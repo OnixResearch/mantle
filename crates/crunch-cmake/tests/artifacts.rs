@@ -1,7 +1,17 @@
 use std::io::Write;
 
+use crunch_cmake::NativeInputRequest;
 use crunch_cmake::inspect_architecture;
 use crunch_cmake::native_input;
+
+fn native_request(output_root: &str, role: &str, root_env: &str, store_prefix: &str) -> NativeInputRequest {
+    NativeInputRequest {
+        output_root: output_root.into(),
+        role: role.into(),
+        root_env: root_env.into(),
+        store_prefix: store_prefix.into(),
+    }
+}
 
 fn elf(machine: u16) -> Vec<u8> {
     let mut bytes = vec![0_u8; 64];
@@ -42,9 +52,9 @@ fn thin_archives_cannot_smuggle_external_file_references() {
 #[test]
 fn cargo_native_exports_reuse_role_validation_and_reject_reserved_environment() {
     let root = "/mantle/store/00000000000000000000000000000000-answer";
-    let exported = native_input(root, "answer", "ANSWER_ROOT", "/mantle/store").unwrap();
+    let exported = native_input(native_request(root, "answer", "ANSWER_ROOT", "/mantle/store")).unwrap();
     let resolved = mantle_rust_plan_core::resolve_native_inputs(&exported).unwrap();
     assert_eq!(resolved.env["ANSWER_ROOT"], root);
-    assert!(native_input(root, "answer", "PATH", "/mantle/store").is_err());
-    assert!(native_input("/usr/lib", "answer", "ANSWER_ROOT", "/mantle/store").is_err());
+    assert!(native_input(native_request(root, "answer", "PATH", "/mantle/store")).is_err());
+    assert!(native_input(native_request("/usr/lib", "answer", "ANSWER_ROOT", "/mantle/store")).is_err());
 }

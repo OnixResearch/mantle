@@ -105,6 +105,12 @@ pub struct ClassifiedCapture {
     pub name: String,
     pub outcome: Outcome,
 }
+/// One test's harness transcript, bound for classification.
+struct CaptureTranscript<'a> {
+    name: &'a str,
+    text: &'a str,
+    exit: Option<i32>,
+}
 pub struct AttemptSummary {
     pub attempts: Vec<Attempt>,
     pub outcome: Outcome,
@@ -172,9 +178,13 @@ fn relative(value: &str) -> bool {
         && !value.starts_with('/')
         && value.split('/').all(|s| !s.is_empty() && s != "." && s != ".." && !s.contains('\0'))
 }
-fn root(value: &str, prefix: &str) -> bool {
+/// A store prefix; the newtype keeps a prefix distinct from a store path.
+#[derive(Clone, Copy, Debug)]
+struct StorePrefix<'a>(&'a str);
+
+fn root(value: &str, prefix: StorePrefix<'_>) -> bool {
     value
-        .strip_prefix(prefix)
+        .strip_prefix(prefix.0)
         .and_then(|s| s.strip_prefix('/'))
         .is_some_and(|s| !s.is_empty() && !s.contains('/') && s != "." && s != "..")
 }
@@ -182,6 +192,14 @@ fn tool(target: &Target, value: &Tool) -> bool {
     target.inputs.contains_key(&value.root) && relative(&value.member) && hex(&value.blake3)
 }
 fn validate(target: &Target) -> Result<()> {
+    validate_identity(target)?;
+    validate_inputs(target)?;
+    validate_inventory(target)?;
+    validate_environment(target)?;
+    Ok(())
+}
+/// Schema, toolchain, platform, store and naming identity of a target.
+fn validate_identity(target: &Target) -> Result<()> {
     if target.schema != TARGET_SCHEMA || target.cohort != COHORT {
         return Err("test-schema-or-cohort-unsupported".into());
     }
@@ -206,34 +224,68 @@ fn validate(target: &Target) -> Result<()> {
     {
         return Err("test-name".into());
     }
+    debug_assert!(target.schema == TARGET_SCHEMA);
+    debug_assert!(target.cohort == COHORT);
+    debug_assert!(target.rustc_verbose_version.contains("LLVM version: 20.1.8"));
+    debug_assert!(target.deterministic);
+    debug_assert!(!target.external_services);
+    debug_assert!(target.platform == "x86_64-linux" || target.platform == "aarch64-linux");
+    debug_assert!(target.store_prefix.starts_with('/'));
+    debug_assert!(!target.store_prefix.ends_with('/'));
+    debug_assert!(!target.name.is_empty());
+    debug_assert!(target.name.len() <= 80);
+    Ok(())
+}
+/// Store inputs declared by a target and the tools drawn from them.
+fn validate_inputs(target: &Target) -> Result<()> {
     if target.inputs.is_empty()
         || target.inputs.len() > 128
-        || target.inputs.iter().any(|(p, h)| !root(p, &target.store_prefix) || !hex(h))
+        || target.inputs.iter().any(|(p, h)| !root(p, StorePrefix(&target.store_prefix)) || !hex(h))
     {
         return Err("test-inputs".into());
     }
     if !tool(target, &target.executable) || !tool(target, &target.runner) {
         return Err("test-tool-undeclared".into());
     }
-    if target.tests.is_empty()
-        || target.tests.len() > MAX_TESTS
-        || target
-            .tests
-            .iter()
-            .any(|n| n.is_empty() || n.starts_with('-') || n.len() > 512 || n.chars().any(char::is_control))
-        || target.tests.iter().collect::<BTreeSet<_>>().len() != target.tests.len()
+    debug_assert!(!target.inputs.is_empty());
+    debug_assert!(target.inputs.len() <= 128);
+    debug_assert!(target.inputs.contains_key(&target.executable.root));
+    debug_assert!(target.inputs.contains_key(&target.runner.root));
+    Ok(())
+}
+/// The test inventory a target declares and the resources it may consume.
+fn validate_inventory(target: &Target) -> Result<()> {
+    if target.tests.is_empty() || target.tests.len() > MAX_TESTS {
+        return Err("test-inventory".into());
+    }
+    if target
+        .tests
+        .iter()
+        .any(|n| n.is_empty() || n.starts_with('-') || n.len() > 512 || n.chars().any(char::is_control))
     {
         return Err("test-inventory".into());
     }
-    if target.resources.timeout_ms == 0
-        || target.resources.timeout_ms > 3_600_000
-        || target.resources.output_bytes == 0
-        || target.resources.output_bytes > MAX_CAPTURE
-        || target.resources.memory_bytes < 16_777_216
-        || target.resources.memory_bytes > 68_719_476_736
-    {
+    if target.tests.iter().collect::<BTreeSet<_>>().len() != target.tests.len() {
+        return Err("test-inventory".into());
+    }
+    if target.resources.timeout_ms == 0 || target.resources.timeout_ms > 3_600_000 {
         return Err("test-resource-bounds".into());
     }
+    if target.resources.output_bytes == 0 || target.resources.output_bytes > MAX_CAPTURE {
+        return Err("test-resource-bounds".into());
+    }
+    if target.resources.memory_bytes < 16_777_216 || target.resources.memory_bytes > 68_719_476_736 {
+        return Err("test-resource-bounds".into());
+    }
+    debug_assert!(!target.tests.is_empty());
+    debug_assert!(target.tests.len() <= MAX_TESTS);
+    debug_assert!(target.resources.timeout_ms > 0);
+    debug_assert!(target.resources.output_bytes > 0);
+    debug_assert!(target.resources.memory_bytes >= 16_777_216);
+    Ok(())
+}
+/// Environment options, runfiles and the optional coverage contract of a target.
+fn validate_environment(target: &Target) -> Result<()> {
     if target.environment.len() > 64
         || target.environment.iter().any(|(k, v)| {
             k == "TEST_SEED"
@@ -251,30 +303,39 @@ fn validate(target: &Target) -> Result<()> {
     {
         return Err("test-runfiles-undeclared".into());
     }
-    if let Some(c) = &target.coverage
-        && (!tool(target, &c.profdata)
-            || !tool(target, &c.cov)
-            || target.inputs.get(&c.source_root) != Some(&c.source_blake3)
-            || c.max_profile_bytes == 0
-            || c.max_profile_bytes > 67_108_864)
-    {
-        return Err("test-coverage-contract".into());
+    if let Some(c) = &target.coverage {
+        if !tool(target, &c.profdata) || !tool(target, &c.cov) {
+            return Err("test-coverage-contract".into());
+        }
+        if target.inputs.get(&c.source_root) != Some(&c.source_blake3) {
+            return Err("test-coverage-contract".into());
+        }
+        if c.max_profile_bytes == 0 || c.max_profile_bytes > 67_108_864 {
+            return Err("test-coverage-contract".into());
+        }
+        debug_assert!(target.inputs.get(&c.source_root) == Some(&c.source_blake3));
+        debug_assert!(c.max_profile_bytes > 0);
+        debug_assert!(c.max_profile_bytes <= 67_108_864);
     }
+    debug_assert!(target.environment.len() <= 64);
+    debug_assert!(target.runfiles.len() <= 128);
     Ok(())
 }
 pub fn select(target: Target, invocation: Invocation) -> Result<SelectedRequest> {
     validate(&target)?;
-    if invocation.shard_count == 0
-        || invocation.shard_count > 256
-        || invocation.shard_index >= invocation.shard_count
-        || invocation.repeat == 0
-        || invocation.repeat > 16
-    {
+    if invocation.shard_count == 0 || invocation.shard_count > 256 {
         return Err("test-selection-bounds".into());
     }
-    if invocation.exact && invocation.filter.is_none()
-        || invocation.filter.as_ref().is_some_and(|s| s.len() > 512 || s.chars().any(char::is_control))
-    {
+    if invocation.shard_index >= invocation.shard_count {
+        return Err("test-selection-bounds".into());
+    }
+    if invocation.repeat == 0 || invocation.repeat > 16 {
+        return Err("test-selection-bounds".into());
+    }
+    if invocation.exact && invocation.filter.is_none() {
+        return Err("test-filter-invalid".into());
+    }
+    if invocation.filter.as_ref().is_some_and(|s| s.len() > 512 || s.chars().any(char::is_control)) {
         return Err("test-filter-invalid".into());
     }
     if invocation.timeout_ms.is_some_and(|n| n == 0 || n > target.resources.timeout_ms) {
@@ -301,16 +362,21 @@ pub fn select(target: Target, invocation: Invocation) -> Result<SelectedRequest>
             }
         })
     });
+    let shard_count = invocation.shard_count;
+    debug_assert!(shard_count != 0);
     let selected: Vec<_> = names
         .into_iter()
         .enumerate()
-        .filter(|(i, _)| (*i as u32) % invocation.shard_count == invocation.shard_index)
+        .filter(|(i, _)| (*i as u32) % shard_count == invocation.shard_index)
         .map(|(_, n)| n.clone())
         .collect();
     if selected.is_empty() {
         return Err("test-selection-empty".into());
     }
     let identity = digest(&(TARGET_SCHEMA, &target, &invocation))?;
+    debug_assert!(invocation.shard_count != 0);
+    debug_assert!(invocation.shard_index < invocation.shard_count);
+    debug_assert!(!selected.is_empty());
     Ok(SelectedRequest {
         target,
         invocation,
@@ -319,40 +385,54 @@ pub fn select(target: Target, invocation: Invocation) -> Result<SelectedRequest>
     })
 }
 pub fn admit_output(request: SelectedRequest, path: String) -> Result<SelectedRequest> {
-    if !root(&path, &request.target.store_prefix) {
+    if !root(&path, StorePrefix(&request.target.store_prefix)) {
         return Err("test-output-not-store-root".into());
     }
     Ok(request)
 }
 /// A complete one-test harness transcript is required, even for assertion failures.
 pub fn classify_capture(name: String, text: String, exit: Option<i32>) -> ClassifiedCapture {
-    let outcome = classify_capture_inner(&name, &text, exit);
+    let outcome = classify_capture_inner(CaptureTranscript {
+        name: &name,
+        text: &text,
+        exit,
+    });
     ClassifiedCapture { name, outcome }
 }
-fn classify_capture_inner(name: &str, text: &str, exit: Option<i32>) -> Outcome {
-    if text.len() as u64 > MAX_CAPTURE || !text.ends_with('\n') {
+fn classify_capture_inner(capture: CaptureTranscript<'_>) -> Outcome {
+    if capture.text.len() as u64 > MAX_CAPTURE || !capture.text.ends_with('\n') {
         return Outcome::InfrastructureFailure;
     }
-    let Ok(lines) = parse_libtest_events(text) else {
+    let Ok(lines) = parse_libtest_events(capture.text) else {
         return Outcome::InfrastructureFailure;
     };
-    let values: core::result::Result<Vec<serde_json::Value>, _> = text.lines().map(serde_json::from_str).collect();
+    let values: core::result::Result<Vec<serde_json::Value>, _> =
+        capture.text.lines().map(serde_json::from_str).collect();
     let Ok(values) = values else {
         return Outcome::InfrastructureFailure;
     };
     if values.len() != 4 || values[0]["test_count"].as_u64() != Some(1) {
         return Outcome::InfrastructureFailure;
     }
-    let expected_failure = u64::from(exit == Some(101));
+    let expected_failure = u64::from(capture.exit == Some(101));
+    let expected_passed = 1u64.saturating_sub(expected_failure);
     let terminal = &values[3];
-    if terminal["passed"].as_u64() != Some(1 - expected_failure)
-        || terminal["failed"].as_u64() != Some(expected_failure)
-        || terminal["ignored"].as_u64() != Some(0)
-        || terminal["measured"].as_u64() != Some(0)
-    {
+    if terminal["passed"].as_u64() != Some(expected_passed) {
         return Outcome::InfrastructureFailure;
     }
-    classify_four(name, &lines, exit)
+    if terminal["failed"].as_u64() != Some(expected_failure) {
+        return Outcome::InfrastructureFailure;
+    }
+    if terminal["ignored"].as_u64() != Some(0) {
+        return Outcome::InfrastructureFailure;
+    }
+    if terminal["measured"].as_u64() != Some(0) {
+        return Outcome::InfrastructureFailure;
+    }
+    debug_assert!(values.len() == 4);
+    debug_assert!(expected_failure <= 1);
+    debug_assert!(expected_passed <= 1);
+    classify_four(capture.name, &lines, capture.exit)
 }
 fn classify_four(name: &str, lines: &[HarnessLine], exit: Option<i32>) -> Outcome {
     let [

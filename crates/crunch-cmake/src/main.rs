@@ -16,7 +16,7 @@ fn plan_text(text: &str) -> crunch_cmake::Result<Plan> {
 }
 fn read_plan(path: &str) -> crunch_cmake::Result<Plan> {
     let mut text = String::new();
-    std::fs::File::open(path)?.take((MAX_PLAN_BYTES + 1) as u64).read_to_string(&mut text)?;
+    std::fs::File::open(path)?.take(MAX_PLAN_BYTES.saturating_add(1) as u64).read_to_string(&mut text)?;
     plan_text(&text)
 }
 fn main() {
@@ -27,9 +27,11 @@ fn main() {
 }
 fn entry() -> crunch_cmake::Result<()> {
     let raw: Vec<_> = std::env::args_os().collect();
+    debug_assert!(!raw.is_empty());
     let executable_name = Path::new(&raw[0]).file_name();
     if executable_name == Some(OsStr::new("mantle-cc")) || executable_name == Some(OsStr::new("mantle-cxx")) {
         let plan = plan_text(&std::env::var("MANTLE_CMAKE_PLAN")?)?;
+        debug_assert!(plan.schema == "mantle-cmake-plan-v1");
         let code = crunch_cmake::compile(plan, executable_name == Some(OsStr::new("mantle-cxx")), &raw[1..])?;
         std::process::exit(code);
     }
@@ -52,7 +54,13 @@ fn entry() -> crunch_cmake::Result<()> {
             crunch_cmake::inspect_architecture(Path::new(path), machine)?;
         }
         [command, root, role, env, prefix] if command == "native-input" => {
-            println!("{}", serde_json::to_string_pretty(&crunch_cmake::native_input(root, role, env, prefix)?)?);
+            let request = crunch_cmake::NativeInputRequest {
+                output_root: root.clone(),
+                role: role.clone(),
+                root_env: env.clone(),
+                store_prefix: prefix.clone(),
+            };
+            println!("{}", serde_json::to_string_pretty(&crunch_cmake::native_input(request)?)?);
         }
         _ => return Err(std::io::Error::other("usage: mantle-cmake validate PLAN | lower PLAN RUNNER_ROLE RUNNER_MEMBER RUNNER_VERSION | run | inspect ARTIFACT {x86_64|aarch64} | native-input ROOT ROLE ENV STORE_PREFIX").into()),
     }

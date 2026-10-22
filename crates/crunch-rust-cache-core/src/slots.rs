@@ -33,18 +33,22 @@ pub struct SlotPolicy {
 
 impl SlotPolicy {
     pub fn validate(&self) -> Result<(), SlotRejectReason> {
-        if self.schema != SLOT_POLICY_SCHEMA
-            || self.total_slots == 0
-            || self.total_slots > MAX_SLOTS
-            || self.per_build_max == 0
-            || self.per_build_max > self.total_slots
-            || self.total_queue == 0
-            || self.total_queue > MAX_QUEUE
-            || self.per_build_queue == 0
-            || self.per_build_queue > self.total_queue
-            || self.wait_timeout_ms == 0
-            || self.wait_timeout_ms > MAX_WAIT_TIMEOUT_MS
-        {
+        if self.schema != SLOT_POLICY_SCHEMA {
+            return Err(SlotRejectReason::InvalidPolicy);
+        }
+        if self.total_slots == 0 || self.total_slots > MAX_SLOTS {
+            return Err(SlotRejectReason::InvalidPolicy);
+        }
+        if self.per_build_max == 0 || self.per_build_max > self.total_slots {
+            return Err(SlotRejectReason::InvalidPolicy);
+        }
+        if self.total_queue == 0 || self.total_queue > MAX_QUEUE {
+            return Err(SlotRejectReason::InvalidPolicy);
+        }
+        if self.per_build_queue == 0 || self.per_build_queue > self.total_queue {
+            return Err(SlotRejectReason::InvalidPolicy);
+        }
+        if self.wait_timeout_ms == 0 || self.wait_timeout_ms > MAX_WAIT_TIMEOUT_MS {
             return Err(SlotRejectReason::InvalidPolicy);
         }
         Ok(())
@@ -115,6 +119,16 @@ struct Reservation {
     granted_ms: u64,
 }
 
+/// The identity and timing facts a slot receipt reports.
+struct SlotReceiptFacts {
+    request_id: u64,
+    build_id: String,
+    decision: SlotDecision,
+    reason: Option<SlotRejectReason>,
+    observed_ms: u64,
+    waited_ms: u64,
+}
+
 /// No completed-request history is retained. Occupancy is bounded by policy.
 #[derive(Debug)]
 pub struct SlotState {
@@ -155,22 +169,7 @@ impl SlotState {
     }
 
     pub fn admit(&mut self, request: SlotRequest, now_ms: u64) -> SlotReceipt {
-        let reason = if request.build_id.is_empty() || request.build_id.len() > MAX_BUILD_ID_BYTES {
-            Some(SlotRejectReason::InvalidBuildId)
-        } else if self.queue.iter().any(|p| p.request.request_id == request.request_id)
-            || self.active.iter().any(|p| p.request.request_id == request.request_id)
-        {
-            Some(SlotRejectReason::DuplicateRequest)
-        } else if self.queued_count() >= self.policy.total_queue {
-            Some(SlotRejectReason::TotalQueueFull)
-        } else if self.queue.iter().filter(|p| p.request.build_id == request.build_id).count()
-            >= self.policy.per_build_queue as usize
-        {
-            Some(SlotRejectReason::BuildQueueFull)
-        } else {
-            None
-        };
-        if let Some(reason) = reason {
+        if let Some(reason) = self.admission_rejection(&request) {
             return self.rejection(&request, now_ms, reason);
         }
         if !self.build_order.contains(&request.build_id) {
@@ -181,19 +180,43 @@ impl SlotState {
             };
             self.build_order.insert(index, request.build_id.clone());
         }
+        let request_id = request.request_id;
+        let build_id = request.build_id.clone();
         self.queue.push_back(Pending {
             request,
             admitted_ms: now_ms,
         });
         assert!(self.queued_count() <= self.policy.total_queue);
         assert!(self.active_count() <= self.policy.total_slots);
-        self.receipt(
-            &self.queue.back().expect("admitted request is queued").request,
-            SlotDecision::Queued,
-            None,
-            now_ms,
-            0,
-        )
+        self.receipt_fields(SlotReceiptFacts {
+            request_id,
+            build_id,
+            decision: SlotDecision::Queued,
+            reason: None,
+            observed_ms: now_ms,
+            waited_ms: 0,
+        })
+    }
+
+    /// Reject admissions that duplicate a live request or exceed the queue
+    /// bounds of the policy.
+    fn admission_rejection(&self, request: &SlotRequest) -> Option<SlotRejectReason> {
+        if request.build_id.is_empty() || request.build_id.len() > MAX_BUILD_ID_BYTES {
+            return Some(SlotRejectReason::InvalidBuildId);
+        }
+        let is_duplicate = self.queue.iter().any(|p| p.request.request_id == request.request_id)
+            || self.active.iter().any(|p| p.request.request_id == request.request_id);
+        if is_duplicate {
+            return Some(SlotRejectReason::DuplicateRequest);
+        }
+        if self.queued_count() >= self.policy.total_queue {
+            return Some(SlotRejectReason::TotalQueueFull);
+        }
+        let queued_for_build = self.queue.iter().filter(|p| p.request.build_id == request.build_id).count() as u64;
+        if queued_for_build >= u64::from(self.policy.per_build_queue) {
+            return Some(SlotRejectReason::BuildQueueFull);
+        }
+        None
     }
 
     /// Round-robin among eligible builds, FIFO within each build. Expired
@@ -204,16 +227,18 @@ impl SlotState {
         }
         let unexpired = |pending: &Pending| now_ms.saturating_sub(pending.admitted_ms) < self.policy.wait_timeout_ms;
         let build_index = self.build_order.iter().position(|build| {
-            let active = self.active.iter().filter(|r| r.request.build_id == *build).count();
-            active < self.policy.per_build_max as usize
+            let active = self.active.iter().filter(|r| r.request.build_id == *build).count() as u64;
+            active < u64::from(self.policy.per_build_max)
                 && self.queue.iter().any(|pending| pending.request.build_id == *build && unexpired(pending))
         })?;
         let next_build = &self.build_order[build_index];
         let index = self.queue.iter().position(|p| p.request.build_id == *next_build && unexpired(p))?;
-        self.build_order.rotate_left(build_index + 1);
+        self.build_order.rotate_left(build_index.saturating_add(1));
         let pending = self.queue.remove(index)?;
         self.last_build = Some(pending.request.build_id.clone());
         let waited_ms = now_ms.saturating_sub(pending.admitted_ms);
+        let request_id = pending.request.request_id;
+        let build_id = pending.request.build_id.clone();
         self.active.push_back(Reservation {
             request: pending.request,
             admitted_ms: pending.admitted_ms,
@@ -221,13 +246,14 @@ impl SlotState {
         });
         assert!(self.active_count() <= self.policy.total_slots);
         assert!(self.queued_count() < self.policy.total_queue);
-        Some(self.receipt(
-            &self.active.back().expect("reserved request is active").request,
-            SlotDecision::Granted,
-            None,
-            now_ms,
+        Some(self.receipt_fields(SlotReceiptFacts {
+            request_id,
+            build_id,
+            decision: SlotDecision::Granted,
+            reason: None,
+            observed_ms: now_ms,
             waited_ms,
-        ))
+        }))
     }
 
     pub fn grant(&self, request_id: u64) -> Option<SlotReceipt> {
@@ -288,15 +314,28 @@ impl SlotState {
         observed_ms: u64,
         waited_ms: u64,
     ) -> SlotReceipt {
-        SlotReceipt {
-            schema: SLOT_RECEIPT_SCHEMA.to_string(),
+        self.receipt_fields(SlotReceiptFacts {
             request_id: request.request_id,
             build_id: request.build_id.clone(),
             decision,
             reason,
-            fairness: self.policy.fairness,
             observed_ms,
             waited_ms,
+        })
+    }
+
+    /// Build a receipt from already owned identity fields, so callers that
+    /// consumed their request do not have to look it up again.
+    fn receipt_fields(&self, facts: SlotReceiptFacts) -> SlotReceipt {
+        SlotReceipt {
+            schema: SLOT_RECEIPT_SCHEMA.to_string(),
+            request_id: facts.request_id,
+            build_id: facts.build_id,
+            decision: facts.decision,
+            reason: facts.reason,
+            fairness: self.policy.fairness,
+            observed_ms: facts.observed_ms,
+            waited_ms: facts.waited_ms,
             active_slots: self.active_count(),
             queued_requests: self.queued_count(),
             total_slots: self.policy.total_slots,

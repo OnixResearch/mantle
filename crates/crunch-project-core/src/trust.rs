@@ -277,9 +277,10 @@ pub(crate) fn validate_locked_trust_borrowed(
     trust: &LockedTrust,
     subject: &TrustSubject,
     hash_algo: &HashAlgo,
-    hash_value: &str,
+    hash_value: impl AsRef<str>,
     context: &str,
 ) -> Vec<String> {
+    let hash_value = hash_value.as_ref();
     validate_locked_trust_fields(LockedTrustValidation {
         trust,
         subject,

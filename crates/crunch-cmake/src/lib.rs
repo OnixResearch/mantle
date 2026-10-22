@@ -27,8 +27,14 @@ use serde::Serialize;
 pub type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 const WORK: &str = crunch_cmake_core::WORK_DIRECTORY;
 const MAX_FILES: usize = 100_000;
-const MAX_ARTIFACT_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_TREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Largest single installed artifact, in bytes (256 MiB).
+const MAX_ARTIFACT_BYTES: u64 = 268_435_456;
+/// Largest installed tree in total, in bytes (2 GiB).
+const MAX_TREE_BYTES: u64 = 2_147_483_648;
+/// Pending install steps kept reserved on the work stack.
+const INSTALL_TASKS: usize = 64;
+/// Pending provenance scan steps kept reserved on the work stack.
+const ARTIFACT_TASKS: usize = 64;
 
 fn invalid(message: impl Into<String>) -> Box<dyn std::error::Error> {
     std::io::Error::other(message.into()).into()
@@ -131,6 +137,8 @@ fn environment(plan: &Plan) -> Result<BTreeMap<String, String>> {
             .join(":"),
     );
     env.insert("PKG_CONFIG_SYSROOT_DIR".into(), plan.roles[&plan.sysroot].clone());
+    debug_assert!(env.contains_key("PATH"));
+    debug_assert_eq!(env.get("TZ").map(String::as_str), Some("UTC"));
     Ok(env)
 }
 fn command(program: &Path, env: &BTreeMap<String, String>) -> Command {
@@ -148,8 +156,9 @@ fn run(command: &mut Command, phase: &str) -> Result<()> {
     Ok(())
 }
 fn versions(plan: &Plan, env: &BTreeMap<String, String>) -> Result<BTreeMap<String, String>> {
-    let mut observed = BTreeMap::new();
-    for tool in plan.tool_list() {
+    let tools: Vec<&Tool> = plan.tool_list().collect();
+    let mut observed: Vec<(String, String)> = Vec::with_capacity(tools.len());
+    for tool in &tools {
         let path = executable(plan, tool)?;
         let output = command(&path, env).arg("--version").output()?;
         let text = String::from_utf8(output.stdout)?;
@@ -161,7 +170,7 @@ fn versions(plan: &Plan, env: &BTreeMap<String, String>) -> Result<BTreeMap<Stri
                 tool.version
             )));
         }
-        observed.insert(path.display().to_string(), line.to_string());
+        observed.push((path.display().to_string(), line.to_string()));
     }
     for tool in [&plan.tools.cc, &plan.tools.cxx] {
         let path = executable(plan, tool)?;
@@ -179,6 +188,9 @@ fn versions(plan: &Plan, env: &BTreeMap<String, String>) -> Result<BTreeMap<Stri
             )));
         }
     }
+    let observed: BTreeMap<String, String> = observed.into_iter().collect();
+    debug_assert!(observed.keys().all(|path| path.starts_with('/')));
+    debug_assert!(observed.values().all(|line| !line.is_empty()));
     Ok(observed)
 }
 /// Offline CMake-language guard; callers separately prepend their declared
@@ -244,25 +256,41 @@ pub fn lower(plan: WirePlan, runner: Tool) -> Result<Derivation> {
         env: BTreeMap::from([("MANTLE_CMAKE_PLAN".into(), json)]),
     })
 }
-pub fn native_input(
-    output_root: &str,
-    role: &str,
-    root_env: &str,
-    store_prefix: &str,
-) -> Result<NativeInputDeclaration> {
+/// Owned request for one native export declaration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeInputRequest {
+    /// Absolute store root of the exported output.
+    pub output_root: String,
+    /// Role the exported root is bound to.
+    pub role: String,
+    /// Environment variable that receives the role marker.
+    pub root_env: String,
+    /// Store prefix the exported root must live under.
+    pub store_prefix: String,
+}
+/// Bind an exported store root as a native input of the ordinary plan pipeline.
+pub fn native_input(request: NativeInputRequest) -> Result<NativeInputDeclaration> {
+    let NativeInputRequest {
+        output_root,
+        role,
+        root_env,
+        store_prefix,
+    } = request;
     if !crunch_cmake_core::store_root(StoreRootRequest {
-        value: output_root.into(),
-        prefix: store_prefix.into(),
-    }) || !crunch_cmake_core::identifier(role.into())
+        value: output_root.clone(),
+        prefix: store_prefix.clone(),
+    }) || !crunch_cmake_core::identifier(role.clone())
     {
         return Err(invalid("cmake-native-export-invalid"));
     }
     let declaration = NativeInputDeclaration {
-        inputs: BTreeMap::from([(role.into(), output_root.into())]),
-        env: BTreeMap::from([(root_env.into(), format!("{{{{role:{role}}}}}"))]),
+        inputs: BTreeMap::from([(role.clone(), output_root.clone())]),
+        env: BTreeMap::from([(root_env.clone(), format!("{{{{role:{role}}}}}"))]),
         path: Vec::new(),
     };
     mantle_rust_plan_core::resolve_native_inputs(&declaration).map_err(|e| invalid(e.to_string()))?;
+    debug_assert!(declaration.inputs.contains_key(&role));
+    debug_assert!(declaration.env.contains_key(&root_env));
     Ok(declaration)
 }
 pub fn build(plan: WirePlan, out: &Path) -> Result<()> {
@@ -274,6 +302,8 @@ pub fn build(plan: WirePlan, out: &Path) -> Result<()> {
     let lowered = lowering.lowered;
     let admitted = Plan(lowering.admission);
     let plan = &admitted;
+    debug_assert!(plan.roles.contains_key(&plan.source));
+    debug_assert!(plan.roles.contains_key(&plan.sysroot));
     fs::create_dir(WORK)?; // A build never silently reuses an ambient CMake cache.
     for dir in ["home/config", "home/cache", "tmp", "wrappers", "modules", "stage"] {
         fs::create_dir_all(Path::new(WORK).join(dir))?;
@@ -308,6 +338,8 @@ pub fn build(plan: WirePlan, out: &Path) -> Result<()> {
     fs::create_dir(out)?;
     let mut budget = TreeBudget { files: 0, bytes: 0 };
     copy_installed(&installed, out, out, lowered.expected_elf_machine, &mut budget)?;
+    debug_assert!(budget.files <= MAX_FILES);
+    debug_assert!(budget.bytes <= MAX_TREE_BYTES);
     for member in &plan.outputs {
         let path = out.join(member);
         if !fs::metadata(&path)?.is_file() {
@@ -362,66 +394,137 @@ struct TreeBudget {
     files: usize,
     bytes: u64,
 }
+/// One pending install step.
+enum InstallTask {
+    /// List a directory's entries and install them.
+    Expand { source: PathBuf, dest: PathBuf },
+    /// Install one directory entry.
+    Entry { source: PathBuf, dest: PathBuf },
+}
+/// What installing one directory entry leaves to do.
+enum Installed {
+    /// The entry was a directory; its own entries still need installing.
+    Directory,
+    /// The entry is fully installed.
+    Complete,
+}
+/// Install a staged tree into the output directory without recursive descent.
 fn copy_installed(source: &Path, dest: &Path, root: &Path, machine: u16, budget: &mut TreeBudget) -> Result<()> {
-    let mut entries = fs::read_dir(source)?.take(MAX_FILES + 1).collect::<std::io::Result<Vec<_>>>()?;
-    entries.sort_by_key(std::fs::DirEntry::file_name);
-    for entry in entries {
-        budget.files += 1;
-        if budget.files > MAX_FILES {
-            return Err(invalid("cmake-install-limit"));
-        }
-        let name = entry.file_name();
-        if name.to_str().is_none_or(|s| !crunch_cmake_core::identifier(s.into())) {
-            return Err(invalid("cmake-installed-name-invalid"));
-        }
-        let src = entry.path();
-        let dst = dest.join(name);
-        let relative = dst.strip_prefix(root)?;
-        if relative.components().count() > 64 || relative.as_os_str().len() > 1024 {
-            return Err(invalid("cmake-install-limit"));
-        }
-        let meta = fs::symlink_metadata(&src)?;
-        if meta.file_type().is_symlink() {
-            let target = fs::read_link(&src)?;
-            if target.is_absolute() {
-                return Err(invalid("cmake-install-symlink-escape"));
+    let mut tasks: Vec<InstallTask> = Vec::with_capacity(INSTALL_TASKS);
+    tasks.push(InstallTask::Expand {
+        source: source.to_path_buf(),
+        dest: dest.to_path_buf(),
+    });
+    while let Some(task) = tasks.pop() {
+        match task {
+            InstallTask::Expand { source, dest } => {
+                for task in install_tasks(&source, &dest)? {
+                    tasks.push(task);
+                }
             }
-            let canonical = fs::canonicalize(&src)?;
-            // Resolve against the complete stage (not only a nested directory).
-            let stage_root = Path::new(WORK).join("stage").join(root.strip_prefix("/")?);
-            if !canonical.starts_with(stage_root) {
-                return Err(invalid("cmake-install-symlink-escape"));
+            InstallTask::Entry { source, dest } => {
+                let installed = install_entry(&source, &dest, root, machine, budget)?;
+                if matches!(installed, Installed::Directory) {
+                    tasks.push(InstallTask::Expand { source, dest });
+                }
             }
-            symlink(target, dst)?;
-        } else if meta.is_dir() {
-            fs::create_dir(&dst)?;
-            copy_installed(&src, &dst, root, machine, budget)?;
-        } else if meta.is_file() {
-            budget.bytes = budget.bytes.checked_add(meta.len()).ok_or_else(|| invalid("cmake-install-limit"))?;
-            if meta.len() > MAX_ARTIFACT_BYTES || budget.bytes > MAX_TREE_BYTES {
-                return Err(invalid("cmake-install-limit"));
-            }
-            inspect_architecture(&src, machine)?;
-            fs::copy(&src, &dst)?;
-            fs::set_permissions(
-                &dst,
-                fs::Permissions::from_mode(if meta.permissions().mode() & 0o111 != 0 {
-                    0o755
-                } else {
-                    0o644
-                }),
-            )?;
-        } else {
-            return Err(invalid("cmake-install-special-file"));
         }
     }
+    debug_assert!(budget.files <= MAX_FILES);
+    debug_assert!(budget.bytes <= MAX_TREE_BYTES);
+    Ok(())
+}
+/// List a directory's entries in stable order as pending install tasks.
+fn install_tasks(source: &Path, dest: &Path) -> Result<Vec<InstallTask>> {
+    let mut entries = fs::read_dir(source)?.take(MAX_FILES.saturating_add(1)).collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    let mut tasks = Vec::with_capacity(entries.len());
+    for entry in entries.into_iter().rev() {
+        let name = entry.file_name();
+        tasks.push(InstallTask::Entry {
+            source: entry.path(),
+            dest: dest.join(name),
+        });
+    }
+    Ok(tasks)
+}
+/// Install one directory entry; a directory reports that its contents remain.
+fn install_entry(source: &Path, dest: &Path, root: &Path, machine: u16, budget: &mut TreeBudget) -> Result<Installed> {
+    budget.files += 1;
+    if budget.files > MAX_FILES {
+        return Err(invalid("cmake-install-limit"));
+    }
+    debug_assert!(budget.files <= MAX_FILES);
+    check_install_path(source, dest, root)?;
+    debug_assert!(dest.starts_with(root));
+    let meta = fs::symlink_metadata(source)?;
+    if meta.file_type().is_symlink() {
+        install_symlink(source, dest, root)?;
+        return Ok(Installed::Complete);
+    }
+    if meta.is_dir() {
+        fs::create_dir(dest)?;
+        return Ok(Installed::Directory);
+    }
+    if meta.is_file() {
+        install_file(source, dest, &meta, machine, budget)?;
+        return Ok(Installed::Complete);
+    }
+    Err(invalid("cmake-install-special-file"))
+}
+/// Check that an installed entry keeps its declared name and a bounded path.
+fn check_install_path(source: &Path, dest: &Path, root: &Path) -> Result<()> {
+    let name = source.file_name().ok_or_else(|| invalid("cmake-installed-name-invalid"))?;
+    let is_valid_name = name.to_str().is_some_and(|text| crunch_cmake_core::identifier(text.into()));
+    if !is_valid_name {
+        return Err(invalid("cmake-installed-name-invalid"));
+    }
+    debug_assert!(is_valid_name);
+    let relative = dest.strip_prefix(root)?;
+    let is_bounded = relative.components().count() <= 64 && relative.as_os_str().len() <= 1024;
+    if !is_bounded {
+        return Err(invalid("cmake-install-limit"));
+    }
+    debug_assert!(is_bounded);
+    Ok(())
+}
+/// Install a symlink whose resolution stays inside the staged tree.
+fn install_symlink(source: &Path, dest: &Path, root: &Path) -> Result<()> {
+    let target = fs::read_link(source)?;
+    if target.is_absolute() {
+        return Err(invalid("cmake-install-symlink-escape"));
+    }
+    let canonical = fs::canonicalize(source)?;
+    // Resolve against the complete stage (not only a nested directory).
+    let stage_root = Path::new(WORK).join("stage").join(root.strip_prefix("/")?);
+    if !canonical.starts_with(stage_root) {
+        return Err(invalid("cmake-install-symlink-escape"));
+    }
+    symlink(target, dest)?;
+    Ok(())
+}
+/// Copy one regular file into the install tree with normalized permissions.
+fn install_file(source: &Path, dest: &Path, meta: &fs::Metadata, machine: u16, budget: &mut TreeBudget) -> Result<()> {
+    budget.bytes = budget.bytes.checked_add(meta.len()).ok_or_else(|| invalid("cmake-install-limit"))?;
+    let is_beyond_budget = meta.len() > MAX_ARTIFACT_BYTES || budget.bytes > MAX_TREE_BYTES;
+    if is_beyond_budget {
+        return Err(invalid("cmake-install-limit"));
+    }
+    inspect_architecture(source, machine)?;
+    fs::copy(source, dest)?;
+    let mode = if meta.permissions().mode() & 0o111 != 0 {
+        0o755
+    } else {
+        0o644
+    };
+    fs::set_permissions(dest, fs::Permissions::from_mode(mode))?;
     Ok(())
 }
 /// Inspect ELF files and every ELF member of ordinary ar archives; never execute.
 pub fn inspect_architecture(path: &Path, machine: u16) -> Result<()> {
     let mut file = fs::File::open(path)?;
-    let length = file.metadata()?.len();
-    if length < 8 {
+    let length_bytes = file.metadata()?.len();
+    if length_bytes < 8 {
         return Ok(());
     }
     let mut magic = [0_u8; 8];
@@ -430,34 +533,44 @@ pub fn inspect_architecture(path: &Path, machine: u16) -> Result<()> {
         return Err(invalid("cmake-thin-archive-unsupported"));
     }
     if &magic == b"!<arch>\n" {
-        let mut offset = 8_u64;
-        while offset < length {
-            if offset + 60 > length {
-                return Err(invalid("cmake-archive-invalid"));
-            }
-            file.seek(SeekFrom::Start(offset))?;
-            let mut header = [0_u8; 60];
-            file.read_exact(&mut header)?;
-            if &header[58..60] != b"`\n" || header.starts_with(b"#1/") {
-                return Err(invalid("cmake-archive-format-unsupported"));
-            }
-            let size: u64 = std::str::from_utf8(&header[48..58])?.trim().parse()?;
-            let start = offset + 60;
-            if start.checked_add(size).is_none_or(|end| end > length) {
-                return Err(invalid("cmake-archive-invalid"));
-            }
-            if size >= 20 {
-                inspect_elf(&mut file, machine)?;
-            }
-            offset = start
-                .checked_add(size)
-                .and_then(|n| n.checked_add(size % 2))
-                .ok_or_else(|| invalid("cmake-archive-invalid"))?;
-        }
-    } else if length >= 20 {
+        return inspect_archive(&mut file, length_bytes, machine);
+    }
+    if length_bytes >= 20 {
         file.seek(SeekFrom::Start(0))?;
         inspect_elf(&mut file, machine)?;
     }
+    debug_assert!(length_bytes >= 8);
+    debug_assert!(magic != *b"!<thin>\n");
+    Ok(())
+}
+/// Inspect every ELF member of an ordinary ar archive.
+fn inspect_archive(file: &mut fs::File, length_bytes: u64, machine: u16) -> Result<()> {
+    let mut offset_bytes = 8_u64;
+    while offset_bytes < length_bytes {
+        if offset_bytes.saturating_add(60) > length_bytes {
+            return Err(invalid("cmake-archive-invalid"));
+        }
+        file.seek(SeekFrom::Start(offset_bytes))?;
+        let mut header = [0_u8; 60];
+        file.read_exact(&mut header)?;
+        if &header[58..60] != b"`\n" || header.starts_with(b"#1/") {
+            return Err(invalid("cmake-archive-format-unsupported"));
+        }
+        let size_bytes: u64 = std::str::from_utf8(&header[48..58])?.trim().parse()?;
+        let start = offset_bytes.saturating_add(60);
+        if start.checked_add(size_bytes).is_none_or(|end| end > length_bytes) {
+            return Err(invalid("cmake-archive-invalid"));
+        }
+        if size_bytes >= 20 {
+            inspect_elf(file, machine)?;
+        }
+        offset_bytes = start
+            .checked_add(size_bytes)
+            .and_then(|n| n.checked_add(size_bytes % 2))
+            .ok_or_else(|| invalid("cmake-archive-invalid"))?;
+    }
+    debug_assert!(offset_bytes >= 8);
+    debug_assert!(offset_bytes <= length_bytes.saturating_add(1));
     Ok(())
 }
 fn inspect_elf(file: &mut fs::File, machine: u16) -> Result<()> {
@@ -481,53 +594,87 @@ struct Artifact {
     executable: bool,
     symlink_target: Option<String>,
 }
+/// One pending provenance scan step.
+enum ArtifactTask {
+    /// List a directory's entries.
+    Directory(PathBuf),
+    /// Hash a regular file.
+    File { path: PathBuf, meta: fs::Metadata },
+    /// Record a symlink target.
+    Symlink(PathBuf),
+}
+/// Record every installed file and symlink below `dir` in stable order.
 fn artifacts(root: &Path, dir: &Path, result: &mut Vec<Artifact>) -> Result<()> {
+    let mut tasks: Vec<ArtifactTask> = Vec::with_capacity(ARTIFACT_TASKS);
+    tasks.push(ArtifactTask::Directory(dir.to_path_buf()));
+    while let Some(task) = tasks.pop() {
+        match task {
+            ArtifactTask::Directory(path) => {
+                for task in scan_tasks(&path)? {
+                    tasks.push(task);
+                }
+            }
+            ArtifactTask::File { path, meta } => {
+                result.push(file_artifact(root, &path, &meta)?);
+            }
+            ArtifactTask::Symlink(path) => {
+                result.push(symlink_artifact(root, &path)?);
+            }
+        }
+    }
+    debug_assert!(result.iter().all(|artifact| !artifact.path.starts_with('/')));
+    debug_assert!(result.iter().all(|artifact| artifact.symlink_target.is_none() || !artifact.executable));
+    Ok(())
+}
+/// List a directory's entries in stable order as pending scan tasks.
+fn scan_tasks(dir: &Path) -> Result<Vec<ArtifactTask>> {
     let mut entries = fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(std::fs::DirEntry::file_name);
-    for entry in entries {
+    let mut tasks = Vec::with_capacity(entries.len());
+    for entry in entries.into_iter().rev() {
         let path = entry.path();
         let meta = fs::symlink_metadata(&path)?;
         if meta.is_dir() {
-            artifacts(root, &path, result)?;
+            tasks.push(ArtifactTask::Directory(path));
         } else if meta.is_file() {
-            let mut hasher = blake3::Hasher::new();
-            let mut file = fs::File::open(&path)?;
-            let mut buffer = [0_u8; 65536];
-            loop {
-                let n = file.read(&mut buffer)?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buffer[..n]);
-            }
-            result.push(Artifact {
-                path: path.strip_prefix(root)?.display().to_string(),
-                blake3: hasher.finalize().to_hex().to_string(),
-                size_bytes: meta.len(),
-                executable: meta.permissions().mode() & 0o111 != 0,
-                symlink_target: None,
-            });
+            tasks.push(ArtifactTask::File { path, meta });
         } else if meta.file_type().is_symlink() {
-            let target = fs::read_link(&path)?
-                .into_os_string()
-                .into_string()
-                .map_err(|_| invalid("cmake-symlink-non-utf8"))?;
-            result.push(Artifact {
-                path: path.strip_prefix(root)?.display().to_string(),
-                blake3: blake3::hash(target.as_bytes()).to_hex().to_string(),
-                size_bytes: target.len() as u64,
-                executable: false,
-                symlink_target: Some(target),
-            });
+            tasks.push(ArtifactTask::Symlink(path));
         }
     }
-    Ok(())
+    Ok(tasks)
+}
+/// Hash one regular file into a provenance artifact.
+fn file_artifact(root: &Path, path: &Path, meta: &fs::Metadata) -> Result<Artifact> {
+    let mut hasher = blake3::Hasher::new();
+    let mut file = fs::File::open(path)?;
+    hasher.update_reader(&mut file)?;
+    Ok(Artifact {
+        path: path.strip_prefix(root)?.display().to_string(),
+        blake3: hasher.finalize().to_hex().to_string(),
+        size_bytes: meta.len(),
+        executable: meta.permissions().mode() & 0o111 != 0,
+        symlink_target: None,
+    })
+}
+/// Record one symlink target as a provenance artifact.
+fn symlink_artifact(root: &Path, path: &Path) -> Result<Artifact> {
+    let target = fs::read_link(path)?.into_os_string().into_string().map_err(|_| invalid("cmake-symlink-non-utf8"))?;
+    Ok(Artifact {
+        path: path.strip_prefix(root)?.display().to_string(),
+        blake3: blake3::hash(target.as_bytes()).to_hex().to_string(),
+        size_bytes: target.len() as u64,
+        executable: false,
+        symlink_target: Some(target),
+    })
 }
 fn write_provenance(plan: &Plan, out: &Path, versions: BTreeMap<String, String>) -> Result<()> {
     let mut installed = Vec::new();
     artifacts(out, out, &mut installed)?;
     let identity = blake3::hash(&serde_json::to_vec(plan)?).to_hex().to_string();
+    debug_assert!(identity.len() == 64);
     let dir = out.join("share/mantle");
+    debug_assert!(dir.starts_with(out));
     fs::create_dir_all(&dir)?;
     let path = dir.join("cmake-provenance.json");
     if path.exists() {
@@ -573,6 +720,8 @@ pub fn compile(plan: WirePlan, cxx: bool, args: &[std::ffi::OsString]) -> Result
         .arg(format!("-ffile-prefix-map={}=./source", plan.roles[&plan.source]))
         .arg(format!("-ffile-prefix-map={WORK}=./build"));
     compiler.args(args);
+    debug_assert!(plan.roles.contains_key(&plan.sysroot));
+    debug_assert!(plan.roles.contains_key(&plan.source));
     let status = compiler.status()?;
     if status.success() {
         let output = args

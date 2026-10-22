@@ -9,6 +9,8 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::iter::Peekable;
+use core::str::Chars;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -76,12 +78,12 @@ pub fn classify(args: &[String]) -> Result<Invocation, Bypass> {
         phony_targets: false,
         semantic_args: Vec::new(),
     };
-    let mut compile = false;
+    let mut is_compile = false;
     let mut index = 0;
     while index < args.len() {
         let arg = &args[index];
         match arg.as_str() {
-            "-c" if !compile => compile = true,
+            "-c" if !is_compile => is_compile = true,
             "-o" if invocation.output.is_empty() => {
                 invocation.output = take_value(args, &mut index)?.to_string();
             }
@@ -114,7 +116,9 @@ pub fn classify(args: &[String]) -> Result<Invocation, Bypass> {
         }
         index += 1;
     }
-    finish_invocation(invocation, compile)
+    debug_assert!(invocation.source.is_empty() || source_path(&invocation.source));
+    debug_assert!(invocation.semantic_args.len() <= args.len());
+    finish_invocation(invocation, is_compile)
 }
 
 fn validate_arguments(args: &[String]) -> Result<(), Bypass> {
@@ -147,8 +151,8 @@ fn source_path(path: &str) -> bool {
     [".c", ".cc", ".cpp", ".cxx", ".C"].iter().any(|suffix| path.ends_with(suffix))
 }
 
-fn finish_invocation(mut value: Invocation, compile: bool) -> Result<Invocation, Bypass> {
-    if !compile || value.source.is_empty() || value.output.is_empty() {
+fn finish_invocation(mut value: Invocation, is_compile: bool) -> Result<Invocation, Bypass> {
+    if !is_compile || value.source.is_empty() || value.output.is_empty() {
         return Err(Bypass::UnsupportedInvocation);
     }
     if value.output == "-" || value.output == value.source {
@@ -159,9 +163,9 @@ fn finish_invocation(mut value: Invocation, compile: bool) -> Result<Invocation,
     }
     if value.dependency_mode.is_some() && value.depfile.is_none() {
         let basename = value.output.rsplit('/').next().unwrap_or(&value.output);
-        let stem_bytes = basename
-            .rfind('.')
-            .map_or(value.output.len(), |offset| value.output.len() - basename.len() + offset);
+        let stem_bytes = basename.rfind('.').map_or(value.output.len(), |offset| {
+            value.output.len().saturating_sub(basename.len()).saturating_add(offset)
+        });
         value.depfile = Some(alloc::format!("{}.d", &value.output[..stem_bytes]));
     }
     if let Some(depfile) = &value.depfile
@@ -169,6 +173,8 @@ fn finish_invocation(mut value: Invocation, compile: bool) -> Result<Invocation,
     {
         return Err(Bypass::SideEffects);
     }
+    debug_assert!(!value.source.is_empty());
+    debug_assert!(value.depfile.is_some() == value.dependency_mode.is_some());
     Ok(value)
 }
 
@@ -186,6 +192,7 @@ fn classify_option(args: &[String], index: &mut usize) -> Result<SemanticArgumen
     ] {
         if arg == option {
             let path = take_value(args, index)?.to_string();
+            debug_assert!(bounded_text(&path));
             return Ok(SemanticArgument::Path {
                 option: option.to_string(),
                 path,
@@ -193,6 +200,7 @@ fn classify_option(args: &[String], index: &mut usize) -> Result<SemanticArgumen
         }
     }
     if let Some(path) = arg.strip_prefix("-I").filter(|value| !value.is_empty()) {
+        debug_assert!(!path.is_empty());
         if path == "-" {
             return Err(Bypass::UnknownOption);
         }
@@ -210,29 +218,15 @@ fn classify_option(args: &[String], index: &mut usize) -> Result<SemanticArgumen
             path: path.to_string(),
         });
     }
-    for option in ["-ffile-prefix-map", "-fmacro-prefix-map", "-fdebug-prefix-map"] {
-        if let Some(mapping) = arg.strip_prefix(option).and_then(|text| text.strip_prefix('=')) {
-            let (from, to) = mapping.split_once('=').ok_or(Bypass::UnknownOption)?;
-            if from.is_empty()
-                || to.contains('=')
-                || to.starts_with('/')
-                || to.contains('\\')
-                || to.split('/').any(|part| part == "..")
-            {
-                return Err(Bypass::UnclassifiedPath);
-            }
-            return Ok(SemanticArgument::PrefixMap {
-                option: option.to_string(),
-                from: from.to_string(),
-                to: to.to_string(),
-            });
-        }
+    if let Some(argument) = prefix_map_option(arg)? {
+        return Ok(argument);
     }
     if arg == "-D" || arg == "-U" {
         let value = take_value(args, index)?;
         if !safe_macro(value) {
             return Err(Bypass::UnknownOption);
         }
+        debug_assert!(!value.is_empty());
         return Ok(SemanticArgument::Literal(alloc::format!("{arg}{value}")));
     }
     if (arg.starts_with("-D") || arg.starts_with("-U")) && safe_macro(&arg[2..]) {
@@ -242,6 +236,44 @@ fn classify_option(args: &[String], index: &mut usize) -> Result<SemanticArgumen
         return Ok(SemanticArgument::Literal(arg.clone()));
     }
     Err(Bypass::UnknownOption)
+}
+
+/// Prefix-map options are order sensitive, so only the first matching option
+/// form is classified; the mapped target must stay a relative, `..`-free path.
+fn prefix_map_option(arg: &str) -> Result<Option<SemanticArgument>, Bypass> {
+    for option in ["-ffile-prefix-map", "-fmacro-prefix-map", "-fdebug-prefix-map"] {
+        let Some(mapping) = arg.strip_prefix(option).and_then(|text| text.strip_prefix('=')) else {
+            continue;
+        };
+        let Some((from, to)) = mapping.split_once('=') else {
+            return Err(Bypass::UnknownOption);
+        };
+        if from.is_empty() || !is_classifiable_prefix_target(to) {
+            return Err(Bypass::UnclassifiedPath);
+        }
+        return Ok(Some(SemanticArgument::PrefixMap {
+            option: option.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+        }));
+    }
+    Ok(None)
+}
+
+fn is_classifiable_prefix_target(to: &str) -> bool {
+    if to.contains('=') {
+        return false;
+    }
+    if to.starts_with('/') {
+        return false;
+    }
+    if to.contains('\\') {
+        return false;
+    }
+    if to.split('/').any(|part| part == "..") {
+        return false;
+    }
+    true
 }
 
 /// Content-only replay cannot represent clocks or file mtimes. Be conservative:
@@ -270,6 +302,14 @@ fn safe_macro(value: &str) -> bool {
 }
 
 fn literal_option(value: &str) -> bool {
+    literal_codegen_option(value)
+        || literal_diagnostic_option(value)
+        || literal_runtime_option(value)
+        || literal_target_option(value)
+        || literal_standard_option(value)
+}
+
+fn literal_codegen_option(value: &str) -> bool {
     matches!(
         value,
         "-O0"
@@ -283,16 +323,6 @@ fn literal_option(value: &str) -> bool {
             | "-g0"
             | "-pipe"
             | "-pthread"
-            | "-pedantic"
-            | "-pedantic-errors"
-            | "-Wall"
-            | "-Wextra"
-            | "-Werror"
-            | "-Wno-error"
-            | "-Wno-unused-parameter"
-            | "-Wno-unused-function"
-            | "-Wno-unused-variable"
-            | "-Wno-sign-compare"
             | "-fPIC"
             | "-fpic"
             | "-fPIE"
@@ -305,7 +335,29 @@ fn literal_option(value: &str) -> bool {
             | "-fomit-frame-pointer"
             | "-ffunction-sections"
             | "-fdata-sections"
-            | "-fno-builtin"
+    )
+}
+
+fn literal_diagnostic_option(value: &str) -> bool {
+    matches!(
+        value,
+        "-pedantic"
+            | "-pedantic-errors"
+            | "-Wall"
+            | "-Wextra"
+            | "-Werror"
+            | "-Wno-error"
+            | "-Wno-unused-parameter"
+            | "-Wno-unused-function"
+            | "-Wno-unused-variable"
+            | "-Wno-sign-compare"
+    )
+}
+
+fn literal_runtime_option(value: &str) -> bool {
+    matches!(
+        value,
+        "-fno-builtin"
             | "-ffreestanding"
             | "-fno-common"
             | "-fcommon"
@@ -315,11 +367,17 @@ fn literal_option(value: &str) -> bool {
             | "-frtti"
             | "-funsigned-char"
             | "-fsigned-char"
-            | "-m32"
-            | "-m64"
-            | "-nostdinc"
-            | "-nostdinc++"
-            | "-std=c89"
+    )
+}
+
+fn literal_target_option(value: &str) -> bool {
+    matches!(value, "-m32" | "-m64" | "-nostdinc" | "-nostdinc++")
+}
+
+fn literal_standard_option(value: &str) -> bool {
+    matches!(
+        value,
+        "-std=c89"
             | "-std=c90"
             | "-std=c99"
             | "-std=c11"
@@ -413,16 +471,31 @@ fn validate_manifest(manifest: &DependencyManifest) -> Result<(), Bypass> {
     }
     let mut names = BTreeSet::new();
     for item in &manifest.dependencies {
-        if !clean_path(&item.name)
-            || item.name.starts_with('/')
-            || item.name == "."
-            || !valid_digest(&item.digest_blake3)
-            || !names.insert(&item.name)
-        {
+        if !valid_dependency(item) {
+            return Err(Bypass::InvalidIdentity);
+        }
+        if !names.insert(&item.name) {
             return Err(Bypass::InvalidIdentity);
         }
     }
+    debug_assert!(names.len() == manifest.dependencies.len());
+    debug_assert!(manifest.dependencies.len() <= MAX_DEPENDENCIES);
     Ok(())
+}
+
+/// A dependency identity is only admissible when its alias-relative name is a
+/// clean relative path and its digest is a full BLAKE3 hex digest.
+fn valid_dependency(item: &DependencyIdentity) -> bool {
+    if !clean_path(&item.name) {
+        return false;
+    }
+    if item.name.starts_with('/') {
+        return false;
+    }
+    if item.name == "." {
+        return false;
+    }
+    valid_digest(&item.digest_blake3)
 }
 
 fn validate_key_inputs(inputs: &KeyInputs) -> Result<(), Bypass> {
@@ -452,20 +525,25 @@ fn validate_key_inputs(inputs: &KeyInputs) -> Result<(), Bypass> {
             return Err(Bypass::InvalidIdentity);
         }
     }
+    debug_assert!(paths.len() == inputs.roots.len());
+    debug_assert!(inputs.roots.len() <= MAX_ROOTS);
     validate_manifest(&inputs.manifest)
 }
 
-fn relative_to<'a>(path: &'a str, root: &str) -> Option<&'a str> {
-    if path == root {
+/// Resolve `path` against an attested identity root, returning the
+/// root-relative remainder. `None` means the path is outside the root.
+fn relative_to<'a>(path: &'a str, root: &IdentityRoot) -> Option<&'a str> {
+    let root_path = root.path.as_str();
+    if path == root_path {
         return Some("");
     }
-    if root == "." && !path.starts_with('/') {
+    if root_path == "." && !path.starts_with('/') {
         return Some(path);
     }
-    if root == "/" {
+    if root_path == "/" {
         return path.strip_prefix('/');
     }
-    path.strip_prefix(root).and_then(|suffix| suffix.strip_prefix('/'))
+    path.strip_prefix(root_path).and_then(|suffix| suffix.strip_prefix('/'))
 }
 
 fn hash_field(hash: &mut blake3::Hasher, bytes: &[u8]) {
@@ -479,13 +557,13 @@ fn hash_path(hash: &mut blake3::Hasher, path: &str, roots: &[IdentityRoot]) -> R
     }
     let root = roots
         .iter()
-        .filter(|root| relative_to(path, &root.path).is_some())
+        .filter(|root| relative_to(path, root).is_some())
         .max_by_key(|root| root.path.len())
         .ok_or(Bypass::UnclassifiedPath)?;
     if !root.path_independent {
         return Err(Bypass::PathDependentOutput);
     }
-    let relative = relative_to(path, &root.path).ok_or(Bypass::UnclassifiedPath)?;
+    let relative = relative_to(path, root).ok_or(Bypass::UnclassifiedPath)?;
     hash_field(hash, root.digest_blake3.as_bytes());
     hash_field(hash, relative.as_bytes());
     Ok(())
@@ -521,18 +599,22 @@ pub fn semantic_key(invocation: &Invocation, inputs: &KeyInputs) -> Result<Strin
     hash_arguments(&mut hash, &invocation.semantic_args, &inputs.roots)?;
     let mut roots: Vec<&str> = inputs.roots.iter().map(|root| root.digest_blake3.as_str()).collect();
     roots.sort_unstable();
+    debug_assert!(roots.len() == inputs.roots.len());
     hash_field(&mut hash, &(roots.len() as u64).to_le_bytes());
     for root in roots {
         hash_field(&mut hash, root.as_bytes());
     }
     let mut dependencies: Vec<&DependencyIdentity> = inputs.manifest.dependencies.iter().collect();
     dependencies.sort_unstable();
+    debug_assert!(dependencies.len() == inputs.manifest.dependencies.len());
     hash_field(&mut hash, &(dependencies.len() as u64).to_le_bytes());
     for dependency in dependencies {
         hash_field(&mut hash, dependency.name.as_bytes());
         hash_field(&mut hash, dependency.digest_blake3.as_bytes());
     }
-    Ok(hash.finalize().to_hex().to_string())
+    let key = hash.finalize().to_hex().to_string();
+    debug_assert!(key.len() == 64);
+    Ok(key)
 }
 
 fn hash_arguments(hash: &mut blake3::Hasher, args: &[SemanticArgument], roots: &[IdentityRoot]) -> Result<(), Bypass> {
@@ -543,6 +625,7 @@ fn hash_arguments(hash: &mut blake3::Hasher, args: &[SemanticArgument], roots: &
                 if !bounded_text(value) || value.contains(['/', '\\']) {
                     return Err(Bypass::UnclassifiedPath);
                 }
+                debug_assert!(!value.is_empty());
                 hash_field(hash, b"literal");
                 hash_field(hash, value.as_bytes());
             }
@@ -550,20 +633,16 @@ fn hash_arguments(hash: &mut blake3::Hasher, args: &[SemanticArgument], roots: &
                 if !bounded_text(option) {
                     return Err(Bypass::InvalidIdentity);
                 }
+                debug_assert!(!option.is_empty());
                 hash_field(hash, b"path");
                 hash_field(hash, option.as_bytes());
                 hash_path(hash, path, roots)?;
             }
             SemanticArgument::PrefixMap { option, from, to } => {
-                if !bounded_text(option)
-                    || to.len() > MAX_STRING_BYTES
-                    || to.starts_with('/')
-                    || to.contains(['\\', '='])
-                    || to.chars().any(char::is_control)
-                    || to.split('/').any(|part| part == "..")
-                {
+                if !bounded_text(option) || !is_hashable_prefix_target(to) {
                     return Err(Bypass::UnclassifiedPath);
                 }
+                debug_assert!(!option.is_empty());
                 hash_field(hash, b"prefix-map");
                 hash_field(hash, option.as_bytes());
                 hash_path(hash, from, roots)?;
@@ -572,6 +651,27 @@ fn hash_arguments(hash: &mut blake3::Hasher, args: &[SemanticArgument], roots: &
         }
     }
     Ok(())
+}
+
+/// A hashed prefix-map target must stay relative, bounded and free of
+/// control characters, `=` separators and `..` segments.
+fn is_hashable_prefix_target(to: &str) -> bool {
+    if to.len() > MAX_STRING_BYTES {
+        return false;
+    }
+    if to.starts_with('/') {
+        return false;
+    }
+    if to.contains(['\\', '=']) {
+        return false;
+    }
+    if to.chars().any(char::is_control) {
+        return false;
+    }
+    if to.split('/').any(|part| part == "..") {
+        return false;
+    }
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -613,15 +713,29 @@ pub fn replay_admission(kind: CachedResultKind, invocation: &Invocation, inputs:
     semantic_key(invocation, inputs)
 }
 
+/// The main rule identity a depfile must declare.
+struct DepfileExpectation<'a> {
+    target: &'a str,
+    source: &'a str,
+}
+
 /// Parse the GCC/Clang make depfile subset. One main target is required; -MP
 /// stubs must name known prerequisites. Rejects make expansion, multiple main
 /// rules, malformed escaping, absent source, truncation, and unknown syntax.
 /// The resulting paths are *not* content identities: the shell must hash them.
-pub fn parse_depfile(text: &str, expected_target: &str, expected_source: &str) -> Result<Vec<String>, Bypass> {
+pub fn parse_depfile<T, U>(text: &str, expected_target: T, expected_source: U) -> Result<Vec<String>, Bypass>
+where
+    T: AsRef<str>,
+    U: AsRef<str>,
+{
+    let expectation = DepfileExpectation {
+        target: expected_target.as_ref(),
+        source: expected_source.as_ref(),
+    };
     if text.is_empty() || text.len() > MAX_DEPFILE_BYTES {
         return Err(Bypass::BoundsExceeded);
     }
-    if !text.ends_with('\n') || !bounded_text(expected_target) || !bounded_text(expected_source) {
+    if !text.ends_with('\n') || !bounded_text(expectation.target) || !bounded_text(expectation.source) {
         return Err(Bypass::InvalidDepfile);
     }
     let lines = depfile_lines(text)?;
@@ -633,30 +747,53 @@ pub fn parse_depfile(text: &str, expected_target: &str, expected_source: &str) -
         }
         let (targets, inputs) = depfile_rule(&line)?;
         if dependencies.is_empty() {
-            if targets.len() != 1
-                || targets[0] != expected_target
-                || inputs.is_empty()
-                || !inputs.iter().any(|path| path == expected_source)
-            {
+            if targets.len() != 1 {
                 return Err(Bypass::InvalidDepfile);
             }
-            let mut unique = BTreeSet::new();
-            for input in inputs {
-                if unique.insert(input.clone()) {
-                    dependencies.push(input);
-                }
+            if targets[0] != expectation.target {
+                return Err(Bypass::InvalidDepfile);
             }
-        } else if targets.len() != 1
-            || !inputs.is_empty()
-            || !dependencies.contains(&targets[0])
-            || !stubs.insert(targets[0].clone())
-        {
-            return Err(Bypass::InvalidDepfile);
+            dependencies = main_rule_dependencies(inputs, &expectation)?;
+        } else {
+            if targets.len() != 1 {
+                return Err(Bypass::InvalidDepfile);
+            }
+            if !inputs.is_empty() {
+                return Err(Bypass::InvalidDepfile);
+            }
+            if !dependencies.contains(&targets[0]) {
+                return Err(Bypass::InvalidDepfile);
+            }
+            if !stubs.insert(targets[0].clone()) {
+                return Err(Bypass::InvalidDepfile);
+            }
         }
     }
     if dependencies.is_empty() {
         return Err(Bypass::InvalidDepfile);
     }
+    debug_assert!(!dependencies.is_empty());
+    debug_assert!(dependencies.len() <= MAX_DEPENDENCIES);
+    Ok(dependencies)
+}
+
+/// The main rule must name the expected source; prerequisites are returned in
+/// first-seen order with duplicates removed.
+fn main_rule_dependencies(inputs: Vec<String>, expectation: &DepfileExpectation<'_>) -> Result<Vec<String>, Bypass> {
+    if inputs.is_empty() {
+        return Err(Bypass::InvalidDepfile);
+    }
+    if !inputs.iter().any(|path| path == expectation.source) {
+        return Err(Bypass::InvalidDepfile);
+    }
+    let mut unique = BTreeSet::new();
+    let mut dependencies = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        if unique.insert(input.clone()) {
+            dependencies.push(input);
+        }
+    }
+    debug_assert!(dependencies.len() == unique.len());
     Ok(dependencies)
 }
 
@@ -666,32 +803,20 @@ fn depfile_lines(text: &str) -> Result<Vec<String>, Bypass> {
     let mut lines = Vec::new();
     let mut current = String::new();
     let mut chars = text.chars().peekable();
-    while let Some(character) = chars.next() {
+    while chars.peek().is_some() {
+        let character = chars.next().ok_or(Bypass::InvalidDepfile)?;
         match character {
-            '\\' => {
-                let next = chars.next().ok_or(Bypass::InvalidDepfile)?;
-                if next == '\n' {
-                    current.push(' ');
-                } else if next == '\r' && chars.peek() == Some(&'\n') {
-                    chars.next();
-                    current.push(' ');
-                } else if matches!(next, ' ' | '\t' | '\\' | '#' | ':') {
-                    current.push('\\');
-                    current.push(next);
-                } else {
-                    return Err(Bypass::InvalidDepfile);
-                }
-            }
+            '\\' => push_escape(&mut current, &mut chars)?,
             '#' => {
                 while chars.peek().is_some_and(|value| *value != '\n') {
                     chars.next();
                 }
             }
             '\n' => {
-                lines.push(core::mem::take(&mut current));
-                if lines.len() > MAX_DEPENDENCIES + 1 {
+                if lines.len() >= MAX_DEPENDENCIES.saturating_add(1) {
                     return Err(Bypass::BoundsExceeded);
                 }
+                lines.push(core::mem::take(&mut current));
             }
             '\r' if chars.peek() == Some(&'\n') => {}
             '$' | ';' | '|' | '=' | '\0' => return Err(Bypass::InvalidDepfile),
@@ -702,27 +827,57 @@ fn depfile_lines(text: &str) -> Result<Vec<String>, Bypass> {
     if !current.is_empty() {
         return Err(Bypass::InvalidDepfile);
     }
+    debug_assert!(current.is_empty());
+    debug_assert!(lines.len() <= MAX_DEPENDENCIES.saturating_add(1));
     Ok(lines)
+}
+
+/// An escape keeps its backslash unless it continues a line; continuations
+/// collapse to a single space so two dependency names never join.
+fn push_escape(current: &mut String, chars: &mut Peekable<Chars<'_>>) -> Result<(), Bypass> {
+    let next = chars.next().ok_or(Bypass::InvalidDepfile)?;
+    if next == '\n' {
+        current.push(' ');
+        debug_assert!(current.ends_with(' '));
+        return Ok(());
+    }
+    if next == '\r' {
+        if chars.peek() != Some(&'\n') {
+            return Err(Bypass::InvalidDepfile);
+        }
+        chars.next();
+        current.push(' ');
+        debug_assert!(current.ends_with(' '));
+        return Ok(());
+    }
+    if matches!(next, ' ' | '\t' | '\\' | '#' | ':') {
+        current.push('\\');
+        current.push(next);
+        debug_assert!(current.ends_with(next));
+        return Ok(());
+    }
+    Err(Bypass::InvalidDepfile)
 }
 
 fn depfile_rule(line: &str) -> Result<(Vec<String>, Vec<String>), Bypass> {
     let mut targets = Vec::new();
     let mut inputs = Vec::new();
     let mut word = String::new();
-    let mut colon = false;
-    let mut chars = line.chars();
-    while let Some(character) = chars.next() {
+    let mut has_colon = false;
+    let mut chars = line.chars().peekable();
+    while chars.peek().is_some() {
+        let character = chars.next().ok_or(Bypass::InvalidDepfile)?;
         match character {
             '\\' => word.push(chars.next().ok_or(Bypass::InvalidDepfile)?),
             ':' => {
-                if colon {
+                if has_colon {
                     return Err(Bypass::InvalidDepfile);
                 }
                 finish_word(&mut word, &mut targets)?;
-                colon = true;
+                has_colon = true;
             }
             ' ' | '\t' => {
-                finish_word(&mut word, if colon { &mut inputs } else { &mut targets })?;
+                finish_word(&mut word, if has_colon { &mut inputs } else { &mut targets })?;
             }
             value => word.push(value),
         }
@@ -730,10 +885,13 @@ fn depfile_rule(line: &str) -> Result<(Vec<String>, Vec<String>), Bypass> {
             return Err(Bypass::BoundsExceeded);
         }
     }
-    finish_word(&mut word, if colon { &mut inputs } else { &mut targets })?;
-    if !colon || targets.is_empty() {
+    finish_word(&mut word, if has_colon { &mut inputs } else { &mut targets })?;
+    if !has_colon || targets.is_empty() {
         return Err(Bypass::InvalidDepfile);
     }
+    debug_assert!(has_colon);
+    debug_assert!(targets.len() <= MAX_DEPENDENCIES);
+    debug_assert!(inputs.len() <= MAX_DEPENDENCIES);
     Ok((targets, inputs))
 }
 

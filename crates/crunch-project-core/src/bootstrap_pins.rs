@@ -152,7 +152,10 @@ fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<b
     if !template.contains("{version}") {
         return Ok(false);
     }
-    Ok(render_pin_url_ref(&artifact.url_template, version)? == artifact.url)
+    Ok(render_pin_url_ref(RenderPinUrlRequest {
+        url_template: &artifact.url_template,
+        version,
+    })? == artifact.url)
 }
 
 fn valid_resolve_hook(hook: &ResolveHook) -> bool {
@@ -174,8 +177,18 @@ pub struct RenderedPinUrl {
     pub url: String,
 }
 
+/// A template and the version to render into it, bundled so call sites cannot swap them.
+#[derive(Debug)]
+struct RenderPinUrlRequest<'a> {
+    url_template: &'a str,
+    version: &'a str,
+}
+
 pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedPinUrl, String> {
-    let url = render_pin_url_ref(&url_template, &version)?;
+    let url = render_pin_url_ref(RenderPinUrlRequest {
+        url_template: &url_template,
+        version: &version,
+    })?;
     Ok(RenderedPinUrl {
         url_template,
         version,
@@ -183,11 +196,11 @@ pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedP
     })
 }
 
-fn render_pin_url_ref(url_template: &str, version: &str) -> Result<String, String> {
-    if !valid_version(version) {
+fn render_pin_url_ref(request: RenderPinUrlRequest<'_>) -> Result<String, String> {
+    if !valid_version(request.version) {
         return Err("invalid candidate version".to_string());
     }
-    let url = url_template.replace("{version}", version);
+    let url = request.url_template.replace("{version}", request.version);
     if !url.starts_with("https://") || url.len() > MAX_URL_BYTES {
         return Err("rendered pin URL is invalid".to_string());
     }
@@ -236,6 +249,13 @@ pub struct VersionPair {
     pub candidate: String,
 }
 
+/// Borrowed current and candidate versions, named so call sites cannot swap them.
+#[derive(Debug)]
+struct VersionPairRef<'a> {
+    current: &'a str,
+    candidate: &'a str,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VersionOrder {
     Less,
@@ -252,7 +272,10 @@ pub struct VersionComparison {
 /// Compare numeric segments numerically and remaining segments lexically.
 /// Every segment is compared, including suffixes after long equal prefixes.
 pub fn compare_versions(versions: VersionPair) -> VersionComparison {
-    let ordering = match compare_versions_ref(&versions.current, &versions.candidate) {
+    let ordering = match compare_versions_ref(VersionPairRef {
+        current: &versions.current,
+        candidate: &versions.candidate,
+    }) {
         core::cmp::Ordering::Less => VersionOrder::Less,
         core::cmp::Ordering::Equal => VersionOrder::Equal,
         core::cmp::Ordering::Greater => VersionOrder::Greater,
@@ -260,7 +283,9 @@ pub fn compare_versions(versions: VersionPair) -> VersionComparison {
     VersionComparison { versions, ordering }
 }
 
-fn compare_versions_ref(current: &str, candidate: &str) -> core::cmp::Ordering {
+fn compare_versions_ref(versions: VersionPairRef<'_>) -> core::cmp::Ordering {
+    let current = versions.current;
+    let candidate = versions.candidate;
     let mut current_parts = current.split(['.', '-', '_']);
     let mut candidate_parts = candidate.split(['.', '-', '_']);
     let segment_bound = current.len().max(candidate.len()).saturating_add(1);
@@ -313,7 +338,11 @@ fn candidate_is_newer(pin: &BootstrapPin, candidate: &PinCandidate) -> Result<bo
     if !valid_version(&candidate.version) || !valid_date(&candidate.release_date) {
         return Err("invalid upstream version or date".to_string());
     }
-    if !compare_versions_ref(&pin.version, &candidate.version).is_lt() {
+    let ordering = compare_versions_ref(VersionPairRef {
+        current: &pin.version,
+        candidate: &candidate.version,
+    });
+    if !ordering.is_lt() {
         return Ok(false);
     }
     let is_complete = candidate.hashes.len() == pin.artifacts.len()
