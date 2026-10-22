@@ -4,6 +4,7 @@ target
 target-autoresearch*/
 coverage/
 doc/
+__pycache__/
 
 # Nix
 result*
