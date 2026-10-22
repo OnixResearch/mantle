@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::ambient_clock)]
+
 //! Same-daemon compile slots. Scheduling receipts are not build evidence.
 //!
 //! Each lease occupies one dedicated, bounded daemon connection worker. Never
@@ -65,7 +71,7 @@ pub struct SlotAuthority {
     changed: Condvar,
     epoch: Instant,
     receipt_sink: ReceiptSink,
-    connection_limit: u32,
+    max_connections: u32,
 }
 
 // r[impl mantle.compile_slots.slot_authority]
@@ -85,7 +91,7 @@ impl SlotAuthority {
     pub fn with_receipt_sink(policy: SlotPolicy, receipt_sink: ReceiptSink) -> Result<Self, Error> {
         let slots =
             SlotState::new(policy).map_err(|reason| Error::Policy(format!("compile-slot-policy:{reason:?}")))?;
-        let connection_limit = slots.policy().total_slots + slots.policy().total_queue;
+        let max_connections = slots.policy().total_slots.saturating_add(slots.policy().total_queue);
         Ok(Self {
             state: Mutex::new(AuthorityState {
                 slots,
@@ -94,12 +100,12 @@ impl SlotAuthority {
             changed: Condvar::new(),
             epoch: Instant::now(),
             receipt_sink,
-            connection_limit,
+            max_connections,
         })
     }
 
     pub fn connection_limit(&self) -> u32 {
-        self.connection_limit
+        self.max_connections
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, AuthorityState>, Error> {
@@ -107,7 +113,9 @@ impl SlotAuthority {
     }
 
     fn now_ms(&self) -> u64 {
-        self.epoch.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+        let elapsed_ms = self.epoch.elapsed().as_millis();
+        // A lease older than the u64 millisecond range saturates at the range end.
+        u64::try_from(elapsed_ms).map_or(u64::MAX, |value| value)
     }
 
     fn emit(&self, receipt: &SlotReceipt) {
@@ -115,14 +123,15 @@ impl SlotAuthority {
     }
 
     fn reserve_available(&self) -> Result<(), Error> {
-        loop {
-            let receipt = self.lock()?.slots.reserve(self.now_ms());
-            let Some(receipt) = receipt else {
-                return Ok(());
-            };
-            self.changed.notify_all();
-            self.emit(&receipt);
+        let mut pending = self.lock()?.slots.reserve(self.now_ms());
+        while pending.is_some() {
+            if let Some(receipt) = pending.take() {
+                self.changed.notify_all();
+                self.emit(&receipt);
+            }
+            pending = self.lock()?.slots.reserve(self.now_ms());
         }
+        Ok(())
     }
 
     /// Caller authenticates the peer using the existing daemon policy before
@@ -168,7 +177,8 @@ impl SlotAuthority {
         let result = self.serve_lease(stream, &mut reservation, &grant, timeout_ms);
         if result.is_err() {
             // Unblock a forked child still waiting for ACK before waiting on its pidfd.
-            let _ = stream.shutdown(std::net::Shutdown::Both);
+            let shutdown = stream.shutdown(std::net::Shutdown::Both);
+            debug_assert!(shutdown.is_ok(), "compile-slot-shutdown-failed");
         }
         result
     }
@@ -204,7 +214,7 @@ impl SlotAuthority {
                 self.reserve_available()?;
                 return Ok(receipt);
             }
-            let remaining = Duration::from_millis(timeout_ms - elapsed_ms).min(CHECK_INTERVAL);
+            let remaining = Duration::from_millis(timeout_ms.saturating_sub(elapsed_ms)).min(CHECK_INTERVAL);
             state = self
                 .changed
                 .wait_timeout(state, remaining)
@@ -342,9 +352,22 @@ fn lifecycle_operation(stream: &UnixStream) -> Result<(u8, u32), Error> {
     message.msg_iovlen = 1;
     message.msg_control = control.as_mut_ptr().cast();
     message.msg_controllen = std::mem::size_of_val(&control);
-    loop {
+    receive_lifecycle_byte(stream, &mut message)?;
+    debug_assert_eq!(message.msg_iovlen, 1);
+    if message.msg_flags & libc::MSG_CTRUNC != 0 {
+        return Err(Error::Protocol("compile-slot-truncated-credentials".into()));
+    }
+    let sender_pid = sender_pid_from_credentials(&message)?;
+    debug_assert!(sender_pid > 0);
+    Ok((operation, sender_pid))
+}
+
+/// Reads the single lifecycle byte, retrying only on an interrupted syscall.
+fn receive_lifecycle_byte(stream: &UnixStream, message: &mut libc::msghdr) -> Result<(), Error> {
+    let mut is_received = false;
+    while !is_received {
         // SAFETY: message owns correctly sized writable buffers throughout recvmsg.
-        let count = unsafe { libc::recvmsg(stream.as_raw_fd(), &mut message, 0) };
+        let count = unsafe { libc::recvmsg(stream.as_raw_fd(), message, 0) };
         if count < 0 && io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
             continue;
         }
@@ -355,19 +378,25 @@ fn lifecycle_operation(stream: &UnixStream) -> Result<(u8, u32), Error> {
                 io::Error::last_os_error()
             }));
         }
-        break;
+        is_received = true;
     }
-    if message.msg_flags & libc::MSG_CTRUNC != 0 {
-        return Err(Error::Protocol("compile-slot-truncated-credentials".into()));
-    }
+    Ok(())
+}
+
+/// Reads the sender's host PID from the ancillary credential header.
+fn sender_pid_from_credentials(message: &libc::msghdr) -> Result<u32, Error> {
+    // SAFETY: CMSG_LEN is a pure size computation over a compile-time constant.
+    let credential_len = unsafe { libc::CMSG_LEN(std::mem::size_of::<libc::ucred>() as libc::c_uint) };
+    let credential_min_bytes = usize::try_from(credential_len).map_or(usize::MAX, |min_bytes| min_bytes);
+    debug_assert!(credential_min_bytes > 0);
     // SAFETY: libc traverses the returned ancillary buffer using its recorded bounds.
-    let mut header = unsafe { libc::CMSG_FIRSTHDR(&message) };
+    let mut header = unsafe { libc::CMSG_FIRSTHDR(message) };
     while !header.is_null() {
         // SAFETY: header is a valid control header inside message's stack buffer.
         let credential = unsafe {
             if (*header).cmsg_level == libc::SOL_SOCKET
                 && (*header).cmsg_type == libc::SCM_CREDENTIALS
-                && (*header).cmsg_len >= libc::CMSG_LEN(std::mem::size_of::<libc::ucred>() as _) as usize
+                && (*header).cmsg_len >= credential_min_bytes
             {
                 Some(std::ptr::read_unaligned(libc::CMSG_DATA(header).cast::<libc::ucred>()))
             } else {
@@ -378,10 +407,11 @@ fn lifecycle_operation(stream: &UnixStream) -> Result<(u8, u32), Error> {
             if credential.pid <= 0 {
                 return Err(Error::Protocol("compile-slot-invisible-sender".into()));
             }
-            return Ok((operation, credential.pid as u32));
+            debug_assert!(credential.pid > 0);
+            return u32::try_from(credential.pid).map_err(|_| Error::Protocol("compile-slot-invisible-sender".into()));
         }
         // SAFETY: current header and message are valid ancillary buffer views.
-        header = unsafe { libc::CMSG_NXTHDR(&message, header) };
+        header = unsafe { libc::CMSG_NXTHDR(message, header) };
     }
     Err(Error::Protocol("compile-slot-missing-sender-credentials".into()))
 }
@@ -413,13 +443,15 @@ fn open_pidfd(pid: u32) -> Result<OwnedFd, Error> {
     if fd < 0 {
         return Err(io_error(io::Error::last_os_error()));
     }
+    let descriptor = i32::try_from(fd).map_err(|_| io_error(io::Error::from_raw_os_error(libc::EOVERFLOW)))?;
     // SAFETY: successful pidfd_open returned a newly owned descriptor.
-    Ok(unsafe { OwnedFd::from_raw_fd(fd as RawFd) })
+    Ok(unsafe { OwnedFd::from_raw_fd(descriptor) })
 }
 
 /// Fail closed on transient poll errors: never return while the child is live.
 fn wait_child(child: &OwnedFd) {
-    loop {
+    let mut is_live = true;
+    while is_live {
         let mut descriptor = libc::pollfd {
             fd: child.as_raw_fd(),
             events: libc::POLLIN,
@@ -428,20 +460,21 @@ fn wait_child(child: &OwnedFd) {
         // SAFETY: descriptor is a valid one-element poll array; pidfd stays owned.
         let result = unsafe { libc::poll(&mut descriptor, 1, -1) };
         if result > 0 && descriptor.revents & (libc::POLLIN | libc::POLLHUP) != 0 {
-            return;
-        }
-        if result < 0 && io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+            is_live = false;
+        } else if result < 0 && io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
             std::thread::sleep(CHECK_INTERVAL);
         }
     }
 }
 
 fn await_release_or_disconnect(stream: &mut UnixStream) -> Result<bool, Error> {
-    loop {
-        let mut operation = [0_u8; 1];
+    let mut operation = [0_u8; 1];
+    let mut is_released = false;
+    let mut is_disconnected = false;
+    while !is_released && !is_disconnected {
         match stream.read(&mut operation) {
-            Ok(0) => return Ok(false),
-            Ok(_) if operation[0] == RELEASE => return Ok(true),
+            Ok(0) => is_disconnected = true,
+            Ok(_) if operation[0] == RELEASE => is_released = true,
             Ok(_) => return Err(Error::Protocol("compile-slot-release-opcode".to_string())),
             Err(error)
                 if matches!(
@@ -451,6 +484,9 @@ fn await_release_or_disconnect(stream: &mut UnixStream) -> Result<bool, Error> {
             Err(error) => return Err(io_error(error)),
         }
     }
+    debug_assert!(is_released != is_disconnected);
+    debug_assert!(!is_released || operation[0] == RELEASE);
+    Ok(is_released)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -490,28 +526,20 @@ pub struct SlotLease {
 
 // r[impl mantle.compile_slots.degrade_without_authority]
 pub fn acquire_slot(socket: &Path, build_id: &str, wait_timeout: Duration) -> SlotClientOutcome {
-    let degrade = |reason, authority_receipt| {
-        SlotClientOutcome::Degraded(SlotDegradation {
-            schema: SLOT_DEGRADATION_SCHEMA.to_string(),
-            build_id: build_id.to_string(),
-            disposition: "degraded".to_string(),
-            reason,
-            authority_receipt,
-        })
-    };
-    if build_id.is_empty()
-        || build_id.len() > MAX_BUILD_ID_BYTES
-        || wait_timeout.is_zero()
-        || wait_timeout > Duration::from_millis(MAX_WAIT_TIMEOUT_MS)
-    {
-        return degrade(SlotDegradedReason::InvalidRequest, None);
+    let is_build_id_invalid = build_id.is_empty() || build_id.len() > MAX_BUILD_ID_BYTES;
+    let is_wait_budget_invalid = wait_timeout.is_zero() || wait_timeout > Duration::from_millis(MAX_WAIT_TIMEOUT_MS);
+    if is_build_id_invalid || is_wait_budget_invalid {
+        return degraded_outcome(build_id, SlotDegradedReason::InvalidRequest, None);
     }
+    debug_assert!(!build_id.is_empty());
+    debug_assert!(build_id.len() <= MAX_BUILD_ID_BYTES);
+    debug_assert!(!wait_timeout.is_zero());
     let started = Instant::now();
     let mut stream = match connect_bounded(socket, wait_timeout) {
         Ok(stream) => stream,
-        Err(_) => return degrade(SlotDegradedReason::AuthorityUnavailable, None),
+        Err(_) => return degraded_outcome(build_id, SlotDegradedReason::AuthorityUnavailable, None),
     };
-    let mut transport = DeadlineIo {
+    let mut deadline_io = DeadlineIo {
         stream: &mut stream,
         deadline: started + wait_timeout,
     };
@@ -519,30 +547,46 @@ pub fn acquire_slot(socket: &Path, build_id: &str, wait_timeout: Duration) -> Sl
         schema: SLOT_ACQUIRE_SCHEMA.to_string(),
         build_id: build_id.to_string(),
     };
-    if write_frame(&mut transport, &request, SLOT_FRAME_BYTES).is_err() {
-        return degrade(SlotDegradedReason::AuthorityUnavailable, None);
+    if write_frame(&mut deadline_io, &request, SLOT_FRAME_BYTES).is_err() {
+        return degraded_outcome(build_id, SlotDegradedReason::AuthorityUnavailable, None);
     }
-    let response = read_frame::<SlotReceipt>(&mut transport, SLOT_FRAME_BYTES);
+    let response = read_frame::<SlotReceipt>(&mut deadline_io, SLOT_FRAME_BYTES);
     match response {
-        Ok(receipt)
-            if receipt.schema == crunch_rust_cache_core::slots::SLOT_RECEIPT_SCHEMA
-                && receipt.build_id == build_id
-                && receipt.decision == SlotDecision::Granted =>
-        {
-            SlotClientOutcome::Granted(SlotLease {
-                stream,
-                grant_receipt: receipt,
-                spawn_attempted: false,
-            })
-        }
-        Ok(receipt) => degrade(SlotDegradedReason::AuthorityRejected, Some(receipt)),
+        Ok(receipt) if is_granted_receipt(&receipt, build_id) => SlotClientOutcome::Granted(SlotLease {
+            stream,
+            grant_receipt: receipt,
+            spawn_attempted: false,
+        }),
+        Ok(receipt) => degraded_outcome(build_id, SlotDegradedReason::AuthorityRejected, Some(receipt)),
         Err(Error::Io { source, .. })
             if matches!(source.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) =>
         {
-            degrade(SlotDegradedReason::AuthorityTimeout, None)
+            degraded_outcome(build_id, SlotDegradedReason::AuthorityTimeout, None)
         }
-        Err(_) => degrade(SlotDegradedReason::AuthorityProtocol, None),
+        Err(_) => degraded_outcome(build_id, SlotDegradedReason::AuthorityProtocol, None),
     }
+}
+
+/// Builds the degraded outcome published when the authority cannot grant.
+fn degraded_outcome(
+    build_id: &str,
+    reason: SlotDegradedReason,
+    authority_receipt: Option<SlotReceipt>,
+) -> SlotClientOutcome {
+    SlotClientOutcome::Degraded(SlotDegradation {
+        schema: SLOT_DEGRADATION_SCHEMA.to_string(),
+        build_id: build_id.to_string(),
+        disposition: "degraded".to_string(),
+        reason,
+        authority_receipt,
+    })
+}
+
+/// A grant is only honoured when the receipt matches this exact request.
+fn is_granted_receipt(receipt: &SlotReceipt, build_id: &str) -> bool {
+    receipt.schema == crunch_rust_cache_core::slots::SLOT_RECEIPT_SCHEMA
+        && receipt.build_id == build_id
+        && receipt.decision == SlotDecision::Granted
 }
 
 struct DeadlineIo<'a> {
@@ -588,9 +632,9 @@ impl SlotLease {
         if self.spawn_attempted {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "compile-slot-lease-already-used"));
         }
-        let timeout = Duration::from_millis(self.grant_receipt.wait_timeout_ms.clamp(1, MAX_WAIT_TIMEOUT_MS));
-        self.stream.set_read_timeout(Some(timeout))?;
-        self.stream.set_write_timeout(Some(timeout))?;
+        let timeout_ms = self.grant_receipt.wait_timeout_ms.clamp(1, MAX_WAIT_TIMEOUT_MS);
+        self.stream.set_read_timeout(Some(Duration::from_millis(timeout_ms)))?;
+        self.stream.set_write_timeout(Some(Duration::from_millis(timeout_ms)))?;
         self.spawn_attempted = true;
         let descriptor = self.stream.as_raw_fd();
         // SAFETY: hook calls only async-signal-safe setpgid/getpid/send/recv. The lease
@@ -614,43 +658,62 @@ impl SlotLease {
 /// Linux /proc is the liveness authority; errors fall back to conservative kill(0).
 pub(crate) fn process_group_live(group: i32) -> bool {
     assert!(group > 0);
-    let scan = || -> io::Result<bool> {
-        for entry in std::fs::read_dir("/proc")? {
-            let entry = entry?;
-            if !entry.file_name().as_bytes().iter().all(u8::is_ascii_digit) {
-                continue;
-            }
-            let Some((process_group, terminal)) = read_proc_stat(&entry.path().join("stat"))? else {
-                continue;
-            };
-            if process_group != group {
-                continue;
-            }
-            if !terminal {
-                return Ok(true);
-            }
-            // A pthread-exited group leader may be a zombie with live threads.
-            // Only ignore it when every remaining task is terminal as well.
-            let tasks = match std::fs::read_dir(entry.path().join("task")) {
-                Ok(tasks) => tasks,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error),
-            };
-            for task in tasks {
-                let Some((task_group, terminal)) = read_proc_stat(&task?.path().join("stat"))? else {
-                    continue;
-                };
-                if task_group == group && !terminal {
-                    return Ok(true);
-                }
-            }
-        }
-        Ok(false)
-    };
+    let scan = || -> io::Result<bool> { scan_process_group(group) };
     scan().unwrap_or_else(|_| {
+        debug_assert!(group > 0);
         // SAFETY: signal zero probes the owned process group without modifying it.
         (unsafe { libc::kill(-group, 0) }) == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
     })
+}
+
+/// Scans /proc for a live member of the owned process group.
+fn scan_process_group(group: i32) -> io::Result<bool> {
+    for entry in std::fs::read_dir("/proc")? {
+        let entry = entry?;
+        if !is_process_directory(&entry.file_name()) {
+            continue;
+        }
+        let Some((process_group, terminal)) = read_proc_stat(&entry.path().join("stat"))? else {
+            continue;
+        };
+        if process_group != group {
+            continue;
+        }
+        if !terminal {
+            debug_assert!(process_group == group);
+            return Ok(true);
+        }
+        // A pthread-exited group leader may be a zombie with live threads.
+        // Only ignore it when every remaining task is terminal as well.
+        if group_has_live_task(group, &entry.path())? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Only numeric /proc entries describe processes.
+fn is_process_directory(name: &std::ffi::OsStr) -> bool {
+    name.as_bytes().iter().all(u8::is_ascii_digit)
+}
+
+/// Reports whether any task of the process still runs inside the group.
+fn group_has_live_task(group: i32, process_path: &Path) -> io::Result<bool> {
+    let tasks = match std::fs::read_dir(process_path.join("task")) {
+        Ok(tasks) => tasks,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    for task in tasks {
+        let Some((task_group, terminal)) = read_proc_stat(&task?.path().join("stat"))? else {
+            continue;
+        };
+        if task_group == group && !terminal {
+            debug_assert!(group > 0);
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn stat_group_state(bytes: &[u8]) -> io::Result<(i32, bool)> {
@@ -660,7 +723,7 @@ fn stat_group_state(bytes: &[u8]) -> io::Result<(i32, bool)> {
         .iter()
         .rposition(|byte| *byte == b')')
         .ok_or_else(|| io::Error::other("compile-slot-proc-stat"))?;
-    let text = std::str::from_utf8(&bytes[end + 1..]).map_err(io::Error::other)?;
+    let text = std::str::from_utf8(&bytes[end.saturating_add(1)..]).map_err(io::Error::other)?;
     let mut fields = text.split_whitespace();
     let state = fields.next().ok_or_else(|| io::Error::other("compile-slot-proc-state"))?;
     let _parent = fields.next().ok_or_else(|| io::Error::other("compile-slot-proc-parent"))?;
@@ -681,17 +744,15 @@ fn read_proc_stat(path: &Path) -> io::Result<Option<(i32, bool)>> {
     };
     let mut bytes = [0_u8; 4096];
     let mut count = 0;
-    loop {
+    let mut is_complete = false;
+    while !is_complete {
+        debug_assert!(count <= bytes.len());
         if count == bytes.len() {
             return Err(io::Error::other("compile-slot-proc-stat-bound"));
         }
         match file.read(&mut bytes[count..]) {
             Ok(0) => {
-                return if count == 0 {
-                    Ok(None)
-                } else {
-                    stat_group_state(&bytes[..count]).map(Some)
-                };
+                is_complete = true;
             }
             Ok(read) => count += read,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
@@ -701,6 +762,11 @@ fn read_proc_stat(path: &Path) -> io::Result<Option<(i32, bool)>> {
             Err(error) => return Err(error),
         }
     }
+    debug_assert!(count <= bytes.len());
+    if count == 0 {
+        return Ok(None);
+    }
+    stat_group_state(&bytes[..count]).map(Some)
 }
 
 pub(crate) fn terminate_process_group(group: i32) {
@@ -728,11 +794,17 @@ fn child_handshake(descriptor: RawFd) -> io::Result<()> {
     // SAFETY: getpid has no preconditions and is async-signal-safe.
     let pid = unsafe { libc::getpid() } as u32;
     message[1..].copy_from_slice(&pid.to_be_bytes());
-    let mut offset = 0;
-    while offset < message.len() {
+    debug_assert_eq!(message[0], START_CHILD);
+    let mut offset_bytes = 0;
+    while offset_bytes < message.len() {
         // SAFETY: valid inherited socket and immutable remainder of stack buffer.
         let count = unsafe {
-            libc::send(descriptor, message[offset..].as_ptr().cast(), message.len() - offset, libc::MSG_NOSIGNAL)
+            libc::send(
+                descriptor,
+                message[offset_bytes..].as_ptr().cast(),
+                message.len().saturating_sub(offset_bytes),
+                libc::MSG_NOSIGNAL,
+            )
         };
         if count < 0 {
             let error = io::Error::last_os_error();
@@ -744,94 +816,122 @@ fn child_handshake(descriptor: RawFd) -> io::Result<()> {
         if count == 0 {
             return Err(io::Error::from_raw_os_error(libc::EPIPE));
         }
-        offset += count as usize;
+        offset_bytes += count as usize;
     }
+    debug_assert_eq!(offset_bytes, message.len());
     let mut ack = 0_u8;
-    loop {
+    let mut is_acknowledged = false;
+    while !is_acknowledged {
         // SAFETY: one writable stack byte and an inherited socket descriptor.
         let count = unsafe { libc::recv(descriptor, std::ptr::addr_of_mut!(ack).cast(), 1, 0) };
         if count == 1 && ack == CHILD_READY {
-            return Ok(());
-        }
-        if count < 0 {
+            is_acknowledged = true;
+        } else if count < 0 {
             let error = io::Error::last_os_error();
             if error.kind() == io::ErrorKind::Interrupted {
                 continue;
             }
             return Err(error);
+        } else {
+            return Err(io::Error::from_raw_os_error(libc::ECONNRESET));
         }
-        return Err(io::Error::from_raw_os_error(libc::ECONNRESET));
     }
+    debug_assert_eq!(ack, CHILD_READY);
+    Ok(())
 }
 
 /// Nonblocking connect avoids an unbounded wait on a full Unix accept backlog.
 fn connect_bounded(path: &Path, timeout: Duration) -> io::Result<UnixStream> {
+    let address = unix_socket_address(path)?;
+    // SAFETY: socket arguments specify a Linux Unix stream with owned CLOEXEC fd.
+    let raw = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };
+    if raw < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    debug_assert!(raw >= 0);
+    // SAFETY: successful socket returned a fresh descriptor.
+    let descriptor = unsafe { OwnedFd::from_raw_fd(raw) };
+    connect_within_deadline(raw, &address, timeout)?;
+    // SAFETY: clearing O_NONBLOCK on an owned socket preserves its CLOEXEC flag.
+    if unsafe { libc::fcntl(raw, libc::F_SETFL, 0) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(UnixStream::from(descriptor))
+}
+
+/// Builds the Unix socket address for a filesystem path.
+fn unix_socket_address(path: &Path) -> io::Result<libc::sockaddr_un> {
     let bytes = path.as_os_str().as_bytes();
     // SAFETY: sockaddr_un is plain data; zero initializes its pathname padding.
     let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     if bytes.is_empty() || bytes.len() >= address.sun_path.len() || bytes.contains(&0) {
         return Err(io::Error::from_raw_os_error(libc::EINVAL));
     }
-    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    address.sun_family =
+        libc::sa_family_t::try_from(libc::AF_UNIX).map_err(|_| io::Error::from_raw_os_error(libc::EINVAL))?;
     for (destination, byte) in address.sun_path.iter_mut().zip(bytes) {
         *destination = *byte as libc::c_char;
     }
-    // SAFETY: socket arguments specify a Linux Unix stream with owned CLOEXEC fd.
-    let raw = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };
-    if raw < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: successful socket returned a fresh descriptor.
-    let descriptor = unsafe { OwnedFd::from_raw_fd(raw) };
+    debug_assert!(!bytes.is_empty());
+    Ok(address)
+}
+
+/// Connects without blocking on a saturated accept backlog.
+fn connect_within_deadline(raw: libc::c_int, address: &libc::sockaddr_un, timeout: Duration) -> io::Result<()> {
     // SAFETY: initialized sockaddr_un is correctly sized and lives through call.
     let result = unsafe {
-        libc::connect(raw, std::ptr::addr_of!(address).cast(), std::mem::size_of_val(&address) as libc::socklen_t)
+        libc::connect(raw, std::ptr::from_ref(address).cast(), std::mem::size_of_val(address) as libc::socklen_t)
     };
-    if result < 0 {
-        let error = io::Error::last_os_error();
-        // EAGAIN on a Unix socket means backlog saturation, not an in-flight
-        // connection. Degrade immediately rather than polling a false success.
-        if error.raw_os_error() != Some(libc::EINPROGRESS) {
-            return Err(error);
-        }
-        let mut pollfd = libc::pollfd {
-            fd: raw,
-            events: libc::POLLOUT,
-            revents: 0,
-        };
-        let timeout_ms = timeout.as_millis().min(i32::MAX as u128).max(1) as i32;
-        // SAFETY: one valid pollfd and a bounded millisecond timeout.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
-        if ready == 0 {
-            return Err(io::Error::from(io::ErrorKind::TimedOut));
-        }
-        if ready < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let mut pending_error: libc::c_int = 0;
-        let mut length = std::mem::size_of_val(&pending_error) as libc::socklen_t;
-        // SAFETY: correctly sized writable SO_ERROR buffers and valid fd.
-        let status = unsafe {
-            libc::getsockopt(
-                raw,
-                libc::SOL_SOCKET,
-                libc::SO_ERROR,
-                std::ptr::addr_of_mut!(pending_error).cast(),
-                std::ptr::addr_of_mut!(length),
-            )
-        };
-        if status < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if pending_error != 0 {
-            return Err(io::Error::from_raw_os_error(pending_error));
-        }
+    if result == 0 {
+        return Ok(());
     }
-    // SAFETY: clearing O_NONBLOCK on an owned socket preserves its CLOEXEC flag.
-    if unsafe { libc::fcntl(raw, libc::F_SETFL, 0) } < 0 {
+    let error = io::Error::last_os_error();
+    // EAGAIN on a Unix socket means backlog saturation, not an in-flight
+    // connection. Degrade immediately rather than polling a false success.
+    if error.raw_os_error() != Some(libc::EINPROGRESS) {
+        return Err(error);
+    }
+    await_connect_ready(raw, timeout)
+}
+
+/// Waits for a pending nonblocking connect to settle.
+fn await_connect_ready(raw: libc::c_int, timeout: Duration) -> io::Result<()> {
+    let mut pollfd = libc::pollfd {
+        fd: raw,
+        events: libc::POLLOUT,
+        revents: 0,
+    };
+    // The poll timeout saturates at the i32 millisecond range and never waits less than a tick.
+    let timeout_ms = i32::try_from(timeout.as_millis().max(1).min(i32::MAX as u128)).map_or(i32::MAX, |millis| millis);
+    debug_assert!(timeout_ms >= 1);
+    // SAFETY: one valid pollfd and a bounded millisecond timeout.
+    let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+    if ready == 0 {
+        return Err(io::Error::from(io::ErrorKind::TimedOut));
+    }
+    if ready < 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok(UnixStream::from(descriptor))
+    let mut pending_error: libc::c_int = 0;
+    let mut length_bytes = std::mem::size_of_val(&pending_error) as libc::socklen_t;
+    debug_assert!(length_bytes > 0);
+    // SAFETY: correctly sized writable SO_ERROR buffers and valid fd.
+    let status = unsafe {
+        libc::getsockopt(
+            raw,
+            libc::SOL_SOCKET,
+            libc::SO_ERROR,
+            std::ptr::addr_of_mut!(pending_error).cast(),
+            std::ptr::addr_of_mut!(length_bytes).cast(),
+        )
+    };
+    if status < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if pending_error != 0 {
+        return Err(io::Error::from_raw_os_error(pending_error));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

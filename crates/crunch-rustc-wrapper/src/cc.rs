@@ -1,3 +1,12 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+//
+// The compiler deadline is a wall-clock scheduling decision owned by this driver
+// boundary: the deadline is enforced where the compiler is supervised, so the
+// clock read stays in the driver.
+#![allow(tigerstyle::ambient_clock)]
 //! Explicit C/C++ compiler driver and existing-daemon object protocol.
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -88,19 +97,25 @@ pub struct Response {
     pub accepted: bool,
 }
 
+/// Cache access is granted per direction so the two flags cannot be swapped.
+pub(crate) struct CacheAccess {
+    pub reads: bool,
+    pub writes: bool,
+}
+
 pub(crate) fn serve(
     stream: &mut UnixStream,
     cache: &crunch_rust_cache::RustCache,
-    reads: bool,
-    writes: bool,
+    access: CacheAccess,
     request: Request,
 ) -> Result<(), Error> {
-    if request.schema != CC_PROTOCOL_SCHEMA {
+    let is_schema_known = request.schema == CC_PROTOCOL_SCHEMA;
+    if !is_schema_known {
         return Err(Error::Protocol("cc-protocol-schema".into()));
     }
     let response = match request.operation {
         Operation::Lookup { base_key } => {
-            let record = if reads {
+            let record = if access.reads {
                 cache.cc_lookup(&base_key).map_err(cache_error)?
             } else {
                 None
@@ -113,20 +128,25 @@ pub(crate) fn serve(
             Response {
                 record,
                 object,
-                accepted: reads,
+                accepted: access.reads,
             }
         }
         Operation::Publish { record, object } => {
-            if writes {
+            if access.writes {
                 cache.cc_publish(&record, object.as_deref()).map_err(cache_error)?;
             }
             Response {
                 record: None,
                 object: None,
-                accepted: writes,
+                accepted: access.writes,
             }
         }
     };
+    debug_assert!(is_schema_known, "a served request carries the protocol schema");
+    debug_assert!(
+        response.record.is_none() || response.accepted,
+        "a cache record is only served when reads are enabled"
+    );
     write_frame(stream, &response, MAX_CC_FRAME_BYTES)
 }
 
@@ -175,184 +195,322 @@ struct Execution {
     cacheable: bool,
 }
 
-/// Real compiler arguments are never reconstructed when classification fails.
-pub fn run_driver(policy: &DriverPolicy, arguments: &[OsString]) -> Result<i32, Error> {
-    validate_policy(policy)?;
-    let socket = std::env::var_os(SOCKET_ENV).map(PathBuf::from);
-    let build_id = std::env::var(BUILD_ID_ENV).unwrap_or_else(|_| format!("driver-{}", std::process::id()));
-    let strings = arguments.iter().map(|a| a.to_str().map(str::to_owned)).collect::<Option<Vec<_>>>();
-    let invocation = strings.as_deref().and_then(|args| cc::classify(args).ok());
-    let plain = |disposition| -> Result<i32, Error> {
-        let execution = execute(policy, arguments, socket.as_deref(), &build_id, None)?;
-        receipt(policy, disposition, execution.status, execution.slot, None);
+/// One driver invocation: the policy, the daemon socket and the build identity.
+struct Driver<'a> {
+    policy: &'a DriverPolicy,
+    socket: Option<PathBuf>,
+    build_id: String,
+}
+
+impl Driver<'_> {
+    /// Runs the untouched invocation and reports the compiler's exit status.
+    fn forward(&self, arguments: &[OsString], disposition: CacheDisposition) -> Result<i32, Error> {
+        let execution = execute(self.policy, arguments, self.socket.as_deref(), &self.build_id, None)?;
+        receipt(self.policy, disposition, execution.status, execution.slot, None);
         Ok(execution.status)
-    };
-    if !policy.cache_enabled || invocation.is_none() {
-        return plain(if invocation.is_none() {
-            CacheDisposition::ForwardUnchanged
-        } else {
-            CacheDisposition::CacheOff
-        });
-    }
-    let invocation = invocation.expect("classified above");
-    let Ok(mut inputs) = prepare(policy, &invocation) else {
-        return plain(CacheDisposition::ForwardUnprovenInputs);
-    };
-    let Ok(base_key) = key(&invocation, &inputs) else {
-        return plain(CacheDisposition::ForwardUnprovenPaths);
-    };
-    let lookup = socket.as_deref().map(|s| {
-        request(s, Operation::Lookup {
-            base_key: base_key.clone(),
-        })
-    });
-    let mut disposition = CacheDisposition::CacheMiss;
-    if let Some(Ok(response)) = &lookup {
-        // Invalid/corrupt records are advisory misses, not build errors.
-        if response.accepted
-            && let Some(record) = &response.record
-            && record.validate().is_ok()
-            && record.base_key == base_key
-            && let Ok(manifest) = current_manifest(policy, &record.dependencies)
-        {
-            inputs.manifest = manifest;
-            let kind = if policy.probe_script.is_some() {
-                cc::CachedResultKind::Probe
-            } else if record.status == 0 {
-                cc::CachedResultKind::Object
-            } else {
-                cc::CachedResultKind::Failure
-            };
-            let admitted = normalized_invocation(&invocation).and_then(|normalized| {
-                cc::replay_admission(kind, &normalized, &inputs).map_err(|e| Error::Core(format!("cc-replay:{e:?}")))
-            });
-            if admitted.ok().as_deref() == Some(record.key.as_str()) {
-                if record.status == 0 {
-                    if let Some(bytes) = &response.object
-                        && Some(blake3::hash(bytes).to_hex().as_str()) == record.object_digest.as_deref()
-                        && bytes.len() as u64 == record.object_bytes
-                        && restore_outputs(&invocation, policy, record, bytes).is_ok()
-                    {
-                        let _ = std::io::stdout().write_all(&record.stdout);
-                        let _ = std::io::stderr().write_all(&record.stderr);
-                        receipt(
-                            policy,
-                            CacheDisposition::ObjectHit,
-                            0,
-                            SlotDisposition::NotRequestedCacheHit,
-                            Some(&record.key),
-                        );
-                        return Ok(0);
-                    }
-                } else if invocation.depfile.is_none() && !path_entry_exists(Path::new(&invocation.output)) {
-                    // Failed compiles can delete destinations or leave depfiles.
-                    // Replay only the declared no-output mode, with no existing
-                    // destination whose filesystem effects would be skipped.
-                    let _ = std::io::stdout().write_all(&record.stdout);
-                    let _ = std::io::stderr().write_all(&record.stderr);
-                    receipt(
-                        policy,
-                        CacheDisposition::FailureHit,
-                        record.status,
-                        SlotDisposition::NotRequestedCacheHit,
-                        Some(&record.key),
-                    );
-                    return Ok(record.status);
-                }
-            }
-        }
-    } else {
-        disposition = CacheDisposition::DaemonUnavailable;
     }
 
-    // All optional capture setup happens before the compiler. If it fails,
-    // execute the untouched invocation with inherited streams instead.
-    let capture = || -> std::io::Result<_> {
-        let temporary = tempfile::tempdir()?;
-        let stdout = File::create(temporary.path().join("stdout"))?;
-        let stderr = File::create(temporary.path().join("stderr"))?;
-        let out_reader = File::open(temporary.path().join("stdout"))?;
-        let err_reader = File::open(temporary.path().join("stderr"))?;
-        Ok((temporary, stdout, stderr, out_reader, err_reader))
-    };
-    let Ok((temporary, stdout, stderr, mut out_reader, mut err_reader)) = capture() else {
-        return plain(CacheDisposition::ForwardUnprovenInputs);
-    };
-    let depfile = temporary.path().join("dependencies.d");
+    /// Asks the daemon for a cached record; an unavailable daemon is a miss.
+    fn look_up(&self, base_key: &str) -> Option<Response> {
+        let socket = self.socket.as_deref()?;
+        let response = request(socket, Operation::Lookup {
+            base_key: base_key.to_owned(),
+        })
+        .ok()?;
+        Some(response)
+    }
+
+    /// Runs the compiler with its own streams captured.
+    fn compile(&self, arguments: &[OsString], stdout: File, stderr: File) -> Result<Execution, Error> {
+        execute(self.policy, arguments, self.socket.as_deref(), &self.build_id, Some((stdout, stderr)))
+    }
+}
+
+/// Classifies the compiler arguments; unclassifiable arguments are forwarded.
+fn classify_invocation(arguments: &[OsString]) -> Option<cc::Invocation> {
+    let strings = arguments.iter().map(|argument| argument.to_str().map(str::to_owned)).collect::<Option<Vec<_>>>()?;
+    cc::classify(&strings).ok()
+}
+
+/// Adds the dependency capture flags when the invocation does not request them.
+fn depfile_arguments(arguments: &[OsString], invocation: &cc::Invocation, depfile: &Path) -> Vec<OsString> {
     let mut actual = arguments.to_vec();
     if invocation.depfile.is_none() {
         actual.extend([
             OsString::from("-MD"),
             OsString::from("-MF"),
-            depfile.clone().into_os_string(),
+            depfile.to_path_buf().into_os_string(),
         ]);
     }
-    let output_existed = path_entry_exists(Path::new(&invocation.output));
-    let execution = execute(policy, &actual, socket.as_deref(), &build_id, Some((stdout, stderr)))?;
-    // Open read handles survive pathname loss; neither replay/publication nor
-    // receipt failures can replace an actual compiler's streams or exit status.
-    let _ = std::io::copy(&mut out_reader, &mut std::io::stdout());
-    let _ = std::io::copy(&mut err_reader, &mut std::io::stderr());
-    let publish = || -> Result<(), Error> {
-        if !execution.cacheable {
+    actual
+}
+
+/// Replayed compiler output is advisory: a failed replay write never replaces
+/// the compiler's own streams or its exit status.
+fn replay_output(stdout: &[u8], stderr: &[u8]) {
+    let _stdout_write = std::io::stdout().write_all(stdout);
+    let _stderr_write = std::io::stderr().write_all(stderr);
+}
+
+/// Replays a cached record when it is admissible; otherwise the cache misses.
+fn replay_hit(
+    policy: &DriverPolicy,
+    invocation: &cc::Invocation,
+    inputs: &mut cc::KeyInputs,
+    base_key: &str,
+    response: &Response,
+) -> Option<i32> {
+    // Invalid/corrupt records are advisory misses, not build errors.
+    if !response.accepted {
+        return None;
+    }
+    let Some(record) = &response.record else {
+        return None;
+    };
+    if record.validate().is_err() {
+        return None;
+    }
+    if record.base_key != base_key {
+        return None;
+    }
+    let Ok(manifest) = current_manifest(policy, &record.dependencies) else {
+        return None;
+    };
+    inputs.manifest = manifest;
+    debug_assert!(inputs.manifest.complete, "an admitted record restores a complete manifest");
+    let kind = if policy.probe_script.is_some() {
+        cc::CachedResultKind::Probe
+    } else if record.status == 0 {
+        cc::CachedResultKind::Object
+    } else {
+        cc::CachedResultKind::Failure
+    };
+    let admitted = normalized_invocation(invocation).and_then(|normalized| {
+        cc::replay_admission(kind, &normalized, inputs).map_err(|e| Error::Core(format!("cc-replay:{e:?}")))
+    });
+    if admitted.ok().as_deref() != Some(record.key.as_str()) {
+        return None;
+    }
+    if record.status == 0 {
+        return replay_object(policy, invocation, record, response);
+    }
+    if invocation.depfile.is_some() {
+        return None;
+    }
+    if path_entry_exists(Path::new(&invocation.output)) {
+        return None;
+    }
+    // Failed compiles can delete destinations or leave depfiles.
+    // Replay only the declared no-output mode, with no existing
+    // destination whose filesystem effects would be skipped.
+    debug_assert!(record.status != 0, "a failure replay only replays a failing record");
+    replay_output(&record.stdout, &record.stderr);
+    receipt(
+        policy,
+        CacheDisposition::FailureHit,
+        record.status,
+        SlotDisposition::NotRequestedCacheHit,
+        Some(&record.key),
+    );
+    Some(record.status)
+}
+
+/// Restores a cached object; an unrestorable or mismatched object is a miss.
+fn replay_object(
+    policy: &DriverPolicy,
+    invocation: &cc::Invocation,
+    record: &CcRecord,
+    response: &Response,
+) -> Option<i32> {
+    debug_assert!(record.status == 0, "an object replay only replays a successful record");
+    let bytes = response.object.as_ref()?;
+    let is_digest_matched = Some(blake3::hash(bytes).to_hex().as_str()) == record.object_digest.as_deref();
+    if !is_digest_matched {
+        return None;
+    }
+    if bytes.len() as u64 != record.object_bytes {
+        return None;
+    }
+    if restore_outputs(invocation, policy, record, bytes).is_err() {
+        return None;
+    }
+    debug_assert!(record.object_mode.is_some(), "a restored object carries its recorded mode");
+    replay_output(&record.stdout, &record.stderr);
+    receipt(policy, CacheDisposition::ObjectHit, 0, SlotDisposition::NotRequestedCacheHit, Some(&record.key));
+    Some(0)
+}
+
+/// The compiler's captured streams and the temporary directory that owns them.
+struct Capture {
+    stdout: File,
+    stderr: File,
+    out_reader: File,
+    err_reader: File,
+    depfile: PathBuf,
+}
+
+/// Captures the compiler's streams; a capture that cannot be set up is not fatal.
+fn capture_streams(temporary: &tempfile::TempDir) -> Option<Capture> {
+    let stdout = File::create(temporary.path().join("stdout")).ok()?;
+    let stderr = File::create(temporary.path().join("stderr")).ok()?;
+    let out_reader = File::open(temporary.path().join("stdout")).ok()?;
+    let err_reader = File::open(temporary.path().join("stderr")).ok()?;
+    Some(Capture {
+        stdout,
+        stderr,
+        out_reader,
+        err_reader,
+        depfile: temporary.path().join("dependencies.d"),
+    })
+}
+
+/// The finished compilation, ready to become a cache record.
+struct Publication<'a> {
+    policy: &'a DriverPolicy,
+    invocation: &'a cc::Invocation,
+    inputs: &'a mut cc::KeyInputs,
+    base_key: String,
+    socket: Option<&'a Path>,
+    depfile: PathBuf,
+    out_reader: &'a mut File,
+    err_reader: &'a mut File,
+    execution: &'a Execution,
+    is_output_existed: bool,
+}
+
+impl Publication<'_> {
+    /// Publishes the finished compilation as a cache record.
+    fn publish(&mut self) -> Result<(), Error> {
+        if !self.execution.cacheable {
             return Ok(());
         }
-        let after = prepare(policy, &invocation)?;
-        if key(&invocation, &after)? != base_key {
+        let after = prepare(self.policy, self.invocation)?;
+        if key(self.invocation, &after)? != self.base_key {
             return Ok(());
         }
-        let learned_path = invocation.depfile.as_deref().map(Path::new).unwrap_or(&depfile);
-        let dependencies = learn(policy, &invocation, learned_path)?;
-        inputs.manifest = current_manifest(policy, &dependencies)?;
-        let key = key(&invocation, &inputs)?;
-        if execution.status != 0
-            && (output_existed || path_entry_exists(Path::new(&invocation.output)) || invocation.depfile.is_some())
-        {
-            return Ok(());
+        let learned_path = self.invocation.depfile.as_deref().map(Path::new).unwrap_or(self.depfile.as_path());
+        let dependencies = learn(self.policy, self.invocation, learned_path)?;
+        self.inputs.manifest = current_manifest(self.policy, &dependencies)?;
+        let key = key(self.invocation, self.inputs)?;
+        if self.execution.status != 0 {
+            let is_output_present = self.is_output_existed || path_entry_exists(Path::new(&self.invocation.output));
+            if is_output_present || self.invocation.depfile.is_some() {
+                return Ok(());
+            }
         }
-        let object = if execution.status == 0 {
-            Some(bounded_read(Path::new(&invocation.output), MAX_CC_OBJECT_BYTES).map_err(io)?)
+        let object = if self.execution.status == 0 {
+            Some(bounded_read(Path::new(&self.invocation.output), MAX_CC_OBJECT_BYTES).map_err(io)?)
         } else {
             None
         };
         let record = CcRecord {
             schema: "mantle-cc-cache-record-v1".into(),
-            base_key,
+            base_key: self.base_key.clone(),
             key,
             dependencies,
             complete: true,
-            status: execution.status,
-            stdout: read_capture(&mut out_reader)?,
-            stderr: read_capture(&mut err_reader)?,
+            status: self.execution.status,
+            stdout: read_capture(self.out_reader)?,
+            stderr: read_capture(self.err_reader)?,
             object_digest: object.as_ref().map(|b| blake3::hash(b).to_hex().to_string()),
             object_bytes: object.as_ref().map_or(0, |b| b.len() as u64),
-            object_mode: if execution.status == 0 {
-                Some(output_mode(Path::new(&invocation.output))?)
+            object_mode: if self.execution.status == 0 {
+                Some(output_mode(Path::new(&self.invocation.output))?)
             } else {
                 None
             },
-            depfile: if invocation.depfile.is_some() {
-                Some(depfile_template(policy, &invocation, learned_path)?)
+            depfile: if self.invocation.depfile.is_some() {
+                Some(depfile_template(self.policy, self.invocation, learned_path)?)
             } else {
                 None
             },
-            depfile_mode: if invocation.depfile.is_some() {
+            depfile_mode: if self.invocation.depfile.is_some() {
                 Some(output_mode(learned_path)?)
             } else {
                 None
             },
         };
-        if let Some(socket) = &socket {
+        debug_assert!(record.complete, "a published record is complete");
+        debug_assert_eq!(record.status, self.execution.status, "the published record carries the compiler status");
+        debug_assert!(
+            record.object_bytes == 0 || record.status == 0,
+            "only a successful compilation publishes object bytes"
+        );
+        if let Some(socket) = self.socket {
             let response = request(socket, Operation::Publish { record, object })?;
             if !response.accepted {
                 return Err(Error::Protocol("cc-publication-declined".into()));
             }
         }
         Ok(())
+    }
+}
+
+/// Real compiler arguments are never reconstructed when classification fails.
+pub fn run_driver(policy: &DriverPolicy, arguments: &[OsString]) -> Result<i32, Error> {
+    validate_policy(policy)?;
+    let driver = Driver {
+        policy,
+        socket: std::env::var_os(SOCKET_ENV).map(PathBuf::from),
+        build_id: std::env::var(BUILD_ID_ENV).unwrap_or_else(|_| format!("driver-{}", std::process::id())),
     };
-    if publish().is_err() && matches!(disposition, CacheDisposition::CacheMiss) {
+    let Some(invocation) = classify_invocation(arguments) else {
+        return driver.forward(arguments, CacheDisposition::ForwardUnchanged);
+    };
+    if !policy.cache_enabled {
+        return driver.forward(arguments, CacheDisposition::CacheOff);
+    }
+    let Ok(mut inputs) = prepare(policy, &invocation) else {
+        return driver.forward(arguments, CacheDisposition::ForwardUnprovenInputs);
+    };
+    let Ok(base_key) = key(&invocation, &inputs) else {
+        return driver.forward(arguments, CacheDisposition::ForwardUnprovenPaths);
+    };
+    let mut disposition = CacheDisposition::CacheMiss;
+    if let Some(response) = driver.look_up(&base_key) {
+        if let Some(status) = replay_hit(policy, &invocation, &mut inputs, &base_key, &response) {
+            return Ok(status);
+        }
+    } else {
+        disposition = CacheDisposition::DaemonUnavailable;
+    }
+    // All optional capture setup happens before the compiler. If it fails,
+    // execute the untouched invocation with inherited streams instead.
+    let Some(temporary) = tempfile::tempdir().ok() else {
+        return driver.forward(arguments, CacheDisposition::ForwardUnprovenInputs);
+    };
+    let Some(mut capture) = capture_streams(&temporary) else {
+        return driver.forward(arguments, CacheDisposition::ForwardUnprovenInputs);
+    };
+    let actual = depfile_arguments(arguments, &invocation, &capture.depfile);
+    let is_output_existed = path_entry_exists(Path::new(&invocation.output));
+    let execution = driver.compile(&actual, capture.stdout, capture.stderr)?;
+    // Open read handles survive pathname loss; neither replay/publication nor
+    // receipt failures can replace an actual compiler's streams or exit status.
+    let _stdout_copy = std::io::copy(&mut capture.out_reader, &mut std::io::stdout());
+    let _stderr_copy = std::io::copy(&mut capture.err_reader, &mut std::io::stderr());
+    let mut publication = Publication {
+        policy,
+        invocation: &invocation,
+        inputs: &mut inputs,
+        base_key,
+        socket: driver.socket.as_deref(),
+        depfile: capture.depfile.clone(),
+        out_reader: &mut capture.out_reader,
+        err_reader: &mut capture.err_reader,
+        execution: &execution,
+        is_output_existed,
+    };
+    if publication.publish().is_err() && matches!(disposition, CacheDisposition::CacheMiss) {
         disposition = CacheDisposition::PublishUnavailable;
     }
+    let is_compiled_disposition = matches!(
+        disposition,
+        CacheDisposition::CacheMiss | CacheDisposition::DaemonUnavailable | CacheDisposition::PublishUnavailable
+    );
+    debug_assert!(is_compiled_disposition, "a compiled run reports how the cache was used");
+    let is_cache_hit_slot = matches!(execution.slot, SlotDisposition::NotRequestedCacheHit);
+    debug_assert!(!is_cache_hit_slot, "a compiled run never reports a cache-hit slot");
     receipt(policy, disposition, execution.status, execution.slot, None);
     Ok(execution.status)
 }
@@ -399,18 +557,47 @@ fn execute(
         ),
     };
     let group = child.id() as i32;
+    let is_slot_leased = lease.is_some();
+    let (completed, is_timed_out) = await_completion(&mut child, group, policy.elapsed_ms_max)?;
+    debug_assert!(group != 0, "the compiler runs in its own process group");
+    let is_lease_granted = matches!(slot, SlotDisposition::Granted);
+    debug_assert!(is_slot_leased == is_lease_granted, "a held slot lease is only reported as granted");
+    if let Some(lease) = lease {
+        // Releasing the slot lease is advisory: the compiler already finished.
+        let _released = lease.release();
+    }
+    Ok(Execution {
+        status: if is_timed_out {
+            124
+        } else {
+            completed.code().unwrap_or_else(|| 128 + completed.signal().unwrap_or(0))
+        },
+        slot,
+        cacheable: !is_timed_out && completed.code().is_some(),
+    })
+}
+
+/// Waits for the compiler process group, enforcing the elapsed-time deadline.
+///
+/// The deadline is a wall-clock scheduling decision owned by this driver
+/// boundary, so the clock read and the deadline decision stay together.
+fn await_completion(
+    child: &mut std::process::Child,
+    group: i32,
+    elapsed_ms_max: u64,
+) -> Result<(std::process::ExitStatus, bool), Error> {
     let started = Instant::now();
-    let mut completed = None;
-    let mut timed_out = false;
-    loop {
+    let mut completed: Option<std::process::ExitStatus> = None;
+    let mut is_timed_out = false;
+    while completed.is_none() || crate::slots::process_group_live(group) {
         if completed.is_none() {
             completed = child.try_wait().map_err(io)?;
         }
         if completed.is_some() && !crate::slots::process_group_live(group) {
             break;
         }
-        if started.elapsed().as_millis() >= u128::from(policy.elapsed_ms_max) {
-            timed_out = true;
+        if started.elapsed().as_millis() >= u128::from(elapsed_ms_max) {
+            is_timed_out = true;
             crate::slots::terminate_process_group(group);
             if completed.is_none() {
                 completed = Some(child.wait().map_err(io)?);
@@ -422,19 +609,18 @@ fn execute(
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    let completed = completed.expect("child was waited above");
-    if let Some(lease) = lease {
-        let _ = lease.release();
+    let Some(completed) = completed else {
+        return Err(Error::Process("cc-child-status-unavailable".into()));
+    };
+    let elapsed = started.elapsed();
+    let is_deadline_passed = elapsed.as_millis() >= u128::from(elapsed_ms_max);
+    debug_assert!(is_deadline_passed || !is_timed_out, "a timeout is only declared after the deadline passed");
+    if is_timed_out {
+        let is_group_live = crate::slots::process_group_live(group);
+        let is_group_finished = !is_group_live;
+        debug_assert!(is_group_finished, "a timed-out compiler leaves no live descendants");
     }
-    Ok(Execution {
-        status: if timed_out {
-            124
-        } else {
-            completed.code().unwrap_or_else(|| 128 + completed.signal().unwrap_or(0))
-        },
-        slot,
-        cacheable: !timed_out && completed.code().is_some(),
-    })
+    Ok((completed, is_timed_out))
 }
 
 fn path_entry_exists(path: &Path) -> bool {
@@ -444,7 +630,8 @@ fn path_entry_exists(path: &Path) -> bool {
 fn read_capture(file: &mut File) -> Result<Vec<u8>, Error> {
     file.seek(SeekFrom::Start(0)).map_err(io)?;
     let mut bytes = Vec::new();
-    file.take(MAX_CC_DIAGNOSTIC_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(io)?;
+    let bound = MAX_CC_DIAGNOSTIC_BYTES.saturating_add(1) as u64;
+    file.take(bound).read_to_end(&mut bytes).map_err(io)?;
     if bytes.len() > MAX_CC_DIAGNOSTIC_BYTES {
         return Err(Error::Bound("cc-diagnostics-bound".into()));
     }
@@ -469,36 +656,50 @@ fn restore_outputs(
     )
 }
 
+/// Every declared check must hold for a policy to be admitted.
+fn all_hold(checks: &[bool]) -> bool {
+    checks.iter().all(|check| *check)
+}
+
 fn validate_policy(policy: &DriverPolicy) -> Result<(), Error> {
-    if policy.schema != "mantle-cc-driver-policy-v1"
-        || !policy.compiler.is_absolute()
-        || !policy.receipt_dir.is_absolute()
-        || policy.roots.is_empty()
-        || policy.roots.len() > 64
-        || policy.platform.is_empty()
-        || policy.elapsed_ms_max == 0
-        || policy.elapsed_ms_max > 3_600_000
-        || policy.slot_wait_ms_max == 0
-        || policy.slot_wait_ms_max > 3_600_000
-    {
+    let is_schema_known = policy.schema == "mantle-cc-driver-policy-v1";
+    let is_compiler_absolute = policy.compiler.is_absolute();
+    let is_receipt_dir_absolute = policy.receipt_dir.is_absolute();
+    let is_root_count_admitted = !policy.roots.is_empty() && policy.roots.len() <= 64;
+    let is_platform_named = !policy.platform.is_empty();
+    let is_elapsed_admitted = policy.elapsed_ms_max > 0 && policy.elapsed_ms_max <= 3_600_000;
+    let is_slot_wait_admitted = policy.slot_wait_ms_max > 0 && policy.slot_wait_ms_max <= 3_600_000;
+    let is_policy_admitted = all_hold(&[
+        is_schema_known,
+        is_compiler_absolute,
+        is_receipt_dir_absolute,
+        is_root_count_admitted,
+        is_platform_named,
+        is_elapsed_admitted,
+        is_slot_wait_admitted,
+    ]);
+    if !is_policy_admitted {
         return Err(Error::Policy("cc-driver-policy-invalid".into()));
     }
     let mut aliases = std::collections::BTreeSet::new();
     for root in &policy.roots {
-        if !root.path.is_absolute()
-            || root.alias.is_empty()
-            || root.alias.len() > 128
-            || !root.alias.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
-            || !aliases.insert(&root.alias)
-        {
+        let is_path_absolute = root.path.is_absolute();
+        let is_alias_named = !root.alias.is_empty();
+        let is_alias_short = root.alias.len() <= 128;
+        let is_alias_charset = root.alias.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+        let is_root_admitted = all_hold(&[is_path_absolute, is_alias_named, is_alias_short, is_alias_charset]);
+        let is_alias_unique = is_root_admitted && aliases.insert(&root.alias);
+        if !all_hold(&[is_root_admitted, is_alias_unique]) {
             return Err(Error::Policy("cc-driver-root-invalid".into()));
         }
     }
+    debug_assert!(is_policy_admitted, "an admitted policy passes every check");
+    debug_assert_eq!(aliases.len(), policy.roots.len(), "every admitted root contributes a distinct alias");
     Ok(())
 }
 
 fn prepare(policy: &DriverPolicy, invocation: &cc::Invocation) -> Result<cc::KeyInputs, Error> {
-    let mut roots = Vec::new();
+    let mut roots = Vec::with_capacity(policy.roots.len());
     let mut toolchain = blake3::Hasher::new();
     for root in &policy.roots {
         let digest = crate::declared_input_digest_blake3(
@@ -518,6 +719,7 @@ fn prepare(policy: &DriverPolicy, invocation: &cc::Invocation) -> Result<cc::Key
             path_independent: root.path_independent,
         });
     }
+    debug_assert_eq!(roots.len(), policy.roots.len(), "each declared root contributes one identity");
     locator(policy, &policy.compiler)?;
     let mut environment = std::env::vars().collect::<BTreeMap<_, _>>();
     environment.remove(SOCKET_ENV);
@@ -529,6 +731,7 @@ fn prepare(policy: &DriverPolicy, invocation: &cc::Invocation) -> Result<cc::Key
         .iter()
         .map(|(k, v)| Ok((k.clone(), normalize_value(policy, v)?)))
         .collect::<Result<BTreeMap<_, _>, Error>>()?;
+    debug_assert_eq!(normalized.len(), environment.len(), "each environment value is normalized in place");
     let source = Path::new(&invocation.source);
     let source_digest = input_digest(source)?;
     Ok(cc::KeyInputs {
@@ -646,7 +849,10 @@ fn write_depfile(
     };
     let parts = parts.ok_or_else(|| Error::Protocol("cc-depfile-template-missing".into()))?;
     let mut text = String::new();
+    let mut rendered_parts = 0_usize;
+    let mut rendered_bytes = 0_usize;
     for part in parts {
+        let before = text.len();
         match part {
             CcDepfilePart::Literal { text: value } => text.push_str(value),
             CcDepfilePart::Output => text.push_str(&escape_make(&invocation.output)),
@@ -659,7 +865,11 @@ fn write_depfile(
                 text.push_str(&escape_make(&root.path.to_string_lossy()));
             }
         }
+        rendered_parts = rendered_parts.saturating_add(1);
+        rendered_bytes = rendered_bytes.saturating_add(text.len().saturating_sub(before));
     }
+    debug_assert_eq!(rendered_parts, parts.len(), "every template part is rendered exactly once");
+    debug_assert_eq!(rendered_bytes, text.len(), "the rendered text is exactly the rendered parts");
     atomic_output(
         Path::new(path),
         text.as_bytes(),
@@ -681,7 +891,9 @@ fn depfile_template(
         .collect::<Vec<_>>();
     patterns.push((escape_make(&invocation.output), CcDepfilePart::Output));
     patterns.sort_by_key(|(p, _)| std::cmp::Reverse(p.len()));
-    let mut result = Vec::new();
+    // The rendered template is bounded by the part limit below; one part per
+    // declared pattern is reserved before the template is rendered.
+    let mut result = Vec::with_capacity(patterns.len().saturating_add(1));
     let mut rest = text.as_str();
     while !rest.is_empty() {
         let found = patterns
@@ -689,10 +901,11 @@ fn depfile_template(
             .filter_map(|(pattern, part)| {
                 rest.match_indices(pattern.as_str())
                     .find(|(offset, _)| {
+                        let end = offset.saturating_add(pattern.len());
                         make_boundary(rest, *offset)
-                            && (make_boundary(rest, offset + pattern.len())
+                            && (make_boundary(rest, end)
                                 || (matches!(part, CcDepfilePart::Root { .. })
-                                    && rest.as_bytes().get(offset + pattern.len()) == Some(&b'/')))
+                                    && rest.as_bytes().get(end) == Some(&b'/')))
                     })
                     .map(|(offset, _)| (offset, pattern, part))
             })
@@ -707,11 +920,16 @@ fn depfile_template(
             });
         }
         result.push(part.clone());
-        rest = &rest[offset + pattern.len()..];
+        let Some(end) = offset.checked_add(pattern.len()) else {
+            return Err(Error::Bound("cc-depfile-template".into()));
+        };
+        rest = &rest[end..];
         if result.len() > 8192 {
             return Err(Error::Bound("cc-depfile-template".into()));
         }
     }
+    debug_assert!(result.len() <= 8193, "a rendered template stays within the part bound");
+    debug_assert_eq!(result.is_empty(), text.is_empty(), "an empty depfile renders no parts");
     Ok(result)
 }
 
@@ -719,13 +937,16 @@ fn make_boundary(text: &str, offset: usize) -> bool {
     if offset == 0 || offset == text.len() {
         return true;
     }
-    let before = text.as_bytes()[offset - 1];
+    let Some(before_index) = offset.checked_sub(1) else {
+        return true;
+    };
+    let before = text.as_bytes()[before_index];
     let at = text.as_bytes()[offset];
     // Callers use this at a token start and end. Escaped spaces and colons
     // belong to a filename, never a substitution boundary.
     let escaped =
         |index: usize| text.as_bytes()[..index].iter().rev().take_while(|byte| **byte == b'\\').count() % 2 != 0;
-    (matches!(before, b' ' | b'\t' | b'\n' | b'\r' | b':') && !escaped(offset - 1))
+    (matches!(before, b' ' | b'\t' | b'\n' | b'\r' | b':') && !escaped(before_index))
         || (matches!(at, b' ' | b'\t' | b'\n' | b'\r' | b':') && !escaped(offset))
 }
 
@@ -747,6 +968,15 @@ fn normalized_invocation(invocation: &cc::Invocation) -> Result<cc::Invocation, 
             _ => {}
         }
     }
+    debug_assert!(normalized.source.starts_with('/'), "the normalized source is an absolute path");
+    debug_assert!(
+        normalized.semantic_args.iter().all(|argument| match argument {
+            cc::SemanticArgument::Path { path, .. } => path.starts_with('/'),
+            cc::SemanticArgument::PrefixMap { from, .. } => from.starts_with('/'),
+            _ => true,
+        }),
+        "every normalized semantic path is absolute"
+    );
     Ok(normalized)
 }
 fn key(invocation: &cc::Invocation, inputs: &cc::KeyInputs) -> Result<String, Error> {
@@ -822,6 +1052,11 @@ fn receipt(
         bypass: None,
         probe: policy.probe_script.is_some(),
     };
+    debug_assert_eq!(observation.key.is_some(), key.is_some(), "the receipt carries exactly the key it was given");
+    debug_assert!(
+        matches!(observation.disposition, cc::Disposition::Hit) == matches!(disposition, CacheDisposition::ObjectHit),
+        "an object hit is the only disposition that maps to a core hit"
+    );
     let write = || -> Result<(), Error> {
         fs::create_dir_all(&policy.receipt_dir).map_err(io)?;
         let mut file = tempfile::Builder::new()
@@ -840,7 +1075,9 @@ fn receipt(
         file.keep().map_err(|e| io(e.error))?;
         Ok(())
     };
-    let _ = write();
+    // Receipts are advisory: a failed receipt never replaces the compiler's
+    // exit status, so the write result is deliberately not propagated.
+    let _receipt_write = write();
 }
 fn bounded_read(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
     let file = File::open(path)?;
@@ -848,7 +1085,7 @@ fn bounded_read(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
         return Err(std::io::Error::other("cc-file-bound"));
     }
     let mut bytes = Vec::new();
-    file.take(max + 1).read_to_end(&mut bytes)?;
+    file.take(max.saturating_add(1)).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > max {
         return Err(std::io::Error::other("cc-file-bound"));
     }
@@ -871,22 +1108,24 @@ fn digest_file(path: &Path, check_volatile: bool) -> Result<String, Error> {
     let mut overlap = 0;
     let mut total = 0_u64;
     let mut hash = blake3::Hasher::new();
-    loop {
-        let count = file.read(&mut buffer[overlap..]).map_err(io)?;
-        if count == 0 {
-            break;
-        }
+    let mut count = file.read(&mut buffer[overlap..]).map_err(io)?;
+    while count != 0 {
         total += count as u64;
         if total > 268_435_456 {
             return Err(Error::Bound("cc-file-bound".into()));
         }
-        hash.update(&buffer[overlap..overlap + count]);
-        let end = overlap + count;
+        let Some(end) = overlap.checked_add(count) else {
+            return Err(Error::Bound("cc-file-bound".into()));
+        };
+        hash.update(&buffer[overlap..end]);
         if check_volatile && cc::volatile_input(&buffer[..end]) {
             return Err(Error::Core(format!("cc-input:{:?}", cc::Bypass::VolatileInput)));
         }
         overlap = end.min(16);
-        buffer.copy_within(end - overlap..end, 0);
+        buffer.copy_within(end.saturating_sub(overlap)..end, 0);
+        debug_assert!(overlap <= 16, "the overlap window stays within the boundary size");
+        debug_assert!(end <= buffer.len(), "the read window stays within the buffer");
+        count = file.read(&mut buffer[overlap..]).map_err(io)?;
     }
     Ok(hash.finalize().to_hex().to_string())
 }

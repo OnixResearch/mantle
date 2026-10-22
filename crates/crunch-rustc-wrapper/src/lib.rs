@@ -1,5 +1,10 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::ambient_clock)]
 //! Bounded Unix-socket shell for the Mantle Rust compiler cache protocol.
 //!
 //! `crunch-rust-cache-core::wrapper` owns canonical data and decisions. This
@@ -344,6 +349,27 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
     create_private_directory(&options.store_output_dir)?;
     create_private_directory(&options.receipt_dir)?;
     let cache = RustCache::open(store_config).map_err(|error| Error::Process(format!("open-rust-cache:{error}")))?;
+    let (local_policy, shared_policy) = cache_policies(&policy)?;
+    let sources = open_result_sources(&policy)?;
+    let slots = open_slot_authority(options)?;
+    assert_eq!(sources.len(), policy.result_sources.len());
+    Ok(DaemonContext {
+        policy,
+        cache,
+        local_policy,
+        shared_policy,
+        sources,
+        receipt_dir: options.receipt_dir.clone(),
+        response_flushed: None,
+        slots,
+        rust_active: Mutex::new(0),
+    })
+}
+
+/// Derives the local and shared cache policies from the daemon policy.
+fn cache_policies(policy: &WrapperDaemonPolicy) -> Result<(LocalCachePolicy, SharedRustCachePolicy), Error> {
+    debug_assert!(!policy.policy_id.is_empty());
+    debug_assert!(policy.max_concurrency > 0);
     let local_policy = LocalCachePolicy {
         schema: crunch_rust_cache_core::LOCAL_CACHE_POLICY_SCHEMA.to_string(),
         policy_id: format!("{}-local", policy.policy_id),
@@ -373,30 +399,22 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
         max_redirects: 0,
         max_retries: 0,
     };
-    let sources = open_result_sources(&policy)?;
+    Ok((local_policy, shared_policy))
+}
+
+/// Opens the compile-slot authority when a slot policy is published beside the
+/// daemon policy. A missing slot policy keeps slot admission disabled.
+fn open_slot_authority(options: &DaemonOptions) -> Result<Option<Arc<slots::SlotAuthority>>, Error> {
     let slot_policy_path = options.policy_path.with_file_name("compile-slot-policy.json");
-    let slots = if slot_policy_path.exists() {
-        let policy = load_json_file::<crunch_rust_cache_core::slots::SlotPolicy>(
-            &slot_policy_path,
-            MAX_POLICY_BYTES,
-            "compile-slot-policy",
-        )?;
-        Some(Arc::new(slots::SlotAuthority::new(policy)?))
-    } else {
-        None
-    };
-    assert_eq!(sources.len(), policy.result_sources.len());
-    Ok(DaemonContext {
-        policy,
-        cache,
-        local_policy,
-        shared_policy,
-        sources,
-        receipt_dir: options.receipt_dir.clone(),
-        response_flushed: None,
-        slots,
-        rust_active: Mutex::new(0),
-    })
+    if !slot_policy_path.exists() {
+        return Ok(None);
+    }
+    let policy = load_json_file::<crunch_rust_cache_core::slots::SlotPolicy>(
+        &slot_policy_path,
+        MAX_POLICY_BYTES,
+        "compile-slot-policy",
+    )?;
+    Ok(Some(Arc::new(slots::SlotAuthority::new(policy)?)))
 }
 
 fn serve_listener(listener: &UnixListener, context: Arc<DaemonContext>, run_once: bool) -> Result<(), Error> {
@@ -475,33 +493,24 @@ fn serve_multiplexed_listener(
     context: Arc<DaemonContext>,
     run_once: bool,
 ) -> Result<(), Error> {
-    let limit = context
-        .slots
-        .as_ref()
-        .map_or(0, |s| s.connection_limit())
-        .saturating_add(context.policy.max_concurrency.saturating_mul(2));
-    let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
+    let connection_headroom = context.slots.as_ref().map_or(0, |authority| authority.connection_limit());
+    let worker_headroom = connection_headroom.saturating_add(context.policy.max_concurrency.saturating_mul(2));
+    let max_workers = usize::try_from(worker_headroom)
+        .map_err(|_| Error::Bound("rustc-wrapper-worker-limit-unrepresentable".to_string()))?;
+    debug_assert!(max_workers > 0);
+    debug_assert!(context.policy.max_concurrency > 0);
+    let mut workers: Vec<thread::JoinHandle<()>> = Vec::with_capacity(max_workers);
     while !SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
-        let mut index = 0;
-        while index < workers.len() {
-            if workers[index].is_finished() {
-                workers.swap_remove(index).join().map_err(|_| Error::Process("compile-worker-panicked".into()))?;
-            } else {
-                index += 1;
-            }
-        }
+        reap_finished_workers(&mut workers)?;
         match listener.accept() {
             Ok((mut stream, _)) => {
-                if workers.len() >= limit as usize {
-                    let _ = stream.shutdown(Shutdown::Both);
+                if workers.len() >= max_workers {
+                    shutdown_client(&mut stream);
                     continue;
                 }
-                let context = Arc::clone(&context);
+                let worker_context = Arc::clone(&context);
                 workers.push(thread::spawn(move || {
-                    if let Err(error) = handle_connection(&mut stream, &context) {
-                        let _ = stream.shutdown(Shutdown::Both);
-                        eprintln!("mantle-rust-cache-daemon:{error}");
-                    }
+                    serve_compile_client(&mut stream, &worker_context);
                 }));
                 if run_once {
                     break;
@@ -524,6 +533,34 @@ fn serve_multiplexed_listener(
     Ok(())
 }
 
+/// Joins the compile workers that already finished so the pool stays bounded.
+fn reap_finished_workers(workers: &mut Vec<thread::JoinHandle<()>>) -> Result<(), Error> {
+    let mut index = 0;
+    while index < workers.len() {
+        if workers[index].is_finished() {
+            workers.swap_remove(index).join().map_err(|_| Error::Process("compile-worker-panicked".into()))?;
+        } else {
+            index += 1;
+        }
+    }
+    Ok(())
+}
+
+/// Serves one accepted compile connection on its own worker.
+fn serve_compile_client(stream: &mut UnixStream, context: &DaemonContext) {
+    if let Err(error) = handle_connection(stream, context) {
+        shutdown_client(stream);
+        eprintln!("mantle-rust-cache-daemon:{error}");
+    }
+}
+
+/// Closes a client connection that the daemon will not serve.
+fn shutdown_client(stream: &mut UnixStream) {
+    if let Err(shutdown_error) = stream.shutdown(Shutdown::Both) {
+        eprintln!("mantle-rust-cache-daemon:shutdown-client:{shutdown_error}");
+    }
+}
+
 struct RustExecutionPermit<'a>(&'a Mutex<u32>);
 impl Drop for RustExecutionPermit<'_> {
     fn drop(&mut self) {
@@ -535,18 +572,18 @@ impl Drop for RustExecutionPermit<'_> {
 
 fn rust_execution_permit(context: &DaemonContext) -> Result<RustExecutionPermit<'_>, Error> {
     let started = std::time::Instant::now();
-    loop {
-        let mut active = context.rust_active.lock().map_err(|_| Error::Process("rust-execution-lock".into()))?;
-        if *active < context.policy.max_concurrency {
-            *active += 1;
-            return Ok(RustExecutionPermit(&context.rust_active));
-        }
+    let mut active = context.rust_active.lock().map_err(|_| Error::Process("rust-execution-lock".into()))?;
+    while *active >= context.policy.max_concurrency {
         drop(active);
         if started.elapsed().as_millis() >= u128::from(context.policy.limits.elapsed_millis) {
             return Err(Error::Bound("rust-execution-capacity-timeout".into()));
         }
         thread::sleep(Duration::from_millis(ACCEPT_POLL_MILLIS));
+        active = context.rust_active.lock().map_err(|_| Error::Process("rust-execution-lock".into()))?;
     }
+    *active += 1;
+    debug_assert!(*active <= context.policy.max_concurrency);
+    Ok(RustExecutionPermit(&context.rust_active))
 }
 
 fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result<(), Error> {
@@ -574,8 +611,10 @@ fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result
         return cc::serve(
             stream,
             &context.cache,
-            context.policy.local_reads_enabled,
-            context.policy.local_writes_enabled,
+            cc::CacheAccess {
+                reads: context.policy.local_reads_enabled,
+                writes: context.policy.local_writes_enabled,
+            },
             request,
         );
     }
