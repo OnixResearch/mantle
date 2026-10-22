@@ -1973,14 +1973,14 @@ pub(crate) fn verify_source_review_evidence(
             ));
         }
     }
-    Ok(verify_release_source_review(
+    Ok(verify_release_source_review(&crunch_release_core::source_review::SourceReviewVerificationRequest {
         manifest,
-        attachment.as_deref(),
-        policy.as_deref(),
-        valence.as_deref(),
-        trusted.as_deref(),
-        required,
-    ))
+        attachment_bytes: attachment.as_deref(),
+        policy_bytes: policy.as_deref(),
+        valence_bytes: valence.as_deref(),
+        trusted_policy_bytes: trusted.as_deref(),
+        require_review: required,
+    }))
 }
 
 fn read_source_review_artifact(

@@ -3411,7 +3411,16 @@ mod tests {
         manifest.cairn_handoff_validation = cairn_assessment.receipt;
         let cairn_handoff_result = cairn_assessment.verification;
         let source_review_result =
-            crunch_release_core::source_review::verify_release_source_review(&manifest, None, None, None, None, false);
+            crunch_release_core::source_review::verify_release_source_review(
+                &crunch_release_core::source_review::SourceReviewVerificationRequest {
+                    manifest: &manifest,
+                    attachment_bytes: None,
+                    policy_bytes: None,
+                    valence_bytes: None,
+                    trusted_policy_bytes: None,
+                    require_review: false,
+                },
+            );
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
@@ -3538,7 +3547,16 @@ mod tests {
         );
         let cairn_result = satisfied_cairn_handoff_result();
         let source_review_result =
-            crunch_release_core::source_review::verify_release_source_review(&manifest, None, None, None, None, false);
+            crunch_release_core::source_review::verify_release_source_review(
+                &crunch_release_core::source_review::SourceReviewVerificationRequest {
+                    manifest: &manifest,
+                    attachment_bytes: None,
+                    policy_bytes: None,
+                    valence_bytes: None,
+                    trusted_policy_bytes: None,
+                    require_review: false,
+                },
+            );
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
