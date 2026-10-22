@@ -162,11 +162,19 @@ pub fn release_owner_identities(
     if path_facts.iter().all(|fact| fact.owner != selector.owner) {
         return Err(InterestError::ForeignOwner);
     }
-    let identities = path_facts
-        .into_iter()
+    let path_fact_count = path_facts.len();
+    let owner_fact_count = path_facts
+        .iter()
         .filter(|fact| fact.owner == selector.owner)
-        .map(|fact| fact.identity)
-        .collect::<Vec<_>>();
+        .count();
+    let mut identities = Vec::with_capacity(owner_fact_count);
+    for fact in path_facts {
+        if fact.owner == selector.owner {
+            identities.push(fact.identity);
+        }
+    }
+    assert_eq!(identities.len(), owner_fact_count);
+    assert!(identities.len() <= path_fact_count);
     Ok(InterestRelease { selector, identities })
 }
 
