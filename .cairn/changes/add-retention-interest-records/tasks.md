@@ -23,6 +23,6 @@ Completed tasks below record the implementation and exercised evidence; remainin
 
 ## Phase 4: Verification
 
-- [ ] [serial] T4.1 Run the concurrent-owner, retraction, and migration rails before and after the change. Preserve exact results. r[mantle.store_lifecycle.retention_owner_scope]
-- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.store_lifecycle.retention_interest_records]
-- [ ] [serial] T4.3 Sync accepted specs and retain final-source completion evidence in the isolated branch, leaving the change archive-ready for the separately verified terminal Cairn archive command. r[mantle.store_lifecycle.retention_owner_scope]
+- [x] [serial] T4.1 Run the concurrent-owner, retraction, and migration rails before and after the change. Preserve exact results. r[mantle.store_lifecycle.retention_owner_scope]
+- [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.store_lifecycle.retention_interest_records]
+- [x] [serial] T4.3 Sync accepted specs and retain final-source completion evidence in the isolated branch, leaving the change archive-ready for the separately verified terminal Cairn archive command. r[mantle.store_lifecycle.retention_owner_scope]
