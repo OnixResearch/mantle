@@ -1,0 +1,6 @@
+# Focused acceptance for the repaired Nickel standard library.
+cargo test --locked --offline -p mantle --test stdlib_tests -- --test-threads 1
+cargo test --locked --offline -p crunch-eval --lib -- --test-threads 1
+cargo test --locked --offline -p crunch-glue --lib -- --test-threads 1
+cargo clippy --locked --offline -p crunch-eval -p crunch-glue -p mantle --all-targets --no-deps -- -D warnings
+cargo fmt --check -p crunch-eval -p crunch-glue -p mantle
