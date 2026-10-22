@@ -8,9 +8,17 @@ package that fails to compile under lint, so a single run over the whole scope
 hides every package behind the first failure. The per-package scan found 477
 findings in 24 packages.
 
+Within one package the lint also reports in waves: a library that fails type
+checking under lint does not report every lint finding, so the `mantle` library
+was rescanned after each repair until it compiled with no finding. The gate runs
+`cargo check --lib` (`workspace.metadata.tigerstyle.cargo_check_args`), so a
+scoped package without a library target, such as the binary-only
+`crunch-python`, contributes no lint target.
+
 ## What was fixed
 
-467 findings were fixed in the source. The categories fixed in place were
+Every finding that is not listed under "What was deferred" was fixed in the
+source. The categories fixed in place were
 assertion density, compound conditions, numeric unit naming, bool naming,
 explicit defaults, unchecked unsigned arithmetic, function length, nested
 conditionals, parameter count, ambiguous parameters, collection growth, loop
@@ -42,13 +50,19 @@ with a `HARDENING-BACKLOG 2026-10-22` comment naming this file. The
 | `crates/crunch-rustc-wrapper/src/slots.rs` | `ambient_clock` | Three direct system clock reads: the lease epoch, the acquire deadline and the deadline transport | The reads carry the real slot-lifetime and timeout decisions of the compile-slot lease. Removing the ambient reads would change the lease timing behaviour, so the finding is scheduled for the standalone hardening pass. |
 | `crates/crunch-rustc-wrapper/src/cc.rs` | `ambient_clock` | Direct system clock read in the compiler deadline wait | The read carries the real compiler deadline decision of the driver boundary. Injecting the clock would change the published `run_driver` signature or the compiler-supervision semantics, so the finding is scheduled for the standalone hardening pass. |
 | `crates/crunch-test/src/lib.rs` | `ambient_clock`, `contradictory_time` | The clock reads that turn the caller-supplied timeout into an absolute deadline, and the reads that enforce it and the descendant-teardown deadline | The reads carry the real timeout, cancellation and teardown decisions of a spawned test. Unifying them with the supplied timeout would change the scheduling decision, so the findings are scheduled for the standalone hardening pass. |
+| `src/bootstrap_effect_port.rs` | `no_unwrap` | Two `.expect()` calls on the planned-effect lookup in `BootstrapPort::call` and `BootstrapPort::call_async` | A capability call for an effect that was never planned is a programming error, and the capability's generic `Result<T, E>` has no error value to return in its place. Returning one instead would turn the abort into an error that callers could handle, which changes observable behaviour, so the finding is scheduled for the standalone hardening pass. |
+| `src/elf_dynamic_fixup_core.rs` | `usize_in_public_api` | `plan_dynamic_relocation` takes a `usize` depth and `StringPatch` publishes a `usize` offset | The module is `pub` in the `mantle` library and is consumed by the relocation shell and the reference-scanner and relocation integration tests. Narrowing the values would change the published library API. |
+| `src/elf_dynamic_fixup_shell.rs` | `usize_in_public_api` | `relocate_dynamic_file` and `relocate_declared_file` take a `usize` depth and return a `usize` patch count | The module is `pub` in the `mantle` library and is consumed by the relocation integration test. Narrowing the values would change the published library API. |
+| `src/source_built_fixed_point_action_controller.rs` | `explicit_defaults` | One `#[serde(default)]` option field, `guard`, on the controller specification | Serde expands the attribute into `Default::default()` for an absent field. Removing it would reject action plans whose controllers omit the optional guard, changing the accepted inputs and the plan wire format. |
+| `src/user_profile_cmd/admission.rs` | `too_many_parameters` | `package_from_derivation` takes six parameters | The function is re-exported from the `mantle` library's `user_profile_cmd` module. Bundling the parameters would change the published library API. |
 
 ## Why these were recorded rather than forced
 
-Removing any of these findings would change a published public API or change
-which inputs are accepted. That is a larger change than a style pass, so the
-finding is recorded against the standalone hardening pass instead of being
-forced through a signature or wire-format change.
+Removing any of these findings would change a published public API, change
+which inputs are accepted, or change observable failure behaviour. That is a
+larger change than a style pass, so the finding is recorded against the
+standalone hardening pass instead of being forced through a signature,
+wire-format or failure-mode change.
 
 The `HARDENING-BACKLOG` convention is the repository's own. The workspace
 Tiger Style hardening pass of 2026-09-09, commit `3f0385b0f`, closed the same
