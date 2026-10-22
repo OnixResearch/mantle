@@ -417,7 +417,10 @@ impl SourceObservationBinding {
             },
             payload_blake3,
         };
-        let admitted = crunch_source_core::admit_source_observation(&request, &LocatorBoundaryPolicy::default());
+        let boundary_policy = LocatorBoundaryPolicy {
+            allowed_query_fields: Vec::new(),
+        };
+        let admitted = crunch_source_core::admit_source_observation(&request, &boundary_policy);
         let observation = admitted.observation.ok_or_else(|| {
             validation_error(format!("release source observation admission failed: {:?}", admitted.diagnostics))
         })?;
@@ -754,48 +757,49 @@ pub fn release_evidence_cairn_bundle_binding(
     Ok(ReleaseEvidenceBindingProjection { manifest, binding })
 }
 
-fn release_evidence_cairn_projection_bytes(
-    manifest: &ReleaseEvidenceManifest,
-) -> Result<Vec<u8>, ReleaseEvidenceError> {
-    #[derive(Serialize)]
-    struct Projection<'a> {
-        schema: &'a String,
-        release_id: &'a String,
-        claim_scope: &'a String,
-        workflow: &'a ReleaseWorkflowIdentity,
-        source_archive: &'a BundledArtifact,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        source_acquisition: &'a Option<SourceAcquisition>,
-        binaries: &'a Vec<BundledArtifact>,
-        proof_bundle: &'a BundledArtifact,
-        prerequisite_inventory: &'a BundledArtifact,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        provider_fixed_point_proof: &'a Option<ProviderFixedPointProofArtifact>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        reproducibility_report: &'a Option<BundledArtifact>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        deterministic_build_proof: &'a Option<RoleBoundedReleaseArtifact>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        deterministic_sandbox_isolation_evidence: &'a Option<RoleBoundedReleaseArtifact>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        independent_agreement_report: &'a Option<BundledArtifact>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        external_evidence: &'a Vec<ExternalEvidence>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        kani_toolchain_evidence: &'a Vec<KaniToolchainEvidence>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        stack_provenance: &'a Option<StackProvenanceReleaseEvidence>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        opaque_evidence_sidecar_bindings: &'a Vec<OpaqueEvidenceSidecarBindingReceipt>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        function_address_evidence: &'a Option<FunctionAddressReleaseEvidence>,
-        proof_linkage: &'a ReleaseProofLinkage,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        provenance_coverage: &'a Option<ProvenanceCoverage>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        content_bound_requirement_evidence: &'a Option<ContentBoundReleaseEvidenceV1>,
-    }
-    let projection = Projection {
+/// Canonical Cairn release-manifest projection bound into the bundle digest.
+#[derive(Serialize)]
+struct CairnReleaseManifestProjection<'a> {
+    schema: &'a String,
+    release_id: &'a String,
+    claim_scope: &'a String,
+    workflow: &'a ReleaseWorkflowIdentity,
+    source_archive: &'a BundledArtifact,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_acquisition: &'a Option<SourceAcquisition>,
+    binaries: &'a Vec<BundledArtifact>,
+    proof_bundle: &'a BundledArtifact,
+    prerequisite_inventory: &'a BundledArtifact,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_fixed_point_proof: &'a Option<ProviderFixedPointProofArtifact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reproducibility_report: &'a Option<BundledArtifact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deterministic_build_proof: &'a Option<RoleBoundedReleaseArtifact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deterministic_sandbox_isolation_evidence: &'a Option<RoleBoundedReleaseArtifact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    independent_agreement_report: &'a Option<BundledArtifact>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    external_evidence: &'a Vec<ExternalEvidence>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    kani_toolchain_evidence: &'a Vec<KaniToolchainEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stack_provenance: &'a Option<StackProvenanceReleaseEvidence>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    opaque_evidence_sidecar_bindings: &'a Vec<OpaqueEvidenceSidecarBindingReceipt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_address_evidence: &'a Option<FunctionAddressReleaseEvidence>,
+    proof_linkage: &'a ReleaseProofLinkage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provenance_coverage: &'a Option<ProvenanceCoverage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content_bound_requirement_evidence: &'a Option<ContentBoundReleaseEvidenceV1>,
+}
+
+/// Mirrors every released manifest fact into the canonical Cairn projection.
+fn cairn_release_manifest_projection(manifest: &ReleaseEvidenceManifest) -> CairnReleaseManifestProjection<'_> {
+    let projection = CairnReleaseManifestProjection {
         schema: &manifest.schema,
         release_id: &manifest.release_id,
         claim_scope: &manifest.claim_scope,
@@ -819,6 +823,16 @@ fn release_evidence_cairn_projection_bytes(
         provenance_coverage: &manifest.provenance_coverage,
         content_bound_requirement_evidence: &manifest.content_bound_requirement_evidence,
     };
+    debug_assert_eq!(projection.binaries.len(), manifest.binaries.len());
+    debug_assert_eq!(projection.external_evidence.len(), manifest.external_evidence.len());
+    debug_assert_eq!(projection.release_id.as_str(), manifest.release_id.as_str());
+    projection
+}
+
+fn release_evidence_cairn_projection_bytes(
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<Vec<u8>, ReleaseEvidenceError> {
+    let projection = cairn_release_manifest_projection(manifest);
     serde_json::to_vec(&projection)
         .map_err(|error| parse_error(format!("serializing Cairn release manifest projection: {error}")))
 }

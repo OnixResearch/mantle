@@ -131,11 +131,11 @@ pub struct SourceReviewVerification {
     pub non_claims: Vec<String>,
 }
 
-fn failure(required: bool, status: SourceReviewStatus, reason: &str) -> SourceReviewVerification {
+fn failure(is_required: bool, status: SourceReviewStatus, reason: &str) -> SourceReviewVerification {
     SourceReviewVerification {
         status,
         valid: false,
-        required,
+        required: is_required,
         approved_key_blake3: Vec::new(),
         signed_statement_blake3: Vec::new(),
         attachment_identity: None,
@@ -146,54 +146,86 @@ fn failure(required: bool, status: SourceReviewStatus, reason: &str) -> SourceRe
     }
 }
 
+/// Inputs for one independent release source-review verification.
+///
+/// Each field carries exactly one domain fact so a caller cannot swap
+/// artifacts by position, and the trusted policy stays an explicit operator
+/// input next to the policy bytes it is compared against.
+#[derive(Debug, Clone, Copy)]
+pub struct SourceReviewVerificationRequest<'a> {
+    pub manifest: &'a ReleaseEvidenceManifest,
+    pub attachment_bytes: Option<&'a [u8]>,
+    pub policy_bytes: Option<&'a [u8]>,
+    pub valence_bytes: Option<&'a [u8]>,
+    pub trusted_policy_bytes: Option<&'a [u8]>,
+    pub require_review: bool,
+}
+
 /// Independently verifies real detached statements and exact Valence linkage.
 /// The trusted policy is an explicit operator input, never inferred from a
 /// bundled producer policy. Absence is optional only when no policy is selected.
-pub fn verify_release_source_review(
-    manifest: &ReleaseEvidenceManifest,
-    attachment_bytes: Option<&[u8]>,
-    policy_bytes: Option<&[u8]>,
-    valence_bytes: Option<&[u8]>,
-    trusted_policy_bytes: Option<&[u8]>,
-    require_review: bool,
-) -> SourceReviewVerification {
-    let required = require_review || trusted_policy_bytes.is_some();
-    if attachment_bytes.is_none() && policy_bytes.is_none() && valence_bytes.is_none() && !required {
+pub fn verify_release_source_review(request: &SourceReviewVerificationRequest<'_>) -> SourceReviewVerification {
+    let is_required = request.require_review || request.trusted_policy_bytes.is_some();
+    let has_artifact =
+        request.attachment_bytes.is_some() || request.policy_bytes.is_some() || request.valence_bytes.is_some();
+    if !has_artifact && !is_required {
         let mut result = failure(false, SourceReviewStatus::NotRequired, "");
         result.valid = true;
         result.diagnostics.clear();
         return result;
     }
-    if required && trusted_policy_bytes.is_none() {
-        return failure(required, SourceReviewStatus::Missing, "source-review-trusted-policy-missing");
+    if is_required && request.trusted_policy_bytes.is_none() {
+        return failure(is_required, SourceReviewStatus::Missing, "source-review-trusted-policy-missing");
     }
-    let (Some(attachment), Some(policy), Some(valence)) = (attachment_bytes, policy_bytes, valence_bytes) else {
-        return failure(required, SourceReviewStatus::Missing, "source-review-artifact-missing");
+    debug_assert!(!is_required || request.trusted_policy_bytes.is_some());
+    let (Some(attachment), Some(policy), Some(valence)) =
+        (request.attachment_bytes, request.policy_bytes, request.valence_bytes)
+    else {
+        return failure(is_required, SourceReviewStatus::Missing, "source-review-artifact-missing");
     };
     if [attachment.len(), policy.len(), valence.len()].into_iter().any(|len| len > SOURCE_REVIEW_BYTES_MAX) {
-        return failure(required, SourceReviewStatus::Invalid, "source-review-artifact-oversized");
+        return failure(is_required, SourceReviewStatus::Invalid, "source-review-artifact-oversized");
     }
-    if trusted_policy_bytes.is_some_and(|trusted| trusted != policy) {
-        return failure(required, SourceReviewStatus::Stale, "source-review-selected-policy-mismatch");
+    debug_assert!(attachment.len() <= SOURCE_REVIEW_BYTES_MAX);
+    if request.trusted_policy_bytes.is_some_and(|trusted| trusted != policy) {
+        return failure(is_required, SourceReviewStatus::Stale, "source-review-selected-policy-mismatch");
     }
-    match verify_present(manifest, attachment, policy, valence, required) {
+    match verify_present(request.manifest, attachment, policy, valence, is_required) {
         Ok(result) => result,
-        Err(reason) => {
-            let status = if reason == "source-review-insufficient-approvals" {
-                SourceReviewStatus::Insufficient
-            } else if reason.ends_with("unsupported") {
-                SourceReviewStatus::Unsupported
-            } else if reason.starts_with("source-review-stale-")
-                || reason.starts_with("source-review-release-")
-                || reason == "source-review-observation-subject-mismatch"
-            {
-                SourceReviewStatus::Stale
-            } else {
-                SourceReviewStatus::Invalid
-            };
-            failure(required, status, &reason)
-        }
+        Err(reason) => failure(is_required, source_review_failure_status(&reason), &reason),
     }
+}
+
+/// Maps one verification failure reason to the release-evidence status it proves.
+fn source_review_failure_status(reason: &str) -> SourceReviewStatus {
+    if reason == "source-review-insufficient-approvals" {
+        return SourceReviewStatus::Insufficient;
+    }
+    if reason.ends_with("unsupported") {
+        return SourceReviewStatus::Unsupported;
+    }
+    if reason.starts_with("source-review-stale-") || reason.starts_with("source-review-release-") {
+        return SourceReviewStatus::Stale;
+    }
+    if reason == "source-review-observation-subject-mismatch" {
+        return SourceReviewStatus::Stale;
+    }
+    SourceReviewStatus::Invalid
+}
+
+/// Canonical identities and reviewer key sets established by verified review rows.
+struct VerifiedReviewEvidence {
+    approved_keys: Vec<String>,
+    statement_ids: Vec<String>,
+    claim_ids: Vec<String>,
+}
+
+/// One review row after its statement, scope, and claim identity were verified.
+struct VerifiedReviewRow {
+    key_blake3: String,
+    is_approved: bool,
+    statement_identity: String,
+    claim_identity: String,
 }
 
 fn verify_present(
@@ -201,13 +233,64 @@ fn verify_present(
     attachment_bytes: &[u8],
     policy_bytes: &[u8],
     valence_bytes: &[u8],
-    required: bool,
+    is_required: bool,
 ) -> Result<SourceReviewVerification, String> {
     let mut attachment: SourceReviewAttachment =
         serde_json::from_slice(attachment_bytes).map_err(|_| "source-review-attachment-malformed")?;
     let mut policy: SourceReviewVerificationPolicy =
         serde_json::from_slice(policy_bytes).map_err(|_| "source-review-policy-malformed")?;
     validate_profile(manifest, &attachment, &policy)?;
+    canonicalize_review_order(&mut attachment, &mut policy);
+    let evidence = verify_review_rows(&attachment.reviews, &policy)?;
+    if evidence.approved_keys.len() < usize::from(policy.required_approvals) {
+        return Err("source-review-insufficient-approvals".to_string());
+    }
+    debug_assert!(evidence.approved_keys.len() >= usize::from(policy.required_approvals));
+    debug_assert_eq!(evidence.statement_ids.len(), attachment.reviews.len());
+    let authentication_policy_id = artifact_auth_core::policy_identity(&policy.authentication_policy)
+        .map_err(|_| "source-review-authentication-policy-invalid")?;
+    let VerifiedReviewEvidence {
+        approved_keys,
+        mut statement_ids,
+        mut claim_ids,
+    } = evidence;
+    statement_ids.sort();
+    claim_ids.sort();
+    claim_ids.dedup();
+    let attachment_id = source_review_identity(b"cairn.source-review-attachment.v1\0", &attachment)?;
+    let policy_id = source_review_identity(b"cairn.source-review-verification-policy.v1\0", &policy)?;
+    let receipt_id = validate_valence_receipt(&ValenceReceiptExpectation {
+        receipt_bytes: valence_bytes,
+        attachment_bytes,
+        policy_bytes,
+        policy: &policy,
+        attachment_id: &attachment_id,
+        policy_id: &policy_id,
+        authentication_policy_id: &authentication_policy_id,
+        approved_keys: &approved_keys,
+        statement_ids: &statement_ids,
+        claim_ids: &claim_ids,
+    })?;
+    Ok(SourceReviewVerification {
+        status: if is_required {
+            SourceReviewStatus::Satisfied
+        } else {
+            SourceReviewStatus::Recorded
+        },
+        valid: true,
+        required: is_required,
+        approved_key_blake3: approved_keys,
+        signed_statement_blake3: statement_ids,
+        attachment_identity: Some(attachment_id),
+        policy_identity: Some(policy_id),
+        valence_receipt_identity: Some(receipt_id),
+        diagnostics: Vec::new(),
+        non_claims: attachment.non_claims,
+    })
+}
+
+/// Orders every review collection so identities do not depend on input order.
+fn canonicalize_review_order(attachment: &mut SourceReviewAttachment, policy: &mut SourceReviewVerificationPolicy) {
     attachment
         .reviews
         .sort_by(|left, right| left.statement.key_identity.digest_hex.cmp(&right.statement.key_identity.digest_hex));
@@ -221,15 +304,21 @@ fn verify_present(
     for key in &mut policy.authentication_policy.trusted_keys {
         key.allowed_purposes.sort();
     }
-    let mut statement_ids = Vec::with_capacity(attachment.reviews.len());
-    let mut claim_ids = Vec::with_capacity(attachment.reviews.len());
+}
+
+/// Verifies every review row and collects the identities it establishes.
+fn verify_review_rows(
+    reviews: &[SignedSourceReview],
+    policy: &SourceReviewVerificationPolicy,
+) -> Result<VerifiedReviewEvidence, String> {
     let mut seen_keys = BTreeSet::new();
     let mut approved_keys = BTreeSet::new();
+    let mut statement_ids = Vec::with_capacity(reviews.len());
+    let mut claim_ids = Vec::with_capacity(reviews.len());
     let mut row_policy = policy.authentication_policy.clone();
     row_policy.threshold = 1;
-    for review in &attachment.reviews {
-        validate_review(review, &policy)?;
-        let scope = expected_review_scope(&review.claim, &policy.verifier_context)?;
+    for review in reviews {
+        let scope = verify_review_claim(review, policy)?;
         let key = review.statement.key_identity.digest_hex.clone();
         if !seen_keys.insert(key.clone()) {
             return Err("source-review-duplicate-full-key".to_string());
@@ -237,64 +326,59 @@ fn verify_present(
         if policy.exclude_authors && policy.author_key_blake3.iter().any(|author| author.as_str() == key) {
             return Err("source-review-author-excluded".to_string());
         }
-        let public_key = decode_hex::<32>(&review.public_key_hex)?;
-        let signature = decode_hex::<64>(&review.signature_hex)?;
-        let cryptographic = artifact_auth_ed25519::verify_statement(&review.statement, &public_key, &signature);
-        let authentication = artifact_auth_core::evaluate_authentication(&row_policy, &scope, &[SignatureEvidence {
-            statement: review.statement.clone(),
-            generation: review.generation,
-            cryptographic,
-        }]);
-        if !authentication.passed {
-            let codes = authentication.issues.iter().map(|issue| issue.code.as_str()).collect::<Vec<_>>().join(",");
-            return Err(format!("source-review-authentication-rejected:{codes}"));
+        let row = verify_review_signature(review, &row_policy, &scope)?;
+        if row.is_approved {
+            approved_keys.insert(row.key_blake3);
         }
-        if review.claim.disposition == "approved" {
-            approved_keys.insert(key);
-        }
-        statement_ids.push(
-            artifact_auth_core::statement_identity(&review.statement).map_err(|_| "source-review-statement-invalid")?,
-        );
-        claim_ids.push(source_review_identity(b"cairn.source-review-claim.v1\0", &review.claim)?);
+        statement_ids.push(row.statement_identity);
+        claim_ids.push(row.claim_identity);
     }
-    if approved_keys.len() < usize::from(policy.required_approvals) {
-        return Err("source-review-insufficient-approvals".to_string());
+    debug_assert_eq!(statement_ids.len(), reviews.len());
+    debug_assert_eq!(claim_ids.len(), reviews.len());
+    Ok(VerifiedReviewEvidence {
+        approved_keys: approved_keys.into_iter().collect(),
+        statement_ids,
+        claim_ids,
+    })
+}
+
+/// Checks the review claim and returns the scope its statement must carry.
+fn verify_review_claim(
+    review: &SignedSourceReview,
+    policy: &SourceReviewVerificationPolicy,
+) -> Result<AuthenticationScope, String> {
+    validate_review(review, policy)?;
+    expected_review_scope(&review.claim, &policy.verifier_context)
+}
+
+/// Authenticates one review statement and derives its canonical identities.
+fn verify_review_signature(
+    review: &SignedSourceReview,
+    row_policy: &AuthenticationPolicy,
+    scope: &AuthenticationScope,
+) -> Result<VerifiedReviewRow, String> {
+    let public_key = decode_hex::<32>(&review.public_key_hex)?;
+    let signature = decode_hex::<64>(&review.signature_hex)?;
+    debug_assert_eq!(row_policy.threshold, 1);
+    debug_assert!(matches!(review.claim.disposition.as_str(), "approved" | "needs_revision"));
+    let cryptographic = artifact_auth_ed25519::verify_statement(&review.statement, &public_key, &signature);
+    let authentication = artifact_auth_core::evaluate_authentication(row_policy, scope, &[SignatureEvidence {
+        statement: review.statement.clone(),
+        generation: review.generation,
+        cryptographic,
+    }]);
+    if !authentication.passed {
+        let codes = authentication.issues.iter().map(|issue| issue.code.as_str()).collect::<Vec<_>>().join(",");
+        return Err(format!("source-review-authentication-rejected:{codes}"));
     }
-    let authentication_policy_id = artifact_auth_core::policy_identity(&policy.authentication_policy)
-        .map_err(|_| "source-review-authentication-policy-invalid")?;
-    let approved_keys = approved_keys.into_iter().collect::<Vec<_>>();
-    statement_ids.sort();
-    claim_ids.sort();
-    claim_ids.dedup();
-    let attachment_id = source_review_identity(b"cairn.source-review-attachment.v1\0", &attachment)?;
-    let policy_id = source_review_identity(b"cairn.source-review-verification-policy.v1\0", &policy)?;
-    let receipt_id = validate_valence_receipt(
-        valence_bytes,
-        attachment_bytes,
-        policy_bytes,
-        &policy,
-        &attachment_id,
-        &policy_id,
-        &authentication_policy_id,
-        &approved_keys,
-        &statement_ids,
-        &claim_ids,
-    )?;
-    Ok(SourceReviewVerification {
-        status: if required {
-            SourceReviewStatus::Satisfied
-        } else {
-            SourceReviewStatus::Recorded
-        },
-        valid: true,
-        required,
-        approved_key_blake3: approved_keys,
-        signed_statement_blake3: statement_ids,
-        attachment_identity: Some(attachment_id),
-        policy_identity: Some(policy_id),
-        valence_receipt_identity: Some(receipt_id),
-        diagnostics: Vec::new(),
-        non_claims: attachment.non_claims,
+    let statement_identity =
+        artifact_auth_core::statement_identity(&review.statement).map_err(|_| "source-review-statement-invalid")?;
+    let claim_identity = source_review_identity(b"cairn.source-review-claim.v1\0", &review.claim)?;
+    Ok(VerifiedReviewRow {
+        key_blake3: review.statement.key_identity.digest_hex.clone(),
+        is_approved: review.claim.disposition == "approved",
+        statement_identity,
+        claim_identity,
     })
 }
 
@@ -305,55 +389,119 @@ fn validate_profile(
 ) -> Result<(), String> {
     crate::manifest::validate_source_acquisition(manifest)
         .map_err(|_| "source-review-release-acquisition-or-observation-invalid")?;
+    validate_profile_schemas(attachment, policy)?;
+    validate_profile_bounds(attachment, policy)?;
+    validate_non_claims(&attachment.non_claims)?;
+    validate_non_claims(&policy.non_claims)?;
+    validate_profile_subject(policy)?;
+    validate_profile_revision(policy)?;
+    validate_profile_acquisition(manifest, policy)?;
+    validate_profile_reviewer_keys(policy)?;
+    Ok(())
+}
+
+/// Requires the fixed attachment and policy schema names.
+fn validate_profile_schemas(
+    attachment: &SourceReviewAttachment,
+    policy: &SourceReviewVerificationPolicy,
+) -> Result<(), String> {
     if attachment.schema != SOURCE_REVIEW_ATTACHMENT_SCHEMA || policy.schema != SOURCE_REVIEW_POLICY_SCHEMA {
         return Err("source-review-schema-unsupported".to_string());
     }
-    if attachment.reviews.len() > SOURCE_REVIEW_ROWS_MAX
-        || policy.author_key_blake3.len() > SOURCE_REVIEW_ROWS_MAX
-        || policy.authentication_policy.trusted_keys.is_empty()
-        || policy.authentication_policy.trusted_keys.len() > SOURCE_REVIEW_ROWS_MAX
-        || policy.required_approvals == 0
-        || usize::from(policy.required_approvals) > SOURCE_REVIEW_ROWS_MAX
-        || policy.authentication_policy.profile_id != "cairn.source-review.v1"
-        || policy.authentication_policy.threshold != policy.required_approvals
-    {
+    Ok(())
+}
+
+/// Bounds every reviewer collection and pins the authentication profile.
+fn validate_profile_bounds(
+    attachment: &SourceReviewAttachment,
+    policy: &SourceReviewVerificationPolicy,
+) -> Result<(), String> {
+    if attachment.reviews.len() > SOURCE_REVIEW_ROWS_MAX || policy.author_key_blake3.len() > SOURCE_REVIEW_ROWS_MAX {
         return Err("source-review-policy-bounds-invalid".to_string());
     }
-    validate_non_claims(&attachment.non_claims)?;
-    validate_non_claims(&policy.non_claims)?;
+    let trusted_keys = &policy.authentication_policy.trusted_keys;
+    if trusted_keys.is_empty() || trusted_keys.len() > SOURCE_REVIEW_ROWS_MAX {
+        return Err("source-review-policy-bounds-invalid".to_string());
+    }
+    debug_assert!(trusted_keys.len() <= SOURCE_REVIEW_ROWS_MAX);
+    if policy.required_approvals == 0 || usize::from(policy.required_approvals) > SOURCE_REVIEW_ROWS_MAX {
+        return Err("source-review-policy-bounds-invalid".to_string());
+    }
+    debug_assert!(policy.required_approvals > 0);
+    if policy.authentication_policy.profile_id != "cairn.source-review.v1" {
+        return Err("source-review-policy-bounds-invalid".to_string());
+    }
+    if policy.authentication_policy.threshold != policy.required_approvals {
+        return Err("source-review-policy-bounds-invalid".to_string());
+    }
+    Ok(())
+}
+
+/// Requires the reviewed subject to describe the released source projection.
+fn validate_profile_subject(policy: &SourceReviewVerificationPolicy) -> Result<(), String> {
     let subject = &policy.subject;
-    if subject.schema != "cairn.source-review-subject.v1"
-        || subject.snapshot_profile != "mantle-release-source"
-        || subject.snapshot_profile_version != 1
-        || subject.projection != "source"
-    {
+    if subject.schema != "cairn.source-review-subject.v1" {
         return Err("source-review-subject-profile-unsupported".to_string());
     }
-    if subject
+    if subject.snapshot_profile != "mantle-release-source" {
+        return Err("source-review-subject-profile-unsupported".to_string());
+    }
+    if subject.snapshot_profile_version != 1 {
+        return Err("source-review-subject-profile-unsupported".to_string());
+    }
+    if subject.projection != "source" {
+        return Err("source-review-subject-profile-unsupported".to_string());
+    }
+    Ok(())
+}
+
+/// Bounds the reviewed source revision text.
+fn validate_profile_revision(policy: &SourceReviewVerificationPolicy) -> Result<(), String> {
+    if policy
+        .subject
         .source_revision
         .as_ref()
         .is_some_and(|revision| revision.is_empty() || revision.len() > 256 || revision.chars().any(char::is_control))
     {
         return Err("source-review-source-revision-invalid".to_string());
     }
+    Ok(())
+}
+
+/// Binds the reviewed subject to the released source acquisition facts.
+fn validate_profile_acquisition(
+    manifest: &ReleaseEvidenceManifest,
+    policy: &SourceReviewVerificationPolicy,
+) -> Result<(), String> {
+    let subject = &policy.subject;
     if subject.source_archive_blake3.as_str() != manifest.source_archive.digest_blake3 {
         return Err("source-review-release-source-mismatch".to_string());
     }
-    if let Some(acquisition) = &manifest.source_acquisition {
-        if acquisition.commit != subject.source_revision {
-            return Err("source-review-release-revision-mismatch".to_string());
+    debug_assert_eq!(subject.source_archive_blake3.as_str(), manifest.source_archive.digest_blake3);
+    let Some(acquisition) = &manifest.source_acquisition else {
+        if subject.source_revision.is_some() {
+            return Err("source-review-release-revision-unavailable".to_string());
         }
-        if let Some(observation) = &acquisition.source_observation {
-            let mismatch = observation.payload_blake3 != subject.source_archive_blake3.as_str()
-                || observation.snapshot_profile_name != subject.snapshot_profile
-                || observation.snapshot_profile_version != subject.snapshot_profile_version;
-            if mismatch {
-                return Err("source-review-observation-subject-mismatch".to_string());
-            }
-        }
-    } else if subject.source_revision.is_some() {
-        return Err("source-review-release-revision-unavailable".to_string());
+        return Ok(());
+    };
+    if acquisition.commit != subject.source_revision {
+        return Err("source-review-release-revision-mismatch".to_string());
     }
+    debug_assert_eq!(acquisition.commit, subject.source_revision);
+    let Some(observation) = &acquisition.source_observation else {
+        return Ok(());
+    };
+    let is_mismatch = observation.payload_blake3 != subject.source_archive_blake3.as_str()
+        || observation.snapshot_profile_name != subject.snapshot_profile
+        || observation.snapshot_profile_version != subject.snapshot_profile_version;
+    if is_mismatch {
+        return Err("source-review-observation-subject-mismatch".to_string());
+    }
+    Ok(())
+}
+
+/// Requires every trusted reviewer key to carry the reviewer approval role.
+fn validate_profile_reviewer_keys(policy: &SourceReviewVerificationPolicy) -> Result<(), String> {
     let mut keys = BTreeSet::new();
     for key in &policy.authentication_policy.trusted_keys {
         if !keys.insert(key.key_identity.digest_hex.as_str())
@@ -388,33 +536,49 @@ fn validate_review(review: &SignedSourceReview, policy: &SourceReviewVerificatio
     if review.statement.scope != expected {
         return Err("source-review-signed-scope-mismatch".to_string());
     }
+    debug_assert!(matches!(claim.disposition.as_str(), "approved" | "needs_revision"));
+    debug_assert_eq!(claim.subject, policy.subject);
     Ok(())
 }
 
 fn expected_review_scope(claim: &SourceReviewClaim, context: &ArtifactRef) -> Result<AuthenticationScope, String> {
     let mut parents = vec![
-        reference("mantle-release-source.v1", claim.subject.source_archive_blake3.as_str()),
-        reference("cairn.source-review-policy.v1", claim.review_policy_blake3.as_str()),
+        reference(ProfileDigest {
+            profile: "mantle-release-source.v1",
+            digest: claim.subject.source_archive_blake3.as_str(),
+        }),
+        reference(ProfileDigest {
+            profile: "cairn.source-review-policy.v1",
+            digest: claim.review_policy_blake3.as_str(),
+        }),
     ];
     parents.sort();
+    debug_assert_eq!(parents.len(), 2);
+    debug_assert!(parents.windows(2).all(|pair| pair[0] <= pair[1]));
     Ok(AuthenticationScope {
         domain: "cairn.source-review.v1".to_string(),
         purpose: "source-review-approval".to_string(),
         profile_id: "cairn.source-review.v1".to_string(),
-        subject: reference(
-            "cairn.source-review-claim.v1",
-            &source_review_identity(b"cairn.source-review-claim.v1\0", claim)?,
-        ),
+        subject: reference(ProfileDigest {
+            profile: "cairn.source-review-claim.v1",
+            digest: &source_review_identity(b"cairn.source-review-claim.v1\0", claim)?,
+        }),
         parents,
         verifier_context: context.clone(),
     })
 }
 
-fn reference(profile: &str, digest: &str) -> ArtifactRef {
+/// Binds a profile name to the digest it references so the pair cannot be swapped.
+struct ProfileDigest<'a> {
+    profile: &'a str,
+    digest: &'a str,
+}
+
+fn reference(named: ProfileDigest<'_>) -> ArtifactRef {
     ArtifactRef {
-        profile: profile.to_string(),
+        profile: named.profile.to_string(),
         algorithm: "blake3".to_string(),
-        digest_hex: digest.to_string(),
+        digest_hex: named.digest.to_string(),
     }
 }
 
@@ -426,15 +590,27 @@ fn validate_non_claims(values: &[String]) -> Result<(), String> {
 }
 
 fn decode_hex<const N: usize>(text: &str) -> Result<[u8; N], String> {
-    if text.len() != N * 2 || !text.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+    let expected_len = N.checked_mul(2).ok_or_else(|| "source-review-key-or-signature-malformed".to_string())?;
+    if text.len() != expected_len || !text.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
         return Err("source-review-key-or-signature-malformed".to_string());
     }
     let mut output = [0; N];
     for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
-        let digit = |byte: u8| if byte <= b'9' { byte - b'0' } else { byte - b'a' + 10 };
-        output[index] = (digit(pair[0]) << 4) | digit(pair[1]);
+        let high = hex_digit(pair[0])?;
+        let low = hex_digit(pair[1])?;
+        output[index] = (high << 4) | low;
     }
     Ok(output)
+}
+
+/// Decodes one lowercase hexadecimal digit without unchecked arithmetic.
+fn hex_digit(byte: u8) -> Result<u8, String> {
+    let value = if byte <= b'9' {
+        byte.checked_sub(b'0')
+    } else {
+        byte.checked_sub(b'a').and_then(|digit| digit.checked_add(10))
+    };
+    value.ok_or_else(|| "source-review-key-or-signature-malformed".to_string())
 }
 
 /// Canonical external payload identity, distinct from exact artifact-byte hashes.
@@ -501,21 +677,29 @@ struct ValenceSourceReviewAcceptance {
     issues: Vec<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn validate_valence_receipt(
-    bytes: &[u8],
-    attachment_bytes: &[u8],
-    policy_bytes: &[u8],
-    policy: &SourceReviewVerificationPolicy,
-    attachment_id: &str,
-    policy_id: &str,
-    authentication_policy_id: &str,
-    keys: &[String],
-    statements: &[String],
-    claims: &[String],
-) -> Result<String, String> {
+/// Facts a Valence receipt must agree with the independently verified evidence.
+struct ValenceReceiptExpectation<'a> {
+    receipt_bytes: &'a [u8],
+    attachment_bytes: &'a [u8],
+    policy_bytes: &'a [u8],
+    policy: &'a SourceReviewVerificationPolicy,
+    attachment_id: &'a str,
+    policy_id: &'a str,
+    authentication_policy_id: &'a str,
+    approved_keys: &'a [String],
+    statement_ids: &'a [String],
+    claim_ids: &'a [String],
+}
+
+/// Number of scalar linkage fields a Valence receipt must carry.
+const VALENCE_SCALAR_FIELD_COUNT: usize = 11;
+
+/// Number of structured linkage fields a Valence receipt must carry.
+const VALENCE_LINKAGE_FIELD_COUNT: usize = 7;
+
+fn validate_valence_receipt(expectation: &ValenceReceiptExpectation<'_>) -> Result<String, String> {
     let parsed: ValenceSourceReviewAcceptance =
-        serde_json::from_slice(bytes).map_err(|_| "source-review-valence-malformed")?;
+        serde_json::from_slice(expectation.receipt_bytes).map_err(|_| "source-review-valence-malformed")?;
     let mut receipt = serde_json::to_value(parsed).map_err(|_| "source-review-valence-canonicalization-failed")?;
     let object = receipt.as_object_mut().ok_or("source-review-valence-malformed")?;
     let receipt_id = object
@@ -525,38 +709,63 @@ fn validate_valence_receipt(
     if source_review_identity(b"valence.source-review-acceptance.v1\0", &receipt)? != receipt_id {
         return Err("source-review-valence-receipt-identity-mismatch".to_string());
     }
+    validate_valence_scalar_fields(&receipt, expectation)?;
+    validate_valence_linkage_fields(&receipt, expectation)?;
+    Ok(receipt_id)
+}
+
+/// Requires every scalar linkage field of the receipt to match the evidence.
+fn validate_valence_scalar_fields(receipt: &Value, expectation: &ValenceReceiptExpectation<'_>) -> Result<(), String> {
     let expected = [
         ("schema", SOURCE_REVIEW_VALENCE_SCHEMA.to_string()),
         ("outcome", "accepted_manual_review".to_string()),
         ("verification_role", "manual_review".to_string()),
-        ("attachment_identity", attachment_id.to_string()),
-        ("verification_policy_identity", policy_id.to_string()),
-        ("authentication_policy_identity", authentication_policy_id.to_string()),
-        ("review_policy_blake3", policy.review_policy_blake3.as_str().to_string()),
-        ("attachment_artifact_blake3", blake3::hash(attachment_bytes).to_hex().to_string()),
-        ("policy_artifact_blake3", blake3::hash(policy_bytes).to_hex().to_string()),
-        ("subject_identity", source_review_identity(b"cairn.source-review-subject.v1\0", &policy.subject)?),
-        ("claim_root_identity", source_review_identity(b"cairn.claim-root.v1\0", &policy.claim_root)?),
+        ("attachment_identity", expectation.attachment_id.to_string()),
+        ("verification_policy_identity", expectation.policy_id.to_string()),
+        ("authentication_policy_identity", expectation.authentication_policy_id.to_string()),
+        ("review_policy_blake3", expectation.policy.review_policy_blake3.as_str().to_string()),
+        ("attachment_artifact_blake3", blake3::hash(expectation.attachment_bytes).to_hex().to_string()),
+        ("policy_artifact_blake3", blake3::hash(expectation.policy_bytes).to_hex().to_string()),
+        (
+            "subject_identity",
+            source_review_identity(b"cairn.source-review-subject.v1\0", &expectation.policy.subject)?,
+        ),
+        (
+            "claim_root_identity",
+            source_review_identity(b"cairn.claim-root.v1\0", &expectation.policy.claim_root)?,
+        ),
     ];
+    debug_assert_eq!(expected.len(), VALENCE_SCALAR_FIELD_COUNT);
     for (field, value) in expected {
         if receipt.get(field).and_then(Value::as_str) != Some(value.as_str()) {
             return Err(format!("source-review-valence-linkage-mismatch:{field}"));
         }
     }
-    for (field, value) in [
-        ("subject", serde_json::to_value(&policy.subject)),
-        ("claim_root", serde_json::to_value(&policy.claim_root)),
-        ("approved_key_blake3", serde_json::to_value(keys)),
-        ("signed_statement_blake3", serde_json::to_value(statements)),
-        ("claim_identity", serde_json::to_value(claims)),
-        ("non_claims", serde_json::to_value(&policy.non_claims)),
-        ("issues", Ok(Value::Array(Vec::new()))),
-    ] {
-        if receipt.get(field) != Some(&value.map_err(|_| "source-review-valence-canonicalization-failed")?) {
+    Ok(())
+}
+
+/// Requires every structured linkage field of the receipt to match the evidence.
+fn validate_valence_linkage_fields(receipt: &Value, expectation: &ValenceReceiptExpectation<'_>) -> Result<(), String> {
+    let mut expected = Vec::with_capacity(VALENCE_LINKAGE_FIELD_COUNT);
+    expected.push(("subject", canonical_value(&expectation.policy.subject)?));
+    expected.push(("claim_root", canonical_value(&expectation.policy.claim_root)?));
+    expected.push(("approved_key_blake3", canonical_value(expectation.approved_keys)?));
+    expected.push(("signed_statement_blake3", canonical_value(expectation.statement_ids)?));
+    expected.push(("claim_identity", canonical_value(expectation.claim_ids)?));
+    expected.push(("non_claims", canonical_value(&expectation.policy.non_claims)?));
+    expected.push(("issues", Value::Array(Vec::new())));
+    debug_assert_eq!(expected.len(), VALENCE_LINKAGE_FIELD_COUNT);
+    for (field, value) in expected {
+        if receipt.get(field) != Some(&value) {
             return Err(format!("source-review-valence-linkage-mismatch:{field}"));
         }
     }
-    Ok(receipt_id)
+    Ok(())
+}
+
+/// Canonicalizes one linkage value for exact comparison with the receipt.
+fn canonical_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, String> {
+    serde_json::to_value(value).map_err(|_| "source-review-valence-canonicalization-failed".to_string())
 }
 
 #[cfg(test)]

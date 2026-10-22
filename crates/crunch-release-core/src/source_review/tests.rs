@@ -54,7 +54,10 @@ fn signed_review(policy: &SourceReviewVerificationPolicy, seed: u8, disposition:
 impl Fixture {
     fn new() -> Self {
         let non_claims = SOURCE_REVIEW_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
-        let context = reference("test-review-currentness.v1", digest(b"current test key observations").as_str());
+        let context = reference(ProfileDigest {
+            profile: "test-review-currentness.v1",
+            digest: digest(b"current test key observations").as_str(),
+        });
         let subject = SourceReviewSubject {
             schema: "cairn.source-review-subject.v1".to_string(),
             source_archive_blake3: digest(b"test source archive"),
@@ -202,14 +205,14 @@ impl Fixture {
     fn verify(&self) -> SourceReviewVerification {
         let attachment = serde_json::to_vec(&self.attachment).unwrap();
         let policy = serde_json::to_vec(&self.policy).unwrap();
-        verify_release_source_review(
-            &self.manifest,
-            Some(&attachment),
-            Some(&policy),
-            Some(&self.receipt),
-            Some(&policy),
-            true,
-        )
+        verify_release_source_review(&SourceReviewVerificationRequest {
+            manifest: &self.manifest,
+            attachment_bytes: Some(&attachment),
+            policy_bytes: Some(&policy),
+            valence_bytes: Some(&self.receipt),
+            trusted_policy_bytes: Some(&policy),
+            require_review: true,
+        })
     }
 }
 
@@ -233,10 +236,24 @@ fn distinct_full_keys_with_identical_labels_satisfy_only_the_selected_review_gat
     assert!(result.valid);
     assert_eq!(result.approved_key_blake3.len(), 2);
     assert_eq!(result.approved_key_blake3, acceptance.approved_key_blake3);
-    let optional = verify_release_source_review(&fixture.manifest, None, None, None, None, false);
+    let optional = verify_release_source_review(&SourceReviewVerificationRequest {
+        manifest: &fixture.manifest,
+        attachment_bytes: None,
+        policy_bytes: None,
+        valence_bytes: None,
+        trusted_policy_bytes: None,
+        require_review: false,
+    });
     assert_eq!(optional.status, SourceReviewStatus::NotRequired);
     assert!(optional.valid);
-    let required = verify_release_source_review(&fixture.manifest, None, None, None, None, true);
+    let required = verify_release_source_review(&SourceReviewVerificationRequest {
+        manifest: &fixture.manifest,
+        attachment_bytes: None,
+        policy_bytes: None,
+        valence_bytes: None,
+        trusted_policy_bytes: None,
+        require_review: true,
+    });
     assert_eq!(required.status, SourceReviewStatus::Missing);
     assert!(!required.valid);
 }
@@ -303,8 +320,10 @@ fn authors_revocation_generation_and_role_are_enforced_without_receipt_authority
     fixture.policy.authentication_policy.trusted_keys[0].allowed_purposes = vec!["release-signature".to_string()];
     assert_eq!(fixture.verify().diagnostics, ["source-review-reviewer-key-role-invalid"]);
     let mut fixture = Fixture::new();
-    fixture.policy.authentication_policy.trusted_keys[0].currentness_ref =
-        reference("test-review-currentness.v1", digest(b"other observation").as_str());
+    fixture.policy.authentication_policy.trusted_keys[0].currentness_ref = reference(ProfileDigest {
+        profile: "test-review-currentness.v1",
+        digest: digest(b"other observation").as_str(),
+    });
     assert_eq!(fixture.verify().diagnostics, ["source-review-reviewer-key-role-invalid"]);
 }
 
@@ -313,14 +332,14 @@ fn explicit_policy_and_exact_valence_artifact_linkage_cannot_be_substituted() {
     let fixture = Fixture::new();
     let attachment = serde_json::to_vec(&fixture.attachment).unwrap();
     let policy = serde_json::to_vec(&fixture.policy).unwrap();
-    let result = verify_release_source_review(
-        &fixture.manifest,
-        Some(&attachment),
-        Some(&policy),
-        Some(&fixture.receipt),
-        Some(b"other policy"),
-        true,
-    );
+    let result = verify_release_source_review(&SourceReviewVerificationRequest {
+        manifest: &fixture.manifest,
+        attachment_bytes: Some(&attachment),
+        policy_bytes: Some(&policy),
+        valence_bytes: Some(&fixture.receipt),
+        trusted_policy_bytes: Some(b"other policy"),
+        require_review: true,
+    });
     assert_eq!(result.status, SourceReviewStatus::Stale);
     let mut fixture = Fixture::new();
     let mut receipt: Value = serde_json::from_slice(&fixture.receipt).unwrap();

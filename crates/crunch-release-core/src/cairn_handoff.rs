@@ -170,8 +170,11 @@ struct TextField<'a> {
 // r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
 // r[impl mantle.release_provenance.cairn_evidence_handoff.production_wiring]
 pub fn validate_cairn_release_evidence_handoff(handoff: CairnReleaseEvidenceHandoff) -> CairnHandoffValidation {
-    let report = validate_cairn_release_evidence_handoff_borrowed(&handoff);
-    CairnHandoffValidation { handoff, report }
+    let verdict = validate_cairn_release_evidence_handoff_borrowed(&handoff);
+    CairnHandoffValidation {
+        handoff,
+        report: verdict,
+    }
 }
 
 fn validate_cairn_release_evidence_handoff_borrowed(

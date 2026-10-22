@@ -158,14 +158,14 @@ pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<TreeCopyLimitValues
 }
 
 fn shared_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::TreeLimits, Vec<TreeCopyBlocker>> {
-    let limits = bounded_tree_limits(limits)?;
+    let admitted = bounded_tree_limits(limits)?;
     let values = bounded_tree_core::LimitValues {
-        entries: limits.entries,
-        depth: limits.depth,
-        path_bytes: limits.path_bytes,
-        file_bytes: limits.file_bytes,
-        total_bytes: limits.total_bytes,
-        symlink_target_bytes: limits.symlink_target_bytes,
+        entries: admitted.entries,
+        depth: admitted.depth,
+        path_bytes: admitted.path_bytes,
+        file_bytes: admitted.file_bytes,
+        total_bytes: admitted.total_bytes,
+        symlink_target_bytes: admitted.symlink_target_bytes,
     };
     bounded_tree_core::TreeLimits::new(values).map_err(|error| {
         vec![blocker(
