@@ -650,9 +650,10 @@ impl ProviderAdoptionPort for LocalProviderAdoption {
             let store = crunch_store::StoreHandle::open(config)
                 .await
                 .map_err(|error| admission_error(format!("opening provider adoption readback store: {error}")))?;
-            let persisted = store
-                .pathinfo_service()
-                .get(*parsed.digest())
+            let parts = store.into_pipeline_store_parts();
+            let persisted = parts
+                .output_lookup
+                .find(&parsed)
                 .await
                 .map_err(|error| admission_error(format!("reading adopted provider PathInfo: {error}")))?
                 .ok_or_else(|| admission_error(format!("adopted provider PathInfo is missing: {logical_path}")))?;
