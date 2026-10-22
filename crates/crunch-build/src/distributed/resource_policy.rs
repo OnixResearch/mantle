@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::ambiguous_params, tigerstyle::too_many_parameters)]
+
 //! Resource-policy adapter. Class inventory is rechecked through the existing
 //! named-resource/lease admission path. This does not register or authenticate
 //! workers, consume UCAN grants, or publish/reuse a result by itself.

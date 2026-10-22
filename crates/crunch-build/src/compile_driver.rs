@@ -47,27 +47,34 @@ impl CompileDriverRuntime {
     }
 
     pub fn validate(&self) -> io::Result<()> {
-        if self.schema != "mantle-compile-driver-runtime-v1"
-            || !clean_absolute(&self.host_socket)
-            || !clean_absolute(&self.receipt_path)
-            || self.host_socket.as_os_str().as_encoded_bytes().len() > 107
-            || self.receipt_path.as_os_str().as_encoded_bytes().len() > 4096
-            || self.host_socket == self.receipt_path
-            || self.build_id.is_empty()
-            || self.build_id.len() > 256
-            || self.build_id.chars().any(char::is_control)
-            || self.admitted_builders.is_empty()
-            || self.admitted_builders.len() > 256
-            || self
-                .admitted_builders
-                .iter()
-                .any(|b| !clean_absolute(Path::new(b)) || b.len() > 4096 || b.chars().any(char::is_control))
-            || self
-                .admitted_builders
-                .iter()
-                .enumerate()
-                .any(|(index, builder)| self.admitted_builders[..index].contains(builder))
-        {
+        let is_known_schema = self.schema == "mantle-compile-driver-runtime-v1";
+        let has_absolute_host_socket = clean_absolute(&self.host_socket);
+        let has_absolute_receipt_path = clean_absolute(&self.receipt_path);
+        let has_bounded_host_socket = self.host_socket.as_os_str().as_encoded_bytes().len() <= 107;
+        let has_bounded_receipt_path = self.receipt_path.as_os_str().as_encoded_bytes().len() <= 4096;
+        let has_distinct_paths = self.host_socket != self.receipt_path;
+        let has_usable_build_id =
+            !self.build_id.is_empty() && self.build_id.len() <= 256 && !self.build_id.chars().any(char::is_control);
+        let has_admitted_builders = !self.admitted_builders.is_empty() && self.admitted_builders.len() <= 256;
+        let has_valid_builders = self.admitted_builders.iter().all(|builder| {
+            clean_absolute(Path::new(builder)) && builder.len() <= 4096 && !builder.chars().any(char::is_control)
+        });
+        let has_unique_builders = self
+            .admitted_builders
+            .iter()
+            .enumerate()
+            .all(|(index, builder)| !self.admitted_builders[..index].contains(builder));
+        let is_valid = is_known_schema
+            && has_absolute_host_socket
+            && has_absolute_receipt_path
+            && has_bounded_host_socket
+            && has_bounded_receipt_path
+            && has_distinct_paths
+            && has_usable_build_id
+            && has_admitted_builders
+            && has_valid_builders
+            && has_unique_builders;
+        if !is_valid {
             return Err(io::Error::other("compile-driver-runtime-invalid"));
         }
         Ok(())

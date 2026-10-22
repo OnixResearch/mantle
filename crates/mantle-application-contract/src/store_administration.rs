@@ -284,171 +284,410 @@ pub enum StoreFactFailure {
     ClosureRootNotAdmitted,
 }
 
+/// Whether the leaf reports the row accounting shape.
+fn admits_rows_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::List | StoreLeaf::PushSelection | StoreLeaf::ArchiveSelection | StoreLeaf::Info)
+}
+
+/// Whether the leaf reports the root accounting shape.
+fn admits_roots_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::Roots { .. })
+}
+
+/// Whether the leaf reports the usage accounting shape.
+fn admits_usage_facts(leaf: StoreLeaf) -> bool {
+    leaf == StoreLeaf::Usage
+}
+
+/// Whether the leaf reports the retention accounting shape.
+fn admits_retention_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::Pin | StoreLeaf::Unpin)
+}
+
+/// Whether the leaf reports the garbage-collection accounting shape.
+fn admits_gc_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::Gc { .. })
+}
+
+/// Whether the leaf reports the verification accounting shape.
+fn admits_verify_facts(leaf: StoreLeaf) -> bool {
+    leaf == StoreLeaf::Verify
+}
+
+/// Whether the leaf reports the repair accounting shape.
+fn admits_repair_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::Repair { .. })
+}
+
+/// Whether the leaf reports the signature accounting shape.
+fn admits_sign_facts(leaf: StoreLeaf) -> bool {
+    leaf == StoreLeaf::Sign
+}
+
+/// Whether the leaf reports the push accounting shape.
+fn admits_push_facts(leaf: StoreLeaf) -> bool {
+    leaf == StoreLeaf::Push
+}
+
+/// Whether the leaf reports the pull accounting shape.
+fn admits_pull_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::Pull { .. })
+}
+
+/// Whether the leaf reports the composition accounting shape.
+fn admits_composition_facts(leaf: StoreLeaf) -> bool {
+    matches!(leaf, StoreLeaf::CompositionPlan | StoreLeaf::CompositionRealize)
+}
+
+/// Whether the leaf reports the archive accounting shape.
+fn admits_archive_facts(leaf: StoreLeaf) -> bool {
+    matches!(
+        leaf,
+        StoreLeaf::ArchiveExport { .. } | StoreLeaf::ArchiveImport { .. } | StoreLeaf::ArchiveList { .. }
+    )
+}
+
+/// Whether the reported rows account for the leaf's read.
+fn is_rows_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Rows { rows, invalid_rows } = facts else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_rows_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Rows { .. }));
+    let is_info_complete = leaf != StoreLeaf::Info || rows > 0;
+    Ok(invalid_rows == 0 && is_info_complete)
+}
+
+/// Whether the reported roots account for the leaf's read.
+fn is_roots_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Roots {
+        invalid_rows,
+        readback_matches,
+        ..
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_roots_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Roots { .. }));
+    Ok(invalid_rows == 0 && readback_matches)
+}
+
+/// Whether the reported usage partitions the observed bytes.
+fn is_usage_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Usage { observed, classified } = facts else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_usage_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Usage { .. }));
+    Ok(classified == Some(observed))
+}
+
+/// Whether the reported retention matches the requested transition.
+fn is_retention_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Retention { found, matching_after } = facts else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_retention_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Retention { .. }));
+    if !found {
+        return Err(StoreFactFailure::MissingRoot);
+    }
+    debug_assert!(found);
+    let is_pinned = leaf == StoreLeaf::Pin;
+    Ok(if is_pinned {
+        matching_after > 0
+    } else {
+        matching_after == 0
+    })
+}
+
+/// Whether the reported garbage collection accounts for the requested work.
+fn is_gc_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreLeaf::Gc { execute } = leaf else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let StoreFacts::Gc {
+        dry_run,
+        plan_matches,
+        candidates,
+        candidate_rows,
+        complete,
+        failures,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    debug_assert!(admits_gc_facts(leaf));
+    debug_assert!(matches!(facts, StoreFacts::Gc { .. }));
+    if execute && (!complete || failures > 0) {
+        return Err(StoreFactFailure::IncompleteGc);
+    }
+    debug_assert!(!execute || (complete && failures == 0));
+    let is_plan_consistent = dry_run != execute && plan_matches;
+    let is_candidates_consistent = usize::try_from(candidates).ok() == Some(candidate_rows);
+    Ok(is_plan_consistent && is_candidates_consistent)
+}
+
+/// Whether the reported verification accounts for every checked signature.
+fn is_verify_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Verify {
+        checked,
+        signatures,
+        mismatches,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_verify_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Verify { .. }));
+    if mismatches > checked {
+        return Err(StoreFactFailure::InconsistentResult);
+    }
+    if mismatches > 0 {
+        return Err(StoreFactFailure::VerificationMismatch);
+    }
+    debug_assert!(mismatches <= checked);
+    Ok(usize::try_from(checked).ok() == Some(signatures))
+}
+
+/// Whether the reported repair matches the requested execution mode.
+fn is_repair_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreLeaf::Repair { execute } = leaf else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let StoreFacts::Repair {
+        path_matches,
+        execution_requested,
+        required,
+        mutated,
+        readback_required,
+        signatures_match,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    debug_assert!(admits_repair_facts(leaf));
+    debug_assert!(matches!(facts, StoreFacts::Repair { .. }));
+    let is_execution_consistent = execution_requested == execute;
+    let is_mutation_consistent = mutated == (execute && required);
+    let is_readback_settled = !execute || !readback_required;
+    Ok(path_matches && is_execution_consistent && is_mutation_consistent && signatures_match && is_readback_settled)
+}
+
+/// Whether the reported signatures account for every transition.
+fn is_sign_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Sign {
+        rows,
+        transitions,
+        trusted_after,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_sign_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Sign { .. }));
+    let is_transitions_accounted = rows == transitions;
+    let is_trust_settled = rows == trusted_after;
+    Ok(is_transitions_accounted && is_trust_settled)
+}
+
+/// Whether the reported push accounts for every selected path.
+fn is_push_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Push {
+        selected,
+        pushed,
+        skipped_unsigned,
+        skipped_present,
+        rows,
+        invalid_rows,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_push_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Push { .. }));
+    let accounted = u64::from(pushed)
+        .saturating_add(u64::from(skipped_unsigned))
+        .saturating_add(u64::from(skipped_present));
+    let is_selection_accounted = u64::try_from(selected).ok() == Some(accounted);
+    let is_rows_consistent = usize::try_from(pushed).ok() == Some(rows);
+    Ok(is_selection_accounted && is_rows_consistent && invalid_rows == 0)
+}
+
+/// The root admission reported by a pull.
+fn pull_root_admitted(facts: StoreFacts) -> Option<bool> {
+    let StoreFacts::Pull { root_admitted, .. } = facts else {
+        return None;
+    };
+    root_admitted
+}
+
+/// Whether the reported pull accounts for every selected path.
+fn is_pull_accounting_consistent(facts: StoreFacts) -> bool {
+    let StoreFacts::Pull {
+        imported,
+        skipped,
+        expected_paths,
+        ..
+    } = facts
+    else {
+        return false;
+    };
+    let accounted = skipped.checked_add(u64::from(imported));
+    let is_selection_accounted = expected_paths.is_none_or(|expected| u64::try_from(expected).ok() == accounted);
+    is_selection_accounted && is_pull_row_accounting_consistent(facts)
+}
+
+/// Whether the reported pull accounts for every imported path.
+fn is_pull_row_accounting_consistent(facts: StoreFacts) -> bool {
+    let StoreFacts::Pull {
+        imported,
+        rows,
+        invalid_rows,
+        payload_bytes,
+        row_bytes,
+        readback_matches,
+        ..
+    } = facts
+    else {
+        return false;
+    };
+    let is_rows_consistent = usize::try_from(imported).ok() == Some(rows);
+    let is_payload_accounted = row_bytes == Some(payload_bytes);
+    is_rows_consistent && invalid_rows == 0 && readback_matches && is_payload_accounted
+}
+
+/// Whether the reported pull matches the requested root admission.
+fn is_pull_root_consistent(root_admitted: Option<bool>, closure: bool) -> bool {
+    if closure {
+        root_admitted == Some(true)
+    } else {
+        root_admitted.is_none()
+    }
+}
+
+/// Whether the reported pull accounts for the requested selection.
+fn is_pull_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreLeaf::Pull { closure, .. } = leaf else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let StoreFacts::Pull { .. } = facts else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    debug_assert!(admits_pull_facts(leaf));
+    debug_assert!(matches!(facts, StoreFacts::Pull { .. }));
+    let root_admitted = pull_root_admitted(facts);
+    if closure && root_admitted == Some(false) {
+        return Err(StoreFactFailure::ClosureRootNotAdmitted);
+    }
+    debug_assert!(!closure || root_admitted != Some(false));
+    let is_accounting_consistent = is_pull_accounting_consistent(facts);
+    let is_root_consistent = is_pull_root_consistent(root_admitted, closure);
+    Ok(is_accounting_consistent && is_root_consistent)
+}
+
+/// Whether the reported composition accounts for every binding and decision.
+fn is_composition_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Composition {
+        requested_bindings,
+        bindings,
+        requested_decisions,
+        decisions,
+        identity_matches,
+        readback_matches,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_composition_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Composition { .. }));
+    let is_bindings_accounted = requested_bindings == bindings;
+    let is_decisions_accounted = requested_decisions == decisions;
+    Ok(is_bindings_accounted && is_decisions_accounted && identity_matches && readback_matches)
+}
+
+/// Whether the reported archive accounts for every recorded path.
+fn is_archive_consistent(leaf: StoreLeaf, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    let StoreFacts::Archive {
+        reported,
+        rows,
+        invalid_rows,
+        payload_bytes,
+        row_bytes,
+        content_matches,
+    } = facts
+    else {
+        return Err(StoreFactFailure::WrongEvidence);
+    };
+    let is_leaf_admissible = admits_archive_facts(leaf);
+    if !is_leaf_admissible {
+        return Err(StoreFactFailure::WrongEvidence);
+    }
+    debug_assert!(is_leaf_admissible);
+    debug_assert!(matches!(facts, StoreFacts::Archive { .. }));
+    let is_rows_consistent = usize::try_from(reported).ok() == Some(rows);
+    let is_payload_accounted = row_bytes == Some(payload_bytes);
+    Ok(is_rows_consistent && invalid_rows == 0 && is_payload_accounted && content_matches)
+}
+
+/// Whether the reported facts account for the leaf's result.
+fn is_store_facts_consistent(plan: StorePlan, facts: StoreFacts) -> Result<bool, StoreFactFailure> {
+    match facts {
+        StoreFacts::Rows { .. } => is_rows_consistent(plan.leaf, facts),
+        StoreFacts::Roots { .. } => is_roots_consistent(plan.leaf, facts),
+        StoreFacts::Usage { .. } => is_usage_consistent(plan.leaf, facts),
+        StoreFacts::Retention { .. } => is_retention_consistent(plan.leaf, facts),
+        StoreFacts::Gc { .. } => is_gc_consistent(plan.leaf, facts),
+        StoreFacts::Verify { .. } => is_verify_consistent(plan.leaf, facts),
+        StoreFacts::Repair { .. } => is_repair_consistent(plan.leaf, facts),
+        StoreFacts::Sign { .. } => is_sign_consistent(plan.leaf, facts),
+        StoreFacts::Push { .. } => is_push_consistent(plan.leaf, facts),
+        StoreFacts::Pull { .. } => is_pull_consistent(plan.leaf, facts),
+        StoreFacts::Composition { .. } => is_composition_consistent(plan.leaf, facts),
+        StoreFacts::Archive { .. } => is_archive_consistent(plan.leaf, facts),
+    }
+}
+
 /// Classify result accounting and persisted state, not whether a port returned Ok.
 pub fn classify_store_facts(plan: StorePlan, facts: StoreFacts) -> Result<(), StoreFactFailure> {
-    use StoreFactFailure as Failure;
-    use StoreFacts as Facts;
-    use StoreLeaf as Leaf;
-    let consistent = match (plan.leaf, facts) {
-        (
-            Leaf::List | Leaf::PushSelection | Leaf::ArchiveSelection | Leaf::Info,
-            Facts::Rows { rows, invalid_rows },
-        ) => invalid_rows == 0 && (plan.leaf != Leaf::Info || rows > 0),
-        (
-            Leaf::Roots { .. },
-            Facts::Roots {
-                invalid_rows,
-                readback_matches,
-                ..
-            },
-        ) => invalid_rows == 0 && readback_matches,
-        (Leaf::Usage, Facts::Usage { observed, classified }) => classified == Some(observed),
-        (Leaf::Pin | Leaf::Unpin, Facts::Retention { found, matching_after }) => {
-            if !found {
-                return Err(Failure::MissingRoot);
-            }
-            if plan.leaf == Leaf::Pin {
-                matching_after > 0
-            } else {
-                matching_after == 0
-            }
-        }
-        (
-            Leaf::Gc { execute },
-            Facts::Gc {
-                dry_run,
-                plan_matches,
-                candidates,
-                candidate_rows,
-                complete,
-                failures,
-            },
-        ) => {
-            if execute && (!complete || failures > 0) {
-                return Err(Failure::IncompleteGc);
-            }
-            dry_run != execute && plan_matches && usize::try_from(candidates).ok() == Some(candidate_rows)
-        }
-        (
-            Leaf::Verify,
-            Facts::Verify {
-                checked,
-                signatures,
-                mismatches,
-            },
-        ) => {
-            if mismatches > checked {
-                return Err(Failure::InconsistentResult);
-            }
-            if mismatches > 0 {
-                return Err(Failure::VerificationMismatch);
-            }
-            usize::try_from(checked).ok() == Some(signatures)
-        }
-        (
-            Leaf::Repair { execute },
-            Facts::Repair {
-                path_matches,
-                execution_requested,
-                required,
-                mutated,
-                readback_required,
-                signatures_match,
-            },
-        ) => {
-            path_matches
-                && execution_requested == execute
-                && mutated == (execute && required)
-                && signatures_match
-                && (!execute || !readback_required)
-        }
-        (
-            Leaf::Sign,
-            Facts::Sign {
-                rows,
-                transitions,
-                trusted_after,
-            },
-        ) => rows == transitions && rows == trusted_after,
-        (
-            Leaf::Push,
-            Facts::Push {
-                selected,
-                pushed,
-                skipped_unsigned,
-                skipped_present,
-                rows,
-                invalid_rows,
-            },
-        ) => {
-            let accounted = u64::from(pushed) + u64::from(skipped_unsigned) + u64::from(skipped_present);
-            u64::try_from(selected).ok() == Some(accounted)
-                && usize::try_from(pushed).ok() == Some(rows)
-                && invalid_rows == 0
-        }
-        (
-            Leaf::Pull { closure, .. },
-            Facts::Pull {
-                imported,
-                skipped,
-                expected_paths,
-                rows,
-                invalid_rows,
-                payload_bytes,
-                row_bytes,
-                readback_matches,
-                root_admitted,
-            },
-        ) => {
-            if closure && root_admitted == Some(false) {
-                return Err(Failure::ClosureRootNotAdmitted);
-            }
-            let accounted = skipped.checked_add(u64::from(imported));
-            usize::try_from(imported).ok() == Some(rows)
-                && invalid_rows == 0
-                && readback_matches
-                && row_bytes == Some(payload_bytes)
-                && expected_paths.is_none_or(|expected| u64::try_from(expected).ok() == accounted)
-                && if closure {
-                    root_admitted == Some(true)
-                } else {
-                    root_admitted.is_none()
-                }
-        }
-        (
-            Leaf::CompositionPlan | Leaf::CompositionRealize,
-            Facts::Composition {
-                requested_bindings,
-                bindings,
-                requested_decisions,
-                decisions,
-                identity_matches,
-                readback_matches,
-            },
-        ) => requested_bindings == bindings && requested_decisions == decisions && identity_matches && readback_matches,
-        (
-            Leaf::ArchiveExport { .. } | Leaf::ArchiveImport { .. } | Leaf::ArchiveList { .. },
-            Facts::Archive {
-                reported,
-                rows,
-                invalid_rows,
-                payload_bytes,
-                row_bytes,
-                content_matches,
-            },
-        ) => {
-            usize::try_from(reported).ok() == Some(rows)
-                && invalid_rows == 0
-                && row_bytes == Some(payload_bytes)
-                && content_matches
-        }
-        _ => return Err(Failure::WrongEvidence),
-    };
-    if consistent {
-        Ok(())
-    } else {
-        Err(Failure::InconsistentResult)
+    let is_consistent = is_store_facts_consistent(plan, facts)?;
+    if is_consistent {
+        return Ok(());
     }
+    Err(StoreFactFailure::InconsistentResult)
 }
 
 #[cfg(test)]

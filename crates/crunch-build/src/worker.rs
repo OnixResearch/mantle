@@ -155,6 +155,9 @@ struct DynamicPlaceholderBindings {
     unit_outputs: BTreeMap<(UnitId, OutputName), StorePathString>,
 }
 
+/// One dynamic unit output bound to the store path that realizes it.
+type DynamicOutputBinding = ((UnitId, OutputName), StorePathString);
+
 struct NativePlanIdentity<'a> {
     producer_key: &'a str,
     output_name: &'a str,
@@ -1298,6 +1301,81 @@ fn dynamic_output_binding(
     admit_dynamic_binding_path(path, store_dir).map(Some)
 }
 
+/// The dynamic unit outputs this unit's arguments and environment reference.
+fn required_dynamic_outputs(unit: &DynamicUnit) -> Result<BTreeSet<(UnitId, OutputName)>, Error> {
+    let placeholders = unit
+        .derivation
+        .args
+        .iter()
+        .chain(unit.derivation.env.values())
+        .map(|value| parse_dynamic_placeholders(value))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            Error::Store(format!("parsing native dynamic placeholders for unit '{}': {error}", unit.id))
+        })?;
+    Ok(placeholders.into_iter().flatten().filter_map(dynamic_unit_output_placeholder).collect())
+}
+
+/// The unit output a placeholder names, when it names one at all.
+fn dynamic_unit_output_placeholder(placeholder: DynamicPlaceholder) -> Option<(UnitId, OutputName)> {
+    match placeholder {
+        DynamicPlaceholder::UnitOutput { unit, output } => Some((unit, output)),
+        DynamicPlaceholder::Source { .. } => None,
+    }
+}
+
+/// The store path bound to one dynamic unit output, when that output is
+/// statically known or carries a signed provisional path.
+fn resolve_dynamic_output_binding(
+    unit: &DynamicUnit,
+    dependency: &UnitId,
+    output: &OutputName,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
+    known_paths: &impl NativeUnitLookup,
+    store_dir: &str,
+    required_outputs: &BTreeSet<(UnitId, OutputName)>,
+) -> Result<Option<DynamicOutputBinding>, Error> {
+    let drv_path = registered_units.get(dependency).ok_or_else(|| {
+        Error::Store(format!("native dynamic unit '{}' references unregistered dynamic unit {dependency}", unit.id))
+    })?;
+    debug_assert!(registered_units.contains_key(dependency), "a registered dynamic unit backs every output binding");
+    let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
+    let binding_key = (dependency.clone(), output.clone());
+    let resolved_path = match dynamic_output_binding(known_paths, &drv_abs, dependency, output, store_dir)? {
+        Some(binding_path) => Some(binding_path),
+        None if known_paths.native_is_ca(&drv_abs) => {
+            // CA outputs have a provisional path until their signed
+            // realization. Staged and live parents use the same rule.
+            let provisional = known_paths.native_provisional(&drv_abs, output.as_str()).ok_or_else(|| {
+                Error::Store(format!("native dynamic CA unit {dependency}:{output} has no provisional path"))
+            })?;
+            Some(admit_dynamic_binding_path(
+                String::from_utf8(provisional.to_vec()).map_err(|_| {
+                    Error::Store(format!("native dynamic CA unit {dependency}:{output} path is not UTF-8"))
+                })?,
+                store_dir,
+            )?)
+        }
+        None => {
+            if required_outputs.contains(&binding_key) {
+                return Err(Error::Store(format!(
+                    "native dynamic unit '{}' requires a statically known path for {dependency}:{output}",
+                    unit.id
+                )));
+            }
+            None
+        }
+    };
+    let Some(resolved_path) = resolved_path else {
+        return Ok(None);
+    };
+    debug_assert!(
+        resolved_path.as_str().starts_with(store_dir),
+        "dynamic output bindings resolve inside the store directory"
+    );
+    Ok(Some((binding_key, resolved_path)))
+}
+
 fn dynamic_placeholder_bindings(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
@@ -1305,21 +1383,7 @@ fn dynamic_placeholder_bindings(
     known_paths: &impl NativeUnitLookup,
     store_dir: &str,
 ) -> Result<DynamicPlaceholderBindings, Error> {
-    let required_outputs = unit
-        .derivation
-        .args
-        .iter()
-        .chain(unit.derivation.env.values())
-        .map(|value| parse_dynamic_placeholders(value))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| Error::Store(format!("parsing native dynamic placeholders for unit '{}': {error}", unit.id)))?
-        .into_iter()
-        .flatten()
-        .filter_map(|placeholder| match placeholder {
-            DynamicPlaceholder::UnitOutput { unit, output } => Some((unit, output)),
-            DynamicPlaceholder::Source { .. } => None,
-        })
-        .collect::<BTreeSet<_>>();
+    let required_outputs = required_dynamic_outputs(unit)?;
     let binding_count_max = unit.derivation.inputs.len();
     let mut source_bindings = BTreeMap::new();
     let mut output_bindings = BTreeMap::new();
@@ -1339,42 +1403,20 @@ fn dynamic_placeholder_bindings(
                 unit: dependency,
                 output,
             } => {
-                let drv_path = registered_units.get(dependency).ok_or_else(|| {
-                    Error::Store(format!(
-                        "native dynamic unit '{}' references unregistered dynamic unit {dependency}",
-                        unit.id
-                    ))
-                })?;
-                let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
-                let binding_key = (dependency.clone(), output.clone());
-                if let Some(binding_path) =
-                    dynamic_output_binding(known_paths, &drv_abs, dependency, output, store_dir)?
-                {
+                let binding = resolve_dynamic_output_binding(
+                    unit,
+                    dependency,
+                    output,
+                    registered_units,
+                    known_paths,
+                    store_dir,
+                    &required_outputs,
+                )?;
+                if let Some((binding_key, binding_path)) = binding {
                     if output_bindings.len() >= binding_count_max {
                         return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
                     }
                     output_bindings.insert(binding_key, binding_path);
-                } else if known_paths.native_is_ca(&drv_abs) {
-                    // CA outputs have a provisional path until their signed
-                    // realization. Staged and live parents use the same rule.
-                    let provisional = known_paths.native_provisional(&drv_abs, output.as_str()).ok_or_else(|| {
-                        Error::Store(format!("native dynamic CA unit {dependency}:{output} has no provisional path"))
-                    })?;
-                    let binding_path = admit_dynamic_binding_path(
-                        String::from_utf8(provisional.to_vec()).map_err(|_| {
-                            Error::Store(format!("native dynamic CA unit {dependency}:{output} path is not UTF-8"))
-                        })?,
-                        store_dir,
-                    )?;
-                    if output_bindings.len() >= binding_count_max {
-                        return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
-                    }
-                    output_bindings.insert(binding_key, binding_path);
-                } else if required_outputs.contains(&binding_key) {
-                    return Err(Error::Store(format!(
-                        "native dynamic unit '{}' requires a statically known path for {dependency}:{output}",
-                        unit.id
-                    )));
                 }
             }
             DynamicInput::StorePath { .. } => {}
@@ -2232,8 +2274,8 @@ impl Worker {
         }
         .await;
 
-        let cancelled = self.streaming_cancelled();
-        if self.streaming_cancellation.is_some() && (cancelled || result.is_err()) {
+        let is_cancelled = self.streaming_cancelled();
+        if self.streaming_cancellation.is_some() && (is_cancelled || result.is_err()) {
             rx.close();
             let mut stale: Vec<_> = state.pending_meta.keys().cloned().collect();
             stale.sort_unstable();
@@ -2250,7 +2292,7 @@ impl Worker {
             if !state.pending_meta.is_empty() {
                 return Err(Error::Store("streaming teardown is not observed".to_string()));
             }
-            if cancelled {
+            if is_cancelled {
                 let goals: Vec<_> = self
                     .registry
                     .iter()

@@ -168,7 +168,9 @@ pub struct RustCacheRetentionPlan {
 
 impl RustCacheRetentionPlan {
     pub fn live_nodes(&self) -> &[Node] {
-        assert!(self.live_nodes.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES + cc::MAX_CC_RECORDS);
+        assert!(
+            self.live_nodes.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES.saturating_add(cc::MAX_CC_RECORDS)
+        );
         assert!(!self.mutation_lock_path.as_os_str().is_empty());
         &self.live_nodes
     }

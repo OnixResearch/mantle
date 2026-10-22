@@ -534,6 +534,39 @@ fn collect_pipeline_evidence<S: snix_build::buildservice::BuildService + 'static
     })
 }
 
+/// Run the Worker until the evaluation stream ends. An owned cancellation lets
+/// the caller tear the sandbox down before the run reports a terminal outcome.
+#[cfg(target_os = "linux")]
+async fn run_worker_stream<BServ: snix_build::buildservice::BuildService + 'static>(
+    worker: &mut Worker,
+    builder: &mut Builder<BServ>,
+    known_paths: &mut DerivationRegistry,
+    rx: &mut mpsc::Receiver<EvalMessage>,
+    live_observer: Option<&mut dyn FnMut(&crunch_build::GoalRegistry)>,
+    cancellation: &EvaluationCancellation,
+    owned_cancellation: bool,
+) -> Result<WorkerResult, crunch_build::Error> {
+    if owned_cancellation {
+        let (shutdown, receiver) = tokio::sync::watch::channel(cancellation.is_requested());
+        let run = worker.run_streaming_cancellable(builder, known_paths, rx, live_observer, receiver);
+        tokio::pin!(run);
+        let result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => {
+                shutdown.send_replace(true);
+                run.await
+            }
+            result = &mut run => result,
+        };
+        if result.is_err() {
+            cancellation.request();
+        }
+        result
+    } else {
+        worker.run_streaming_observed(builder, known_paths, rx, live_observer).await
+    }
+}
+
 #[cfg(target_os = "linux")]
 async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, Error> {
     let config = request.config;
@@ -555,29 +588,16 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     }
     let mut worker_observation = request.worker_observation.map(live_worker_observer);
     let cancellation = request.cancellation.clone();
-    let worker_run = async {
-        let observer =
-            worker_observation.as_mut().map(|observe| observe as &mut dyn FnMut(&crunch_build::GoalRegistry));
-        if request.owned_cancellation {
-            let (shutdown, receiver) = tokio::sync::watch::channel(cancellation.is_requested());
-            let run = worker.run_streaming_cancellable(&mut builder, &mut known_paths, &mut rx, observer, receiver);
-            tokio::pin!(run);
-            let result = tokio::select! {
-                biased;
-                _ = cancellation.cancelled() => {
-                    shutdown.send_replace(true);
-                    run.await
-                }
-                result = &mut run => result,
-            };
-            if result.is_err() {
-                cancellation.request();
-            }
-            result
-        } else {
-            worker.run_streaming_observed(&mut builder, &mut known_paths, &mut rx, observer).await
-        }
-    };
+    let observer = worker_observation.as_mut().map(|observe| observe as &mut dyn FnMut(&crunch_build::GoalRegistry));
+    let worker_run = run_worker_stream(
+        &mut worker,
+        &mut builder,
+        &mut known_paths,
+        &mut rx,
+        observer,
+        &cancellation,
+        request.owned_cancellation,
+    );
     let eval_stream = stream_roots_into_worker(EvalStreamRequest {
         max_jobs: config.max_jobs,
         store_dir: &config.store_dir,

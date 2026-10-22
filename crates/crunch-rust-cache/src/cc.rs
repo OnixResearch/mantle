@@ -50,17 +50,25 @@ pub struct CcRecord {
 
 impl CcRecord {
     pub fn validate(&self) -> Result<(), Error> {
-        if self.schema != "mantle-cc-cache-record-v1"
-            || !valid_digest(&self.base_key)
-            || !valid_digest(&self.key)
-            || !self.complete
-            || self.dependencies.is_empty()
-            || self.dependencies.len() > MAX_CC_DEPENDENCIES
-            || self.stdout.len() > MAX_CC_DIAGNOSTIC_BYTES
-            || self.stderr.len() > MAX_CC_DIAGNOSTIC_BYTES
-            || self.object_bytes > MAX_CC_OBJECT_BYTES
-            || !(0..=255).contains(&self.status)
-        {
+        let is_known_schema = self.schema == "mantle-cc-cache-record-v1";
+        let has_valid_base_key = valid_digest(&self.base_key);
+        let has_valid_key = valid_digest(&self.key);
+        let is_complete = self.complete;
+        let has_bounded_dependencies = !self.dependencies.is_empty() && self.dependencies.len() <= MAX_CC_DEPENDENCIES;
+        let has_bounded_stdout = self.stdout.len() <= MAX_CC_DIAGNOSTIC_BYTES;
+        let has_bounded_stderr = self.stderr.len() <= MAX_CC_DIAGNOSTIC_BYTES;
+        let has_bounded_object = self.object_bytes <= MAX_CC_OBJECT_BYTES;
+        let has_valid_status = (0..=255).contains(&self.status);
+        let is_valid_record = is_known_schema
+            && has_valid_base_key
+            && has_valid_key
+            && is_complete
+            && has_bounded_dependencies
+            && has_bounded_stdout
+            && has_bounded_stderr
+            && has_bounded_object
+            && has_valid_status;
+        if !is_valid_record {
             return Err(Error::State("cc-cache-record-invalid".into()));
         }
         if self.object_mode.is_some_and(|mode| mode > 0o777)
@@ -76,24 +84,25 @@ impl CcRecord {
             return Err(Error::Bound("cc-depfile-template-bound".into()));
         }
         for dependency in &self.dependencies {
-            if dependency.locator.is_empty()
-                || dependency.locator.len() > 4096
-                || dependency.locator.starts_with('/')
-                || dependency.locator.split('/').any(|part| part == "..")
-                || !valid_digest(&dependency.digest_blake3)
-            {
+            let has_usable_locator = !dependency.locator.is_empty()
+                && dependency.locator.len() <= 4096
+                && !dependency.locator.starts_with('/')
+                && !dependency.locator.split('/').any(|part| part == "..");
+            let has_valid_digest = valid_digest(&dependency.digest_blake3);
+            if !has_usable_locator || !has_valid_digest {
                 return Err(Error::State("cc-cache-dependency-invalid".into()));
             }
         }
-        if self.status == 0 {
-            if !self.object_digest.as_deref().is_some_and(valid_digest) || self.object_mode.is_none() {
-                return Err(Error::State("cc-cache-object-missing".into()));
-            }
-        } else if self.object_digest.is_some()
+        let has_failure_object = self.object_digest.is_some()
             || self.object_bytes != 0
             || self.object_mode.is_some()
-            || self.depfile.is_some()
-        {
+            || self.depfile.is_some();
+        if self.status == 0 {
+            let has_object = self.object_digest.as_deref().is_some_and(valid_digest) && self.object_mode.is_some();
+            if !has_object {
+                return Err(Error::State("cc-cache-object-missing".into()));
+            }
+        } else if has_failure_object {
             return Err(Error::State("cc-cache-failure-object-present".into()));
         }
         Ok(())
@@ -179,7 +188,7 @@ impl RustCache {
                 return Ok(None);
             };
             let mut bytes = Vec::new();
-            reader.take(MAX_CC_OBJECT_BYTES + 1).read_to_end(&mut bytes).await.map_err(io)?;
+            reader.take(MAX_CC_OBJECT_BYTES.saturating_add(1)).read_to_end(&mut bytes).await.map_err(io)?;
             if bytes.len() as u64 != record.object_bytes || blake3::hash(&bytes).to_hex().as_str() != encoded {
                 return Err(Error::State("cc-cache-object-corrupt".into()));
             }
@@ -194,7 +203,7 @@ impl RustCache {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(e) => return Err(io(e)),
         };
-        let mut nodes = Vec::new();
+        let mut nodes = Vec::with_capacity(MAX_CC_RECORDS);
         for (index, entry) in entries.enumerate() {
             if index >= MAX_CC_RECORDS {
                 return Err(Error::Bound("cc-cache-record-limit".into()));
@@ -202,7 +211,10 @@ impl RustCache {
             let entry = entry.map_err(io)?;
             let mut file = super::open_read_nofollow(&entry.path())?;
             let mut bytes = Vec::new();
-            Read::by_ref(&mut file).take(super::MAX_CACHE_JSON_BYTES + 1).read_to_end(&mut bytes).map_err(io)?;
+            Read::by_ref(&mut file)
+                .take(super::MAX_CACHE_JSON_BYTES.saturating_add(1))
+                .read_to_end(&mut bytes)
+                .map_err(io)?;
             if bytes.len() as u64 > super::MAX_CACHE_JSON_BYTES {
                 return Err(Error::Bound("cc-record-bytes".into()));
             }

@@ -370,29 +370,39 @@ pub fn plan_rust_operation(operation: RustOperation) -> Result<EffectPlan, PlanE
     }])
 }
 
+/// The observation reported for one rust operation.
+fn rust_observation(operation: RustOperation, is_admitted: bool) -> Observation {
+    let (id, kind, _) = operation.effect();
+    let status = if is_admitted {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    let diagnostics_code = if is_admitted {
+        None
+    } else {
+        Some("rust-operation-evidence-rejected".into())
+    };
+    debug_assert_eq!(status == ObservationStatus::Succeeded, is_admitted);
+    debug_assert_eq!(diagnostics_code.is_some(), !is_admitted);
+    Observation {
+        effect_id: EffectId(id.into()),
+        kind,
+        status,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(1),
+        diagnostics_code,
+    }
+}
+
 pub fn classify_rust_operation(
     plan: &EffectPlan,
     operation: RustOperation,
     evidence: &RustEvidence<'_>,
 ) -> ApplicationOutcome {
-    let (id, kind, _) = operation.effect();
-    let admitted = evidence.admits(operation);
-    classify_observations(plan, &[Observation {
-        effect_id: EffectId(id.into()),
-        kind,
-        status: if admitted {
-            ObservationStatus::Succeeded
-        } else {
-            ObservationStatus::Failed
-        },
-        output: EffectOutput::None,
-        usage: EffectMeasure::Calls(1),
-        diagnostics_code: if admitted {
-            None
-        } else {
-            Some("rust-operation-evidence-rejected".into())
-        },
-    }])
+    let is_admitted = evidence.admits(operation);
+    let observation = rust_observation(operation, is_admitted);
+    classify_observations(plan, &[observation])
 }
 
 #[cfg(test)]

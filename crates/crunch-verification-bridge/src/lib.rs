@@ -1,3 +1,13 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    reason = "the published consume entry points keep their documented profile and receipt path arguments"
+)]
 //! Filesystem adapter for exact-byte evidence handoff, with no process/network effects.
 use std::collections::BTreeSet;
 use std::fs::File;
@@ -34,7 +44,7 @@ pub struct ProfileInputs {
     pub profile: Vec<u8>,
 }
 
-fn read_bounded(root: &Path, relative: String, limit: usize) -> Result<Material, String> {
+fn read_bounded(root: &Path, relative: String, limit_bytes: usize) -> Result<Material, String> {
     let relative = relative_path(relative)?;
     if fs::symlink_metadata(root).map_err(|error| error.to_string())?.file_type().is_symlink() {
         return Err("handoff root may not be a symlink".into());
@@ -52,14 +62,17 @@ fn read_bounded(root: &Path, relative: String, limit: usize) -> Result<Material,
     }
     let file = File::open(&path).map_err(|error| format!("{}: {error}", path.display()))?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
-    if !metadata.is_file() || metadata.len() > limit as u64 {
+    if !metadata.is_file() || metadata.len() > limit_bytes as u64 {
         return Err(format!("artifact is not a bounded regular file: {relative}"));
     }
     let mut bytes = Vec::new();
-    file.take(limit as u64 + 1).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
-    if bytes.len() > limit {
+    let read_limit_bytes = (limit_bytes as u64).saturating_add(1);
+    file.take(read_limit_bytes).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
+    if bytes.len() > limit_bytes {
         return Err(format!("artifact grew beyond byte bound: {relative}"));
     }
+    debug_assert!(metadata.is_file());
+    debug_assert!(bytes.len() <= limit_bytes);
     Ok(Material { path: relative, bytes })
 }
 
@@ -99,6 +112,8 @@ pub fn packaging_inputs(producer: Producer, profile: Vec<u8>, revision: &str) ->
         Producer::Trellis => value.get("extraction"),
     }
     .ok_or("missing producer options")?;
+    debug_assert!(identified.bytes.len() <= crunch_verification_bridge_core::MAX_DOCUMENT_BYTES);
+    debug_assert!(!identified.identity.is_empty());
     let inputs = PackagingInputs {
         source_revision: revision.to_owned(),
         source_identity: text(consumer, "/source/paths/0/identity")?.to_owned(),
@@ -149,84 +164,13 @@ fn consume_profile(
     let receipt =
         read_bounded(root, receipt_path.to_owned(), crunch_verification_bridge_core::MAX_DOCUMENT_BYTES)?.bytes;
     let parsed = json(&receipt)?;
-    let mut paths = BTreeSet::new();
-    match producer {
-        Producer::Octet | Producer::OctetVerified => {
-            paths.insert(text(&parsed, "/consumer/source_path")?.to_owned());
-            paths.insert("proofs/aeneas/provider-profile.json".to_owned());
-            let stages = parsed
-                .pointer("/consumer/stage_artifacts")
-                .and_then(Value::as_array)
-                .ok_or("missing stage artifacts")?;
-            let artifacts =
-                parsed.get("artifact_identities").and_then(Value::as_array).ok_or("missing artifact identities")?;
-            if stages.len() > crunch_verification_bridge_core::MAX_MATERIALS
-                || artifacts.len() > crunch_verification_bridge_core::MAX_MATERIALS
-            {
-                return Err("external artifact count exceeds bound".into());
-            }
-            for stage in stages {
-                let digest = text(stage, "/blake3")?.trim_start_matches("b3:");
-                for row in artifacts {
-                    if text(row, "/blake3")?.trim_start_matches("b3:") == digest {
-                        paths.insert(text(row, "/locator")?.to_owned());
-                        break;
-                    }
-                }
-            }
-        }
-        Producer::Trellis => {
-            paths.insert(text(&parsed, "/source_path")?.to_owned());
-            paths.insert(text(&parsed, "/verus_receipt_path")?.to_owned());
-            let rows = parsed.get("artifacts").and_then(Value::as_array).ok_or("missing artifacts")?;
-            if rows.len() > crunch_verification_bridge_core::MAX_MATERIALS {
-                return Err("external artifact count exceeds bound".into());
-            }
-            for row in rows {
-                paths.insert(text(row, "/path")?.to_owned());
-            }
-        }
-    }
+    let mut paths = material_paths(producer, &parsed)?;
     let verification = if matches!(producer, Producer::OctetVerified) {
-        let report = read_bounded(
-            root,
-            "producer-artifact-verification.json".to_owned(),
-            crunch_verification_bridge_core::MAX_DOCUMENT_BYTES,
-        )?;
-        let value = json(&report.bytes)?;
-        let rows = value.get("artifacts").and_then(Value::as_array).ok_or("missing verified artifacts")?;
-        if rows.len() > crunch_verification_bridge_core::MAX_MATERIALS {
-            return Err("verified artifact count exceeds bound".into());
-        }
-        for row in rows {
-            paths.insert(text(row, "/artifact")?.to_owned());
-        }
-        let artifacts =
-            parsed.get("artifact_identities").and_then(Value::as_array).ok_or("missing envelope artifacts")?;
-        for row in artifacts {
-            paths.insert(text(row, "/locator")?.to_owned());
-        }
-        Some(report)
+        verified_report(root, &parsed, &mut paths)?
     } else {
         None
     };
-    if paths.len() + usize::from(verification.is_some()) > crunch_verification_bridge_core::MAX_MATERIALS {
-        return Err("material count exceeds bound".into());
-    }
-    let mut materials = Vec::with_capacity(paths.len() + usize::from(verification.is_some()));
-    let mut total = 0usize;
-    if let Some(report) = verification {
-        total = report.bytes.len();
-        materials.push(report);
-    }
-    for path in paths {
-        let material = read_bounded(root, path, crunch_verification_bridge_core::MAX_MATERIAL_BYTES)?;
-        total = total.checked_add(material.bytes.len()).ok_or("material byte overflow")?;
-        if total > crunch_verification_bridge_core::MAX_TOTAL_BYTES {
-            return Err("aggregate material byte bound exceeded".into());
-        }
-        materials.push(material);
-    }
+    let materials = read_materials(root, paths, verification)?;
     let request = ObservationRequest {
         inputs,
         profile,
@@ -238,6 +182,8 @@ fn consume_profile(
         Producer::OctetVerified => crunch_verification_bridge_core::observe_octet_verified(request),
         Producer::Trellis => crunch_verification_bridge_core::observe_trellis(request),
     }?;
+    debug_assert!(!observed.observation.schema.is_empty());
+    debug_assert!(!observed.observation.producer.is_empty());
     Ok(Handoff {
         observation: observed.observation,
         profile: observed.profile,
@@ -245,6 +191,115 @@ fn consume_profile(
         materials: observed.materials,
         producer_binding: None,
     })
+}
+
+/// The paths the selected producer receipt names for its own materials.
+fn material_paths(producer: Producer, parsed: &Value) -> Result<BTreeSet<String>, String> {
+    let mut paths = BTreeSet::new();
+    match producer {
+        Producer::Octet | Producer::OctetVerified => octet_material_paths(parsed, &mut paths)?,
+        Producer::Trellis => trellis_material_paths(parsed, &mut paths)?,
+    }
+    Ok(paths)
+}
+
+/// The Octet receipt names its source, the provider profile, and one artifact
+/// per generated stage.
+fn octet_material_paths(parsed: &Value, paths: &mut BTreeSet<String>) -> Result<(), String> {
+    paths.insert(text(parsed, "/consumer/source_path")?.to_owned());
+    paths.insert("proofs/aeneas/provider-profile.json".to_owned());
+    let stages = parsed
+        .pointer("/consumer/stage_artifacts")
+        .and_then(Value::as_array)
+        .ok_or("missing stage artifacts")?;
+    let artifacts = parsed.get("artifact_identities").and_then(Value::as_array).ok_or("missing artifact identities")?;
+    if stages.len() > crunch_verification_bridge_core::MAX_MATERIALS
+        || artifacts.len() > crunch_verification_bridge_core::MAX_MATERIALS
+    {
+        return Err("external artifact count exceeds bound".into());
+    }
+    for stage in stages {
+        let digest = text(stage, "/blake3")?.trim_start_matches("b3:");
+        for row in artifacts {
+            if text(row, "/blake3")?.trim_start_matches("b3:") == digest {
+                paths.insert(text(row, "/locator")?.to_owned());
+                break;
+            }
+        }
+    }
+    debug_assert!(stages.len() <= crunch_verification_bridge_core::MAX_MATERIALS);
+    debug_assert!(artifacts.len() <= crunch_verification_bridge_core::MAX_MATERIALS);
+    Ok(())
+}
+
+/// The Trellis receipt names its source, the verifier receipt, and every
+/// artifact of the pilot profile.
+fn trellis_material_paths(parsed: &Value, paths: &mut BTreeSet<String>) -> Result<(), String> {
+    paths.insert(text(parsed, "/source_path")?.to_owned());
+    paths.insert(text(parsed, "/verus_receipt_path")?.to_owned());
+    let rows = parsed.get("artifacts").and_then(Value::as_array).ok_or("missing artifacts")?;
+    if rows.len() > crunch_verification_bridge_core::MAX_MATERIALS {
+        return Err("external artifact count exceeds bound".into());
+    }
+    for row in rows {
+        paths.insert(text(row, "/path")?.to_owned());
+    }
+    Ok(())
+}
+
+/// The artifact-verification report of a verified Octet handoff, together with
+/// every payload it and the receipt envelope name.
+fn verified_report(root: &Path, parsed: &Value, paths: &mut BTreeSet<String>) -> Result<Option<Material>, String> {
+    let verification = read_bounded(
+        root,
+        "producer-artifact-verification.json".to_owned(),
+        crunch_verification_bridge_core::MAX_DOCUMENT_BYTES,
+    )?;
+    let value = json(&verification.bytes)?;
+    let rows = value.get("artifacts").and_then(Value::as_array).ok_or("missing verified artifacts")?;
+    if rows.len() > crunch_verification_bridge_core::MAX_MATERIALS {
+        return Err("verified artifact count exceeds bound".into());
+    }
+    for row in rows {
+        paths.insert(text(row, "/artifact")?.to_owned());
+    }
+    let artifacts = parsed.get("artifact_identities").and_then(Value::as_array).ok_or("missing envelope artifacts")?;
+    for row in artifacts {
+        paths.insert(text(row, "/locator")?.to_owned());
+    }
+    debug_assert!(rows.len() <= crunch_verification_bridge_core::MAX_MATERIALS);
+    debug_assert!(verification.bytes.len() <= crunch_verification_bridge_core::MAX_DOCUMENT_BYTES);
+    Ok(Some(verification))
+}
+
+/// Reads every named payload, including the verification report, within the
+/// bridge material and aggregate byte bounds.
+fn read_materials(
+    root: &Path,
+    paths: BTreeSet<String>,
+    verification: Option<Material>,
+) -> Result<Vec<Material>, String> {
+    let material_count = paths.len().saturating_add(usize::from(verification.is_some()));
+    if material_count > crunch_verification_bridge_core::MAX_MATERIALS {
+        return Err("material count exceeds bound".into());
+    }
+    let mut materials = Vec::with_capacity(material_count);
+    let mut total_bytes = 0usize;
+    if let Some(report) = verification {
+        total_bytes = report.bytes.len();
+        materials.push(report);
+    }
+    for path in paths {
+        let material = read_bounded(root, path, crunch_verification_bridge_core::MAX_MATERIAL_BYTES)?;
+        total_bytes = total_bytes.checked_add(material.bytes.len()).ok_or("material byte overflow")?;
+        if total_bytes > crunch_verification_bridge_core::MAX_TOTAL_BYTES {
+            return Err("aggregate material byte bound exceeded".into());
+        }
+        materials.push(material);
+    }
+    debug_assert!(materials.len() <= crunch_verification_bridge_core::MAX_MATERIALS);
+    debug_assert!(total_bytes <= crunch_verification_bridge_core::MAX_TOTAL_BYTES);
+    Ok(materials)
 }
 
 /// Bind the real producer output to an acquisition-only frozen executable graph.
@@ -293,6 +348,8 @@ pub fn consume_octet_job(root: &Path, producer_export: &Path, source_revision: &
             root_derivation,
         },
     )?;
+    debug_assert!(bound.handoff.observation.producer_job_identity.is_some());
+    debug_assert!(bound.handoff.observation.tool_graph_identity.is_some());
     Ok(Handoff {
         observation: bound.handoff.observation,
         profile: bound.handoff.profile,
@@ -327,6 +384,8 @@ pub fn export(mut handoff: Handoff, destination: &Path) -> Result<Handoff, Strin
         material.path = write_new(staging.path(), std::mem::take(&mut material.path), &material.bytes)?;
     }
     fs::rename(staging.path(), destination).map_err(|error| error.to_string())?;
+    debug_assert!(!handoff.observation.schema.is_empty());
+    debug_assert!(!handoff.observation.producer.is_empty());
     Ok(handoff)
 }
 

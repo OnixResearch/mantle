@@ -27,7 +27,14 @@ pub struct Derivation {
     pub outputs: Vec<String>,
 }
 
-fn store_root(value: &str, prefix: &str) -> Result<String, Error> {
+/// A store path together with the prefix it must live under.
+struct StoreRootRequest<'a> {
+    value: &'a str,
+    prefix: &'a str,
+}
+
+fn store_root(request: StoreRootRequest<'_>) -> Result<String, Error> {
+    let StoreRootRequest { value, prefix } = request;
     let relative = value.strip_prefix(prefix).and_then(|s| s.strip_prefix('/')).ok_or(Error::StoreInput)?;
     let root = relative.split('/').next().ok_or(Error::StoreInput)?;
     let (hash, name) = root.split_once('-').ok_or(Error::StoreInput)?;
@@ -44,12 +51,21 @@ fn store_root(value: &str, prefix: &str) -> Result<String, Error> {
 /// lexical validation here is deliberately not an attestation substitute.
 pub fn lower(plan: Plan, prefix: &str) -> Result<Derivation, Error> {
     let plan = validate(plan).map_err(Error::Plan)?;
-    if !prefix.starts_with('/') || prefix.ends_with('/') || prefix.contains("..") || prefix.contains('\n') {
+    if !prefix.starts_with('/') || prefix.ends_with('/') {
         return Err(Error::StoreInput);
     }
-    let mut inputs = vec![store_root(&plan.model_root, prefix)?];
+    if prefix.contains("..") || prefix.contains('\n') {
+        return Err(Error::StoreInput);
+    }
+    let mut inputs = vec![store_root(StoreRootRequest {
+        value: &plan.model_root,
+        prefix,
+    })?];
     for tool in &plan.tools {
-        let root = store_root(&tool.path, prefix)?;
+        let root = store_root(StoreRootRequest {
+            value: &tool.path,
+            prefix,
+        })?;
         if root != tool.path {
             return Err(Error::StoreInput);
         }

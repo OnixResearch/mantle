@@ -27,13 +27,23 @@ pub struct ApkPlan {
     pub manifest: String,
     pub resources: Vec<String>,
     pub java_sources: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_assets")]
     pub assets: Vec<native::Asset>,
-    #[serde(default)]
+    #[serde(default = "default_native_package")]
     pub native: Option<native::Package>,
     pub toolchains: ToolchainRefs,
     pub signing: Option<SigningConfig>,
     pub reproducibility: ReproducibilityPolicy,
+}
+
+/// Serde default for a plan that declares no assets.
+fn default_assets() -> Vec<native::Asset> {
+    Vec::new()
+}
+
+/// Serde default for a plan that declares no native package.
+fn default_native_package() -> Option<native::Package> {
+    None
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,7 +279,21 @@ fn validate_signing(signing: &SigningConfig) -> Result<(), PlanRejection> {
 }
 
 fn lower_steps(plan: &ApkPlan) -> Vec<StepPlan> {
-    let mut steps = vec![
+    let mut steps = lower_build_steps(plan);
+    if let Some(signing) = &plan.signing {
+        steps.push(lower_signing_step(signing));
+    }
+    debug_assert!(steps.first().is_some_and(|step| step.prior_outputs.is_empty()), "first step has no step inputs");
+    debug_assert!(
+        steps.last().is_some_and(|step| step.kind == StepKind::Apksigner) == plan.signing.is_some(),
+        "a signing step exists exactly when signing is declared"
+    );
+    steps
+}
+
+/// The build steps every accepted plan lowers to, in dependency order.
+fn lower_build_steps(plan: &ApkPlan) -> Vec<StepPlan> {
+    let steps = vec![
         StepPlan {
             kind: StepKind::Aapt2Compile,
             source_inputs: plan.resources.clone(),
@@ -323,25 +347,30 @@ fn lower_steps(plan: &ApkPlan) -> Vec<StepPlan> {
             outputs: vec![StepOutput::AlignedApk],
         },
     ];
-    if let Some(signing) = &plan.signing {
-        steps.push(StepPlan {
-            kind: StepKind::Apksigner,
-            source_inputs: vec![
-                signing.keystore.clone(),
-                signing.store_password_file.clone(),
-                signing.key_password_file.clone(),
-            ],
-            required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk],
-            prior_outputs: vec![StepOutput::AlignedApk],
-            outputs: vec![StepOutput::SignedApk],
-        });
-    }
-    debug_assert!(steps.first().is_some_and(|step| step.prior_outputs.is_empty()), "first step has no step inputs");
     debug_assert!(
-        steps.last().is_some_and(|step| step.kind == StepKind::Apksigner) == plan.signing.is_some(),
-        "a signing step exists exactly when signing is declared"
+        steps.first().is_some_and(|step| step.kind == StepKind::Aapt2Compile),
+        "the build starts by compiling resources"
+    );
+    debug_assert!(
+        steps.last().is_some_and(|step| step.kind == StepKind::Zipalign),
+        "the build ends by aligning the APK"
     );
     steps
+}
+
+/// The signing step appended to a plan that declares signing.
+fn lower_signing_step(signing: &SigningConfig) -> StepPlan {
+    StepPlan {
+        kind: StepKind::Apksigner,
+        source_inputs: vec![
+            signing.keystore.clone(),
+            signing.store_password_file.clone(),
+            signing.key_password_file.clone(),
+        ],
+        required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk],
+        prior_outputs: vec![StepOutput::AlignedApk],
+        outputs: vec![StepOutput::SignedApk],
+    }
 }
 
 #[cfg(test)]
@@ -629,13 +658,23 @@ pub mod reviewed {
         pub manifest_member: String,
         pub resources: Vec<String>,
         pub java_sources: Vec<String>,
-        #[serde(default)]
+        #[serde(default = "default_assets")]
         pub assets: Vec<super::native::Asset>,
-        #[serde(default)]
+        #[serde(default = "default_native_package")]
         pub native: Option<super::native::Package>,
         pub toolchain: Toolchain,
         pub signing: Option<Signing>,
         pub reproducibility: Reproducibility,
+    }
+
+    /// Serde default for a reviewed plan that declares no assets.
+    fn default_assets() -> Vec<super::native::Asset> {
+        Vec::new()
+    }
+
+    /// Serde default for a reviewed plan that declares no native package.
+    fn default_native_package() -> Option<super::native::Package> {
+        None
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -777,26 +816,32 @@ pub mod reviewed {
             return Err(Rejection::UnpinnedTimestampPolicy);
         }
         if let Some(signing) = &plan.signing {
-            if !safe_member(&signing.keystore_member) || !signing.keystore_member.starts_with("keys/") {
-                return Err(Rejection::KeystorePathEscape);
-            }
-            if signing.key_alias.is_empty()
-                || signing.key_alias.len() > MAX_NAME_BYTES
-                || !signing.key_alias.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-            {
-                return Err(Rejection::KeystorePathEscape);
-            }
-            if signing.schemes.is_empty()
-                || signing.schemes.len() > 3
-                || !signing.schemes.iter().all(|scheme| matches!(scheme.as_str(), "v1" | "v2" | "v3"))
-            {
-                return Err(Rejection::UnknownSignatureScheme);
-            }
+            validate_signing(signing)?;
         }
         debug_assert!(!plan.module.is_empty());
         debug_assert!(plan.version_code != 0);
         debug_assert!(plan.resources.len() <= MAX_MEMBERS);
         debug_assert!(plan.java_sources.len() <= MAX_MEMBERS);
+        Ok(())
+    }
+
+    fn validate_signing(signing: &Signing) -> Result<(), Rejection> {
+        if !safe_member(&signing.keystore_member) || !signing.keystore_member.starts_with("keys/") {
+            return Err(Rejection::KeystorePathEscape);
+        }
+        if signing.key_alias.is_empty()
+            || signing.key_alias.len() > MAX_NAME_BYTES
+            || !signing.key_alias.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+        {
+            return Err(Rejection::KeystorePathEscape);
+        }
+        if signing.schemes.is_empty()
+            || signing.schemes.len() > 3
+            || !signing.schemes.iter().all(|scheme| matches!(scheme.as_str(), "v1" | "v2" | "v3"))
+        {
+            return Err(Rejection::UnknownSignatureScheme);
+        }
+        debug_assert!(signing.schemes.len() <= 3, "the signing scheme count stayed bounded");
         Ok(())
     }
 
@@ -865,27 +910,25 @@ pub mod reviewed {
             toolchain_identity: tools.clone(),
             output: "classes.dex".into(),
         });
-        steps.push(StepPlan {
-            kind: StepKind::Zipalign,
-            inputs: alloc::vec![
-                StepInput::PreviousOutput(StepKind::D8),
-                StepInput::PreviousOutput(StepKind::Aapt2Link),
-                StepInput::ToolchainIdentity(tools.clone()),
-                StepInput::ToolchainIdentity(plan.toolchain.jdk.clone())
-            ],
-            toolchain_identity: tools.clone(),
-            output: "unsigned.apk".into(),
-        });
-        let package_step = steps.last_mut().expect("package step was inserted");
-        package_step
-            .inputs
-            .extend(plan.assets.iter().map(|asset| StepInput::SourceMember(asset.source_member.clone())));
-        package_step.inputs.extend(
+        let mut package_inputs = alloc::vec![
+            StepInput::PreviousOutput(StepKind::D8),
+            StepInput::PreviousOutput(StepKind::Aapt2Link),
+            StepInput::ToolchainIdentity(tools.clone()),
+            StepInput::ToolchainIdentity(plan.toolchain.jdk.clone())
+        ];
+        package_inputs.extend(plan.assets.iter().map(|asset| StepInput::SourceMember(asset.source_member.clone())));
+        package_inputs.extend(
             plan.native
                 .iter()
                 .flat_map(|package| package.libraries.iter())
                 .map(|library| StepInput::SourceMember(library.store_file.clone())),
         );
+        steps.push(StepPlan {
+            kind: StepKind::Zipalign,
+            inputs: package_inputs,
+            toolchain_identity: tools.clone(),
+            output: "unsigned.apk".into(),
+        });
         if let Some(signing) = &plan.signing {
             steps.push(StepPlan {
                 kind: StepKind::Apksigner,

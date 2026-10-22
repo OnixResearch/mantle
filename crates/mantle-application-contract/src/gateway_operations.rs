@@ -169,139 +169,213 @@ pub trait GatewayOperationPort {
     ) -> Result<GatewayOperationResult, Self::Error>;
 }
 
+/// Whether the binding input evidence covers the admitted read.
+fn is_binding_input_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::BindingInput { bytes_read, maximum } = evidence else {
+        return false;
+    };
+    *bytes_read > 0 && bytes_read <= maximum
+}
+
+/// Whether the call evidence covers the admitted protocol exchange.
+fn is_call_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::Call {
+        envelope_bytes,
+        response_bytes,
+        version,
+        has_response,
+        has_error,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_envelope_admissible = *envelope_bytes > 0 && *envelope_bytes <= 128 * 1024;
+    let is_response_admissible = *response_bytes > 0 && *response_bytes <= 1024 * 1024;
+    let is_version_admissible = *version == Some(1);
+    let is_envelope_evidence = is_envelope_admissible && is_response_admissible;
+    let is_protocol_evidence = is_version_admissible && *has_response;
+    is_envelope_evidence && is_protocol_evidence && !has_error
+}
+
+/// Whether the service evidence covers the admitted socket lifetime.
+fn is_service_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::Service {
+        socket_inode,
+        shutdown_requested,
+        workers_started,
+        workers_joined,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_socket_bound = *socket_inode != 0;
+    let is_shutdown_requested = *shutdown_requested;
+    let is_workers_joined = workers_started == workers_joined;
+    is_socket_bound && is_shutdown_requested && is_workers_joined
+}
+
+/// Whether the import evidence covers the admitted byte accounting.
+fn is_import_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::Import {
+        declared_bytes,
+        verified_bytes,
+        admitted_bytes,
+        missing_paths,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_declared = *declared_bytes > 0;
+    let is_verified = declared_bytes == verified_bytes;
+    let is_admitted = verified_bytes <= admitted_bytes;
+    let is_complete = *missing_paths == 0;
+    is_declared && is_verified && is_admitted && is_complete
+}
+
+/// Whether the store-read evidence covers the admitted write authorization.
+fn is_store_read_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::StoreRead {
+        authorized_writes,
+        response_bytes,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_write_authorized = *authorized_writes > 0;
+    let is_response_present = *response_bytes > 0;
+    is_write_authorized && is_response_present
+}
+
+/// Whether the quota ledger evidence carries the declared schema.
+fn is_quota_provision_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::QuotaProvision {
+        ledger_schema,
+        expected_schema,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_schema_declared = !expected_schema.is_empty();
+    let is_schema_matched = ledger_schema.as_str() == *expected_schema;
+    is_schema_declared && is_schema_matched
+}
+
+/// Whether the quota fixture evidence covers the declared fault campaign.
+fn is_quota_fixture_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::QuotaFixture {
+        expected_steps,
+        observed_steps,
+        expected_errors,
+        observed_errors,
+        ..
+    } = evidence
+    else {
+        return false;
+    };
+    let is_step_count_matched = *expected_steps > 0 && expected_steps == observed_steps;
+    let is_error_count_matched = *expected_errors == 4 && expected_errors == observed_errors;
+    is_step_count_matched && is_error_count_matched && is_quota_accounting_admissible(evidence)
+}
+
+/// Whether the quota fixture evidence leaves the ledger and reservations untouched.
+fn is_quota_accounting_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::QuotaFixture {
+        ledger_entries,
+        project_charged,
+        account_charged,
+        project_reserved,
+        account_reserved,
+        ..
+    } = evidence
+    else {
+        return false;
+    };
+    let is_ledger_single = *ledger_entries == 1;
+    let is_charges_single = *project_charged == 1 && *account_charged == 1;
+    let is_reservations_empty = *project_reserved == 0 && *account_reserved == 0;
+    is_ledger_single && is_charges_single && is_reservations_empty
+}
+
+/// Whether the build evidence covers the admitted request set.
+fn is_build_admissible(evidence: &GatewayOperationEvidence) -> bool {
+    let GatewayOperationEvidence::Build {
+        requests,
+        completed,
+        failed,
+        missing_result_evidence,
+        missing_outputs,
+    } = evidence
+    else {
+        return false;
+    };
+    let is_requested = *requests > 0;
+    let is_completed = requests == completed;
+    let is_failure_free = *failed == 0;
+    let is_evidence_complete = *missing_result_evidence == 0 && *missing_outputs == 0;
+    is_requested && is_completed && is_failure_free && is_evidence_complete
+}
+
+/// Whether the returned evidence supports the operation's declared effect.
+fn is_evidence_admissible(operation: GatewayOperation, evidence: &GatewayOperationEvidence) -> bool {
+    use GatewayOperation as Op;
+    match (operation, evidence) {
+        (Op::NixStoreReadBinding, GatewayOperationEvidence::PureBinding) => true,
+        (Op::Binding | Op::NixUploadBinding, evidence) => is_binding_input_admissible(evidence),
+        (Op::Call, evidence) => is_call_admissible(evidence),
+        (Op::Read | Op::Serve, evidence) => is_service_admissible(evidence),
+        (Op::NixImportOnce, evidence) => is_import_admissible(evidence),
+        (Op::NixStoreReadOnce, evidence) => is_store_read_admissible(evidence),
+        (Op::ProvisionQuota, evidence) => is_quota_provision_admissible(evidence),
+        (Op::QuotaFaultCampaign, evidence) => is_quota_fixture_admissible(evidence),
+        (Op::NixOnce, evidence) => is_build_admissible(evidence),
+        _ => false,
+    }
+}
+
+/// The observation reported for one declared gateway authority.
+fn gateway_observation(id: &str, kind: EffectKind, is_admissible: bool) -> Observation {
+    let status = if is_admissible {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    let diagnostics_code = if is_admissible {
+        None
+    } else {
+        Some(String::from("gateway-operation-evidence-contradicted"))
+    };
+    debug_assert_eq!(status == ObservationStatus::Succeeded, is_admissible);
+    debug_assert_eq!(diagnostics_code.is_some(), !is_admissible);
+    Observation {
+        effect_id: EffectId(String::from(id)),
+        kind,
+        status,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(1),
+        diagnostics_code,
+    }
+}
+
+/// The observations reported for every authority of one gateway operation.
+fn gateway_observations(operation: GatewayOperation, is_admissible: bool) -> Vec<Observation> {
+    operation
+        .authorities()
+        .iter()
+        .map(|(id, kind)| gateway_observation(id, *kind, is_admissible))
+        .collect()
+}
+
 pub fn classify_gateway_operation(plan: &GatewayOperationPlan, facts: &GatewayOperationEvidence) -> ApplicationOutcome {
     use GatewayOperation as Op;
-    use GatewayOperationEvidence as Facts;
-    let supported = match (plan.operation, facts) {
-        (Op::NixStoreReadBinding, Facts::PureBinding) => true,
-        (Op::Binding | Op::NixUploadBinding, Facts::BindingInput { bytes_read, maximum }) => {
-            *bytes_read > 0 && bytes_read <= maximum
-        }
-        (
-            Op::Call,
-            Facts::Call {
-                envelope_bytes,
-                response_bytes,
-                version,
-                has_response,
-                has_error,
-            },
-        ) => {
-            *envelope_bytes > 0
-                && *envelope_bytes <= 128 * 1024
-                && *response_bytes > 0
-                && *response_bytes <= 1024 * 1024
-                && *version == Some(1)
-                && *has_response
-                && !has_error
-        }
-        (
-            Op::Read | Op::Serve,
-            Facts::Service {
-                socket_inode,
-                shutdown_requested,
-                workers_started,
-                workers_joined,
-            },
-        ) => *socket_inode != 0 && *shutdown_requested && workers_started == workers_joined,
-        (
-            Op::NixImportOnce,
-            Facts::Import {
-                declared_bytes,
-                verified_bytes,
-                admitted_bytes,
-                missing_paths,
-            },
-        ) => {
-            *declared_bytes > 0
-                && declared_bytes == verified_bytes
-                && verified_bytes <= admitted_bytes
-                && *missing_paths == 0
-        }
-        (
-            Op::NixStoreReadOnce,
-            Facts::StoreRead {
-                authorized_writes,
-                response_bytes,
-            },
-        ) => *authorized_writes > 0 && *response_bytes > 0,
-        (
-            Op::ProvisionQuota,
-            Facts::QuotaProvision {
-                ledger_schema,
-                expected_schema,
-            },
-        ) => !expected_schema.is_empty() && ledger_schema.as_str() == *expected_schema,
-        (
-            Op::QuotaFaultCampaign,
-            Facts::QuotaFixture {
-                expected_steps,
-                observed_steps,
-                expected_errors,
-                observed_errors,
-                ledger_entries,
-                project_charged,
-                account_charged,
-                project_reserved,
-                account_reserved,
-            },
-        ) => {
-            *expected_steps > 0
-                && expected_steps == observed_steps
-                && *expected_errors == 4
-                && expected_errors == observed_errors
-                && *ledger_entries == 1
-                && *project_charged == 1
-                && *account_charged == 1
-                && *project_reserved == 0
-                && *account_reserved == 0
-        }
-        (
-            Op::NixOnce,
-            Facts::Build {
-                requests,
-                completed,
-                failed,
-                missing_result_evidence,
-                missing_outputs,
-            },
-        ) => {
-            *requests > 0
-                && requests == completed
-                && *failed == 0
-                && *missing_result_evidence == 0
-                && *missing_outputs == 0
-        }
-        _ => false,
-    };
+    let is_admissible = is_evidence_admissible(plan.operation, facts);
     let Some(effects) = &plan.effects else {
-        return if supported && plan.operation == Op::NixStoreReadBinding {
+        return if is_admissible && plan.operation == Op::NixStoreReadBinding {
             ApplicationOutcome::Completed
         } else {
             ApplicationOutcome::Contradicted { effect_count: 1 }
         };
     };
-    let observations: Vec<_> = plan
-        .operation
-        .authorities()
-        .iter()
-        .map(|(id, kind)| Observation {
-            effect_id: EffectId(String::from(*id)),
-            kind: *kind,
-            status: if supported {
-                ObservationStatus::Succeeded
-            } else {
-                ObservationStatus::Failed
-            },
-            output: EffectOutput::None,
-            usage: EffectMeasure::Calls(1),
-            diagnostics_code: if supported {
-                None
-            } else {
-                Some(String::from("gateway-operation-evidence-contradicted"))
-            },
-        })
-        .collect();
+    let observations = gateway_observations(plan.operation, is_admissible);
     crate::classify_observations(effects, &observations)
 }
 

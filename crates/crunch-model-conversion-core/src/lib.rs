@@ -97,65 +97,149 @@ pub fn validate(plan: Plan) -> Result<Plan, Rejection> {
 }
 
 fn validate_plan(plan: &Plan) -> Result<(), Rejection> {
-    if plan.schema != "mantle-model-conversion-v1"
-        || plan.converter_revision != CONVERTER_REVISION
-        || plan.system != "x86_64-linux"
-        || plan.hardware != "x86_64-cpu-little-endian-no-accelerator"
-    {
+    validate_cohort(plan)?;
+    validate_options(plan)?;
+    validate_files(plan)?;
+    validate_identity(plan)?;
+    validate_cpu_facts(plan)?;
+    validate_tool_trees(plan)?;
+    validate_tool_bindings(plan)?;
+    validate_limits(plan)?;
+    assert!(plan.files.len() <= MAX_FILES);
+    assert!(plan.calibration.is_empty());
+    Ok(())
+}
+
+/// The admitted cohort is fixed: schema, converter revision, system and hardware.
+fn validate_cohort(plan: &Plan) -> Result<(), Rejection> {
+    if plan.schema != "mantle-model-conversion-v1" || plan.converter_revision != CONVERTER_REVISION {
         return Err(Rejection::Cohort);
     }
-    if plan.format != "gguf-v3-f32"
-        || plan.quantization != "Q8_0"
-        || !plan.calibration.is_empty()
-        || plan.seed != 0
-        || plan.threads != 1
-    {
+    if plan.system != "x86_64-linux" || plan.hardware != "x86_64-cpu-little-endian-no-accelerator" {
+        return Err(Rejection::Cohort);
+    }
+    Ok(())
+}
+
+/// The admitted conversion options are fixed: format, quantization and seed.
+fn validate_options(plan: &Plan) -> Result<(), Rejection> {
+    if plan.format != "gguf-v3-f32" || plan.quantization != "Q8_0" {
         return Err(Rejection::Options);
     }
-    validate_files(plan)?;
+    if !plan.calibration.is_empty() || plan.seed != 0 || plan.threads != 1 {
+        return Err(Rejection::Options);
+    }
+    Ok(())
+}
+
+/// The model root and the declared tool set must exist and stay bounded.
+fn validate_identity(plan: &Plan) -> Result<(), Rejection> {
     if plan.tools.is_empty() || plan.tools.len() > 64 || !path(&plan.model_root) {
         return Err(Rejection::Identity);
     }
-    if plan.cpu_model.is_empty()
-        || plan.cpu_model.len() > 256
-        || !plan.cpu_model.is_ascii()
-        || plan.cpu_model.bytes().any(|b| b.is_ascii_control())
-        || plan.cpu_flags.is_empty()
-        || plan.cpu_flags.len() > 256
-        || plan.cpu_flags.iter().any(|s| {
-            s.is_empty()
-                || s.len() > 64
-                || !s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-        })
-        || plan.cpu_flags.windows(2).any(|w| w[0] >= w[1])
-    {
+    Ok(())
+}
+
+/// The CPU description is part of the admitted cohort.
+fn validate_cpu_facts(plan: &Plan) -> Result<(), Rejection> {
+    if !is_admissible_cpu_model(&plan.cpu_model) {
         return Err(Rejection::Cohort);
     }
-    for (i, tree) in plan.tools.iter().enumerate() {
-        if !path(&tree.path)
-            || !digest(&tree.blake3)
-            || tree.bytes_max == 0
-            || tree.bytes_max > 8 << 30
-            || plan.tools[..i].iter().any(|t| t.path == tree.path)
-        {
+    if plan.cpu_flags.is_empty() || plan.cpu_flags.len() > 256 {
+        return Err(Rejection::Cohort);
+    }
+    if !plan.cpu_flags.iter().all(|flag| is_admissible_cpu_flag(flag.as_str())) {
+        return Err(Rejection::Cohort);
+    }
+    if plan.cpu_flags.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(Rejection::Cohort);
+    }
+    Ok(())
+}
+
+fn is_admissible_cpu_model(cpu_model: &str) -> bool {
+    if cpu_model.is_empty() {
+        return false;
+    }
+    if cpu_model.len() > 256 {
+        return false;
+    }
+    if !cpu_model.is_ascii() {
+        return false;
+    }
+    if cpu_model.bytes().any(|byte| byte.is_ascii_control()) {
+        return false;
+    }
+    true
+}
+
+fn is_admissible_cpu_flag(flag: &str) -> bool {
+    if flag.is_empty() {
+        return false;
+    }
+    if flag.len() > 64 {
+        return false;
+    }
+    if !flag.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_') {
+        return false;
+    }
+    true
+}
+
+/// Every declared tool tree must be well formed and uniquely addressed.
+fn validate_tool_trees(plan: &Plan) -> Result<(), Rejection> {
+    for (index, tree) in plan.tools.iter().enumerate() {
+        if !is_admissible_tool_tree(tree) {
+            return Err(Rejection::Identity);
+        }
+        if plan.tools[..index].iter().any(|other| other.path == tree.path) {
             return Err(Rejection::Identity);
         }
     }
+    Ok(())
+}
+
+fn is_admissible_tool_tree(tree: &TreeIdentity) -> bool {
+    if !path(&tree.path) {
+        return false;
+    }
+    if !digest(&tree.blake3) {
+        return false;
+    }
+    if tree.bytes_max == 0 {
+        return false;
+    }
+    if tree.bytes_max > 8 << 30 {
+        return false;
+    }
+    true
+}
+
+/// The interpreter, site directory, converter and quantizer live inside a declared tree.
+fn validate_tool_bindings(plan: &Plan) -> Result<(), Rejection> {
     for tool in [&plan.python, &plan.python_site, &plan.converter, &plan.quantizer] {
         if !bound_tool(plan, tool) {
             return Err(Rejection::UndeclaredTool);
         }
     }
-    let l = &plan.limits;
-    if !(1 << 30..=8 << 30).contains(&l.address_space_bytes)
-        || !(256 << 20..=2 << 30).contains(&l.storage_bytes)
-        || !(1..=300).contains(&l.cpu_seconds)
-        || !(1..=600).contains(&l.wall_seconds)
-    {
+    Ok(())
+}
+
+/// The declared resource limits must stay inside the admitted bounds.
+fn validate_limits(plan: &Plan) -> Result<(), Rejection> {
+    let bounds = &plan.limits;
+    if !(1 << 30..=8 << 30).contains(&bounds.address_space_bytes) {
         return Err(Rejection::Bounds);
     }
-    assert!(plan.files.len() <= MAX_FILES);
-    assert!(plan.calibration.is_empty());
+    if !(256 << 20..=2 << 30).contains(&bounds.storage_bytes) {
+        return Err(Rejection::Bounds);
+    }
+    if !(1..=300).contains(&bounds.cpu_seconds) {
+        return Err(Rejection::Bounds);
+    }
+    if !(1..=600).contains(&bounds.wall_seconds) {
+        return Err(Rejection::Bounds);
+    }
     Ok(())
 }
 fn validate_files(plan: &Plan) -> Result<(), Rejection> {
@@ -163,18 +247,15 @@ fn validate_files(plan: &Plan) -> Result<(), Rejection> {
         return Err(Rejection::Files);
     }
     let mut total = 0_u64;
-    for (i, file) in plan.files.iter().enumerate() {
-        let allowed = matches!(
-            file.member.as_str(),
-            "config.json" | "tokenizer.model" | "tokenizer_config.json" | "model.safetensors.index.json"
-        ) || (file.member.starts_with("model-")
-            && file.member.ends_with(".safetensors")
-            && file.member.bytes().all(|b| b.is_ascii_alphanumeric() || b".-".contains(&b)));
-        if !allowed
-            || !digest(&file.blake3)
-            || file.bytes == 0
-            || plan.files[..i].iter().any(|f| f.member == file.member)
-        {
+    for (index, file) in plan.files.iter().enumerate() {
+        let is_allowed = is_allowed_member(&file.member);
+        if !is_allowed || !digest(&file.blake3) {
+            return Err(Rejection::Files);
+        }
+        if file.bytes == 0 {
+            return Err(Rejection::Files);
+        }
+        if plan.files[..index].iter().any(|other| other.member == file.member) {
             return Err(Rejection::Files);
         }
         total = total.checked_add(file.bytes).ok_or(Rejection::Bounds)?;
@@ -195,6 +276,20 @@ fn validate_files(plan: &Plan) -> Result<(), Rejection> {
     assert!(total > 0);
     assert!(!plan.files.is_empty());
     Ok(())
+}
+
+/// The admitted member names are the fixed metadata files plus safetensors shards.
+fn is_allowed_member(member: &str) -> bool {
+    if matches!(member, "config.json" | "tokenizer.model" | "tokenizer_config.json" | "model.safetensors.index.json") {
+        return true;
+    }
+    if !member.starts_with("model-") {
+        return false;
+    }
+    if !member.ends_with(".safetensors") {
+        return false;
+    }
+    member.bytes().all(|byte| byte.is_ascii_alphanumeric() || b".-".contains(&byte))
 }
 
 #[cfg(test)]

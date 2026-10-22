@@ -231,8 +231,8 @@ pub fn classify_doctor(
     reported_healthy: bool,
 ) -> crate::ApplicationOutcome {
     let outcome = crate::classify_observations(plan, observations);
-    let observed_healthy = observations.iter().all(|fact| fact.status == crate::ObservationStatus::Succeeded);
-    if reported_healthy != observed_healthy {
+    let is_observed_healthy = observations.iter().all(|fact| fact.status == crate::ObservationStatus::Succeeded);
+    if reported_healthy != is_observed_healthy {
         return crate::ApplicationOutcome::Contradicted { effect_count: 1 };
     }
     outcome

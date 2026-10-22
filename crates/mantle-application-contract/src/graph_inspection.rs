@@ -14,7 +14,8 @@ use mantle_rust_plan_core::domain_digest;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const MAX_GRAPH_BYTES: u64 = 16 * 1024 * 1024;
+/// Largest admitted serialized graph size in bytes (16 MiB).
+pub const MAX_GRAPH_BYTES: u64 = 16_777_216;
 pub const MAX_GRAPH_NODES: u32 = 65_536;
 pub const MAX_GRAPH_EDGES: u32 = 262_144;
 pub const MAX_GRAPH_STEPS: u32 = 1_048_576;
@@ -101,14 +102,24 @@ impl Action {
     }
 }
 
+/// Empty configured-target map used when saved facts omit the field.
+fn empty_configured_targets() -> BTreeMap<String, Configuration> {
+    BTreeMap::new()
+}
+
+/// Empty action map used when saved facts omit the field.
+fn empty_actions() -> BTreeMap<String, Action> {
+    BTreeMap::new()
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InspectionFacts {
     #[serde(default)]
     pub state: EvaluationState,
-    #[serde(default)]
+    #[serde(default = "empty_configured_targets")]
     pub configured: BTreeMap<String, Configuration>,
-    #[serde(default)]
+    #[serde(default = "empty_actions")]
     pub actions: BTreeMap<String, Action>,
 }
 
@@ -132,15 +143,14 @@ impl Default for QueryLimits {
 }
 impl QueryLimits {
     pub fn validate(self) -> Result<(), String> {
-        if self.nodes == 0
-            || self.nodes > MAX_GRAPH_NODES
-            || self.edges == 0
-            || self.edges > MAX_GRAPH_EDGES
-            || self.steps == 0
-            || self.steps > MAX_GRAPH_STEPS
-            || self.depth == 0
-            || self.depth > MAX_GRAPH_DEPTH
-        {
+        let is_nodes_admissible = self.nodes > 0 && self.nodes <= MAX_GRAPH_NODES;
+        let is_edges_admissible = self.edges > 0 && self.edges <= MAX_GRAPH_EDGES;
+        let is_steps_admissible = self.steps > 0 && self.steps <= MAX_GRAPH_STEPS;
+        let is_depth_admissible = self.depth > 0 && self.depth <= MAX_GRAPH_DEPTH;
+        let is_shape_admissible = is_nodes_admissible && is_edges_admissible;
+        let is_budget_admissible = is_steps_admissible && is_depth_admissible;
+        let is_admissible = is_shape_admissible && is_budget_admissible;
+        if !is_admissible {
             return Err(String::from("invalid graph query resource limits"));
         }
         Ok(())
@@ -179,23 +189,33 @@ impl<'a> DependencyIndex<'a> {
     /// Provenance relationships are not dependencies and may form cycles.
     pub fn provenance(ids: &[&'a str], edges: &[(&'a str, &'a str)], limits: QueryLimits) -> Result<Self, String> {
         limits.validate()?;
-        if ids.len() > limits.nodes as usize || edges.len() > limits.edges as usize {
+        let node_count =
+            u32::try_from(ids.len()).map_err(|_| String::from("graph admission exceeds node/edge bound"))?;
+        let edge_count =
+            u32::try_from(edges.len()).map_err(|_| String::from("graph admission exceeds node/edge bound"))?;
+        let is_node_count_admissible = node_count <= limits.nodes;
+        let is_edge_count_admissible = edge_count <= limits.edges;
+        if !is_node_count_admissible || !is_edge_count_admissible {
             return Err(String::from("graph admission exceeds node/edge bound"));
         }
-        let mut forward = BTreeMap::new();
-        let mut reverse = BTreeMap::new();
-        for id in ids {
-            if id.trim().is_empty() || forward.insert(*id, BTreeSet::new()).is_some() {
-                return Err(String::from("empty or duplicate graph identity"));
-            }
-            reverse.insert(*id, BTreeSet::new());
+        let mut forward: BTreeMap<&'a str, BTreeSet<&'a str>> =
+            ids.iter().copied().map(|id| (id, BTreeSet::new())).collect();
+        let has_empty_id = ids.iter().any(|id| id.trim().is_empty());
+        let has_duplicate_id = forward.len() != ids.len();
+        if has_empty_id || has_duplicate_id {
+            return Err(String::from("empty or duplicate graph identity"));
         }
+        let mut reverse: BTreeMap<&'a str, BTreeSet<&'a str>> =
+            forward.keys().map(|id| (*id, BTreeSet::new())).collect();
         for (from, to) in edges {
-            if !forward.contains_key(from) || !forward.contains_key(to) {
+            let Some(targets) = forward.get_mut(from) else {
                 return Err(String::from("dependency references missing target"));
-            }
-            forward.get_mut(from).expect("checked endpoint").insert(*to);
-            reverse.get_mut(to).expect("checked endpoint").insert(*from);
+            };
+            targets.insert(*to);
+            let Some(sources) = reverse.get_mut(to) else {
+                return Err(String::from("dependency references missing target"));
+            };
+            sources.insert(*from);
         }
         Ok(Self {
             forward,
@@ -212,14 +232,19 @@ impl<'a> DependencyIndex<'a> {
         while let Some(id) = ready.pop_first() {
             visited += 1;
             for to in &self.forward[id] {
-                let count = indegree.get_mut(to).expect("indexed endpoint");
-                *count -= 1;
-                if *count == 0 {
+                let Some(count) = indegree.get_mut(to) else {
+                    return Err(String::from("cyclic-invalid dependency graph"));
+                };
+                let remaining = count.saturating_sub(1);
+                *count = remaining;
+                if remaining == 0 {
                     ready.insert(to);
                 }
             }
         }
-        if visited as usize != self.forward.len() {
+        let total_nodes =
+            u32::try_from(self.forward.len()).map_err(|_| String::from("cyclic-invalid dependency graph"))?;
+        if visited != total_nodes {
             return Err(String::from("cyclic-invalid dependency graph"));
         }
         Ok(())
@@ -262,7 +287,7 @@ impl<'a> DependencyIndex<'a> {
                     return Err(String::from("graph traversal exceeds depth bound"));
                 }
                 parents.insert(*next, id);
-                queue.push_back((*next, depth + 1));
+                queue.push_back((*next, depth.saturating_add(1)));
             }
         }
         let path = destination.and_then(|target| {
@@ -313,12 +338,16 @@ pub struct ActionComparison {
     pub conclusion: FactChange,
 }
 
-pub fn compare_actions(
+/// Number of independently reported facts in one action comparison.
+const ACTION_FACT_COUNT: usize = 10;
+
+/// The independently observed facts of one action comparison.
+fn action_facts(
     before: &Action,
     after: &Action,
     old: Option<&Configuration>,
     new: Option<&Configuration>,
-) -> Result<ActionComparison, String> {
+) -> BTreeMap<String, FactChange> {
     let mut facts = BTreeMap::from([
         (String::from("command"), compare(before.command.as_ref(), after.command.as_ref())),
         (String::from("environment"), compare(before.environment.as_ref(), after.environment.as_ref())),
@@ -338,24 +367,51 @@ pub fn compare_actions(
         String::from("configured-target"),
         compare(Some(&before.configured_target), Some(&after.configured_target)),
     );
-    let changed_inputs = match (&before.inputs, &after.inputs) {
-        (Some(a), Some(b)) => a
-            .keys()
-            .chain(b.keys())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .filter(|key| a.get(*key) != b.get(*key))
-            .cloned()
-            .collect(),
-        _ => Vec::new(),
+    debug_assert_eq!(facts.len(), ACTION_FACT_COUNT);
+    facts
+}
+
+/// Declared input identities whose recorded content differs between snapshots.
+fn changed_input_keys(before: &Action, after: &Action) -> Vec<String> {
+    let (Some(a), Some(b)) = (&before.inputs, &after.inputs) else {
+        return Vec::new();
     };
-    let conclusion = if facts.values().any(|v| *v == FactChange::Changed) {
-        FactChange::Changed
-    } else if facts.values().any(|v| *v == FactChange::Unavailable) {
-        FactChange::Unavailable
-    } else {
-        FactChange::Unchanged
-    };
+    a.keys()
+        .chain(b.keys())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter(|key| a.get(*key) != b.get(*key))
+        .cloned()
+        .collect()
+}
+
+/// The overall verdict implied by the individually observed facts.
+fn comparison_conclusion(facts: &BTreeMap<String, FactChange>) -> FactChange {
+    let is_changed = facts.values().any(|value| *value == FactChange::Changed);
+    let is_unavailable = facts.values().any(|value| *value == FactChange::Unavailable);
+    if is_changed {
+        return FactChange::Changed;
+    }
+    if is_unavailable {
+        return FactChange::Unavailable;
+    }
+    FactChange::Unchanged
+}
+
+pub fn compare_actions(
+    before: &Action,
+    after: &Action,
+    old: Option<&Configuration>,
+    new: Option<&Configuration>,
+) -> Result<ActionComparison, String> {
+    let facts = action_facts(before, after, old, new);
+    let changed_inputs = changed_input_keys(before, after);
+    let conclusion = comparison_conclusion(&facts);
+    let is_unchanged = conclusion == FactChange::Unchanged;
+    let is_all_facts_unchanged = facts.values().all(|value| *value == FactChange::Unchanged);
+    debug_assert_eq!(is_unchanged, is_all_facts_unchanged);
+    let is_inputs_changed = facts.get("inputs") == Some(&FactChange::Changed);
+    debug_assert!(!is_inputs_changed || !changed_inputs.is_empty());
     Ok(ActionComparison {
         schema: "mantle-action-comparison-v1",
         before: before.identity()?,

@@ -29,6 +29,27 @@ use serde::Serialize;
 
 pub type Result<T, E = String> = std::result::Result<T, E>;
 
+/// The exact artifacts one synthesis run must produce, relative to its root.
+const ARTIFACT_PATHS: &[&str] = &[
+    "synthesis/netlist.json",
+    "synthesis/stdout.log",
+    "synthesis/stderr.log",
+    "place-route/routed.asc",
+    "place-route/routed.json",
+    "place-route/report.json",
+    "place-route/stdout.log",
+    "place-route/stderr.log",
+    "packing/bitstream.bin",
+    "packing/stdout.log",
+    "packing/stderr.log",
+];
+
+/// The exact synthesis recipe and constraint text a profile must reproduce.
+struct Recipe<'a> {
+    synthesis_script: &'a str,
+    constraints: &'a str,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
@@ -69,7 +90,7 @@ pub fn hash_file(path: &Path, maximum_bytes: u64) -> Result<(String, u64)> {
     let mut buffer = [0_u8; 65_536];
     let mut hasher = blake3::Hasher::new();
     let mut total_bytes = 0_u64;
-    loop {
+    while total_bytes <= maximum_bytes {
         let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
         if count == 0 {
             break;
@@ -83,6 +104,8 @@ pub fn hash_file(path: &Path, maximum_bytes: u64) -> Result<(String, u64)> {
     if total_bytes != metadata.len() {
         return Err("file-changed-during-observation".into());
     }
+    debug_assert!(metadata.is_file());
+    debug_assert!(total_bytes <= maximum_bytes);
     Ok((hasher.finalize().to_hex().to_string(), total_bytes))
 }
 
@@ -91,10 +114,11 @@ fn read_bounded(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>> {
     if !metadata.is_file() || metadata.len() > maximum_bytes {
         return Err(format!("regular-file-byte-bound:{}", path.display()));
     }
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    let capacity_bytes = usize::try_from(metadata.len()).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::with_capacity(capacity_bytes);
     File::open(path)
         .map_err(|e| e.to_string())?
-        .take(maximum_bytes + 1)
+        .take(maximum_bytes.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
     if bytes.len() as u64 > maximum_bytes {
@@ -147,7 +171,7 @@ fn snapshot(input: &FileInput, directory: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn prepare(profile: &Profile, synthesis_script: &str, constraints: &str, root: &Path) -> Result<()> {
+fn prepare(profile: &Profile, recipe: &Recipe<'_>, root: &Path) -> Result<()> {
     for tool in [&profile.yosys, &profile.nextpnr, &profile.packer, &profile.shell] {
         admit_tool(tool)?;
     }
@@ -163,14 +187,16 @@ fn prepare(profile: &Profile, synthesis_script: &str, constraints: &str, root: &
         }
     }
     let script = snapshot(&profile.synthesis_script, &synth)?;
-    if script != synthesis_script.as_bytes() {
+    if script != recipe.synthesis_script.as_bytes() {
         return Err("pinned-synthesis-script-does-not-match-typed-recipe".into());
     }
+    debug_assert_eq!(script, recipe.synthesis_script.as_bytes());
     let pnr = root.join("place-route");
     fs::create_dir(&pnr).map_err(|e| e.to_string())?;
-    if snapshot(&profile.constraints, &pnr)? != constraints.as_bytes() {
+    if snapshot(&profile.constraints, &pnr)? != recipe.constraints.as_bytes() {
         return Err("invalid-pcf-does-not-match-complete-typed-constraints".into());
     }
+    debug_assert!(total_bytes <= crunch_fpga_core::MAX_ARTIFACT_BYTES);
     Ok(())
 }
 
@@ -191,6 +217,7 @@ fn run_stage(profile: &Profile, stage: &str, tool: &Tool, args: Vec<String>, roo
     ]);
     // Only admitted executables can be found by Yosys's ABC subprocess.
     let bin_dirs: Vec<String> = tool.closure.iter().map(|p| format!("{p}/bin")).collect();
+    debug_assert_eq!(bin_dirs.len(), tool.closure.len());
     env.insert("PATH".into(), bin_dirs.join(":"));
     let mut shell_args = vec![
         "-c".into(),
@@ -199,6 +226,7 @@ fn run_stage(profile: &Profile, stage: &str, tool: &Tool, args: Vec<String>, roo
         tool.executable.path.clone(),
     ];
     shell_args.extend(args);
+    debug_assert!(!shell_args.is_empty());
     fs::create_dir(root.join("tmp")).map_err(|e| e.to_string())?;
     let result = run_strict_action(StrictActionRequest {
         bwrap: PathBuf::from(&profile.bwrap.executable.path),
@@ -246,6 +274,8 @@ fn check_stage_bounds(root: &Path, maximum_bytes: u64) -> Result<()> {
             }
         }
     }
+    debug_assert!(count <= 256);
+    debug_assert!(total_bytes <= maximum_bytes);
     Ok(())
 }
 
@@ -260,13 +290,22 @@ pub fn execute(profile: Profile, root: &Path) -> Result<Manifest> {
     if !root.is_absolute() {
         return Err("absolute-fresh-output-root-required".into());
     }
+    debug_assert!(root.is_absolute());
     let PlannedProfile {
         profile,
         stages,
         synthesis_script,
         constraints,
     } = crunch_fpga_core::identities(profile)?;
-    prepare(&profile, &synthesis_script, &constraints, root)?;
+    debug_assert_eq!(stages.synthesis.len(), 64);
+    prepare(
+        &profile,
+        &Recipe {
+            synthesis_script: &synthesis_script,
+            constraints: &constraints,
+        },
+        root,
+    )?;
     let synthesis = root.join("synthesis");
     run_stage(
         &profile,
@@ -291,15 +330,16 @@ pub fn execute(profile: Profile, root: &Path) -> Result<Manifest> {
     let pnr = root.join("place-route");
     write_new(&pnr.join("netlist.json"), &netlist_bytes)?;
     run_stage(&profile, "place-route", &profile.nextpnr, pnr_args(&profile), &pnr)?;
-    let report: Report = serde_json::from_slice(&read_bounded(&pnr.join("report.json"), profile.max_output_bytes)?)
+    let facts: Report = serde_json::from_slice(&read_bounded(&pnr.join("report.json"), profile.max_output_bytes)?)
         .map_err(|e| format!("invalid-nextpnr-report:{e}"))?;
     // Packing never starts on successful exit alone: facts must pass policy.
-    let ReportRequest { profile, report } = crunch_fpga_core::accept_report(ReportRequest { profile, report })?;
+    let ReportRequest { profile, report: facts } =
+        crunch_fpga_core::accept_report(ReportRequest { profile, report: facts })?;
     let pack = root.join("packing");
     fs::create_dir(&pack).map_err(|e| e.to_string())?;
     copy_artifact(&pnr.join("routed.asc"), &pack.join("routed.asc"), profile.max_output_bytes)?;
     run_stage(&profile, "packing", &profile.packer, vec!["routed.asc".into(), "bitstream.bin".into()], &pack)?;
-    finish(profile, stages, report, root)
+    finish(profile, stages, facts, root)
 }
 
 fn pnr_args(profile: &Profile) -> Vec<String> {
@@ -329,37 +369,26 @@ fn pnr_args(profile: &Profile) -> Vec<String> {
     ]
 }
 
-fn finish(profile: Profile, stages: StageIdentities, report: Report, root: &Path) -> Result<Manifest> {
-    let mut artifacts = Vec::new();
-    for name in [
-        "synthesis/netlist.json",
-        "synthesis/stdout.log",
-        "synthesis/stderr.log",
-        "place-route/routed.asc",
-        "place-route/routed.json",
-        "place-route/report.json",
-        "place-route/stdout.log",
-        "place-route/stderr.log",
-        "packing/bitstream.bin",
-        "packing/stdout.log",
-        "packing/stderr.log",
-    ] {
+fn finish(profile: Profile, stages: StageIdentities, facts: Report, root: &Path) -> Result<Manifest> {
+    let mut artifacts = Vec::with_capacity(ARTIFACT_PATHS.len());
+    for name in ARTIFACT_PATHS {
         let path = root.join(name);
         let bytes = read_bounded(&path, profile.max_output_bytes)?;
         if bytes.is_empty() && !name.ends_with(".log") {
             return Err(format!("empty-required-artifact:{name}"));
         }
         artifacts.push(Artifact {
-            path: name.into(),
+            path: (*name).into(),
             blake3: blake3::hash(&bytes).to_hex().to_string(),
             bytes: bytes.len() as u64,
         });
     }
+    debug_assert_eq!(artifacts.len(), ARTIFACT_PATHS.len());
     let manifest = Manifest {
         schema: "mantle-fpga-artifacts-v1".into(),
         profile,
         stages,
-        report,
+        report: facts,
         artifacts,
         synthesis_completed: true,
         declared_clock_timing_accepted: true,

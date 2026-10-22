@@ -147,8 +147,8 @@ pub enum RealizationEffect {
     Child,
 }
 
-/// Declare one capability before invoking its adapter.
-pub fn realization_effect_plan(effect: RealizationEffect) -> Result<crate::EffectPlan, crate::PlanError> {
+/// The effect identity and authority of one realization capability.
+fn realization_effect_authority(effect: RealizationEffect) -> (&'static str, crate::EffectKind) {
     let (effect_id, kind) = match effect {
         RealizationEffect::Watch => ("realization-watch", crate::EffectKind::StoreAccess),
         RealizationEffect::Build => ("realization-build", crate::EffectKind::StoreAccess),
@@ -169,6 +169,16 @@ pub fn realization_effect_plan(effect: RealizationEffect) -> Result<crate::Effec
         RealizationEffect::Environment => ("realization-environment", crate::EffectKind::ReadEnvironment),
         RealizationEffect::Child => ("realization-child", crate::EffectKind::RunProcess),
     };
+    debug_assert!(effect_id.starts_with("realization-"));
+    debug_assert!(!effect_id.is_empty());
+    (effect_id, kind)
+}
+
+/// Declare one capability before invoking its adapter.
+pub fn realization_effect_plan(effect: RealizationEffect) -> Result<crate::EffectPlan, crate::PlanError> {
+    let (effect_id, kind) = realization_effect_authority(effect);
+    debug_assert!(effect_id.starts_with("realization-"));
+    debug_assert!(!effect_id.is_empty());
     crate::plan_effects(crate::CommandFamily::Realization, &[crate::EffectSpec {
         effect_id,
         kind,

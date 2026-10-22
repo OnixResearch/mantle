@@ -149,11 +149,11 @@ pub fn validate_graph_query(request: &GraphQueryRequest) -> Vec<ApplicationBlock
             "a graph query must name the target it queries",
         ));
     }
-    let binary = matches!(
+    let is_binary = matches!(
         request.kind,
         GraphQueryKind::Path | GraphQueryKind::CompareConfiguration | GraphQueryKind::CompareAction
     );
-    if binary != request.other_target.is_some()
+    if is_binary != request.other_target.is_some()
         || request.other_target.as_ref().is_some_and(|target| target.trim().is_empty())
     {
         blockers.push(ApplicationBlocker::new(

@@ -1,7 +1,14 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::ambient_clock)]
+
 //! Thin durable shell for the combined quota ledger. The stable lock covers
 //! read/decision/atomic replacement; no admission is acknowledged before fsync.
 //! A publication/fsync error is uncertain, not a release. Retrying the identical
 //! attempt operation reads the durable state and cannot double reserve/charge.
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
@@ -18,9 +25,12 @@ use crunch_remote_core::resource_quota::Reservation;
 use crunch_remote_core::resource_quota::UsageEvent;
 use fs2::FileExt;
 
-pub const MAX_LEDGER_BYTES: u64 = 8 * 1024 * 1024;
+pub const MAX_LEDGER_BYTES: u64 = 8_388_608;
 pub const QUOTA_LOCK_TIMEOUT_MS: u64 = 250;
 pub const QUOTA_LOCK_POLL_MS: u64 = 5;
+/// Upper bound on exclusive-lock attempts: the timeout window divided by the
+/// poll interval, plus the final attempt that observes the elapsed timeout.
+const QUOTA_LOCK_MAX_ATTEMPTS: u64 = 51;
 
 #[cfg(unix)]
 fn private_options() -> OpenOptions {
@@ -41,14 +51,16 @@ fn private_file(path: &Path) -> Result<File, QuotaError> {
 }
 fn validate_private_file(file: &File) -> Result<(), QuotaError> {
     let metadata = file.metadata().map_err(|_| QuotaError::StoreUnavailable)?;
+    debug_assert!(metadata.is_file(), "quota store file must be a regular file");
+    debug_assert!(!metadata.is_symlink(), "quota store file must not be a symlink");
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if !metadata.is_file()
-            || metadata.uid() != unsafe { libc::geteuid() }
-            || metadata.mode() & 0o077 != 0
-            || metadata.nlink() != 1
-        {
+        let is_owned_by_caller = metadata.uid() == unsafe { libc::geteuid() };
+        let is_private_mode = metadata.mode() & 0o077 == 0;
+        let is_single_link = metadata.nlink() == 1;
+        let is_private_file = metadata.is_file() && is_owned_by_caller && is_private_mode && is_single_link;
+        if !is_private_file {
             return Err(QuotaError::StoreUnavailable);
         }
         Ok(())
@@ -79,6 +91,16 @@ fn private_directory(path: &Path) -> Result<File, QuotaError> {
     {
         let _ = path;
         Err(QuotaError::StoreUnavailable)
+    }
+}
+/// The explicit empty ledger written when the store is first provisioned.
+fn empty_ledger() -> Ledger {
+    Ledger {
+        schema: crunch_remote_core::resource_quota::LEDGER_SCHEMA.to_string(),
+        revision: 0,
+        entries: BTreeMap::new(),
+        observations: BTreeMap::new(),
+        resource_contexts: BTreeMap::new(),
     }
 }
 #[derive(Debug, Clone)]
@@ -122,7 +144,7 @@ impl ResourceQuotaStore {
                     .map_err(|_| QuotaError::StoreUnavailable)?;
                 marker.sync_all().map_err(|_| QuotaError::StoreUnavailable)?;
                 private_directory(directory)?.sync_all().map_err(|_| QuotaError::StoreUnavailable)?;
-                store.publish(&Ledger::default(), QuotaStoreFault::None)?;
+                store.publish(&empty_ledger(), QuotaStoreFault::None)?;
             }
             Err(_) => return Err(QuotaError::StoreUnavailable),
         }
@@ -151,19 +173,21 @@ impl ResourceQuotaStore {
             .map_err(|_| QuotaError::StoreUnavailable)?;
         validate_private_file(&file)?;
         let started = std::time::Instant::now();
-        loop {
+        let timeout_ms = QUOTA_LOCK_TIMEOUT_MS;
+        let poll_ms = QUOTA_LOCK_POLL_MS;
+        for _attempt in 0..QUOTA_LOCK_MAX_ATTEMPTS {
             match file.try_lock_exclusive() {
-                Ok(()) => break,
+                Ok(()) => return Ok(file),
                 Err(error)
                     if error.kind() == std::io::ErrorKind::WouldBlock
-                        && started.elapsed() < std::time::Duration::from_millis(QUOTA_LOCK_TIMEOUT_MS) =>
+                        && started.elapsed() < std::time::Duration::from_millis(timeout_ms) =>
                 {
-                    std::thread::sleep(std::time::Duration::from_millis(QUOTA_LOCK_POLL_MS));
+                    std::thread::sleep(std::time::Duration::from_millis(poll_ms));
                 }
                 Err(_) => return Err(QuotaError::StoreUnavailable),
             }
         }
-        Ok(file)
+        Err(QuotaError::StoreUnavailable)
     }
     fn read_locked(&self) -> Result<Ledger, QuotaError> {
         let marker = private_file(&self.directory.join("resource-quota.initialized"))?;
@@ -175,7 +199,9 @@ impl ResourceQuotaStore {
             return Err(QuotaError::StoreUnavailable);
         }
         let mut bytes = Vec::new();
-        file.take(MAX_LEDGER_BYTES + 1).read_to_end(&mut bytes).map_err(|_| QuotaError::StoreUnavailable)?;
+        file.take(MAX_LEDGER_BYTES.saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|_| QuotaError::StoreUnavailable)?;
         if bytes.len() as u64 > MAX_LEDGER_BYTES {
             return Err(QuotaError::StoreUnavailable);
         }
@@ -331,6 +357,8 @@ pub fn run_quota_fault_fixture(directory: &Path, steps: &[QuotaFixtureStep]) -> 
         };
         results.push(result);
     }
+    debug_assert_eq!(results.len(), steps.len(), "every fixture step yields exactly one result");
+    debug_assert!(results.len() <= crunch_remote_core::resource_quota::MAX_RESERVATIONS);
     Ok(QuotaFixtureReport {
         results,
         ledger: store.snapshot()?,

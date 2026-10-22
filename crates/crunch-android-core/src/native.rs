@@ -91,12 +91,13 @@ pub fn validate(package: &Package) -> Result<(), &'static str> {
         return Err("NDK sysroot must be a declared store input");
     }
     for (index, library) in package.libraries.iter().enumerate() {
-        if !super::safe_store_input(&library.store_file)
-            || !member(&library.filename)
-            || library.filename.contains('/')
-            || !library.filename.starts_with("lib")
-            || !library.filename.ends_with(".so")
-        {
+        let is_store_input = super::safe_store_input(&library.store_file);
+        let is_member = member(&library.filename);
+        let has_separator = library.filename.contains('/');
+        let has_lib_prefix = library.filename.starts_with("lib");
+        let has_so_suffix = library.filename.ends_with(".so");
+        let is_valid_output = is_store_input && is_member && !has_separator && has_lib_prefix && has_so_suffix;
+        if !is_valid_output {
             return Err("invalid Android native output");
         }
         if package.libraries[..index].iter().any(|prior| prior.filename == library.filename) {
@@ -112,6 +113,8 @@ pub fn validate(package: &Package) -> Result<(), &'static str> {
             return Err("invalid required JNI export");
         }
     }
+    debug_assert!(package.libraries.len() <= MAX_LIBRARIES, "the library count stayed bounded");
+    debug_assert!(package.abi == ABI, "accepted packages use the declared ABI");
     Ok(())
 }
 

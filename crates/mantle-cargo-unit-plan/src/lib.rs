@@ -1,6 +1,11 @@
 #![no_std]
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::explicit_defaults)]
 
 //! Pure adapter from admitted Rust-plan effects to the generic mantle-plan-v2 wire ABI.
 //! Binding facts are supplied by the producer; this crate performs no store or host I/O.
@@ -680,12 +685,15 @@ fn validate_target_linker(plan: &PlanBindings) -> Result<(), Vec<Blocker>> {
         }
     }
     for argument in &linker.arguments {
-        if argument.is_empty()
-            || argument.len() > 16_384
-            || argument.contains('\0')
-            || argument.contains("{{")
-            || argument.contains('@')
-        {
+        let is_empty_argument = argument.is_empty();
+        let is_excessive_argument = argument.len() > 16_384;
+        if is_empty_argument || is_excessive_argument {
+            return Err(blocked("unit-plan-host-path", "target_linker", argument));
+        }
+        let has_nul_byte = argument.contains('\0');
+        let has_template_marker = argument.contains("{{");
+        let has_at_marker = argument.contains('@');
+        if has_nul_byte || has_template_marker || has_at_marker {
             return Err(blocked("unit-plan-host-path", "target_linker", argument));
         }
         for token in argument.split(['=', ',', ' ']) {

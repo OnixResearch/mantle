@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_glue::ConversionCache;
@@ -45,6 +46,15 @@ pub struct NativeDerivationClosure {
     pub derivations: Vec<NativePlannedDerivation>,
 }
 
+/// The mutable planning state for one native preflight closure.
+struct NativeClosureState<'a> {
+    store_prefix: &'a str,
+    cache: ConversionCache,
+    roots: Vec<NativeDerivationRoot>,
+    derivations: BTreeMap<String, NativePlannedDerivation>,
+    resolvers: BTreeMap<PathBuf, DerivationFileResolver>,
+}
+
 /// Evaluate the complete static derivation closure without opening a store,
 /// starting a worker, fetching sources, or running any recipe. Use this before
 /// the first proof action, with the same imported source tree and logical prefix
@@ -62,76 +72,89 @@ pub fn plan_derivation_closure(
     {
         return Err(Error::Convert("native preflight requires a normalized absolute store prefix".into()));
     }
-    let mut cache = ConversionCache::new(store_prefix);
-    let mut roots = Vec::new();
-    let mut derivations = BTreeMap::new();
-    let mut resolvers = BTreeMap::new();
+    let mut state = NativeClosureState {
+        store_prefix,
+        cache: ConversionCache::new(store_prefix),
+        roots: Vec::new(),
+        derivations: BTreeMap::new(),
+        resolvers: BTreeMap::new(),
+    };
     for file in files {
-        let recipe = file.canonicalize().map_err(|error| {
-            Error::Eval(format!("canonicalizing native preflight recipe {}: {error}", file.display()))
-        })?;
-        let selected = crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&recipe, import_paths)
-            .map_err(map_eval_error)?;
-        if selected.is_empty() {
-            return Err(Error::Convert(format!("native preflight recipe has no roots: {}", recipe.display())));
+        plan_recipe_roots(&mut state, file, import_paths)?;
+    }
+    validate_dependencies(&state.derivations, store_prefix)?;
+    Ok(NativeDerivationClosure {
+        roots: state.roots,
+        derivations: state.derivations.into_values().collect(),
+    })
+}
+
+/// Convert one recipe's selected roots and the derivations they introduce.
+fn plan_recipe_roots(state: &mut NativeClosureState<'_>, file: &Path, import_paths: &[OsString]) -> Result<(), Error> {
+    let recipe = file
+        .canonicalize()
+        .map_err(|error| Error::Eval(format!("canonicalizing native preflight recipe {}: {error}", file.display())))?;
+    let selected = crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&recipe, import_paths)
+        .map_err(map_eval_error)?;
+    if selected.is_empty() {
+        return Err(Error::Convert(format!("native preflight recipe has no roots: {}", recipe.display())));
+    }
+    debug_assert!(!selected.is_empty(), "a planned recipe contributes at least one selected root");
+    let directory = recipe
+        .parent()
+        .ok_or_else(|| Error::Eval(format!("native preflight recipe has no parent: {}", recipe.display())))?;
+    let resolver = match state.resolvers.entry(directory.to_path_buf()) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(DerivationFileResolver::new(&recipe, import_paths)?)
         }
-        let directory = recipe
-            .parent()
-            .ok_or_else(|| Error::Eval(format!("native preflight recipe has no parent: {}", recipe.display())))?;
-        let resolver = match resolvers.entry(directory.to_path_buf()) {
+        std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+    };
+    for (label, mut derivation) in selected {
+        resolver.resolve_root_inputs(&recipe, &mut derivation, &mut state.cache)?;
+        let (drv_path, _) = crunch_glue::convert(&derivation, &mut state.cache)
+            .map_err(|error| Error::Convert(format!("native preflight {label}: {error}")))?;
+        if state.roots.len() >= DERIVATIONS_MAX {
+            return Err(Error::Convert("native preflight root count exceeds derivation bound".into()));
+        }
+        state.roots.push(NativeDerivationRoot {
+            recipe: recipe.clone(),
+            label,
+            drv_path,
+        });
+        drain_pending_derivations(&mut state.cache, &mut state.derivations, state.store_prefix)?;
+    }
+    Ok(())
+}
+
+/// Move every derivation the conversion cache just produced into the closure.
+fn drain_pending_derivations(
+    cache: &mut ConversionCache,
+    derivations: &mut BTreeMap<String, NativePlannedDerivation>,
+    store_prefix: &str,
+) -> Result<(), Error> {
+    for (drv_path, hash_derivation_modulo, derivation, content_addressed, dynamic_outputs, _) in cache.drain_pending() {
+        let key = drv_path.to_absolute_path_with_prefix(store_prefix);
+        if !dynamic_outputs.is_empty() {
+            return Err(Error::Convert(format!("native preflight cannot enumerate dynamic plan outputs: {key}")));
+        }
+        if derivations.len() >= DERIVATIONS_MAX {
+            return Err(Error::Convert("native preflight derivation count exceeds bound".into()));
+        }
+        match derivations.entry(key) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(DerivationFileResolver::new(&recipe, import_paths)?)
+                entry.insert(NativePlannedDerivation {
+                    drv_path,
+                    hash_derivation_modulo,
+                    derivation,
+                    content_addressed,
+                });
             }
-            std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
-        };
-        for (label, mut derivation) in selected {
-            resolver.resolve_root_inputs(&recipe, &mut derivation, &mut cache)?;
-            let (drv_path, _) = crunch_glue::convert(&derivation, &mut cache)
-                .map_err(|error| Error::Convert(format!("native preflight {label}: {error}")))?;
-            if roots.len() >= DERIVATIONS_MAX {
-                return Err(Error::Convert("native preflight root count exceeds derivation bound".into()));
-            }
-            roots.push(NativeDerivationRoot {
-                recipe: recipe.clone(),
-                label,
-                drv_path,
-            });
-            for (drv_path, hash_derivation_modulo, derivation, content_addressed, dynamic_outputs, _) in
-                cache.drain_pending()
-            {
-                let key = drv_path.to_absolute_path_with_prefix(store_prefix);
-                if !dynamic_outputs.is_empty() {
-                    return Err(Error::Convert(format!(
-                        "native preflight cannot enumerate dynamic plan outputs: {key}"
-                    )));
-                }
-                if derivations.len() >= DERIVATIONS_MAX {
-                    return Err(Error::Convert("native preflight derivation count exceeds bound".into()));
-                }
-                match derivations.entry(key) {
-                    std::collections::btree_map::Entry::Vacant(entry) => {
-                        entry.insert(NativePlannedDerivation {
-                            drv_path,
-                            hash_derivation_modulo,
-                            derivation,
-                            content_addressed,
-                        });
-                    }
-                    std::collections::btree_map::Entry::Occupied(entry) => {
-                        return Err(Error::Convert(format!(
-                            "native preflight duplicate derivation identity: {}",
-                            entry.key()
-                        )));
-                    }
-                }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                return Err(Error::Convert(format!("native preflight duplicate derivation identity: {}", entry.key())));
             }
         }
     }
-    validate_dependencies(&derivations, store_prefix)?;
-    Ok(NativeDerivationClosure {
-        roots,
-        derivations: derivations.into_values().collect(),
-    })
+    Ok(())
 }
 
 fn validate_dependencies(

@@ -27,8 +27,18 @@ use serde::Serialize;
 pub type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 const WORK: &str = "/build/mantle-zephyr";
 const MAX_FILES: u64 = 400_000;
-const MAX_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_BYTES: u64 = 8_589_934_592;
 const MAX_DEPTH: u32 = 64;
+/// Chunk size of the bounded read loops.
+const CHUNK_BYTES: usize = 64 * 1024;
+/// Read iterations over one tree file: the byte bound over the chunk size, plus the empty read.
+const MAX_TREE_CHUNKS: u64 = 131_073;
+/// Largest published artifact.
+const MAX_ARTIFACT_BYTES: u64 = 67_108_864;
+/// Read iterations over one artifact: the byte bound over the chunk size, plus the empty read.
+const MAX_ARTIFACT_CHUNKS: u64 = 1_025;
+/// Working-set size of the explicit traversal stacks.
+const FRAME_CAPACITY: usize = 65;
 fn invalid(message: impl Into<String>) -> Box<dyn std::error::Error> {
     std::io::Error::other(message.into()).into()
 }
@@ -89,6 +99,9 @@ fn checked(plan: WirePlan) -> Result<Plan> {
     crunch_zephyr_core::admit(plan).map(Plan).map_err(|e| invalid(e.to_string()))
 }
 
+/// A CMake cache key, kept distinct from its value so the two cannot be swapped.
+struct SettingKey<'a>(&'a str);
+
 /// Length-delimited, sorted tree encoding; ignores mtimes, uid/gid and writable bits.
 /// Symlink target bytes and executable bits are content, not their resolved host path.
 pub fn tree_blake3(root: &Path) -> Result<String> {
@@ -113,21 +126,46 @@ fn frame(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(&(bytes.len() as u64).to_le_bytes());
     hasher.update(bytes);
 }
+/// One directory of the explicit depth first tree traversal.
+struct TreeFrame {
+    entries: Vec<fs::DirEntry>,
+    index: usize,
+    depth: u32,
+}
+impl TreeFrame {
+    fn new(dir: &Path, depth: u32) -> Result<Self> {
+        if depth > MAX_DEPTH {
+            return Err(invalid("zephyr-tree-depth-limit"));
+        }
+        let mut entries = fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|entry| entry.file_name());
+        Ok(Self {
+            entries,
+            index: 0,
+            depth,
+        })
+    }
+    fn next_path(&mut self) -> Option<PathBuf> {
+        let entry = self.entries.get(self.index)?;
+        self.index = self.index.saturating_add(1);
+        Some(entry.path())
+    }
+}
 fn hash_directory(root: &Path, dir: &Path, depth: u32, state: &mut TreeState) -> Result<()> {
-    if depth > MAX_DEPTH {
-        return Err(invalid("zephyr-tree-depth-limit"));
-    }
-    let mut entries = fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
-    entries.sort_by_key(|entry| entry.file_name());
-    if entries.len() as u64 > MAX_FILES.saturating_sub(state.files) {
-        return Err(invalid("zephyr-tree-file-limit"));
-    }
-    for entry in entries {
+    let mut pending: Vec<TreeFrame> = Vec::with_capacity(FRAME_CAPACITY);
+    let directory = TreeFrame::new(dir, depth)?;
+    check_frame_capacity(&directory, state)?;
+    pending.push(directory);
+    while !pending.is_empty() {
+        let next = pending.last_mut().and_then(TreeFrame::next_path);
+        let Some(path) = next else {
+            pending.pop();
+            continue;
+        };
         if state.files >= MAX_FILES {
             return Err(invalid("zephyr-tree-file-limit"));
         }
-        state.files += 1;
-        let path = entry.path();
+        state.files = state.files.saturating_add(1);
         let relative = path.strip_prefix(root)?.to_str().ok_or_else(|| invalid("zephyr-non-utf8-path"))?;
         if relative.len() > 4096 {
             return Err(invalid("zephyr-tree-path-limit"));
@@ -136,24 +174,12 @@ fn hash_directory(root: &Path, dir: &Path, depth: u32, state: &mut TreeState) ->
         let meta = fs::symlink_metadata(&path)?;
         if meta.is_dir() {
             state.hasher.update(b"d");
-            hash_directory(root, &path, depth + 1, state)?;
+            let child_depth = pending.last().map(|parent| parent.depth).unwrap_or(depth).saturating_add(1);
+            let child = TreeFrame::new(&path, child_depth)?;
+            check_frame_capacity(&child, state)?;
+            pending.push(child);
         } else if meta.is_file() {
-            state.hasher.update(b"f");
-            state.hasher.update(&[u8::from(meta.permissions().mode() & 0o111 != 0)]);
-            state.bytes = state.bytes.checked_add(meta.len()).ok_or_else(|| invalid("zephyr-tree-byte-limit"))?;
-            if state.bytes > MAX_BYTES {
-                return Err(invalid("zephyr-tree-byte-limit"));
-            }
-            state.hasher.update(&meta.len().to_le_bytes());
-            let mut file = fs::File::open(&path)?;
-            let mut buffer = [0; 64 * 1024];
-            loop {
-                let n = file.read(&mut buffer)?;
-                if n == 0 {
-                    break;
-                }
-                state.hasher.update(&buffer[..n]);
-            }
+            hash_file(&path, &meta, state)?;
         } else if meta.file_type().is_symlink() {
             state.hasher.update(b"l");
             let target = fs::read_link(&path)?;
@@ -166,6 +192,33 @@ fn hash_directory(root: &Path, dir: &Path, depth: u32, state: &mut TreeState) ->
     debug_assert!(state.bytes <= MAX_BYTES);
     Ok(())
 }
+/// A directory may not hold more entries than the remaining file budget.
+fn check_frame_capacity(directory: &TreeFrame, state: &TreeState) -> Result<()> {
+    if directory.entries.len() as u64 > MAX_FILES.saturating_sub(state.files) {
+        return Err(invalid("zephyr-tree-file-limit"));
+    }
+    Ok(())
+}
+/// Hash one regular file with its executable bit, its length and its exact bytes.
+fn hash_file(path: &Path, meta: &fs::Metadata, state: &mut TreeState) -> Result<()> {
+    state.hasher.update(b"f");
+    state.hasher.update(&[u8::from(meta.permissions().mode() & 0o111 != 0)]);
+    state.bytes = state.bytes.checked_add(meta.len()).ok_or_else(|| invalid("zephyr-tree-byte-limit"))?;
+    if state.bytes > MAX_BYTES {
+        return Err(invalid("zephyr-tree-byte-limit"));
+    }
+    state.hasher.update(&meta.len().to_le_bytes());
+    let mut file = fs::File::open(path)?;
+    let mut buffer = [0; CHUNK_BYTES];
+    for _ in 0..MAX_TREE_CHUNKS {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        state.hasher.update(&buffer[..n]);
+    }
+    Ok(())
+}
 fn bound(plan: &Plan, path: &Path) -> Result<PathBuf> {
     let resolved =
         fs::canonicalize(path).map_err(|e| invalid(format!("zephyr-missing-input: {}: {e}", path.display())))?;
@@ -174,17 +227,43 @@ fn bound(plan: &Plan, path: &Path) -> Result<PathBuf> {
     }
     Ok(resolved)
 }
-fn audit_links(plan: &Plan, dir: &Path, depth: u32) -> Result<()> {
-    if depth > MAX_DEPTH {
-        return Err(invalid("zephyr-tree-depth-limit"));
-    }
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_symlink() {
-            bound(plan, &entry.path())?;
-        } else if entry.file_type()?.is_dir() {
-            audit_links(plan, &entry.path(), depth + 1)?;
+/// One directory of the explicit depth first link audit.
+struct AuditFrame {
+    entries: fs::ReadDir,
+    depth: u32,
+}
+impl AuditFrame {
+    fn new(dir: &Path, depth: u32) -> Result<Self> {
+        if depth > MAX_DEPTH {
+            return Err(invalid("zephyr-tree-depth-limit"));
         }
+        Ok(Self {
+            entries: fs::read_dir(dir)?,
+            depth,
+        })
+    }
+}
+fn audit_links(plan: &Plan, dir: &Path, depth: u32) -> Result<()> {
+    let mut pending: Vec<AuditFrame> = Vec::with_capacity(FRAME_CAPACITY);
+    pending.push(AuditFrame::new(dir, depth)?);
+    while !pending.is_empty() {
+        let next = pending.last_mut().and_then(|parent| parent.entries.next());
+        let Some(entry) = next else {
+            pending.pop();
+            continue;
+        };
+        audit_entry(plan, &mut pending, entry?, depth)?;
+    }
+    Ok(())
+}
+/// Audit one entry and queue the subdirectory it names.
+fn audit_entry(plan: &Plan, pending: &mut Vec<AuditFrame>, entry: fs::DirEntry, depth: u32) -> Result<()> {
+    let path = entry.path();
+    if entry.file_type()?.is_symlink() {
+        bound(plan, &path)?;
+    } else if entry.file_type()?.is_dir() {
+        let child_depth = pending.last().map(|parent| parent.depth).unwrap_or(depth).saturating_add(1);
+        pending.push(AuditFrame::new(&path, child_depth)?);
     }
     Ok(())
 }
@@ -202,6 +281,7 @@ fn executable(plan: &Plan, tool: &Tool) -> Result<PathBuf> {
     }
     Ok(path)
 }
+
 pub fn identity(plan: WirePlan) -> Result<String> {
     let plan = crunch_zephyr_core::validate(plan).map_err(|e| invalid(e.to_string()))?;
     identity_ref(&plan)
@@ -229,13 +309,15 @@ pub fn lower(plan: WirePlan, runner: Tool) -> Result<Derivation> {
     })
 }
 fn environment(plan: &Plan) -> Result<BTreeMap<String, String>> {
-    let mut dirs = Vec::new();
+    let mut dirs = Vec::with_capacity(plan.tools().count());
     for tool in plan.tools() {
         let path = executable(plan, tool)?;
         dirs.push(path.parent().ok_or_else(|| invalid("zephyr-tool-parent"))?.display().to_string());
     }
     dirs.sort();
     dirs.dedup();
+    debug_assert!(!dirs.is_empty());
+    debug_assert!(dirs.is_sorted());
     Ok(BTreeMap::from([
         ("PATH".into(), dirs.join(":")),
         ("HOME".into(), format!("{WORK}/home")),
@@ -271,7 +353,7 @@ fn run(cmd: &mut Command, phase: &str) -> Result<()> {
     Ok(())
 }
 fn versions(plan: &Plan, env: &BTreeMap<String, String>) -> Result<BTreeMap<String, String>> {
-    let mut observations = BTreeMap::new();
+    let mut observations = Vec::with_capacity(plan.tools().count());
     for tool in plan.tools() {
         let path = executable(plan, tool)?;
         let result = command(&path, env).arg("--version").output()?;
@@ -284,9 +366,9 @@ fn versions(plan: &Plan, env: &BTreeMap<String, String>) -> Result<BTreeMap<Stri
                 tool.version
             )));
         }
-        observations.insert(path.display().to_string(), line.into());
+        observations.push((path.display().to_string(), line.into()));
     }
-    Ok(observations)
+    Ok(observations.into_iter().collect())
 }
 const CHECK_CLOSURE: &str = r#"
 import importlib.metadata as m, importlib.util, json, pathlib, sys, yaml
@@ -304,12 +386,24 @@ for package,version in {'PyYAML':'6.0.2','pykwalify':'1.8.0','pyelftools':'0.31'
 print(json.dumps({package:m.version(package) for package in ['PyYAML','pykwalify','pyelftools','packaging','anytree','intelhex']},sort_keys=True))
 "#;
 fn verify_inputs(plan: &Plan, env: &BTreeMap<String, String>) -> Result<()> {
+    verify_role_trees(plan)?;
+    verify_resolved_west(plan)?;
+    verify_release_versions(plan)?;
+    verify_closure(plan, env)?;
+    verify_sdk_target(plan, env)
+}
+/// Every declared role must match its admitted tree identity and carry no escaping link.
+fn verify_role_trees(plan: &Plan) -> Result<()> {
     for (role, input) in &plan.roles {
         if tree_blake3(Path::new(&input.root))? != input.tree_blake3 {
             return Err(invalid(format!("zephyr-content-mismatch: {role}")));
         }
         audit_links(plan, Path::new(&input.root), 0)?;
     }
+    Ok(())
+}
+/// The acquired resolved west manifest must be the one the plan names.
+fn verify_resolved_west(plan: &Plan) -> Result<()> {
     let resolved: ResolvedWest = serde_json::from_slice(&read_bounded(&member(plan, &plan.resolved_west)?, 65536)?)?;
     if resolved != plan.west {
         return Err(invalid("zephyr-manifest-mismatch: acquired resolved-west.json differs from plan"));
@@ -317,6 +411,10 @@ fn verify_inputs(plan: &Plan, env: &BTreeMap<String, String>) -> Result<()> {
     for path in &plan.0.module_paths {
         bound(plan, Path::new(path))?;
     }
+    Ok(())
+}
+/// The acquired SDK and Zephyr releases must be the pinned ones.
+fn verify_release_versions(plan: &Plan) -> Result<()> {
     let sdk = Path::new(plan.root(&plan.sdk)?);
     if fs::read_to_string(sdk.join("sdk_version"))?.trim() != plan.sdk_version.as_str() {
         return Err(invalid("zephyr-sdk-mismatch: requires 0.16.8"));
@@ -332,10 +430,18 @@ fn verify_inputs(plan: &Plan, env: &BTreeMap<String, String>) -> Result<()> {
             return Err(invalid("zephyr-release-mismatch: requires 3.7.0"));
         }
     }
+    Ok(())
+}
+/// The build Python environment must bind the pinned module closure.
+fn verify_closure(plan: &Plan, env: &BTreeMap<String, String>) -> Result<()> {
     run(
         command(&executable(plan, &plan.tools.python)?, env).args(["-c", CHECK_CLOSURE, &serde_json::to_string(plan)?]),
         "closure-validation",
-    )?;
+    )
+}
+/// The pinned cross compiler must target the declared target triple.
+fn verify_sdk_target(plan: &Plan, env: &BTreeMap<String, String>) -> Result<()> {
+    let sdk = Path::new(plan.root(&plan.sdk)?);
     let cc = sdk.join(format!("{}/bin/{}-gcc", plan.target, plan.target));
     bound(plan, &cc)?;
     let target = command(&cc, env).arg("-dumpmachine").output()?;
@@ -350,17 +456,26 @@ fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
         return Err(invalid("zephyr-file-byte-limit"));
     }
     let mut bytes = Vec::new();
-    file.take(limit + 1).read_to_end(&mut bytes)?;
+    file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > limit {
         return Err(invalid("zephyr-file-byte-limit"));
     }
     Ok(bytes)
 }
-fn setting(text: &mut String, key: &str, value: &str) {
-    text.push_str(&format!("set({key} {} CACHE STRING \"Mantle owned\" FORCE)\n", cmake_literal(value.into())));
+fn setting(text: &mut String, key: SettingKey<'_>, value: &str) {
+    text.push_str(&format!("set({} {} CACHE STRING \"Mantle owned\" FORCE)\n", key.0, cmake_literal(value.into())));
 }
 fn configuration(plan: &Plan) -> Result<String> {
     let mut text = format!("include({})\n", cmake_literal(format!("{WORK}/guard.cmake")));
+    set_core_settings(&mut text, plan)?;
+    set_tool_settings(&mut text, plan)?;
+    set_offline_settings(&mut text);
+    set_module_settings(&mut text, plan)?;
+    set_file_settings(&mut text, plan)?;
+    Ok(text)
+}
+/// The board, toolchain and cache locations the build reads.
+fn set_core_settings(text: &mut String, plan: &Plan) -> Result<()> {
     let sdk = plan.root(&plan.sdk)?;
     let zephyr = plan.root(&plan.zephyr)?;
     for (key, value) in [
@@ -375,15 +490,19 @@ fn configuration(plan: &Plan) -> Result<String> {
         ("CMAKE_PROJECT_INCLUDE_BEFORE", &format!("{WORK}/guard.cmake")),
         ("CMAKE_MODULE_PATH", &format!("{WORK}/modules")),
     ] {
-        setting(&mut text, key, value);
+        setting(text, SettingKey(key), value);
     }
+    Ok(())
+}
+/// The tool paths and the program directories the build resolves.
+fn set_tool_settings(text: &mut String, plan: &Plan) -> Result<()> {
     for (key, tool) in [
         ("CMAKE_MAKE_PROGRAM", &plan.tools.ninja),
         ("PYTHON_EXECUTABLE", &plan.tools.python),
         ("Python3_EXECUTABLE", &plan.tools.python),
         ("DTC", &plan.tools.dtc),
     ] {
-        setting(&mut text, key, plan.tool(tool).map_err(|e| invalid(e.to_string()))?);
+        setting(text, SettingKey(key), plan.tool(tool).map_err(|e| invalid(e.to_string()))?);
     }
     let program_dirs = plan
         .tools()
@@ -392,7 +511,11 @@ fn configuration(plan: &Plan) -> Result<String> {
             Ok(path.parent().ok_or_else(|| invalid("zephyr-tool-parent"))?.display().to_string())
         })
         .collect::<Result<Vec<_>>>()?;
-    setting(&mut text, "CMAKE_PROGRAM_PATH", &program_dirs.join(";"));
+    setting(text, SettingKey("CMAKE_PROGRAM_PATH"), &program_dirs.join(";"));
+    Ok(())
+}
+/// Every registry, cache and network lookup stays disabled.
+fn set_offline_settings(text: &mut String) {
     for key in [
         "CMAKE_FIND_USE_PACKAGE_REGISTRY",
         "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY",
@@ -402,36 +525,39 @@ fn configuration(plan: &Plan) -> Result<String> {
         "CMAKE_FIND_USE_CMAKE_SYSTEM_PATH",
         "USE_CCACHE",
     ] {
-        setting(&mut text, key, "OFF");
+        setting(text, SettingKey(key), "OFF");
     }
     for key in ["FETCHCONTENT_FULLY_DISCONNECTED", "FETCHCONTENT_UPDATES_DISCONNECTED"] {
-        setting(&mut text, key, "ON");
+        setting(text, SettingKey(key), "ON");
     }
-    setting(&mut text, "CMAKE_POLICY_DEFAULT_CMP0170", "NEW");
-    setting(
-        &mut text,
-        "ZEPHYR_MODULES",
-        &plan
-            .west
-            .modules
-            .values()
-            .map(|module| plan.root(&module.role))
-            .collect::<std::result::Result<Vec<_>, _>>()?
-            .join(";"),
-    );
+    setting(text, SettingKey("CMAKE_POLICY_DEFAULT_CMP0170"), "NEW");
+}
+/// The resolved west modules are the only module roots the build sees.
+fn set_module_settings(text: &mut String, plan: &Plan) -> Result<()> {
+    let modules = plan
+        .west
+        .modules
+        .values()
+        .map(|module| plan.root(&module.role))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    setting(text, SettingKey("ZEPHYR_MODULES"), &modules.join(";"));
+    Ok(())
+}
+/// The configuration, overlay and build identity files the build reads.
+fn set_file_settings(text: &mut String, plan: &Plan) -> Result<()> {
     for (key, members) in [("CONF_FILE", &plan.kconfig), ("DTC_OVERLAY_FILE", &plan.overlays)] {
         let paths = members
             .iter()
             .map(|item| member(plan, item).map(|path| path.display().to_string()))
             .collect::<Result<Vec<_>>>()?;
-        setting(&mut text, key, &paths.join(";"));
+        setting(text, SettingKey(key), &paths.join(";"));
     }
     // An empty EXTRA_* value suppresses application/board auto-discovery additions.
     for key in ["EXTRA_CONF_FILE", "EXTRA_DTC_OVERLAY_FILE", "EXTRA_ZEPHYR_MODULES"] {
-        setting(&mut text, key, "");
+        setting(text, SettingKey(key), "");
     }
-    setting(&mut text, "BUILD_VERSION", crunch_zephyr_core::ZEPHYR_REVISION);
-    Ok(text)
+    setting(text, SettingKey("BUILD_VERSION"), crunch_zephyr_core::ZEPHYR_REVISION);
+    Ok(())
 }
 #[derive(Serialize)]
 struct Provenance<'a> {
@@ -497,11 +623,13 @@ pub fn build(plan: WirePlan, out: &Path) -> Result<()> {
         artifacts_blake3,
     };
     fs::write(out.join("manifest.json"), serde_json::to_vec_pretty(&provenance)?)?;
+    debug_assert!(!provenance.tools.is_empty());
+    debug_assert!(!provenance.artifacts_blake3.is_empty());
     Ok(())
 }
 fn publish(out: &Path) -> Result<BTreeMap<String, String>> {
     fs::create_dir_all(out)?;
-    let mut hashes = BTreeMap::new();
+    let mut hashes = Vec::with_capacity(ARTIFACTS.len());
     for artifact in ARTIFACTS {
         let source = Path::new(WORK).join("build/zephyr").join(artifact);
         if !fs::symlink_metadata(&source)?.is_file() {
@@ -509,20 +637,20 @@ fn publish(out: &Path) -> Result<BTreeMap<String, String>> {
         }
         let target = out.join(artifact);
         fs::create_dir_all(target.parent().ok_or_else(|| invalid("zephyr-artifact-parent"))?)?;
-        hashes.insert(artifact.into(), copy_artifact(&source, &target, artifact == "zephyr.elf")?);
+        hashes.push((artifact.into(), copy_artifact(&source, &target, artifact == "zephyr.elf")?));
     }
-    Ok(hashes)
+    Ok(hashes.into_iter().collect())
 }
 fn copy_artifact(source: &Path, target: &Path, elf: bool) -> Result<String> {
     let mut input = fs::File::open(source)?;
-    let size = input.metadata()?.len();
-    if size == 0 || size > 64 * 1024 * 1024 {
+    let size_bytes = input.metadata()?.len();
+    if size_bytes == 0 || size_bytes > MAX_ARTIFACT_BYTES {
         return Err(invalid("zephyr-artifact-size-invalid"));
     }
     let mut output = fs::File::create(target)?;
     let mut hasher = blake3::Hasher::new();
     let mut copied = 0_u64;
-    let mut buffer = [0; 64 * 1024];
+    let mut buffer = [0; CHUNK_BYTES];
     if elf {
         input.read_exact(&mut buffer[..20])?;
         check_elf(&buffer[..20])?;
@@ -530,30 +658,33 @@ fn copy_artifact(source: &Path, target: &Path, elf: bool) -> Result<String> {
         hasher.update(&buffer[..20]);
         copied = 20;
     }
-    loop {
+    for _ in 0..MAX_ARTIFACT_CHUNKS {
         let n = input.read(&mut buffer)?;
         if n == 0 {
             break;
         }
-        copied += n as u64;
-        if copied > size {
+        copied = copied.saturating_add(n as u64);
+        if copied > size_bytes {
             return Err(invalid("zephyr-artifact-size-changed"));
         }
         hasher.update(&buffer[..n]);
         output.write_all(&buffer[..n])?;
     }
-    if copied != size {
+    if copied != size_bytes {
         return Err(invalid("zephyr-artifact-size-changed"));
     }
+    debug_assert!(copied == size_bytes);
+    debug_assert!(size_bytes <= MAX_ARTIFACT_BYTES);
     Ok(hasher.finalize().to_hex().to_string())
 }
 fn check_elf(header: &[u8]) -> Result<()> {
-    if header.len() < 20
-        || &header[..4] != b"\x7fELF"
-        || header[4] != 1
-        || header[5] != 1
-        || header[16..20] != [2, 0, 40, 0]
-    {
+    let is_long_enough = header.len() >= 20;
+    let is_elf_magic = header.get(..4) == Some(b"\x7fELF".as_slice());
+    let is_elf_class_32 = header.get(4) == Some(&1);
+    let is_little_endian = header.get(5) == Some(&1);
+    let is_arm_executable = header.get(16..20) == Some([2, 0, 40, 0].as_slice());
+    let is_expected_elf = is_long_enough && is_elf_magic && is_elf_class_32 && is_little_endian && is_arm_executable;
+    if !is_expected_elf {
         return Err(invalid("zephyr-artifact-target-mismatch: expected ELF32 little-endian ARM executable"));
     }
     Ok(())

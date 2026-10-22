@@ -14,7 +14,7 @@ use serde::Serialize;
 pub const MAX_PACKAGES: usize = 256;
 pub const MAX_SELECTIONS: usize = 64;
 pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
-pub const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_INPUT_BYTES: u64 = (64u64 * 1024).saturating_mul(1024);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,14 +44,13 @@ pub fn admit_target(target: Target) -> Result<Target, String> {
     if patch.is_empty() || patch.len() > 4 || !patch.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err("python-version-unsupported".into());
     }
-    if target.wheel_tags.is_empty()
-        || target.wheel_tags.len() > 2
-        || target
-            .wheel_tags
-            .iter()
-            .any(|tag| !["py3-none-any", "cp312-cp312-linux_x86_64"].contains(&tag.as_str()))
-        || (target.wheel_tags.len() == 2 && target.wheel_tags[0] == target.wheel_tags[1])
-    {
+    let is_tag_count_valid = !target.wheel_tags.is_empty() && target.wheel_tags.len() <= 2;
+    let has_unknown_tag = target
+        .wheel_tags
+        .iter()
+        .any(|tag| !["py3-none-any", "cp312-cp312-linux_x86_64"].contains(&tag.as_str()));
+    let has_duplicate_tags = target.wheel_tags.len() == 2 && target.wheel_tags[0] == target.wheel_tags[1];
+    if !is_tag_count_valid || has_unknown_tag || has_duplicate_tags {
         return Err("python-wheel-tags-unsupported".into());
     }
     debug_assert!(target.python.starts_with("3.12."));
@@ -92,17 +91,19 @@ pub fn admit_selections(selections: Vec<String>) -> Result<Vec<String>, String> 
         return Err("python-selection-limit".into());
     }
     for (index, selection) in selections.iter().enumerate() {
-        if selection.is_empty()
-            || selection.len() > 128
-            || !selection
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_.".contains(&byte))
-            || selections[..index].contains(selection)
-        {
+        let is_empty = selection.is_empty();
+        let is_too_long = selection.len() > 128;
+        let has_invalid_char = !selection
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_.".contains(&byte));
+        let is_duplicate = selections[..index].contains(selection);
+        let is_invalid = is_empty || is_too_long || has_invalid_char || is_duplicate;
+        if is_invalid {
             return Err("python-selection-invalid".into());
         }
     }
     debug_assert!(selections.len() <= MAX_SELECTIONS);
+    debug_assert!(selections.iter().all(|selection| !selection.is_empty()));
     Ok(selections)
 }
 

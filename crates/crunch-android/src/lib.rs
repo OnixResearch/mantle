@@ -579,8 +579,10 @@ impl PreparedApk {
                             .ok_or_else(|| Error::InvalidInput("non-UTF8 source".into()))?,
                         &self.plan.assets,
                         self.plan.native.as_ref(),
-                        "\"$UTILITY\"",
-                        "$PWD/android-additions",
+                        native::CopyTarget {
+                            utility: "\"$UTILITY\"",
+                            destination: "$PWD/android-additions",
+                        },
                     ));
                     script.push_str("(cd \"$PWD/android-additions\" && \"$UTILITY\" find . -type f | \"$UTILITY\" sort > \"$PWD/../android-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${member#./}\"; done < \"$PWD/android-members\"\n(cd \"$PWD/android-additions\" && run_sdk \"$jdk_root/bin/jar\" --update --no-compress --file \"$PWD/../with-dex.apk\" --date \"$entry_date\" \"$@\")\n");
                 }
@@ -898,10 +900,36 @@ pub mod pinned {
         libraries: &'a str,
     }
 
+    /// The resolved toolchain paths, run command and prior outputs a stage
+    /// script renders with.
+    struct StageRender<'a> {
+        jdk: &'a str,
+        tools: &'a str,
+        platform: &'a str,
+        run: String,
+        previous: &'a BTreeMap<&'static str, String>,
+    }
+
+    impl StageRender<'_> {
+        fn prior_output(&self, name: &'static str) -> Result<&str, AdapterError> {
+            self.previous
+                .get(name)
+                .map(String::as_str)
+                .ok_or_else(|| error(format!("missing prior Android step output: {name}")))
+        }
+
+        fn java_command(&self) -> Result<String, AdapterError> {
+            Ok(format!(
+                "{} {} -Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+                self.run,
+                shell(&format!("{}/bin/java", self.jdk))?
+            ))
+        }
+    }
+
     fn stage_script(context: StageScript<'_>) -> Result<String, AdapterError> {
         let StageScript {
             kind,
-            plan,
             paths,
             previous,
             loader,
@@ -920,62 +948,90 @@ pub mod pinned {
             libraries.push_str(&format!(":{tools}/lib64"));
         }
         let run = format!("{} --library-path {}", q(loader)?, q(&libraries)?);
-        let java = || -> Result<String, AdapterError> {
-            Ok(format!(
-                "{run} {} -Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
-                q(&format!("{jdk}/bin/java"))?
-            ))
-        };
-        let output = |name: &'static str| -> Result<&str, AdapterError> {
-            previous
-                .get(name)
-                .map(String::as_str)
-                .ok_or_else(|| error(format!("missing prior Android step output: {name}")))
+        let render = StageRender {
+            jdk,
+            tools,
+            platform,
+            run,
+            previous,
         };
         let mut script =
             String::from("set -eu\nexport LC_ALL=C TZ=UTC\nexport JAVA_TOOL_OPTIONS=\"-Djava.io.tmpdir=$TMPDIR\"\n");
         match kind {
             StepKind::Aapt2Compile | StepKind::Aapt2Link | StepKind::Javac => {
-                render_early_stage(&context, &run, &mut script)?;
+                render_early_stage(&context, &render.run, &mut script)?;
             }
             StepKind::D8 => {
-                let java = java()?;
-                script.push_str(&format!("/bin/busybox mkdir -p \"$out\"\n/bin/busybox find {} -type f -name '*.class' -print | /bin/busybox sort > \"$TMPDIR/android-classes\"\nset --\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-classes\"\n",
-                q(output("javac")?)?));
-                script.push_str(&format!(
-                    "{java} -cp {} com.android.tools.r8.D8 --lib {} --min-api {} --output \"$out\" \"$@\"\n",
-                    q(&format!("{tools}/lib/d8.jar"))?,
-                    q(&format!("{platform}/android.jar"))?,
-                    plan.native.as_ref().map_or(23, |package| package.api_level)
-                ));
+                render_d8_stage(&context, &render, &mut script)?;
             }
             StepKind::Zipalign => {
-                script.push_str(&format!("/bin/busybox mkdir -p \"$TMPDIR/android-merge\"\n/bin/busybox unzip -q {} -d \"$TMPDIR/android-merge\"\n/bin/busybox find {} -type f -name 'classes*.dex' -print | /bin/busybox sort > \"$TMPDIR/android-dex\"\nwhile IFS= read -r dex; do /bin/busybox cp \"$dex\" \"$TMPDIR/android-merge/\"; done < \"$TMPDIR/android-dex\"\n",
-                    q(&format!("{}/base.apk", output("link")?))?, q(output("d8")?)?));
-                script.push_str(&super::native::copy_script(
-                    context.source,
-                    &plan.assets,
-                    plan.native.as_ref(),
-                    "/bin/busybox",
-                    "$TMPDIR/android-merge",
-                ));
-                script.push_str(&format!("stamp=$(/bin/busybox date -u -d \"@$SOURCE_DATE_EPOCH\" '+%Y%m%d%H%M.%S')\n/bin/busybox find \"$TMPDIR/android-merge\" -exec /bin/busybox touch -t \"$stamp\" {{}} +\n(cd \"$TMPDIR/android-merge\" && /bin/busybox find . -type f -print | /bin/busybox sort > \"$TMPDIR/android-zip-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${{member#./}}\"; done < \"$TMPDIR/android-zip-members\"\n(cd \"$TMPDIR/android-merge\" && {run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 --create --file \"$TMPDIR/android-merged.apk\" --no-manifest --no-compress \"$@\")\n{run} {} -P 16 -f 4 \"$TMPDIR/android-merged.apk\" \"$out\"\n{run} {} -c -P 16 4 \"$out\"\n",
-                    q(&format!("{jdk}/bin/jar"))?, q(&format!("{tools}/zipalign"))?, q(&format!("{tools}/zipalign"))?));
+                render_zipalign_stage(&context, &render, &mut script)?;
             }
             StepKind::Apksigner => {
-                let java = java()?;
-                let signing =
-                    plan.signing.as_ref().ok_or_else(|| error("signing stage without signing declaration"))?;
-                let flags = signing_flags(&signing.schemes);
-                script.push_str(&format!("{java} -cp {} com.android.apksigner.ApkSignerTool sign --ks {} --ks-key-alias {} --ks-pass {} --key-pass {} {flags} --v4-signing-enabled false --out \"$out\" {}\n",
-                q(&format!("{tools}/lib/apksigner.jar"))?, q(&signing.keystore)?, q(&signing.alias)?,
-                q(&format!("file:{}", signing.store_password_file))?, q(&format!("file:{}", signing.key_password_file))?,
-                q(output("zipalign")?)?));
+                render_signing_stage(&context, &render, &mut script)?;
             }
         }
         assert!(script.starts_with("set -eu\n"));
-        assert!(run.contains("--library-path"));
+        assert!(render.run.contains("--library-path"));
         Ok(script)
+    }
+
+    fn render_d8_stage(
+        context: &StageScript<'_>,
+        render: &StageRender<'_>,
+        script: &mut String,
+    ) -> Result<(), AdapterError> {
+        let q = |value: &str| shell(value);
+        let java = render.java_command()?;
+        script.push_str(&format!("/bin/busybox mkdir -p \"$out\"\n/bin/busybox find {} -type f -name '*.class' -print | /bin/busybox sort > \"$TMPDIR/android-classes\"\nset --\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-classes\"\n",
+                q(render.prior_output("javac")?)?));
+        script.push_str(&format!(
+            "{java} -cp {} com.android.tools.r8.D8 --lib {} --min-api {} --output \"$out\" \"$@\"\n",
+            q(&format!("{}/lib/d8.jar", render.tools))?,
+            q(&format!("{}/android.jar", render.platform))?,
+            context.plan.native.as_ref().map_or(23, |package| package.api_level)
+        ));
+        Ok(())
+    }
+
+    fn render_zipalign_stage(
+        context: &StageScript<'_>,
+        render: &StageRender<'_>,
+        script: &mut String,
+    ) -> Result<(), AdapterError> {
+        let q = |value: &str| shell(value);
+        let run = &render.run;
+        script.push_str(&format!("/bin/busybox mkdir -p \"$TMPDIR/android-merge\"\n/bin/busybox unzip -q {} -d \"$TMPDIR/android-merge\"\n/bin/busybox find {} -type f -name 'classes*.dex' -print | /bin/busybox sort > \"$TMPDIR/android-dex\"\nwhile IFS= read -r dex; do /bin/busybox cp \"$dex\" \"$TMPDIR/android-merge/\"; done < \"$TMPDIR/android-dex\"\n",
+                    q(&format!("{}/base.apk", render.prior_output("link")?))?, q(render.prior_output("d8")?)?));
+        script.push_str(&super::native::copy_script(
+            context.source,
+            &context.plan.assets,
+            context.plan.native.as_ref(),
+            super::native::CopyTarget {
+                utility: "/bin/busybox",
+                destination: "$TMPDIR/android-merge",
+            },
+        ));
+        script.push_str(&format!("stamp=$(/bin/busybox date -u -d \"@$SOURCE_DATE_EPOCH\" '+%Y%m%d%H%M.%S')\n/bin/busybox find \"$TMPDIR/android-merge\" -exec /bin/busybox touch -t \"$stamp\" {{}} +\n(cd \"$TMPDIR/android-merge\" && /bin/busybox find . -type f -print | /bin/busybox sort > \"$TMPDIR/android-zip-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${{member#./}}\"; done < \"$TMPDIR/android-zip-members\"\n(cd \"$TMPDIR/android-merge\" && {run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 --create --file \"$TMPDIR/android-merged.apk\" --no-manifest --no-compress \"$@\")\n{run} {} -P 16 -f 4 \"$TMPDIR/android-merged.apk\" \"$out\"\n{run} {} -c -P 16 4 \"$out\"\n",
+                    q(&format!("{}/bin/jar", render.jdk))?, q(&format!("{}/zipalign", render.tools))?, q(&format!("{}/zipalign", render.tools))?));
+        Ok(())
+    }
+
+    fn render_signing_stage(
+        context: &StageScript<'_>,
+        render: &StageRender<'_>,
+        script: &mut String,
+    ) -> Result<(), AdapterError> {
+        let q = |value: &str| shell(value);
+        let java = render.java_command()?;
+        let signing =
+            context.plan.signing.as_ref().ok_or_else(|| error("signing stage without signing declaration"))?;
+        let flags = signing_flags(&signing.schemes);
+        script.push_str(&format!("{java} -cp {} com.android.tools.apksigner.ApkSignerTool sign --ks {} --ks-key-alias {} --ks-pass {} --key-pass {} {flags} --v4-signing-enabled false --out \"$out\" {}\n",
+                q(&format!("{}/lib/apksigner.jar", render.tools))?, q(&signing.keystore)?, q(&signing.alias)?,
+                q(&format!("file:{}", signing.store_password_file))?, q(&format!("file:{}", signing.key_password_file))?,
+                q(render.prior_output("zipalign")?)?));
+        Ok(())
     }
 
     fn signing_flags(schemes: &[String]) -> String {
@@ -1420,6 +1476,22 @@ pub mod pinned {
     ) -> Result<(Vec<Input>, BTreeMap<String, String>), AdapterError> {
         let mut dependencies = vec![Input::Source(context.inputs.source_root.clone())];
         dependencies.extend(context.runtime_inputs.iter().cloned().map(Input::Source));
+        let mut stage_paths = BTreeMap::new();
+        add_native_dependencies(step, context, &mut dependencies)?;
+        add_toolchain_dependencies(step, context, &mut dependencies, &mut stage_paths)?;
+        add_prior_dependencies(step, stages, &mut dependencies)?;
+        add_signing_dependencies(step, context, &mut dependencies)?;
+        assert!(stage_paths.len() <= COMPONENTS.len());
+        assert!(dependencies.len() >= 3);
+        Ok((dependencies, stage_paths))
+    }
+
+    /// Adds the declared native sysroot and libraries a packaging step needs.
+    fn add_native_dependencies(
+        step: &crunch_android_core::StepPlan,
+        context: &StageAssembly<'_>,
+        dependencies: &mut Vec<Input>,
+    ) -> Result<(), AdapterError> {
         if step.kind == StepKind::Zipalign
             && let Some(package) = &context.plan.native
         {
@@ -1428,7 +1500,16 @@ pub mod pinned {
                 dependencies.push(Input::Source(store_object(&library.store_file, StorePrefix(context.prefix))?));
             }
         }
-        let mut stage_paths = BTreeMap::new();
+        Ok(())
+    }
+
+    /// Adds the extracted toolchains a step requires and their stage paths.
+    fn add_toolchain_dependencies(
+        step: &crunch_android_core::StepPlan,
+        context: &StageAssembly<'_>,
+        dependencies: &mut Vec<Input>,
+        stage_paths: &mut BTreeMap<String, String>,
+    ) -> Result<(), AdapterError> {
         for component in step.required_toolchains.iter().copied() {
             if stage_paths.len() >= COMPONENTS.len() {
                 return Err(error("too many required Android toolchains"));
@@ -1453,6 +1534,16 @@ pub mod pinned {
             dependencies.push(Input::Derivation(Box::new(fetched.clone())));
             dependencies.push(Input::Derivation(Box::new(extracted.clone())));
         }
+        debug_assert!(stage_paths.len() <= COMPONENTS.len(), "the stage path count stayed bounded");
+        Ok(())
+    }
+
+    /// Adds the derivations of the stages a step consumes.
+    fn add_prior_dependencies(
+        step: &crunch_android_core::StepPlan,
+        stages: &[CrunchDerivation],
+        dependencies: &mut Vec<Input>,
+    ) -> Result<(), AdapterError> {
         let prior_names: &[&str] = match step.kind {
             StepKind::Aapt2Compile => &[],
             StepKind::Aapt2Link => &["compile"],
@@ -1461,6 +1552,7 @@ pub mod pinned {
             StepKind::Zipalign => &["link", "d8"],
             StepKind::Apksigner => &["zipalign"],
         };
+        debug_assert!(prior_names.len() <= 2, "a step consumes at most two prior stages");
         for name in prior_names {
             let kind = match *name {
                 "compile" => StepKind::Aapt2Compile,
@@ -1476,6 +1568,15 @@ pub mod pinned {
                 .ok_or_else(|| error(format!("missing prior Android derivation: {name}")))?;
             dependencies.push(Input::Derivation(Box::new(previous.clone())));
         }
+        Ok(())
+    }
+
+    /// Adds the signing inputs a signing step consumes.
+    fn add_signing_dependencies(
+        step: &crunch_android_core::StepPlan,
+        context: &StageAssembly<'_>,
+        dependencies: &mut Vec<Input>,
+    ) -> Result<(), AdapterError> {
         if step.kind == StepKind::Apksigner {
             let signing =
                 context.plan.signing.as_ref().ok_or_else(|| error("signing stage without signing declaration"))?;
@@ -1487,9 +1588,7 @@ pub mod pinned {
                 dependencies.push(Input::Source(store_object(path, StorePrefix(context.prefix))?));
             }
         }
-        assert!(stage_paths.len() <= COMPONENTS.len());
-        assert!(dependencies.len() >= 3);
-        Ok((dependencies, stage_paths))
+        Ok(())
     }
 
     #[cfg(test)]

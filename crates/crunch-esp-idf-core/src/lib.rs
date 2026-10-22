@@ -13,6 +13,8 @@ pub const SDK_COMMIT: &str = "fcae32885b0296b32044cb99ecbdc50d98dddb83";
 pub const MAX_ROLES: usize = 128;
 pub const MAX_MEMBERS: usize = 65536;
 pub const MAX_PATH_BYTES: usize = 1024;
+const MAX_COMPONENTS: usize = 256;
+const MAX_DEFAULT_FILES: usize = 128;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -99,8 +101,10 @@ fn member(plan: &Plan, value: &Member) -> Result<(), Error> {
     }
     Ok(())
 }
-fn validate_ref(plan: &Plan) -> Result<(), Error> {
-    if plan.host != "x86_64-linux" || plan.release != RELEASE || plan.sdk_commit != SDK_COMMIT {
+/// The pinned release, SDK commit, target and toolchain are one cohort.
+fn validate_cohort(plan: &Plan) -> Result<(), Error> {
+    let is_pinned_cohort = plan.host == "x86_64-linux" && plan.release == RELEASE && plan.sdk_commit == SDK_COMMIT;
+    if !is_pinned_cohort {
         return Err(Error::UnsupportedCohort);
     }
     let compiler = match plan.target.as_str() {
@@ -111,26 +115,54 @@ fn validate_ref(plan: &Plan) -> Result<(), Error> {
     if plan.compiler.member.rsplit('/').next() != Some(compiler) {
         return Err(Error::TargetToolchainMismatch);
     }
-    if !safe_member_ref(&plan.name)
-        || plan.name.contains('/')
-        || !safe_member_ref(&plan.project_version)
-        || plan.project_version.contains('/')
-    {
+    debug_assert!(plan.target == "esp32s3" || plan.target == "esp32c3");
+    debug_assert!(plan.compiler.member.ends_with(compiler));
+    Ok(())
+}
+/// The plan name and the project version are single path segments.
+fn validate_names(plan: &Plan) -> Result<(), Error> {
+    let is_valid_name = safe_member_ref(&plan.name) && !plan.name.contains('/');
+    let is_valid_version = safe_member_ref(&plan.project_version) && !plan.project_version.contains('/');
+    if !is_valid_name || !is_valid_version {
         return Err(Error::InvalidName);
     }
-    if plan.roles.is_empty()
-        || plan.roles.len() > MAX_ROLES
-        || plan.components.len() > 256
-        || plan.common_defaults.len() + plan.target_defaults.len() > 128
-        || plan.path.len() > MAX_ROLES
-    {
+    debug_assert!(!plan.name.contains('/'));
+    debug_assert!(!plan.project_version.contains('/'));
+    Ok(())
+}
+/// Every bounded collection of the plan is checked before it is walked.
+fn validate_bounds(plan: &Plan) -> Result<(), Error> {
+    let default_file_count = plan.common_defaults.len().saturating_add(plan.target_defaults.len());
+    let has_too_many_roles = plan.roles.len() > MAX_ROLES;
+    let has_too_many_components = plan.components.len() > MAX_COMPONENTS;
+    let has_too_many_default_files = default_file_count > MAX_DEFAULT_FILES;
+    let has_too_many_path_entries = plan.path.len() > MAX_ROLES;
+    let is_unbounded = plan.roles.is_empty()
+        || has_too_many_roles
+        || has_too_many_components
+        || has_too_many_default_files
+        || has_too_many_path_entries;
+    if is_unbounded {
         return Err(Error::UnboundedInput);
     }
+    debug_assert!(plan.roles.len() <= MAX_ROLES);
+    debug_assert!(default_file_count <= MAX_DEFAULT_FILES);
+    Ok(())
+}
+/// Every declared role carries a content digest, never a version string.
+fn validate_roles(plan: &Plan) -> Result<(), Error> {
     for (name, role) in &plan.roles {
         if !safe_member_ref(name) || name.contains('/') || !digest(&role.tree_blake3) {
             return Err(Error::InvalidRole);
         }
     }
+    debug_assert!(plan.roles.len() <= MAX_ROLES);
+    debug_assert!(!plan.roles.is_empty());
+    Ok(())
+}
+/// Every member of the plan is declared by a role of the plan, and every
+/// defaulted, locked and partitioned file name stays inside the project.
+fn validate_members(plan: &Plan) -> Result<(), Error> {
     for value in [
         &plan.project,
         &plan.sdk,
@@ -157,6 +189,12 @@ fn validate_ref(plan: &Plan) -> Result<(), Error> {
             return Err(Error::PathEscape);
         }
     }
+    debug_assert!(plan.path.len() <= MAX_ROLES);
+    debug_assert!(plan.common_defaults.len() <= MAX_DEFAULT_FILES);
+    Ok(())
+}
+/// Component names are unique single segments; managed components are locked.
+fn validate_components(plan: &Plan) -> Result<(), Error> {
     for (index, component) in plan.components.iter().enumerate() {
         member(plan, &component.source)?;
         if !safe_member_ref(&component.name) || component.name.contains('/') {
@@ -169,6 +207,17 @@ fn validate_ref(plan: &Plan) -> Result<(), Error> {
             return Err(Error::MissingLock);
         }
     }
+    debug_assert!(plan.components.len() <= MAX_COMPONENTS);
+    debug_assert!(plan.components.iter().all(|component| !component.name.contains('/')));
+    Ok(())
+}
+fn validate_ref(plan: &Plan) -> Result<(), Error> {
+    validate_cohort(plan)?;
+    validate_names(plan)?;
+    validate_bounds(plan)?;
+    validate_roles(plan)?;
+    validate_members(plan)?;
+    validate_components(plan)?;
     Ok(())
 }
 
@@ -259,6 +308,51 @@ mod tests {
         value.components[0].source.role = "cohort".into();
         value.dependencies_lock = Some("../other-project.lock".into());
         assert_eq!(validate(value), Err(Error::PathEscape));
+    }
+    #[test]
+    fn bounded_collections_and_identities_fail_closed() {
+        let mut value = plan("esp32s3");
+        value.roles.clear();
+        assert_eq!(validate(value.clone()), Err(Error::UnboundedInput));
+        value = plan("esp32s3");
+        value.common_defaults = alloc::vec!["default".into(); MAX_DEFAULT_FILES + 1];
+        assert_eq!(validate(value.clone()), Err(Error::UnboundedInput));
+        value = plan("esp32s3");
+        value.path = alloc::vec![Member {
+            role: "cohort".into(),
+            member: "bin".into(),
+        }; MAX_ROLES + 1];
+        assert_eq!(validate(value.clone()), Err(Error::UnboundedInput));
+        value = plan("esp32s3");
+        value.name = "bad/name".into();
+        assert_eq!(validate(value.clone()), Err(Error::InvalidName));
+        value = plan("esp32s3");
+        value.project_version = "bad/version".into();
+        assert_eq!(validate(value.clone()), Err(Error::InvalidName));
+        value = plan("esp32s3");
+        value.roles.insert("other".into(), Role {
+            root: "/nix/store/other".into(),
+            tree_blake3: "z".into(),
+        });
+        assert_eq!(validate(value.clone()), Err(Error::InvalidRole));
+        value = plan("esp32s3");
+        let source = Member {
+            role: "cohort".into(),
+            member: "component".into(),
+        };
+        value.components = alloc::vec![
+            Component {
+                name: "vendor__component".into(),
+                source: source.clone(),
+                managed: false,
+            },
+            Component {
+                name: "vendor__component".into(),
+                source,
+                managed: false,
+            },
+        ];
+        assert_eq!(validate(value), Err(Error::DuplicateComponent));
     }
     #[test]
     fn members_cannot_escape_or_inject_cmake_lists() {

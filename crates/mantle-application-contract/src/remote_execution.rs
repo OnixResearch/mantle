@@ -338,172 +338,299 @@ fn is_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+/// Whether the snapshot evidence accounts for every source record.
+fn is_snapshot_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Snapshot {
+        source_records,
+        reported_records,
+    } = facts
+    else {
+        return false;
+    };
+    source_records == reported_records
+}
+
+/// Whether the status snapshot evidence matches every reported counter.
+fn is_status_snapshot_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::StatusSnapshot {
+        expected_endpoint,
+        observed_endpoint,
+        source_jobs,
+        reported_jobs,
+        ..
+    } = facts
+    else {
+        return false;
+    };
+    let is_endpoint_declared = !expected_endpoint.is_empty();
+    let is_endpoint_matched = expected_endpoint == observed_endpoint;
+    let is_jobs_accounted = source_jobs == reported_jobs;
+    is_endpoint_declared && is_endpoint_matched && is_jobs_accounted && is_status_worker_admissible(facts)
+}
+
+/// Whether the status snapshot evidence matches the reported worker and ticket counters.
+fn is_status_worker_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::StatusSnapshot {
+        source_workers,
+        reported_workers,
+        source_tickets,
+        reported_tickets,
+        ..
+    } = facts
+    else {
+        return false;
+    };
+    let is_workers_accounted = source_workers == reported_workers;
+    let is_tickets_accounted = source_tickets == reported_tickets;
+    is_workers_accounted && is_tickets_accounted
+}
+
+/// Whether the identity evidence names and matches the inspected identity.
+fn is_identity_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Identity { expected, observed } = facts else {
+        return false;
+    };
+    !expected.is_empty() && expected == observed
+}
+
+/// Whether the ticket state evidence accounts for every transition.
+fn is_ticket_state_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::TicketState {
+        expected_sequence,
+        observed_sequence,
+        expected_records,
+        observed_records,
+        mismatched_records,
+    } = facts
+    else {
+        return false;
+    };
+    let is_sequence_matched = expected_sequence == observed_sequence;
+    let is_records_accounted = expected_records == observed_records;
+    let is_records_intact = mismatched_records == 0;
+    is_sequence_matched && is_records_accounted && is_records_intact
+}
+
+/// Whether the migration evidence matches the requested migration mode.
+fn is_migration_admissible(operation: RemoteOperation, facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Migration {
+        dry_run,
+        executed,
+        missing_invalidations,
+        schema,
+        expected_schema,
+    } = facts
+    else {
+        return false;
+    };
+    let is_mode_matched = dry_run == (operation == RemoteOperation::TicketMigratePreview);
+    let is_execution_disjoint = executed != dry_run;
+    let is_invalidation_complete = missing_invalidations == 0;
+    is_mode_matched && is_execution_disjoint && is_invalidation_complete && schema == expected_schema
+}
+
+/// Whether the bundle evidence carries the digests the operation requires.
+fn is_bundle_admissible(operation: RemoteOperation, facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Bundle {
+        bundle_digest,
+        replay_digest,
+    } = facts
+    else {
+        return false;
+    };
+    let is_bundle_digest = is_digest(bundle_digest);
+    if operation == RemoteOperation::DebugInspect {
+        return is_bundle_digest && replay_digest.is_none();
+    }
+    let is_replay_digest = replay_digest.is_some_and(is_digest);
+    is_bundle_digest && is_replay_digest
+}
+
+/// Whether the retention evidence reports no failed deletion.
+fn is_retention_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Retention { failed_deletions } = facts else {
+        return false;
+    };
+    failed_deletions == 0
+}
+
+/// Whether the key evidence names both the verifier and the signer.
+fn is_keys_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Keys { verifier_id, signer_id } = facts else {
+        return false;
+    };
+    !verifier_id.is_empty() && !signer_id.is_empty()
+}
+
+/// Whether the server opening evidence matches the requested endpoint.
+fn is_server_opening_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::ServerOpening {
+        expected_endpoint,
+        observed_endpoint,
+        expected_prefix,
+        observed_prefix,
+        request_id,
+        outputs,
+    } = facts
+    else {
+        return false;
+    };
+    let is_request_named = !request_id.is_empty();
+    let has_outputs = outputs > 0;
+    let is_endpoint_matched = expected_endpoint == observed_endpoint;
+    let is_prefix_matched = expected_prefix == observed_prefix;
+    is_request_named && has_outputs && is_endpoint_matched && is_prefix_matched
+}
+
+/// Whether the endpoint configuration evidence stays inside its bounds.
+fn is_endpoint_configuration_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::EndpointConfiguration {
+        bytes,
+        bytes_max,
+        schema,
+        expected_schema,
+        bindings,
+        bindings_max,
+    } = facts
+    else {
+        return false;
+    };
+    let has_bytes = bytes > 0;
+    let is_bytes_bounded = u64::try_from(bytes).is_ok_and(|bytes| bytes <= bytes_max);
+    let is_schema_matched = schema == expected_schema;
+    let is_bindings_bounded = bindings <= bindings_max;
+    has_bytes && is_bytes_bounded && is_schema_matched && is_bindings_bounded
+}
+
+/// Whether the readiness evidence reports an ineligible, component-complete state.
+fn is_readiness_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Readiness {
+        schema,
+        expected_schema,
+        classification,
+        expected_classification,
+        evidence_eligible,
+        invalid_components,
+    } = facts
+    else {
+        return false;
+    };
+    let is_schema_matched = schema == expected_schema;
+    let is_classification_matched = classification == expected_classification;
+    let is_ineligible = !evidence_eligible;
+    let is_components_valid = invalid_components == 0;
+    is_schema_matched && is_classification_matched && is_ineligible && is_components_valid
+}
+
+/// Whether the socket evidence names a bound socket with a requested shutdown.
+fn is_socket_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Socket {
+        device: _,
+        inode,
+        shutdown_requested,
+    } = facts
+    else {
+        return false;
+    };
+    inode != 0 && shutdown_requested
+}
+
+/// Whether the subscription evidence reports snapshots and no malformed frame.
+fn is_subscription_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Subscription {
+        snapshots,
+        malformed_frames,
+    } = facts
+    else {
+        return false;
+    };
+    snapshots > 0 && malformed_frames == 0
+}
+
+/// Whether the output evidence accounts for every admitted output.
+fn is_outputs_admissible(facts: RemoteOperationFacts<'_>) -> bool {
+    let RemoteOperationFacts::Outputs {
+        expected,
+        admitted,
+        unevidenced,
+    } = facts
+    else {
+        return false;
+    };
+    let has_expected = expected > 0;
+    let is_admitted = expected == admitted;
+    let is_evidenced = unevidenced == 0;
+    has_expected && is_admitted && is_evidenced
+}
+
+/// Whether the ticket family evidence supports the requested operation.
+fn is_ticket_evidence_admissible(operation: RemoteOperation, facts: RemoteOperationFacts<'_>) -> bool {
+    use RemoteOperation as Op;
+    match (operation, facts) {
+        (Op::TicketList, facts) => is_snapshot_admissible(facts),
+        (Op::Status, facts) => is_status_snapshot_admissible(facts),
+        (Op::TicketInspect, facts) => is_identity_admissible(facts),
+        (Op::TicketCreate | Op::TicketRevoke | Op::RotateKeys, facts) => is_ticket_state_admissible(facts),
+        (Op::TicketMigrate | Op::TicketMigratePreview, facts) => is_migration_admissible(operation, facts),
+        _ => false,
+    }
+}
+
+/// Whether the remaining remote evidence supports the requested operation.
+fn is_host_evidence_admissible(operation: RemoteOperation, facts: RemoteOperationFacts<'_>) -> bool {
+    use RemoteOperation as Op;
+    match (operation, facts) {
+        (Op::DebugInspect | Op::DebugReplayPlan, facts) => is_bundle_admissible(operation, facts),
+        (Op::DebugGc, facts) => is_retention_admissible(facts),
+        (Op::SecretResolve | Op::SecretWorker, facts) => is_keys_admissible(facts),
+        (Op::ServerOpening, facts) => is_server_opening_admissible(facts),
+        (Op::EndpointConfiguration, facts) => is_endpoint_configuration_admissible(facts),
+        (Op::ReadinessQuery, facts) => is_readiness_admissible(facts),
+        (Op::LiveServe, facts) => is_socket_admissible(facts),
+        (Op::LiveSubscribe, facts) => is_subscription_admissible(facts),
+        (Op::Build | Op::Replay | Op::ServeFixture | Op::UsageExecutor, facts) => is_outputs_admissible(facts),
+        _ => false,
+    }
+}
+
+/// Whether the returned evidence supports the operation's declared effect.
+fn is_operation_evidence_admissible(operation: RemoteOperation, facts: RemoteOperationFacts<'_>) -> bool {
+    if is_ticket_evidence_admissible(operation, facts) {
+        return true;
+    }
+    is_host_evidence_admissible(operation, facts)
+}
+
+/// The observation reported for one remote operation.
+fn remote_observation(operation: RemoteOperation, is_admitted: bool) -> crate::Observation {
+    let status = if is_admitted {
+        crate::ObservationStatus::Succeeded
+    } else {
+        crate::ObservationStatus::Failed
+    };
+    let diagnostics_code = if is_admitted {
+        None
+    } else {
+        Some(String::from("remote-operation-evidence-contradicted"))
+    };
+    debug_assert_eq!(status == crate::ObservationStatus::Succeeded, is_admitted);
+    debug_assert_eq!(diagnostics_code.is_some(), !is_admitted);
+    crate::Observation {
+        effect_id: crate::EffectId(String::from(operation.effect_id())),
+        kind: operation.effect_kind(),
+        status,
+        output: crate::EffectOutput::None,
+        usage: crate::EffectMeasure::Calls(1),
+        diagnostics_code,
+    }
+}
+
 pub fn classify_remote_operation(
     plan: &RemoteOperationPlan,
     facts: RemoteOperationFacts<'_>,
 ) -> crate::ApplicationOutcome {
-    use RemoteOperation as Op;
-    use RemoteOperationFacts as Facts;
-    let admitted = match (plan.operation, facts) {
-        (
-            Op::TicketList,
-            Facts::Snapshot {
-                source_records,
-                reported_records,
-            },
-        ) => source_records == reported_records,
-        (
-            Op::Status,
-            Facts::StatusSnapshot {
-                expected_endpoint,
-                observed_endpoint,
-                source_jobs,
-                reported_jobs,
-                source_workers,
-                reported_workers,
-                source_tickets,
-                reported_tickets,
-            },
-        ) => {
-            !expected_endpoint.is_empty()
-                && expected_endpoint == observed_endpoint
-                && source_jobs == reported_jobs
-                && source_workers == reported_workers
-                && source_tickets == reported_tickets
-        }
-        (Op::TicketInspect, Facts::Identity { expected, observed }) => !expected.is_empty() && expected == observed,
-        (
-            Op::TicketCreate | Op::TicketRevoke | Op::RotateKeys,
-            Facts::TicketState {
-                expected_sequence,
-                observed_sequence,
-                expected_records,
-                observed_records,
-                mismatched_records,
-            },
-        ) => expected_sequence == observed_sequence && expected_records == observed_records && mismatched_records == 0,
-        (
-            Op::TicketMigrate | Op::TicketMigratePreview,
-            Facts::Migration {
-                dry_run,
-                executed,
-                missing_invalidations,
-                schema,
-                expected_schema,
-            },
-        ) => {
-            dry_run == (plan.operation == Op::TicketMigratePreview)
-                && executed != dry_run
-                && missing_invalidations == 0
-                && schema == expected_schema
-        }
-        (
-            Op::DebugInspect,
-            Facts::Bundle {
-                bundle_digest,
-                replay_digest: None,
-            },
-        ) => is_digest(bundle_digest),
-        (
-            Op::DebugReplayPlan,
-            Facts::Bundle {
-                bundle_digest,
-                replay_digest: Some(replay_digest),
-            },
-        ) => is_digest(bundle_digest) && is_digest(replay_digest),
-        (Op::DebugGc, Facts::Retention { failed_deletions }) => failed_deletions == 0,
-        (Op::SecretResolve | Op::SecretWorker, Facts::Keys { verifier_id, signer_id }) => {
-            !verifier_id.is_empty() && !signer_id.is_empty()
-        }
-        (
-            Op::ServerOpening,
-            Facts::ServerOpening {
-                expected_endpoint,
-                observed_endpoint,
-                expected_prefix,
-                observed_prefix,
-                request_id,
-                outputs,
-            },
-        ) => {
-            !request_id.is_empty()
-                && outputs > 0
-                && expected_endpoint == observed_endpoint
-                && expected_prefix == observed_prefix
-        }
-        (
-            Op::EndpointConfiguration,
-            Facts::EndpointConfiguration {
-                bytes,
-                bytes_max,
-                schema,
-                expected_schema,
-                bindings,
-                bindings_max,
-            },
-        ) => {
-            bytes > 0
-                && u64::try_from(bytes).is_ok_and(|bytes| bytes <= bytes_max)
-                && schema == expected_schema
-                && bindings <= bindings_max
-        }
-        (
-            Op::ReadinessQuery,
-            Facts::Readiness {
-                schema,
-                expected_schema,
-                classification,
-                expected_classification,
-                evidence_eligible,
-                invalid_components,
-            },
-        ) => {
-            schema == expected_schema
-                && classification == expected_classification
-                && !evidence_eligible
-                && invalid_components == 0
-        }
-        (
-            Op::LiveServe,
-            Facts::Socket {
-                device: _,
-                inode,
-                shutdown_requested,
-            },
-        ) => inode != 0 && shutdown_requested,
-        (
-            Op::LiveSubscribe,
-            Facts::Subscription {
-                snapshots,
-                malformed_frames,
-            },
-        ) => snapshots > 0 && malformed_frames == 0,
-        (
-            Op::Build | Op::Replay | Op::ServeFixture | Op::UsageExecutor,
-            Facts::Outputs {
-                expected,
-                admitted,
-                unevidenced,
-            },
-        ) => expected > 0 && expected == admitted && unevidenced == 0,
-        _ => false,
-    };
-    let observation = crate::Observation {
-        effect_id: crate::EffectId(String::from(plan.operation.effect_id())),
-        kind: plan.operation.effect_kind(),
-        status: if admitted {
-            crate::ObservationStatus::Succeeded
-        } else {
-            crate::ObservationStatus::Failed
-        },
-        output: crate::EffectOutput::None,
-        usage: crate::EffectMeasure::Calls(1),
-        diagnostics_code: if admitted {
-            None
-        } else {
-            Some(String::from("remote-operation-evidence-contradicted"))
-        },
-    };
+    let is_admitted = is_operation_evidence_admissible(plan.operation, facts);
+    let observation = remote_observation(plan.operation, is_admitted);
     crate::classify_observations(&plan.effects, &[observation])
 }
 

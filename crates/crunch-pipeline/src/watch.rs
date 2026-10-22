@@ -579,8 +579,11 @@ impl WatchCoordinator<'_> {
                 if self.evaluation_cache.is_some() {
                     let (mode, diagnostics) = candidate.as_ref().map_or(
                         ("fresh-fallback-unsupported-or-capacity", ReuseDiagnostics {
+                            executed_roots: Vec::new(),
+                            reused_roots: Vec::new(),
+                            invalidated_roots: Vec::new(),
                             evicted_roots: previous_labels.clone(),
-                            ..ReuseDiagnostics::default()
+                            retained_value_bytes: 0,
                         }),
                         |candidate| ("independent-import-roots", candidate.diagnostics().clone()),
                     );
@@ -599,8 +602,11 @@ impl WatchCoordinator<'_> {
                         .send(WatchNotice::Evaluation {
                             mode: "rejected-cache-evicted",
                             diagnostics: ReuseDiagnostics {
+                                executed_roots: Vec::new(),
+                                reused_roots: Vec::new(),
+                                invalidated_roots: Vec::new(),
                                 evicted_roots: previous_labels,
-                                ..ReuseDiagnostics::default()
+                                retained_value_bytes: 0,
                             },
                         })
                         .await
