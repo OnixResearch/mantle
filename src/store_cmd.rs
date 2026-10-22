@@ -1329,21 +1329,21 @@ fn nar_hash_matches(hash: &[u8; NAR_SHA256_BYTES], encoded: &str) -> bool {
 }
 
 async fn readback_path_metadata<'a>(
-    store: &crunch_store::StoreHandle,
+    lookup: &crunch_store::OutputLookup,
+    build_service: &crunch_store::BuildServiceStore,
     paths: impl IntoIterator<Item = (&'a str, u64, &'a str)>,
 ) -> Result<bool, RunError> {
-    let service = store.pathinfo_service();
     for (identity, nar_size, nar_hash) in paths {
         let parsed = if identity.starts_with('/') {
-            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(identity.as_bytes(), store.store_dir())
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(identity.as_bytes(), lookup.store_dir())
         } else {
             nix_compat::store_path::StorePath::from_bytes(identity.as_bytes())
         };
         let Ok(path) = parsed else {
             return Ok(false);
         };
-        let persisted = service
-            .get(*path.digest())
+        let persisted = lookup
+            .find(&path)
             .await
             .map_err(|error| RunError::Internal(format!("reading store result {identity}: {error}")))?;
         let Some(persisted) = persisted else {
@@ -1355,8 +1355,8 @@ async fn readback_path_metadata<'a>(
         {
             return Ok(false);
         }
-        if !store
-            .castore_has_complete_content(&persisted.node)
+        if !build_service
+            .has_complete_content(&persisted)
             .await
             .map_err(|error| RunError::Internal(format!("reading store content {identity}: {error}")))?
         {
@@ -1777,7 +1777,8 @@ async fn cmd_store_pull(
         }
     };
     let readback_matches = readback_path_metadata(
-        store,
+        &store.output_lookup(),
+        &store.build_service_store(),
         report
             .paths
             .iter()
@@ -2278,7 +2279,8 @@ async fn cmd_store_archive_import(
         )
         .await?;
         let readback_matches = readback_path_metadata(
-            store,
+            &store.output_lookup(),
+            &store.build_service_store(),
             report
                 .paths
                 .iter()
@@ -2326,7 +2328,8 @@ async fn cmd_store_archive_import(
     )
     .await?;
     let readback_matches = readback_path_metadata(
-        store,
+        &store.output_lookup(),
+        &store.build_service_store(),
         report
             .paths
             .iter()

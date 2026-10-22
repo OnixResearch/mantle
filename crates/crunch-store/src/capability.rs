@@ -355,17 +355,7 @@ impl StoreHandle {
 
     #[must_use]
     pub fn into_pipeline_store_parts(mut self) -> PipelineStoreParts {
-        let (ca_mappings, base_ca_mappings) = self.ca_mapping_snapshots();
-        let output_lookup = OutputLookup {
-            pathinfo_service: self.pathinfo_service(),
-            base_pathinfo_inspection_services: self.base_pathinfo_inspection_services(),
-            remote_pathinfo: self.remote_pathinfo(),
-            state_dir: self.state_dir().to_path_buf(),
-            store_dir: self.store_dir().to_string(),
-            overlay_state: self.overlay_state(),
-            ca_mappings,
-            base_ca_mappings,
-        };
+        let output_lookup = self.output_lookup();
         let root_registry = RootRegistry {
             state_dir: self.state_dir().to_path_buf(),
             store_dir: self.store_dir().to_string(),
@@ -418,6 +408,35 @@ impl StoreHandle {
 
     pub fn store_admin(&mut self) -> StoreAdmin<'_> {
         StoreAdmin { handle: self }
+    }
+
+    /// A read-only output lookup over this store.
+    ///
+    /// The view shares the store's PathInfo service, overlay state, and CA
+    /// mapping snapshots, so a caller that still holds the compatibility handle
+    /// reads a record through the narrow view instead of the raw service.
+    #[must_use]
+    pub fn output_lookup(&self) -> OutputLookup {
+        let (ca_mappings, base_ca_mappings) = self.ca_mapping_snapshots();
+        OutputLookup {
+            pathinfo_service: self.pathinfo_service(),
+            base_pathinfo_inspection_services: self.base_pathinfo_inspection_services(),
+            remote_pathinfo: self.remote_pathinfo(),
+            state_dir: self.state_dir().to_path_buf(),
+            store_dir: self.store_dir().to_string(),
+            overlay_state: self.overlay_state(),
+            ca_mappings,
+            base_ca_mappings,
+        }
+    }
+
+    /// A read-only build service view over this store's castore services.
+    #[must_use]
+    pub fn build_service_store(&self) -> BuildServiceStore {
+        BuildServiceStore {
+            blob_service: self.blob_service(),
+            directory_service: self.directory_service(),
+        }
     }
 }
 
@@ -750,6 +769,12 @@ impl ActionResultPort {
 }
 
 impl OutputLookup {
+    /// The store directory prefix this lookup resolves paths against.
+    #[must_use]
+    pub fn store_dir(&self) -> &str {
+        &self.store_dir
+    }
+
     pub async fn find(&self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
         self.find_with_layer(path).await.map(|found| found.map(|layered| layered.value))
     }
