@@ -101,10 +101,16 @@ impl core::fmt::Display for Rejection {
         write!(f, "{}: {}", self.code, self.detail)
     }
 }
-fn reject(code: &str, detail: &str) -> Rejection {
+/// Rejection code and detail carried together so the two cannot be swapped.
+struct RejectionRequest<'a> {
+    code: &'a str,
+    detail: &'a str,
+}
+
+fn reject(request: RejectionRequest<'_>) -> Rejection {
     Rejection {
-        code: code.into(),
-        detail: detail.into(),
+        code: request.code.into(),
+        detail: request.detail.into(),
     }
 }
 fn digest(value: &str) -> bool {
@@ -113,14 +119,19 @@ fn digest(value: &str) -> bool {
 impl core::error::Error for Rejection {}
 impl Plan {
     fn root(&self, role: &str) -> Result<&str, Rejection> {
-        self.roles
-            .get(role)
-            .map(|input| input.root.as_str())
-            .ok_or_else(|| reject("zephyr-missing-role", role))
+        self.roles.get(role).map(|input| input.root.as_str()).ok_or_else(|| {
+            reject(RejectionRequest {
+                code: "zephyr-missing-role",
+                detail: role,
+            })
+        })
     }
     fn check_member(&self, member: &Member) -> Result<(), Rejection> {
         if !relative(&member.member) {
-            return Err(reject("zephyr-path-escape", &member.member));
+            return Err(reject(RejectionRequest {
+                code: "zephyr-path-escape",
+                detail: &member.member,
+            }));
         }
         self.root(&member.role)?;
         Ok(())
@@ -131,10 +142,16 @@ impl Plan {
     }
     fn check_tool(&self, tool: &Tool) -> Result<(), Rejection> {
         if tool.version.is_empty() || tool.version.len() > 128 || tool.version.contains(['\n', '\r', '\0']) {
-            return Err(reject("zephyr-tool-version", &tool.role));
+            return Err(reject(RejectionRequest {
+                code: "zephyr-tool-version",
+                detail: &tool.role,
+            }));
         }
         if !relative(&tool.member) {
-            return Err(reject("zephyr-path-escape", &tool.member));
+            return Err(reject(RejectionRequest {
+                code: "zephyr-path-escape",
+                detail: &tool.member,
+            }));
         }
         self.root(&tool.role)?;
         Ok(())
@@ -156,41 +173,96 @@ impl Plan {
 }
 /// Supported cohort is intentionally finite, not an implied board compatibility promise.
 fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
-    if plan.schema != "mantle-zephyr-plan-v1"
-        || !identifier(&plan.name)
-        || plan.build_platform != "x86_64-linux"
-        || plan.jobs == 0
-        || plan.jobs > 64
-    {
-        return Err(reject("zephyr-plan-invalid", "schema, name, Linux host or jobs"));
+    check_plan_identity(plan)?;
+    check_store_roles(plan)?;
+    check_configuration(plan)?;
+    check_tool_cohort(plan)?;
+    debug_assert!(plan.roles.len() <= 64);
+    debug_assert!(!plan.kconfig.is_empty());
+    Ok(())
+}
+
+/// Plan identity: exact schema, plain name, Linux host and a bounded job count.
+fn check_plan_identity(plan: &Plan) -> Result<(), Rejection> {
+    let is_schema_admitted = plan.schema == "mantle-zephyr-plan-v1";
+    let is_name_admitted = identifier(&plan.name);
+    let is_build_platform_admitted = plan.build_platform == "x86_64-linux";
+    let is_jobs_admitted = plan.jobs > 0 && plan.jobs <= 64;
+    let is_plan_admitted = is_schema_admitted && is_name_admitted && is_build_platform_admitted && is_jobs_admitted;
+    if !is_plan_admitted {
+        return Err(reject(RejectionRequest {
+            code: "zephyr-plan-invalid",
+            detail: "schema, name, Linux host or jobs",
+        }));
     }
     if plan.sdk_version != "0.16.8" || plan.target != "arm-zephyr-eabi" {
-        return Err(reject("zephyr-toolchain-unsupported", "requires SDK 0.16.8 / arm-zephyr-eabi"));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-toolchain-unsupported",
+            detail: "requires SDK 0.16.8 / arm-zephyr-eabi",
+        }));
     }
     if plan.board != BOARD || !plan.qualifiers.is_empty() {
-        return Err(reject("zephyr-board-unsupported", &plan.board));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-board-unsupported",
+            detail: &plan.board,
+        }));
     }
-    if !plan.store_prefix.starts_with('/')
-        || !plan.store_prefix[1..].split('/').all(identifier)
-        || plan.roles.is_empty()
-        || plan.roles.len() > 64
-    {
-        return Err(reject("zephyr-plan-invalid", "prefix or role bound"));
+    debug_assert!(identifier(&plan.name));
+    debug_assert!(plan.board == BOARD);
+    Ok(())
+}
+
+/// Absolute store prefix with a bounded set of declared, digested role roots.
+fn check_store_roles(plan: &Plan) -> Result<(), Rejection> {
+    let is_prefix_absolute = plan.store_prefix.starts_with('/');
+    let is_prefix_identifiers = is_prefix_absolute && plan.store_prefix[1..].split('/').all(identifier);
+    let has_roles = !plan.roles.is_empty();
+    let is_within_role_bound = plan.roles.len() <= 64;
+    let is_store_admissible = is_prefix_absolute && is_prefix_identifiers && has_roles && is_within_role_bound;
+    if !is_store_admissible {
+        return Err(reject(RejectionRequest {
+            code: "zephyr-plan-invalid",
+            detail: "prefix or role bound",
+        }));
     }
     for (role, input) in &plan.roles {
-        if !identifier(role) || !store_root(&input.root, &plan.store_prefix) || !digest(&input.tree_blake3) {
-            return Err(reject("zephyr-input-invalid", role));
+        let is_role_named = identifier(role);
+        let is_root_resolved = store_root(&input.root, StorePrefix(&plan.store_prefix));
+        let is_digested = digest(&input.tree_blake3);
+        if !is_role_named || !is_root_resolved || !is_digested {
+            return Err(reject(RejectionRequest {
+                code: "zephyr-input-invalid",
+                detail: role,
+            }));
         }
     }
     for role in [&plan.zephyr, &plan.sdk, &plan.project] {
         plan.root(role)?;
     }
+    debug_assert!(plan.roles.contains_key(&plan.zephyr));
+    debug_assert!(plan.roles.contains_key(&plan.project));
+    Ok(())
+}
+
+/// Project subdirectory, west closure and the bounded configuration cohort.
+fn check_configuration(plan: &Plan) -> Result<(), Rejection> {
     if !plan.project_subdir.is_empty() && !relative(&plan.project_subdir) {
-        return Err(reject("zephyr-path-escape", &plan.project_subdir));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-path-escape",
+            detail: &plan.project_subdir,
+        }));
     }
     validate_west(plan)?;
-    if plan.kconfig.is_empty() || plan.kconfig.len() > 16 || plan.overlays.len() > 16 || plan.tools.host.len() > 32 {
-        return Err(reject("zephyr-plan-limit", "configuration, overlay or host tool count"));
+    let has_kconfig = !plan.kconfig.is_empty();
+    let is_kconfig_bounded = plan.kconfig.len() <= 16;
+    let is_overlay_bounded = plan.overlays.len() <= 16;
+    let is_host_bounded = plan.tools.host.len() <= 32;
+    let is_within_bounds = has_kconfig && is_kconfig_bounded && is_overlay_bounded && is_host_bounded;
+    if !is_within_bounds {
+        return Err(reject(RejectionRequest {
+            code: "zephyr-plan-limit",
+            detail: "configuration, overlay or host tool count",
+        }));
     }
     for member in plan.kconfig.iter().chain(&plan.overlays).chain(core::iter::once(&plan.resolved_west)) {
         plan.check_member(member)?;
@@ -198,34 +270,59 @@ fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
     for tool in plan.tools() {
         plan.check_tool(tool)?;
     }
-    // Exact host tool cohort; content roots, not these version strings, are authority.
-    if plan.tools.cmake.version != "3.30.5"
-        || plan.tools.ninja.version != "1.12.1"
-        || plan.tools.python.version != "3.11.10"
-        || plan.tools.dtc.version != "1.7.0"
-    {
-        return Err(reject(
-            "zephyr-tool-unsupported",
-            "requires CMake 3.30.5, Ninja 1.12.1, Python 3.11.10, dtc 1.7.0",
-        ));
+    debug_assert!(!plan.kconfig.is_empty());
+    debug_assert!(plan.kconfig.len() <= 16);
+    Ok(())
+}
+
+/// Exact host tool cohort.
+fn check_tool_cohort(plan: &Plan) -> Result<(), Rejection> {
+    // Content roots, not these version strings, are authority.
+    let is_cmake_admitted = plan.tools.cmake.version == "3.30.5";
+    let is_ninja_admitted = plan.tools.ninja.version == "1.12.1";
+    let is_python_admitted = plan.tools.python.version == "3.11.10";
+    let is_dtc_admitted = plan.tools.dtc.version == "1.7.0";
+    let is_cohort_admitted = is_cmake_admitted && is_ninja_admitted && is_python_admitted && is_dtc_admitted;
+    if !is_cohort_admitted {
+        return Err(reject(RejectionRequest {
+            code: "zephyr-tool-unsupported",
+            detail: "requires CMake 3.30.5, Ninja 1.12.1, Python 3.11.10, dtc 1.7.0",
+        }));
     }
     if plan.tools.host.iter().filter(|tool| tool.member == "bin/gperf" && tool.version == "3.1").count() != 1 {
-        return Err(reject("zephyr-tool-unsupported", "requires exactly one declared bin/gperf 3.1"));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-tool-unsupported",
+            detail: "requires exactly one declared bin/gperf 3.1",
+        }));
     }
-    debug_assert!(plan.roles.len() <= 64);
-    debug_assert!(!plan.kconfig.is_empty());
+    debug_assert!(plan.tools.cmake.version == "3.30.5");
+    debug_assert!(plan.tools.dtc.version == "1.7.0");
     Ok(())
 }
 fn validate_west(plan: &Plan) -> Result<(), Rejection> {
     if plan.west.schema != "mantle-zephyr-resolved-west-v1" || plan.west.zephyr_revision != ZEPHYR_REVISION {
-        return Err(reject("zephyr-manifest-mismatch", "Zephyr v3.7.0 exact commit required"));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-manifest-mismatch",
+            detail: "Zephyr v3.7.0 exact commit required",
+        }));
     }
     if plan.west.modules.len() != 1 {
-        return Err(reject("zephyr-missing-module", "exact explicit CMSIS closure required"));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-missing-module",
+            detail: "exact explicit CMSIS closure required",
+        }));
     }
-    let cmsis = plan.west.modules.get("cmsis").ok_or_else(|| reject("zephyr-missing-module", "cmsis"))?;
+    let cmsis = plan.west.modules.get("cmsis").ok_or_else(|| {
+        reject(RejectionRequest {
+            code: "zephyr-missing-module",
+            detail: "cmsis",
+        })
+    })?;
     if cmsis.revision != CMSIS_REVISION || cmsis.path != "modules/hal/cmsis" {
-        return Err(reject("zephyr-manifest-mismatch", "CMSIS revision/path differs from v3.7.0 west.yml"));
+        return Err(reject(RejectionRequest {
+            code: "zephyr-manifest-mismatch",
+            detail: "CMSIS revision/path differs from v3.7.0 west.yml",
+        }));
     }
     plan.root(&cmsis.role)?;
     debug_assert_eq!(plan.west.modules.len(), 1);
@@ -243,7 +340,11 @@ fn identifier(value: &str) -> bool {
 fn relative(value: &str) -> bool {
     value.len() <= 1024 && !value.is_empty() && value.split('/').all(identifier)
 }
-fn store_root(value: &str, prefix: &str) -> bool {
+/// Store prefix namespace; wrapped so a prefix cannot be swapped with a root path.
+struct StorePrefix<'a>(&'a str);
+
+fn store_root(value: &str, prefix: StorePrefix<'_>) -> bool {
+    let StorePrefix(prefix) = prefix;
     if !prefix.starts_with('/') || !prefix[1..].split('/').all(identifier) {
         return false;
     }
@@ -299,12 +400,14 @@ pub fn admit(plan: Plan) -> Result<Admission, Rejection> {
         .chain(core::iter::once(&plan.resolved_west))
         .map(|member| plan.member(member))
         .collect::<Result<_, _>>()?;
-    let mut module_paths = Vec::new();
+    let mut module_paths = Vec::with_capacity(plan.west.modules.len().saturating_mul(2));
     for module in plan.west.modules.values() {
         for required in ["zephyr/module.yml", "CMSIS/Core/Include/cmsis_gcc.h"] {
             module_paths.push(format!("{}/{}", plan.root(&module.role)?, required));
         }
     }
+    debug_assert_eq!(module_paths.len(), plan.west.modules.len().saturating_mul(2));
+    debug_assert_eq!(plan.west.modules.len(), 1);
     Ok(Admission {
         plan,
         tool_paths,

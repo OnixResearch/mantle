@@ -36,7 +36,11 @@ fn identifier(value: &str) -> bool {
 fn relative(value: &str) -> bool {
     value.len() <= 1024 && !value.is_empty() && value.split('/').all(identifier)
 }
-fn store_root(value: &str, prefix: &str) -> bool {
+/// Store prefix namespace; wrapped so a prefix cannot be swapped with a root path.
+struct StorePrefix<'a>(&'a str);
+
+fn store_root(value: &str, prefix: StorePrefix<'_>) -> bool {
+    let StorePrefix(prefix) = prefix;
     if !prefix.starts_with('/') || !prefix[1..].split('/').all(identifier) {
         return false;
     }
@@ -164,6 +168,9 @@ fn c_identifier(value: &str) -> bool {
 /// admitted. Other combinations require independent real-tool evidence.
 pub fn validate(plan: Plan) -> Result<AdmittedPlan, Rejection> {
     validate_plan(&plan)?;
+    debug_assert!(!plan.headers.is_empty());
+    debug_assert!(plan.roles.contains_key(&plan.sysroot));
+    debug_assert!(plan.roles.contains_key(&plan.toolkit));
     let member = |value: &Member| plan.resolved(&value.role, &value.member);
     let tool = |value: &Tool| plan.resolved(&value.role, &value.member);
     let paths = Paths {
@@ -184,29 +191,66 @@ pub fn validate(plan: Plan) -> Result<AdmittedPlan, Rejection> {
 }
 
 fn validate_plan(plan: &Plan) -> Result<(), Rejection> {
+    check_plan_identity(plan)?;
+    check_toolchain(plan)?;
+    check_store(plan)?;
+    check_tools(plan)?;
+    check_members(plan)?;
+    check_defines(plan)?;
+    check_entry_points(plan)?;
+    debug_assert!(!plan.roles.is_empty());
+    debug_assert!(plan.optimization <= 3);
+    Ok(())
+}
+
+/// Exact plan schema and a plain plan name.
+fn check_plan_identity(plan: &Plan) -> Result<(), Rejection> {
     if plan.schema != "mantle-gpu-plan-v1" || !identifier(&plan.name) {
         return Err(reject("gpu-plan-invalid"));
     }
-    if plan.backend != "hip-clang"
-        || plan.architecture != "gfx900"
-        || plan.toolkit_revision != "7.2.3"
-        || plan.build_platform != "x86_64-linux"
-        || plan.host_target != "x86_64-unknown-linux-gnu"
-    {
+    Ok(())
+}
+
+/// The single admitted backend, architecture, toolkit and host triple.
+fn check_toolchain(plan: &Plan) -> Result<(), Rejection> {
+    let is_backend_admitted = plan.backend == "hip-clang";
+    let is_architecture_admitted = plan.architecture == "gfx900";
+    let is_toolkit_admitted = plan.toolkit_revision == "7.2.3";
+    let is_build_platform_admitted = plan.build_platform == "x86_64-linux";
+    let is_host_target_admitted = plan.host_target == "x86_64-unknown-linux-gnu";
+    let is_combination_admitted = is_backend_admitted
+        && is_architecture_admitted
+        && is_toolkit_admitted
+        && is_build_platform_admitted
+        && is_host_target_admitted;
+    if !is_combination_admitted {
         return Err(reject("gpu-combination-unsupported"));
     }
-    if !plan.store_prefix.starts_with('/')
-        || !plan.store_prefix[1..].split('/').all(identifier)
-        || plan.roles.is_empty()
-        || plan.roles.len() > MAX_ENTRIES
-    {
+    Ok(())
+}
+
+/// Absolute store prefix with a bounded set of declared role roots.
+fn check_store(plan: &Plan) -> Result<(), Rejection> {
+    let is_prefix_absolute = plan.store_prefix.starts_with('/');
+    let is_prefix_identifiers = is_prefix_absolute && plan.store_prefix[1..].split('/').all(identifier);
+    let has_roles = !plan.roles.is_empty();
+    let is_within_role_bound = plan.roles.len() <= MAX_ENTRIES;
+    let is_store_admissible = is_prefix_absolute && is_prefix_identifiers && has_roles && is_within_role_bound;
+    if !is_store_admissible {
         return Err(reject("gpu-input-limit"));
     }
     for (role, root) in &plan.roles {
-        if !identifier(role) || !store_root(root, &plan.store_prefix) {
+        let is_role_named = identifier(role);
+        let is_root_resolved = store_root(root, StorePrefix(&plan.store_prefix));
+        if !is_role_named || !is_root_resolved {
             return Err(reject("gpu-path-escape"));
         }
     }
+    Ok(())
+}
+
+/// Exact host compiler cohort and the admitted runner.
+fn check_tools(plan: &Plan) -> Result<(), Rejection> {
     for tool in [&plan.clang, &plan.host_compiler, &plan.inspector] {
         if tool.version != "22.0.0" {
             return Err(reject("gpu-compiler-unsupported"));
@@ -217,17 +261,24 @@ fn validate_plan(plan: &Plan) -> Result<(), Rejection> {
         return Err(reject("gpu-runner-unsupported"));
     }
     plan.tool(&plan.runner)?;
+    Ok(())
+}
+
+/// Required members, non-empty collections and their count bounds.
+fn check_members(plan: &Plan) -> Result<(), Rejection> {
     plan.member(&plan.kernel)?;
     plan.member(&plan.resource_dir)?;
     plan.member(&plan.device_libraries)?;
     plan.role(&plan.sysroot)?;
     plan.role(&plan.toolkit)?;
-    if plan.headers.is_empty()
-        || plan.runtime_libraries.is_empty()
-        || plan.entry_points.is_empty()
-        || plan.optimization > 3
-        || plan.source_date_epoch > i64::MAX as u64
-    {
+    let has_headers = !plan.headers.is_empty();
+    let has_runtime_libraries = !plan.runtime_libraries.is_empty();
+    let has_entry_points = !plan.entry_points.is_empty();
+    let is_optimization_admitted = plan.optimization <= 3;
+    let is_epoch_admitted = plan.source_date_epoch <= i64::MAX as u64;
+    let is_plan_admissible =
+        has_headers && has_runtime_libraries && has_entry_points && is_optimization_admitted && is_epoch_admitted;
+    if !is_plan_admissible {
         return Err(reject("gpu-plan-invalid"));
     }
     for count in [
@@ -244,21 +295,34 @@ fn validate_plan(plan: &Plan) -> Result<(), Rejection> {
     for member in plan.headers.iter().chain(&plan.generated).chain(&plan.runtime_libraries) {
         plan.member(member)?;
     }
+    debug_assert!(plan.headers.iter().all(|header| plan.roles.contains_key(&header.role)));
+    debug_assert!(plan.runtime_libraries.iter().all(|library| plan.roles.contains_key(&library.role)));
+    Ok(())
+}
+
+/// Preprocessor defines: C identifiers with bounded, plain values.
+fn check_defines(plan: &Plan) -> Result<(), Rejection> {
     for (key, value) in &plan.defines {
-        if !c_identifier(key)
-            || value.len() > 128
-            || value.is_empty()
-            || !value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_+.-".contains(&b))
-        {
+        let is_key_valid = c_identifier(key);
+        let is_value_bounded = value.len() <= 128;
+        let is_value_present = !value.is_empty();
+        let is_value_charset = value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_+.-".contains(&b));
+        let is_define_admissible = is_key_valid && is_value_bounded && is_value_present && is_value_charset;
+        if !is_define_admissible {
             return Err(reject("gpu-option-unsupported"));
         }
     }
+    Ok(())
+}
+
+/// Entry points: unique C identifiers.
+fn check_entry_points(plan: &Plan) -> Result<(), Rejection> {
     let names: BTreeSet<_> = plan.entry_points.iter().collect();
-    if names.len() != plan.entry_points.len() || names.iter().any(|s| !c_identifier(s)) {
+    let is_unique = names.len() == plan.entry_points.len();
+    let is_named = names.iter().all(|name| c_identifier(name));
+    if !is_unique || !is_named {
         return Err(reject("gpu-entry-point-invalid"));
     }
-    debug_assert!(!plan.roles.is_empty());
-    debug_assert!(plan.optimization <= 3);
     Ok(())
 }
 

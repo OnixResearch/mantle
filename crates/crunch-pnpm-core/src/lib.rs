@@ -22,7 +22,7 @@ use serde::Serialize;
 pub const NODE_VERSION: &str = "22.14.0";
 pub const PNPM_VERSION: &str = "9.15.9";
 pub const MAX_PACKAGES: usize = 4096;
-pub const MAX_INPUT_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_INPUT_BYTES: u64 = 536_870_912;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -89,20 +89,49 @@ fn check_member(value: &str) -> Result<(), String> {
 }
 
 pub fn validate(request: Request) -> Result<AdmittedRequest, String> {
-    if request.schema != "mantle-pnpm-workspace-v1"
-        || request.node_version != NODE_VERSION
-        || request.pnpm_version != PNPM_VERSION
-        || request.platform != "linux-x64"
-    {
+    check_toolchain(&request)?;
+    check_bounds(&request)?;
+    let sources = collect_packages(&request)?;
+    check_targets(&request)?;
+    check_runtime(&request)?;
+    let identity = domain_digest(b"mantle-pnpm-workspace-v1\0", &request).map_err(|e| e.to_string())?;
+    debug_assert_eq!(sources.len(), request.packages.len());
+    Ok(AdmittedRequest {
+        request,
+        identity,
+        sources,
+    })
+}
+
+/// Exact schema, Node, pnpm and platform cohort this contract admits.
+fn check_toolchain(request: &Request) -> Result<(), String> {
+    let is_schema_admitted = request.schema == "mantle-pnpm-workspace-v1";
+    let is_node_admitted = request.node_version == NODE_VERSION;
+    let is_pnpm_admitted = request.pnpm_version == PNPM_VERSION;
+    let is_platform_admitted = request.platform == "linux-x64";
+    let is_toolchain_admitted = is_schema_admitted && is_node_admitted && is_pnpm_admitted && is_platform_admitted;
+    if !is_toolchain_admitted {
         return Err("requires Node 22.14.0, pnpm 9.15.9, Linux x64".to_string());
     }
-    if request.packages.len() > MAX_PACKAGES
-        || request.targets.is_empty()
-        || request.targets.len() > 128
-        || request.runtime.len() > 128
-    {
+    Ok(())
+}
+
+/// Bounded package, target and runtime cardinalities.
+fn check_bounds(request: &Request) -> Result<(), String> {
+    let has_too_many_packages = request.packages.len() > MAX_PACKAGES;
+    let has_zero_targets = request.targets.is_empty();
+    let has_too_many_targets = request.targets.len() > 128;
+    let has_too_many_runtime_inputs = request.runtime.len() > 128;
+    let is_within_bounds =
+        !has_too_many_packages && !has_zero_targets && !has_too_many_targets && !has_too_many_runtime_inputs;
+    if !is_within_bounds {
         return Err("pnpm plan bound exceeded".to_string());
     }
+    Ok(())
+}
+
+/// Admit every declared package and collect its ordered source observation.
+fn collect_packages(request: &Request) -> Result<Vec<SourceObservation>, String> {
     let mut keys = BTreeSet::new();
     let mut sources = Vec::with_capacity(request.packages.len());
     for package in &request.packages {
@@ -118,14 +147,23 @@ pub fn validate(request: Request) -> Result<AdmittedRequest, String> {
         }
         sources.push(observation(package)?);
     }
+    debug_assert_eq!(sources.len(), request.packages.len());
+    debug_assert_eq!(keys.len(), sources.len());
+    Ok(sources)
+}
+
+/// Admit every declared workspace target and its explicit script permissions.
+fn check_targets(request: &Request) -> Result<(), String> {
     let mut workspaces = BTreeSet::new();
     for target in &request.targets {
         check_member(&target.workspace)?;
-        if !workspaces.insert(&target.workspace)
-            || target.outputs.is_empty()
-            || target.outputs.len() > 32
-            || target.scripts.len() > 16
-        {
+        let is_new_workspace = workspaces.insert(&target.workspace);
+        let has_zero_outputs = target.outputs.is_empty();
+        let has_too_many_outputs = target.outputs.len() > 32;
+        let has_too_many_scripts = target.scripts.len() > 16;
+        let is_target_admissible =
+            is_new_workspace && !has_zero_outputs && !has_too_many_outputs && !has_too_many_scripts;
+        if !is_target_admissible {
             return Err("duplicate workspace or target bound exceeded".to_string());
         }
         for output in &target.outputs {
@@ -135,25 +173,29 @@ pub fn validate(request: Request) -> Result<AdmittedRequest, String> {
             check_member(output)?;
         }
         for script in &target.scripts {
-            if script.is_empty()
-                || script.len() > 128
-                || !script.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_:".contains(&b))
-            {
+            let is_script_admissible = !script.is_empty()
+                && script.len() <= 128
+                && script.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_:".contains(&b));
+            if !is_script_admissible {
                 return Err("unsafe script permission".to_string());
             }
         }
     }
+    debug_assert_eq!(workspaces.len(), request.targets.len());
+    debug_assert!(request.targets.iter().all(|target| !target.outputs.is_empty()));
+    Ok(())
+}
+
+/// Runtime inputs must be exact `/nix/store` entries, never nested paths.
+fn check_runtime(request: &Request) -> Result<(), String> {
     for input in &request.runtime {
-        if !input.path.starts_with("/nix/store/") || input.path.len() <= 11 || input.path[11..].contains('/') {
+        let is_exact_store_entry = input.path.starts_with("/nix/store/") && input.path.len() > 11;
+        let has_nested_path = is_exact_store_entry && input.path[11..].contains('/');
+        if !is_exact_store_entry || has_nested_path {
             return Err("runtime roots must be exact /nix/store entries".to_string());
         }
     }
-    let identity = domain_digest(b"mantle-pnpm-workspace-v1\0", &request).map_err(|e| e.to_string())?;
-    Ok(AdmittedRequest {
-        request,
-        identity,
-        sources,
-    })
+    Ok(())
 }
 
 fn observation(package: &Package) -> Result<SourceObservation, String> {
@@ -173,7 +215,12 @@ fn observation(package: &Package) -> Result<SourceObservation, String> {
             },
             payload_blake3: package.blake3.clone(),
         },
-        &LocatorBoundaryPolicy::default(),
+        &LocatorBoundaryPolicy {
+            allowed_query_fields: Vec::new(),
+        },
     );
-    result.observation.ok_or_else(|| alloc::format!("{:?}", result.diagnostics))
+    let observation = result.observation.ok_or_else(|| alloc::format!("{:?}", result.diagnostics))?;
+    debug_assert!(observation.mutable_ref_hint.is_none());
+    debug_assert_eq!(observation.payload_blake3, package.blake3);
+    Ok(observation)
 }
