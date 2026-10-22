@@ -2,7 +2,6 @@
 cargo test --locked --offline -p crunch-gc-core --lib interest -- --test-threads 1
 cargo test --locked --offline -p crunch-store --lib roots::tests:: -- --test-threads 1
 cargo test --locked --offline -p mantle --test retention_interest_cli -- --nocapture --test-threads 1
-cargo test --locked --offline -p mantle --test retention_writer_baseline -- --nocapture --test-threads 1
 cargo clippy --locked --offline -p crunch-gc-core -p crunch-store --lib --no-deps -- -D warnings
 cargo fmt --check -p crunch-gc-core -p crunch-store -p mantle
 git diff --check
