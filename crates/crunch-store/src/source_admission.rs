@@ -1,9 +1,11 @@
-//! Store-neutral admission for external read sources.
+//! Store-neutral admission for declared read sources.
 //!
 //! The shell resolves operator-owned endpoint bindings. Admission grants a live
 //! source session only; signatures, content identity and layer generations are
 //! still checked by their existing consumers. Every escaped service or reader
 //! retains its lease, so dropping a store facade cannot release authority early.
+//! A declared local base layer is admitted by the operator's own declaration
+//! unless a configured admission authority covers it.
 
 use std::fmt::Debug;
 use std::io;
@@ -49,6 +51,19 @@ pub enum StoreSource<'a> {
 
 /// Retained shell authority for one admitted source session.
 pub trait StoreSourceLease: Send + Sync + Debug {}
+
+/// Retains the operator's own declaration for a local base layer that no
+/// operator-owned endpoint binding covers.
+///
+/// A base layer is a local, operator-declared directory: its admission rests
+/// on that declaration, on the base's own trust policy, and on its read-only
+/// generation facts. No external session authority exists for it, so this
+/// lease only keeps the local admission witness alive for as long as the
+/// composed store holds the layer.
+#[derive(Debug)]
+pub(crate) struct LocalBaseLayerLease;
+
+impl StoreSourceLease for LocalBaseLayerLease {}
 
 /// Resolves an operator-owned binding without inferring trust from a source.
 pub trait StoreSourceAdmission: Send + Sync + Debug {

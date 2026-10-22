@@ -106,6 +106,7 @@ use crate::overlay::StoreOverlayState;
 use crate::path_identity::require_requested_path_identity;
 use crate::roots;
 use crate::source_admission::Leased;
+use crate::source_admission::LocalBaseLayerLease;
 use crate::source_admission::admit_source;
 
 pub(crate) const NAR_SHA256_BYTES: usize = 32;
@@ -147,8 +148,9 @@ pub struct StoreConfig {
     /// (default single-store behavior).
     pub base_state_dirs: Vec<PathBuf>,
 
-    /// Operator-owned admission for external cache and base-layer sessions.
-    /// `None` permits local-only stores; configured external sources fail closed.
+    /// Operator-owned admission for remote cache and base-layer sessions.
+    /// `None` permits local-only stores, including a declared local base layer;
+    /// a configured remote source without an admission authority fails closed.
     pub source_admission: Option<Arc<dyn StoreSourceAdmission>>,
 }
 
@@ -279,9 +281,6 @@ impl StoreConfig {
     ) -> Result<AdmittedSources, Error> {
         let mut sources = AdmittedSources::default();
         for (declaration_index, base_dir) in base_state_dirs.iter().enumerate() {
-            // Missing authority must not even inspect the configured source.
-            let admission =
-                source_admission.ok_or_else(|| Error::Store("store-source-admission-required".to_string()))?;
             let metadata = std::fs::symlink_metadata(base_dir)
                 .map_err(|error| Error::Store(format!("opening overlay base {}: {error}", base_dir.display())))?;
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -291,7 +290,16 @@ impl StoreConfig {
             }
             let canonical = std::fs::canonicalize(base_dir)
                 .map_err(|error| Error::Store(format!("resolving overlay base {}: {error}", base_dir.display())))?;
-            sources.base_leases.push(admission.admit(StoreSource::BaseLayer(&canonical), store_dir)?);
+            // A base layer is a local, operator-declared directory, so its
+            // admission rests on that declaration and on the base's own trust
+            // policy. A configured admission authority stays the authority for a
+            // declared base and can still refuse it; only the absence of an
+            // authority leaves a local base layer admitted on its own facts.
+            let lease: Arc<dyn StoreSourceLease> = match source_admission {
+                Some(admission) => admission.admit(StoreSource::BaseLayer(&canonical), store_dir)?,
+                None => Arc::new(LocalBaseLayerLease),
+            };
+            sources.base_leases.push(lease);
             sources.base_dirs.push(canonical);
         }
         Ok(sources)
@@ -7883,6 +7891,67 @@ mod tests {
             Ok(_) => panic!("missing base must fail closed"),
         };
         assert!(err.contains("opening overlay base"), "error must identify the missing base");
+    }
+
+    #[tokio::test]
+    async fn overlay_base_layer_opens_without_a_source_admission_authority() {
+        // GIVEN an overlay composed over a locally declared base layer
+        // WHEN opening the composed handle without a source admission authority
+        // THEN the open succeeds, because the base is the operator's own local
+        // declaration rather than an external endpoint.
+
+        let base_dir = tempfile::tempdir().unwrap();
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        create_base_store(base_dir.path(), store_dir, &test_output("issue-30-base", 71)).await;
+
+        let handle = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![base_dir.path().to_path_buf()],
+            source_admission: None,
+        })
+        .await;
+
+        let err = match handle {
+            Ok(_) => return,
+            Err(error) => error.to_string(),
+        };
+        panic!("a locally declared base layer must open without an admission authority: {err}");
+    }
+
+    #[tokio::test]
+    async fn overlay_substituter_refuses_to_open_without_a_source_admission_authority() {
+        // GIVEN a store configured with a substituter and no source admission
+        // authority
+        // WHEN opening the store
+        // THEN the open fails closed with the source admission diagnostic.
+
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let result = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: vec!["https://cache.example.invalid/substituters".to_string()],
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: "/nix/store".to_string(),
+            base_state_dirs: Vec::new(),
+            source_admission: None,
+        })
+        .await;
+
+        let err = match result {
+            Err(error) => error.to_string(),
+            Ok(_) => panic!("a substituter must not open without a source admission authority"),
+        };
+        assert!(
+            err.contains("store-source-admission-required"),
+            "the refusal must name the missing admission authority, got: {err}"
+        );
     }
 
     #[tokio::test]
