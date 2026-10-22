@@ -142,7 +142,8 @@ fn validate_package(package: &Package, prefix: &str) -> Result<(), String> {
         let Some(base) = path.strip_prefix(&under) else {
             return Err("package path has wrong store prefix".to_string());
         };
-        if base.is_empty() || base.contains('/') || base == "." || base == ".." {
+        let is_reserved = base == "." || base == "..";
+        if base.is_empty() || base.contains('/') || is_reserved {
             return Err("package path is not a direct store member".to_string());
         }
     }
@@ -160,12 +161,17 @@ fn validate_package(package: &Package, prefix: &str) -> Result<(), String> {
 }
 
 fn valid_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 64
-        && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        && name != "."
-        && name != ".."
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    if name == "." || name == ".." {
+        return false;
+    }
+    name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
+
+const PATH_PARTS_MAX: usize = 64;
+const PATH_BYTES_MAX: usize = 4096;
 
 /// Reject leaf/leaf and leaf/directory ambiguity even for identical contents.
 pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String, String>, String> {
@@ -175,15 +181,16 @@ pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String
     let mut directories = BTreeSet::new();
     let mut links = BTreeMap::new();
     for (path, target) in entries {
-        let parts: Vec<_> = path.split('/').collect();
-        if parts.len() > 64
-            || path.len() > 4096
-            || !EXPOSED_DIRECTORIES.contains(&parts[0])
-            || parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..")
-        {
+        let parts: Vec<&str> = path.split('/').collect();
+        let is_exposed = EXPOSED_DIRECTORIES.contains(&parts[0]);
+        let has_invalid_part = parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..");
+        if parts.len() > PATH_PARTS_MAX || path.len() > PATH_BYTES_MAX {
             return Err(format!("invalid profile composition path: {path}"));
         }
-        let mut ancestor = String::new();
+        if !is_exposed || has_invalid_part {
+            return Err(format!("invalid profile composition path: {path}"));
+        }
+        let mut ancestor = String::with_capacity(path.len());
         for part in parts.iter().take(parts.len().saturating_sub(1)) {
             if !ancestor.is_empty() {
                 ancestor.push('/');
@@ -207,6 +214,9 @@ pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String
                 }
                 if directories.contains(&path) || links.contains_key(&path) {
                     return Err(format!("profile leaf conflict: {path}"));
+                }
+                if links.len() >= ENTRIES_MAX {
+                    return Err("profile composition exceeds entry bound".to_string());
                 }
                 links.insert(path, target);
             }

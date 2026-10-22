@@ -66,11 +66,9 @@ pub fn merge(facts: Vec<InterestFact>) -> Result<BTreeMap<String, Vec<InterestFa
     let fact_count = facts.len();
     let mut by_path = BTreeMap::<String, Vec<InterestFact>>::new();
     for fact in facts {
-        if let Some(path_facts) = by_path.get_mut(&fact.path) {
-            path_facts.push(fact);
-        } else {
-            by_path.insert(fact.path.clone(), Vec::from([fact]));
-        }
+        let path = fact.path.clone();
+        let path_facts = by_path.entry(path).or_insert_with(|| Vec::with_capacity(fact_count));
+        path_facts.push(fact);
     }
     assert_eq!(by_path.is_empty(), fact_count == 0);
     assert!(by_path.len() <= fact_count);
@@ -163,10 +161,7 @@ pub fn release_owner_identities(
         return Err(InterestError::ForeignOwner);
     }
     let path_fact_count = path_facts.len();
-    let owner_fact_count = path_facts
-        .iter()
-        .filter(|fact| fact.owner == selector.owner)
-        .count();
+    let owner_fact_count = path_facts.iter().filter(|fact| fact.owner == selector.owner).count();
     let mut identities = Vec::with_capacity(owner_fact_count);
     for fact in path_facts {
         if fact.owner == selector.owner {
