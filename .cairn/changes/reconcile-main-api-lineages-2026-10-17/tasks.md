@@ -152,3 +152,31 @@ one remaining failure belongs upstream.
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.
+
+The gate transcript for revision `a09814bff590809f10688ec2684ab799953feaa0` is
+retained in `evidence/final-gate-v4/`. The verification-bridge fixture was
+repinned to a published consistent receipt in `e9b78b676`, and its
+`boundaries` suite now passes. The Tiger Style pass is archived as
+`2026-10-22-schedule-tigerstyle-hardening-backlog`. The GCC 4.0 configure
+bridge, the canonical rustfmt and strict Clippy pass, and the workspace
+lib/tests phase now reaches the `mantle` binary unit tests for the first time:
+the `crunch` binary reports 2734 passed, 16 failed and 92 ignored. Run one
+target at a time
+after the gate stopped, 46 of the 63 `mantle` integration targets pass and 17
+fail, and every package ordered after `mantle` passes. Every failing test also
+fails on `684e31623`, before the Tiger Style pass, so these failures predate it;
+the archived change's `evidence/v1-gates-2026-10-22/` holds the per-target
+transcripts and the baseline reruns.
+
+The failures fall into these groups: store opening refused with
+`store-source-admission-required` in the substitution, HTTP pull and attest
+paths; remote production paths refused with
+`remote-production-endpoint-binding-config-required`; Nickel evaluation errors
+in the example projects, the offline Cargo project and the evaluated examples;
+`rust-plan` capture evidence rejected with one failed effect in 42 CLI tests;
+Cargo-free topology effects that omit package-resolved target-library
+producers, and a missing declared source that is now refused before topology
+planning; gateway attempt and ticket state validation in the remote build unit
+tests; Nix gateway session expiry and resource-host store access; and stale
+expectations in the flake-check workflow, examples catalog and public scan
+bound tests. G1 remains unaccepted until those failures are repaired.

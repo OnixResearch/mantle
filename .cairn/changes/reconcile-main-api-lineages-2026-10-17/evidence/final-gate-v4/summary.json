@@ -1,0 +1,41 @@
+{
+  "schema": "mantle-first-party-gate-evidence-v1",
+  "revision": "a09814bff590809f10688ec2684ab799953feaa0",
+  "command": "nix develop -c ./scripts/check-first-party-quality.sh",
+  "host": "local workstation, CARGO_TARGET_DIR=/tmp/target-mantle-elf",
+  "transcripts": [
+    {
+      "transcript": "first-party-gate.stdout.log",
+      "bytes": 817341,
+      "sha256": "de572143f757ccd5de279e5c53c1f08c18386e1d18f8625a3d6c7dddee49a060"
+    },
+    {
+      "transcript": "first-party-gate.exit",
+      "bytes": 61,
+      "sha256": "7ad5810f0f1382a956033e3f558885a07198439668bfcc198a040793e03b58d3"
+    },
+    {
+      "transcript": "identity.txt",
+      "bytes": 160,
+      "sha256": "6c9f372d72d45ceeced18840372852797ceab8c5d91cce66e97effb8c5264ae4"
+    }
+  ],
+  "remaining_suites": ".cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22/head-remaining-suites/summary.txt",
+  "baseline_comparison": ".cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22/summary.md",
+  "non_claims": [
+    "gate evidence for the recorded revision only",
+    "not a bootstrap, release, or Nickel-parity claim",
+    "the ordinary gate does not pass on this revision"
+  ],
+  "outcome": {
+    "gcc40_configure_bridge": "pass",
+    "canonical_first_party_rustfmt": "pass",
+    "strict_clippy_vendored_excluded": "pass",
+    "workspace_lib_tests": "failed",
+    "first_failing_suite": "mantle --bin crunch (unit tests): 2734 passed, 16 failed, 92 ignored",
+    "later_suites": "run one target at a time after the gate stopped: 46 of 63 mantle integration targets pass, 17 fail; every package ordered after mantle passes",
+    "repaired_since_the_previous_transcript": "the verification-bridge fixture (e9b78b676) now passes, so the gate reaches the mantle binary unit tests for the first time",
+    "failures_predate_the_tiger_style_pass": "every failing test also fails on 684e31623; the evaluator teardown test is timing-flaky on both revisions",
+    "build_strategy": "CARGO_INCREMENTAL=0, because the pinned nightly panics in the incremental dependency graph for crates/crunch-delta; see docs/toolchain-incremental-ice.md"
+  }
+}
