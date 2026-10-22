@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 #[path = "../src/elf_dynamic_fixup_core.rs"]
 mod elf_dynamic_fixup_core;
 
