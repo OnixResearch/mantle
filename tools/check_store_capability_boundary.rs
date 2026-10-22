@@ -66,7 +66,10 @@ const ADAPTER_ALLOWLIST: [&str; 1] = ["crunch-rust-cache"];
 /// Paths allowed to construct a `StoreHandle`: the CLI composition root,
 /// remote-build/foreign shells that own an executor store, pipeline
 /// orchestration, and the declared cache adapter.
-const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 12] = [
+///
+/// Each entry is a maintainer declaration of a real composition root under
+/// ADR 0058, not a waiver of the raw-service or writable-authority guards.
+const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 15] = [
     "src/main.rs",
     // Bootstrap owns a guarded raw-seed store and immediately splits it into
     // pipeline capabilities; it does not pass the broad handle to build code.
@@ -79,7 +82,15 @@ const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 12] = [
     "src/full_source_provider.rs",
     "src/foreign_provenance_audit.rs",
     "src/build_plan.rs",
+    // The user profile command opens its own store and immediately splits it
+    // into pipeline capabilities.
+    "src/user_profile_cmd.rs",
     "crates/crunch-pipeline/src/lib.rs",
+    // The watch shell opens the store it hands to the watch pipeline builder.
+    "crates/crunch-pipeline/src/watch.rs",
+    // The Android admission tool is a standalone composition root: it owns
+    // the store it admits sources into.
+    "crates/crunch-android/src/bin/admit.rs",
     "crates/crunch-rust-cache/src/lib.rs",
 ];
 
