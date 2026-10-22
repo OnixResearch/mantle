@@ -30,8 +30,8 @@ tested, committed implementation rather than the historical first binary.
 
 - [x] [serial] T4.1 Prove the plane boundary: no daemon, the build still succeeds; evidence validators reject live facts; the daemon cannot mutate the store. r[mantle.coordination_service.daemon_independence]
 - [x] [serial] T4.2 Run the subscription, retraction, and boundary rails before and after the change. Preserve exact results. r[mantle.coordination_service.retraction_on_owner_stop]
-- [ ] [serial] T4.3 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.build_interchange.live_state_emission]
-- [ ] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.coordination_service.daemon_independence]
+- [x] [serial] T4.3 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.build_interchange.live_state_emission]
+- [x] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.coordination_service.daemon_independence]
 
 Completion gate for T4.3/T4.4: retain the implementation commit and exact
 second coherent binary SHA-256, re-exercise the affected live CLI path if it
