@@ -69,7 +69,7 @@ const ADAPTER_ALLOWLIST: [&str; 1] = ["crunch-rust-cache"];
 ///
 /// Each entry is a maintainer declaration of a real composition root under
 /// ADR 0058, not a waiver of the raw-service or writable-authority guards.
-const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 15] = [
+const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 16] = [
     "src/main.rs",
     // Bootstrap owns a guarded raw-seed store and immediately splits it into
     // pipeline capabilities; it does not pass the broad handle to build code.
@@ -85,6 +85,9 @@ const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 15] = [
     // The user profile command opens its own store and immediately splits it
     // into pipeline capabilities.
     "src/user_profile_cmd.rs",
+    // The source bundle helpers own the store they read offline cache records
+    // from and immediately split it into pipeline capabilities.
+    "src/source_bundle.rs",
     "crates/crunch-pipeline/src/lib.rs",
     // The watch shell opens the store it hands to the watch pipeline builder.
     "crates/crunch-pipeline/src/watch.rs",

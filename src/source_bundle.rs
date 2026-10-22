@@ -2719,8 +2719,8 @@ pub fn offline_vendor_cache_overrides(
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
-        let service = store.pathinfo_service();
-        verified_offline_cache_path(&*service, catalog_path, catalog_name, store_prefix, trusted_keys).await?;
+        let parts = store.into_pipeline_store_parts();
+        verified_offline_cache_path(&parts.output_lookup, catalog_path, catalog_name, store_prefix, trusted_keys).await?;
         let metadata = fs::metadata(catalog_path)
             .map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
         if metadata.len() > MAX_OFFLINE_VENDOR_CACHE_BYTES {
@@ -2746,7 +2746,7 @@ pub fn offline_vendor_cache_overrides(
             .file_name()
             .and_then(|name| name.to_str())
             .ok_or_else(|| RunError::Internal("invalid offline source-bundle store path".to_string()))?;
-        verified_offline_cache_path(&*service, &source, source_name, store_prefix, trusted_keys).await?;
+        verified_offline_cache_path(&parts.output_lookup, &source, source_name, store_prefix, trusted_keys).await?;
         let lock_path = source.join("workspace/Cargo.lock");
         if lock_path.is_symlink() || !lock_path.is_file() {
             return Err(RunError::Internal(
@@ -2836,8 +2836,14 @@ pub fn offline_vendor_cache_overrides(
                 *nar
             } else {
                 let (nar, _, _) =
-                    verified_offline_cache_path(&*service, &source_path, stored_name, store_prefix, trusted_keys)
-                        .await?;
+                    verified_offline_cache_path(
+                        &parts.output_lookup,
+                        &source_path,
+                        stored_name,
+                        store_prefix,
+                        trusted_keys,
+                    )
+                    .await?;
                 cache_paths.insert(stored_name.to_string(), nar);
                 nar
             };
@@ -2916,7 +2922,7 @@ fn offline_cache_physical_path(logical: &str, output_dir: &Path, store_prefix: &
 }
 
 async fn verified_offline_cache_path(
-    service: &dyn snix_store::pathinfoservice::PathInfoService,
+    lookup: &crunch_store::OutputLookup,
     physical: &Path,
     name: &str,
     store_prefix: &str,
@@ -2926,8 +2932,8 @@ async fn verified_offline_cache_path(
     let path =
         nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
             .map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
-    let info = service
-        .get(*path.digest())
+    let info = lookup
+        .find(&path)
         .await
         .map_err(|error| RunError::Internal(format!("reading offline PathInfo {name}: {error}")))?
         .ok_or_else(|| RunError::Internal(format!("missing signed offline PathInfo: {name}")))?;
@@ -3010,7 +3016,8 @@ pub(crate) fn verify_signed_store_root(
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening attested store: {error}")))?;
-        verified_offline_cache_path(&*store.pathinfo_service(), &physical, name, store_prefix, trust.trusted_keys).await
+        let parts = store.into_pipeline_store_parts();
+        verified_offline_cache_path(&parts.output_lookup, &physical, name, store_prefix, trust.trusted_keys).await
     })?;
     Ok(StorePathAttestation {
         logical_store_path: logical.to_string(),
