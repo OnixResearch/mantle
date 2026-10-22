@@ -1,0 +1,24 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.81s
+     Running tests/store_archive_cli.rs (/tmp/target-mantle-elf/debug/deps/store_archive_cli-fe888db8b045e6c6)
+
+running 14 tests
+test admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail ... ok
+test casita_archive_import_rejects_unprovisioned_keys_and_unnamed_signer_without_mutation ... ok
+test casita_rejects_base_store_and_nario_unsigned_before_state_access ... ok
+test casita_rejects_unsigned_archive_before_creating_state ... ok
+test default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts ... ok
+test independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key ... ok
+test legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unrelated_state ... ok
+test nario_v2_cli_lists_imports_and_skips_pinned_producer_fixture ... ok
+test nario_v2_cli_rejects_bad_input_wrong_prefix_untrusted_and_export ... ok
+test nario_v2_cli_rejects_durable_negative_fixture_corpus ... ok
+test snix_to_casita_cli_migration_pins_root_without_modifying_source ... ok
+test store_archive_cli_exports_lists_json_and_imports_from_file ... ok
+test store_archive_cli_requires_unsigned_escape_hatch ... ok
+test store_archive_cli_streams_stdout_and_stdin ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 161.22s
+

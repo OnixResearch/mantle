@@ -1,0 +1,53 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.15s
+     Running tests/offline_cargo_project.rs (/tmp/target-mantle-elf/debug/deps/offline_cargo_project-6714134be55fc382)
+
+running 4 tests
+test offline_cargo_helper_rejects_missing_binary_name ... FAILED
+test offline_cargo_native_admission_rejects_ambient_paths_and_control_overrides ... ok
+test offline_cargo_native_roles_resolve_under_a_declared_logical_prefix ... FAILED
+test offline_cargo_project_run_executes_declared_sandbox_cargo_output ... FAILED
+
+failures:
+
+---- offline_cargo_helper_rejects_missing_binary_name stdout ----
+
+thread 'offline_cargo_helper_rejects_missing_binary_name' (2536139) panicked at tests/offline_cargo_project.rs:97:5:
+Nickel evaluation error:
+error: infinite recursion
+   ┌─ /tmp/mantle-base-wt/lib/offline_cargo.ncl:77:70
+   │
+77 │   else { inputs = std.record.values roles, env = environment, path = path }
+   │                                                                      ^^^^ recursive reference
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- offline_cargo_native_roles_resolve_under_a_declared_logical_prefix stdout ----
+
+thread 'offline_cargo_native_roles_resolve_under_a_declared_logical_prefix' (2537081) panicked at tests/offline_cargo_project.rs:68:40:
+called `Result::unwrap()` on an `Err` value: Eval(EvalError(EvalErrorData { ctxt: EvalCtxt { call_stack: CallStack([App(PosIdx(2147492705)), Fun(PosIdx(2147492705)), App(PosIdx(3933)), Var { id: LocIdent { ident: `$string`, pos: None }, pos: PosIdx(4294967295) }, Fun(PosIdx(2147487578)), Fun(PosIdx(3933)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(953), end: ByteIndex(958) }) }, pos: PosIdx(3547) }, Var { id: LocIdent { ident: `field_value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(11825), end: ByteIndex(11836) }) }, pos: PosIdx(3932) }, App(PosIdx(9057)), App(PosIdx(9048)), Field { id: LocIdent { ident: `serialize`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(11604), end: ByteIndex(11613) }) }, pos_record: PosIdx(3519), pos_field: PosIdx(3467), pos_access: PosIdx(9046) }, App(PosIdx(3467)), Fun(PosIdx(9048)), App(PosIdx(3617)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(3068), end: ByteIndex(3073) }) }, pos: PosIdx(3681) }, Fun(PosIdx(9057)), App(PosIdx(3463)), Field { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(11759), end: ByteIndex(11763) }) }, pos_record: PosIdx(8768), pos_field: PosIdx(8767), pos_access: PosIdx(9055) }, Var { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(4271), end: ByteIndex(4275) }) }, pos: PosIdx(8767) }]) }, error: InfiniteRecursion(CallStack([App(PosIdx(2147492705)), Fun(PosIdx(2147492705)), App(PosIdx(3933)), Var { id: LocIdent { ident: `$string`, pos: None }, pos: PosIdx(4294967295) }, Fun(PosIdx(2147487578)), Fun(PosIdx(3933)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(953), end: ByteIndex(958) }) }, pos: PosIdx(3547) }, Var { id: LocIdent { ident: `field_value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(11825), end: ByteIndex(11836) }) }, pos: PosIdx(3932) }, App(PosIdx(9057)), App(PosIdx(9048)), Field { id: LocIdent { ident: `serialize`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(11604), end: ByteIndex(11613) }) }, pos_record: PosIdx(3519), pos_field: PosIdx(3467), pos_access: PosIdx(9046) }, App(PosIdx(3467)), Fun(PosIdx(9048)), App(PosIdx(3617)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(3068), end: ByteIndex(3073) }) }, pos: PosIdx(3681) }, Fun(PosIdx(9057)), App(PosIdx(3463)), Field { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(11759), end: ByteIndex(11763) }) }, pos_record: PosIdx(8768), pos_field: PosIdx(8767), pos_access: PosIdx(9055) }, Var { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(8), start: ByteIndex(4271), end: ByteIndex(4275) }) }, pos: PosIdx(8767) }]), PosIdx(8767)) }))
+
+---- offline_cargo_project_run_executes_declared_sandbox_cargo_output stdout ----
+
+thread 'offline_cargo_project_run_executes_declared_sandbox_cargo_output' (2537106) panicked at tests/offline_cargo_project.rs:126:5:
+stdout:
+
+stderr:
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmp7ZbjLe/signing-key)
+2026-10-22T20:53:59.649387Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 12, path: \"/tmp/nix-shell.qFloVi/.tmp7ZbjLe/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+2026-10-22T20:53:59.650563Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 13, path: \"/tmp/nix-shell.qFloVi/.tmp7ZbjLe/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+error: build failed
+run target .#demo has failed build roots
+
+
+
+failures:
+    offline_cargo_helper_rejects_missing_binary_name
+    offline_cargo_native_roles_resolve_under_a_declared_logical_prefix
+    offline_cargo_project_run_executes_declared_sandbox_cargo_output
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.21s
+
+error: test failed, to rerun pass `-p mantle --test offline_cargo_project`

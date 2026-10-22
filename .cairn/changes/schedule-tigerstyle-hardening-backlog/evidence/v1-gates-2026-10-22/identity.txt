@@ -1,0 +1,4 @@
+revision a09814bff590809f10688ec2684ab799953feaa0
+status:
+rustc: rustc 1.96.0-nightly (c75612477 2026-04-07)
+cargo: cargo 1.96.0-nightly (a357df4c2 2026-04-03)

@@ -1,0 +1,28 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.42s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_plan_app-1b96ee621150bfb1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/application_fixtures.rs (/tmp/target-mantle-elf/debug/deps/application_fixtures-9b0f6f7d344bb601)
+
+running 11 tests
+test cache_hit_and_miss_are_observed_without_a_second_lookup ... ok
+test cached_compiler_and_successful_script_retain_a_real_metadata_blocker ... ok
+test cached_script_metadata_blocker_requires_matching_real_process_and_diagnostic ... ok
+test consumer_cannot_claim_an_unproduced_dependency_digest ... ok
+test failed_policy_compiler_cannot_attest_a_successful_unit ... ok
+test missing_or_substituted_process_attempt_is_rejected_after_compiler_miss ... ok
+test oversized_execution_fails_before_preparing_a_unit ... ok
+test restored_compiler_does_not_mask_a_failed_real_build_script ... ok
+test stopped_execution_does_not_claim_success_for_unobserved_consumers ... ok
+test wrong_cache_observation_and_cache_fault_never_complete_a_plan ... ok
+test wrong_execution_observations_cannot_complete_the_plan ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

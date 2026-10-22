@@ -1,0 +1,35 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling blake3 v1.8.5
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-wasm-component-core)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-wasm-consumer-verifier)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.29s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_wasm_consumer_verifier-51fb25e52e81fdc0)
+
+running 1 test
+test facade::tests::non_claims_are_fixed_and_complete ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/consumer_fixtures.rs (/tmp/target-mantle-elf/debug/deps/consumer_fixtures-f6604f3dfd741001)
+
+running 15 tests
+test facade_parity_matches_implementation_over_structural_corpus ... ok
+test kamacite_frozen_fixture_passes_structural_layer ... ok
+test negative_conflicting_member_identity_is_rejected ... ok
+test negative_declared_oversize_member_rejects_as_drift ... ok
+test negative_directory_member_blocks ... ok
+test negative_drifted_member_bytes_reject ... ok
+test negative_missing_member_blocks ... ok
+test negative_missing_stage_kind_rejects_before_bytes ... ok
+test negative_parent_traversal_is_rejected_by_the_shell ... ok
+test negative_symlink_member_blocks ... ok
+test positive_complete_bundle_verifies_through_both_layers ... ok
+test positive_shared_member_path_satisfies_both_roles ... ok
+test rejected_bundle_reports_carry_no_byte_layer_claims ... ok
+test report_leaks_no_member_paths_and_binds_fixed_non_claims ... ok
+test second_consumer_world_and_member_graph_passes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

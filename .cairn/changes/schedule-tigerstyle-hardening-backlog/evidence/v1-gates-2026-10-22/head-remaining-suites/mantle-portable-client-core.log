@@ -1,0 +1,19 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-portable-client-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.88s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_portable_client_core-6f8fadb424830fd6)
+
+running 8 tests
+test tests::command_inventory_is_complete_and_unique ... ok
+test tests::darwin_local_build_is_rejected_before_execution ... ok
+test tests::darwin_remote_build_is_admitted_without_local_execution ... ok
+test tests::portable_plan_has_no_fixed_nix_store_assumption ... ok
+test tests::portable_plan_keeps_client_and_target_platforms_separate ... ok
+test tests::portable_plan_requires_remote_capability_and_trust ... ok
+test tests::private_nix_gateway_never_becomes_a_portable_remote_client ... ok
+test tests::raw_frontend_payload_is_rejected ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

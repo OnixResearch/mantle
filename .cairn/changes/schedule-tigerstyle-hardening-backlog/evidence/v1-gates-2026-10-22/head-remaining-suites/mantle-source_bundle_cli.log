@@ -1,0 +1,19 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.79s
+     Running tests/source_bundle_cli.rs (/tmp/target-mantle-elf/debug/deps/source_bundle_cli-d0fb85fe786e732b)
+
+running 9 tests
+test source_bundle_cli_caches_pinned_https_archive_for_offline_import_and_preflight ... ok
+test source_bundle_cli_preflight_reports_network_required_before_build ... ok
+test source_bundle_cli_preflight_reports_unpinned_imported_state ... ok
+test source_bundle_cli_preflights_dynamic_producer_sources_before_and_after_import ... ok
+test source_bundle_cli_preserves_pinned_query_url_and_archive_path_containing_equals ... ok
+test source_bundle_cli_rejects_tampered_bundle_without_persisting_records ... ok
+test source_bundle_cli_rejects_wrong_duplicate_and_drifted_cached_https_archives ... ok
+test source_bundle_cli_reports_stale_imported_state ... ok
+test source_bundle_cli_round_trips_imported_source_state ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.05s
+

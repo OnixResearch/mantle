@@ -1,0 +1,24 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running tests/project_refresh_cli.rs (/tmp/target-mantle-elf/debug/deps/project_refresh_cli-60ac0334c224cc8e)
+
+running 14 tests
+test build_fetch_policy_refresh_uses_expected_hash_without_network_resolution ... ok
+test failed_recursive_observation_does_not_mutate_lock_or_generated_inputs ... ok
+test freshness_command_missing_timeout_and_output_limit_fail_deterministically ... ok
+test freshness_git_ref_probe_reports_stale_without_mutating_lock ... ok
+test freshness_http_json_template_refreshes_selected_stale_input ... ok
+test freshness_local_directory_probe_updates_lock_digest ... ok
+test freshness_no_network_mode_does_not_contact_http_probe ... ok
+test list_stale_reports_stale_and_failed_without_mutating_files ... ok
+test refresh_git_input_locks_resolved_rev_and_tree_hash ... ok
+test refresh_partial_failure_writes_successes_and_exits_nonzero ... ok
+test refresh_tarball_supports_each_recursive_hash_algorithm ... ok
+test refresh_tarball_uses_unpacked_tree_hash_not_archive_bytes ... ok
+test refresh_trusted_file_input_with_wrong_signature_rejects_lock_write ... ok
+test refresh_trusted_file_input_writes_lock_evidence_and_show_reports_claim ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.29s
+

@@ -1,0 +1,12 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.02s
+     Running tests/android_sources_offline.rs (/tmp/target-mantle-elf/debug/deps/android_sources_offline-9a67f7c1c3c055b2)
+
+running 2 tests
+test android_pinned_fetch_request_replays_only_matching_kind_and_url ... ok
+test bound_android_tool_cannot_execute_after_real_fixed_output_digest_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.25s
+

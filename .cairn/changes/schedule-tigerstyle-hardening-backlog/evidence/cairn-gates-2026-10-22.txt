@@ -1,0 +1,16 @@
+$ cairn validate --root .
+valid: True issues: []
+exit=0
+
+$ cairn gate proposal schedule-tigerstyle-hardening-backlog --root .
+valid: True issues: []
+exit=0
+
+$ cairn gate design schedule-tigerstyle-hardening-backlog --root .
+valid: True issues: []
+exit=0
+
+$ cairn gate tasks schedule-tigerstyle-hardening-backlog --root .
+valid: True issues: []
+exit=0
+

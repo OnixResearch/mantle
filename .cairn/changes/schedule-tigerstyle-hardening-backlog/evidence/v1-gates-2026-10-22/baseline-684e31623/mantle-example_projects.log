@@ -1,0 +1,95 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.67s
+     Running tests/example_projects.rs (/tmp/target-mantle-elf/debug/deps/example_projects-b7eb455a893a48f8)
+
+running 37 tests
+test artifact_provenance_walkthrough_inspects_verifies_and_diffs_evidence ... ok
+test artifact_provenance_walkthrough_rejects_tampered_and_missing_evidence ... ok
+test c_library_project_builds_library_cli_and_check ... ignored, realizes the pinned bootstrap C toolchain on first build
+test c_library_project_exports_and_keeps_positive_and_negative_tests ... ok
+test casita_local_action_result_reuses_verified_output_after_export_removal ... ok
+test codegen_project_builds_runnable_package_and_check ... ok
+test developer_shell_and_run_loop_executes_named_profiles ... ok
+test developer_shell_and_run_loop_rejects_invalid_selection_and_arguments ... ok
+test fetched_and_patched_project_builds_check_and_rejects_invalid_patch ... ignored, uses the live crates.io fixed-output source
+test fetched_and_patched_project_declares_fixed_positive_and_negative_patches ... ok
+test fixed_source_projects_assemble_authoritative_files ... ok
+test generated_site_project_builds_package_and_check ... ok
+test hermetic_plan_and_rebuild_match_across_ambient_host_changes ... ok
+test hermetic_plan_rejects_impure_mode_and_scopes_identity_to_inputs_and_store_prefix ... ok
+test locked_dependency_lifecycle_detects_staleness_refreshes_and_upgrades ... ok
+test locked_dependency_refresh_rejects_a_missing_local_patch ... ok
+test locked_dependency_refresh_rejects_an_unresolved_revision ... ok
+test missing_project_selector_fails_closed ... ok
+test multi_output_sdk_builds_outputs_and_selected_consumers ... ignored, realizes the pinned bootstrap C toolchain and all selected SDK outputs
+test multi_output_sdk_source_assembles_and_project_evaluates ... ok
+test offline_source_bundle_round_trips_and_rejects_tampering ... ok
+test production_workflow_projects_evaluate_and_keep_negative_paths ... ok
+test project_output_parser_accepts_named_outputs_and_rejects_duplicates ... ok
+test reproducible_release_matches_blake3_and_detects_tampering ... ok
+test reviewed_file_generation_applies_current_plan_and_tracks_state ... ok
+test reviewed_file_generation_classifies_a_partial_state_before_plan_reporting ... ok
+test reviewed_file_generation_rejects_drift_conflict_and_escape ... ok
+test reviewed_file_generation_rejects_missing_contract_field ... ok
+test reviewed_file_generation_rejects_plan_publication_failure ... ok
+test reviewed_file_generation_rejects_unsupported_schema_before_applying ... ok
+test rust_workspace_project_builds_package_and_smoke_check ... ignored, realizes the source-built Rust, seed-toolchain, and musl closure on first build
+test rust_workspace_project_exports_and_keeps_positive_and_negative_tests ... FAILED
+test schema_codegen_builds_bindings_and_rejects_invalid_schema ... FAILED
+test schema_codegen_builds_both_languages_and_integration_check ... ignored, realizes both bootstrap C and source-built Rust toolchains
+test shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact ... FAILED
+test shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity ... FAILED
+test static_cache_request_paths_accept_normal_files_and_reject_escape ... ok
+
+failures:
+
+---- rust_workspace_project_exports_and_keeps_positive_and_negative_tests stdout ----
+
+thread 'rust_workspace_project_exports_and_keeps_positive_and_negative_tests' (2505877) panicked at tests/example_projects.rs:1864:5:
+Rust project should evaluate: error: evaluation failed
+Nickel evaluation error:
+error: infinite recursion
+   ┌─ /tmp/mantle-base-wt/lib/offline_cargo.ncl:77:70
+   │
+77 │   else { inputs = std.record.values roles, env = environment, path = path }
+   │                                                                      ^^^^ recursive reference
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- schema_codegen_builds_bindings_and_rejects_invalid_schema stdout ----
+
+thread 'schema_codegen_builds_bindings_and_rejects_invalid_schema' (2505955) panicked at tests/example_projects.rs:342:5:
+schema codegen project should evaluate: error: evaluation failed
+Nickel evaluation error:
+error: infinite recursion
+   ┌─ /tmp/mantle-base-wt/lib/offline_cargo.ncl:77:70
+   │
+77 │   else { inputs = std.record.values roles, env = environment, path = path }
+   │                                                                      ^^^^ recursive reference
+
+
+---- shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact stdout ----
+
+thread 'shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact' (2506028) panicked at tests/example_projects.rs:423:5:
+shared action-result consumer build failed: {"error":"opening store: store: store-source-admission-required","code":3,"kind":"internal"}
+
+
+---- shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity stdout ----
+
+thread 'shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity' (2506232) panicked at tests/example_projects.rs:423:5:
+shared action-result consumer build failed: {"error":"opening store: store: store-source-admission-required","code":3,"kind":"internal"}
+
+
+
+failures:
+    rust_workspace_project_exports_and_keeps_positive_and_negative_tests
+    schema_codegen_builds_bindings_and_rejects_invalid_schema
+    shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact
+    shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity
+
+test result: FAILED. 28 passed; 4 failed; 5 ignored; 0 measured; 0 filtered out; finished in 37.65s
+
+error: test failed, to rerun pass `-p mantle --test example_projects`

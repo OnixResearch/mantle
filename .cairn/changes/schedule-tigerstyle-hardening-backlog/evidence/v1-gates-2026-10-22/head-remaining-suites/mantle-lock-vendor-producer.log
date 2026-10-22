@@ -1,0 +1,16 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde_core v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling mantle-lock-vendor-producer v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-lock-vendor-producer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.14s
+     Running unittests src/main.rs (/tmp/target-mantle-elf/debug/deps/mantle_lock_vendor_producer-490fac6083860fb9)
+
+running 3 tests
+test tests::all_locked_artifacts_remain_reachable_across_sharding_and_name_collisions ... ok
+test tests::emits_exact_locked_flat_fetches_and_single_assembly_root ... ok
+test tests::refuses_undeclared_lock_full_table_and_incompatible_hash_modes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+

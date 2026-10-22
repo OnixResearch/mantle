@@ -1,0 +1,177 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling constant_time_eq v0.4.2
+   Compiling memchr v2.8.0
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.5
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-core)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-application-contract)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.83s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_application_contract-f6884a2a0f3f0870)
+
+running 126 tests
+test admission_facts::tests::a_build_with_a_builder_selects_a_remote_route ... ok
+test admission_facts::tests::a_plain_build_or_another_command_selects_no_remote_route ... ok
+test admission_facts::tests::a_remote_client_operation_is_not_the_serve_action ... ok
+test admission_facts::tests::the_test_sentinel_needs_a_debug_build_and_a_path ... ok
+test artifact::tests::composite_store_call_checks_independent_authority_destination_and_bound ... ok
+test artifact::tests::export_store_copy_and_receipt_reject_wrong_observed_facts ... ok
+test artifact::tests::registry_stops_and_receipt_identity_cannot_be_invented ... ok
+test attest::tests::actual_failure_stage_and_code_are_required ... ok
+test attest::tests::bounded_admission_rejects_wrong_shape_and_oversized_selection ... ok
+test attest::tests::wrong_target_authority_output_or_limit_never_completes ... ok
+test bootstrap_effects::tests::publication_without_independent_readback_cannot_complete ... ok
+test bootstrap_effects::tests::rejects_zero_or_duplicate_boundaries ... ok
+test bootstrap_flow::tests::a_complete_request_is_admissible ... ok
+test bootstrap_flow::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test bootstrap_flow::tests::the_family_specific_requirement_is_enforced ... ok
+test component_flow::tests::a_complete_request_is_admissible ... ok
+test component_flow::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test component_flow::tests::the_family_specific_requirement_is_enforced ... ok
+test diagnostics::tests::a_complete_request_is_admissible ... ok
+test diagnostics::tests::failed_prerequisite_cannot_be_reported_healthy ... ok
+test diagnostics::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test diagnostics::tests::the_family_specific_requirement_is_enforced ... ok
+test envelope::environment_tests::environment_kind_accepts_its_public_serde_name ... ok
+test envelope::environment_tests::missing_or_repeated_effect_rejects_before_observed_failure ... ok
+test envelope::environment_tests::observed_environment_reads_respect_kind_and_bounded_actual_usage ... ok
+test evaluation::tests::a_complete_request_is_admissible ... ok
+test evaluation::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test evaluation::tests::the_family_specific_requirement_is_enforced ... ok
+test gateway_operations::tests::graceful_idle_service_is_valid_but_early_worker_exit_is_not ... ok
+test gateway_operations::tests::import_requires_exact_verified_bytes_and_retained_path ... ok
+test gateway_operations::tests::peer_error_and_unversioned_json_are_not_success ... ok
+test gateway_operations::tests::protocol_disconnect_or_rejected_build_is_not_a_completed_build ... ok
+test gateway_operations::tests::pure_binding_is_not_evidence_of_a_store_read ... ok
+test graph_query::inspection::tests::action_explanations_preserve_unknown_added_removed_and_policy_changes ... ok
+test graph_query::inspection::tests::configurations_and_action_identities_do_not_collapse ... ok
+test graph_query::inspection::tests::cycles_and_missing_targets_are_invalid_not_empty_answers ... ok
+test graph_query::inspection::tests::partial_dependency_equality_is_not_promoted_to_unchanged ... ok
+test graph_query::inspection::tests::shared_dependency_paths_are_directed_and_deterministic ... ok
+test graph_query::inspection::tests::traversal_charges_shared_edges_and_depth_not_just_result_size ... ok
+test graph_query::tests::a_result_for_another_graph_target_is_rejected ... ok
+test graph_query::tests::an_empty_target_is_rejected_before_any_port ... ok
+test graph_query::tests::an_unbounded_fact_fails_closed ... ok
+test graph_query::tests::binary_queries_require_destinations_and_reject_invalid_resource_limits ... ok
+test graph_query::tests::bounded_facts_complete ... ok
+test graph_query::tests::the_plan_holds_one_bounded_read_effect ... ok
+test nix_free_demo::tests::a_bundle_not_backed_by_admitted_inputs_fails_closed ... ok
+test nix_free_demo::tests::a_complete_write_of_admitted_inputs_completes ... ok
+test nix_free_demo::tests::a_failed_write_fails_the_generation ... ok
+test nix_free_demo::tests::a_rejection_records_the_write_as_skipped_and_never_completes ... ok
+test nix_free_demo::tests::a_write_reporting_fewer_files_than_planned_fails_closed ... ok
+test nix_free_demo::tests::only_an_absent_or_empty_output_is_free ... ok
+test output_format::tests::json_without_requested_logs_suppresses_default_logging ... ok
+test output_format::tests::requested_logs_start_tracing_in_either_format ... ok
+test output_format::tests::the_flag_selects_the_matching_format ... ok
+test planning::tests::a_complete_request_is_admissible ... ok
+test planning::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test planning::tests::the_family_specific_requirement_is_enforced ... ok
+test project_lifecycle::tests::a_complete_request_is_admissible ... ok
+test project_lifecycle::tests::an_empty_effect_plan_cannot_certify_an_operation ... ok
+test project_lifecycle::tests::early_blocker_and_skipped_conditional_writes_cannot_complete ... ok
+test project_lifecycle::tests::failed_late_write_keeps_earlier_write_observation_without_claiming_completion ... ok
+test project_lifecycle::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test project_lifecycle::tests::refresh_plans_resolution_and_each_independently_observed_write ... ok
+test project_lifecycle::tests::rejected_effect_counts_keep_mismatch_extra_and_missing_distinct ... ok
+test project_lifecycle::tests::resolver_admits_exact_boundary_and_blocks_overbound_before_call ... ok
+test project_lifecycle::tests::resolver_permissions_keep_network_and_process_independent ... ok
+test project_lifecycle::tests::scaffold_readback_must_observe_matching_bytes_before_success ... ok
+test project_lifecycle::tests::skipping_required_init_write_never_claims_a_complete_scaffold ... ok
+test project_lifecycle::tests::the_family_specific_requirement_is_enforced ... ok
+test project_lifecycle::tests::unchanged_refresh_skips_all_writes_but_partial_persistence_rejects ... ok
+test project_lifecycle::tests::wrong_observation_identity_authority_output_and_limit_are_rejected ... ok
+test release::tests::a_bundle_consuming_operation_without_a_bundle_is_rejected ... ok
+test release::tests::a_failed_release_write_can_have_partial_effects_without_claiming_success ... ok
+test release::tests::a_verify_command_with_a_bundle_and_known_proofs_is_admissible ... ok
+test release::tests::create_may_run_without_a_bundle_but_needs_its_root ... ok
+test release::tests::proof_kinds_are_a_closed_set ... ok
+test release::tests::release_output_must_match_selected_destination_authority_and_byte_bound ... ok
+test remote_execution::tests::a_complete_request_is_admissible ... ok
+test remote_execution::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test remote_execution::tests::remote_operation_build_requires_every_declared_evidenced_output ... ok
+test remote_execution::tests::remote_operation_rejects_facts_from_another_leaf ... ok
+test remote_execution::tests::remote_operation_status_rejects_a_missing_active_job ... ok
+test remote_execution::tests::the_family_specific_requirement_is_enforced ... ok
+test root_validators::tests::a_cargo_free_self_build_rejects_every_legacy_option ... ok
+test root_validators::tests::a_complete_shared_cache_request_is_admissible ... ok
+test root_validators::tests::a_lowercase_kebab_status_code_is_admissible ... ok
+test root_validators::tests::a_plain_executable_name_is_admissible ... ok
+test root_validators::tests::an_off_cache_with_arguments_is_rejected ... ok
+test root_validators::tests::malformed_status_codes_are_rejected ... ok
+test root_validators::tests::path_shaped_executable_names_are_rejected ... ok
+test root_validators::tests::shared_cache_blockers_carry_operator_messages ... ok
+test root_validators::tests::shared_cache_pairing_failures_report_their_own_blocker ... ok
+test root_validators::tests::the_local_cache_pairing_is_enforced ... ok
+test root_validators::tests::the_stage_inventory_pairing_is_enforced ... ok
+test rust_operations::tests::cargo_invocation_invalidates_an_otherwise_successful_cargo_free_binary ... ok
+test rust_operations::tests::daemon_listener_without_consumed_request_is_not_success ... ok
+test rust_operations::tests::mismatching_fixed_point_digests_are_not_success ... ok
+test rust_operations::tests::profile_dry_run_does_not_require_a_published_generation ... ok
+test rust_operations::tests::profile_generation_removal_must_not_switch_the_active_generation ... ok
+test rust_operations::tests::replay_requires_observed_execution ... ok
+test rust_operations::tests::successful_status_without_artifacts_is_not_execution_success ... ok
+test source_provenance::tests::a_complete_request_is_admissible ... ok
+test source_provenance::tests::export_admits_network_only_when_requested_and_all_observations_are_required ... ok
+test source_provenance::tests::missing_root_subject_and_declared_entries_are_rejected ... ok
+test source_provenance::tests::source_effect_planning_rejects_input_counts_before_admission ... ok
+test source_provenance::tests::source_publication_rejects_wrong_artifact_and_excess_usage ... ok
+test source_provenance::tests::the_family_specific_requirement_is_enforced ... ok
+test store_administration::tests::a_selector_bearing_operation_with_selectors_is_admissible ... ok
+test store_administration::tests::a_selector_bearing_operation_without_selectors_is_rejected ... ok
+test store_administration::tests::archive_record_counts_do_not_substitute_for_payload_accounting ... ok
+test store_administration::tests::empty_selectors_and_missing_roots_are_rejected ... ok
+test store_administration::tests::explicit_pull_allows_policy_skips_but_accounts_for_every_http_selector ... ok
+test store_administration::tests::garbage_collection_may_run_without_selectors ... ok
+test store_administration::tests::incomplete_gc_is_not_a_successful_empty_collection ... ok
+test store_administration::tests::pull_readback_and_closure_root_are_independent_requirements ... ok
+test store_administration::tests::push_accounts_for_skips_without_requiring_every_path_to_be_written ... ok
+test store_administration::tests::repair_must_not_claim_mutation_in_inspect_mode_or_leave_execute_unrepaired ... ok
+test store_administration::tests::retention_requires_the_requested_post_transition_state ... ok
+test store_administration::tests::signatures_require_both_transition_accounting_and_trusted_readback ... ok
+test store_administration::tests::usage_overflow_is_not_an_empty_or_complete_partition ... ok
+test store_prefix::tests::a_declared_prefix_applies_and_the_default_stays_default ... ok
+test store_prefix::tests::a_malformed_declared_prefix_is_reported_without_changing_resolution ... ok
+test store_prefix::tests::malformed_prefixes_report_their_issue ... ok
+test store_prefix::tests::nix_compat_does_not_record_the_default_or_the_compatible_prefix_as_shadowed ... ok
+test store_prefix::tests::nix_compat_selects_the_compatible_prefix_and_records_the_shadow ... ok
+test store_prefix::tests::well_formed_prefixes_are_admissible ... ok
+
+test result: ok. 126 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/contract_fixtures.rs (/tmp/target-mantle-elf/debug/deps/contract_fixtures-b9288a38ee55babb)
+
+running 8 tests
+test effect_declarations_require_independent_id_kind_and_nonzero_limit ... ok
+test every_public_root_maps_to_exactly_one_family ... ok
+test family_roots_are_unique_and_complete ... ok
+test observation_classification_checks_actual_authority_output_and_usage ... ok
+test realization_commands_are_validated_before_any_port_call ... ok
+test realization_port_reports_blocked_completed_and_capability_failures ... ok
+test reconstructed_plans_cannot_vacuously_complete ... ok
+test unclassified_roots_are_rejected ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/port_fixtures.rs (/tmp/target-mantle-elf/debug/deps/port_fixtures-950e28ccff9a65ec)
+
+running 8 tests
+test a_duplicate_family_is_rejected ... ok
+test a_malformed_port_name_is_rejected ... ok
+test a_missing_family_is_rejected ... ok
+test an_empty_family_port_set_is_rejected ... ok
+test an_oversized_family_port_set_is_rejected ... ok
+test canonical_inventory_covers_every_family ... ok
+test every_family_declares_distinct_entries ... ok
+test port_owners_and_labels_are_deterministic ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

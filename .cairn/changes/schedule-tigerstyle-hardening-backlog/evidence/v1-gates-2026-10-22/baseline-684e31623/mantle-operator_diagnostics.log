@@ -1,0 +1,149 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running tests/operator_diagnostics.rs (/tmp/target-mantle-elf/debug/deps/operator_diagnostics-a316aec411a6e8e5)
+
+running 32 tests
+test build_human_failure_reports_log_persistence_failure_without_saved_log_path ... FAILED
+test build_human_failure_summary_matches_json_facts ... FAILED
+test build_json_failure_envelope_includes_saved_log_path ... FAILED
+test build_json_preflight_failure_omits_saved_log_path ... FAILED
+test build_json_success_reports_log_persistence_failure_without_fake_log_file ... FAILED
+test build_plan_json_reports_action_schema ... ok
+test build_plan_reports_build_for_uncached_root ... ok
+test build_plan_reports_cached_after_fetchurl_build ... FAILED
+test build_plan_reports_preflight_error_for_missing_store_dir ... FAILED
+test build_without_plan_still_executes_fetchurl ... FAILED
+test doctor_default_profile_is_build_and_does_not_mutate_paths ... ok
+test doctor_explicit_self_build_profile_checks_nightly_visibility ... ok
+test doctor_failure_names_missing_prerequisite_and_profile ... ok
+test doctor_json_failure_reports_missing_prerequisite ... ok
+test doctor_json_output_reports_selected_profile ... ok
+test empty_log_directory_environment_rejects_before_log_or_transcript_effects ... ok
+test empty_selected_state_environment_rejects_artifact_import_before_any_write ... ok
+test empty_state_environment_rejects_bootstrap_validate_before_evidence_write ... ok
+test explicit_state_dir_overrides_empty_environment_and_preserves_relative_path ... ok
+test operator_contract_checked_files_match_clap_and_policy ... FAILED
+test operator_contract_exports_sorted_public_clap_paths ... ok
+test operator_contract_generator_runs_positive_and_negative_self_test ... ok
+test refactor_apply_reports_only_the_verified_renamed_content ... ok
+test refactor_inspection_adapter_fault_cannot_emit_a_success_plan ... ok
+test relative_selected_state_environment_rejects_artifact_import_without_cwd_writes ... ok
+test selected_crunch_state_dir_ignores_empty_lower_priority_fallbacks ... ok
+test selected_log_directory_and_relative_state_override_preserve_log_output ... ok
+test selected_non_utf8_log_environment_keeps_its_exact_path ... ok
+test selected_non_utf8_state_environment_keeps_its_exact_path ... ok
+test selected_xdg_and_home_fallbacks_store_artifacts_outside_working_directory ... ok
+test terminal_report_output_failure_is_a_cli_error_not_a_panic ... ok
+test unset_home_retains_tmp_state_fallback_without_creating_cwd_state ... ok
+
+failures:
+
+---- build_human_failure_reports_log_persistence_failure_without_saved_log_path stdout ----
+
+thread 'build_human_failure_reports_log_persistence_failure_without_saved_log_path' (2537658) panicked at tests/operator_diagnostics.rs:825:5:
+assertion failed: stderr.contains("WARNING: diagnostic persistence failed")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- build_human_failure_summary_matches_json_facts stdout ----
+
+thread 'build_human_failure_summary_matches_json_facts' (2537694) panicked at tests/operator_diagnostics.rs:696:76:
+called `Result::unwrap()` on an `Err` value: Error("EOF while parsing a value", line: 1, column: 0)
+
+---- build_json_failure_envelope_includes_saved_log_path stdout ----
+
+thread 'build_json_failure_envelope_includes_saved_log_path' (2537742) panicked at tests/operator_diagnostics.rs:663:65:
+called `Result::unwrap()` on an `Err` value: Error("EOF while parsing a value", line: 1, column: 0)
+
+---- build_json_preflight_failure_omits_saved_log_path stdout ----
+
+thread 'build_json_preflight_failure_omits_saved_log_path' (2537778) panicked at tests/operator_diagnostics.rs:749:65:
+called `Result::unwrap()` on an `Err` value: Error("EOF while parsing a value", line: 1, column: 0)
+
+---- build_json_success_reports_log_persistence_failure_without_fake_log_file stdout ----
+
+thread 'build_json_success_reports_log_persistence_failure_without_fake_log_file' (2537815) panicked at tests/operator_diagnostics.rs:784:5:
+fetchurl build should succeed
+
+---- build_plan_reports_cached_after_fetchurl_build stdout ----
+
+thread 'build_plan_reports_cached_after_fetchurl_build' (2538041) panicked at /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5:
+Unexpected failure.
+code=3
+stderr=``````
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmp7XhNXs/state/signing-key)
+error: opening store: store: store-source-admission-required
+```
+```
+command=`cd "/tmp/nix-shell.qFloVi/.tmp7XhNXs" && "/tmp/target-mantle-elf/debug/crunch" "--state-dir" "/tmp/nix-shell.qFloVi/.tmp7XhNXs/state" "--store" "/tmp/nix-shell.qFloVi/.tmp7XhNXs/store" "build" "/tmp/nix-shell.qFloVi/.tmp7XhNXs/fetch-plan.ncl"`
+code=3
+stdout=""
+stderr=```
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmp7XhNXs/state/signing-key)
+error: opening store: store: store-source-admission-required
+```
+
+
+
+---- build_plan_reports_preflight_error_for_missing_store_dir stdout ----
+
+thread 'build_plan_reports_preflight_error_for_missing_store_dir' (2538078) panicked at /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5:
+Unexpected stderr, failed var.contains(preflight-error)
+├── var: error: opening composed planning store: store: store-source-admission-required
+└── var as str: error: opening composed planning store: store: store-source-admission-required
+
+command=`cd "/tmp/nix-shell.qFloVi/.tmpfe6lkz" && "/tmp/target-mantle-elf/debug/crunch" "--state-dir" "/tmp/nix-shell.qFloVi/.tmpfe6lkz/state" "--store" "/tmp/nix-shell.qFloVi/.tmpfe6lkz/missing-store" "build" "--plan" "/tmp/nix-shell.qFloVi/.tmpfe6lkz/plan-preflight.ncl"`
+code=3
+stdout=""
+stderr="error: opening composed planning store: store: store-source-admission-required\n"
+
+
+---- build_without_plan_still_executes_fetchurl stdout ----
+
+thread 'build_without_plan_still_executes_fetchurl' (2538165) panicked at /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5:
+Unexpected failure.
+code=3
+stderr=``````
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmpqIx0GI/state/signing-key)
+error: opening store: store: store-source-admission-required
+```
+```
+command=`cd "/tmp/nix-shell.qFloVi/.tmpqIx0GI" && "/tmp/target-mantle-elf/debug/crunch" "--state-dir" "/tmp/nix-shell.qFloVi/.tmpqIx0GI/state" "--store" "/tmp/nix-shell.qFloVi/.tmpqIx0GI/store" "build" "/tmp/nix-shell.qFloVi/.tmpqIx0GI/fetch-build.ncl"`
+code=3
+stdout=""
+stderr=```
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmpqIx0GI/state/signing-key)
+error: opening store: store: store-source-admission-required
+```
+
+
+
+---- operator_contract_checked_files_match_clap_and_policy stdout ----
+
+thread 'operator_contract_checked_files_match_clap_and_policy' (2538301) panicked at /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5:
+Unexpected failure.
+code=3
+stderr=```"error: operator command contract: platform-profile-count: 41 profiles does not match 44 reviewed roots\n"```
+command=`cd "/tmp/mantle-base-wt" && "/tmp/target-mantle-elf/debug/crunch" "__operator-contract" "--mode" "check"`
+code=3
+stdout=""
+stderr="error: operator command contract: platform-profile-count: 41 profiles does not match 44 reviewed roots\n"
+
+
+
+failures:
+    build_human_failure_reports_log_persistence_failure_without_saved_log_path
+    build_human_failure_summary_matches_json_facts
+    build_json_failure_envelope_includes_saved_log_path
+    build_json_preflight_failure_omits_saved_log_path
+    build_json_success_reports_log_persistence_failure_without_fake_log_file
+    build_plan_reports_cached_after_fetchurl_build
+    build_plan_reports_preflight_error_for_missing_store_dir
+    build_without_plan_still_executes_fetchurl
+    operator_contract_checked_files_match_clap_and_policy
+
+test result: FAILED. 23 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.59s
+
+error: test failed, to rerun pass `-p mantle --test operator_diagnostics`

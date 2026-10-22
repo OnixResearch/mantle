@@ -1,0 +1,14 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.02s
+     Running tests/rust_compatibility_rail.rs (/tmp/target-mantle-elf/debug/deps/rust_compatibility_rail-64d0285c6fcc80e2)
+
+running 4 tests
+test native_path_only_surface_reports_matrix_binding_without_cargo_fallback ... ok
+test representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_fallback ... ok
+test supported_unit_plan_matrix_rows_retain_bounded_non_claims ... ok
+test unit_plan_matrix_rejects_supported_rows_without_named_fixture ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.49s
+

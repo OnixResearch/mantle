@@ -1,0 +1,44 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running tests/examples_eval.rs (/tmp/target-mantle-elf/debug/deps/examples_eval-319b33692cf845ec)
+
+running 7 tests
+test bootstrap_no_nix_example_uses_store_env_glob ... ok
+test cataloged_eval_examples_export_json ... FAILED
+test eval_bootstrap_no_nix_example_uses_shared_seed ... ok
+test eval_build_crate_crc64_example ... ok
+test eval_fetch_crate_crc64_example ... ok
+test malformed_example_fails_before_export ... ok
+test seed_dependent_example_without_seed_fails_loudly ... FAILED
+
+failures:
+
+---- cataloged_eval_examples_export_json stdout ----
+
+thread 'cataloged_eval_examples_export_json' (2506913) panicked at tests/examples_eval.rs:71:64:
+called `Result::unwrap()` on an `Err` value: Eval(EvalError(EvalErrorData { ctxt: EvalCtxt { call_stack: CallStack([App(PosIdx(2147491721)), Fun(PosIdx(2147491721)), App(PosIdx(3933)), Var { id: LocIdent { ident: `$string`, pos: None }, pos: PosIdx(4294967295) }, Fun(PosIdx(2147487578)), Fun(PosIdx(3933)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(953), end: ByteIndex(958) }) }, pos: PosIdx(3547) }, Var { id: LocIdent { ident: `field_value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(11825), end: ByteIndex(11836) }) }, pos: PosIdx(3932) }, App(PosIdx(8073)), App(PosIdx(8064)), Field { id: LocIdent { ident: `serialize`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(11604), end: ByteIndex(11613) }) }, pos_record: PosIdx(3519), pos_field: PosIdx(3467), pos_access: PosIdx(8062) }, App(PosIdx(3467)), Fun(PosIdx(8064)), App(PosIdx(3617)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(3068), end: ByteIndex(3073) }) }, pos: PosIdx(3681) }, Fun(PosIdx(8073)), App(PosIdx(3463)), Field { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(11759), end: ByteIndex(11763) }) }, pos_record: PosIdx(7784), pos_field: PosIdx(7783), pos_access: PosIdx(8071) }, Var { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(4271), end: ByteIndex(4275) }) }, pos: PosIdx(7783) }]) }, error: InfiniteRecursion(CallStack([App(PosIdx(2147491721)), Fun(PosIdx(2147491721)), App(PosIdx(3933)), Var { id: LocIdent { ident: `$string`, pos: None }, pos: PosIdx(4294967295) }, Fun(PosIdx(2147487578)), Fun(PosIdx(3933)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(953), end: ByteIndex(958) }) }, pos: PosIdx(3547) }, Var { id: LocIdent { ident: `field_value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(11825), end: ByteIndex(11836) }) }, pos: PosIdx(3932) }, App(PosIdx(8073)), App(PosIdx(8064)), Field { id: LocIdent { ident: `serialize`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(11604), end: ByteIndex(11613) }) }, pos_record: PosIdx(3519), pos_field: PosIdx(3467), pos_access: PosIdx(8062) }, App(PosIdx(3467)), Fun(PosIdx(8064)), App(PosIdx(3617)), Var { id: LocIdent { ident: `value`, pos: Original(RawSpan { src_id: FileId(1), start: ByteIndex(3068), end: ByteIndex(3073) }) }, pos: PosIdx(3681) }, Fun(PosIdx(8073)), App(PosIdx(3463)), Field { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(11759), end: ByteIndex(11763) }) }, pos_record: PosIdx(7784), pos_field: PosIdx(7783), pos_access: PosIdx(8071) }, Var { id: LocIdent { ident: `path`, pos: Original(RawSpan { src_id: FileId(11), start: ByteIndex(4271), end: ByteIndex(4275) }) }, pos: PosIdx(7783) }]), PosIdx(7783)) }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- seed_dependent_example_without_seed_fails_loudly stdout ----
+
+thread 'seed_dependent_example_without_seed_fails_loudly' (2508522) panicked at tests/examples_eval.rs:105:5:
+unexpected error: Nickel evaluation error:
+error: dynamic type error
+  ┌─ <input>:8:13
+  │
+8 │   inputs = [seed.bash],
+  │             ^^^^ this expression has type CustomContract, but Record was expected
+  │
+  = field access only makes sense for records
+
+
+failures:
+    cataloged_eval_examples_export_json
+    seed_dependent_example_without_seed_fails_loudly
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.22s
+
+error: test failed, to rerun pass `-p mantle --test examples_eval`

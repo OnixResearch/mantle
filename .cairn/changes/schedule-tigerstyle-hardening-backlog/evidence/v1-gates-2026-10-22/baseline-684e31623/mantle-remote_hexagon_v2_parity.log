@@ -1,0 +1,54 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.43s
+     Running tests/remote_hexagon_v2_parity.rs (/tmp/target-mantle-elf/debug/deps/remote_hexagon_v2_parity-147e7a453883fea5)
+
+running 7 tests
+test accepted_stdio_matches_independently_observed_origin_wire_receipt_and_durable_ticket ... ok
+test malformed_frame_rejects_with_distinct_original_diagnostic_before_ticket_state ... ok
+test original_executable_plan_preimage_matches_extracted_receipt_core ... ok
+test physical_failed_adapter_preserves_original_post_dispatch_failure_semantics ... FAILED
+test physical_production_signed_output_and_fenced_transfer_match_original_semantics ... FAILED
+test physical_production_untrusted_key_rejects_after_input_without_client_output_claim ... FAILED
+test physical_production_upload_quota_rejects_before_ticket_or_transfer ... FAILED
+
+failures:
+
+---- physical_failed_adapter_preserves_original_post_dispatch_failure_semantics stdout ----
+
+thread 'physical_failed_adapter_preserves_original_post_dispatch_failure_semantics' (2542995) panicked at tests/remote_hexagon_v2_parity.rs:1033:5:
+real failure must be the transport child spawn ENOENT, not earlier admission
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- physical_production_signed_output_and_fenced_transfer_match_original_semantics stdout ----
+
+thread 'physical_production_signed_output_and_fenced_transfer_match_original_semantics' (2543004) panicked at tests/remote_hexagon_v2_parity.rs:859:5:
+assertion `left == right` failed: physical build failed: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+  left: Some(3)
+ right: Some(0)
+
+---- physical_production_untrusted_key_rejects_after_input_without_client_output_claim stdout ----
+
+thread 'physical_production_untrusted_key_rejects_after_input_without_client_output_claim' (2543016) panicked at tests/remote_hexagon_v2_parity.rs:809:5:
+expected old untrusted-output-key rejection point, got: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- physical_production_upload_quota_rejects_before_ticket_or_transfer stdout ----
+
+thread 'physical_production_upload_quota_rejects_before_ticket_or_transfer' (2543028) panicked at tests/remote_hexagon_v2_parity.rs:809:5:
+expected old upload-byte-limit-exceeded rejection point, got: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+
+failures:
+    physical_failed_adapter_preserves_original_post_dispatch_failure_semantics
+    physical_production_signed_output_and_fenced_transfer_match_original_semantics
+    physical_production_untrusted_key_rejects_after_input_without_client_output_claim
+    physical_production_upload_quota_rejects_before_ticket_or_transfer
+
+test result: FAILED. 3 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+error: test failed, to rerun pass `-p mantle --test remote_hexagon_v2_parity`

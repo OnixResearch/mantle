@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.69s
+     Running tests/causal_build_trace.rs (/tmp/target-mantle-elf/debug/deps/causal_build_trace-8f1812e4b15aa2e0)
+
+running 3 tests
+test real_failure_has_causal_leaf_chain_without_changing_report_or_receipt ... ok
+test trace_flag_rejects_evaluation_stream ... ok
+test traced_store_preflight_preserves_failed_report_without_inventing_a_worker_trace ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.85s
+

@@ -1,0 +1,16 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+     Running tests/kernelscript_experiment.rs (/tmp/target-mantle-elf/debug/deps/kernelscript_experiment-ca1eef75fe6a5c2f)
+
+running 6 tests
+test fixture_files_are_regular_and_makefile_is_evidence_not_an_executable_test_input ... ok
+test fixture_source_blake3_matches_typed_profile_without_embedding_source_in_receipts ... ok
+test nickel_contract_rejects_default_enable_and_unknown_production_field ... ok
+test official_source_derivation_is_flat_fixed_output_and_does_not_claim_compiler_closure ... ok
+test production_shell_delegates_shape_and_receipt_semantics_to_the_core_adapter ... ok
+test typed_nickel_profile_matches_pure_core_and_exact_fixture_files ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.43s
+

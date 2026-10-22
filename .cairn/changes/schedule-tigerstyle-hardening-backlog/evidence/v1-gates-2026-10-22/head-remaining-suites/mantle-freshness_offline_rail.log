@@ -1,0 +1,15 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.68s
+     Running tests/freshness_offline_rail.rs (/tmp/target-mantle-elf/debug/deps/freshness_offline_rail-9493770780c96e42)
+
+running 5 tests
+test freshness_offline_rail_command_probe_failures_are_deterministic ... ok
+test freshness_offline_rail_composes_full_workflow ... ok
+test freshness_offline_rail_evidence_has_required_fields ... ok
+test freshness_offline_rail_network_probe_reported_as_network_required ... ok
+test freshness_offline_rail_repeated_runs_are_deterministic ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+

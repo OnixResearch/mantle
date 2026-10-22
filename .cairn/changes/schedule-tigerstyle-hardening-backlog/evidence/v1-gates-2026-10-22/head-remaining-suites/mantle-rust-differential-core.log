@@ -1,0 +1,30 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-differential-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.20s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_differential_core-2ef550ce0fe53327)
+
+running 5 tests
+test waits::tests::missing_readiness_queue_exit_remain_unavailable ... ok
+test waits::tests::rejects_cross_clock_dangling_and_malformed_events ... ok
+test waits::tests::retains_mixed_controls_failures_unrun_and_no_sparse_percentiles ... ok
+test waits::tests::separates_dependency_queue_gap_and_exact_role_pause ... ok
+test waits::tests::separates_same_name_roles_retries_and_cache_without_compiler ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/evidence.rs (/tmp/target-mantle-elf/debug/deps/evidence-87feb538b5044320)
+
+running 8 tests
+test exact_edits_cover_binary_inputs_absence_and_wrong_preimages ... ok
+test expected_rejection_does_not_accept_success_crash_or_wrong_error ... ok
+test fallback_and_required_unrun_do_not_cover_original_route ... ok
+test lost_test_or_replaced_denominator_cannot_hide_behind_equal_counts ... ok
+test recovery_preserves_the_interruption_instead_of_greenwashing_continuity ... ok
+test repeated_and_ordered_diagnostics_remain_consumer_visible ... ok
+test same_binary_future_registration_cannot_exchange_compilers ... ok
+test unknown_fields_truncation_ice_and_bad_cleanup_are_not_equivalence ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

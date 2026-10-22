@@ -1,0 +1,41 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.71s
+     Running tests/attest_cli.rs (/tmp/target-mantle-elf/debug/deps/attest_cli-f6593ce09a647399)
+
+running 10 tests
+test attest_build_workflow_and_cached_second_build ... ok
+test attest_closure_and_verify_runtime_roots ... ok
+test attest_diff_accepts_existing_exported_artifact_selectors ... ok
+test attest_input_limit_rejects_before_store_initialization ... ok
+test attest_project_verify_and_diff ... ok
+test attest_project_workflow_on_built_root ... ok
+test attest_remote_substitution_workflow_persists_sidecars_and_verifies ... FAILED
+test attest_show_and_verify_artifact ... ok
+test attest_store_query_rejection_initializes_only_its_selected_store ... ok
+test casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy ... FAILED
+
+failures:
+
+---- attest_remote_substitution_workflow_persists_sidecars_and_verifies stdout ----
+
+thread 'attest_remote_substitution_workflow_persists_sidecars_and_verifies' (1906596) panicked at tests/attest_cli.rs:446:5:
+substitution build failed: {"error":"opening store: store: store-source-admission-required","code":3,"kind":"internal"}
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy stdout ----
+
+thread 'casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy' (1907787) panicked at tests/attest_cli.rs:574:5:
+{"error":"opening store: store: store-source-admission-required","code":3,"kind":"internal"}
+
+
+
+failures:
+    attest_remote_substitution_workflow_persists_sidecars_and_verifies
+    casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy
+
+test result: FAILED. 8 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.12s
+
+error: test failed, to rerun pass `-p mantle --test attest_cli`

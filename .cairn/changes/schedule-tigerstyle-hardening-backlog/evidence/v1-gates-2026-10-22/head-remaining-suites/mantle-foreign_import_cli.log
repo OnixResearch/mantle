@@ -1,0 +1,29 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.90s
+     Running tests/foreign_import_cli.rs (/tmp/target-mantle-elf/debug/deps/foreign_import_cli-3c11a2b79c927ecd)
+
+running 19 tests
+test foreign_import_cli_does_not_require_foreign_frontend_commands ... ok
+test foreign_import_cli_prepares_exact_nario_source_and_rejects_unmatched_records ... ok
+test foreign_import_cli_produce_aterm_matches_nix_and_emits_guix_directory_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_bad_bundles_without_partial_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_duplicate_and_bounded_byte_inputs ... ok
+test foreign_import_cli_produce_aterm_rejects_input_mode_conflicts_without_artifacts ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_without_nix ... ok
+test foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs ... ok
+test foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_drv_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_json_and_policy_failures ... ok
+test foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state ... ok
+test foreign_import_cli_validates_and_plans_checked_fixtures ... ok
+test foreign_plan_refuses_success_when_distinct_output_names_alias ... ok
+test produce_backend_fix_and_host_nix_emit_parity_artifacts ... ignored, requires MANTLE_TEST_FIX_BACKEND_BINARY, MANTLE_TEST_NIX_INSTANTIATE_BINARY, and a reachable Nix daemon
+test produce_backend_rejects_conflicting_target_modes ... ok
+test produce_backend_rejects_unknown_backend ... ok
+
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.88s
+

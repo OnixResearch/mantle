@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.26s
+     Running tests/composition_root_cli.rs (/tmp/target-mantle-elf/debug/deps/composition_root_cli-4bb91fe8efdcb210)
+
+running 3 tests
+test composition_cli_has_stable_identity_and_realizes_complete_roots ... ok
+test composition_cli_rejects_frontend_intent_and_missing_roots_without_receipts ... ok
+test composition_plan_fixtures_are_order_independent_and_frontend_neutral ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+

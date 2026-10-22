@@ -1,0 +1,30 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.02s
+     Running tests/store_gc_cli.rs (/tmp/target-mantle-elf/debug/deps/store_gc_cli-774d8ec0169176d8)
+
+running 20 tests
+test ambient_backend_name_cannot_override_default_snix_selection ... ok
+test casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_roots ... ok
+test casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_nar ... ok
+test casita_store_gc_missing_retained_cache_root_fails_before_removing_signed_output ... ok
+test casita_store_gc_without_cache_state_collects_only_unpinned_signed_output ... ok
+test identityless_casita_repository_rejects_both_backends_with_or_without_snix_state ... ok
+test identityless_foreign_content_rejects_casita_before_state_or_output_mutation ... ok
+test selected_backend_is_recorded_and_mismatch_rejects_without_mutation ... ok
+test selected_backend_states_preserve_frozen_hello_and_signed_facts_under_provisioned_fixture_keys ... ok
+test selected_backends_reopen_the_same_signed_ca_closure_and_plan_the_same_gc_candidate ... ok
+test store_gc_dry_run_reports_candidate_without_mutating ... ok
+test store_gc_execution_refuses_when_mutation_lock_is_held ... ok
+test store_info_rejects_writable_base_before_overlay_creation ... ok
+test store_info_reports_base_layer_without_mutating_base ... ok
+test store_pin_and_unpin_round_trip ... ok
+test store_roots_migrates_legacy_records_without_inventing_ownership ... ok
+test unknown_backend_is_rejected_before_creating_state ... ok
+test wrong_backend_build_rejects_before_creating_a_signer_or_changing_state ... ok
+test wrong_backend_overlay_base_build_rejects_before_creating_a_signer ... ok
+test wrong_backend_sign_rejects_before_creating_a_signer_or_changing_state ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.56s
+

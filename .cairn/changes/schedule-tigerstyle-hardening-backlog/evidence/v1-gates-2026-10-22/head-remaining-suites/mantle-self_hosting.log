@@ -1,0 +1,70 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.66s
+     Running tests/self_hosting.rs (/tmp/target-mantle-elf/debug/deps/self_hosting-3d971852f3ef19e6)
+
+running 56 tests
+test append_no_host_tools_stage0_args_preserves_base_command_and_adds_inventory ... ok
+test audit_hashing_rejects_excessively_deep_trees ... ok
+test collect_embedded_store_paths_filters_relevant_entries ... ok
+test create_stage0_scrubbed_path_blocks_nix_binaries ... ok
+test diff_binary_bytes_reports_first_mismatch ... ok
+test expected_store_prefix_defaults_to_crunch_store ... ok
+test expected_store_prefix_matches_nix_compat_precedence ... ok
+test filtered_proof_tool_names_removes_blocked_host_tools_for_no_host_mode ... ok
+test full_source_provider_admission_preserves_authenticated_source_authority ... ok
+test full_source_provider_admission_rejects_tampered_status_output_and_source_authority ... ok
+test proof_mode_defaults_to_fixed_point ... ok
+test prove_self_hosting_script_accepts_exact_scratch_threshold ... ok
+test prove_self_hosting_script_anchors_default_scratch_root_to_repo_root_from_non_repo_cwd ... ok
+test prove_self_hosting_script_anchors_relative_bundle_dir_and_updates_latest ... ok
+test prove_self_hosting_script_anchors_relative_sandbox_shell_to_repo_root ... ok
+test prove_self_hosting_script_anchors_relative_scratch_override_to_repo_root_from_non_repo_cwd ... ok
+test prove_self_hosting_script_creates_selected_scratch_root_when_missing ... ok
+test prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env_is_bin_sh ... ok
+test prove_self_hosting_script_exports_authenticated_source_authority ... ok
+test prove_self_hosting_script_exports_no_host_tools_inventory_and_blocks_host_tools ... ok
+test prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc ... ok
+test prove_self_hosting_script_exports_strict_later_stage_hermeticity_by_default ... ok
+test prove_self_hosting_script_fails_fast_when_default_sandbox_shell_missing_without_nix_build_fallback ... ok
+test prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds ... ok
+test prove_self_hosting_script_no_host_tools_requires_inventory_before_launch ... ok
+test prove_self_hosting_script_preserves_absolute_bundle_dir_and_updates_latest ... ok
+test prove_self_hosting_script_preserves_absolute_scratch_override_path ... ok
+test prove_self_hosting_script_rejects_below_threshold_override_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_create_failure_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_create_failure_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_rejects_option_like_bundle_dir_value ... ok
+test prove_self_hosting_script_rejects_unpaired_source_authority_before_launch ... ok
+test prove_self_hosting_script_rejects_unusable_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_rejects_unwritable_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_unwritable_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_reports_default_scratch_policy_in_check_mode ... ok
+test prove_self_hosting_script_reports_scratch_override_in_check_mode ... ok
+test prove_self_hosting_script_routes_spawned_tmpdir_and_cargo_target_under_default_scratch_root ... ok
+test prove_self_hosting_script_uses_bundle_dir_env_when_cli_arg_absent ... ok
+test record_stage_evidence_with_populated_store_avoids_audit_limit ... ok
+test record_stage_evidence_writes_audit_and_diagnostics_paths ... ok
+test remove_crunch_outputs_ignores_non_mantle_entries ... ok
+test remove_crunch_outputs_removes_read_only_crunch_output ... ok
+test render_stage_diagnostics_includes_proof_lines_and_paths ... ok
+test resolve_proof_bundle_dir_anchors_relative_env_to_repo_root ... ok
+test resolve_proof_bundle_dir_preserves_absolute_env_path ... ok
+test run_command_live_writes_stage_stream_files ... stdout-1
+stdout-2
+stderr-1
+stderr-2
+ok
+test self_hosting_controlled_failure_reports_breadcrumbs ... ok
+test self_hosting_controlled_failure_reports_breadcrumbs_trigger ... ok
+test self_hosting_stage0_stage1_stage2 ... ignored
+test stage_context_reads_saved_snapshot_from_disk ... ok
+test test_script_shebang_leaves_non_script_payload_unchanged ... ok
+test test_script_shebang_uses_declared_absolute_shell ... ok
+test write_proof_bundle_copies_stage_artifacts_and_manifest ... ok
+
+test result: ok. 55 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 54.64s
+

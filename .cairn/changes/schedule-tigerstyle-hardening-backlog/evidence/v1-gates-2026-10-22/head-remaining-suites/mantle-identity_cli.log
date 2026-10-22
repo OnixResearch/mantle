@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running tests/identity_cli.rs (/tmp/target-mantle-elf/debug/deps/identity_cli-3cbb4cb1d598fa5f)
+
+running 3 tests
+test legacy_crunch_binary_is_alias_to_mantle_help ... ok
+test mantle_help_reports_canonical_identity ... ok
+test mantle_version_reports_canonical_binary_name ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

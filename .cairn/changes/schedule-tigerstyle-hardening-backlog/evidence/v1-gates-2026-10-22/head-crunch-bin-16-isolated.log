@@ -1,0 +1,149 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.41s
+     Running unittests src/main.rs (/tmp/target-mantle-elf/debug/deps/crunch-764c2fb2f56a0498)
+
+running 16 tests
+test nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend ... FAILED
+test nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory ... FAILED
+test nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class ... FAILED
+test nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements ... FAILED
+test remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner ... FAILED
+test remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records ... FAILED
+test remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry ... FAILED
+test remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once ... FAILED
+test remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer ... FAILED
+test remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission ... FAILED
+test rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source ... FAILED
+test rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay ... FAILED
+test source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails ... FAILED
+test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections ... FAILED
+test tests::flake_check_workflow_has_one_verification_command ... FAILED
+
+failures:
+
+---- nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend stdout ----
+
+thread 'nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend' (970313) panicked at src/nix_gateway/authority/tests.rs:103:5:
+assertion failed: verifier.revalidate(&session, 1901).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory stdout ----
+
+thread 'nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory' (970630) panicked at src/nix_gateway/resource_host_tests.rs:212:53:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class stdout ----
+
+thread 'nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class' (970656) panicked at src/nix_gateway/resource_host_tests.rs:127:65:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements stdout ----
+
+thread 'nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements' (970657) panicked at src/nix_gateway/resource_host_tests.rs:186:53:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner' (970658) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records' (970891) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry' (970933) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once stdout ----
+
+thread 'remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once' (970947) panicked at src/remote_build/tests/endpoint_binding_tests.rs:123:48:
+called `Result::unwrap()` on an `Err` value: Internal("remote-ticket-state-validation-failed")
+
+---- remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer stdout ----
+
+thread 'remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer' (971075) panicked at src/remote_build.rs:21309:10:
+timeout cancels scheduler allocation and coordinator attempt: "persistence-failed: error: remote-coordinator-save-conflict: expected revision 5, persisted revision 6; reload coordinator state before applying the transition"
+
+---- remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission stdout ----
+
+thread 'remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission' (971389) panicked at src/remote_build/tests/source_binding_tests.rs:340:6:
+called `Result::unwrap()` on an `Err` value: Export("exporting imported HTTP path /tmp/nix-shell.imTDi8/.tmpmiS1B1/target/output/8x3lfis78x3lfis78x3lfis78x3lfis7-real-signed-source: creating materialization staging directory: No such file or directory (os error 2) at path \"/tmp/nix-shell.imTDi8/.tmpmiS1B1/target/output/.mantle-pull-stage-MLd0uY\"")
+
+---- rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source stdout ----
+
+thread 'rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source' (972445) panicked at src/rust_plan.rs:19350:9:
+assertion failed: error.to_string().contains("blocked")
+
+---- rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay stdout ----
+
+thread 'rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay' (972573) panicked at src/rust_plan.rs:19510:9:
+assertion `left == right` failed
+  left: []
+ right: [UnitId("native:240a9e1a9c9b4e2f8aa304b79921e23884243864792c0a710e2b373210e4221f:registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0:dep-crate:lib:build")]
+
+---- source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails stdout ----
+
+thread 'source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails' (972747) panicked at src/source_bundle.rs:8849:9:
+assertion failed: error.to_string().contains("creating source records dir")
+
+---- source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity stdout ----
+
+thread 'source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity' (973015) panicked at src/source_root_capability.rs:187:9:
+assertion failed: command_available(self_executable.to_str().unwrap(), &mut executed)
+
+---- stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections stdout ----
+
+thread 'stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections' (973149) panicked at src/stagex_command_capture.rs:672:13:
+positive: stdout=
+running 1 test
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections has been running for over 60 seconds
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections ... FAILED
+
+failures:
+
+failures:
+    stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2841 filtered out; finished in 414.72s
+
+ stderr=
+thread 'stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections' (973223) panicked at src/stagex_command_capture.rs:735:60:
+called `Result::unwrap()` on an `Err` value: Limit("nonregular or oversized StageX input/output: /tmp/target-mantle-elf/debug/deps/crunch-764c2fb2f56a0498")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+---- tests::flake_check_workflow_has_one_verification_command stdout ----
+
+thread 'tests::flake_check_workflow_has_one_verification_command' (3109698) panicked at src/main.rs:11350:9:
+assertion `left == right` failed
+  left: ["run: nix develop --command ./scripts/check-operator-command-contract.sh", "run: nix flake check"]
+ right: ["run: nix flake check"]
+
+
+failures:
+    nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend
+    nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory
+    nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class
+    nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements
+    remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner
+    remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records
+    remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry
+    remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once
+    remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer
+    remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission
+    rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source
+    rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay
+    source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails
+    source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity
+    stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections
+    tests::flake_check_workflow_has_one_verification_command
+
+test result: FAILED. 0 passed; 16 failed; 0 ignored; 0 measured; 2826 filtered out; finished in 415.41s
+
+error: test failed, to rerun pass `-p mantle --bin crunch`

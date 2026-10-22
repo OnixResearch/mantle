@@ -1,0 +1,31 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde_json v1.0.149
+   Compiling blake3 v1.8.5
+   Compiling libc v0.2.186
+   Compiling serde v1.0.228
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-core)
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-differential-core)
+   Compiling mantle-rust-differential v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-differential)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.45s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_differential-e5f0c542884b7678)
+
+running 2 tests
+test waits::tests::a_precollector_supervision_origin_cannot_claim_complete_drain_timing ... ok
+test waits::tests::supervisor_elapsed_and_resource_offsets_use_the_wrapper_clock ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/main.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_differential-0383f5ab803f3720)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/wait-wrapper.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_wait_wrapper-6f369c4754dd114c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

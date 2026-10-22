@@ -1,0 +1,22 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.79s
+     Running tests/examples_workflow_gallery.rs (/tmp/target-mantle-elf/debug/deps/examples_workflow_gallery-8914f78f20c3c9d0)
+
+running 12 tests
+test cargo_import_example_plans_applies_and_fails_before_invalid_writes ... ok
+test cargo_import_example_rejects_ambiguous_default_package ... ok
+test checked_gallery_transcript_executes_with_the_real_mantle_binary ... ok
+test foreign_import_example_accepts_checked_inputs_and_rejects_untrusted_cache ... ok
+test nixpkgs_tool_use_binds_the_imported_builder_and_negative_cases ... ok
+test receipt_example_exports_lists_and_rejects_tamper ... ok
+test remote_ticket_example_delivers_once_redacts_and_revokes ... ok
+test remote_ticket_example_rejects_unknown_ticket ... ok
+test semantic_graph_example_explains_output_and_dependents ... ok
+test semantic_graph_example_reports_incomplete_evidence_without_invention ... ok
+test wasm_workflow_rejects_empty_world_at_the_typed_boundary ... ok
+test workflow_entrypoints_evaluate_to_their_declared_shapes ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.29s
+

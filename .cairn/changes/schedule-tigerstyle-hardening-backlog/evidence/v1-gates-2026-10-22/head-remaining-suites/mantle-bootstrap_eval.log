@@ -1,0 +1,46 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+     Running tests/bootstrap_eval.rs (/tmp/target-mantle-elf/debug/deps/bootstrap_eval-64b853f24723d783)
+
+running 36 tests
+test all_bootstrap_entrypoints_evaluate ... ok
+test binutils_tcc_uses_declared_generators_and_checks_the_full_tool_matrix ... ok
+test bison_23_musl_builds_complete_declared_sources_with_bounded_hash_semantics ... ok
+test bootstrap_entrypoints_do_not_inline_raw_seed_provider_details ... ok
+test diffutils_musl_uses_proven_tcc_and_rejects_compiler_teardown_outputs ... ok
+test eval_crunch_bootstrap_imports_shared_seed ... ok
+test eval_make_bootstrap_imports_shared_seed ... ok
+test eval_seed_module_exposes_selected_full_source_provider_metadata ... ok
+test flex_musl_bounds_varargs_and_declares_m4_with_both_fixture_polarities ... ok
+test full_source_host_tools_bind_the_selected_linux_header_identity ... ok
+test full_source_provider_records_authenticated_closure_and_is_selected ... ok
+test gawk_musl_uses_proven_tcc_with_bounded_numeric_runtime_and_generator_checks ... ok
+test gawk_string_macros_are_config_header_owned ... ok
+test gcc40_cxx_defaults_random_seeds_to_main_input_identity ... ok
+test gcc_built_binutils_defaults_to_deterministic_archives ... ok
+test gcc_native_diagnostic_uses_runtime_tcc_without_autotools_claims ... ok
+test gcc_pass3_linker_uses_only_relocatable_stagex_authority ... ok
+test gcc_pass4_tool_wrappers_use_only_relocatable_stagex_authority ... ok
+test gcc_pass5_archives_bind_deterministic_binutils_metadata ... ok
+test gzip_marks_generated_crc_helper_executable_before_running_it ... ok
+test legacy_seed_derivation_writes_shared_provider_metadata_schema ... ok
+test linux_header_derivation_evaluates_with_direct_runtime_inputs ... ok
+test m4_musl_builds_genuine_prefix_capable_binary_with_fixture_polarities ... ok
+test native_musl_candidate_preserves_runtime_sources ... ok
+test native_tcc_diagnostics_remain_bounded_and_non_admitted ... ok
+test perl_gcc_generators_keep_normalized_inputs_and_runtime_rails ... ok
+test perl_gcc_runtime_contract_rejects_stale_malformed_source_diagnostic ... ok
+test rust_source_route_registry_disqualifies_compatibility_and_import_routes ... ok
+test rust_source_route_registry_selects_only_the_full_source_musl_candidate ... ok
+test seed_selector_selects_full_source_without_legacy_fallback_or_self_recursion ... ok
+test self_hosting_proof_defaults_to_full_source_provider_identity ... ok
+test selfhosted_tinycc_candidate_rebuilds_compiler_source ... ok
+test source_built_coreutils_handoff_rejects_busybox_output_wrappers ... ok
+test source_built_linux_headers_replace_legacy_seed_header_assumption ... ok
+test source_built_sbase_remains_separate_from_bounded_gcc_tool_path ... ok
+test tcc_musl_v2_installs_and_exercises_its_stdarg_contract ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.02s
+

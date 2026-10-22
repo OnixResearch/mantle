@@ -1,0 +1,42 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running tests/examples_inventory.rs (/tmp/target-mantle-elf/debug/deps/examples_inventory-ac8a8f2abd878980)
+
+running 17 tests
+test documented_crunch_ncl_identifier_is_allowed ... ok
+test examples_catalog_covers_checked_in_user_facing_examples ... FAILED
+test examples_catalog_rejects_duplicate_ids_and_paths ... ok
+test examples_catalog_rejects_fetchers_without_offline_and_negative_rails ... ok
+test examples_catalog_rejects_invalid_tier_and_silent_skip ... ok
+test examples_catalog_rejects_missing_required_workflow_rail ... ok
+test examples_catalog_rejects_readme_lane_order_and_missing_project_outputs ... ok
+test examples_catalog_rejects_readme_omissions_and_stale_paths ... ok
+test examples_catalog_rejects_stale_crunch_branding_in_user_docs ... ok
+test examples_catalog_rejects_trust_docs_without_non_claims ... ok
+test examples_catalog_supports_lane_inventory_for_docs ... ok
+test flake_source_keeps_project_and_transcript_support_trees ... ok
+test only_transcript_markdown_is_a_user_facing_markdown_example ... ok
+test project_indexes_are_documentation_support_files ... ok
+test project_sources_are_grouped_under_their_mantle_entrypoint ... ok
+test registry_oci_workflow_catalog_and_docs_preserve_signed_immutable_admission_boundary ... ok
+test remote_resumable_workflow_catalog_and_docs_name_the_production_boundary ... ok
+
+failures:
+
+---- examples_catalog_covers_checked_in_user_facing_examples stdout ----
+
+thread 'examples_catalog_covers_checked_in_user_facing_examples' (2508879) panicked at tests/examples_inventory.rs:619:5:
+examples catalog invalid:
+user-facing example `examples/resource_policy_replay.rs` missing from catalog
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    examples_catalog_covers_checked_in_user_facing_examples
+
+test result: FAILED. 16 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+error: test failed, to rerun pass `-p mantle --test examples_inventory`

@@ -1,0 +1,31 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.45s
+     Running tests/bootstrap_parity_cli.rs (/tmp/target-mantle-elf/debug/deps/bootstrap_parity_cli-df7d7adf72de2be8)
+
+running 21 tests
+test bootstrap_capabilities_report_missing_host_tools_without_process_path ... ok
+test bootstrap_parity_report_accepts_independently_receipted_early_native_rows ... ok
+test bootstrap_parity_report_emits_json_gap_report ... ok
+test bootstrap_parity_report_keeps_stale_final_native_evidence_partial ... ok
+test bootstrap_parity_report_preserves_absolute_missing_derivation_paths ... ok
+test bootstrap_parity_report_rejects_corrupt_predecessor_attestation ... ok
+test bootstrap_parity_report_rejects_cross_row_final_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_cross_row_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_forbidden_host_tool_discovery ... ok
+test bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes ... ok
+test bootstrap_parity_report_rejects_malformed_row_receipt ... ok
+test bootstrap_parity_report_rejects_missing_final_runtime_member ... ok
+test bootstrap_parity_report_rejects_missing_output_artifact_evidence ... ok
+test bootstrap_parity_report_rejects_stale_generated_artifact_status ... ok
+test bootstrap_parity_report_rejects_stale_row_source_digest ... ok
+test bootstrap_parity_report_rejects_state_pinned_final_source ... ok
+test bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint ... ok
+test bootstrap_parity_report_rejects_wrapper_delegation_marker ... ok
+test bootstrap_parity_report_require_fails_closed_on_gaps ... ok
+test bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_guix ... ok
+test bootstrap_parity_report_stagex_requires_lineage_seed_provider ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.25s
+

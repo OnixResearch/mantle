@@ -1,0 +1,38 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running tests/stdlib_tests.rs (/tmp/target-mantle-elf/debug/deps/stdlib_tests-d2ecf32030d8076e)
+
+running 28 tests
+test contract_catches_missing_name ... ok
+test contract_catches_wrong_type ... ok
+test contract_rejects_extra_fields ... ok
+test enum_tags_deserialize_direct_serde ... ok
+test enum_tags_deserialize_via_json ... ok
+test fetch_git_produces_git_env ... ok
+test fetch_tarball_produces_recursive_hash ... ok
+test fetchurl_custom_name ... ok
+test fetchurl_invalid_hash_passes_eval ... ok
+test fetchurl_preserves_optional_fetch_policy_env ... ok
+test fetchurl_produces_fod_record ... ok
+test fetchurl_rejects_empty_url ... ok
+test fixed_output_contract ... ok
+test full_serde_round_trip ... ok
+test i386_linux_system_tag_is_accepted ... ok
+test lock_vendor_evaluation_defers_missing_lock_and_fetch_to_the_declared_producer ... ok
+test mixed_inputs_array_validates ... ok
+test recursive_record_self_reference ... ok
+test select_produces_correct_structure ... ok
+test select_round_trip_through_glue ... ok
+test store_path_validator_accepts_custom_store_prefix ... ok
+test store_path_validator_accepts_nix_store_path ... ok
+test store_path_validator_rejects_invalid ... ok
+test wasm_component_export_is_deterministic ... ok
+test wasm_component_export_rejects_digest_role_confusion ... ok
+test wasm_component_manifest_exports_owned_tool_inputs ... ok
+test wasm_component_manifest_rejects_empty_world ... ok
+test wasm_component_manifest_rejects_unknown_output_class ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.90s
+

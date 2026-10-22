@@ -1,0 +1,14 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.50s
+     Running tests/kernel_bundle_oci_cli.rs (/tmp/target-mantle-elf/debug/deps/kernel_bundle_oci_cli-5328038bc88255e9)
+
+running 4 tests
+test checked_gallery_fixture_rejects_tampered_layer_before_import_report ... ok
+test checked_gallery_fixture_round_trips_through_the_public_cli ... ok
+test oci_export_rejects_unsealed_unknown_projection_before_object_reads ... ok
+test oci_projection_commands_are_public_and_document_the_local_boundary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+

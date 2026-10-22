@@ -1,0 +1,206 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.88s
+     Running tests/integration.rs (/tmp/target-mantle-elf/debug/deps/integration-8a3836719cae56ad)
+
+running 80 tests
+test bootstrap_creates_seed_file ... ok
+test bootstrap_seed_is_importable ... ok
+test build_accepts_jobs_flag ... ok
+test build_accepts_no_substitute_flag ... ok
+test build_accepts_short_j_flag ... ok
+test build_accepts_substituters_flag ... ok
+test build_missing_store_exits_3 ... ok
+test build_tests::build_evaluation_stream_emits_complete_success_contract ... ok
+test build_tests::build_evaluation_stream_preserves_partial_results_and_exit_status ... ok
+test build_tests::build_evaluation_stream_rejects_broken_stdout ... ok
+test build_tests::build_evaluation_stream_repeated_signal_forces_non_success ... ok
+test build_tests::build_evaluation_stream_sigint_emits_cancelled_summary ... ok
+test build_tests::build_evaluation_stream_sigterm_emits_cancelled_summary ... ok
+test build_tests::build_failing_builder_exits_1 ... ok
+test build_tests::build_json_failure_keeps_report_on_stdout_and_stderr_empty ... ok
+test build_tests::build_json_success_emits_machine_readable_report ... ok
+test build_tests::build_persists_signed_pathinfo ... FAILED
+test build_tests::build_trivial_derivation ... ok
+test build_tests::build_writes_log_file ... ok
+test casita_repair_final_nar_rejects_before_creating_or_mutating_state ... ok
+test default_eval_does_not_emit_runtime_fingerprint ... ok
+test develop_alias_exists ... ok
+test eval_core_derivation_rejects_builder_only_provenance ... ok
+test eval_invalid_nickel_exits_2 ... ok
+test eval_json_flag_emits_json_error ... ok
+test eval_mkderivation_custom_phase_overrides_default ... ok
+test eval_mkderivation_empty_phase_skips ... ok
+test eval_mkderivation_has_default_phases ... ok
+test eval_mkderivation_provenance_exported_from_builder_layer ... ok
+test eval_mkderivation_src_wired_to_env ... ok
+test eval_mkshell_produces_valid_derivation ... ok
+test eval_mkshell_sidecar_empty_inputs ... ok
+test eval_mkshell_sidecar_with_hook ... ok
+test eval_multi_derivation_prints_both ... ok
+test eval_multi_output_derivation ... ok
+test eval_nonexistent_file_exits_2 ... ok
+test eval_output_is_valid_json ... ok
+test eval_output_selection_with_select ... ok
+test eval_simple_derivation_prints_json ... ok
+test eval_still_uses_json_export_after_build_path_switch ... ok
+test eval_with_import_path_flag ... ok
+test evaluation_stream_requires_explicit_non_json_build_mode ... ok
+test fetchurl_wrong_hash_shows_correct_hash ... FAILED
+test fix_flag_rewrites_hash ... FAILED
+test json_verbose_eval_keeps_stdout_parseable_and_diagnostics_on_stderr ... ok
+test log_subcommand_lists_logs ... ok
+test log_subcommand_no_logs ... ok
+test log_subcommand_query_not_found ... ok
+test log_subcommand_rejects_missing_log_file ... ok
+test log_subcommand_rejects_unreadable_log_before_printing_any_listing ... ok
+test log_subcommand_rejects_unreadable_matched_file ... ok
+test log_subcommand_shows_log_by_query ... ok
+test shell_build_tests::shell_env_vars_visible_in_command ... FAILED
+test shell_build_tests::shell_exit_code_propagation ... FAILED
+test shell_build_tests::shell_hook_output_appears ... FAILED
+test shell_build_tests::shell_missing_sidecar_clear_error ... FAILED
+test shell_build_tests::shell_no_hook_suppresses_hook ... FAILED
+test shell_build_tests::shell_strict_hooks_exits_on_failure ... FAILED
+test shell_build_tests::shell_with_adds_path_entry ... FAILED
+test shell_command_run_mutual_exclusion ... ok
+test shell_help_shows_new_flags ... ok
+test shell_with_nonexistent_path_fails ... ok
+test store_pull_closure_conflicts_with_all ... ok
+test store_pull_directory_rejects_closure_mode ... ok
+test store_pull_http_closure_rejects_multiple_roots ... ok
+test store_pull_http_closure_requires_exactly_one_root ... ok
+test store_pull_http_closure_round_trip_imports_root ... FAILED
+test store_pull_http_rejects_all ... ok
+test store_pull_http_requires_explicit_paths ... ok
+test store_pull_http_round_trip_imports_path ... FAILED
+test store_pull_rejects_http_url_with_userinfo ... ok
+test store_pull_rejects_unsupported_url_scheme ... ok
+test store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent ... ok
+test store_repair_final_nar_enables_archive_export_after_execution ... ok
+test store_repair_final_nar_rejects_fragment_without_mutation ... ok
+test store_sign_all_signs_existing_unsigned_entries ... ok
+test store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering ... ok
+test verbose_build_plan_emits_build_mode_fingerprint_before_preflight_result ... ok
+test verbose_eval_emits_runtime_fingerprint_to_stderr ... ok
+test verbose_store_roots_emits_store_fingerprint ... ok
+
+failures:
+
+---- build_tests::build_persists_signed_pathinfo stdout ----
+
+thread 'build_tests::build_persists_signed_pathinfo' (2036866) panicked at /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5:
+Unexpected failure.
+code=3
+stderr=```"error: opening store: store: store-source-admission-required\n"```
+command=`CRUNCH_STATE_DIR="/tmp/nix-shell.OZiTMs/.tmprSY6wU" "/tmp/target-mantle-elf/debug/crunch" "--store" "/tmp/nix-shell.OZiTMs/.tmpJMX4Fq" "build" "--signing-key" "/tmp/nix-shell.OZiTMs/.tmpCC85aI/cache.key" "-I" "/tmp/nix-shell.OZiTMs/.tmpCC85aI" "/tmp/nix-shell.OZiTMs/.tmpCC85aI/signed.ncl"`
+code=3
+stdout=""
+stderr="error: opening store: store: store-source-admission-required\n"
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- fetchurl_wrong_hash_shows_correct_hash stdout ----
+
+thread 'fetchurl_wrong_hash_shows_correct_hash' (2039144) panicked at tests/integration.rs:2076:5:
+stderr should mention hash mismatch: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpwZy7rZ/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- fix_flag_rewrites_hash stdout ----
+
+thread 'fix_flag_rewrites_hash' (2040736) panicked at tests/integration.rs:2138:5:
+stderr should confirm the fix: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpKo5ehs/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- shell_build_tests::shell_env_vars_visible_in_command stdout ----
+
+thread 'shell_build_tests::shell_env_vars_visible_in_command' (2042487) panicked at tests/integration.rs:2684:9:
+shell --command env: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpMI0F16/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- shell_build_tests::shell_exit_code_propagation stdout ----
+
+thread 'shell_build_tests::shell_exit_code_propagation' (2042524) panicked at tests/integration.rs:2890:9:
+assertion `left == right` failed: exit code should be 42
+  left: Some(3)
+ right: Some(42)
+
+---- shell_build_tests::shell_hook_output_appears stdout ----
+
+thread 'shell_build_tests::shell_hook_output_appears' (2042570) panicked at tests/integration.rs:2714:9:
+shell with hook: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmp270Rfo/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- shell_build_tests::shell_missing_sidecar_clear_error stdout ----
+
+thread 'shell_build_tests::shell_missing_sidecar_clear_error' (2042608) panicked at tests/integration.rs:2862:9:
+error should name the sidecar file: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmp5e696P/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- shell_build_tests::shell_no_hook_suppresses_hook stdout ----
+
+thread 'shell_build_tests::shell_no_hook_suppresses_hook' (2042645) panicked at tests/integration.rs:2742:9:
+shell --no-hook: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpfgu8kK/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- shell_build_tests::shell_strict_hooks_exits_on_failure stdout ----
+
+thread 'shell_build_tests::shell_strict_hooks_exits_on_failure' (2042682) panicked at tests/integration.rs:2771:9:
+assertion `left == right` failed: exit code should propagate from hook
+  left: Some(3)
+ right: Some(7)
+
+---- shell_build_tests::shell_with_adds_path_entry stdout ----
+
+thread 'shell_build_tests::shell_with_adds_path_entry' (2042727) panicked at tests/integration.rs:2813:9:
+--with should add tool to PATH: Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpT1KNhS/signing-key)
+error: opening store: store: store-source-admission-required
+
+
+---- store_pull_http_closure_round_trip_imports_root stdout ----
+
+thread 'store_pull_http_closure_round_trip_imports_root' (2042937) panicked at tests/integration.rs:1755:5:
+HTTP closure pull failed (exit 3):
+stdout: 
+stderr: 2026-10-22T20:28:48.825444Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/tmp/nix-shell.OZiTMs/.tmpudB4l6/closure-pull-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+2026-10-22T20:28:48.827457Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 12, path: \"/tmp/nix-shell.OZiTMs/.tmpudB4l6/closure-pull-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmpudB4l6/closure-pull-state/signing-key)
+error: pull closure: store: store-source-admission-required
+
+
+---- store_pull_http_round_trip_imports_path stdout ----
+
+thread 'store_pull_http_round_trip_imports_path' (2043084) panicked at tests/integration.rs:1710:5:
+HTTP pull failed (exit 3):
+stdout: 
+stderr: 2026-10-22T20:28:48.954478Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/tmp/nix-shell.OZiTMs/.tmp9XnPJf/pull-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+2026-10-22T20:28:48.956814Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 12, path: \"/tmp/nix-shell.OZiTMs/.tmp9XnPJf/pull-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.OZiTMs/.tmp9XnPJf/pull-state/signing-key)
+error: pull: store: store-source-admission-required
+
+
+
+failures:
+    build_tests::build_persists_signed_pathinfo
+    fetchurl_wrong_hash_shows_correct_hash
+    fix_flag_rewrites_hash
+    shell_build_tests::shell_env_vars_visible_in_command
+    shell_build_tests::shell_exit_code_propagation
+    shell_build_tests::shell_hook_output_appears
+    shell_build_tests::shell_missing_sidecar_clear_error
+    shell_build_tests::shell_no_hook_suppresses_hook
+    shell_build_tests::shell_strict_hooks_exits_on_failure
+    shell_build_tests::shell_with_adds_path_entry
+    store_pull_http_closure_round_trip_imports_root
+    store_pull_http_round_trip_imports_path
+
+test result: FAILED. 68 passed; 12 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.62s
+
+error: test failed, to rerun pass `-p mantle --test integration`

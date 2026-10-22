@@ -1,0 +1,103 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.36s
+     Running tests/remote_transfer_production.rs (/tmp/target-mantle-elf/debug/deps/remote_transfer_production-fb7b5fe74cf8047b)
+
+running 12 tests
+test failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle ... FAILED
+test failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth ... ok
+test gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content ... FAILED
+test gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once ... FAILED
+test oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure ... FAILED
+test production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits ... FAILED
+test production_stdio_drops_malformed_trace_and_survives_otlp_outage ... FAILED
+test production_stdio_exports_prometheus_and_propagates_bounded_trace_context ... FAILED
+test production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission ... FAILED
+test production_stdio_resumes_interrupted_multi_chunk_input_upload ... FAILED
+test production_stdio_resumes_missing_chunks_and_imports_output ... FAILED
+test production_stdio_streams_and_admits_8_mib_output ... FAILED
+
+failures:
+
+---- failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle stdout ----
+
+thread 'failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle' (2108250) panicked at tests/remote_transfer_production.rs:571:5:
+unexpected failure stderr: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content stdout ----
+
+thread 'gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content' (2108263) panicked at tests/remote_transfer_production.rs:816:10:
+partial output checkpoint
+
+---- gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once stdout ----
+
+thread 'gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once' (2108280) panicked at tests/remote_transfer_production.rs:338:5:
+gallery interruption stderr={"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure stdout ----
+
+thread 'oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure' (2108292) panicked at tests/remote_transfer_production.rs:534:5:
+assertion failed: stderr.contains("remote-local-executor-build")
+
+---- production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits stdout ----
+
+thread 'production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits' (2108304) panicked at tests/remote_transfer_production.rs:285:5:
+fallback stderr={"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- production_stdio_drops_malformed_trace_and_survives_otlp_outage stdout ----
+
+thread 'production_stdio_drops_malformed_trace_and_survives_otlp_outage' (2108325) panicked at tests/remote_transfer_production.rs:673:5:
+outage stderr={"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- production_stdio_exports_prometheus_and_propagates_bounded_trace_context stdout ----
+
+thread 'production_stdio_exports_prometheus_and_propagates_bounded_trace_context' (2108344) panicked at tests/remote_transfer_production.rs:639:5:
+trace-enabled stderr={"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission stdout ----
+
+thread 'production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission' (2108367) panicked at tests/remote_transfer_production.rs:270:5:
+assertion failed: String::from_utf8_lossy(&rejected.stderr).contains("upload-byte-limit-exceeded")
+
+---- production_stdio_resumes_interrupted_multi_chunk_input_upload stdout ----
+
+thread 'production_stdio_resumes_interrupted_multi_chunk_input_upload' (2108445) panicked at tests/remote_transfer_production.rs:230:5:
+unexpected input interruption stderr: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- production_stdio_resumes_missing_chunks_and_imports_output stdout ----
+
+thread 'production_stdio_resumes_missing_chunks_and_imports_output' (2108468) panicked at tests/remote_transfer_production.rs:123:5:
+unexpected interruption stderr: {"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+---- production_stdio_streams_and_admits_8_mib_output stdout ----
+
+thread 'production_stdio_streams_and_admits_8_mib_output' (2108495) panicked at tests/remote_transfer_production.rs:306:5:
+8 MiB stderr={"error":"remote-production-endpoint-binding-config-required","code":3,"kind":"internal"}
+
+
+
+failures:
+    failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle
+    gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content
+    gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once
+    oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure
+    production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits
+    production_stdio_drops_malformed_trace_and_survives_otlp_outage
+    production_stdio_exports_prometheus_and_propagates_bounded_trace_context
+    production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission
+    production_stdio_resumes_interrupted_multi_chunk_input_upload
+    production_stdio_resumes_missing_chunks_and_imports_output
+    production_stdio_streams_and_admits_8_mib_output
+
+test result: FAILED. 1 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+error: test failed, to rerun pass `-p mantle --test remote_transfer_production`

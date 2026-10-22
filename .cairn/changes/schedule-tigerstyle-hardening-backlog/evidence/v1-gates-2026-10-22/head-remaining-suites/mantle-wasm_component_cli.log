@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running tests/wasm_component_cli.rs (/tmp/target-mantle-elf/debug/deps/wasm_component_cli-9e5e0f1387d7cd72)
+
+running 3 tests
+test production_cli_binds_target_specific_wasmtime_aot_without_promoting_portability ... ok
+test production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence ... ok
+test production_cli_fails_closed_on_identity_interface_composition_and_runtime_drift ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 301.95s
+

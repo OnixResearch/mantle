@@ -1,0 +1,15 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.39s
+     Running tests/bootstrap_validate_cli.rs (/tmp/target-mantle-elf/debug/deps/bootstrap_validate_cli-6570c30403f607fa)
+
+running 5 tests
+test bootstrap_validate_build_child_uses_selected_casita_backend ... ok
+test bootstrap_validate_preflight_failure_writes_evidence_bundle ... ok
+test bootstrap_validate_success_writes_logs_and_summary ... ok
+test native_closure_existing_output_is_not_overwritten_by_failed_input_read ... ok
+test provider_admission_rejects_invalid_digest_before_creating_report ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.14s
+

@@ -1,0 +1,44 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.42s
+     Running tests/integration_build.rs (/tmp/target-mantle-elf/debug/deps/integration_build-9a295d206e2f2231)
+
+running 20 tests
+test cache_hit_skips_build ... ok
+test casita_explicit_external_signing_key_outside_policy_cannot_publish ... ok
+test casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes ... ok
+test casita_external_config_signer_requires_destination_policy_for_build_and_read ... ok
+test casita_external_signer_policy_removal_rejects_fresh_lookup_verify_gc ... ok
+test casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy ... ok
+test casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute ... FAILED
+test end_to_end_ca_build ... ok
+test end_to_end_overlay_build_reads_base_only_input_without_backfill ... ok
+test end_to_end_trivial_build ... ok
+test eval_hello_world_with_seed ... ok
+test fetch_tarball_unpacks_and_strips_prefix ... ok
+test fetchgit_downloads_requested_revision_and_verifies_recursive_hash ... ok
+test fetchgit_wrong_recursive_hash_reports_mismatch ... ok
+test fetchurl_downloads_and_verifies_hash ... ok
+test fod_hash_mismatch_error ... ok
+test independently_built_backend_closures_have_identical_archives_and_offline_source_reports ... ok
+test signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes ... ok
+test typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds ... ok
+test workspace_action_identity_uses_snapshot_ref_but_clean_derivation_drops_mutable_identity ... ok
+
+failures:
+
+---- casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute stdout ----
+
+thread 'casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute' (2516640) panicked at tests/integration_build.rs:1521:77:
+called `Result::unwrap()` on an `Err` value: Store("store-source-admission-required")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute
+
+test result: FAILED. 19 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.13s
+
+error: test failed, to rerun pass `-p mantle --test integration_build`

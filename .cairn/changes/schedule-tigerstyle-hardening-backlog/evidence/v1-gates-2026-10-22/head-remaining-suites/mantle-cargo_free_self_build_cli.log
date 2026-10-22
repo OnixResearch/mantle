@@ -1,0 +1,24 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.04s
+     Running tests/cargo_free_self_build_cli.rs (/tmp/target-mantle-elf/debug/deps/cargo_free_self_build_cli-8d7aa636782b5fdf)
+
+running 14 tests
+test cargo_free_fixed_point_builds_tiny_mantle_fixture ... ok
+test cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_claiming_proof ... ok
+test cargo_free_fixed_point_fails_if_stage_invokes_cargo ... ok
+test cargo_free_fixed_point_rejects_inside_source_output_dir ... ok
+test cargo_free_fixed_point_rejects_invalid_toolchain_closure_manifest ... ok
+test cargo_free_fixed_point_reports_missing_rustc_toolchain ... ok
+test cargo_free_fixed_point_reports_stage_digest_mismatch ... ok
+test cargo_free_self_build_builds_tiny_mantle_fixture ... ok
+test cargo_free_self_build_enforces_matching_toolchain_closure_manifest_without_claiming_proof ... ok
+test cargo_free_self_build_fails_if_ambient_cargo_is_invoked ... ok
+test cargo_free_self_build_rejects_invalid_toolchain_closure_manifest ... ok
+test cargo_free_self_build_rejects_placeholder_seed_exception_manifest ... ok
+test cargo_free_self_build_rejects_undeclared_host_rustc_before_unit_execution ... ok
+test cargo_free_self_build_reports_seed_exception_accounting_without_claiming_proof ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.28s
+

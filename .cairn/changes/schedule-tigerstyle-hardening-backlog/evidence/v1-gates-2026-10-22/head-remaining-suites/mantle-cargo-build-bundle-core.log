@@ -1,0 +1,21 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-cargo-build-bundle-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.98s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_cargo_build_bundle_core-3f78313c07c6352e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bundle.rs (/tmp/target-mantle-elf/debug/deps/bundle-ccf73470583d3bfb)
+
+running 4 tests
+test canonical_identity_does_not_depend_on_transport_order_or_checkout ... ok
+test mandatory_version_platform_policy_limits_and_tamper_fail_closed ... ok
+test tool_and_native_input_changes_invalidate_handoff_identity ... ok
+test unresolved_package_edges_cycles_and_native_roles_are_not_admitted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

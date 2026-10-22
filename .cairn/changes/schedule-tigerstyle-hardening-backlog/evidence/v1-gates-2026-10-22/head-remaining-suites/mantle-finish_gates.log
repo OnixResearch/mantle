@@ -1,0 +1,663 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.65s
+     Running tests/finish_gates.rs (/tmp/target-mantle-elf/debug/deps/finish_gates-4dc89cdd1c62fc1c)
+
+running 6 tests
+test legacy_raw_recipe_builds_without_implicitly_adopting_gates ... ok
+test real_builder_default_requires_matching_executable_version ... FAILED
+test real_builder_exit_and_shell_syntax_cannot_skip_required_version ... FAILED
+test real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix ... FAILED
+test real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure ... FAILED
+test real_finish_gate_passes_version_and_relocation_and_reports_clean_scan ... FAILED
+
+failures:
+
+---- real_builder_default_requires_matching_executable_version stdout ----
+
+thread 'real_builder_default_requires_matching_executable_version' (2017809) panicked at tests/finish_gates.rs:68:5:
+stdout={
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/nix-shell.OZiTMs/.tmp1rf2Ee/recipe.ncl",
+  "output_dir": "/tmp/nix-shell.OZiTMs/.tmp1rf2Ee/store",
+  "state_dir": "/tmp/nix-shell.OZiTMs/.tmp1rf2Ee/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [],
+  "network_policy_reports": [],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/5a7fddd2ea8a6e2ee1befe92e9db4ba3b92dfb3b547732aba03f014cd38eaf06",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "5243c7fe51ee055aef4ffc176d86de45d75bb5cede28ecc0d58da905da324a15",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "a75bfeddc69dffc592ca2a72cb83c597989da90e84586dc75f37153c331f44fc",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "demo-1.0",
+      "drv_key": "/mantle/store/q11d9hrkw61wj4j0bm3smklqin8rhz03-demo-1.0.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: policy freshness blocker: regenerate finish-gate deterministic export",
+      "saved_log_path": "/tmp/nix-shell.OZiTMs/.tmp1rf2Ee/state/logs/q11d9hrkw61wj4j0bm3smklqin8rhz03-demo-1.0.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+ stderr=
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- real_builder_exit_and_shell_syntax_cannot_skip_required_version stdout ----
+
+thread 'real_builder_exit_and_shell_syntax_cannot_skip_required_version' (2017938) panicked at tests/finish_gates.rs:94:5:
+stdout={
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/nix-shell.OZiTMs/.tmpeyg65r/recipe.ncl",
+  "output_dir": "/tmp/nix-shell.OZiTMs/.tmpeyg65r/store",
+  "state_dir": "/tmp/nix-shell.OZiTMs/.tmpeyg65r/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [],
+  "network_policy_reports": [],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/31daf4f057bf6f3e37961f57c4107f3ab5b5538ba9d20da7acab2b8dd4c3073c",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "66e2846f9310f6663182621fefd9e41e0a11f846f9aff66ec2138497472d5d9c",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "7f561446add4086920976eb8b3b4939bd5fb103a3007792b0153de0b19c0c3dc",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "demo-1.0",
+      "drv_key": "/mantle/store/d81xj81jwdz8yaiaf1k19xpflrki0fq5-demo-1.0.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: policy freshness blocker: regenerate finish-gate deterministic export",
+      "saved_log_path": "/tmp/nix-shell.OZiTMs/.tmpeyg65r/state/logs/d81xj81jwdz8yaiaf1k19xpflrki0fq5-demo-1.0.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+ stderr=
+
+---- real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix stdout ----
+
+thread 'real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix' (2018043) panicked at tests/finish_gates.rs:188:5:
+stdout={
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/nix-shell.OZiTMs/.tmpwiWJ1D/recipe.ncl",
+  "output_dir": "/tmp/nix-shell.OZiTMs/.tmpwiWJ1D/store",
+  "state_dir": "/tmp/nix-shell.OZiTMs/.tmpwiWJ1D/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [],
+  "network_policy_reports": [],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/f3147a3b233f997d5b3eea4d66e334c3b5fed846105b9f78c006598685e390a8",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "a648367c4c73a268c618856340d61b720915c92ebd4be1b0833491c0a87d26e6",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "e18d35eb9b10f021cc5ed141183cde821f14ca2c66e10f4a573d0ceab267f392",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "finish-gates-positive",
+      "drv_key": "/mantle/store/yk4wyb8qyazlpw55wc47iyxad7zvp6zs-finish-gates-positive.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: policy freshness blocker: regenerate finish-gate deterministic export",
+      "saved_log_path": "/tmp/nix-shell.OZiTMs/.tmpwiWJ1D/state/logs/yk4wyb8qyazlpw55wc47iyxad7zvp6zs-finish-gates-positive.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+ stderr=
+
+---- real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure stdout ----
+
+thread 'real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure' (2018415) panicked at tests/finish_gates.rs:145:5:
+stdout={
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/nix-shell.OZiTMs/.tmpvZiuVO/recipe.ncl",
+  "output_dir": "/tmp/nix-shell.OZiTMs/.tmpvZiuVO/store",
+  "state_dir": "/tmp/nix-shell.OZiTMs/.tmpvZiuVO/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [],
+  "network_policy_reports": [],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/7dc56aa44588b7ddaf2f7d00c350230b0ae1074a02c02d8e83820ae1b900eaf0",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "d845e7cad7f416937fefd13e2837da545e3634ae9e1d61ab273ef936e4ae7943",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "5f121c725ab5e8a63deef0036ec96e778cef4c35b93795bfc7839a55319156c4",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "finish-gates-positive",
+      "drv_key": "/mantle/store/ngcryz52dbd2spgvag1sr1yh9yrcag04-finish-gates-positive.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: policy freshness blocker: regenerate finish-gate deterministic export",
+      "saved_log_path": "/tmp/nix-shell.OZiTMs/.tmpvZiuVO/state/logs/ngcryz52dbd2spgvag1sr1yh9yrcag04-finish-gates-positive.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+ stderr=
+
+---- real_finish_gate_passes_version_and_relocation_and_reports_clean_scan stdout ----
+
+thread 'real_finish_gate_passes_version_and_relocation_and_reports_clean_scan' (2018988) panicked at tests/finish_gates.rs:126:5:
+stdout={
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/nix-shell.OZiTMs/.tmpkSCYkF/recipe.ncl",
+  "output_dir": "/tmp/nix-shell.OZiTMs/.tmpkSCYkF/store",
+  "state_dir": "/tmp/nix-shell.OZiTMs/.tmpkSCYkF/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [],
+  "network_policy_reports": [],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/a5134c801da33db79f27b843e77fb8dd13af795c54e33a43629c7ea13786f846",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "e8e4779553e748ed3bf173f1e20ba60be00f58ba2de8bb4005149f690674d969",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "494fbb8366671c395b25b89bb1c68cfc8e4dd01bae7bff1a25812d7e1769703f",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "finish-gates-positive",
+      "drv_key": "/mantle/store/ds2k6j84pnh7aapkxgc6v1sypkq6n0pl-finish-gates-positive.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: policy freshness blocker: regenerate finish-gate deterministic export",
+      "saved_log_path": "/tmp/nix-shell.OZiTMs/.tmpkSCYkF/state/logs/ds2k6j84pnh7aapkxgc6v1sypkq6n0pl-finish-gates-positive.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+ stderr=
+
+
+failures:
+    real_builder_default_requires_matching_executable_version
+    real_builder_exit_and_shell_syntax_cannot_skip_required_version
+    real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix
+    real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure
+    real_finish_gate_passes_version_and_relocation_and_reports_clean_scan
+
+test result: FAILED. 1 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.26s
+
+error: test failed, to rerun pass `-p mantle --test finish_gates`

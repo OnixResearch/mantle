@@ -1,0 +1,14 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.21s
+     Running tests/machine_schema_contracts.rs (/tmp/target-mantle-elf/debug/deps/machine_schema_contracts-4b0008fcce4cc9f7)
+
+running 4 tests
+test generated_contracts_accept_positive_and_reject_adversarial_fixtures ... ok
+test inventory_is_typed_nickel_data ... ok
+test shared_oci_identity_predicates_are_callable_and_fail_closed ... ok
+test shared_string_bounds_count_utf8_bytes_exactly ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.98s
+

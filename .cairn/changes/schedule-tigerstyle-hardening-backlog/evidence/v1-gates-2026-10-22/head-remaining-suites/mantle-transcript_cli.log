@@ -1,0 +1,25 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running tests/transcript_cli.rs (/tmp/target-mantle-elf/debug/deps/transcript_cli-499556dd698e25cd)
+
+running 14 tests
+test checked_fast_fixtures_parse_through_transcript_runner ... transcript ok: 1 visible step(s); output: /tmp/nix-shell.OZiTMs/.tmpR4aHdm/fixture.output.json
+ok
+test transcript_child_uses_selected_casita_store_backend ... ok
+test transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation ... ok
+test transcript_run_executes_hidden_setup_before_visible_command ... ok
+test transcript_run_passes_expected_failure_when_diagnostic_matches ... ok
+test transcript_run_passes_success_and_injects_isolated_state_and_writes_output ... ok
+test transcript_run_rejects_empty_expect_block ... ok
+test transcript_run_rejects_empty_expect_json_block ... ok
+test transcript_run_rejects_expected_failure_without_expectation ... ok
+test transcript_run_rejects_in_place_without_explicit_allowance_before_command_execution ... ok
+test transcript_run_runs_cleanup_even_after_failure ... ok
+test transcript_run_supports_json_expectations ... ok
+test transcript_run_uses_transcript_directory_and_ignores_prose_fences ... ok
+test transcript_unexpected_success_preserves_partial_evidence_without_success_report ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+

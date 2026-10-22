@@ -1,0 +1,24 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.87s
+     Running tests/cargo_import_cli.rs (/tmp/target-mantle-elf/debug/deps/cargo_import_cli-6b3243538e6e63e8)
+
+running 14 tests
+test cargo_import_apply_fails_before_writing_conflicting_files ... ok
+test cargo_import_apply_matches_reviewed_plan_bytes_and_is_repeatable ... ok
+test cargo_import_apply_rejects_stale_vendor_checksum_before_writes ... ok
+test cargo_import_apply_wires_vendor_input_into_generated_project ... ok
+test cargo_import_apply_writes_bounded_files_and_project_shape ... ok
+test cargo_import_blocks_missing_lockfile_and_unsupported_registry_source ... ok
+test cargo_import_ignores_ambient_cargo_home_vendor_material ... ok
+test cargo_import_plan_accepts_declared_vendored_registry_source ... ok
+test cargo_import_plan_is_reviewable_and_side_effect_free ... ok
+test cargo_import_rejects_changed_lock_checksum_at_package_boundary ... ok
+test cargo_import_rejects_overlapping_output_targets_before_writing ... ok
+test cargo_import_rejects_symlink_output_parent_before_any_write ... ok
+test cargo_import_rejects_unchecksummed_vendor_file ... ok
+test cargo_import_rejects_vendor_symlink_even_when_target_hash_matches ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+

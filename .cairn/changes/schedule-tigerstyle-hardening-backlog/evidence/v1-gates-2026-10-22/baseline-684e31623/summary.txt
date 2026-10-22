@@ -1,0 +1,20 @@
+revision 684e31623a59d57cde5462d36d2f42ccddeea507
+mantle --test attest_cli exit=101
+mantle --test evaluator_budget_cli exit=0
+mantle --test example_projects exit=101
+mantle --test examples_eval exit=101
+mantle --test examples_inventory exit=101
+mantle --test finish_gates exit=101
+mantle --test integration_build exit=101
+mantle --test integration exit=101
+mantle --test offline_cargo_project exit=101
+mantle --test operator_diagnostics exit=101
+mantle --test remote_credentials_cli exit=101
+mantle --test remote_hexagon_v2_parity exit=101
+mantle --test remote_stdio_cli exit=101
+mantle --test remote_transfer_production exit=101
+mantle --test removed_system_cli exit=101
+mantle --test rust_plan_cli exit=101
+mantle --test smoke exit=101
+mantle-lock-vendor-producer exit=101
+done

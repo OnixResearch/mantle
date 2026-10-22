@@ -1,0 +1,17 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.43s
+     Running tests/android_apk.rs (/tmp/target-mantle-elf/debug/deps/android_apk-9666cad1d6c40ab9)
+
+running 7 tests
+test explicit_signing_is_a_plan_member_not_an_ambient_secret ... ok
+test forced_embedded_stdlib_authors_the_reviewed_apk_plan ... ok
+test malicious_or_incomplete_apk_authoring_fails_before_tool_fetch ... ok
+test native_authoring_rejects_unsupported_abi_api_toolchain_and_asset_collisions ... ok
+test published_apk_entrypoint_does_not_infer_reviewed_authority_from_plan_shape ... ok
+test published_zip_and_reviewed_jar_date_policies_have_explicit_endpoints ... ok
+test reviewed_apk_authoring_matches_core_wire_shape ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 158.71s
+

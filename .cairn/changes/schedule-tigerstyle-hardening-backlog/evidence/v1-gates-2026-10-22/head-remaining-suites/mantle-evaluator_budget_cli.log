@@ -1,0 +1,39 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.36s
+     Running tests/evaluator_budget_cli.rs (/tmp/target-mantle-elf/debug/deps/evaluator_budget_cli-51be452df23d378e)
+
+running 14 tests
+test cancellation_is_terminal_and_reaps_a_late_worker ... ok
+test cpu_exhaustion_reaches_the_enforced_cpu_terminal_class ... ok
+test deadline_is_terminal_and_worker_is_reaped ... ok
+test discovered_root_limit_fails_with_its_stable_class ... ok
+test hidden_worker_is_not_listed_in_public_help ... ok
+test invalid_policy_fixtures_fail_before_report_publication ... ok
+test observe_only_keeps_in_process_path_and_marks_operation_scoped_metrics_unavailable ... ok
+test process_fixtures_bound_stderr_and_make_late_results_terminal ... FAILED
+test process_fixtures_classify_crash_signal_protocol_overflow_and_memory ... ok
+test selected_and_all_root_requests_report_honest_force_counts ... ok
+test simulated_reap_failure_blocks_a_clean_terminal_claim ... ok
+test strict_worker_confines_imports_to_admitted_roots ... ok
+test strict_worker_matches_existing_eval_and_reports_supported_resources ... ok
+test worker_preserves_declared_imports_and_bounded_evaluator_errors ... ok
+
+failures:
+
+---- process_fixtures_bound_stderr_and_make_late_results_terminal stdout ----
+
+thread 'process_fixtures_bound_stderr_and_make_late_results_terminal' (1956560) panicked at tests/evaluator_budget_cli.rs:455:9:
+assertion `left == right` failed
+  left: Bool(true)
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    process_fixtures_bound_stderr_and_make_late_results_terminal
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.98s
+
+error: test failed, to rerun pass `-p mantle --test evaluator_budget_cli`

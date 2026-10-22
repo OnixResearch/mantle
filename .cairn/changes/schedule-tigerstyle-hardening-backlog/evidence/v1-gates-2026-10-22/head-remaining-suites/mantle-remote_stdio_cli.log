@@ -1,0 +1,31 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running tests/remote_stdio_cli.rs (/tmp/target-mantle-elf/debug/deps/remote_stdio_cli-97021493ffafae0b)
+
+running 7 tests
+test concurrent_one_use_redemption_commits_exactly_once ... ok
+test live_subscriber_pipe_flushes_snapshot_and_later_real_goal_before_daemon_stops ... ok
+test remote_serve_stdio_once_exchanges_frames_and_redeems_ticket ... ok
+test remote_serve_stdio_once_rejects_unknown_ticket_without_stdout_frames ... ok
+test selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets ... FAILED
+test stdio_rejects_clock_rollback_before_any_success_frame ... ok
+test stdio_rejects_endpoint_bound_ticket_without_authenticated_peer ... ok
+
+failures:
+
+---- selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets stdout ----
+
+thread 'selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets' (2107309) panicked at tests/remote_stdio_cli.rs:246:5:
+error: remote-production-endpoint-binding-config-required
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.35s
+
+error: test failed, to rerun pass `-p mantle --test remote_stdio_cli`

@@ -1,0 +1,21 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s
+     Running tests/kernel_bundle_oci_registry_cli.rs (/tmp/target-mantle-elf/debug/deps/kernel_bundle_oci_registry_cli-9468f0a2d5f9fabe)
+
+running 11 tests
+test distribution_registry::distribution_config_is_bounded_to_loopback_filesystem_storage ... ok
+test distribution_registry::distribution_version_normalization_removes_only_the_local_executable_path ... ok
+test registry_cli_interoperates_with_pinned_distribution_and_rejects_wrong_signature_digest ... ignored, requires the repository-pinned independent OCI Distribution registry binary
+test registry_cli_pushes_and_pulls_exact_admitted_layout_into_fresh_state ... ok
+test registry_pull_rejects_bad_signature_bytes_before_content_closure_or_admission ... ok
+test registry_pull_rejects_mutable_image_tag_before_layout_or_admission ... ok
+test registry_pull_rejects_signature_tag_drift_before_layout_or_admission ... ok
+test registry_pull_rejects_tampered_metadata_blob_before_layout_or_admission ... ok
+test registry_pull_rejects_unknown_signer_before_content_closure_or_admission ... ok
+test registry_pull_rejects_wrong_repository_and_revoked_policy_before_network_outputs ... ok
+test registry_push_requires_credentials_and_reuses_blobs_after_interruption ... ok
+
+test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.08s
+

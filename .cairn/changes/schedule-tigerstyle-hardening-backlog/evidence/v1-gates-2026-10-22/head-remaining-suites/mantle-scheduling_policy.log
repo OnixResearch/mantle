@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.71s
+     Running tests/scheduling_policy.rs (/tmp/target-mantle-elf/debug/deps/scheduling_policy-8655a3d288587f56)
+
+running 3 tests
+test nickel_default_scheduling_policy_matches_rust_runtime_default ... ok
+test nickel_scheduling_bounds_match_rust_kernel_limits ... ok
+test nickel_scheduling_contract_rejects_unknown_preference_field ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+

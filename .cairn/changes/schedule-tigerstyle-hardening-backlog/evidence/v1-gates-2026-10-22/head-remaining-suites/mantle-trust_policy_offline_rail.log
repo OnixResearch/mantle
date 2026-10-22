@@ -1,0 +1,15 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.80s
+     Running tests/trust_policy_offline_rail.rs (/tmp/target-mantle-elf/debug/deps/trust_policy_offline_rail-42a187bc7caf73fa)
+
+running 5 tests
+test trust_policy_offline_rail_evidence_redaction ... ok
+test trust_policy_offline_rail_hash_only_is_content_integrity ... ok
+test trust_policy_offline_rail_missing_signature_blocks ... ok
+test trust_policy_offline_rail_trusted_refresh_accepted ... ok
+test trust_policy_offline_rail_untrusted_key_blocks ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+

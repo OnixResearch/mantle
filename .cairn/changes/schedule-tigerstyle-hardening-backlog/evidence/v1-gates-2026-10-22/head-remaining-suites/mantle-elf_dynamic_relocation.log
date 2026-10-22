@@ -1,0 +1,16 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.30s
+     Running tests/elf_dynamic_relocation.rs (/tmp/target-mantle-elf/debug/deps/elf_dynamic_relocation-4555ad4d80aea95e)
+
+running 6 tests
+test actual_native_shared_binary_relocates_across_two_prefixes ... ok
+test native_binary_refuses_capacity_mismatch_and_wrong_dependency_without_publication ... ok
+test native_binary_refuses_symbol_name_inside_needed_string ... ok
+test native_binary_refuses_unsupported_and_truncated_images ... ok
+test native_no_soname_alias_reserves_needed_capacity_and_runs_after_copy ... ok
+test unwritable_output_directory_returns_publication_error_without_partial_bytes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.85s
+

@@ -1,0 +1,30 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.77s
+     Running tests/removed_system_cli.rs (/tmp/target-mantle-elf/debug/deps/removed_system_cli-2e8a0317f06ff2fe)
+
+running 6 tests
+test external_frontend_can_hand_mantle_build_shaped_input ... ok
+test help_succeeds_without_system_subcommand ... ok
+test implementation_surface_does_not_gain_module_layer_coupling ... FAILED
+test public_docs_and_stdlib_do_not_reference_system_eval_surface ... ok
+test raw_module_inventory_is_rejected_as_build_plan_input ... ok
+test system_eval_is_not_a_supported_subcommand ... ok
+
+failures:
+
+---- implementation_surface_does_not_gain_module_layer_coupling stdout ----
+
+thread 'implementation_surface_does_not_gain_module_layer_coupling' (2545593) panicked at tests/removed_system_cli.rs:222:9:
+assertion failed: files.len() <= MAX_PUBLIC_SCAN_FILES
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    implementation_surface_does_not_gain_module_layer_coupling
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+error: test failed, to rerun pass `-p mantle --test removed_system_cli`

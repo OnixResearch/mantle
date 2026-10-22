@@ -1,0 +1,16 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.25s
+     Running tests/pin_import_cli.rs (/tmp/target-mantle-elf/debug/deps/pin_import_cli-0ba6da3f227c4175)
+
+running 6 tests
+test pins_import_apply_fails_before_writing_on_blockers_or_conflicts ... ok
+test pins_import_apply_matches_reviewed_plan_bytes_and_is_repeatable ... ok
+test pins_import_apply_writes_only_planned_mantle_files ... ok
+test pins_import_plan_is_no_mutate_and_reviewable ... ok
+test pins_import_rejects_overlapping_output_targets_before_writing ... ok
+test pins_import_rejects_symlink_output_parent_before_any_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+

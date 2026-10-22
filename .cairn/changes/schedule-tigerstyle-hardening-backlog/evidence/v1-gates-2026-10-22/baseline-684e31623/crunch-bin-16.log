@@ -1,0 +1,209 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling nix-compat v0.1.0 (/tmp/mantle-base-wt/vendor/nix-compat)
+   Compiling fuse-backend-rs v0.12.0 (/tmp/mantle-base-wt/vendor/fuse-backend-rs)
+   Compiling crunch-attestation-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-attestation-core)
+   Compiling nix-compat-derive v0.1.0 (/tmp/mantle-base-wt/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/tmp/mantle-base-wt/vendor/snix-castore)
+   Compiling snix-tracing v0.1.0 (/tmp/mantle-base-wt/vendor/snix-tracing)
+   Compiling snix-store v0.1.0 (/tmp/mantle-base-wt/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/tmp/mantle-base-wt/vendor/snix-build)
+   Compiling crunch-action-result-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-action-result-core)
+   Compiling crunch-composition-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-composition-core)
+   Compiling crunch-gc-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-gc-core)
+   Compiling crunch-overlay-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-overlay-core)
+   Compiling crunch-repair-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-repair-core)
+   Compiling crunch-remote-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-remote-core)
+   Compiling crunch-build v0.1.0 (/tmp/mantle-base-wt/crates/crunch-build)
+   Compiling crunch-spacewasm-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-spacewasm-core)
+   Compiling mantle-rust-plan-core v0.1.0 (/tmp/mantle-base-wt/crates/mantle-rust-plan-core)
+   Compiling mantle-causal-trace-core v0.1.0 (/tmp/mantle-base-wt/crates/mantle-causal-trace-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-rust-cache-core)
+   Compiling crunch-eval v0.1.0 (/tmp/mantle-base-wt/crates/crunch-eval)
+   Compiling crunch-source-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-source-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-evaluation-stream-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-wasm-component-core)
+   Compiling crunch-shell-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-shell-core)
+   Compiling crunch-watch-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-watch-core)
+   Compiling crunch-nix-gateway-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-nix-gateway-core)
+   Compiling crunch-delta-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-delta-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-eval-budget-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-hardware-simulation-core)
+   Compiling mantle-build-contract v0.1.0 (/tmp/mantle-base-wt/crates/mantle-build-contract)
+   Compiling crunch-bootstrap-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-bootstrap-core)
+   Compiling mantlepkgs-core v0.1.0 (/tmp/mantle-base-wt/crates/mantlepkgs-core)
+   Compiling mantle-portable-client-core v0.1.0 (/tmp/mantle-base-wt/crates/mantle-portable-client-core)
+   Compiling mantle-lock-vendor-core v0.1.0 (/tmp/mantle-base-wt/crates/mantle-lock-vendor-core)
+   Compiling crunch-service-readiness-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-service-readiness-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-kernelscript-core)
+   Compiling crunch-android-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-android-core)
+   Compiling crunch-shell v0.1.0 (/tmp/mantle-base-wt/crates/crunch-shell)
+   Compiling crunch-release-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-release-core)
+   Compiling crunch-attestation v0.1.0 (/tmp/mantle-base-wt/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-project-core)
+   Compiling mantle-application-contract v0.1.0 (/tmp/mantle-base-wt/crates/mantle-application-contract)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/tmp/mantle-base-wt/crates/mantle-cargo-build-bundle-core)
+   Compiling mantle-rust-plan-app v0.1.0 (/tmp/mantle-base-wt/crates/mantle-rust-plan-app)
+   Compiling crunch-test-core v0.1.0 (/tmp/mantle-base-wt/crates/crunch-test-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/tmp/mantle-base-wt/crates/crunch-hardware-simulation)
+   Compiling crunch-test-app v0.1.0 (/tmp/mantle-base-wt/crates/crunch-test-app)
+   Compiling crunch-test v0.1.0 (/tmp/mantle-base-wt/crates/crunch-test)
+   Compiling crunch-remote-app v0.1.0 (/tmp/mantle-base-wt/crates/crunch-remote-app)
+   Compiling crunch-nar v0.1.0 (/tmp/mantle-base-wt/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/tmp/mantle-base-wt/crates/crunch-glue)
+   Compiling crunch-wasm-component v0.1.0 (/tmp/mantle-base-wt/crates/crunch-wasm-component)
+   Compiling crunch-project v0.1.0 (/tmp/mantle-base-wt/crates/crunch-project)
+   Compiling crunch-store v0.1.0 (/tmp/mantle-base-wt/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/tmp/mantle-base-wt/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/tmp/mantle-base-wt/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/tmp/mantle-base-wt/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/tmp/mantle-base-wt/crates/crunch-pipeline)
+   Compiling crunch-nix-gateway v0.1.0 (/tmp/mantle-base-wt/crates/crunch-nix-gateway)
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12m 39s
+     Running unittests src/main.rs (/tmp/target-mantle-elf/debug/deps/crunch-829415405e8d4445)
+
+running 16 tests
+test nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend ... FAILED
+test nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory ... FAILED
+test nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class ... FAILED
+test nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements ... FAILED
+test remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner ... FAILED
+test remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records ... FAILED
+test remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry ... FAILED
+test remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once ... FAILED
+test remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer ... FAILED
+test remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission ... FAILED
+test rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source ... FAILED
+test rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay ... FAILED
+test source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails ... FAILED
+test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections ... FAILED
+test tests::flake_check_workflow_has_one_verification_command ... FAILED
+
+failures:
+
+---- nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend stdout ----
+
+thread 'nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend' (1551145) panicked at src/nix_gateway/authority/tests.rs:103:5:
+assertion failed: verifier.revalidate(&session, 1901).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory stdout ----
+
+thread 'nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory' (1551150) panicked at src/nix_gateway/resource_host_tests.rs:212:53:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class stdout ----
+
+thread 'nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class' (1551151) panicked at src/nix_gateway/resource_host_tests.rs:127:65:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements stdout ----
+
+thread 'nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements' (1551152) panicked at src/nix_gateway/resource_host_tests.rs:186:53:
+called `Result::unwrap()` on an `Err` value: StoreUnavailable
+
+---- remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner' (1551153) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records' (1551154) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry stdout ----
+
+thread 'remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry' (1551156) panicked at src/remote_build/tests/coordinator_merge_tests.rs:65:49:
+save running gateway state: Internal("gateway-attempt-state-invalid")
+
+---- remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once stdout ----
+
+thread 'remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once' (1551157) panicked at src/remote_build/tests/endpoint_binding_tests.rs:123:48:
+called `Result::unwrap()` on an `Err` value: Internal("remote-ticket-state-validation-failed")
+
+---- remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer stdout ----
+
+thread 'remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer' (1551158) panicked at src/remote_build.rs:21309:10:
+timeout cancels scheduler allocation and coordinator attempt: "persistence-failed: error: remote-coordinator-save-conflict: expected revision 5, persisted revision 6; reload coordinator state before applying the transition"
+
+---- remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission stdout ----
+
+thread 'remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission' (1551160) panicked at src/remote_build/tests/source_binding_tests.rs:340:6:
+called `Result::unwrap()` on an `Err` value: Export("exporting imported HTTP path /tmp/nix-shell.imTDi8/.tmplxXd79/target/output/8x3lfis78x3lfis78x3lfis78x3lfis7-real-signed-source: creating materialization staging directory: No such file or directory (os error 2) at path \"/tmp/nix-shell.imTDi8/.tmplxXd79/target/output/.mantle-pull-stage-LRw3rc\"")
+
+---- rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source stdout ----
+
+thread 'rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source' (1551216) panicked at src/rust_plan.rs:19350:9:
+assertion failed: error.to_string().contains("blocked")
+
+---- rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay stdout ----
+
+thread 'rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay' (1551217) panicked at src/rust_plan.rs:19510:9:
+assertion `left == right` failed
+  left: []
+ right: [UnitId("native:240a9e1a9c9b4e2f8aa304b79921e23884243864792c0a710e2b373210e4221f:registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0:dep-crate:lib:build")]
+
+---- source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails stdout ----
+
+thread 'source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails' (1551219) panicked at src/source_bundle.rs:8849:9:
+assertion failed: error.to_string().contains("creating source records dir")
+
+---- source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity stdout ----
+
+thread 'source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity' (1551233) panicked at src/source_root_capability.rs:187:9:
+assertion failed: command_available(self_executable.to_str().unwrap(), &mut executed)
+
+---- stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections stdout ----
+
+thread 'stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections' (1551240) panicked at src/stagex_command_capture.rs:672:13:
+positive: stdout=
+running 1 test
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections has been running for over 60 seconds
+test stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections ... FAILED
+
+failures:
+
+failures:
+    stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2840 filtered out; finished in 228.25s
+
+ stderr=
+thread 'stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections' (1551245) panicked at src/stagex_command_capture.rs:735:60:
+called `Result::unwrap()` on an `Err` value: Limit("nonregular or oversized StageX input/output: /tmp/target-mantle-elf/debug/deps/crunch-829415405e8d4445")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+---- tests::flake_check_workflow_has_one_verification_command stdout ----
+
+thread 'tests::flake_check_workflow_has_one_verification_command' (1645088) panicked at src/main.rs:11350:9:
+assertion `left == right` failed
+  left: ["run: nix develop --command ./scripts/check-operator-command-contract.sh", "run: nix flake check"]
+ right: ["run: nix flake check"]
+
+
+failures:
+    nix_gateway::authority::tests::private_signed_session_checks_live_revocation_generation_and_operation_without_replay_respend
+    nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory
+    nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class
+    nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements
+    remote_build::tests::coordinator_merge_tests::simultaneous_saves_of_one_revision_have_exactly_one_winner
+    remote_build::tests::coordinator_merge_tests::stale_runner_save_cannot_erase_accepted_cancel_or_independent_records
+    remote_build::tests::coordinator_merge_tests::unsuccessful_write_does_not_advance_revision_or_prevent_fresh_retry
+    remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once
+    remote_build::tests::external_batch_worker_must_register_before_normal_assignment_and_transfer
+    remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission
+    rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source
+    rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay
+    source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails
+    source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity
+    stagex_mes_lib::command_capture::tests::protected_commands_bind_producers_and_preserve_rejections
+    tests::flake_check_workflow_has_one_verification_command
+
+test result: FAILED. 0 passed; 16 failed; 0 ignored; 0 measured; 2825 filtered out; finished in 228.75s
+
+error: test failed, to rerun pass `-p mantle --bin crunch`

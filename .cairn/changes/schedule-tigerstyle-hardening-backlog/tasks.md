@@ -10,7 +10,8 @@
   - Evidence: every file carrying a `HARDENING-BACKLOG 2026-10-22` block has a row with its categories and reason in `evidence/tigerstyle-backlog-2026-10-22.log`. No block dated before this change gained a category, and every allow added in the range is a `tigerstyle::` allow.
 - [x] [task:S4][after:S2][after:S3] Write the deferred-finding log and the green gate transcript into this change's evidence. r[mantle.tigerstyle_backlog.evidence]
   - Evidence: `evidence/tigerstyle-backlog-2026-10-22.log` and `evidence/tigerstyle-final-green.txt`, the cold-target run of the flake's `crunch-tigerstyle check` over the declared scope on `a272ea71e` with a clean source tree, which exits 0.
-- [ ] [task:V1][after:S4] Run `cargo tigerstyle check` over the declared scope, the first-party strict Clippy gate, the workspace lib and tests, and the affected packages' format checks, and retain the exact output. r[mantle.tigerstyle_backlog.verify]
+- [x] [task:V1][after:S4] Run `cargo tigerstyle check` over the declared scope, the first-party strict Clippy gate, the workspace lib and tests, and the affected packages' format checks, and retain the exact output. r[mantle.tigerstyle_backlog.verify]
+  - Evidence: `evidence/v1-gates-2026-10-22/summary.md` and the transcripts beside it, on `a09814bff`, whose source equals `a272ea71e`. Tiger Style, the GCC 4.0 bridge, first-party rustfmt, strict Clippy and the nine affected-package format checks pass. The serialized workspace tests fail: 16 `crunch` binary unit tests and 17 `mantle` integration targets, every one of which fails the same way on `684e31623`, the revision before this change; one of them, the evaluator teardown test, is timing-flaky on both revisions. The ordinary gate therefore does not pass, and those pre-existing failures remain open outside this change.
 
 ## Boundaries
 

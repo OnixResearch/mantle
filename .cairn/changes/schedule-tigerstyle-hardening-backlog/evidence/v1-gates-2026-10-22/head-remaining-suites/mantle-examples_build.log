@@ -1,0 +1,34 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.45s
+     Running tests/examples_build.rs (/tmp/target-mantle-elf/debug/deps/examples_build-1d116aef5b08dfa2)
+
+running 24 tests
+test build_crate_crc64_example_builds_binary ... ignored, heavy bootstrap build; run explicitly when validating the real crate example
+test build_environment_example_persists_configured_values ... ok
+test cowsay_example_builds_and_runs_default_and_custom_messages ... ok
+test dependency_chain_example_consumes_producer_output ... ok
+test diamond_dependency_example_joins_both_shared_branches ... ok
+test fail_example_reports_expected_failure ... ok
+test fetch_crate_crc64_example_builds ... ok
+test fix_flag_updates_temp_fetchurl_fixture_hash ... ok
+test hello_example_builds_flat_output ... ok
+test hello_json_build_report_exposes_artifact_attestation_shape ... ok
+test invalid_output_selection_fails_before_builder_execution ... ok
+test local_multi_output_fixture_builds_named_layout ... ok
+test local_output_layout_example_builds_named_outputs ... ok
+test multi_step_example_builds_structured_output ... ok
+test multiple_roots_example_builds_each_independent_root ... ok
+test offline_fetch_tarball_fixture_builds_without_network ... ok
+test offline_fetcher_wrong_hashes_fail_closed ... ok
+test offline_fetchgit_fixture_builds_without_network ... ok
+test offline_fetchurl_fixture_builds_without_network ... ok
+test portable_receipt_project_builds_payload_for_handoff ... ok
+test project_check_fixture_builds_result_output ... ok
+test project_missing_selector_fails_before_build_success ... ok
+test selected_output_example_mounts_the_requested_development_output ... ok
+test static_site_example_builds_html_and_stylesheet ... ok
+
+test result: ok. 23 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 56.13s
+

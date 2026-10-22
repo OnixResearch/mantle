@@ -1,0 +1,35 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.42s
+     Running tests/benchmark_harness.rs (/tmp/target-mantle-elf/debug/deps/benchmark_harness-b9014a4ce95859e9)
+
+running 25 tests
+test benchmark_docs_cover_all_workloads_and_entry_points ... ok
+test benchmark_entry_points_are_checked_in_examples ... ok
+test benchmark_runtime_boundary_stays_out_of_library_path ... ok
+test benchmark_support::tests::build_result_allows_workloads_without_phase_metrics ... ok
+test benchmark_support::tests::compare_benchmark_files_reads_fixed_fixtures ... ok
+test benchmark_support::tests::compare_bundles_do_not_fabricate_missing_phase_metrics ... ok
+test benchmark_support::tests::compare_bundles_highlight_largest_regressions_and_wins ... ok
+test benchmark_support::tests::compare_bundles_matches_workloads_and_metrics ... ok
+test benchmark_support::tests::compare_bundles_report_sparse_metric_omissions_per_workload ... ok
+test benchmark_support::tests::compare_rejects_threshold_application_across_mismatched_resource_cohorts ... ok
+test benchmark_support::tests::compatible_cohorts_apply_named_memory_thresholds_and_report_missing_values ... ok
+test benchmark_support::tests::default_benchmark_paths_stay_under_target ... ok
+test benchmark_support::tests::record_root_count_rejects_drift ... ok
+test benchmark_support::tests::render_bundle_json_keeps_schema ... ok
+test benchmark_support::tests::suite_workload_descriptors_cover_required_kinds ... ok
+test benchmark_support::tests::suite_workload_setup_is_deterministic ... ok
+test benchmark_support::tests::sum_samples_ns_adds_all_samples ... ok
+test eval_smoke_benchmark_writes_machine_readable_bundle ... ok
+test lazy_selected_root_nonselected_force_count_is_zero ... ok
+test store_metrics_only_appear_on_store_aware_workload ... ok
+test suite_benchmark_writes_full_workload_matrix_bundle ... ok
+test suite_has_checked_in_multi_phase_workflow_result ... ok
+test suite_phase_metrics_cover_phase_two_scope ... ok
+test suite_workload_descriptors_stay_deterministic ... ok
+test toml_section_keeps_dotted_subsections ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.28s
+

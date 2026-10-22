@@ -1,0 +1,22 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running tests/nix_free_demo_cli.rs (/tmp/target-mantle-elf/debug/deps/nix_free_demo_cli-596ea4abd439939d)
+
+running 12 tests
+test nix_free_demo_cli_generate_failed_write_exits_internal_without_report_or_bundle ... ok
+test nix_free_demo_cli_generate_partial_write_failure_reports_no_bundle ... ok
+test nix_free_demo_cli_generate_rejects_bad_inputs_without_partial_valid_bundle ... ok
+test nix_free_demo_cli_generate_rejects_unreadable_inputs_first_without_writing ... ok
+test nix_free_demo_cli_generate_reports_exactly_the_files_it_wrote ... ok
+test nix_free_demo_cli_generates_valid_deterministic_bundle ... ok
+test nix_free_demo_cli_keeps_distinct_exit_classes_for_malformed_and_unreadable_summaries ... ok
+test nix_free_demo_cli_readme_of_unclaimable_summary_renders_and_exits_one ... ok
+test nix_free_demo_cli_rejects_missing_fixed_point_without_success_claim ... ok
+test nix_free_demo_cli_rejects_missing_guard_as_json ... ok
+test nix_free_demo_cli_renders_readme_from_summary ... ok
+test nix_free_demo_cli_validates_claimable_bundle_as_json ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+

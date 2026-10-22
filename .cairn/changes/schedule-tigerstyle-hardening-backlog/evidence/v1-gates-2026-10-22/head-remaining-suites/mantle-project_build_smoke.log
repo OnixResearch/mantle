@@ -1,0 +1,29 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.79s
+     Running tests/project_build_smoke.rs (/tmp/target-mantle-elf/debug/deps/project_build_smoke-efd15c0dbcc05db1)
+
+running 19 tests
+test project_build_check_selector ... ok
+test project_build_default_package ... ok
+test project_build_deterministic_paths ... ok
+test project_build_from_subdirectory ... ok
+test project_build_invalid_selector_fails ... ok
+test project_build_no_crunch_ncl_fails ... ok
+test project_build_qualified_check_selector ... ok
+test project_build_qualified_selector ... ok
+test project_build_selector_by_name ... ok
+test project_run_bare_name_ignores_same_named_path ... ok
+test project_run_bin_selects_requested_binary ... ok
+test project_run_default ... ok
+test project_run_explicit_file_singleton_record_target ... ok
+test project_run_explicit_file_target ... ok
+test project_run_hello ... ok
+test project_run_no_bin_dir_fails ... ok
+test project_run_with_args ... ok
+test run_help_lists_bin_and_passthrough ... ok
+test run_rejects_strict_hermetic_flag ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.36s
+

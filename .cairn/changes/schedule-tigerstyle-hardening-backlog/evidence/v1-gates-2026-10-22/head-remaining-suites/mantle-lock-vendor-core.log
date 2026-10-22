@@ -1,0 +1,21 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_lock_vendor_core-d2da159fe62b344c)
+
+running 11 tests
+test shared_table::tests::independent_additions_union_without_changing_unrelated_subset_identity ... ok
+test shared_table::tests::rejects_conflicting_or_unpinned_entries_and_unsorted_rows ... ok
+test tests::absolute_limits_apply_even_if_caller_supplies_larger_limits ... ok
+test tests::cargo_vendor_default_uses_numeric_semver_and_stable_over_prerelease ... ok
+test tests::git_source_uses_only_pinned_recursive_hash_and_revision ... ok
+test tests::multiple_versions_get_cargo_vendor_suffixes_and_local_package_is_not_fetched ... ok
+test tests::rejects_bounded_and_hashless_inputs_without_emitting_plan ... ok
+test tests::rejects_path_escape_duplicate_and_contradictory_entries ... ok
+test tests::rejects_untrusted_grammar_instead_of_guessing_source_or_hash ... ok
+test tests::reviewed_git_transport_preserves_lock_identity_and_rejects_undeclared_ssh ... ok
+test tests::two_locked_fetches_have_exact_hashes_urls_and_cargo_layout ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

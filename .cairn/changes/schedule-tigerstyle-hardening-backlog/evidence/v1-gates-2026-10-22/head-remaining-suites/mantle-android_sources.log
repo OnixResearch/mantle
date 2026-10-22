@@ -1,0 +1,19 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.59s
+     Running tests/android_sources.rs (/tmp/target-mantle-elf/debug/deps/android_sources-0fd821702f32ef36)
+
+running 9 tests
+test canonical_metadata_ignores_input_field_order ... ok
+test cli_forced_embedded_android_source_resolves_nested_module ... ok
+test embedded_android_module_resolves_nested_imports ... ok
+test file_source_bundle_replays_offline_and_unmatched_request_fails_closed ... ok
+test malformed_sources_are_rejected_before_fetch_lowering ... ok
+test published_source_and_reviewed_metadata_cannot_cross_identity_domains ... ok
+test reviewed_binding_declares_fetch_and_rejects_metadata_drift ... ok
+test reviewed_cohort_identity_is_blake3_of_normalized_metadata ... ok
+test reviewed_tool_binding_uses_one_validated_source_v1_fetch_for_each_alias ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.97s
+

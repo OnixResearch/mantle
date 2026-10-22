@@ -1,0 +1,18 @@
+$ cargo fmt --check -p crunch-composition-core
+exit=0
+$ cargo fmt --check -p crunch-gc-core
+exit=0
+$ cargo fmt --check -p crunch-project-core
+exit=0
+$ cargo fmt --check -p crunch-release-core
+exit=0
+$ cargo fmt --check -p crunch-rust-cache
+exit=0
+$ cargo fmt --check -p crunch-rust-cache-core
+exit=0
+$ cargo fmt --check -p crunch-rustc-wrapper
+exit=0
+$ cargo fmt --check -p mantle-application-contract
+exit=0
+$ cargo fmt --check -p mantle-cargo-unit-plan
+exit=0

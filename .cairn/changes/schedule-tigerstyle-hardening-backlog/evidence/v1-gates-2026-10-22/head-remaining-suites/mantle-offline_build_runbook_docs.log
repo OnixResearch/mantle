@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s
+     Running tests/offline_build_runbook_docs.rs (/tmp/target-mantle-elf/debug/deps/offline_build_runbook_docs-e89274d8718f1af8)
+
+running 3 tests
+test cli_help_exposes_source_bundle_and_offline_source_preflight ... ok
+test offline_build_runbook_docs_cover_commands_evidence_and_non_claims ... ok
+test offline_build_runbook_validator_rejects_missing_commands_and_overclaims ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

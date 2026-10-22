@@ -1,0 +1,23 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-causal-trace-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.02s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_causal_trace_core-2bc8eff477fd2ae3)
+
+running 12 tests
+test tests::absolute_paths_and_standalone_digests_redact_before_admission ... ok
+test tests::aggregate_byte_bound_rejects_many_individually_valid_actions ... ok
+test tests::bounded_diagnostics_do_not_append_unbudgeted_separators ... ok
+test tests::cache_hit_and_retry_chain_to_real_admission_and_failure ... ok
+test tests::dependency_failure_reaches_root_across_parallel_interleaving ... ok
+test tests::escaped_diagnostic_enforces_serialized_record_bound ... ok
+test tests::failed_retry_preserves_retry_cause_without_forging_dispatch ... ok
+test tests::identity_cycle_and_invalid_parent_kind_fail_closed ... ok
+test tests::malformed_cause_edges_and_bounds_fail_closed ... ok
+test tests::multi_hop_dependency_failure_uses_each_observed_direct_edge ... ok
+test tests::parallel_interleaving_does_not_forge_same_goal_or_dependency_edges ... ok
+test tests::unrelated_failed_goal_cannot_be_spliced_into_root_failure_chain ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+

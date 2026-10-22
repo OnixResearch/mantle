@@ -1,0 +1,47 @@
+warning: /tmp/mantle-base-wt/Cargo.toml: file `/tmp/mantle-base-wt/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/tmp/mantle-base-wt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.33s
+     Running tests/smoke.rs (/tmp/target-mantle-elf/debug/deps/smoke-9b198813e71979aa)
+
+running 17 tests
+test smoke_build_and_run_shell_script ... ok
+test smoke_build_ca_derivation ... ok
+test smoke_build_cached_on_second_run ... ok
+test smoke_build_directory_output_with_structure ... ok
+test smoke_build_failure_reports_error ... ok
+test smoke_build_flat_file_and_read_content ... ok
+test smoke_build_multi_derivation_file ... ok
+test smoke_build_multi_derivation_partial_failure_keeps_successful_root ... ok
+test smoke_build_package_set_record_direct_path_regression ... ok
+test smoke_build_push_http_pull_round_trip ... FAILED
+test smoke_build_push_pull_round_trip ... ok
+test smoke_build_single_derivation_direct_path_regression ... ok
+test smoke_build_symlink_in_output ... ok
+test smoke_build_then_push_narinfo_and_nar_match ... ok
+test smoke_deterministic_output_path ... ok
+test smoke_fetchurl_downloads_and_stores ... ok
+test smoke_push_nix_store_prefix_consumable_by_nix ... ok
+
+failures:
+
+---- smoke_build_push_http_pull_round_trip stdout ----
+
+thread 'smoke_build_push_http_pull_round_trip' (2608027) panicked at tests/smoke.rs:1251:5:
+HTTP pull failed (exit 3):
+stdout: 
+stderr: 2026-10-22T20:56:57.686886Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/tmp/nix-shell.qFloVi/.tmpGJBIUR/state-b/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+2026-10-22T20:56:57.688494Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 12, path: \"/tmp/nix-shell.qFloVi/.tmpGJBIUR/state-b/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+Generated signing key: crunch-britton-desktop-1 (/tmp/nix-shell.qFloVi/.tmpGJBIUR/state-b/signing-key)
+error: pull: store: store-source-admission-required
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    smoke_build_push_http_pull_round_trip
+
+test result: FAILED. 16 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.49s
+
+error: test failed, to rerun pass `-p mantle --test smoke`

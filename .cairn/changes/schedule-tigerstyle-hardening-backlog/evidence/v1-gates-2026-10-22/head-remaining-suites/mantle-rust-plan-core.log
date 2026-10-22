@@ -1,0 +1,70 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.60s
+     Running unittests src/lib.rs (/tmp/target-mantle-elf/debug/deps/mantle_rust_plan_core-b496b6bc30031dbf)
+
+running 7 tests
+test build_script::tests::link_search_without_kind_keeps_absolute_path ... ok
+test cfg::tests::nested_cfg_and_malformed_arguments_preserve_admission ... ok
+test cfg::tests::nested_cfg_stops_at_the_evaluation_step_limit ... ok
+test model::tests::invalid_package_identity_precedes_missing_dependency_checks ... ok
+test model::tests::selected_closure_uses_manifest_order_not_traversal_order ... ok
+test model::tests::source_failure_precedes_other_target_identity_errors ... ok
+test plan::tests::observations_over_admitted_unit_limit_are_not_counted_as_valid_execution ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/build_script_fixtures.rs (/tmp/target-mantle-elf/debug/deps/build_script_fixtures-02b580855f7284ae)
+
+running 14 tests
+test build_script_values_preserve_significant_trailing_spaces_through_dependent_flags ... ok
+test duplicate_links_keys_conflict ... ok
+test error_directive_fails_and_legacy_error_key_is_metadata ... ok
+test flags_files_have_stable_line_formats ... ok
+test immediate_arguments_are_filtered_by_target_kind ... ok
+test links_metadata_reaches_a_dependent_script_as_dep_environment ... ok
+test native_role_markers_resolve_to_declared_store_paths ... ok
+test output_bounds_fail_closed ... ok
+test rerun_directives_are_recorded_without_changing_compilation ... ok
+test supported_directives_parse_in_output_order_for_both_syntaxes ... ok
+test target_facts_are_typed_and_exclude_profile_cfg ... ok
+test transitive_link_search_paths_must_stay_inside_admitted_roots ... ok
+test undeclared_role_marker_and_host_paths_fail ... ok
+test unknown_directive_fails_naming_the_directive ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/plan_fixtures.rs (/tmp/target-mantle-elf/debug/deps/plan_fixtures-0de22b219834ee9b)
+
+running 26 tests
+test accepted_compatibility_claims_distinguish_oracle_and_bounded_surface ... ok
+test build_script_run_after_cache_hit_requires_real_receipt_and_artifact_identity ... ok
+test cfg_dependencies_use_selected_triple_once_and_optional_feature_edges ... ok
+test compiler_fallback_and_build_script_run_require_causal_attempts ... ok
+test malformed_native_target_and_package_fields_do_not_cross_admission ... ok
+test native_dfs_topology_preserves_root_and_dependency_order ... ok
+test native_effects_admit_build_script_runs_with_only_declared_topology_and_outputs ... ok
+test native_effects_derive_topology_and_preserve_actual_derivation_material ... ok
+test native_effects_enforce_bounded_declarations_without_inventing_outputs ... ok
+test native_effects_reject_empty_compiler_arguments_and_unpaired_script_execution ... ok
+test native_effects_reject_missing_producers_cycles_and_ambiguous_units ... ok
+test native_execution_role_selects_declared_host_or_target_triple ... ok
+test native_feature_selection_blocks_unknown_and_malformed_references ... ok
+test native_feature_selection_preserves_explicit_seed_and_dependency_edges ... ok
+test native_observations_require_matching_effect_and_unit_and_consistent_exit ... ok
+test native_package_admission_rejects_duplicate_and_missing_selected_facts ... ok
+test native_package_inheritance_and_target_admission_preserve_manifest_order_and_errors ... ok
+test native_package_selection_rejects_oversized_scalar_facts_before_traversal ... ok
+test native_package_selection_uses_actual_ids_and_selected_resolved_edges ... ok
+test native_triple_classification_preserves_bounded_os_precedence ... ok
+test resolved_process_byte_bound_includes_all_matching_producer_artifact_observations ... ok
+test resolved_process_effect_preserves_opaque_child_environment_and_observed_outputs ... ok
+test resolved_process_rejects_missing_producer_and_unrelated_inputs ... ok
+test resolved_process_rejects_unroundtrippable_host_words ... ok
+test runtime_arguments_and_cargo_free_blockers_preserve_explicit_policy ... ok
+test typed_receipt_preimage_hashes_exact_field_order_without_new_domain ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
