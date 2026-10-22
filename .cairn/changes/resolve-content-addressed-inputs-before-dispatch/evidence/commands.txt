@@ -1,0 +1,8 @@
+# Focused acceptance for the content addressed input resolution.
+cargo test --locked --offline -p crunch-build --lib cached_ca_dependency_records_resolved_output_for_later_builds -- --nocapture --test-threads 1
+cargo test --locked --offline -p crunch-build --lib changed_ca_producer_with_identical_realized_bytes_reuses_every_dependent_before_dispatch -- --nocapture --test-threads 1
+cargo test --locked --offline -p crunch-pipeline --lib stream_roots_into_worker_matches_across_root_force_policies -- --nocapture --test-threads 1
+cargo test --locked --offline -p crunch-store --lib local_conflicting_existing_record_is_not_overwritten -- --nocapture --test-threads 1
+cargo clippy --locked --offline -p crunch-build -p crunch-store -p crunch-pipeline --lib --no-deps -- -D warnings
+cargo fmt --check -p crunch-build -p crunch-store -p crunch-pipeline
+git diff --check

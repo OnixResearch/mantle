@@ -26,7 +26,7 @@ Tasks are completed only when their evidence or exercised behavior is recorded b
 
 - [x] [serial] T4.1 Run the early-cutoff fixture and record zero dependent executions with resolved identities in the report. r[mantle.ca_input_resolution.early_cutoff] Evidence: three-node cutoff in `evidence/after-2026-10-01.md`.
 - [x] [serial] T4.2 Run a clean-client fixture that reuses signed realisations and PathInfo without execution. r[mantle.ca_input_resolution.realisation_records] Evidence: clean three-node HTTP client in `evidence/after-2026-10-01.md`.
-- [ ] [serial] T4.3 Prove identity goldens for derivations without CA inputs are unchanged. r[mantle.ca_input_resolution.resolved_identity]
+- [x] [serial] T4.3 Prove identity goldens for derivations without CA inputs are unchanged. r[mantle.ca_input_resolution.resolved_identity]
 - [x] [serial] T4.4 Document resolution, realisation records, trust, and non-claims in the build and cache documentation. r[mantle.ca_input_resolution.realisation_records] Evidence: `README.md` build/cache section, ADR 0098, and corrected `docs/dependency-audit.md` publication distinction.
-- [ ] [serial] T4.5 Run focused `crunch-build`, `crunch-store`, and `crunch-pipeline` suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.ca_input_resolution.negative_controls]
-- [ ] [serial] T4.6 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.ca_input_resolution.early_cutoff]
+- [x] [serial] T4.5 Run focused `crunch-build`, `crunch-store`, and `crunch-pipeline` suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.ca_input_resolution.negative_controls]
+- [x] [serial] T4.6 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.ca_input_resolution.early_cutoff]
