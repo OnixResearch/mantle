@@ -1,0 +1,5 @@
+# Focused acceptance for dynamic plan source slices.
+cargo test --locked --offline -p crunch-build --lib
+cargo test --locked --offline -p crunch-build --tests
+cargo clippy --locked --offline -p crunch-build --all-targets --no-deps -- -D warnings
+cargo fmt --check -p crunch-build
