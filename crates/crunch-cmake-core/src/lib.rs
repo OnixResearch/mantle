@@ -104,9 +104,12 @@ impl core::fmt::Display for Rejection {
         write!(f, "{}: {}", self.code, self.detail)
     }
 }
-fn reject(code: &str, detail: &str) -> Rejection {
+/// A rejection code. The newtype keeps the code distinct from the detail text
+/// so the two arguments of [`reject`] cannot be swapped by accident.
+struct RejectCode(&'static str);
+fn reject(code: RejectCode, detail: &str) -> Rejection {
     Rejection {
-        code: code.to_string(),
+        code: code.0.to_string(),
         detail: detail.to_string(),
     }
 }
@@ -120,7 +123,11 @@ fn identifier_ref(value: &str) -> bool {
 fn relative_ref(value: &str) -> bool {
     value.len() <= 1024 && !value.is_empty() && value.split('/').all(identifier_ref)
 }
-fn store_root_ref(value: &str, prefix: &str) -> bool {
+/// An admitted store prefix. The newtype keeps it distinct from a candidate
+/// path so the two arguments of [`store_root_ref`] cannot be swapped.
+struct StorePrefix<'a>(&'a str);
+fn store_root_ref(value: &str, prefix: StorePrefix<'_>) -> bool {
+    let StorePrefix(prefix) = prefix;
     if !prefix.starts_with('/') || !prefix[1..].split('/').all(identifier_ref) {
         return false;
     }
@@ -137,11 +144,14 @@ fn store_root_ref(value: &str, prefix: &str) -> bool {
 }
 impl Plan {
     fn role(&self, role: &str) -> Result<&str, Rejection> {
-        self.roles.get(role).map(String::as_str).ok_or_else(|| reject("cmake-role-undeclared", role))
+        self.roles
+            .get(role)
+            .map(String::as_str)
+            .ok_or_else(|| reject(RejectCode("cmake-role-undeclared"), role))
     }
     fn check_member(&self, member: &Member) -> Result<(), Rejection> {
         if !relative_ref(&member.member) {
-            return Err(reject("cmake-path-escape", &member.member));
+            return Err(reject(RejectCode("cmake-path-escape"), &member.member));
         }
         self.role(&member.role)?;
         Ok(())
@@ -152,10 +162,10 @@ impl Plan {
     }
     fn check_tool(&self, tool: &Tool) -> Result<(), Rejection> {
         if tool.version.is_empty() || tool.version.len() > 128 || tool.version.contains(['\n', '\r', '\0']) {
-            return Err(reject("cmake-tool-version", &tool.role));
+            return Err(reject(RejectCode("cmake-tool-version"), &tool.role));
         }
         if !relative_ref(&tool.member) {
-            return Err(reject("cmake-path-escape", &tool.member));
+            return Err(reject(RejectCode("cmake-path-escape"), &tool.member));
         }
         self.role(&tool.role)?;
         Ok(())
@@ -179,18 +189,17 @@ impl Plan {
 /// through normal store admission and run the ordinary network-denied sandbox.
 fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
     if plan.schema != "mantle-cmake-plan-v1" || !identifier_ref(&plan.name) {
-        return Err(reject("cmake-plan-invalid", "schema or name"));
+        return Err(reject(RejectCode("cmake-plan-invalid"), "schema or name"));
     }
-    if !plan.store_prefix.starts_with('/')
-        || !plan.store_prefix[1..].split('/').all(identifier_ref)
-        || plan.roles.is_empty()
-        || plan.roles.len() > MAX_ROLES
-    {
-        return Err(reject("cmake-plan-invalid", "store prefix or role count"));
+    let has_valid_store_prefix =
+        plan.store_prefix.starts_with('/') && plan.store_prefix[1..].split('/').all(identifier_ref);
+    let has_bounded_roles = !plan.roles.is_empty() && plan.roles.len() <= MAX_ROLES;
+    if !has_valid_store_prefix || !has_bounded_roles {
+        return Err(reject(RejectCode("cmake-plan-invalid"), "store prefix or role count"));
     }
     for (role, root) in &plan.roles {
-        if !identifier_ref(role) || !store_root_ref(root, &plan.store_prefix) {
-            return Err(reject("cmake-path-escape", root));
+        if !identifier_ref(role) || !store_root_ref(root, StorePrefix(&plan.store_prefix)) {
+            return Err(reject(RejectCode("cmake-path-escape"), root));
         }
     }
     validate_platform(plan)?;
@@ -198,7 +207,7 @@ fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
     plan.role(&plan.source)?;
     plan.role(&plan.sysroot)?;
     if !plan.source_subdir.is_empty() && !relative_ref(&plan.source_subdir) {
-        return Err(reject("cmake-path-escape", &plan.source_subdir));
+        return Err(reject(RejectCode("cmake-path-escape"), &plan.source_subdir));
     }
     for tool in plan.tool_list() {
         plan.check_tool(tool)?;
@@ -213,12 +222,12 @@ fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
         if !relative_ref(output)
             || !["include", "lib", "bin", "share"].contains(&output.split('/').next().unwrap_or(""))
         {
-            return Err(reject("cmake-output-invalid", output));
+            return Err(reject(RejectCode("cmake-output-invalid"), output));
         }
     }
     for name in plan.fetch_sources.keys() {
         if !identifier_ref(name) {
-            return Err(reject("cmake-fetch-source-invalid", name));
+            return Err(reject(RejectCode("cmake-fetch-source-invalid"), name));
         }
     }
     validate_definitions(plan)?;
@@ -227,20 +236,20 @@ fn validate_ref(plan: &Plan) -> Result<(), Rejection> {
     Ok(())
 }
 fn validate_platform(plan: &Plan) -> Result<(), Rejection> {
-    if !["x86_64-linux", "aarch64-linux"].contains(&plan.build_platform.as_str())
-        || plan.target.system != "Linux"
-        || !["x86_64", "aarch64"].contains(&plan.target.processor.as_str())
-        || !identifier_ref(&plan.target.triple)
-        || !plan.target.triple.starts_with(&format!("{}-", plan.target.processor))
-        || !plan.target.triple.contains("linux")
-    {
-        return Err(reject("cmake-platform-unsupported", &plan.target.triple));
+    let is_known_build_platform = ["x86_64-linux", "aarch64-linux"].contains(&plan.build_platform.as_str());
+    let is_known_target =
+        plan.target.system == "Linux" && ["x86_64", "aarch64"].contains(&plan.target.processor.as_str());
+    let has_valid_triple = identifier_ref(&plan.target.triple)
+        && plan.target.triple.starts_with(&format!("{}-", plan.target.processor))
+        && plan.target.triple.contains("linux");
+    if !is_known_build_platform || !is_known_target || !has_valid_triple {
+        return Err(reject(RejectCode("cmake-platform-unsupported"), &plan.target.triple));
     }
     if plan.jobs == 0
         || plan.jobs > 64
         || !["Release", "Debug", "RelWithDebInfo", "MinSizeRel"].contains(&plan.build_type.as_str())
     {
-        return Err(reject("cmake-plan-invalid", "jobs or build type"));
+        return Err(reject(RejectCode("cmake-plan-invalid"), "jobs or build type"));
     }
     debug_assert!(plan.elf_machine() != 0);
     debug_assert!(!plan.target.system.is_empty());
@@ -259,14 +268,14 @@ fn validate_collections(plan: &Plan) -> Result<(), Rejection> {
         plan.outputs.len(),
     ];
     if counts.iter().any(|n| *n > MAX_ENTRIES) || plan.outputs.is_empty() {
-        return Err(reject("cmake-plan-limit", "collection exceeds 64 or no outputs"));
+        return Err(reject(RejectCode("cmake-plan-limit"), "collection exceeds 64 or no outputs"));
     }
     if plan.build_targets.iter().any(|target| !identifier_ref(target)) {
-        return Err(reject("cmake-target-invalid", "build target"));
+        return Err(reject(RejectCode("cmake-target-invalid"), "build target"));
     }
     let unique: BTreeSet<_> = plan.outputs.iter().collect();
     if unique.len() != plan.outputs.len() {
-        return Err(reject("cmake-output-invalid", "duplicate output"));
+        return Err(reject(RejectCode("cmake-output-invalid"), "duplicate output"));
     }
     debug_assert!(!plan.outputs.is_empty());
     debug_assert!(plan.outputs.len() <= MAX_ENTRIES);
@@ -274,26 +283,24 @@ fn validate_collections(plan: &Plan) -> Result<(), Rejection> {
 }
 fn validate_definitions(plan: &Plan) -> Result<(), Rejection> {
     for (key, value) in &plan.definitions {
-        if !identifier_ref(key)
-            || key.starts_with("CMAKE_")
-            || key.starts_with("FETCHCONTENT_")
-            || key == "BUILD_SHARED_LIBS" && !["ON", "OFF"].contains(&value.as_str())
-            || value.len() > MAX_VALUE_BYTES
-            || value.contains(['\n', '\r', '\0', ';'])
-        {
-            return Err(reject("cmake-definition-invalid", key));
+        let has_valid_key = identifier_ref(key) && !key.starts_with("CMAKE_") && !key.starts_with("FETCHCONTENT_");
+        let has_valid_value = value.len() <= MAX_VALUE_BYTES
+            && !value.contains(['\n', '\r', '\0', ';'])
+            && (key != "BUILD_SHARED_LIBS" || ["ON", "OFF"].contains(&value.as_str()));
+        if !has_valid_key || !has_valid_value {
+            return Err(reject(RejectCode("cmake-definition-invalid"), key));
         }
         // Definitions may reference immutable role roots only via a whole-value marker.
         if let Some(rest) = value.strip_prefix("{{role:") {
             let Some((role, suffix)) = rest.split_once("}}") else {
-                return Err(reject("cmake-definition-invalid", key));
+                return Err(reject(RejectCode("cmake-definition-invalid"), key));
             };
             plan.role(role)?;
             if !suffix.is_empty() && !suffix.strip_prefix('/').is_some_and(relative_ref) {
-                return Err(reject("cmake-path-escape", value));
+                return Err(reject(RejectCode("cmake-path-escape"), value));
             }
         } else if value.contains('/') || value.contains("{{") {
-            return Err(reject("cmake-path-escape", value));
+            return Err(reject(RejectCode("cmake-path-escape"), value));
         }
     }
     debug_assert!(plan.definitions.len() <= MAX_ENTRIES);
@@ -302,11 +309,11 @@ fn validate_definitions(plan: &Plan) -> Result<(), Rejection> {
 }
 /// Construct a CMake bracket literal without permitting CMake-language injection.
 fn cmake_literal_ref(value: &str) -> String {
-    let mut delimiter = String::from("=");
-    while value.contains(&format!("]{delimiter}]")) {
-        delimiter.push('=');
+    let mut bracket_run = String::from("=");
+    while value.contains(&format!("]{bracket_run}]")) {
+        bracket_run.push('=');
     }
-    format!("[{delimiter}[{value}]{delimiter}]")
+    format!("[{bracket_run}[{value}]{bracket_run}]")
 }
 
 /// Owned lexical requests for shell observations outside an authoring plan.
@@ -318,7 +325,7 @@ pub fn identifier(value: String) -> bool {
     identifier_ref(&value)
 }
 pub fn store_root(request: StoreRootRequest) -> bool {
-    store_root_ref(&request.value, &request.prefix)
+    store_root_ref(&request.value, StorePrefix(&request.prefix))
 }
 pub fn cmake_literal(value: String) -> String {
     cmake_literal_ref(&value)
