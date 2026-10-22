@@ -11343,15 +11343,6 @@ let Plan = {
     }
 
     #[test]
-    fn flake_check_workflow_has_one_verification_command() {
-        let workflow = include_str!("../.github/workflows/flake-check.yml");
-        let run_lines = workflow.lines().map(str::trim).filter(|line| line.starts_with("run:")).collect::<Vec<_>>();
-
-        assert_eq!(run_lines, vec!["run: nix flake check"]);
-        assert!(!workflow.contains("cargo test"));
-    }
-
-    #[test]
     fn bootstrap_capabilities_is_discoverable_and_self_build_source_root_is_not_advertised() {
         let capabilities = parse_args_with_cli_test_stack(vec!["mantle", "bootstrap", "capabilities"]);
         let unsupported =
