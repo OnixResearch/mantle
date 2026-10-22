@@ -1,6 +1,6 @@
 # T4.3 focused verification of the store backend selection seam on the final source.
-cargo test --locked --offline -p crunch-store
-cargo test --locked --offline -p mantle --bin mantle store::
+cargo test --locked --offline -p crunch-store -- --test-threads 1
+cargo test --locked --offline -p mantle --bin mantle store:: -- --test-threads 1
 cargo run --locked --offline --bin check_store_capability_boundary
 cargo clippy --locked --offline -p crunch-store -p mantle --all-targets --no-deps -- -D warnings
 cargo fmt --check -p crunch-store -p mantle
