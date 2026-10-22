@@ -1,0 +1,5 @@
+# Focused acceptance for the bootstrap source pins.
+cargo test --locked --offline -p mantle --bin mantle bootstrap_pin_cmd::tests:: -- --nocapture --test-threads 1
+cargo test --locked --offline -p crunch-project --lib refresh -- --nocapture --test-threads 1
+cargo clippy --locked --offline -p crunch-project-core --lib -- -D warnings
+cargo fmt --check -p crunch-project-core -p mantle

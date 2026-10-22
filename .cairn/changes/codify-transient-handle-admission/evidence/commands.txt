@@ -1,0 +1,4 @@
+# Focused acceptance for the transient handle admission rule.
+cargo test --locked --offline -p crunch-build --lib distributed::remote_transfer::tests:: -- --test-threads 1
+cargo clippy --locked --offline -p crunch-build --lib --no-deps -- -D warnings
+cargo fmt --check -p crunch-build -p mantle
