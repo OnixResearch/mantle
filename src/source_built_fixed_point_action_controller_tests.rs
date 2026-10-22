@@ -703,6 +703,28 @@ fn large_conditional_catalog_accepts_actual_done_early_without_reserving_unexecu
 }
 
 #[test]
+fn controller_potential_events_charge_each_turn_phase_once_per_admitted_turn() {
+    let (proof, plan, _) = compact_fixture();
+    let stage = &proof.stages[0].stage_id;
+    let mut controller = plan.adapters[0].controllers[0].clone();
+    let turn_phase_events = controller
+        .templates
+        .iter()
+        .filter(|t| !matches!(t.role, ActionControllerRole::Start | ActionControllerRole::Finish))
+        .map(|t| {
+            u64::from(t.action.protected_events_max)
+                + u64::from(t.action.build_events_max)
+                + u64::from(t.action.guard.is_some())
+        })
+        .sum::<u64>();
+    let potential = validate_controller_shape(&controller, stage).unwrap();
+    controller.commands_max += 1;
+    let grown = validate_controller_shape(&controller, stage).unwrap();
+    assert!(turn_phase_events > 0);
+    assert_eq!(grown - potential, turn_phase_events);
+}
+
+#[test]
 fn actual_event_budget_exhaustion_latches_and_matches_portable_replay() {
     use ActionControllerRole::*;
     let (mut proof, mut plan, mut tail) = compact_fixture();

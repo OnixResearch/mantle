@@ -179,6 +179,7 @@ pub fn relocate_dynamic_file(
             reason,
         };
         let plan = plan_dynamic_relocation(&source, depth, rewrites).map_err(refusal)?;
+        debug_assert_eq!(plan.patches.len(), rewrites.len());
         let output = apply_plan(&source, &plan).map_err(refusal)?;
         assert_eq!(source.len(), output.len());
         publish_relocated_file(&mut effects, path, &metadata, &output)?;

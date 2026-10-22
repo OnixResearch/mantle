@@ -520,7 +520,7 @@ async fn deferred_native_output_requires_exact_recorded_ca_realization() {
     derivation.outputs.get_mut("out").unwrap().path = None;
     let drv = derivation.calculate_derivation_path_with_store_dir("tool-1", PREFIX).unwrap();
     let mut store = StoreHandle::open(fixture.config()).await.unwrap();
-    let output = admission::parse_path(&original.output_path, PREFIX).unwrap();
+    let output = admission::parse_path(&original.output_path, admission::StorePrefix(PREFIX)).unwrap();
     let mut info = store.pathinfo_service().get(*output.digest()).await.unwrap().unwrap();
     info.deriver = Some(drv.clone());
     store.pathinfo_service().put(info.clone()).await.unwrap();
@@ -588,8 +588,8 @@ async fn runtime_reference_closure_is_admitted_and_retained_not_just_the_root() 
     let fixture = Fixture::new(crunch_store::StoreBackend::Snix);
     let package = fixture.package("tool", 1, "tool").await;
     let runtime = fixture.package("runtime", 2, "runtime").await;
-    let path = admission::parse_path(&package.output_path, PREFIX).unwrap();
-    let reference = admission::parse_path(&runtime.output_path, PREFIX).unwrap();
+    let path = admission::parse_path(&package.output_path, admission::StorePrefix(PREFIX)).unwrap();
+    let reference = admission::parse_path(&runtime.output_path, admission::StorePrefix(PREFIX)).unwrap();
     let store = StoreHandle::open(fixture.config()).await.unwrap();
     let mut info = store.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
     info.references.push(reference.clone());

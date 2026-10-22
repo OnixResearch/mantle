@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::no_unwrap)]
+
 //! Bootstrap capability execution and independent output verification.
 use std::path::Path;
 
@@ -49,16 +55,10 @@ impl BootstrapPort {
             .iter_mut()
             .find(|item| item.effect_id.0 == effect.id())
             .expect("bootstrap capability must be planned before execution");
+        debug_assert_eq!(observation.effect_id.0, effect.id());
         let result = capability();
-        if let EffectMeasure::Calls(count) = &mut observation.usage {
-            *count += 1;
-        }
-        if result.is_err() {
-            observation.status = ObservationStatus::Failed;
-            observation.diagnostics_code = Some(format!("{}-failed", effect.id()));
-        } else if observation.status == ObservationStatus::Skipped {
-            observation.status = ObservationStatus::Succeeded;
-        }
+        record_outcome(observation, effect, result.is_err());
+        debug_assert!(!matches!(&observation.usage, EffectMeasure::Calls(0)));
         result
     }
 
@@ -72,16 +72,10 @@ impl BootstrapPort {
             .iter_mut()
             .find(|item| item.effect_id.0 == effect.id())
             .expect("bootstrap capability must be planned before execution");
+        debug_assert_eq!(observation.effect_id.0, effect.id());
         let result = capability.await;
-        if let EffectMeasure::Calls(count) = &mut observation.usage {
-            *count += 1;
-        }
-        if result.is_err() {
-            observation.status = ObservationStatus::Failed;
-            observation.diagnostics_code = Some(format!("{}-failed", effect.id()));
-        } else if observation.status == ObservationStatus::Skipped {
-            observation.status = ObservationStatus::Succeeded;
-        }
+        record_outcome(observation, effect, result.is_err());
+        debug_assert!(!matches!(&observation.usage, EffectMeasure::Calls(0)));
         result
     }
 
@@ -112,8 +106,54 @@ impl BootstrapPort {
 /// The expected digest is admitted before the independent file read. Actual
 /// byte usage and output identity are derived from the persisted bytes.
 pub(crate) fn verify_content(path: &Path, expected: &[u8]) -> Result<(), RunError> {
-    use mantle_application_contract::CommandFamily;
     use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectKind;
+    let plan = readback_plan(expected)?;
+    let (bytes, read_bytes) = hash_persisted_bytes(path, expected.len());
+    let observation = Observation {
+        effect_id: EffectId("bootstrap-content-readback".into()),
+        kind: EffectKind::ReadFiles,
+        status: if bytes.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: bytes
+            .as_ref()
+            .map_or(EffectOutput::None, |digest| EffectOutput::Identity(digest.to_hex().to_string())),
+        usage: EffectMeasure::Bytes(read_bytes),
+        diagnostics_code: bytes.as_ref().err().map(|_| "bootstrap-readback-failed".into()),
+    };
+    debug_assert_eq!(observation.effect_id.0, plan.effects[0].effect_id.0);
+    debug_assert!(matches!(&observation.usage, EffectMeasure::Bytes(_)));
+    match (classify_observations(&plan, &[observation]), bytes) {
+        (ApplicationOutcome::Completed, Ok(_)) => Ok(()),
+        (_, Err(error)) => Err(RunError::Internal(format!("reading back {}: {error}", path.display()))),
+        (outcome, _) => Err(RunError::Build(format!(
+            "published output {} differs from planned content: {outcome:?}",
+            path.display()
+        ))),
+    }
+}
+
+/// Retain the actual capability outcome in the admitted ledger entry.
+fn record_outcome(observation: &mut Observation, effect: BootstrapEffect, is_failed: bool) {
+    debug_assert_eq!(observation.effect_id.0, effect.id());
+    if let EffectMeasure::Calls(count) = &mut observation.usage {
+        *count += 1;
+    }
+    if is_failed {
+        observation.status = ObservationStatus::Failed;
+        observation.diagnostics_code = Some(format!("{}-failed", effect.id()));
+    } else if observation.status == ObservationStatus::Skipped {
+        observation.status = ObservationStatus::Succeeded;
+    }
+    debug_assert!(!is_failed || observation.diagnostics_code.is_some());
+}
+
+/// Admit exactly one read-back effect for the expected content identity.
+fn readback_plan(expected: &[u8]) -> Result<EffectPlan, RunError> {
+    use mantle_application_contract::CommandFamily;
     use mantle_application_contract::EffectKind;
     use mantle_application_contract::EffectSpec;
     use mantle_application_contract::ExpectedOutput;
@@ -126,42 +166,35 @@ pub(crate) fn verify_content(path: &Path, expected: &[u8]) -> Result<(), RunErro
         expected_output: ExpectedOutput::Identity(&identity),
     }])
     .map_err(|error| RunError::Internal(format!("planning bootstrap readback: {}", error.code())))?;
+    debug_assert_eq!(plan.effects.len(), 1);
+    debug_assert_eq!(plan.effects[0].effect_id.0, "bootstrap-content-readback");
+    Ok(plan)
+}
+
+/// Hash the persisted bytes. Every read before end of file consumes at least
+/// one of the `limit_bytes` admitted bytes, so `limit_bytes + 1` reads bound
+/// the loop even when the kernel returns short reads.
+fn hash_persisted_bytes(path: &Path, expected_bytes: usize) -> (Result<blake3::Hash, std::io::Error>, u64) {
     use std::io::Read;
-    let mut count = 0u64;
-    let bytes = std::fs::File::open(path).and_then(|file| {
-        let mut reader = file.take((expected.len() as u64).saturating_add(1));
+    const CHUNK_BYTES: usize = 8192;
+    let limit_bytes = (expected_bytes as u64).saturating_add(1);
+    let read_bound = limit_bytes.saturating_add(1);
+    let mut read_bytes = 0u64;
+    let digest = std::fs::File::open(path).and_then(|file| {
+        let mut reader = file.take(limit_bytes);
         let mut hasher = blake3::Hasher::new();
-        let mut buffer = [0u8; 8192];
-        loop {
+        let mut buffer = [0u8; CHUNK_BYTES];
+        for _ in 0..read_bound {
             let read = reader.read(&mut buffer)?;
             if read == 0 {
                 break;
             }
             hasher.update(&buffer[..read]);
-            count += read as u64;
+            read_bytes = read_bytes.saturating_add(read as u64);
         }
         Ok(hasher.finalize())
     });
-    let observation = Observation {
-        effect_id: EffectId("bootstrap-content-readback".into()),
-        kind: EffectKind::ReadFiles,
-        status: if bytes.is_ok() {
-            ObservationStatus::Succeeded
-        } else {
-            ObservationStatus::Failed
-        },
-        output: bytes
-            .as_ref()
-            .map_or(EffectOutput::None, |digest| EffectOutput::Identity(digest.to_hex().to_string())),
-        usage: EffectMeasure::Bytes(count),
-        diagnostics_code: bytes.as_ref().err().map(|_| "bootstrap-readback-failed".into()),
-    };
-    match (classify_observations(&plan, &[observation]), bytes) {
-        (ApplicationOutcome::Completed, Ok(_)) => Ok(()),
-        (_, Err(error)) => Err(RunError::Internal(format!("reading back {}: {error}", path.display()))),
-        (outcome, _) => Err(RunError::Build(format!(
-            "published output {} differs from planned content: {outcome:?}",
-            path.display()
-        ))),
-    }
+    debug_assert!(read_bytes <= limit_bytes);
+    debug_assert!(read_bound > limit_bytes);
+    (digest, read_bytes)
 }

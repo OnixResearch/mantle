@@ -16,6 +16,7 @@ use crunch_composition_core::user_profile::Manifest;
 use crunch_composition_core::user_profile::Package;
 use crunch_store::GcRootClass;
 use crunch_store::GcRootSource;
+use crunch_store::PipelineStoreParts;
 use crunch_store::RootRegistration;
 use crunch_store::RootRegistry;
 use crunch_store::StoreConfig;
@@ -76,7 +77,7 @@ pub async fn execute_profile(mut request: ProfileRequest) -> Result<ProfileRepor
     request.store.preflight_backend_identity().map_err(|error| error.to_string())?;
     publication::require_directory(&request.store.state_dir, true)?;
     publication::require_directory(&request.store.output_dir, false)?;
-    let _store_guard = StoreMutationGuard::try_acquire(&request.store.state_dir).map_err(|error| error.to_string())?;
+    let store_guard = StoreMutationGuard::try_acquire(&request.store.state_dir).map_err(|error| error.to_string())?;
     if request.profile.starts_with(&request.store.output_dir)
         || request.store.output_dir.starts_with(&request.profile)
         || request.profile == request.store.state_dir
@@ -100,23 +101,18 @@ pub async fn execute_profile(mut request: ProfileRequest) -> Result<ProfileRepor
         return Err(format!("stale profile update: expected {:?}, active {active:?}", request.expected_active));
     }
     let retained = publication::generations(&request.profile)?;
-    let mut report = initial_report(&request, active, retained);
-    report.pending_generations = publication::pending_generations(&request.profile)?;
+    let mut result_document = initial_report(&request, active, retained);
+    result_document.pending_generations = publication::pending_generations(&request.profile)?;
     if matches!(request.operation, ProfileOperation::List | ProfileOperation::Generations) {
-        if let Some(number) = active {
-            let generation = publication::read_generation(&request.profile, number)?;
-            require_binding(&generation.manifest, &binding)?;
-            report.manifest = Some(generation.manifest);
-            report.links = generation.links;
-        }
-        return Ok(report);
+        populate_read_only_view(&request.profile, active, &binding, &mut result_document)?;
+        return Ok(result_document);
     }
-    if request.apply {
+    let should_apply = request.apply;
+    let is_removing_generation = matches!(&request.operation, ProfileOperation::RemoveGeneration { .. });
+    if should_apply {
         publication::bind(&request.profile, &binding, true)?;
     }
-    let mut store = StoreHandle::open(request.store).await.map_err(|error| error.to_string())?;
-    store.recover_casita_gc_under_guard(&_store_guard).await.map_err(|error| error.to_string())?;
-    let parts = store.into_pipeline_store_parts();
+    let parts = open_pipeline_parts(request.store, &store_guard).await?;
     let authority = admission::Admission {
         lookup: &parts.output_lookup,
         content: &parts.build_service_store,
@@ -129,29 +125,73 @@ pub async fn execute_profile(mut request: ProfileRequest) -> Result<ProfileRepor
         roots: &parts.root_registry,
         authority,
     };
-    let removes_generation = matches!(&request.operation, ProfileOperation::RemoveGeneration { .. });
-    mutate(request.operation, request.apply, &context, &mut report).await?;
+    mutate(request.operation, should_apply, &context, &mut result_document).await?;
     // Observe publication while both ownership locks are still held. A
     // successful mutator return is not evidence that its requested pointer or
     // generation retention actually became the durable profile state.
-    let observed_active = publication::active(&request.profile)?;
-    let observed_retained = publication::generations(&request.profile)?;
-    let observed_pending = publication::pending_generations(&request.profile)?;
-    if report.active != observed_active
-        || report.retained_generations != observed_retained
-        || report.pending_generations != observed_pending
+    verify_published_state(&request.profile, &result_document, is_removing_generation)?;
+    debug_assert_eq!(result_document.previous_active, active);
+    debug_assert_eq!(result_document.applied, should_apply);
+    Ok(result_document)
+}
+
+/// Open the store under the held mutation guard and recover its GC state.
+async fn open_pipeline_parts(
+    store_config: StoreConfig,
+    guard: &StoreMutationGuard,
+) -> Result<PipelineStoreParts, String> {
+    let mut store = StoreHandle::open(store_config).await.map_err(|error| error.to_string())?;
+    store.recover_casita_gc_under_guard(guard).await.map_err(|error| error.to_string())?;
+    let parts = store.into_pipeline_store_parts();
+    debug_assert!(!parts.output_lookup.store_dir().is_empty());
+    Ok(parts)
+}
+
+/// Report the admitted active generation without publishing anything.
+fn populate_read_only_view(
+    profile: &Path,
+    active: Option<u64>,
+    binding: &publication::Binding,
+    result_document: &mut ProfileReport,
+) -> Result<(), String> {
+    if let Some(number) = active {
+        let generation = publication::read_generation(profile, number)?;
+        require_binding(&generation.manifest, binding)?;
+        result_document.manifest = Some(generation.manifest);
+        result_document.links = generation.links;
+    }
+    debug_assert_eq!(result_document.active, active);
+    debug_assert!(result_document.manifest.is_some() == active.is_some());
+    Ok(())
+}
+
+/// Confirm the durable profile state matches the admitted operation.
+fn verify_published_state(
+    profile: &Path,
+    result_document: &ProfileReport,
+    is_removing_generation: bool,
+) -> Result<(), String> {
+    let observed_active = publication::active(profile)?;
+    let observed_retained = publication::generations(profile)?;
+    let observed_pending = publication::pending_generations(profile)?;
+    if result_document.active != observed_active
+        || result_document.retained_generations != observed_retained
+        || result_document.pending_generations != observed_pending
     {
         return Err("profile publication observation differs from the admitted operation".into());
     }
-    if report.applied && !removes_generation {
+    if result_document.applied && !is_removing_generation {
         let number = observed_active.ok_or("profile publication omitted its active generation")?;
-        let generation = publication::read_generation(&request.profile, number)?;
-        publication::verify_forest(&request.profile, &generation)?;
-        if report.manifest.as_ref() != Some(&generation.manifest) || report.links != generation.links {
+        let generation = publication::read_generation(profile, number)?;
+        publication::verify_forest(profile, &generation)?;
+        if result_document.manifest.as_ref() != Some(&generation.manifest) || result_document.links != generation.links
+        {
             return Err("published profile composition differs from the admitted operation".into());
         }
     }
-    Ok(report)
+    debug_assert!(observed_retained.len() <= publication::GENERATIONS_MAX);
+    debug_assert!(observed_pending.iter().all(|number| *number > 0));
+    Ok(())
 }
 
 struct MutationContext<'a> {
@@ -163,14 +203,14 @@ struct MutationContext<'a> {
 
 async fn mutate(
     operation: ProfileOperation,
-    apply: bool,
+    should_apply: bool,
     context: &MutationContext<'_>,
-    report: &mut ProfileReport,
+    result_document: &mut ProfileReport,
 ) -> Result<(), String> {
     if let ProfileOperation::RemoveGeneration { generation } = operation {
-        return remove_generation(context, generation, apply, report);
+        return remove_generation(context, generation, should_apply, result_document);
     }
-    let (generation, is_new) = select_generation(operation, context, report)?;
+    let (generation, is_new) = select_generation(operation, context, result_document)?;
     require_binding(&generation.manifest, context.binding)?;
     let links = admission::admit(&generation.manifest, &context.authority).await?;
     let mut generation = generation;
@@ -185,12 +225,12 @@ async fn mutate(
     if serde_json::to_vec(&generation).map_err(|error| error.to_string())?.len() as u64 > publication::JSON_BYTES_MAX {
         return Err("profile generation manifest exceeds publication byte bound".into());
     }
-    report.target_generation = Some(generation.number);
-    report.root_owner_label = Some(owner_label(context.profile, generation.number));
-    report.manifest = Some(generation.manifest.clone());
-    report.links = generation.links.clone();
-    report.admission_checked = true;
-    if !apply {
+    result_document.target_generation = Some(generation.number);
+    result_document.root_owner_label = Some(owner_label(context.profile, generation.number));
+    result_document.manifest = Some(generation.manifest.clone());
+    result_document.links = generation.links.clone();
+    result_document.admission_checked = true;
+    if !should_apply {
         return Ok(());
     }
     if is_new {
@@ -204,23 +244,26 @@ async fn mutate(
         retain(context, &generation).await?;
     }
     publication::switch(context.profile, generation.number)?;
-    report.applied = true;
-    report.active = Some(generation.number);
+    result_document.applied = true;
+    result_document.active = Some(generation.number);
     if is_new {
-        report.retained_generations.push(generation.number);
-        report.retained_generations.sort_unstable();
+        result_document.retained_generations.push(generation.number);
+        result_document.retained_generations.sort_unstable();
     }
-    assert_eq!(report.active, report.target_generation);
-    assert!(report.admission_checked);
+    assert_eq!(result_document.active, result_document.target_generation);
+    assert!(result_document.admission_checked);
     Ok(())
 }
 
 fn select_generation(
     operation: ProfileOperation,
     context: &MutationContext<'_>,
-    report: &ProfileReport,
+    result_document: &ProfileReport,
 ) -> Result<(Generation, bool), String> {
-    let current = report.active.map(|number| publication::read_generation(context.profile, number)).transpose()?;
+    let current = result_document
+        .active
+        .map(|number| publication::read_generation(context.profile, number))
+        .transpose()?;
     let manifest = current
         .as_ref()
         .map(|generation| generation.manifest.clone())
@@ -233,8 +276,8 @@ fn select_generation(
             return Ok((publication::read_generation(context.profile, generation)?, false));
         }
         ProfileOperation::Rollback => {
-            let active = report.active.ok_or("cannot roll back an empty profile")?;
-            let previous = report
+            let active = result_document.active.ok_or("cannot roll back an empty profile")?;
+            let previous = result_document
                 .retained_generations
                 .iter()
                 .rev()
@@ -245,17 +288,17 @@ fn select_generation(
         }
         _ => return Err("invalid profile mutation operation".into()),
     };
-    if report.retained_generations.len() >= publication::GENERATIONS_MAX {
+    if result_document.retained_generations.len() >= publication::GENERATIONS_MAX {
         return Err("profile retained generation limit reached; remove an inactive generation separately".into());
     }
-    let number = publication::next_number(context.profile, &report.retained_generations)?;
-    assert!(number > report.retained_generations.last().copied().unwrap_or(0));
+    let number = publication::next_number(context.profile, &result_document.retained_generations)?;
+    assert!(number > result_document.retained_generations.last().copied().unwrap_or(0));
     assert_eq!(candidate.platform, manifest.platform);
     Ok((
         Generation {
             schema: GENERATION_SCHEMA.into(),
             number,
-            parent: report.active,
+            parent: result_document.active,
             manifest: candidate,
             links: BTreeMap::new(),
         },
@@ -268,12 +311,12 @@ async fn retain(context: &MutationContext<'_>, generation: &Generation) -> Resul
     let bytes = serde_json::to_vec(generation).map_err(|error| error.to_string())?;
     let identity = format!("b3:{}", blake3::hash(&bytes).to_hex());
     let mut unique = BTreeSet::new();
-    let mut registrations = Vec::new();
+    let mut registrations = Vec::with_capacity(generation.manifest.packages.len());
     for package in &generation.manifest.packages {
         if !unique.insert(&package.output_path) {
             continue;
         }
-        let path = admission::parse_path(&package.output_path, &context.binding.store_prefix)?;
+        let path = admission::parse_path(&package.output_path, admission::StorePrefix(&context.binding.store_prefix))?;
         registrations.push((path, GcRootSource::Pin, RootRegistration {
             class: GcRootClass::ExplicitPin,
             owner_scope: format!("operator:{label}"),
@@ -294,16 +337,16 @@ async fn retain(context: &MutationContext<'_>, generation: &Generation) -> Resul
 fn remove_generation(
     context: &MutationContext<'_>,
     number: u64,
-    apply: bool,
-    report: &mut ProfileReport,
+    should_apply: bool,
+    result_document: &mut ProfileReport,
 ) -> Result<(), String> {
     if number == 0 {
         return Err("profile generation numbers must be positive".into());
     }
-    if report.active == Some(number) {
+    if result_document.active == Some(number) {
         return Err("cannot remove the active generation; switch separately first".into());
     }
-    let generation = if report.retained_generations.contains(&number) {
+    let generation = if result_document.retained_generations.contains(&number) {
         publication::read_generation(context.profile, number)?
     } else {
         let generation: Generation =
@@ -319,11 +362,11 @@ fn remove_generation(
     };
     require_binding(&generation.manifest, context.binding)?;
     let label = owner_label(context.profile, number);
-    report.target_generation = Some(number);
-    report.root_owner_label = Some(label.clone());
-    report.manifest = Some(generation.manifest.clone());
-    report.links = generation.links.clone();
-    if !apply {
+    result_document.target_generation = Some(number);
+    result_document.root_owner_label = Some(label.clone());
+    result_document.manifest = Some(generation.manifest.clone());
+    result_document.links = generation.links.clone();
+    if !should_apply {
         return Ok(());
     }
     let removed = publication::tombstone(context.profile, number)?;
@@ -331,11 +374,11 @@ fn remove_generation(
         context.roots.release_owned_pin(&package.output_path, &label).map_err(|error| error.to_string())?;
     }
     publication::finish_pending(context.profile, number)?;
-    report.pending_generations.retain(|pending| *pending != number);
-    report.applied = true;
-    report.retained_generations = publication::generations(context.profile)?;
-    assert_eq!(report.active, report.previous_active);
-    assert!(!report.retained_generations.contains(&number));
+    result_document.pending_generations.retain(|pending| *pending != number);
+    result_document.applied = true;
+    result_document.retained_generations = publication::generations(context.profile)?;
+    assert_eq!(result_document.active, result_document.previous_active);
+    assert!(!result_document.retained_generations.contains(&number));
     Ok(())
 }
 

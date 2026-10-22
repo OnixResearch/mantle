@@ -85,22 +85,22 @@ fn valid_exit_codes(codes: &[i32]) -> bool {
     valid_guard_codes(codes) || (codes.len() == 256 && codes.iter().copied().eq(0..=255))
 }
 pub(crate) fn canonical_exit_status(code: i32) -> Result<([u8; 4], usize), String> {
-    if !(0..=255).contains(&code) {
+    let Ok(code) = u8::try_from(code) else {
         return Err("guard status is not a normal exit code".into());
-    }
+    };
     let mut bytes = [0u8; 4];
-    let mut length = 0;
+    let mut length_bytes = 0usize;
     if code >= 100 {
-        bytes[length] = b'0' + (code / 100) as u8;
-        length += 1;
+        bytes[length_bytes] = b'0'.saturating_add(code / 100);
+        length_bytes = length_bytes.saturating_add(1);
     }
     if code >= 10 {
-        bytes[length] = b'0' + ((code / 10) % 10) as u8;
-        length += 1;
+        bytes[length_bytes] = b'0'.saturating_add((code / 10) % 10);
+        length_bytes = length_bytes.saturating_add(1);
     }
-    bytes[length] = b'0' + (code % 10) as u8;
-    bytes[length + 1] = b'\n';
-    Ok((bytes, length + 2))
+    bytes[length_bytes] = b'0'.saturating_add(code % 10);
+    bytes[length_bytes.saturating_add(1)] = b'\n';
+    Ok((bytes, length_bytes.saturating_add(2)))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -239,6 +239,20 @@ pub(crate) fn validate_action_plan(proof: &SourceBuiltFixedPointPlan, plan: &Act
     Ok(())
 }
 
+struct ActionGraphContext<'a> {
+    proof: &'a SourceBuiltFixedPointPlan,
+    plan: &'a ActionTrustPlan,
+    controller_finishes: &'a [ActionSpec],
+}
+
+struct ActionGraphState<'a> {
+    actions: BTreeMap<String, (usize, &'a ActionSpec)>,
+    admitted_controllers: BTreeSet<String>,
+    output_producers: BTreeMap<String, String>,
+    total_events_max: u32,
+    controller_potential_events_max: u64,
+}
+
 pub(super) fn validate_action_graph(proof: &SourceBuiltFixedPointPlan, plan: &ActionTrustPlan) -> Result<(), String> {
     if plan.schema != ACTION_TRUST_SCHEMA || plan.proof_plan_digest_blake3 != proof.plan_digest_blake3 {
         return Err("action trust schema or source proof identity mismatch".into());
@@ -250,8 +264,6 @@ pub(super) fn validate_action_graph(proof: &SourceBuiltFixedPointPlan, plan: &Ac
     if plan.adapters.len() != proof.stages.len() {
         return Err("incomplete six-stage action adapters".into());
     }
-    let mut actions = BTreeMap::new();
-    let mut admitted_controllers = BTreeSet::new();
     let declaration_count = plan
         .adapters
         .iter()
@@ -265,107 +277,172 @@ pub(super) fn validate_action_graph(proof: &SourceBuiltFixedPointPlan, plan: &Ac
         return Err("root-scoped action declaration count exceeds proof limit".into());
     }
     let controller_finishes = controller_finish_specs(plan)?;
-    let mut output_producers = BTreeMap::<String, String>::new();
-    let mut total_events_max = 0u32;
-    let mut controller_potential_events_max = 0u64;
+    let context = ActionGraphContext {
+        proof,
+        plan,
+        controller_finishes: &controller_finishes,
+    };
+    let mut state = ActionGraphState {
+        actions: BTreeMap::new(),
+        admitted_controllers: BTreeSet::new(),
+        output_producers: BTreeMap::new(),
+        total_events_max: 0,
+        controller_potential_events_max: 0,
+    };
     for (stage_index, (stage, adapter)) in proof.stages.iter().zip(&plan.adapters).enumerate() {
-        if adapter.stage_id != stage.stage_id || (adapter.actions.is_empty() && adapter.controllers.is_empty()) {
-            return Err(format!("missing or out-of-order actions for {}", stage.stage_id));
-        }
-        if adapter.actions.len() > ACTION_LIMIT || !strictly_sorted(&adapter.reachable_action_ids) {
-            return Err(format!("incomplete or duplicate action enumeration for {}", stage.stage_id));
-        }
-        let actual_ids = adapter.actions.iter().map(|action| action.id.clone()).collect::<BTreeSet<_>>();
-        let reachable_ids = adapter.reachable_action_ids.iter().cloned().collect::<BTreeSet<_>>();
-        if actual_ids.len() != adapter.actions.len() || actual_ids != reachable_ids {
-            return Err(format!("incomplete action adapter for {}", stage.stage_id));
-        }
-        validate_stage_authorities(stage, adapter, &output_producers)?;
-        for controller in &adapter.controllers {
-            // Conditional template positions are not admitted execution events.
-            // Validate their arithmetic without charging unobserved potential turns.
-            controller_potential_events_max = controller_potential_events_max
-                .checked_add(validate_controller_shape(controller, &stage.stage_id)?)
-                .ok_or("controller potential event bound overflow")?;
-            if plan.adapters.iter().flat_map(|a| &a.actions).any(|a| {
-                a.id == controller.id
-                    || a.id.starts_with(&format!("{}/", controller.id))
-                    || a.id == format!("{}.sandbox", controller.id)
-            }) || plan.adapters.iter().flat_map(|a| &a.controllers).any(|c| {
-                c.id != controller.id
-                    && (c.id.starts_with(&format!("{}/", controller.id))
-                        || controller.id.starts_with(&format!("{}/", c.id)))
-            }) || plan.adapters.iter().flat_map(|a| &a.controllers).filter(|c| c.id == controller.id).count() != 1
-            {
-                return Err("duplicate controller/static root identity".into());
-            }
-        }
-        for action in &adapter.actions {
-            let needed_prefix = adapter
-                .controllers
-                .iter()
-                .rposition(|c| action.producer_actions.contains(&c.id))
-                .map_or(0, |index| index + 1);
-            for controller in adapter.controllers.iter().take(needed_prefix) {
-                if admitted_controllers.insert(controller.id.clone()) {
-                    validate_controller_graph(proof, stage_index, controller, &actions)?;
-                    let finish = controller_finishes
-                        .iter()
-                        .find(|a| a.id == controller.id)
-                        .ok_or("missing controller finish template")?;
-                    actions.insert(finish.id.clone(), (stage_index, finish));
-                }
-            }
-            if action.inputs.iter().any(|i| matches!(i, ActionInput::ControllerOutcome { .. })) {
-                return Err("static action cannot claim a controller outcome".into());
-            }
-            if actions.len() >= ACTION_LIMIT {
-                return Err("root-scoped action count exceeds proof limit".into());
-            }
-            validate_action(proof, stage_index, action, &actions)?;
-            let count = action
-                .protected_events_max
-                .checked_add(action.build_events_max)
-                .and_then(|count| count.checked_add(u32::from(action.guard.is_some())))
-                .ok_or("event bound overflow")?;
-            total_events_max = total_events_max.checked_add(count).ok_or("event bound overflow")?;
-            if actions.insert(action.id.clone(), (stage_index, action)).is_some() {
-                return Err(format!("duplicate root-scoped action {}", action.id));
-            }
-        }
-        for controller in &adapter.controllers {
-            if admitted_controllers.insert(controller.id.clone()) {
-                validate_controller_graph(proof, stage_index, controller, &actions)?;
-                let finish = controller_finishes
-                    .iter()
-                    .find(|a| a.id == controller.id)
-                    .ok_or("missing controller finish template")?;
-                actions.insert(finish.id.clone(), (stage_index, finish));
-            }
-        }
-        let stage_output_id = stage_output_id(stage.output);
-        let mut matching = adapter
-            .actions
-            .iter()
-            .chain(controller_finishes.iter().filter(|a| a.stage_id == stage.stage_id))
-            .filter(|action| action.output_ids.iter().any(|id| id == stage_output_id));
-        let Some(producer) = matching.next() else {
-            return Err(format!("stage {} lacks producing action for {stage_output_id}", stage.stage_id));
-        };
-        if matching.next().is_some() {
-            return Err(format!("stage {} has duplicate producing actions for {stage_output_id}", stage.stage_id));
-        }
-        if producer.guard.is_some() {
-            return Err(format!("stage {} mandatory product cannot be a conditional output", stage.stage_id));
-        }
-        output_producers.insert(stage_output_id.to_string(), producer.id.clone());
+        validate_stage_action_graph(&context, &mut state, stage_index, stage, adapter)?;
     }
-    if total_events_max > proof.resource_bounds.protected_exec_events_max {
+    if state.total_events_max > proof.resource_bounds.protected_exec_events_max {
         return Err("planned action event count exceeds proof bound".into());
     }
-    controller_potential_events_max
-        .checked_add(u64::from(total_events_max))
+    state
+        .controller_potential_events_max
+        .checked_add(u64::from(state.total_events_max))
         .ok_or("total potential event bound overflow")?;
+    debug_assert_eq!(plan.adapters.len(), proof.stages.len());
+    debug_assert!(declaration_count <= ACTION_LIMIT);
+    Ok(())
+}
+fn validate_stage_action_graph<'a>(
+    context: &ActionGraphContext<'a>,
+    state: &mut ActionGraphState<'a>,
+    stage_index: usize,
+    stage: &SourceBuiltFixedPointStagePlan,
+    adapter: &'a StageActionAdapter,
+) -> Result<(), String> {
+    if adapter.stage_id != stage.stage_id || (adapter.actions.is_empty() && adapter.controllers.is_empty()) {
+        return Err(format!("missing or out-of-order actions for {}", stage.stage_id));
+    }
+    if adapter.actions.len() > ACTION_LIMIT || !strictly_sorted(&adapter.reachable_action_ids) {
+        return Err(format!("incomplete or duplicate action enumeration for {}", stage.stage_id));
+    }
+    let actual_ids = adapter.actions.iter().map(|action| action.id.clone()).collect::<BTreeSet<_>>();
+    let reachable_ids = adapter.reachable_action_ids.iter().cloned().collect::<BTreeSet<_>>();
+    if actual_ids.len() != adapter.actions.len() || actual_ids != reachable_ids {
+        return Err(format!("incomplete action adapter for {}", stage.stage_id));
+    }
+    validate_stage_authorities(stage, adapter, &state.output_producers)?;
+    for controller in &adapter.controllers {
+        // Conditional template positions are not admitted execution events.
+        // Validate their arithmetic without charging unobserved potential turns.
+        state.controller_potential_events_max = state
+            .controller_potential_events_max
+            .checked_add(validate_controller_shape(controller, &stage.stage_id)?)
+            .ok_or("controller potential event bound overflow")?;
+        validate_controller_root_identity(context.plan, controller)?;
+    }
+    for action in &adapter.actions {
+        validate_stage_action(context, state, stage_index, action, adapter)?;
+    }
+    for controller in &adapter.controllers {
+        admit_controller(context, state, stage_index, controller)?;
+    }
+    validate_stage_output(context, state, stage, adapter)?;
+    debug_assert_eq!(adapter.stage_id, stage.stage_id);
+    debug_assert!(!adapter.actions.is_empty() || !adapter.controllers.is_empty());
+    Ok(())
+}
+fn validate_stage_action<'a>(
+    context: &ActionGraphContext<'a>,
+    state: &mut ActionGraphState<'a>,
+    stage_index: usize,
+    action: &'a ActionSpec,
+    adapter: &'a StageActionAdapter,
+) -> Result<(), String> {
+    let needed_prefix = adapter
+        .controllers
+        .iter()
+        .rposition(|c| action.producer_actions.contains(&c.id))
+        .map_or(0, |index| index.saturating_add(1));
+    for controller in adapter.controllers.iter().take(needed_prefix) {
+        admit_controller(context, state, stage_index, controller)?;
+    }
+    if action.inputs.iter().any(|i| matches!(i, ActionInput::ControllerOutcome { .. })) {
+        return Err("static action cannot claim a controller outcome".into());
+    }
+    if state.actions.len() >= ACTION_LIMIT {
+        return Err("root-scoped action count exceeds proof limit".into());
+    }
+    validate_action(context.proof, stage_index, action, &state.actions)?;
+    let count = action
+        .protected_events_max
+        .checked_add(action.build_events_max)
+        .and_then(|count| count.checked_add(u32::from(action.guard.is_some())))
+        .ok_or("event bound overflow")?;
+    state.total_events_max = state.total_events_max.checked_add(count).ok_or("event bound overflow")?;
+    if state.actions.insert(action.id.clone(), (stage_index, action)).is_some() {
+        return Err(format!("duplicate root-scoped action {}", action.id));
+    }
+    debug_assert!(state.actions.len() <= ACTION_LIMIT);
+    debug_assert!(state.total_events_max >= count);
+    Ok(())
+}
+fn admit_controller<'a>(
+    context: &ActionGraphContext<'a>,
+    state: &mut ActionGraphState<'a>,
+    stage_index: usize,
+    controller: &ActionControllerSpec,
+) -> Result<(), String> {
+    if !state.admitted_controllers.insert(controller.id.clone()) {
+        return Ok(());
+    }
+    validate_controller_graph(context.proof, stage_index, controller, &state.actions)?;
+    let finish = context
+        .controller_finishes
+        .iter()
+        .find(|a| a.id == controller.id)
+        .ok_or("missing controller finish template")?;
+    state.actions.insert(finish.id.clone(), (stage_index, finish));
+    Ok(())
+}
+fn validate_controller_root_identity(plan: &ActionTrustPlan, controller: &ActionControllerSpec) -> Result<(), String> {
+    let has_static_identity = plan.adapters.iter().flat_map(|a| &a.actions).any(|a| {
+        a.id == controller.id
+            || a.id.starts_with(&format!("{}/", controller.id))
+            || a.id == format!("{}.sandbox", controller.id)
+    });
+    let has_nested_controller_identity = plan.adapters.iter().flat_map(|a| &a.controllers).any(|c| {
+        c.id != controller.id
+            && (c.id.starts_with(&format!("{}/", controller.id)) || controller.id.starts_with(&format!("{}/", c.id)))
+    });
+    let has_duplicate_controller =
+        plan.adapters.iter().flat_map(|a| &a.controllers).filter(|c| c.id == controller.id).count() != 1;
+    let invalid_checks = [
+        has_static_identity,
+        has_nested_controller_identity,
+        has_duplicate_controller,
+    ];
+    if invalid_checks.iter().any(|is_invalid| *is_invalid) {
+        return Err("duplicate controller/static root identity".into());
+    }
+    debug_assert!(!has_static_identity);
+    debug_assert!(!has_nested_controller_identity && !has_duplicate_controller);
+    Ok(())
+}
+fn validate_stage_output<'a>(
+    context: &ActionGraphContext<'a>,
+    state: &mut ActionGraphState<'a>,
+    stage: &SourceBuiltFixedPointStagePlan,
+    adapter: &'a StageActionAdapter,
+) -> Result<(), String> {
+    let stage_output_id = stage_output_id(stage.output);
+    let mut matching = adapter
+        .actions
+        .iter()
+        .chain(context.controller_finishes.iter().filter(|a| a.stage_id == stage.stage_id))
+        .filter(|action| action.output_ids.iter().any(|id| id == stage_output_id));
+    let Some(producer) = matching.next() else {
+        return Err(format!("stage {} lacks producing action for {stage_output_id}", stage.stage_id));
+    };
+    if matching.next().is_some() {
+        return Err(format!("stage {} has duplicate producing actions for {stage_output_id}", stage.stage_id));
+    }
+    if producer.guard.is_some() {
+        return Err(format!("stage {} mandatory product cannot be a conditional output", stage.stage_id));
+    }
+    state.output_producers.insert(stage_output_id.to_string(), producer.id.clone());
+    debug_assert!(!stage_output_id.is_empty());
+    debug_assert!(producer.guard.is_none());
     Ok(())
 }
 
@@ -377,7 +454,10 @@ fn static_template_producer<'a>(
         None => Some(token),
         Some(references) => match references.get(token) {
             Some(ActionControllerRef::Static { action_id }) => Some(action_id.as_str()),
-            _ => None,
+            Some(ActionControllerRef::Current { .. }) => None,
+            Some(ActionControllerRef::PreviousOrEntry) => None,
+            Some(ActionControllerRef::Entry) => None,
+            None => None,
         },
     }
 }
@@ -422,6 +502,8 @@ fn validate_stage_authorities(
             return Err(format!("stage {} action adapter omits declared source or policy authority", stage.stage_id));
         }
     }
+    debug_assert!(!adapter.actions.is_empty() || !adapter.controllers.is_empty());
+    debug_assert_eq!(adapter.stage_id, stage.stage_id);
     Ok(())
 }
 
@@ -443,16 +525,52 @@ fn validate_action<'a>(
     {
         return Err(format!("action {} is outside its stage namespace", action.id));
     }
-    if action.elapsed_seconds_max == 0
-        || action.elapsed_seconds_max > proof.resource_bounds.elapsed_seconds_max
-        || action.disk_bytes_max == 0
-        || action.disk_bytes_max > proof.resource_bounds.disk_bytes_max
-        || action.build_events_min == 0
+    let is_elapsed_bound_invalid =
+        action.elapsed_seconds_max == 0 || action.elapsed_seconds_max > proof.resource_bounds.elapsed_seconds_max;
+    let is_disk_bound_invalid =
+        action.disk_bytes_max == 0 || action.disk_bytes_max > proof.resource_bounds.disk_bytes_max;
+    let is_build_event_invalid = action.build_events_min == 0
         || action.protected_events_min > action.protected_events_max
-        || action.build_events_min > action.build_events_max
-    {
+        || action.build_events_min > action.build_events_max;
+    let invalid_bounds = [is_elapsed_bound_invalid, is_disk_bound_invalid, is_build_event_invalid];
+    if invalid_bounds.iter().any(|is_invalid| *is_invalid) {
         return Err(format!("action {} has invalid build/launch event or resource bounds", action.id));
     }
+    validate_action_exit_contract(action)?;
+    let is_producer_order_valid = strictly_sorted(&action.producer_actions);
+    let is_output_order_valid = strictly_sorted(&action.output_ids);
+    let is_authority_complete = !action.output_ids.is_empty() && !action.inputs.is_empty();
+    if !is_producer_order_valid || !is_output_order_valid || !is_authority_complete {
+        return Err(format!("action {} has incomplete input, producer, or output authority", action.id));
+    }
+    let mut needed_producers = BTreeSet::new();
+    if let ActionExecutable::Fixed { digest_blake3 } = &action.executable {
+        valid_digest(digest_blake3)?;
+    } else if let ActionExecutable::Produced { action_id, output_id } = &action.executable {
+        validate_produced_authority(
+            &ProducedOutputRef {
+                action_id: action_id.as_str(),
+                output_id: output_id.as_str(),
+            },
+            stage_index,
+            preceding,
+        )?;
+        validate_guarded_consumption(action, action_id.as_str(), preceding[action_id].1, true)?;
+        needed_producers.insert(action_id.as_str());
+    }
+    validate_action_inputs(action, stage, stage_index, preceding, &mut needed_producers)?;
+    if let Some(guard) = &action.guard {
+        validate_action_guard(action, guard, preceding)?;
+    }
+    let declared_producers = action.producer_actions.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    if needed_producers != declared_producers {
+        return Err(format!("action {} has missing or unused producer edges", action.id));
+    }
+    debug_assert!(!action.id.is_empty());
+    debug_assert_eq!(action.stage_id, stage.stage_id);
+    Ok(())
+}
+fn validate_action_exit_contract(action: &ActionSpec) -> Result<(), String> {
     if !action.accepted_exit_codes.is_empty()
         && (!valid_exit_codes(&action.accepted_exit_codes) || action.protected_events_min == 0)
     {
@@ -472,21 +590,17 @@ fn validate_action<'a>(
     {
         return Err("failable probe requires mandatory actual stdout/stderr/status inventory".into());
     }
-    if !strictly_sorted(&action.producer_actions)
-        || !strictly_sorted(&action.output_ids)
-        || action.output_ids.is_empty()
-        || action.inputs.is_empty()
-    {
-        return Err(format!("action {} has incomplete input, producer, or output authority", action.id));
-    }
-    let mut needed_producers = BTreeSet::new();
-    if let ActionExecutable::Fixed { digest_blake3 } = &action.executable {
-        valid_digest(digest_blake3)?;
-    } else if let ActionExecutable::Produced { action_id, output_id } = &action.executable {
-        validate_produced_authority(action_id, output_id, stage_index, preceding)?;
-        validate_guarded_consumption(action, action_id, preceding[action_id].1, true)?;
-        needed_producers.insert(action_id.as_str());
-    }
+    debug_assert!(action.accepted_exit_codes.len() <= 256);
+    debug_assert!(action.protected_events_min <= action.protected_events_max);
+    Ok(())
+}
+fn validate_action_inputs<'a>(
+    action: &'a ActionSpec,
+    stage: &SourceBuiltFixedPointStagePlan,
+    stage_index: usize,
+    preceding: &BTreeMap<String, (usize, &'a ActionSpec)>,
+    needed_producers: &mut BTreeSet<&'a str>,
+) -> Result<(), String> {
     for input in &action.inputs {
         match input {
             ActionInput::Stage { authority }
@@ -495,52 +609,64 @@ fn validate_action<'a>(
                 return Err(format!("action {} has undeclared or path-only stage input", action.id));
             }
             ActionInput::Produced { action_id, output_id } => {
-                validate_produced_authority(action_id, output_id, stage_index, preceding)?;
+                validate_produced_authority(
+                    &ProducedOutputRef {
+                        action_id: action_id.as_str(),
+                        output_id: output_id.as_str(),
+                    },
+                    stage_index,
+                    preceding,
+                )?;
                 validate_guarded_consumption(
                     action,
-                    action_id,
+                    action_id.as_str(),
                     preceding[action_id].1,
                     !["stdout", "stderr", "exit-status"].contains(&output_id.as_str()),
                 )?;
-                needed_producers.insert(action_id);
+                needed_producers.insert(action_id.as_str());
             }
             ActionInput::PhaseOutcome { action_id } => {
                 let (producer_stage, producer) = preceding.get(action_id).ok_or("unknown phase outcome producer")?;
                 if *producer_stage > stage_index || producer.guard.is_none() || action_id.ends_with(".sandbox") {
                     return Err("phase outcome must observe a preceding guarded command".into());
                 }
-                needed_producers.insert(action_id);
+                needed_producers.insert(action_id.as_str());
             }
             ActionInput::ControllerOutcome { .. } => {
                 return Err("controller outcome outside a controller finish".into());
             }
         }
     }
-    if let Some(guard) = &action.guard {
-        if !(1..=8).contains(&guard.conditions.len()) || action.protected_events_min == 0 {
-            return Err("invalid guard condition count or unprotected guarded action".into());
+    debug_assert!(!action.inputs.is_empty());
+    debug_assert!(!action.id.is_empty());
+    Ok(())
+}
+fn validate_action_guard<'a>(
+    action: &ActionSpec,
+    guard: &ActionGuard,
+    preceding: &BTreeMap<String, (usize, &'a ActionSpec)>,
+) -> Result<(), String> {
+    if !(1..=8).contains(&guard.conditions.len()) || action.protected_events_min == 0 {
+        return Err("invalid guard condition count or unprotected guarded action".into());
+    }
+    let mut statuses = BTreeSet::new();
+    for condition in &guard.conditions {
+        if !valid_guard_codes(&condition.accepted_codes)
+            || !statuses.insert(&condition.action_id)
+            || !action.inputs.contains(&ActionInput::Produced {
+                action_id: condition.action_id.clone(),
+                output_id: "exit-status".into(),
+            })
+        {
+            return Err("guard must consume exact distinct bounded status inputs".into());
         }
-        let mut statuses = BTreeSet::new();
-        for condition in &guard.conditions {
-            if !valid_guard_codes(&condition.accepted_codes)
-                || !statuses.insert(&condition.action_id)
-                || !action.inputs.contains(&ActionInput::Produced {
-                    action_id: condition.action_id.clone(),
-                    output_id: "exit-status".into(),
-                })
-            {
-                return Err("guard must consume exact distinct bounded status inputs".into());
-            }
-            let producer = preceding.get(&condition.action_id).ok_or("guard status producer is not preceding")?.1;
-            if producer.protected_events_min == 0 || !producer.output_ids.iter().any(|output| output == "exit-status") {
-                return Err("guard status is not a protected command result".into());
-            }
+        let producer = preceding.get(&condition.action_id).ok_or("guard status producer is not preceding")?.1;
+        if producer.protected_events_min == 0 || !producer.output_ids.iter().any(|output| output == "exit-status") {
+            return Err("guard status is not a protected command result".into());
         }
     }
-    let declared_producers = action.producer_actions.iter().map(String::as_str).collect::<BTreeSet<_>>();
-    if needed_producers != declared_producers {
-        return Err(format!("action {} has missing or unused producer edges", action.id));
-    }
+    debug_assert!(statuses.len() == guard.conditions.len());
+    debug_assert!(action.protected_events_min > 0);
     Ok(())
 }
 
@@ -550,10 +676,10 @@ fn validate_guarded_consumption(
     producer: &ActionSpec,
     ordinary_output: bool,
 ) -> Result<(), String> {
-    let optional_failure = ordinary_output
+    let is_optional_failure = ordinary_output
         && producer.accepted_exit_codes.len() > 1
         && producer.output_ids.iter().any(|id| id == "exit-status");
-    if producer.guard.is_none() && !optional_failure {
+    if producer.guard.is_none() && !is_optional_failure {
         return Ok(());
     }
     let guard = action
@@ -570,6 +696,8 @@ fn validate_guarded_consumption(
     {
         return Err("guarded output lacks dominating prior guard conditions".into());
     }
+    debug_assert!(index < guard.conditions.len());
+    debug_assert_eq!(guard.conditions[index].action_id, producer_id);
     Ok(())
 }
 
@@ -584,17 +712,24 @@ fn stage_output_id(role: ProofOutputRole) -> &'static str {
     }
 }
 
+struct ProducedOutputRef<'a> {
+    action_id: &'a str,
+    output_id: &'a str,
+}
+
 fn validate_produced_authority(
-    producer_id: &str,
-    output_id: &str,
+    produced: &ProducedOutputRef<'_>,
     consumer_stage: usize,
     preceding: &BTreeMap<String, (usize, &ActionSpec)>,
 ) -> Result<(), String> {
-    let Some((producer_stage, producer)) = preceding.get(producer_id) else {
-        return Err(format!("generated executable/input has no producer action: {producer_id}"));
+    let Some((producer_stage, producer)) = preceding.get(produced.action_id) else {
+        return Err(format!("generated executable/input has no producer action: {}", produced.action_id));
     };
-    if *producer_stage > consumer_stage || !producer.output_ids.iter().any(|id| id == output_id) {
-        return Err(format!("generated executable/input lacks producer output: {producer_id}/{output_id}"));
+    if *producer_stage > consumer_stage || !producer.output_ids.iter().any(|id| id == produced.output_id) {
+        return Err(format!(
+            "generated executable/input lacks producer output: {}/{}",
+            produced.action_id, produced.output_id
+        ));
     }
     Ok(())
 }
@@ -639,7 +774,11 @@ impl ActionObservationState {
         if action.guard.is_some() && self.guard_outcomes.get(&action.id) != Some(&GuardOutcome::Active) {
             return Err("guarded command execution lacks an active observed decision".into());
         }
-        validate_observation(proof, action, event, &self.produced, &self.phase_outcomes, &self.controllers)?;
+        validate_observation(proof, action, event, &ObservationInputs {
+            produced: &self.produced,
+            phases: &self.phase_outcomes,
+            controllers: &self.controllers,
+        })?;
         let previous = self.counts.get(&action.id).copied().unwrap_or_default();
         if event.kind == ExecutionEventKind::ProtectedExec && !event.produced_outputs.is_empty() {
             return Err(format!("action {} protected launch cannot claim produced output", action.id));
@@ -660,11 +799,14 @@ impl ActionObservationState {
         let mut outputs = BTreeSet::new();
         for (output_id, digest) in &event.produced_outputs {
             valid_digest(digest)?;
-            if !action.output_ids.contains(output_id)
-                || !outputs.insert(output_id)
-                || self.produced.get(&action.id).is_some_and(|prior| prior.contains_key(output_id))
-                || self.provisional_outputs.get(&action.id).is_some_and(|prior| prior.contains_key(output_id))
-            {
+            let is_unknown_output = !action.output_ids.contains(output_id);
+            if is_unknown_output {
+                return Err(format!("action {} has unknown or duplicate output", action.id));
+            }
+            let is_duplicate_output = !outputs.insert(output_id);
+            let is_repeated_output = self.produced.get(&action.id).is_some_and(|prior| prior.contains_key(output_id))
+                || self.provisional_outputs.get(&action.id).is_some_and(|prior| prior.contains_key(output_id));
+            if is_duplicate_output || is_repeated_output {
                 return Err(format!("action {} has unknown or duplicate output", action.id));
             }
         }
@@ -681,17 +823,17 @@ impl ActionObservationState {
         }
         // Measured bytes remain provisional until the producer's entire required
         // event and output inventory is covered, not merely the requested output.
-        if next.0 >= action.protected_events_min
-            && next.1 >= action.build_events_min
-            && self.provisional_outputs.get(&action.id).is_some_and(|outputs| {
-                required_inventory_present(action, outputs, self.normal_exit_codes.get(&action.id).copied())
-            })
-            && let Some((action_id, outputs)) = self.provisional_outputs.remove_entry(&action.id)
-        {
-            self.phase_outcomes.insert(action_id.clone(), PhaseOutcome::Executed {
-                output_digests: outputs.clone(),
-            });
-            self.produced.insert(action_id, outputs);
+        let is_event_minimum_covered = next.0 >= action.protected_events_min && next.1 >= action.build_events_min;
+        let is_inventory_complete = self.provisional_outputs.get(&action.id).is_some_and(|outputs| {
+            required_inventory_present(action, outputs, self.normal_exit_codes.get(&action.id).copied())
+        });
+        if is_event_minimum_covered && is_inventory_complete {
+            if let Some((action_id, outputs)) = self.provisional_outputs.remove_entry(&action.id) {
+                self.phase_outcomes.insert(action_id.clone(), PhaseOutcome::Executed {
+                    output_digests: outputs.clone(),
+                });
+                self.produced.insert(action_id, outputs);
+            }
         }
         self.failed = false;
         Ok(())
@@ -704,31 +846,37 @@ impl ActionObservationState {
         codes: &[i32],
     ) -> Result<(), String> {
         let guard = action.guard.as_ref().ok_or("unguarded action has a guard decision")?;
-        if self.guard_outcomes.contains_key(&action.id)
-            || self.counts.contains_key(&action.id)
-            || codes.is_empty()
-            || codes.len() > guard.conditions.len()
-            || event.inputs.len() != codes.len()
-            || event.input_digests_blake3.len() != codes.len()
-            || !event.executable_digest_blake3.is_empty()
+        let is_duplicate_decision =
+            self.guard_outcomes.contains_key(&action.id) || self.counts.contains_key(&action.id);
+        let is_code_count_invalid = codes.is_empty() || codes.len() > guard.conditions.len();
+        let is_input_count_mismatch =
+            event.inputs.len() != codes.len() || event.input_digests_blake3.len() != codes.len();
+        let is_execution_claimed = !event.executable_digest_blake3.is_empty()
             || event.executable_producer.is_some()
             || event.normal_exit_code.is_some()
             || !event.produced_outputs.is_empty()
-            || event.completed_locally
-            || event.locality != "local"
+            || event.completed_locally;
+        let is_locality_invalid = event.locality != "local"
             || event.cache_hit
             || event.live_fetch
             || event.cargo_invocation
             || event.fallback
-            || event.protected_exec_violation
-            || event.elapsed_seconds > action.elapsed_seconds_max
-            || event.disk_bytes != 0
-        {
+            || event.protected_exec_violation;
+        let is_resource_invalid = event.elapsed_seconds > action.elapsed_seconds_max || event.disk_bytes != 0;
+        let invalid_checks = [
+            is_duplicate_decision,
+            is_code_count_invalid,
+            is_input_count_mismatch,
+            is_execution_claimed,
+            is_locality_invalid,
+            is_resource_invalid,
+        ];
+        if invalid_checks.iter().any(|is_invalid| *is_invalid) {
             return Err("guard decision claims execution, unread inputs, duplicate control or outputs".into());
         }
-        let mut active = true;
+        let mut is_active = true;
         for (index, (condition, code)) in guard.conditions.iter().zip(codes).enumerate() {
-            if !active {
+            if !is_active {
                 return Err("guard evaluated past first inactive condition".into());
             }
             let input = ActionInput::Produced {
@@ -743,11 +891,12 @@ impl ActionObservationState {
             {
                 return Err("guard consumes a forged or incomplete producer status".into());
             }
-            active = condition.accepted_codes.binary_search(code).is_ok();
+            is_active = condition.accepted_codes.binary_search(code).is_ok();
         }
-        if (active && (codes.len() != guard.conditions.len() || outcome != GuardOutcome::Active))
-            || (!active && outcome != GuardOutcome::Skipped)
-        {
+        let is_active_mismatch =
+            is_active && (codes.len() != guard.conditions.len() || outcome != GuardOutcome::Active);
+        let is_skipped_mismatch = !is_active && outcome != GuardOutcome::Skipped;
+        if is_active_mismatch || is_skipped_mismatch {
             return Err("guard decision differs from observed source predicate".into());
         }
         self.guard_outcomes.insert(action.id.clone(), outcome);
@@ -792,8 +941,14 @@ pub(crate) fn reconcile_actions(
         .collect();
     let action_coverage =
         collect_action_coverage(&actions, &counts, &produced, &state.guard_outcomes, &state.normal_exit_codes)?;
-    let stage1_binary = observed_stage_output_digest(plan, &produced, "mantle-stage1", "mantle-stage1")?;
-    let stage2_binary = observed_stage_output_digest(plan, &produced, "mantle-stage2", "mantle-stage2")?;
+    let stage1_binary = observed_stage_output_digest(plan, &produced, &StageOutputRef {
+        stage_id: "mantle-stage1",
+        output_id: "mantle-stage1",
+    })?;
+    let stage2_binary = observed_stage_output_digest(plan, &produced, &StageOutputRef {
+        stage_id: "mantle-stage2",
+        output_id: "mantle-stage2",
+    })?;
     if stage1_binary != stage2_binary {
         return Err("stage1 and stage2 Mantle binary BLAKE3 digests differ".into());
     }
@@ -807,24 +962,30 @@ pub(crate) fn reconcile_actions(
         digest_blake3: String::new(),
     };
     reconciliation.digest_blake3 = payload_digest(RECONCILIATION_DOMAIN, &reconciliation)?;
+    debug_assert_eq!(reconciliation.observed_event_count, observed_count);
+    debug_assert!(!reconciliation.digest_blake3.is_empty());
     Ok(reconciliation)
+}
+
+struct StageOutputRef<'a> {
+    stage_id: &'a str,
+    output_id: &'a str,
 }
 
 fn observed_stage_output_digest<'digest>(
     plan: &ActionTrustPlan,
     produced: &BTreeMap<(&str, &str), &'digest str>,
-    stage_id: &str,
-    output_id: &str,
+    output: &StageOutputRef<'_>,
 ) -> Result<&'digest str, String> {
     let stage = plan
         .adapters
         .iter()
-        .find(|adapter| adapter.stage_id == stage_id)
-        .ok_or_else(|| format!("missing output stage {stage_id}"))?;
+        .find(|adapter| adapter.stage_id == output.stage_id)
+        .ok_or_else(|| format!("missing output stage {}", output.stage_id))?;
     let producer_id = stage
         .actions
         .iter()
-        .find(|action| action.output_ids.iter().any(|output| output == output_id))
+        .find(|action| action.output_ids.iter().any(|id| id == output.output_id))
         .map(|action| action.id.as_str())
         .or_else(|| {
             stage
@@ -834,16 +995,19 @@ fn observed_stage_output_digest<'digest>(
                     controller.templates.iter().any(|template| {
                         template.role == ActionControllerRole::Finish
                             && !template.sandbox
-                            && template.action.output_ids.iter().any(|output| output == output_id)
+                            && template.action.output_ids.iter().any(|id| id == output.output_id)
                     })
                 })
                 .map(|controller| controller.id.as_str())
         })
-        .ok_or_else(|| format!("missing producer for {stage_id}/{output_id}"))?;
-    produced
-        .get(&(producer_id, output_id))
+        .ok_or_else(|| format!("missing producer for {}/{}", output.stage_id, output.output_id))?;
+    let digest = produced
+        .get(&(producer_id, output.output_id))
         .copied()
-        .ok_or_else(|| format!("missing observed output {stage_id}/{output_id}"))
+        .ok_or_else(|| format!("missing observed output {}/{}", output.stage_id, output.output_id))?;
+    debug_assert!(!digest.is_empty());
+    debug_assert!(!producer_id.is_empty());
+    Ok(digest)
 }
 
 fn collect_action_coverage(
@@ -860,12 +1024,12 @@ fn collect_action_coverage(
         if action.guard.is_some() && guard_outcome.is_none() {
             return Err(format!("missing observed guard decision for action {action_id}"));
         }
-        let skipped = guard_outcome == Some(GuardOutcome::Skipped);
-        if (skipped
+        let is_skipped = guard_outcome == Some(GuardOutcome::Skipped);
+        if (is_skipped
             && (protected != 0
                 || build != 0
                 || action.output_ids.iter().any(|output| produced.contains_key(&(*action_id, output.as_str())))))
-            || (!skipped
+            || (!is_skipped
                 && (protected < action.protected_events_min
                     || build < action.build_events_min
                     || action
@@ -887,6 +1051,8 @@ fn collect_action_coverage(
             guard_outcome,
         });
     }
+    debug_assert_eq!(coverage.len(), actions.len());
+    debug_assert!(actions.is_empty() || !coverage.is_empty());
     Ok(coverage)
 }
 
@@ -904,10 +1070,10 @@ pub(crate) fn verify_action_reconciliation(
 }
 
 fn output_required(action: &ActionSpec, output: &str, code: Option<i32>) -> bool {
-    let failed_probe = action.accepted_exit_codes.len() > 1
+    let is_failed_probe = action.accepted_exit_codes.len() > 1
         && code.is_some_and(|code| code != 0)
         && action.output_ids.iter().any(|id| id == "exit-status");
-    !failed_probe || ["stdout", "stderr", "exit-status"].contains(&output)
+    !is_failed_probe || ["stdout", "stderr", "exit-status"].contains(&output)
 }
 fn required_inventory_present(action: &ActionSpec, outputs: &BTreeMap<String, String>, code: Option<i32>) -> bool {
     action
@@ -917,29 +1083,45 @@ fn required_inventory_present(action: &ActionSpec, outputs: &BTreeMap<String, St
         .all(|output| outputs.contains_key(output))
 }
 
+struct ObservationInputs<'a> {
+    produced: &'a BTreeMap<String, BTreeMap<String, String>>,
+    phases: &'a BTreeMap<String, PhaseOutcome>,
+    controllers: &'a BTreeMap<String, ControllerObservation>,
+}
+
 fn validate_observation(
     proof: &SourceBuiltFixedPointPlan,
     action: &ActionSpec,
     event: &ActionExecutionEvent,
-    produced: &BTreeMap<String, BTreeMap<String, String>>,
-    phases: &BTreeMap<String, PhaseOutcome>,
-    controllers: &BTreeMap<String, ControllerObservation>,
+    inputs: &ObservationInputs<'_>,
 ) -> Result<(), String> {
     valid_digest(&event.executable_digest_blake3)?;
-    if event.locality != "local"
+    validate_observation_effects(action, event)?;
+    validate_observation_exit_status(action, event)?;
+    validate_observation_inputs(proof, action, event, inputs)?;
+    validate_observation_executable(action, event, inputs.produced)?;
+    debug_assert_eq!(event.inputs.len(), event.input_digests_blake3.len());
+    debug_assert!(!action.id.is_empty());
+    Ok(())
+}
+fn validate_observation_effects(action: &ActionSpec, event: &ActionExecutionEvent) -> Result<(), String> {
+    let is_locality_invalid = event.locality != "local"
         || !event.completed_locally
         || event.cache_hit
         || event.live_fetch
         || event.cargo_invocation
         || event.fallback
-        || event.protected_exec_violation
-        || event.inputs != action.inputs
-        || event.input_digests_blake3.len() != event.inputs.len()
-        || event.elapsed_seconds > action.elapsed_seconds_max
-        || event.disk_bytes > action.disk_bytes_max
-    {
+        || event.protected_exec_violation;
+    let is_input_mismatch = event.inputs != action.inputs || event.input_digests_blake3.len() != event.inputs.len();
+    let is_resource_invalid =
+        event.elapsed_seconds > action.elapsed_seconds_max || event.disk_bytes > action.disk_bytes_max;
+    let invalid_checks = [is_locality_invalid, is_input_mismatch, is_resource_invalid];
+    if invalid_checks.iter().any(|is_invalid| *is_invalid) {
         return Err(format!("action {} execution violates local source and effect authority", action.id));
     }
+    Ok(())
+}
+fn validate_observation_exit_status(action: &ActionSpec, event: &ActionExecutionEvent) -> Result<(), String> {
     match (&event.kind, action.accepted_exit_codes.is_empty(), event.normal_exit_code) {
         (ExecutionEventKind::ProtectedExec, _, None) | (ExecutionEventKind::BuildExecution, true, None) => {}
         (ExecutionEventKind::BuildExecution, false, Some(code))
@@ -955,22 +1137,34 @@ fn validate_observation(
         }
         _ => return Err("event normal exit does not satisfy exact source command policy".into()),
     }
+    Ok(())
+}
+fn validate_observation_inputs(
+    proof: &SourceBuiltFixedPointPlan,
+    action: &ActionSpec,
+    event: &ActionExecutionEvent,
+    inputs: &ObservationInputs<'_>,
+) -> Result<(), String> {
     for (input, observed_digest) in event.inputs.iter().zip(&event.input_digests_blake3) {
         valid_digest(observed_digest)?;
         let phase_digest;
         let expected_digest = match input {
             ActionInput::Stage { authority } => stage_input_digest(proof, *authority)?,
-            ActionInput::Produced { action_id, output_id } => {
-                produced.get(action_id).and_then(|outputs| outputs.get(output_id)).map(String::as_str).ok_or_else(
-                    || format!("action {} consumes unobserved producer output {action_id}/{output_id}", action.id),
-                )?
-            }
+            ActionInput::Produced { action_id, output_id } => inputs
+                .produced
+                .get(action_id)
+                .and_then(|outputs| outputs.get(output_id))
+                .map(String::as_str)
+                .ok_or_else(|| {
+                    format!("action {} consumes unobserved producer output {action_id}/{output_id}", action.id)
+                })?,
             ActionInput::PhaseOutcome { action_id } => {
-                phase_digest = phases.get(action_id).ok_or("phase outcome is not observed")?.digest()?;
+                phase_digest = inputs.phases.get(action_id).ok_or("phase outcome is not observed")?.digest()?;
                 phase_digest.as_str()
             }
             ActionInput::ControllerOutcome { controller_id } => {
-                phase_digest = controllers
+                phase_digest = inputs
+                    .controllers
                     .get(controller_id)
                     .and_then(|s| s.outcome.as_ref())
                     .ok_or("unobserved controller done outcome")?
@@ -982,6 +1176,15 @@ fn validate_observation(
             return Err(format!("action {} input content digest drift", action.id));
         }
     }
+    debug_assert_eq!(event.inputs.len(), event.input_digests_blake3.len());
+    debug_assert!(!action.id.is_empty());
+    Ok(())
+}
+fn validate_observation_executable(
+    action: &ActionSpec,
+    event: &ActionExecutionEvent,
+    produced: &BTreeMap<String, BTreeMap<String, String>>,
+) -> Result<(), String> {
     match &action.executable {
         ActionExecutable::Fixed { digest_blake3 }
             if event.executable_producer.is_none() && &event.executable_digest_blake3 == digest_blake3 =>

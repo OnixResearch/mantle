@@ -328,6 +328,9 @@ pub(super) fn verify_forest(profile: &Path, generation: &Generation) -> Result<(
                 .into_os_string()
                 .into_string()
                 .map_err(|_| "non-UTF8 profile link")?;
+            if found.len() >= crunch_composition_core::user_profile::ENTRIES_MAX {
+                return Err("profile forest exceeds entry bound".into());
+            }
             found.insert(relative, target);
         }
     }
@@ -415,10 +418,10 @@ pub(super) fn pending_generations(profile: &Path) -> Result<Vec<u64>, String> {
         if number == 0 || text != format!(".pending-{number}.json") {
             return Err("invalid pending generation name".into());
         }
-        pending.push(number);
-        if pending.len() > GENERATIONS_MAX {
+        if pending.len() >= GENERATIONS_MAX {
             return Err("too many pending profile generations".into());
         }
+        pending.push(number);
     }
     pending.sort_unstable();
     assert!(pending.len() <= GENERATIONS_MAX);

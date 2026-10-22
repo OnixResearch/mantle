@@ -18,7 +18,7 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v2";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
-const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
+const REQUIRED_SOURCE_ROLE_COUNT: usize = 7;
 pub(super) const EXPECTED_STAGE_COUNT: u32 = 6;
 pub(super) const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -29,7 +29,7 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX: u32 = 262_144;
 const SOURCE_RECORD_COUNT_MAX: u32 = 65_536;
 const MANTLE_STAGE2_INDEX: usize = 5;
 
-const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as usize] = [
+const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT] = [
     SourceAuthorityRole::StagexSeed,
     SourceAuthorityRole::StagexLineage,
     SourceAuthorityRole::StagexSourceBundle,
@@ -270,7 +270,7 @@ pub(super) fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<
             "source authority input count exceeds u32".to_string(),
         )
     })?;
-    if input_count != REQUIRED_SOURCE_ROLE_COUNT {
+    if inputs.len() != REQUIRED_SOURCE_ROLE_COUNT {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority,
             format!("source authority must contain exactly {REQUIRED_SOURCE_ROLE_COUNT} inputs, got {input_count}"),
@@ -307,8 +307,8 @@ pub(super) fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<
             ));
         }
     }
-    debug_assert_eq!(roles.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
-    debug_assert_eq!(ids.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
+    debug_assert_eq!(roles.len(), REQUIRED_SOURCE_ROLE_COUNT);
+    debug_assert_eq!(ids.len(), REQUIRED_SOURCE_ROLE_COUNT);
     Ok(())
 }
 
@@ -361,34 +361,43 @@ pub(super) fn validate_policies(
     ] {
         validate_digest(name, digest)?;
     }
-    let strict = policies.hermeticity_mode == ProofHermeticityMode::Strict;
-    let forbidden_effect = policies.live_fetch_allowed
+    let is_strict = policies.hermeticity_mode == ProofHermeticityMode::Strict;
+    let is_forbidden_effect = policies.live_fetch_allowed
         || policies.cargo_invocation_allowed
         || policies.ambient_discovery_allowed
         || policies.fallback_allowed
         || policies.provider_cache_completion_allowed;
-    if !strict || forbidden_effect {
+    if !is_strict || is_forbidden_effect {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidPolicy,
             "source-built fixed-point proof requires strict hermeticity and forbids fetch, Cargo, ambient discovery, fallback, and provider-cache completion".to_string(),
         ));
     }
-    debug_assert!(strict);
-    debug_assert!(!forbidden_effect);
+    debug_assert!(is_strict);
+    debug_assert!(!is_forbidden_effect);
     Ok(())
 }
 
 pub(super) fn validate_resource_bounds(
     bounds: &SourceBuiltFixedPointResourceBounds,
 ) -> Result<(), SourceBuiltFixedPointPlanError> {
-    let elapsed_valid = bounds.elapsed_seconds_max > 0 && bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX;
-    let disk_valid = bounds.disk_bytes_max > 0 && bounds.disk_bytes_max <= DISK_BYTES_MAX;
-    let open_files_valid = bounds.open_file_descriptors_max > 0
+    let is_elapsed_valid = bounds.elapsed_seconds_max > 0 && bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX;
+    let is_disk_valid = bounds.disk_bytes_max > 0 && bounds.disk_bytes_max <= DISK_BYTES_MAX;
+    let is_open_files_valid = bounds.open_file_descriptors_max > 0
         && bounds.open_file_descriptors_max <= SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
-    let exec_events_valid = bounds.protected_exec_events_max > 0
+    let is_exec_events_valid = bounds.protected_exec_events_max > 0
         && bounds.protected_exec_events_max <= SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX;
-    let source_records_valid = bounds.source_records_max > 0 && bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX;
-    if !elapsed_valid || !disk_valid || !open_files_valid || !exec_events_valid || !source_records_valid {
+    let is_source_records_valid = bounds.source_records_max > 0 && bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX;
+    let is_every_bound_valid = [
+        is_elapsed_valid,
+        is_disk_valid,
+        is_open_files_valid,
+        is_exec_events_valid,
+        is_source_records_valid,
+    ]
+    .iter()
+    .all(|is_valid| *is_valid);
+    if !is_every_bound_valid {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds,
             "source-built fixed-point resource bounds are zero or exceed the accepted maxima".to_string(),
@@ -480,7 +489,8 @@ pub(super) fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
         mantle_stage1_plan(),
         mantle_stage2_plan(),
     ];
-    debug_assert_eq!(stages.len(), EXPECTED_STAGE_COUNT as usize);
+    let observed_stage_count = u32::try_from(stages.len()).ok();
+    debug_assert_eq!(observed_stage_count, Some(EXPECTED_STAGE_COUNT));
     debug_assert_eq!(stages[MANTLE_STAGE2_INDEX].orchestrator, ProofOrchestrator::Stage1Mantle);
     stages
 }
@@ -624,16 +634,16 @@ fn policy_authority(role: ProofPolicyRole) -> StageAuthorityInput {
     StageAuthorityInput::Policy { role }
 }
 
-pub(super) fn receipt_contract(
+pub(super) fn receipt_contract<D: AsRef<str>>(
     logical_store_prefix: &str,
-    source_authority_digest_blake3: &str,
+    source_authority_digest_blake3: D,
     vendor_blake3: &str,
 ) -> SourceBuiltFixedPointReceiptContract {
     let contract = SourceBuiltFixedPointReceiptContract {
         schema: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         workflow_version: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         selected_provider_kind: SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND.to_string(),
-        source_blake3: source_authority_digest_blake3.to_string(),
+        source_blake3: source_authority_digest_blake3.as_ref().to_string(),
         vendor_blake3: vendor_blake3.to_string(),
         logical_store_prefix: logical_store_prefix.to_string(),
         effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
@@ -668,7 +678,8 @@ pub(super) fn receipt_contract(
         require_zero_cargo_invocations: true,
         require_zero_fallback_events: true,
     };
-    debug_assert_eq!(contract.run_ids.len(), EXPECTED_RUN_COUNT as usize);
+    let observed_run_count = u32::try_from(contract.run_ids.len()).ok();
+    debug_assert_eq!(observed_run_count, Some(EXPECTED_RUN_COUNT));
     debug_assert!(contract.require_content_bound_rebuild_descriptor);
     contract
 }
@@ -706,7 +717,8 @@ pub(super) fn digest_payload<T: Serialize>(context: &str, value: &T) -> Result<S
     Ok(digest)
 }
 
-pub(super) fn validate_text(name: &str, value: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
+pub(super) fn validate_text<N: AsRef<str>>(name: N, value: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
+    let name = name.as_ref();
     let is_valid = !value.trim().is_empty() && value.len() <= TEXT_BYTES_MAX && !value.chars().any(char::is_control);
     if !is_valid {
         return Err(plan_error(
@@ -722,7 +734,11 @@ pub(super) fn validate_text(name: &str, value: &str) -> Result<(), SourceBuiltFi
 pub(super) fn validate_store_prefix(prefix: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
     validate_text("logical_store_prefix", prefix)?;
     let has_parent_component = prefix.split('/').any(|component| component == "..");
-    if !prefix.starts_with('/') || prefix == "/" || prefix.ends_with('/') || has_parent_component {
+    let is_absolute = prefix.starts_with('/');
+    let is_root = prefix == "/";
+    let has_trailing_slash = prefix.ends_with('/');
+    let is_invalid_prefix = [has_parent_component, !is_absolute, is_root, has_trailing_slash];
+    if is_invalid_prefix.iter().any(|is_invalid| *is_invalid) {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidText,
             "logical_store_prefix must be an absolute non-root path without a trailing slash or parent component"
@@ -734,10 +750,11 @@ pub(super) fn validate_store_prefix(prefix: &str) -> Result<(), SourceBuiltFixed
     Ok(())
 }
 
-fn validate_digest(name: &str, digest: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
-    let valid = digest.len() == BLAKE3_HEX_LENGTH
+fn validate_digest<N: AsRef<str>>(name: N, digest: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
+    let name = name.as_ref();
+    let is_valid = digest.len() == BLAKE3_HEX_LENGTH
         && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !valid {
+    if !is_valid {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidDigest,
             format!("{name} must be 64 lowercase hexadecimal BLAKE3 characters"),
@@ -771,7 +788,7 @@ mod tests {
         let plan = plan_source_built_fixed_point(valid_input()).unwrap();
 
         assert_eq!(plan.schema, SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA);
-        assert_eq!(plan.stages.len(), EXPECTED_STAGE_COUNT as usize);
+        assert_eq!(u32::try_from(plan.stages.len()).ok(), Some(EXPECTED_STAGE_COUNT));
         assert_eq!(plan.stages[MANTLE_STAGE2_INDEX].orchestrator, ProofOrchestrator::Stage1Mantle);
         assert_eq!(plan.receipt_contract.schema, SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW);
         assert!(plan.receipt_contract.require_rebuild_authority_plan);

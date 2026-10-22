@@ -36,7 +36,19 @@ pub(crate) const ACTION_EVENTS_FILE: &str = "action-execution-events.json";
 pub(crate) const ACTION_JOURNAL_FILE: &str = "action-execution-events.jsonl";
 pub(crate) const ACTION_RECONCILIATION_FILE: &str = "action-reconciliation.json";
 pub(crate) const PROOF_PLAN_FILE: &str = "source-built-fixed-point-plan.json";
-const JSON_BYTES_MAX: u64 = 512 * 1_024 * 1_024;
+const JSON_BYTES_MAX: u64 = 512_u64.saturating_mul(1_024).saturating_mul(1_024);
+/// Every journal record occupies at least one byte, so the byte bound is also a
+/// record-count bound. One extra iteration observes end of file.
+const ACTION_JOURNAL_RECORD_LIMIT: u64 = JSON_BYTES_MAX.saturating_add(2);
+const RECIPE_JOURNAL_RECORD_LIMIT: u64 = JSON_BYTES_MAX.saturating_add(2);
+/// Every read before end of file consumes at least one byte and no file holds
+/// `u64::MAX` bytes, so this many reads always reach end of file. It is a
+/// runaway guard rather than a policy limit.
+const HASH_READ_CHUNK_LIMIT: u64 = u64::MAX;
+/// An artifact tree holds at most one million entries, so it holds at most one
+/// million directories and never needs more walk steps than that.
+const ARTIFACT_TREE_WALK_STEPS: u64 = 1_000_002;
+const ARTIFACT_TREE_PENDING_LIMIT: usize = 1_000_000;
 const REPORT_TEXT_BYTES_MAX: usize = 4_096;
 const REPORT_NON_CLAIMS: &[&str] = &[
     "This report rechecks supplied evidence; it does not execute a proof or authenticate its producer.",
@@ -76,6 +88,8 @@ pub(crate) fn load_action_evidence(root: &Path, proof: &SourceBuiltFixedPointPla
     }
     let journal_digest = verify_event_journal(root, &events)?;
     verify_action_reconciliation(proof, &plan, &events, &reconciliation).map_err(report_error)?;
+    debug_assert_eq!(u64::from(reconciliation.observed_event_count), events.len() as u64);
+    debug_assert!(events.len() as u64 <= u64::from(proof.resource_bounds.protected_exec_events_max));
     let binding = ActionEvidenceBinding {
         proof_root_identity_blake3: plan.proof_root_identity_blake3.clone(),
         action_plan_digest_blake3: plan.digest_blake3.clone(),
@@ -99,12 +113,12 @@ pub(crate) fn verify_event_journal(root: &Path, events: &[ActionExecutionEvent])
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > JSON_BYTES_MAX {
         return Err(report_error(format!("action journal must be nonempty and within {JSON_BYTES_MAX} bytes")));
     }
-    let mut reader = std::io::BufReader::new(file.take(JSON_BYTES_MAX + 1));
+    let mut reader = std::io::BufReader::new(file.take(JSON_BYTES_MAX.saturating_add(1)));
     let mut hasher = blake3::Hasher::new();
     let mut line = Vec::new();
     let mut total_bytes = 0_u64;
     let mut record_count = 0_u32;
-    loop {
+    for _ in 0..ACTION_JOURNAL_RECORD_LIMIT {
         line.clear();
         let bytes = reader
             .read_until(b'\n', &mut line)
@@ -120,7 +134,9 @@ pub(crate) fn verify_event_journal(root: &Path, events: &[ActionExecutionEvent])
         }
         let event: ActionExecutionEvent = serde_json::from_slice(&line)
             .map_err(|error| report_error(format!("parsing action journal record {record_count}: {error}")))?;
-        if events.get(record_count as usize) != Some(&event) {
+        let record_index =
+            usize::try_from(record_count).map_err(|_| report_error("action journal record count overflow".into()))?;
+        if events.get(record_index) != Some(&event) {
             return Err(report_error(format!(
                 "action journal record {record_count} differs from sealed events (content, order, or count)"
             )));
@@ -133,7 +149,10 @@ pub(crate) fn verify_event_journal(root: &Path, events: &[ActionExecutionEvent])
     if u64::from(record_count) != events.len() as u64 {
         return Err(report_error("action journal is missing sealed execution events".into()));
     }
-    Ok(hasher.finalize().to_hex().to_string())
+    let journal_digest = hasher.finalize().to_hex().to_string();
+    debug_assert_eq!(journal_digest.len(), BLAKE3_HEX_LENGTH);
+    debug_assert!(total_bytes <= JSON_BYTES_MAX);
+    Ok(journal_digest)
 }
 
 /// Only normal relative components and nonsymlink ancestors may authorize a read.
@@ -165,7 +184,7 @@ pub(crate) fn read_bound_json<T: DeserializeOwned>(root: &Path, relative: &str) 
         )));
     }
     let mut bytes = Vec::new();
-    file.take(JSON_BYTES_MAX + 1)
+    file.take(JSON_BYTES_MAX.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|error| report_error(format!("reading {relative}: {error}")))?;
     if bytes.len() as u64 > JSON_BYTES_MAX {
@@ -173,6 +192,8 @@ pub(crate) fn read_bound_json<T: DeserializeOwned>(root: &Path, relative: &str) 
     }
     let digest = blake3::hash(&bytes).to_hex().to_string();
     let value = serde_json::from_slice(&bytes).map_err(|error| report_error(format!("parsing {relative}: {error}")))?;
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    debug_assert!(bytes.len() as u64 <= JSON_BYTES_MAX);
     Ok((value, digest))
 }
 
@@ -206,8 +227,10 @@ pub(crate) struct TrustReport {
 }
 
 fn collect_coverage(plan: &ActionTrustPlan, events: &[ActionExecutionEvent]) -> (Vec<StageCoverage>, u64) {
-    let mut known = std::collections::BTreeMap::new();
-    let mut stages = Vec::new();
+    let mut known: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let planned_action_count = plan.adapters.iter().map(|adapter| adapter.actions.len()).sum::<usize>();
+    known.reserve(planned_action_count.saturating_add(events.len()));
+    let mut stages: Vec<StageCoverage> = Vec::with_capacity(plan.adapters.len());
     for adapter in &plan.adapters {
         let mut row = StageCoverage {
             stage_id: adapter.stage_id.clone(),
@@ -255,6 +278,8 @@ fn collect_coverage(plan: &ActionTrustPlan, events: &[ActionExecutionEvent]) -> 
             unknown += 1;
         }
     }
+    debug_assert_eq!(stages.len(), plan.adapters.len());
+    debug_assert!(unknown <= events.len() as u64);
     (stages, unknown)
 }
 
@@ -271,8 +296,8 @@ fn bounded_blocker(error: impl std::fmt::Display) -> String {
     text
 }
 
-pub(crate) fn trust_report(root: &Path) -> TrustReport {
-    let mut report = TrustReport {
+fn empty_trust_report() -> TrustReport {
+    TrustReport {
         schema: "mantle-source-built-fixed-point-trust-report-v1",
         status: "blocked",
         verified: false,
@@ -285,31 +310,31 @@ pub(crate) fn trust_report(root: &Path) -> TrustReport {
         blockers: Vec::new(),
         non_claims: REPORT_NON_CLAIMS,
         measured_bundle_entries: 0,
-    };
-    if let Err(error) = reject_development_authority(root) {
-        report.blockers.push(bounded_blocker(error));
     }
-    let proof = read_bound_json::<SourceBuiltFixedPointPlan>(root, PROOF_PLAN_FILE).and_then(|(proof, _)| {
+}
+
+fn read_trust_proof_plan(root: &Path) -> Result<SourceBuiltFixedPointPlan, RunError> {
+    read_bound_json::<SourceBuiltFixedPointPlan>(root, PROOF_PLAN_FILE).and_then(|(proof, _)| {
         validate_source_built_fixed_point_plan(&proof).map_err(|error| report_error(error.to_string()))?;
         Ok(proof)
-    });
-    let proof = match proof {
-        Ok(proof) => proof,
-        Err(error) => {
-            report.blockers.push(bounded_blocker(error));
-            return report;
-        }
-    };
+    })
+}
+
+fn load_trust_evidence(
+    root: &Path,
+    proof: &SourceBuiltFixedPointPlan,
+    result_document: &mut TrustReport,
+) -> (Option<ActionTrustPlan>, Option<Vec<ActionExecutionEvent>>) {
     let plan = match read_bound_json::<ActionTrustPlan>(root, ACTION_PLAN_FILE).and_then(|(plan, _)| {
-        validate_action_plan(&proof, &plan).map_err(report_error)?;
+        validate_action_plan(proof, &plan).map_err(report_error)?;
         Ok(plan)
     }) {
         Ok(plan) => {
-            report.action_plan_valid = true;
+            result_document.action_plan_valid = true;
             Some(plan)
         }
         Err(error) => {
-            report.blockers.push(bounded_blocker(error));
+            result_document.blockers.push(bounded_blocker(error));
             None
         }
     };
@@ -318,37 +343,61 @@ pub(crate) fn trust_report(root: &Path) -> TrustReport {
             Some(events)
         }
         Ok(_) => {
-            report.blockers.push("observed event count exceeds proof bound".into());
+            result_document.blockers.push("observed event count exceeds proof bound".into());
             None
         }
         Err(error) => {
-            report.blockers.push(bounded_blocker(error));
+            result_document.blockers.push(bounded_blocker(error));
             None
         }
     };
-    if let Some(plan) = plan.as_ref() {
-        let (stages, unknown) = collect_coverage(plan, events.as_deref().unwrap_or(&[]));
-        report.planned_actions = stages.iter().map(|stage| stage.planned_actions).sum();
-        report.stages = stages;
-        report.unknown_action_events = unknown;
-    }
-    report.observed_events = events.as_ref().map_or(0, |events| events.len() as u64);
-    if plan.is_some() && events.is_some() {
-        match load_action_evidence(root, &proof) {
-            Ok(_) => report.reconciliation_verified = true,
-            Err(error) => report.blockers.push(bounded_blocker(error)),
-        }
-    }
+    debug_assert_eq!(result_document.action_plan_valid, plan.is_some());
+    debug_assert_eq!(result_document.observed_events, 0);
+    (plan, events)
+}
+
+fn finish_trust_report(root: &Path, result_document: &mut TrustReport) {
     match verify_source_built_fixed_point_receipt(root, &root.join(FINAL_RECEIPT_FILE)) {
-        Ok(bundle) if report.blockers.is_empty() => {
-            report.measured_bundle_entries = bundle.entry_count;
-            report.verified = true;
-            report.status = "verified";
+        Ok(bundle) if result_document.blockers.is_empty() => {
+            result_document.measured_bundle_entries = bundle.entry_count;
+            result_document.verified = true;
+            result_document.status = "verified";
         }
         Ok(_) => {}
-        Err(error) => report.blockers.push(bounded_blocker(error)),
+        Err(error) => result_document.blockers.push(bounded_blocker(error)),
     }
-    report
+}
+
+pub(crate) fn trust_report(root: &Path) -> TrustReport {
+    let mut result_document = empty_trust_report();
+    if let Err(error) = reject_development_authority(root) {
+        result_document.blockers.push(bounded_blocker(error));
+    }
+    let proof = match read_trust_proof_plan(root) {
+        Ok(proof) => proof,
+        Err(error) => {
+            result_document.blockers.push(bounded_blocker(error));
+            return result_document;
+        }
+    };
+    let (plan, events) = load_trust_evidence(root, &proof, &mut result_document);
+    if let Some(plan) = plan.as_ref() {
+        let (stages, unknown) = collect_coverage(plan, events.as_deref().unwrap_or(&[]));
+        result_document.planned_actions = stages.iter().map(|stage| stage.planned_actions).sum();
+        result_document.stages = stages;
+        result_document.unknown_action_events = unknown;
+    }
+    result_document.observed_events = events.as_ref().map_or(0, |events| events.len() as u64);
+    if plan.is_some() && events.is_some() {
+        match load_action_evidence(root, &proof) {
+            Ok(_) => result_document.reconciliation_verified = true,
+            Err(error) => result_document.blockers.push(bounded_blocker(error)),
+        }
+    }
+    finish_trust_report(root, &mut result_document);
+    debug_assert_eq!(result_document.verified, result_document.status == "verified");
+    debug_assert!(result_document.unknown_action_events <= result_document.observed_events);
+    result_document
 }
 
 // r[impl bootstrap_inventory.source_built_mantle_fixed_point]
@@ -373,18 +422,18 @@ pub fn cmd_bootstrap_trust_report(proof_root: &Path, json: bool) -> Result<(), R
         expected_output: ExpectedOutput::None,
     }])
     .map_err(|error| report_error(format!("planning trust evidence reads: {}", error.code())))?;
-    let report = trust_report(proof_root);
+    let result_document = trust_report(proof_root);
     let observed = Observation {
         effect_id: EffectId("bootstrap-source-built-receipt-measurement".into()),
         kind: EffectKind::ReadFiles,
-        status: if report.verified {
+        status: if result_document.verified {
             ObservationStatus::Succeeded
         } else {
             ObservationStatus::Failed
         },
         output: EffectOutput::None,
-        usage: EffectMeasure::Items(report.measured_bundle_entries),
-        diagnostics_code: (!report.verified).then(|| "source-built-receipt-verification-failed".into()),
+        usage: EffectMeasure::Items(result_document.measured_bundle_entries),
+        diagnostics_code: (!result_document.verified).then(|| "source-built-receipt-verification-failed".into()),
     };
     let result = match classify_observations(&plan, std::slice::from_ref(&observed)) {
         ApplicationOutcome::Completed => Ok(()),
@@ -393,15 +442,20 @@ pub fn cmd_bootstrap_trust_report(proof_root: &Path, json: bool) -> Result<(), R
         }
         outcome => return Err(report_error(format!("trust evidence observations inconsistent: {outcome:?}"))),
     };
+    debug_assert_eq!(result_document.non_claims.len(), REPORT_NON_CLAIMS.len());
+    debug_assert!(!result_document.non_claims.is_empty());
     if json {
-        println!("{}", serde_json::to_string_pretty(&report).map_err(|error| report_error(error.to_string()))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&result_document).map_err(|error| report_error(error.to_string()))?
+        );
     } else {
-        println!("source-built fixed-point trust: {}", report.status);
+        println!("source-built fixed-point trust: {}", result_document.status);
         println!(
             "planned actions: {}; observed events: {}; unknown events: {}",
-            report.planned_actions, report.observed_events, report.unknown_action_events
+            result_document.planned_actions, result_document.observed_events, result_document.unknown_action_events
         );
-        for blocker in &report.blockers {
+        for blocker in &result_document.blockers {
             println!("blocked: {blocker}");
         }
         for non_claim in REPORT_NON_CLAIMS {
@@ -569,6 +623,10 @@ pub(crate) const PROVIDER_IDENTITY_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-
 pub(crate) const BLAKE3_HEX_LENGTH: usize = 64;
 pub(crate) const HASH_BUFFER_BYTES: usize = 64 * 1_024;
 pub(crate) const PROOF_ENTRY_COUNT_MAX: usize = 2_000_000;
+/// The proof bundle walk visits every directory entry the filesystem reports;
+/// the entry count, not this step count, bounds the bundle.
+const PROOF_BUNDLE_WALK_STEPS: u64 = u64::MAX;
+const PROOF_BUNDLE_WALK_DEPTH_LIMIT: usize = PROOF_ENTRY_COUNT_MAX.saturating_add(1);
 pub(crate) const STAGE_EVIDENCE_COUNT: usize = 6;
 pub(crate) const REQUIRED_RUN_COUNT: usize = 2;
 pub(crate) const NON_CLAIMS: &[&str] = &[
@@ -806,26 +864,32 @@ fn validate_receipt_plan_binding(
     plan: &SourceBuiltFixedPointPlan,
 ) -> Result<(), RunError> {
     let expected_non_claims = NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
-    if extension.schema != EXTENSION_SCHEMA
-        || extension.provider_kind != PROOF_PROVIDER_KIND
-        || extension.plan_digest_blake3 != plan.plan_digest_blake3
-        || extension.source_authority_digest_blake3 != plan.source_authority_digest_blake3
-        || extension.protected_execution_policy_digest_blake3 != plan.policies.protected_execution_policy_digest_blake3
-        || extension.effect_policy_digest_blake3 != plan.policies.effect_policy_digest_blake3
-        || extension.normalization_policy_digest_blake3 != plan.policies.normalization_policy_digest_blake3
-        || extension.native_provider_digest_blake3 != plan.policies.expected_native_provider_digest_blake3
-        || extension.stage_evidence_path != STAGE_EVIDENCE_FILE
-        || extension.non_claims != expected_non_claims
-        || core.schema != PROOF_WORKFLOW
-        || core.workflow_version != PROOF_WORKFLOW
-        || core.selected_provider_kind != PROOF_PROVIDER_KIND
-        || core.source_blake3 != plan.source_authority_digest_blake3
-        || core.vendor_blake3 != plan.receipt_contract.vendor_blake3
-        || core.logical_store_prefix != plan.logical_store_prefix
-        || core.derivation_identity != format!("source-built-plan:{}", plan.plan_digest_blake3)
-        || core.hermeticity_mode != HERMETICITY_MODE
-        || core.physical_store_isolation != PHYSICAL_STORE_ISOLATION
-    {
+    let extension_bindings = [
+        extension.schema == EXTENSION_SCHEMA,
+        extension.provider_kind == PROOF_PROVIDER_KIND,
+        extension.plan_digest_blake3 == plan.plan_digest_blake3,
+        extension.source_authority_digest_blake3 == plan.source_authority_digest_blake3,
+        extension.protected_execution_policy_digest_blake3 == plan.policies.protected_execution_policy_digest_blake3,
+        extension.effect_policy_digest_blake3 == plan.policies.effect_policy_digest_blake3,
+        extension.normalization_policy_digest_blake3 == plan.policies.normalization_policy_digest_blake3,
+        extension.native_provider_digest_blake3 == plan.policies.expected_native_provider_digest_blake3,
+        extension.stage_evidence_path == STAGE_EVIDENCE_FILE,
+        extension.non_claims == expected_non_claims,
+    ];
+    let core_bindings = [
+        core.schema == PROOF_WORKFLOW,
+        core.workflow_version == PROOF_WORKFLOW,
+        core.selected_provider_kind == PROOF_PROVIDER_KIND,
+        core.source_blake3 == plan.source_authority_digest_blake3,
+        core.vendor_blake3 == plan.receipt_contract.vendor_blake3,
+        core.logical_store_prefix == plan.logical_store_prefix,
+        core.derivation_identity == format!("source-built-plan:{}", plan.plan_digest_blake3),
+        core.hermeticity_mode == HERMETICITY_MODE,
+        core.physical_store_isolation == PHYSICAL_STORE_ISOLATION,
+    ];
+    let is_binding_intact =
+        extension_bindings.iter().all(|binding| *binding) && core_bindings.iter().all(|binding| *binding);
+    if !is_binding_intact {
         return Err(receipt_error("receipt source, provider, plan, policy, or non-claim binding mismatch".into()));
     }
     let arguments = receipt_arguments(plan, &plan.policies.closure_policy_digest_blake3, extension)?;
@@ -837,6 +901,8 @@ fn validate_receipt_plan_binding(
     if core.receipt_blake3.as_ref() != Some(&observed_digest) {
         return Err(receipt_error("deterministic receipt core digest missing or mismatched".into()));
     }
+    debug_assert_eq!(observed_digest.len(), BLAKE3_HEX_LENGTH);
+    debug_assert_eq!(core.schema, PROOF_WORKFLOW);
     Ok(())
 }
 
@@ -846,26 +912,22 @@ fn verify_receipt_outputs(
     stages: &[SourceBuiltStageEvidence],
     fixed_point: &FixedPointObservation,
 ) -> Result<(), RunError> {
-    verify_mantle_stage_evidence(
-        stages,
-        &fixed_point.stage1,
-        ProofOutputRole::MantleStage1,
-        &extension.cold_provider.toolchain_closure.path,
-        &extension.toolchain_closure_digest_blake3,
-    )?;
-    verify_mantle_stage_evidence(
-        stages,
-        &fixed_point.stage2,
-        ProofOutputRole::MantleStage2,
-        &extension.cold_provider.toolchain_closure.path,
-        &extension.toolchain_closure_digest_blake3,
-    )?;
+    verify_mantle_stage_evidence(stages, &fixed_point.stage1, &MantleStageEvidenceBinding {
+        role: ProofOutputRole::MantleStage1,
+        closure_path: &extension.cold_provider.toolchain_closure.path,
+        closure_digest: &extension.toolchain_closure_digest_blake3,
+    })?;
+    verify_mantle_stage_evidence(stages, &fixed_point.stage2, &MantleStageEvidenceBinding {
+        role: ProofOutputRole::MantleStage2,
+        closure_path: &extension.cold_provider.toolchain_closure.path,
+        closure_digest: &extension.toolchain_closure_digest_blake3,
+    })?;
     let output = &fixed_point.stage1.binary_digest_blake3;
-    let identity = provider_identity_digest(
-        &extension.native_provider_digest_blake3,
-        &extension.rust_provider_digest_blake3,
-        &extension.toolchain_closure_digest_blake3,
-    );
+    let identity = provider_identity_digest(&ProviderIdentityBinding {
+        native_digest_blake3: &extension.native_provider_digest_blake3,
+        rust_digest_blake3: &extension.rust_provider_digest_blake3,
+        closure_digest_blake3: &extension.toolchain_closure_digest_blake3,
+    });
     let provider = format!(
         "provider-kind={PROOF_PROVIDER_KIND};identity-blake3={identity};closure-policy-blake3={}",
         fixed_point.closure_policy_digest_blake3
@@ -875,14 +937,18 @@ fn verify_receipt_outputs(
     if stage2.map(|stage| stage.executable_identity.as_str()) != Some(format!("blake3:{output}").as_str()) {
         return Err(receipt_error("stage2 orchestrator is not the observed stage1 Mantle binary".into()));
     }
-    if core.proof_unit.target_artifact_identity != PROOF_TARGET_IDENTITY
-        || core.proof_unit.output_identities != vec![format!("{MANTLE_OUTPUT_NAME}:{output}")]
-        || core.toolchain_provider_identity != provider
-        || rust.map(|stage| &stage.output_digest_blake3) != Some(&extension.rust_provider_digest_blake3)
-        || core.runs.len() != REQUIRED_RUN_COUNT
-    {
+    let output_bindings = [
+        core.proof_unit.target_artifact_identity == PROOF_TARGET_IDENTITY,
+        core.proof_unit.output_identities == vec![format!("{MANTLE_OUTPUT_NAME}:{output}")],
+        core.toolchain_provider_identity == provider,
+        rust.map(|stage| &stage.output_digest_blake3) == Some(&extension.rust_provider_digest_blake3),
+        core.runs.len() == REQUIRED_RUN_COUNT,
+    ];
+    if !output_bindings.iter().all(|binding| *binding) {
         return Err(receipt_error("receipt provider or observed output identity mismatch".into()));
     }
+    debug_assert!(stage2.is_some());
+    debug_assert_eq!(core.runs.len(), REQUIRED_RUN_COUNT);
     for (run, (expected_id, observed)) in core.runs.iter().zip([
         (STAGE1_RUN_ID, &fixed_point.stage1),
         (STAGE2_RUN_ID, &fixed_point.stage2),
@@ -901,29 +967,326 @@ fn verify_receipt_outputs(
     Ok(())
 }
 
-pub(crate) fn recipe_output_path(journal: &str, stage: &str, action: &str, output: &str) -> Result<String, RunError> {
-    let parent = journal
+/// The immutable recipe binding of one produced output. Named fields keep the
+/// journal, stage, producer action, and output label from being transposed.
+pub(crate) struct RecipeOutputBinding<'a> {
+    pub(crate) journal_path: &'a str,
+    pub(crate) stage_id: &'a str,
+    pub(crate) action_id: &'a str,
+    pub(crate) output_id: &'a str,
+}
+
+pub(crate) fn recipe_output_path(binding: &RecipeOutputBinding<'_>) -> Result<String, RunError> {
+    let parent = binding
+        .journal_path
         .strip_suffix("/execution.jsonl")
         .ok_or_else(|| receipt_error("recipe journal lacks canonical filename".into()))?;
-    let step = action
-        .strip_prefix(stage)
+    let step = binding
+        .action_id
+        .strip_prefix(binding.stage_id)
         .and_then(|suffix| suffix.strip_prefix('/'))
         .ok_or_else(|| receipt_error("recipe output producer belongs to a different stage".into()))?;
-    if output.contains('/') {
+    if binding.output_id.contains('/') {
         return Err(receipt_error("recipe output is not a single label".into()));
     }
-    for label in step.split('/').chain(std::iter::once(output)) {
-        if label.is_empty()
-            || label == "."
-            || label == ".."
-            || label.len() > 256
-            || !label.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':' | b'.'))
-        {
+    for label in step.split('/').chain(std::iter::once(binding.output_id)) {
+        let is_label_reserved = label == "." || label == "..";
+        let is_label_too_long = label.len() > 256;
+        let is_label_charset_valid =
+            label.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':' | b'.'));
+        let label_defects = [
+            label.is_empty(),
+            is_label_reserved,
+            is_label_too_long,
+            !is_label_charset_valid,
+        ];
+        if label_defects.iter().any(|defect| *defect) {
             return Err(receipt_error("recipe output has invalid physical binding label".into()));
         }
     }
-    Ok(format!("{parent}/{step}/outputs/{output}"))
+    debug_assert!(!step.is_empty());
+    debug_assert!(!binding.output_id.is_empty());
+    Ok(format!("{parent}/{step}/outputs/{}", binding.output_id))
 }
+/// The reconciled events a recipe journal may corroborate, in journal order.
+struct RecipeJournalEvents<'a> {
+    builds: Vec<&'a ActionExecutionEvent>,
+    protected: Vec<&'a ActionExecutionEvent>,
+    guards: Vec<&'a ActionExecutionEvent>,
+    statuses: Vec<&'a ActionExecutionEvent>,
+}
+
+fn recipe_journal_events<'a>(actions: &'a ActionEvidence, ids: &BTreeSet<&'a str>) -> RecipeJournalEvents<'a> {
+    let events = RecipeJournalEvents {
+        builds: actions
+            .events
+            .iter()
+            .filter(|event| {
+                ids.contains(event.action_id.as_str())
+                    && event.kind == ExecutionEventKind::BuildExecution
+                    && !event.action_id.ends_with(".sandbox")
+                    && !event.action_id.ends_with("/orchestrator")
+                    && !event.produced_outputs.iter().any(|(id, _)| id == "native-provider-publication")
+            })
+            .collect(),
+        protected: actions
+            .events
+            .iter()
+            .filter(|event| {
+                ids.contains(event.action_id.as_str())
+                    && event.kind == ExecutionEventKind::ProtectedExec
+                    && !event.action_id.ends_with("/orchestrator")
+            })
+            .collect(),
+        guards: actions
+            .events
+            .iter()
+            .filter(|event| {
+                ids.contains(event.action_id.as_str()) && matches!(event.kind, ExecutionEventKind::GuardDecision { .. })
+            })
+            .collect(),
+        statuses: actions
+            .events
+            .iter()
+            .filter(|event| {
+                ids.contains(event.action_id.as_str())
+                    && event.kind == ExecutionEventKind::BuildExecution
+                    && event.normal_exit_code.is_some()
+            })
+            .collect(),
+    };
+    debug_assert!(events.builds.len() <= actions.events.len());
+    debug_assert!(events.guards.len() <= actions.events.len());
+    events
+}
+
+/// One recipe journal under verification. Each record kind consumes at most
+/// one reconciled event, and no journal record may introduce new authority.
+struct RecipeJournalCursor<'a> {
+    root: &'a Path,
+    proof: &'a SourceBuiltFixedPointPlan,
+    stage: &'a SourceBuiltStageEvidence,
+    events: RecipeJournalEvents<'a>,
+    build_cursor: usize,
+    protected_cursor: usize,
+    guard_cursor: usize,
+    status_cursor: usize,
+    is_header_seen: bool,
+    is_complete: bool,
+    output_count: u64,
+}
+
+impl<'a> RecipeJournalCursor<'a> {
+    fn new(
+        root: &'a Path,
+        proof: &'a SourceBuiltFixedPointPlan,
+        stage: &'a SourceBuiltStageEvidence,
+        events: RecipeJournalEvents<'a>,
+    ) -> Self {
+        let cursor = Self {
+            root,
+            proof,
+            stage,
+            events,
+            build_cursor: 0,
+            protected_cursor: 0,
+            guard_cursor: 0,
+            status_cursor: 0,
+            is_header_seen: false,
+            is_complete: false,
+            output_count: 0,
+        };
+        debug_assert!(!cursor.is_header_seen);
+        debug_assert_eq!(cursor.output_count, 0);
+        cursor
+    }
+
+    fn next_build(&mut self) -> Option<&'a ActionExecutionEvent> {
+        let event = self.events.builds.get(self.build_cursor).copied()?;
+        self.build_cursor = self.build_cursor.saturating_add(1);
+        Some(event)
+    }
+
+    fn next_protected(&mut self) -> Option<&'a ActionExecutionEvent> {
+        let event = self.events.protected.get(self.protected_cursor).copied()?;
+        self.protected_cursor = self.protected_cursor.saturating_add(1);
+        Some(event)
+    }
+
+    fn next_guard(&mut self) -> Option<&'a ActionExecutionEvent> {
+        let event = self.events.guards.get(self.guard_cursor).copied()?;
+        self.guard_cursor = self.guard_cursor.saturating_add(1);
+        Some(event)
+    }
+
+    fn next_status(&mut self) -> Option<&'a ActionExecutionEvent> {
+        let event = self.events.statuses.get(self.status_cursor).copied()?;
+        self.status_cursor = self.status_cursor.saturating_add(1);
+        Some(event)
+    }
+
+    fn apply_record(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        if !self.is_header_seen {
+            return self.apply_header(record);
+        }
+        if record.get("action_id").is_some() {
+            return self.apply_guard(record);
+        }
+        if record.get("normal_exit_code").is_some() {
+            return self.apply_status(record);
+        }
+        if record.get("actual_outputs").is_some() {
+            return self.apply_completion(record);
+        }
+        if record.get("pid").is_some() {
+            return self.apply_protected(record);
+        }
+        if *record == serde_json::json!({"complete":true,"output_count":self.output_count}) {
+            self.is_complete = true;
+            debug_assert!(self.is_header_seen);
+            debug_assert!(self.build_cursor <= self.events.builds.len());
+            return Ok(());
+        }
+        Err(receipt_error("recipe journal contains a failed, unknown, or legacy summary record".into()))
+    }
+
+    fn apply_header(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        let proof = self.proof;
+        let stage = self.stage;
+        if *record
+            != serde_json::json!({"schema":"mantle-source-recipe-execution-v1","proof":proof.plan_digest_blake3,"stage":stage.stage_id})
+        {
+            return Err(receipt_error("recipe journal source/stage header mismatch".into()));
+        }
+        self.is_header_seen = true;
+        Ok(())
+    }
+
+    fn apply_guard(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        let event = self
+            .next_guard()
+            .ok_or_else(|| receipt_error("recipe journal adds an unobserved guard decision".into()))?;
+        let expected = serde_json::to_value(event).map_err(|error| receipt_error(error.to_string()))?;
+        if *record != expected {
+            return Err(receipt_error("recipe journal guard differs from reconciled control evidence".into()));
+        }
+        Ok(())
+    }
+
+    fn apply_status(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        let event = self
+            .next_status()
+            .ok_or_else(|| receipt_error("recipe journal adds an unobserved normal status".into()))?;
+        if *record != serde_json::json!({"action":event.action_id,"normal_exit_code":event.normal_exit_code}) {
+            return Err(receipt_error("recipe journal status differs from actual source command exit".into()));
+        }
+        Ok(())
+    }
+
+    fn apply_completion(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        let event = self
+            .next_build()
+            .ok_or_else(|| receipt_error("recipe journal adds an unobserved completion".into()))?;
+        if *record
+            != serde_json::json!({"action":event.action_id,"actual_outputs":event.produced_outputs,"disk_bytes":event.disk_bytes,"completed":true})
+        {
+            return Err(receipt_error("recipe journal completion differs from reconciled execution".into()));
+        }
+        let root = self.root;
+        let stage = self.stage;
+        let mut measured_bytes = 0_u64;
+        for (output, digest) in &event.produced_outputs {
+            let path = recipe_output_path(&RecipeOutputBinding {
+                journal_path: &stage.execution_journal_path,
+                stage_id: &stage.stage_id,
+                action_id: &event.action_id,
+                output_id: output,
+            })?;
+            let (size, measured) = measure_artifact(root, &path)?;
+            if &measured != digest {
+                return Err(receipt_error(format!("actual recipe output {path} content drift")));
+            }
+            measured_bytes = measured_bytes
+                .checked_add(size)
+                .ok_or_else(|| receipt_error("recipe output size overflow".into()))?;
+        }
+        if measured_bytes != event.disk_bytes {
+            return Err(receipt_error("recipe actual output size differs from reconciled completion".into()));
+        }
+        debug_assert_eq!(measured_bytes, event.disk_bytes);
+        debug_assert!(!event.produced_outputs.is_empty() || event.disk_bytes == 0);
+        self.output_count = self
+            .output_count
+            .checked_add(event.produced_outputs.len() as u64)
+            .ok_or_else(|| receipt_error("recipe output count overflow".into()))?;
+        Ok(())
+    }
+
+    fn apply_protected(&mut self, record: &serde_json::Value) -> Result<(), RunError> {
+        let keys = [
+            "pid",
+            "syscall",
+            "tracee_path",
+            "resolved_path",
+            "digest_blake3",
+            "allowed",
+            "reason",
+            "is_exec",
+        ];
+        let is_key_set_complete = record
+            .as_object()
+            .is_some_and(|object| object.len() == keys.len() && keys.iter().all(|key| object.contains_key(*key)));
+        let observation_defects = [
+            !is_key_set_complete,
+            record["allowed"] != true,
+            record["pid"].as_u64().is_none(),
+            record["syscall"].as_i64().is_none(),
+            record["tracee_path"].as_str().is_none(),
+            record["resolved_path"].as_str().is_none(),
+            record["reason"].as_str().is_none(),
+        ];
+        if observation_defects.iter().any(|defect| *defect) {
+            return Err(receipt_error("recipe journal malformed or denied protected observation".into()));
+        }
+        if record["is_exec"] == true {
+            let event = self
+                .next_protected()
+                .ok_or_else(|| receipt_error("recipe journal adds an unobserved protected execution".into()))?;
+            if record["digest_blake3"].as_str() != Some(event.executable_digest_blake3.as_str()) {
+                return Err(receipt_error("recipe journal protected image differs from reconciled execution".into()));
+            }
+            return Ok(());
+        }
+        let image_claims = [
+            record["is_exec"] != false,
+            record["digest_blake3"] != "",
+            record["tracee_path"] != "",
+            record["resolved_path"] != "",
+        ];
+        if image_claims.iter().any(|claim| *claim) {
+            return Err(receipt_error("recipe journal process observation claims image authority".into()));
+        }
+        debug_assert!(is_key_set_complete);
+        debug_assert!(record["allowed"] == true);
+        Ok(())
+    }
+
+    fn require_complete(&self) -> Result<(), RunError> {
+        let unconsumed = [
+            !self.is_header_seen,
+            !self.is_complete,
+            self.build_cursor < self.events.builds.len(),
+            self.protected_cursor < self.events.protected.len(),
+            self.guard_cursor < self.events.guards.len(),
+            self.status_cursor < self.events.statuses.len(),
+        ];
+        if unconsumed.iter().any(|pending| *pending) {
+            return Err(receipt_error("recipe journal omits actual execution records".into()));
+        }
+        Ok(())
+    }
+}
+
 /// Measured corroboration only: journals cannot introduce execution authority.
 fn verify_recipe_journal(
     root: &Path,
@@ -940,143 +1303,24 @@ fn verify_recipe_journal(
         return Err(receipt_error("recipe journal exceeds byte bound".into()));
     }
     let ids = stage_action_ids(actions, &stage.stage_id)?;
-    let mut builds = actions.events.iter().filter(|event| {
-        ids.contains(event.action_id.as_str())
-            && event.kind == ExecutionEventKind::BuildExecution
-            && !event.action_id.ends_with(".sandbox")
-            && !event.action_id.ends_with("/orchestrator")
-            && !event.produced_outputs.iter().any(|(id, _)| id == "native-provider-publication")
-    });
-    let mut protected = actions.events.iter().filter(|event| {
-        ids.contains(event.action_id.as_str())
-            && event.kind == ExecutionEventKind::ProtectedExec
-            && !event.action_id.ends_with("/orchestrator")
-    });
-    let mut guards = actions.events.iter().filter(|event| {
-        ids.contains(event.action_id.as_str()) && matches!(event.kind, ExecutionEventKind::GuardDecision { .. })
-    });
-    let mut statuses = actions.events.iter().filter(|event| {
-        ids.contains(event.action_id.as_str())
-            && event.kind == ExecutionEventKind::BuildExecution
-            && event.normal_exit_code.is_some()
-    });
+    let mut cursor = RecipeJournalCursor::new(root, proof, stage, recipe_journal_events(actions, &ids));
     let mut reader = std::io::BufReader::new(file);
     let mut line = Vec::new();
-    let mut header_seen = false;
-    let mut complete = false;
-    let mut count = 0_u64;
-    loop {
+    for _ in 0..RECIPE_JOURNAL_RECORD_LIMIT {
         line.clear();
         if reader.read_until(b'\n', &mut line).map_err(|error| receipt_error(error.to_string()))? == 0 {
             break;
         }
-        if complete || line.last() != Some(&b'\n') {
+        if cursor.is_complete || line.last() != Some(&b'\n') {
             return Err(receipt_error("recipe journal has trailing or incomplete records".into()));
         }
         let record: serde_json::Value = serde_json::from_slice(&line)
             .map_err(|error| receipt_error(format!("parsing actual recipe journal: {error}")))?;
-        if !header_seen {
-            if record
-                != serde_json::json!({"schema":"mantle-source-recipe-execution-v1","proof":proof.plan_digest_blake3,"stage":stage.stage_id})
-            {
-                return Err(receipt_error("recipe journal source/stage header mismatch".into()));
-            }
-            header_seen = true;
-        } else if record.get("action_id").is_some() {
-            let event = guards
-                .next()
-                .ok_or_else(|| receipt_error("recipe journal adds an unobserved guard decision".into()))?;
-            let expected = serde_json::to_value(event).map_err(|error| receipt_error(error.to_string()))?;
-            if record != expected {
-                return Err(receipt_error("recipe journal guard differs from reconciled control evidence".into()));
-            }
-        } else if record.get("normal_exit_code").is_some() {
-            let event = statuses
-                .next()
-                .ok_or_else(|| receipt_error("recipe journal adds an unobserved normal status".into()))?;
-            if record != serde_json::json!({"action":event.action_id,"normal_exit_code":event.normal_exit_code}) {
-                return Err(receipt_error("recipe journal status differs from actual source command exit".into()));
-            }
-        } else if record.get("actual_outputs").is_some() {
-            let event =
-                builds.next().ok_or_else(|| receipt_error("recipe journal adds an unobserved completion".into()))?;
-            if record
-                != serde_json::json!({"action":event.action_id,"actual_outputs":event.produced_outputs,"disk_bytes":event.disk_bytes,"completed":true})
-            {
-                return Err(receipt_error("recipe journal completion differs from reconciled execution".into()));
-            }
-            let mut measured_bytes = 0_u64;
-            for (output, digest) in &event.produced_outputs {
-                let path =
-                    recipe_output_path(&stage.execution_journal_path, &stage.stage_id, &event.action_id, output)?;
-                let (size, measured) = measure_artifact(root, &path)?;
-                if &measured != digest {
-                    return Err(receipt_error(format!("actual recipe output {path} content drift")));
-                }
-                measured_bytes = measured_bytes
-                    .checked_add(size)
-                    .ok_or_else(|| receipt_error("recipe output size overflow".into()))?;
-            }
-            if measured_bytes != event.disk_bytes {
-                return Err(receipt_error("recipe actual output size differs from reconciled completion".into()));
-            }
-            count = count
-                .checked_add(event.produced_outputs.len() as u64)
-                .ok_or_else(|| receipt_error("recipe output count overflow".into()))?;
-        } else if record.get("pid").is_some() {
-            let keys = [
-                "pid",
-                "syscall",
-                "tracee_path",
-                "resolved_path",
-                "digest_blake3",
-                "allowed",
-                "reason",
-                "is_exec",
-            ];
-            if record
-                .as_object()
-                .is_none_or(|object| object.len() != keys.len() || keys.iter().any(|key| !object.contains_key(*key)))
-                || record["allowed"] != true
-                || record["pid"].as_u64().is_none()
-                || record["syscall"].as_i64().is_none()
-                || record["tracee_path"].as_str().is_none()
-                || record["resolved_path"].as_str().is_none()
-                || record["reason"].as_str().is_none()
-            {
-                return Err(receipt_error("recipe journal malformed or denied protected observation".into()));
-            }
-            if record["is_exec"] == true {
-                let event = protected
-                    .next()
-                    .ok_or_else(|| receipt_error("recipe journal adds an unobserved protected execution".into()))?;
-                if record["digest_blake3"].as_str() != Some(event.executable_digest_blake3.as_str()) {
-                    return Err(receipt_error(
-                        "recipe journal protected image differs from reconciled execution".into(),
-                    ));
-                }
-            } else if record["is_exec"] != false
-                || record["digest_blake3"] != ""
-                || record["tracee_path"] != ""
-                || record["resolved_path"] != ""
-            {
-                return Err(receipt_error("recipe journal process observation claims image authority".into()));
-            }
-        } else if record == serde_json::json!({"complete":true,"output_count":count}) {
-            complete = true;
-        } else {
-            return Err(receipt_error("recipe journal contains a failed, unknown, or legacy summary record".into()));
-        }
+        cursor.apply_record(&record)?;
     }
-    if !header_seen
-        || !complete
-        || builds.next().is_some()
-        || protected.next().is_some()
-        || guards.next().is_some()
-        || statuses.next().is_some()
-    {
-        return Err(receipt_error("recipe journal omits actual execution records".into()));
-    }
+    cursor.require_complete()?;
+    debug_assert!(cursor.is_header_seen);
+    debug_assert!(cursor.is_complete);
     Ok(())
 }
 
@@ -1102,6 +1346,101 @@ struct NativePublication {
     native_source_manifest_digest_blake3: String,
     expected_provider_digest_blake3: String,
     artifacts: std::collections::BTreeMap<String, PublishedArtifact>,
+}
+
+const NATIVE_EXECUTABLE_ROLES: &[&str] = &[
+    "native.cc1",
+    "native.cc1plus",
+    "native.as",
+    "native.ld",
+    "native.ar",
+    "native.nm",
+    "native.ranlib",
+    "native.objcopy",
+    "native.strip",
+    "native.readelf",
+    "native.loader",
+    "host.make",
+    "host.cmake",
+    "host.python",
+    "host.perl",
+    "host.busybox",
+];
+const NATIVE_TREE_ROLES: &[&str] = &["native.provider", "native.sysroot", "linux.headers"];
+const NATIVE_RUNTIME_ROLES: &[&str] = &["native.libc", "native.libgcc", "native.libgcc-eh", "native.libstdcxx"];
+
+/// One published native artifact together with the evidence that produced it.
+struct NativePublicationCheck<'a> {
+    root: &'a Path,
+    stage: &'a SourceBuiltStageEvidence,
+    actions: &'a ActionEvidence,
+    publication: &'a NativePublication,
+    producer_event: &'a ActionExecutionEvent,
+}
+
+impl NativePublicationCheck<'_> {
+    fn verify_role(&self, role: &str) -> Result<(), RunError> {
+        let artifact = self
+            .publication
+            .artifacts
+            .get(role)
+            .ok_or_else(|| receipt_error(format!("native publication omits {role}")))?;
+        let PublicationProducer::Produced { action_id, output_id } = &artifact.producer;
+        let measured = measure_artifact(self.root, &artifact.path)?;
+        let producer = bound_output_event(self.actions, &BoundOutputRequest {
+            stage_id: &self.stage.stage_id,
+            producer_action_id: action_id,
+            output_id: output_id,
+        })?;
+        let is_expected_kind = if NATIVE_EXECUTABLE_ROLES.contains(&role) {
+            artifact.kind == "executable"
+        } else if NATIVE_TREE_ROLES.contains(&role) {
+            artifact.kind == "tree"
+        } else {
+            matches!(artifact.kind.as_str(), "archive" | "object" | "executable")
+        };
+        if !is_expected_kind {
+            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        }
+        if evidence_path(self.root, &artifact.path)?.is_dir() != NATIVE_TREE_ROLES.contains(&role) {
+            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        }
+        if measured != (artifact.size_bytes, artifact.digest_blake3.clone()) {
+            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        }
+        let is_produced_output = producer
+            .produced_outputs
+            .iter()
+            .any(|(id, observed)| id == output_id && observed == &artifact.digest_blake3);
+        if !is_produced_output {
+            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        }
+        let is_produced_input = self.producer_event.inputs.iter().zip(&self.producer_event.input_digests_blake3).any(
+            |(input, observed)| {
+                matches!(input,
+                crate::source_built_fixed_point_action_trust::ActionInput::Produced { action_id: id, output_id: output }
+                if id == action_id && output == output_id)
+                    && observed == &artifact.digest_blake3
+            },
+        );
+        if !is_produced_input {
+            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        }
+        if role == "native.provider" {
+            let is_canonical = [
+                artifact.path == self.stage.output_path,
+                action_id == &self.stage.producer_action_id,
+                output_id == &self.stage.output_id,
+            ];
+            if !is_canonical.iter().all(|canonical| *canonical) {
+                return Err(receipt_error("native publication canonical provider binding drift".into()));
+            }
+        }
+        debug_assert!(is_expected_kind);
+        debug_assert!(is_produced_output);
+        debug_assert!(is_produced_input);
+        Ok(())
+    }
 }
 
 fn verify_native_publication(
@@ -1132,76 +1471,161 @@ fn verify_native_publication(
         .iter()
         .find(|input| input.role == crate::source_built_fixed_point::SourceAuthorityRole::NativeSourceBundle)
         .ok_or_else(|| receipt_error("native manifest not admitted".into()))?;
-    if publication.schema != "mantle-source-native-provider-publication-v1"
-        || publication.proof_plan_digest_blake3 != proof.plan_digest_blake3
-        || publication.native_source_manifest_digest_blake3 != source_digest.digest_blake3
-        || publication.expected_provider_digest_blake3 != proof.policies.expected_native_provider_digest_blake3
-    {
+    let publication_bindings = [
+        publication.schema == "mantle-source-native-provider-publication-v1",
+        publication.proof_plan_digest_blake3 == proof.plan_digest_blake3,
+        publication.native_source_manifest_digest_blake3 == source_digest.digest_blake3,
+        publication.expected_provider_digest_blake3 == proof.policies.expected_native_provider_digest_blake3,
+    ];
+    if !publication_bindings.iter().all(|binding| *binding) {
         return Err(receipt_error("native publication source/proof/pin mismatch".into()));
     }
-    let executables = [
-        "native.cc1",
-        "native.cc1plus",
-        "native.as",
-        "native.ld",
-        "native.ar",
-        "native.nm",
-        "native.ranlib",
-        "native.objcopy",
-        "native.strip",
-        "native.readelf",
-        "native.loader",
-        "host.make",
-        "host.cmake",
-        "host.python",
-        "host.perl",
-        "host.busybox",
-    ];
-    let trees = ["native.provider", "native.sysroot", "linux.headers"];
-    let runtimes = ["native.libc", "native.libgcc", "native.libgcc-eh", "native.libstdcxx"];
-    if publication.artifacts.len() != executables.len() + trees.len() + runtimes.len() {
+    let expected_artifact_count = NATIVE_EXECUTABLE_ROLES
+        .len()
+        .saturating_add(NATIVE_TREE_ROLES.len())
+        .saturating_add(NATIVE_RUNTIME_ROLES.len());
+    if publication.artifacts.len() != expected_artifact_count {
         return Err(receipt_error("native publication role coverage drift".into()));
     }
-    for role in executables.iter().chain(&trees).chain(&runtimes) {
-        let artifact = publication
-            .artifacts
-            .get(*role)
-            .ok_or_else(|| receipt_error(format!("native publication omits {role}")))?;
-        let PublicationProducer::Produced { action_id, output_id } = &artifact.producer;
-        let measured = measure_artifact(root, &artifact.path)?;
-        let producer = bound_output_event(actions, &stage.stage_id, action_id, output_id)?;
-        let expected_kind = if executables.contains(role) {
-            artifact.kind == "executable"
-        } else if trees.contains(role) {
-            artifact.kind == "tree"
-        } else {
-            matches!(artifact.kind.as_str(), "archive" | "object" | "executable")
+    let check = NativePublicationCheck {
+        root,
+        stage,
+        actions,
+        publication: &publication,
+        producer_event: event,
+    };
+    for role in NATIVE_EXECUTABLE_ROLES.iter().chain(NATIVE_TREE_ROLES).chain(NATIVE_RUNTIME_ROLES) {
+        check.verify_role(role)?;
+    }
+    debug_assert_eq!(event.kind, ExecutionEventKind::BuildExecution);
+    debug_assert_eq!(publication.artifacts.len(), expected_artifact_count);
+    Ok(())
+}
+
+/// Collect the relative paths of one artifact tree. The walk is iterative so
+/// that a deep tree cannot exhaust the stack, and every directory is visited
+/// exactly once.
+fn collect_artifact_entries(root: &Path, current: &Path, entries: &mut Vec<String>) -> Result<(), RunError> {
+    let mut pending: Vec<(PathBuf, usize)> = Vec::with_capacity(64);
+    pending.push((current.to_path_buf(), 0));
+    for _ in 0..ARTIFACT_TREE_WALK_STEPS {
+        let Some((directory, depth)) = pending.pop() else {
+            debug_assert!(entries.len() <= 1_000_000);
+            return Ok(());
         };
-        if !expected_kind
-            || evidence_path(root, &artifact.path)?.is_dir() != trees.contains(role)
-            || measured != (artifact.size_bytes, artifact.digest_blake3.clone())
-            || !producer
-                .produced_outputs
-                .iter()
-                .any(|(id, observed)| id == output_id && observed == &artifact.digest_blake3)
-            || !event.inputs.iter().zip(&event.input_digests_blake3).any(|(input, observed)| {
-                matches!(input,
-                crate::source_built_fixed_point_action_trust::ActionInput::Produced { action_id: id, output_id: output }
-                if id == action_id && output == output_id)
-                    && observed == &artifact.digest_blake3
-            })
-        {
-            return Err(receipt_error(format!("native publication actual artifact {role} drift")));
+        if depth > 128 {
+            return Err(receipt_error("artifact tree depth bound exceeded".into()));
         }
-        if *role == "native.provider"
-            && (artifact.path != stage.output_path
-                || action_id != &stage.producer_action_id
-                || output_id != &stage.output_id)
-        {
-            return Err(receipt_error("native publication canonical provider binding drift".into()));
+        debug_assert!(depth <= 128);
+        for entry in fs::read_dir(&directory).map_err(|error| receipt_error(error.to_string()))? {
+            let entry = entry.map_err(|error| receipt_error(error.to_string()))?;
+            let path = entry.path();
+            let relative = relative_path(root, &path)?;
+            if entries.len() >= 1_000_000 || relative.len() > 4096 {
+                return Err(receipt_error("artifact tree entry/path bound exceeded".into()));
+            }
+            let metadata = fs::symlink_metadata(&path).map_err(|error| receipt_error(error.to_string()))?;
+            entries.push(relative);
+            if metadata.is_dir() {
+                if pending.len() >= ARTIFACT_TREE_PENDING_LIMIT {
+                    return Err(receipt_error("artifact tree entry/path bound exceeded".into()));
+                }
+                pending.push((path, depth.saturating_add(1)));
+            }
         }
     }
-    Ok(())
+    Err(receipt_error("artifact tree entry/path bound exceeded".into()))
+}
+
+/// Hash one artifact tree entry and report the bytes it contributes to the
+/// tree total. Symlinks are hashed as text and never grant authority outside
+/// the selected tree.
+fn measure_artifact_entry(
+    entry: &Path,
+    relative: &str,
+    metadata: &fs::Metadata,
+    canonical_tree: &Path,
+    hasher: &mut blake3::Hasher,
+) -> Result<u64, RunError> {
+    #[cfg(unix)]
+    let mode = {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o7777
+    };
+    #[cfg(not(unix))]
+    let mode = 0_u32;
+    hasher.update(&(relative.len() as u64).to_le_bytes());
+    hasher.update(relative.as_bytes());
+    hasher.update(&mode.to_le_bytes());
+    if metadata.is_dir() {
+        hasher.update(b"dir\0");
+        return Ok(0);
+    }
+    if metadata.is_file() {
+        hasher.update(b"file\0");
+        hasher.update(&metadata.len().to_le_bytes());
+        let mut file = fs::File::open(entry).map_err(|error| receipt_error(error.to_string()))?;
+        let mut bytes = 0_u64;
+        let mut buffer = [0_u8; HASH_BUFFER_BYTES];
+        // Every read before end of file consumes at least one byte, so
+        // `len + 2` reads always reach either end of file or more than `len`
+        // bytes, even when the kernel returns short reads.
+        let read_bound = metadata.len().saturating_add(2);
+        for _ in 0..read_bound {
+            let count = file.read(&mut buffer).map_err(|error| receipt_error(error.to_string()))?;
+            if count == 0 {
+                break;
+            }
+            bytes =
+                bytes.checked_add(count as u64).ok_or_else(|| receipt_error("artifact file size overflow".into()))?;
+            hasher.update(&buffer[..count]);
+        }
+        if bytes != metadata.len() {
+            return Err(receipt_error("artifact tree changed while hashing".into()));
+        }
+        debug_assert_eq!(bytes, metadata.len());
+        return Ok(bytes);
+    }
+    if metadata.file_type().is_symlink() {
+        return measure_artifact_symlink(entry, relative, metadata, canonical_tree, hasher);
+    }
+    Err(receipt_error("unsupported artifact tree entry".into()))
+}
+
+/// Hash one artifact symlink as text. The target is never followed to grant file
+/// authority outside the selected tree.
+fn measure_artifact_symlink(
+    entry: &Path,
+    relative: &str,
+    metadata: &fs::Metadata,
+    canonical_tree: &Path,
+    hasher: &mut blake3::Hasher,
+) -> Result<u64, RunError> {
+    let target = fs::read_link(entry).map_err(|error| receipt_error(error.to_string()))?;
+    let text = target.to_str().ok_or_else(|| receipt_error("artifact symlink target is not UTF-8".into()))?;
+    if text.is_empty() || text.len() > 4096 || target.is_absolute() {
+        return Err(receipt_error("artifact tree has unsafe symlink".into()));
+    }
+    debug_assert!(!text.is_empty());
+    debug_assert!(metadata.file_type().is_symlink());
+    let mut depth = Path::new(relative).parent().map_or(0, |parent| parent.components().count());
+    for part in target.components() {
+        match part {
+            Component::Normal(_) => depth = depth.saturating_add(1),
+            Component::CurDir => (),
+            Component::ParentDir if depth > 0 => depth = depth.saturating_sub(1),
+            _ => return Err(receipt_error("artifact symlink escapes tree".into())),
+        }
+    }
+    let resolved = fs::canonicalize(entry)
+        .map_err(|error| receipt_error(format!("artifact symlink is dangling or cyclic: {error}")))?;
+    if !resolved.starts_with(canonical_tree) {
+        return Err(receipt_error("artifact symlink resolves outside its tree".into()));
+    }
+    hasher.update(b"symlink\0");
+    hasher.update(&(text.len() as u64).to_le_bytes());
+    hasher.update(text.as_bytes());
+    Ok(metadata.len())
 }
 
 /// Same content framing as recipe release-tree measurement. Links are hashed as
@@ -1215,27 +1639,9 @@ pub(crate) fn measure_artifact(root: &Path, relative: &str) -> Result<(u64, Stri
     if !metadata.is_dir() {
         return Err(receipt_error("artifact must be a nonsymlink file or tree".into()));
     }
-    fn collect(root: &Path, current: &Path, depth: usize, entries: &mut Vec<String>) -> Result<(), RunError> {
-        if depth > 128 {
-            return Err(receipt_error("artifact tree depth bound exceeded".into()));
-        }
-        for entry in fs::read_dir(current).map_err(|error| receipt_error(error.to_string()))? {
-            let entry = entry.map_err(|error| receipt_error(error.to_string()))?;
-            let path = entry.path();
-            let relative = relative_path(root, &path)?;
-            if entries.len() >= 1_000_000 || relative.len() > 4096 {
-                return Err(receipt_error("artifact tree entry/path bound exceeded".into()));
-            }
-            let metadata = fs::symlink_metadata(&path).map_err(|error| receipt_error(error.to_string()))?;
-            entries.push(relative);
-            if metadata.is_dir() {
-                collect(root, &path, depth + 1, entries)?;
-            }
-        }
-        Ok(())
-    }
     let mut entries = Vec::new();
-    collect(&path, &path, 0, &mut entries)?;
+    collect_artifact_entries(&path, &path, &mut entries)?;
+    debug_assert!(entries.len() <= 1_000_000);
     entries.sort();
     let canonical_tree = fs::canonicalize(&path).map_err(|error| receipt_error(error.to_string()))?;
     let mut hasher = blake3::Hasher::new();
@@ -1243,92 +1649,42 @@ pub(crate) fn measure_artifact(root: &Path, relative: &str) -> Result<(u64, Stri
     for relative in entries {
         let entry = path.join(&relative);
         let metadata = fs::symlink_metadata(&entry).map_err(|error| receipt_error(error.to_string()))?;
-        #[cfg(unix)]
-        let mode = {
-            use std::os::unix::fs::PermissionsExt;
-            metadata.permissions().mode() & 0o7777
-        };
-        #[cfg(not(unix))]
-        let mode = 0_u32;
-        hasher.update(&(relative.len() as u64).to_le_bytes());
-        hasher.update(relative.as_bytes());
-        hasher.update(&mode.to_le_bytes());
-        if metadata.is_dir() {
-            hasher.update(b"dir\0");
-        } else if metadata.is_file() {
-            hasher.update(b"file\0");
-            hasher.update(&metadata.len().to_le_bytes());
-            let mut file = fs::File::open(&entry).map_err(|error| receipt_error(error.to_string()))?;
-            let mut bytes = 0_u64;
-            let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-            loop {
-                let count = file.read(&mut buffer).map_err(|error| receipt_error(error.to_string()))?;
-                if count == 0 {
-                    break;
-                }
-                bytes = bytes
-                    .checked_add(count as u64)
-                    .ok_or_else(|| receipt_error("artifact file size overflow".into()))?;
-                hasher.update(&buffer[..count]);
-            }
-            if bytes != metadata.len() {
-                return Err(receipt_error("artifact tree changed while hashing".into()));
-            }
-            total = total.checked_add(bytes).ok_or_else(|| receipt_error("artifact tree size overflow".into()))?;
-        } else if metadata.file_type().is_symlink() {
-            let target = fs::read_link(&entry).map_err(|error| receipt_error(error.to_string()))?;
-            let text = target.to_str().ok_or_else(|| receipt_error("artifact symlink target is not UTF-8".into()))?;
-            if text.is_empty() || text.len() > 4096 || target.is_absolute() {
-                return Err(receipt_error("artifact tree has unsafe symlink".into()));
-            }
-            let mut depth = Path::new(&relative).parent().map_or(0, |parent| parent.components().count());
-            for part in target.components() {
-                match part {
-                    Component::Normal(_) => depth += 1,
-                    Component::CurDir => (),
-                    Component::ParentDir if depth > 0 => depth -= 1,
-                    _ => return Err(receipt_error("artifact symlink escapes tree".into())),
-                }
-            }
-            let resolved = fs::canonicalize(&entry)
-                .map_err(|error| receipt_error(format!("artifact symlink is dangling or cyclic: {error}")))?;
-            if !resolved.starts_with(&canonical_tree) {
-                return Err(receipt_error("artifact symlink resolves outside its tree".into()));
-            }
-            hasher.update(b"symlink\0");
-            hasher.update(&(text.len() as u64).to_le_bytes());
-            hasher.update(text.as_bytes());
-            total = total
-                .checked_add(metadata.len())
-                .ok_or_else(|| receipt_error("artifact tree size overflow".into()))?;
-        } else {
-            return Err(receipt_error("unsupported artifact tree entry".into()));
-        }
+        let measured = measure_artifact_entry(&entry, &relative, &metadata, &canonical_tree, &mut hasher)?;
+        total = total.checked_add(measured).ok_or_else(|| receipt_error("artifact tree size overflow".into()))?;
     }
-    Ok((total, hasher.finalize().to_hex().to_string()))
+    let tree_digest = hasher.finalize().to_hex().to_string();
+    debug_assert_eq!(tree_digest.len(), BLAKE3_HEX_LENGTH);
+    Ok((total, tree_digest))
+}
+
+/// The Mantle stage evidence binding: which output role and which closure audit.
+struct MantleStageEvidenceBinding<'a> {
+    role: ProofOutputRole,
+    closure_path: &'a str,
+    closure_digest: &'a str,
 }
 
 fn verify_mantle_stage_evidence(
     stages: &[SourceBuiltStageEvidence],
     observed: &FixedPointStageObservation,
-    role: ProofOutputRole,
-    closure_path: &str,
-    closure_digest: &str,
+    binding: &MantleStageEvidenceBinding<'_>,
 ) -> Result<(), RunError> {
     let stage = stages
         .iter()
-        .find(|stage| stage.output_role == role)
+        .find(|stage| stage.output_role == binding.role)
         .ok_or_else(|| receipt_error("missing observed Mantle stage evidence".into()))?;
-    if stage.transcript_path != observed.manifest_relative_path
-        || stage.transcript_digest_blake3 != observed.manifest_digest_blake3
-        || stage.output_path != observed.binary_relative_path
-        || stage.output_digest_blake3 != observed.binary_digest_blake3
-        || stage.executable_identity != format!("blake3:{}", observed.orchestrator_digest_blake3)
-        || stage.audit_paths.len() != observed.audit_files.len().saturating_add(1)
-        || stage.audit_digests_blake3.len() != stage.audit_paths.len()
-        || stage.audit_paths.last().map(String::as_str) != Some(closure_path)
-        || stage.audit_digests_blake3.last().map(String::as_str) != Some(closure_digest)
-    {
+    let evidence_matches = [
+        stage.transcript_path == observed.manifest_relative_path,
+        stage.transcript_digest_blake3 == observed.manifest_digest_blake3,
+        stage.output_path == observed.binary_relative_path,
+        stage.output_digest_blake3 == observed.binary_digest_blake3,
+        stage.executable_identity == format!("blake3:{}", observed.orchestrator_digest_blake3),
+        stage.audit_paths.len() == observed.audit_files.len().saturating_add(1),
+        stage.audit_digests_blake3.len() == stage.audit_paths.len(),
+        stage.audit_paths.last().map(String::as_str) == Some(binding.closure_path),
+        stage.audit_digests_blake3.last().map(String::as_str) == Some(binding.closure_digest),
+    ];
+    if !evidence_matches.iter().all(|matches| *matches) {
         return Err(receipt_error(format!("{} evidence does not match actual action-bound manifest", stage.stage_id)));
     }
     for ((path, digest), (expected_path, expected_digest)) in
@@ -1338,6 +1694,8 @@ fn verify_mantle_stage_evidence(
             return Err(receipt_error(format!("{} command evidence drift", stage.stage_id)));
         }
     }
+    debug_assert_eq!(stage.audit_paths.len(), stage.audit_digests_blake3.len());
+    debug_assert!(stage.audit_paths.last().map(String::as_str) == Some(binding.closure_path));
     Ok(())
 }
 
@@ -1350,94 +1708,121 @@ pub(crate) fn verify_cold_stage_artifacts(
     actions: &ActionEvidence,
 ) -> Result<(), RunError> {
     for stage in stages {
-        if hash_file(&evidence_path(root, &stage.transcript_path)?)? != stage.transcript_digest_blake3 {
-            return Err(receipt_error(format!("stage {} transcript content drift", stage.stage_id)));
-        }
-        for (path, digest) in stage.audit_paths.iter().zip(&stage.audit_digests_blake3) {
-            if hash_file_allow_empty(&evidence_path(root, path)?)? != *digest {
-                return Err(receipt_error(format!("stage {} audit content drift", stage.stage_id)));
-            }
-        }
-        let expected_output = match stage.output_role {
-            ProofOutputRole::StagexTransition => "stagex-transition",
-            ProofOutputRole::StagexProvider => "stagex-provider",
-            ProofOutputRole::FullSourceNativeProvider => "full-source-native-provider",
-            ProofOutputRole::FullSourceRustProvider => "full-source-rust-provider",
-            ProofOutputRole::MantleStage1 => "mantle-stage1",
-            ProofOutputRole::MantleStage2 => "mantle-stage2",
-        };
-        if stage.output_id != expected_output {
-            return Err(receipt_error(format!("stage {} has noncanonical output identity", stage.stage_id)));
-        }
-        if stage.output_path
-            != recipe_output_path(
-                &stage.execution_journal_path,
-                &stage.stage_id,
-                &stage.producer_action_id,
-                &stage.output_id,
-            )?
-        {
-            return Err(receipt_error("canonical output differs from its immutable recipe binding".into()));
-        }
-        let event = bound_output_event(actions, &stage.stage_id, &stage.producer_action_id, &stage.output_id)?;
-        let (size, digest) = measure_artifact(root, &stage.output_path)?;
-        if !event
-            .produced_outputs
-            .iter()
-            .any(|(id, observed)| id == &stage.output_id && observed == &stage.output_digest_blake3)
-            || digest != stage.output_digest_blake3
-            || size > proof.resource_bounds.disk_bytes_max
-        {
-            return Err(receipt_error(format!(
-                "stage {} actual output differs from reconciled producer",
-                stage.stage_id
-            )));
-        }
-        if !matches!(stage.output_role, ProofOutputRole::MantleStage1 | ProofOutputRole::MantleStage2)
-            && (stage.transcript_path != stage.execution_journal_path
-                || stage.executable_identity != format!("blake3:{}", event.executable_digest_blake3))
-        {
-            return Err(receipt_error(format!("stage {} is not an actual recipe observation", stage.stage_id)));
-        }
-        verify_recipe_journal(root, proof, stage, actions)?;
-        if stage.output_role == ProofOutputRole::FullSourceNativeProvider {
-            verify_native_publication(root, proof, stage, actions)?;
-        } else if !matches!(stage.output_role, ProofOutputRole::MantleStage1 | ProofOutputRole::MantleStage2)
-            && !stage.audit_paths.is_empty()
-        {
-            return Err(receipt_error("cold source stage cannot substitute external summary audits".into()));
-        }
+        verify_cold_stage(root, proof, stage, actions)?;
     }
     Ok(())
 }
 
+fn verify_cold_stage(
+    root: &Path,
+    proof: &SourceBuiltFixedPointPlan,
+    stage: &SourceBuiltStageEvidence,
+    actions: &ActionEvidence,
+) -> Result<(), RunError> {
+    if hash_file(&evidence_path(root, &stage.transcript_path)?)? != stage.transcript_digest_blake3 {
+        return Err(receipt_error(format!("stage {} transcript content drift", stage.stage_id)));
+    }
+    for (path, digest) in stage.audit_paths.iter().zip(&stage.audit_digests_blake3) {
+        if hash_file_allow_empty(&evidence_path(root, path)?)? != *digest {
+            return Err(receipt_error(format!("stage {} audit content drift", stage.stage_id)));
+        }
+    }
+    let expected_output = match stage.output_role {
+        ProofOutputRole::StagexTransition => "stagex-transition",
+        ProofOutputRole::StagexProvider => "stagex-provider",
+        ProofOutputRole::FullSourceNativeProvider => "full-source-native-provider",
+        ProofOutputRole::FullSourceRustProvider => "full-source-rust-provider",
+        ProofOutputRole::MantleStage1 => "mantle-stage1",
+        ProofOutputRole::MantleStage2 => "mantle-stage2",
+    };
+    if stage.output_id != expected_output {
+        return Err(receipt_error(format!("stage {} has noncanonical output identity", stage.stage_id)));
+    }
+    if stage.output_path
+        != recipe_output_path(&RecipeOutputBinding {
+            journal_path: &stage.execution_journal_path,
+            stage_id: &stage.stage_id,
+            action_id: &stage.producer_action_id,
+            output_id: &stage.output_id,
+        })?
+    {
+        return Err(receipt_error("canonical output differs from its immutable recipe binding".into()));
+    }
+    let event = bound_output_event(actions, &BoundOutputRequest {
+        stage_id: &stage.stage_id,
+        producer_action_id: &stage.producer_action_id,
+        output_id: &stage.output_id,
+    })?;
+    let (size, digest) = measure_artifact(root, &stage.output_path)?;
+    if !event
+        .produced_outputs
+        .iter()
+        .any(|(id, observed)| id == &stage.output_id && observed == &stage.output_digest_blake3)
+        || digest != stage.output_digest_blake3
+        || size > proof.resource_bounds.disk_bytes_max
+    {
+        return Err(receipt_error(format!("stage {} actual output differs from reconciled producer", stage.stage_id)));
+    }
+    debug_assert_eq!(digest, stage.output_digest_blake3);
+    debug_assert!(size <= proof.resource_bounds.disk_bytes_max);
+    if !matches!(stage.output_role, ProofOutputRole::MantleStage1 | ProofOutputRole::MantleStage2)
+        && (stage.transcript_path != stage.execution_journal_path
+            || stage.executable_identity != format!("blake3:{}", event.executable_digest_blake3))
+    {
+        return Err(receipt_error(format!("stage {} is not an actual recipe observation", stage.stage_id)));
+    }
+    verify_recipe_journal(root, proof, stage, actions)?;
+    if stage.output_role == ProofOutputRole::FullSourceNativeProvider {
+        verify_native_publication(root, proof, stage, actions)?;
+    } else if !matches!(stage.output_role, ProofOutputRole::MantleStage1 | ProofOutputRole::MantleStage2)
+        && !stage.audit_paths.is_empty()
+    {
+        return Err(receipt_error("cold source stage cannot substitute external summary audits".into()));
+    }
+    Ok(())
+}
+
+/// The reconciled producer of one stage output. Named fields keep the stage,
+/// producer action, and output label from being transposed.
+struct BoundOutputRequest<'a> {
+    stage_id: &'a str,
+    producer_action_id: &'a str,
+    output_id: &'a str,
+}
+
 fn bound_output_event<'a>(
     actions: &'a ActionEvidence,
-    stage_id: &str,
-    producer: &str,
-    output: &str,
+    request: &BoundOutputRequest<'_>,
 ) -> Result<&'a ActionExecutionEvent, RunError> {
     let adapter = actions
         .plan
         .adapters
         .iter()
-        .find(|adapter| adapter.stage_id == stage_id)
-        .ok_or_else(|| receipt_error(format!("missing stage adapter {stage_id}")))?;
-    if !crate::source_built_fixed_point_action_trust::adapter_action_spec(adapter, producer)
+        .find(|adapter| adapter.stage_id == request.stage_id)
+        .ok_or_else(|| receipt_error(format!("missing stage adapter {}", request.stage_id)))?;
+    if !crate::source_built_fixed_point_action_trust::adapter_action_spec(adapter, request.producer_action_id)
         .map_err(receipt_error)?
-        .is_some_and(|action| action.output_ids.iter().any(|id| id == output))
+        .is_some_and(|action| action.output_ids.iter().any(|id| id == request.output_id))
     {
-        return Err(receipt_error(format!("{stage_id} output lacks its admitted producer {producer}/{output}")));
+        return Err(receipt_error(format!(
+            "{} output lacks its admitted producer {}/{}",
+            request.stage_id, request.producer_action_id, request.output_id
+        )));
     }
-    actions
+    let event = actions
         .events
         .iter()
         .find(|event| {
             event.kind == ExecutionEventKind::BuildExecution
-                && event.action_id == producer
-                && event.produced_outputs.iter().any(|(id, _)| id == output)
+                && event.action_id == request.producer_action_id
+                && event.produced_outputs.iter().any(|(id, _)| id == request.output_id)
         })
-        .ok_or_else(|| receipt_error(format!("missing actual completion {producer}/{output}")))
+        .ok_or_else(|| {
+            receipt_error(format!("missing actual completion {}/{}", request.producer_action_id, request.output_id))
+        })?;
+    debug_assert_eq!(event.action_id, request.producer_action_id);
+    debug_assert_eq!(event.kind, ExecutionEventKind::BuildExecution);
+    Ok(event)
 }
 
 pub(crate) fn verify_cold_provider(
@@ -1455,11 +1840,16 @@ pub(crate) fn verify_cold_provider(
         .iter()
         .find(|stage| stage.output_role == ProofOutputRole::FullSourceRustProvider)
         .ok_or_else(|| receipt_error("missing Rust cold output".into()))?;
-    if provider.native_provider_path != native.output_path
-        || provider.rust_provider_path != rust.output_path
-        || !evidence_path(root, &provider.native_provider_path)?.is_dir()
-        || !evidence_path(root, &provider.rust_provider_path)?.is_dir()
-    {
+    if provider.native_provider_path != native.output_path {
+        return Err(receipt_error("cold provider paths are not the canonical measured provider trees".into()));
+    }
+    if provider.rust_provider_path != rust.output_path {
+        return Err(receipt_error("cold provider paths are not the canonical measured provider trees".into()));
+    }
+    if !evidence_path(root, &provider.native_provider_path)?.is_dir() {
+        return Err(receipt_error("cold provider paths are not the canonical measured provider trees".into()));
+    }
+    if !evidence_path(root, &provider.rust_provider_path)?.is_dir() {
         return Err(receipt_error("cold provider paths are not the canonical measured provider trees".into()));
     }
     let (native_size, native_digest) = measure_artifact(root, &provider.native_provider_path)?;
@@ -1472,11 +1862,13 @@ pub(crate) fn verify_cold_provider(
     fs::File::open(&rustc)
         .and_then(|mut file| file.read_exact(&mut magic))
         .map_err(|error| receipt_error(format!("reading produced rustc: {error}")))?;
-    if magic != *b"\x7fELF"
-        || native_digest != proof.policies.expected_native_provider_digest_blake3
-        || native_digest != native.output_digest_blake3
-        || rust_digest != rust.output_digest_blake3
-    {
+    let provider_matches = [
+        magic == *b"\x7fELF",
+        native_digest == proof.policies.expected_native_provider_digest_blake3,
+        native_digest == native.output_digest_blake3,
+        rust_digest == rust.output_digest_blake3,
+    ];
+    if !provider_matches.iter().all(|matches| *matches) {
         return Err(receipt_error("actual cold provider/rustc differs from pinned output".into()));
     }
     #[cfg(unix)]
@@ -1488,9 +1880,31 @@ pub(crate) fn verify_cold_provider(
     }
     // The closure remains an actual produced text artifact, never a legacy
     // provider-summary conversion or a host-supplied execution attestation.
+    let closure_size_bytes = verify_cold_closure(root, proof, provider)?;
+    let provider_size_bytes = native_size
+        .checked_add(rust_size)
+        .and_then(|size| size.checked_add(closure_size_bytes))
+        .ok_or_else(|| receipt_error("provider size overflow".into()))?;
+    debug_assert!(closure_size_bytes <= JSON_BYTES_MAX);
+    debug_assert_eq!(provider_size_bytes, native_size.saturating_add(rust_size).saturating_add(closure_size_bytes));
+    Ok(ColdProviderMeasurement {
+        native_digest,
+        rust_digest,
+        closure_digest,
+        provider_size_bytes,
+    })
+}
+
+/// The closure remains an actual produced text artifact, never a legacy
+/// provider-summary conversion or a host-supplied execution attestation.
+fn verify_cold_closure(
+    root: &Path,
+    proof: &SourceBuiltFixedPointPlan,
+    provider: &ColdProviderEvidence,
+) -> Result<u64, RunError> {
     let closure_path = evidence_path(root, &provider.toolchain_closure.path)?;
-    let closure_size = fs::metadata(&closure_path).map_err(|error| receipt_error(error.to_string()))?.len();
-    if closure_size > JSON_BYTES_MAX || closure_size > proof.resource_bounds.disk_bytes_max {
+    let closure_size_bytes = fs::metadata(&closure_path).map_err(|error| receipt_error(error.to_string()))?.len();
+    if closure_size_bytes > JSON_BYTES_MAX || closure_size_bytes > proof.resource_bounds.disk_bytes_max {
         return Err(receipt_error("actual closure exceeds byte bound".into()));
     }
     let closure = fs::read_to_string(closure_path)
@@ -1498,16 +1912,9 @@ pub(crate) fn verify_cold_provider(
     if closure.is_empty() || closure.contains('\0') {
         return Err(receipt_error("actual toolchain closure is not nonempty source-produced text".into()));
     }
-    let provider_size_bytes = native_size
-        .checked_add(rust_size)
-        .and_then(|size| size.checked_add(closure_size))
-        .ok_or_else(|| receipt_error("provider size overflow".into()))?;
-    Ok(ColdProviderMeasurement {
-        native_digest,
-        rust_digest,
-        closure_digest,
-        provider_size_bytes,
-    })
+    debug_assert!(closure_size_bytes <= JSON_BYTES_MAX);
+    debug_assert!(!closure.is_empty());
+    Ok(closure_size_bytes)
 }
 
 fn verify_cold_artifact(
@@ -1517,17 +1924,26 @@ fn verify_cold_artifact(
     actions: &ActionEvidence,
 ) -> Result<String, RunError> {
     if binding.path
-        != recipe_output_path(journal, "full-source-rust-provider", &binding.producer_action_id, &binding.output_id)?
+        != recipe_output_path(&RecipeOutputBinding {
+            journal_path: journal,
+            stage_id: "full-source-rust-provider",
+            action_id: &binding.producer_action_id,
+            output_id: &binding.output_id,
+        })?
     {
         return Err(receipt_error("cold artifact differs from its immutable recipe binding".into()));
     }
     let path = evidence_path(root, &binding.path)?;
     let digest = hash_file(&path)?;
-    let event =
-        bound_output_event(actions, "full-source-rust-provider", &binding.producer_action_id, &binding.output_id)?;
+    let event = bound_output_event(actions, &BoundOutputRequest {
+        stage_id: "full-source-rust-provider",
+        producer_action_id: &binding.producer_action_id,
+        output_id: &binding.output_id,
+    })?;
     if !event.produced_outputs.iter().any(|(id, observed)| id == &binding.output_id && observed == &digest) {
         return Err(receipt_error(format!("actual cold artifact {} differs from its producer", binding.path)));
     }
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
     Ok(digest)
 }
 
@@ -1543,18 +1959,25 @@ fn verify_cold_descriptor(
         .as_ref()
         .ok_or_else(|| receipt_error("missing cold rebuild descriptor".into()))?;
     let rustc = evidence_path(root, &extension.cold_provider.rustc.path)?;
-    let identity = provider_identity_digest(
-        &extension.native_provider_digest_blake3,
-        &extension.rust_provider_digest_blake3,
-        &extension.toolchain_closure_digest_blake3,
-    );
-    if descriptor.executable.digest_blake3 != hash_file(&rustc)?
-        || descriptor.executable.size_bytes
-            != fs::metadata(rustc).map_err(|error| receipt_error(error.to_string()))?.len()
-        || descriptor.provider.digest_blake3 != identity
-        || descriptor.provider.size_bytes != provider_size
-        || descriptor.source_inputs.len() != proof.source_inputs.len()
+    let identity = provider_identity_digest(&ProviderIdentityBinding {
+        native_digest_blake3: &extension.native_provider_digest_blake3,
+        rust_digest_blake3: &extension.rust_provider_digest_blake3,
+        closure_digest_blake3: &extension.toolchain_closure_digest_blake3,
+    });
+    if descriptor.executable.digest_blake3 != hash_file(&rustc)? {
+        return Err(receipt_error("rebuild descriptor differs from actual cold provider inputs".into()));
+    }
+    if descriptor.executable.size_bytes != fs::metadata(rustc).map_err(|error| receipt_error(error.to_string()))?.len()
     {
+        return Err(receipt_error("rebuild descriptor differs from actual cold provider inputs".into()));
+    }
+    if descriptor.provider.digest_blake3 != identity {
+        return Err(receipt_error("rebuild descriptor differs from actual cold provider inputs".into()));
+    }
+    if descriptor.provider.size_bytes != provider_size {
+        return Err(receipt_error("rebuild descriptor differs from actual cold provider inputs".into()));
+    }
+    if descriptor.source_inputs.len() != proof.source_inputs.len() {
         return Err(receipt_error("rebuild descriptor differs from actual cold provider inputs".into()));
     }
     for source in &proof.source_inputs {
@@ -1577,6 +2000,8 @@ fn verify_cold_descriptor(
             return Err(receipt_error("cold rebuild descriptor source input drift".into()));
         }
     }
+    debug_assert_eq!(descriptor.source_inputs.len(), proof.source_inputs.len());
+    debug_assert_eq!(identity.len(), BLAKE3_HEX_LENGTH);
     Ok(())
 }
 
@@ -1585,8 +2010,14 @@ pub(crate) fn observe_fixed_point(
     proof: &SourceBuiltFixedPointPlan,
     actions: &ActionEvidence,
 ) -> Result<FixedPointObservation, RunError> {
-    let (stage1, first) = observe_mantle_stage(root, proof, actions, "mantle-stage1", MANTLE_STAGE1_MANIFEST)?;
-    let (stage2, second) = observe_mantle_stage(root, proof, actions, "mantle-stage2", MANTLE_STAGE2_MANIFEST)?;
+    let (stage1, first) = observe_mantle_stage(root, proof, actions, &MantleStageObservationRequest {
+        stage_id: "mantle-stage1",
+        manifest_path: MANTLE_STAGE1_MANIFEST,
+    })?;
+    let (stage2, second) = observe_mantle_stage(root, proof, actions, &MantleStageObservationRequest {
+        stage_id: "mantle-stage2",
+        manifest_path: MANTLE_STAGE2_MANIFEST,
+    })?;
     let predecessor = Some((first.binary.producer_action_id.clone(), first.binary.output_id.clone()));
     if first.orchestrator.executable_producer.is_some()
         || second.orchestrator.executable_producer != predecessor
@@ -1597,6 +2028,8 @@ pub(crate) fn observe_fixed_point(
     if stage1.binary_digest_blake3 != stage2.binary_digest_blake3 {
         return Err(receipt_error("stage1 and stage2 Mantle binary digests differ".into()));
     }
+    debug_assert!(first.orchestrator.executable_producer.is_none());
+    debug_assert_eq!(second.orchestrator.executable_digest_blake3, first.binary.digest_blake3);
     Ok(FixedPointObservation {
         stage1,
         stage2,
@@ -1604,39 +2037,65 @@ pub(crate) fn observe_fixed_point(
     })
 }
 
+/// Which Mantle stage to observe and where its manifest lives.
+struct MantleStageObservationRequest<'a> {
+    stage_id: &'a str,
+    manifest_path: &'a str,
+}
+
 fn observe_mantle_stage(
     root: &Path,
     proof: &SourceBuiltFixedPointPlan,
     actions: &ActionEvidence,
-    stage_id: &str,
-    manifest_path: &str,
+    request: &MantleStageObservationRequest<'_>,
 ) -> Result<(FixedPointStageObservation, MantleStageManifest), RunError> {
+    let stage_id = request.stage_id;
+    let manifest_path = request.manifest_path;
     let (manifest, manifest_digest) = read_bound_json::<MantleStageManifest>(root, manifest_path)?;
-    if manifest.schema != MANTLE_STAGE_MANIFEST_SCHEMA
-        || manifest.stage_id != stage_id
-        || manifest.proof_plan_digest_blake3 != proof.plan_digest_blake3
-        || manifest.action_plan_digest_blake3 != actions.plan.digest_blake3
-        || manifest.closure_policy_digest_blake3 != proof.policies.closure_policy_digest_blake3
-        || manifest.semantic_unit_count == 0
-        || manifest.semantic_unit_count > proof.resource_bounds.protected_exec_events_max
-    {
+    let manifest_matches = [
+        manifest.schema == MANTLE_STAGE_MANIFEST_SCHEMA,
+        manifest.stage_id == stage_id,
+        manifest.proof_plan_digest_blake3 == proof.plan_digest_blake3,
+        manifest.action_plan_digest_blake3 == actions.plan.digest_blake3,
+        manifest.closure_policy_digest_blake3 == proof.policies.closure_policy_digest_blake3,
+        manifest.semantic_unit_count != 0,
+        manifest.semantic_unit_count <= proof.resource_bounds.protected_exec_events_max,
+    ];
+    if !manifest_matches.iter().all(|matches| *matches) {
         return Err(receipt_error(format!("{stage_id} manifest source/action/policy identity mismatch")));
     }
     let stage_actions = stage_action_ids(actions, &manifest.stage_id)?;
     validate_mantle_manifest_actions(&manifest, actions, &stage_actions)?;
     let parent = manifest_path.rsplit_once('/').ok_or_else(|| receipt_error("stage manifest lacks parent".into()))?.0;
-    let binary_relative_path = stage_relative_file(parent, &manifest.binary.path)?;
+    let binary_relative_path = stage_relative_file(&StageFileRequest {
+        parent,
+        path: &manifest.binary.path,
+    })?;
     let binary_path = evidence_path(root, &binary_relative_path)?;
     if hash_file(&binary_path)? != manifest.binary.digest_blake3 {
         return Err(receipt_error(format!("{stage_id} actual binary content drift")));
     }
-    let command_path = stage_relative_file(parent, &manifest.command_receipt.path)?;
+    let command_path = stage_relative_file(&StageFileRequest {
+        parent,
+        path: &manifest.command_receipt.path,
+    })?;
     let (commands, command_digest) = read_bound_json::<MantleCommandReceipts>(root, &command_path)?;
     if command_digest != manifest.command_receipt.digest_blake3 || commands.schema != MANTLE_COMMAND_RECEIPTS_SCHEMA {
         return Err(receipt_error(format!("{stage_id} command receipt content or schema drift")));
     }
     let mut audit_files = vec![(command_path, command_digest)];
-    verify_mantle_commands(root, parent, &manifest, &commands, actions, &stage_actions, &mut audit_files)?;
+    let mut verification = MantleCommandVerification {
+        root,
+        parent,
+        manifest: &manifest,
+        receipt: &commands,
+        actions,
+        ids: &stage_actions,
+        audits: &mut audit_files,
+    };
+    verify_mantle_commands(&mut verification)?;
+    debug_assert_eq!(manifest.stage_id, stage_id);
+    debug_assert_eq!(manifest_digest.len(), BLAKE3_HEX_LENGTH);
     Ok((
         FixedPointStageObservation {
             binary_relative_path,
@@ -1650,14 +2109,21 @@ fn observe_mantle_stage(
     ))
 }
 
-fn stage_relative_file(parent: &str, path: &str) -> Result<String, RunError> {
+/// A stage-relative file path together with the manifest directory holding it.
+struct StageFileRequest<'a> {
+    parent: &'a str,
+    path: &'a str,
+}
+
+fn stage_relative_file(request: &StageFileRequest<'_>) -> Result<String, RunError> {
+    let path = request.path;
     if path.is_empty()
         || path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
         || !Path::new(path).components().all(|part| matches!(part, Component::Normal(_)))
     {
         return Err(receipt_error(format!("stage file path is not normalized and contained: {path}")));
     }
-    Ok(format!("{parent}/{path}"))
+    Ok(format!("{}/{path}", request.parent))
 }
 
 fn stage_action_ids<'a>(actions: &'a ActionEvidence, stage_id: &str) -> Result<BTreeSet<&'a str>, RunError> {
@@ -1684,18 +2150,20 @@ fn validate_mantle_manifest_actions(
     actions: &ActionEvidence,
     stage_actions: &BTreeSet<&str>,
 ) -> Result<(), RunError> {
-    if !stage_actions.contains(manifest.binary.producer_action_id.as_str())
-        || !stage_actions.contains(manifest.orchestrator.action_id.as_str())
-        || !stage_actions.contains(manifest.smoke.action_id.as_str())
-        || manifest.smoke.exit_code != 0
-        || manifest.binary.output_id != manifest.stage_id
-    {
+    let manifest_actions_are_local = [
+        stage_actions.contains(manifest.binary.producer_action_id.as_str()),
+        stage_actions.contains(manifest.orchestrator.action_id.as_str()),
+        stage_actions.contains(manifest.smoke.action_id.as_str()),
+        manifest.smoke.exit_code == 0,
+        manifest.binary.output_id == manifest.stage_id,
+    ];
+    if !manifest_actions_are_local.iter().all(|local| *local) {
         return Err(receipt_error(format!(
             "{} manifest names foreign producer/orchestrator/smoke authority",
             manifest.stage_id
         )));
     }
-    let binary_produced = actions.events.iter().any(|event| {
+    let is_binary_produced = actions.events.iter().any(|event| {
         event.action_id == manifest.binary.producer_action_id
             && event.kind == ExecutionEventKind::BuildExecution
             && event
@@ -1703,48 +2171,58 @@ fn validate_mantle_manifest_actions(
                 .iter()
                 .any(|(id, digest)| id == &manifest.binary.output_id && digest == &manifest.binary.digest_blake3)
     });
-    let orchestrated = actions.events.iter().any(|event| {
+    let is_orchestrated = actions.events.iter().any(|event| {
         event.action_id == manifest.orchestrator.action_id
             && event.executable_digest_blake3 == manifest.orchestrator.executable_digest_blake3
             && event.executable_producer == manifest.orchestrator.executable_producer
             && event.kind == ExecutionEventKind::ProtectedExec
     });
     let predecessor = Some((manifest.binary.producer_action_id.clone(), manifest.binary.output_id.clone()));
-    let smoked = actions.events.iter().any(|event| {
+    let is_smoked = actions.events.iter().any(|event| {
         event.action_id == manifest.smoke.action_id
             && event.kind == ExecutionEventKind::ProtectedExec
             && event.executable_digest_blake3 == manifest.binary.digest_blake3
             && event.executable_producer == predecessor
     });
-    if !binary_produced || !orchestrated || !smoked {
+    if !is_binary_produced || !is_orchestrated || !is_smoked {
         return Err(receipt_error(format!(
             "{} manifest lacks observed binary publication, orchestration or smoke",
             manifest.stage_id
         )));
     }
+    debug_assert!(is_binary_produced);
+    debug_assert!(is_orchestrated);
+    debug_assert!(is_smoked);
     Ok(())
 }
 
-fn verify_mantle_commands(
-    root: &Path,
-    parent: &str,
-    manifest: &MantleStageManifest,
-    receipt: &MantleCommandReceipts,
-    actions: &ActionEvidence,
-    ids: &BTreeSet<&str>,
-    audits: &mut Vec<(String, String)>,
-) -> Result<(), RunError> {
-    let mut observed = actions.events.iter().filter(|event| {
+/// The Mantle stage whose recorded command completions are verified, and the
+/// audit trail the verification produces.
+struct MantleCommandVerification<'a> {
+    root: &'a Path,
+    parent: &'a str,
+    manifest: &'a MantleStageManifest,
+    receipt: &'a MantleCommandReceipts,
+    actions: &'a ActionEvidence,
+    ids: &'a BTreeSet<&'a str>,
+    audits: &'a mut Vec<(String, String)>,
+}
+
+fn verify_mantle_commands(request: &mut MantleCommandVerification<'_>) -> Result<(), RunError> {
+    let manifest = request.manifest;
+    let ids = request.ids;
+    let events = &request.actions.events;
+    let mut observed = events.iter().filter(|event| {
         ids.contains(event.action_id.as_str())
             && event.kind == ExecutionEventKind::BuildExecution
             && event.produced_outputs.iter().any(|(id, _)| id == "stdout" || id == "stderr")
     });
-    if receipt.commands.is_empty() || receipt.commands.len() > actions.events.len() {
+    if request.receipt.commands.is_empty() || request.receipt.commands.len() > events.len() {
         return Err(receipt_error(format!("{} command receipt omits or adds observed completions", manifest.stage_id)));
     }
     let mut stderr_hasher = blake3::Hasher::new();
-    let mut smoke_seen = false;
-    for command in &receipt.commands {
+    let mut is_smoke_seen = false;
+    for command in &request.receipt.commands {
         let event = observed.next().ok_or_else(|| {
             receipt_error(format!("{} command receipt adds unobserved completion", manifest.stage_id))
         })?;
@@ -1760,10 +2238,12 @@ fn verify_mantle_commands(
         {
             return Err(receipt_error(format!("{} command order or observed log identity drift", manifest.stage_id)));
         }
-        audits.push(verify_stage_log(root, parent, &command.stdout, None)?);
-        audits.push(verify_stage_log(root, parent, &command.stderr, Some(&mut stderr_hasher))?);
+        request.audits.push(verify_stage_log(request.root, request.parent, &command.stdout, None)?);
+        request
+            .audits
+            .push(verify_stage_log(request.root, request.parent, &command.stderr, Some(&mut stderr_hasher))?);
         if command.action_id == manifest.smoke.action_id {
-            smoke_seen = command.exit_code == 0
+            is_smoke_seen = command.exit_code == 0
                 && command.stdout == manifest.smoke.stdout
                 && command.stderr == manifest.smoke.stderr;
         }
@@ -1771,13 +2251,15 @@ fn verify_mantle_commands(
     if observed.next().is_some() {
         return Err(receipt_error(format!("{} command receipt omits observed completion", manifest.stage_id)));
     }
-    if !smoke_seen || stderr_hasher.finalize().to_hex().as_str() != manifest.stderr.digest_blake3 {
+    if !is_smoke_seen || stderr_hasher.finalize().to_hex().as_str() != manifest.stderr.digest_blake3 {
         return Err(receipt_error(format!(
             "{} smoke completion or aggregate stderr differs from actual command logs",
             manifest.stage_id
         )));
     }
-    audits.push(verify_stage_log(root, parent, &manifest.stderr, None)?);
+    request.audits.push(verify_stage_log(request.root, request.parent, &manifest.stderr, None)?);
+    debug_assert!(is_smoke_seen);
+    debug_assert!(!request.receipt.commands.is_empty());
     Ok(())
 }
 
@@ -1787,7 +2269,10 @@ fn verify_stage_log(
     measured: &MantleMeasuredFile,
     mut aggregate: Option<&mut blake3::Hasher>,
 ) -> Result<(String, String), RunError> {
-    let relative = stage_relative_file(parent, &measured.path)?;
+    let relative = stage_relative_file(&StageFileRequest {
+        parent,
+        path: &measured.path,
+    })?;
     let path = evidence_path(root, &relative)?;
     let mut file =
         fs::File::open(path).map_err(|error| receipt_error(format!("opening stage log {relative}: {error}")))?;
@@ -1796,7 +2281,7 @@ fn verify_stage_log(
     }
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];
-    loop {
+    for _ in 0..HASH_READ_CHUNK_LIMIT {
         let count = file.read(&mut buffer).map_err(|error| receipt_error(error.to_string()))?;
         if count == 0 {
             break;
@@ -1810,6 +2295,8 @@ fn verify_stage_log(
     if digest != measured.digest_blake3 {
         return Err(receipt_error(format!("stage log {relative} content drift")));
     }
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    debug_assert_eq!(digest, measured.digest_blake3);
     Ok((relative, digest))
 }
 pub(crate) fn validate_stage_evidence(evidence: &[SourceBuiltStageEvidence]) -> Result<(), RunError> {
@@ -1829,20 +2316,28 @@ pub(crate) fn validate_stage_evidence(evidence: &[SourceBuiltStageEvidence]) -> 
             ("output", stage.output_digest_blake3.as_str()),
             ("recipe journal", stage.execution_journal_digest_blake3.as_str()),
         ] {
-            validate_digest(&format!("{} {label}", stage.stage_id), digest)?;
+            validate_digest(&DigestExpectation {
+                label: &format!("{} {label}", stage.stage_id),
+                digest,
+            })?;
         }
-        if stage.status != STAGE_STATUS_COMPLETE
-            || !stage.authority_violations.is_empty()
-            || !stage.fallback_events.is_empty()
-            || stage.audit_paths.len() != stage.audit_digests_blake3.len()
-            || stage.producer_action_id.is_empty()
-            || stage.output_id.is_empty()
-            || stage.execution_journal_path.is_empty()
-        {
+        let stage_is_complete = [
+            stage.status == STAGE_STATUS_COMPLETE,
+            stage.authority_violations.is_empty(),
+            stage.fallback_events.is_empty(),
+            stage.audit_paths.len() == stage.audit_digests_blake3.len(),
+            !stage.producer_action_id.is_empty(),
+            !stage.output_id.is_empty(),
+            !stage.execution_journal_path.is_empty(),
+        ];
+        if !stage_is_complete.iter().all(|complete| *complete) {
             return Err(receipt_error(format!("stage evidence {} is incomplete", stage.stage_id)));
         }
         for digest in &stage.audit_digests_blake3 {
-            validate_digest("stage audit", digest)?;
+            validate_digest(&DigestExpectation {
+                label: "stage audit",
+                digest,
+            })?;
         }
     }
     assert_eq!(ids.len(), STAGE_EVIDENCE_COUNT);
@@ -1897,10 +2392,22 @@ fn receipt_extension_digest(extension: &SourceBuiltReceiptExtension) -> Result<S
         .map_err(|error| receipt_error(format!("serializing receipt extension: {error}")))?;
     Ok(hasher.finalize().to_hex().to_string())
 }
-pub(crate) fn provider_identity_digest(native: &str, rust: &str, closure: &str) -> String {
+/// The three provider digests that identify one cold toolchain closure. Named
+/// fields keep the native, rust, and closure roles from being transposed.
+pub(crate) struct ProviderIdentityBinding<'a> {
+    pub(crate) native_digest_blake3: &'a str,
+    pub(crate) rust_digest_blake3: &'a str,
+    pub(crate) closure_digest_blake3: &'a str,
+}
+
+pub(crate) fn provider_identity_digest(binding: &ProviderIdentityBinding<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(PROVIDER_IDENTITY_DIGEST_DOMAIN);
-    for (role, digest) in [("native", native), ("rust", rust), ("closure", closure)] {
+    for (role, digest) in [
+        ("native", binding.native_digest_blake3),
+        ("rust", binding.rust_digest_blake3),
+        ("closure", binding.closure_digest_blake3),
+    ] {
         hasher.update(role.as_bytes());
         hasher.update(&[0]);
         hasher.update(digest.as_bytes());
@@ -1908,7 +2415,10 @@ pub(crate) fn provider_identity_digest(native: &str, rust: &str, closure: &str) 
     }
     let digest = hasher.finalize().to_hex().to_string();
     assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
-    debug_assert!(native != rust || rust != closure);
+    debug_assert!(
+        binding.native_digest_blake3 != binding.rust_digest_blake3
+            || binding.rust_digest_blake3 != binding.closure_digest_blake3
+    );
     digest
 }
 pub(crate) fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunError> {
@@ -1945,6 +2455,15 @@ pub(crate) fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObserv
     })
 }
 
+fn sorted_bundle_children(directory: &Path) -> Result<std::vec::IntoIter<std::fs::DirEntry>, RunError> {
+    let mut children = fs::read_dir(directory)
+        .map_err(|error| receipt_error(format!("reading proof bundle directory {}: {error}", directory.display())))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| receipt_error(format!("reading proof bundle entry: {error}")))?;
+    children.sort_by_key(std::fs::DirEntry::file_name);
+    Ok(children.into_iter())
+}
+
 fn collect_bundle_files(
     proof_root: &Path,
     current: &Path,
@@ -1953,12 +2472,17 @@ fn collect_bundle_files(
     if entries.len() > PROOF_ENTRY_COUNT_MAX {
         return Err(receipt_error("proof bundle entry limit exceeded".to_string()));
     }
-    let mut children = fs::read_dir(current)
-        .map_err(|error| receipt_error(format!("reading proof bundle directory {}: {error}", current.display())))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| receipt_error(format!("reading proof bundle entry: {error}")))?;
-    children.sort_by_key(std::fs::DirEntry::file_name);
-    for child in children {
+    let mut stack: Vec<std::vec::IntoIter<std::fs::DirEntry>> = Vec::with_capacity(64);
+    stack.push(sorted_bundle_children(current)?);
+    for _ in 0..PROOF_BUNDLE_WALK_STEPS {
+        let next = match stack.last_mut() {
+            Some(children) => children.next(),
+            None => break,
+        };
+        let Some(child) = next else {
+            stack.pop();
+            continue;
+        };
         let path = child.path();
         let metadata = fs::symlink_metadata(&path)
             .map_err(|error| receipt_error(format!("reading proof bundle metadata {}: {error}", path.display())))?;
@@ -1973,7 +2497,13 @@ fn collect_bundle_files(
             continue;
         }
         if metadata.is_dir() {
-            collect_bundle_files(proof_root, &path, entries)?;
+            if entries.len() > PROOF_ENTRY_COUNT_MAX {
+                return Err(receipt_error("proof bundle entry limit exceeded".to_string()));
+            }
+            if stack.len() >= PROOF_BUNDLE_WALK_DEPTH_LIMIT {
+                return Err(receipt_error("proof bundle entry limit exceeded".to_string()));
+            }
+            stack.push(sorted_bundle_children(&path)?);
             continue;
         }
         if !metadata.is_file() {
@@ -2007,7 +2537,7 @@ pub(crate) fn hash_file_allow_empty(path: &Path) -> Result<String, RunError> {
         fs::File::open(path).map_err(|error| receipt_error(format!("opening file {}: {error}", path.display())))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = vec![0u8; HASH_BUFFER_BYTES];
-    loop {
+    for _ in 0..HASH_READ_CHUNK_LIMIT {
         let count = file
             .read(&mut buffer)
             .map_err(|error| receipt_error(format!("reading file {}: {error}", path.display())))?;
@@ -2021,14 +2551,20 @@ pub(crate) fn hash_file_allow_empty(path: &Path) -> Result<String, RunError> {
     debug_assert!(path.is_file());
     Ok(digest)
 }
-fn validate_digest(label: &str, digest: &str) -> Result<(), RunError> {
-    let valid = digest.len() == BLAKE3_HEX_LENGTH
-        && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !valid {
-        return Err(receipt_error(format!("{label} is not a lowercase BLAKE3 digest")));
+/// A labelled digest that must be a lowercase BLAKE3 hex string.
+struct DigestExpectation<'a> {
+    label: &'a str,
+    digest: &'a str,
+}
+
+fn validate_digest(expectation: &DigestExpectation<'_>) -> Result<(), RunError> {
+    let is_valid = expectation.digest.len() == BLAKE3_HEX_LENGTH
+        && expectation.digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    if !is_valid {
+        return Err(receipt_error(format!("{} is not a lowercase BLAKE3 digest", expectation.label)));
     }
-    assert!(!label.is_empty());
-    debug_assert!(valid);
+    assert!(!expectation.label.is_empty());
+    debug_assert!(is_valid);
     Ok(())
 }
 
@@ -2049,6 +2585,7 @@ pub(crate) fn relative_path(root: &Path, path: &Path) -> Result<String, RunError
 /// Development adoption/restoration is never cold source-construction evidence.
 /// Presence is disqualifying, even for malformed markers or dangling symlinks.
 pub(crate) fn reject_development_authority(proof_root: &Path) -> Result<(), RunError> {
+    let mut absent_markers = 0_usize;
     for marker in [
         "dev-run-report.json",
         "dev-adopted-report.json",
@@ -2067,7 +2604,10 @@ pub(crate) fn reject_development_authority(proof_root: &Path) -> Result<(), RunE
                 return Err(receipt_error(format!("inspecting development authority marker {marker}: {error}")));
             }
         }
+        absent_markers = absent_markers.saturating_add(1);
     }
+    debug_assert_eq!(absent_markers, 5);
+    debug_assert!(!proof_root.as_os_str().is_empty());
     Ok(())
 }
 
@@ -2085,7 +2625,11 @@ mod receipt_tests {
     fn stage_artifact_paths_cannot_escape_or_hide_noncanonical_components() {
         let parent = "cargo-free-fixed-point/stage1";
         assert_eq!(
-            stage_relative_file(parent, "recipe/compile/outputs/mantle").unwrap(),
+            stage_relative_file(&StageFileRequest {
+                parent,
+                path: "recipe/compile/outputs/mantle"
+            })
+            .unwrap(),
             "cargo-free-fixed-point/stage1/recipe/compile/outputs/mantle"
         );
         for path in [
@@ -2096,7 +2640,10 @@ mod receipt_tests {
             "recipe//mantle",
         ] {
             assert!(
-                stage_relative_file(parent, path).unwrap_err().to_string().contains("not normalized and contained")
+                stage_relative_file(&StageFileRequest { parent, path })
+                    .unwrap_err()
+                    .to_string()
+                    .contains("not normalized and contained")
             );
         }
     }
@@ -2296,10 +2843,26 @@ mod receipt_tests {
 
     #[test]
     fn provider_identity_digest_binds_each_declared_role() {
-        let first = provider_identity_digest(DIGEST_A, DIGEST_B, DIGEST_A);
-        let repeated = provider_identity_digest(DIGEST_A, DIGEST_B, DIGEST_A);
-        let swapped = provider_identity_digest(DIGEST_B, DIGEST_A, DIGEST_A);
-        let substituted = provider_identity_digest(DIGEST_A, DIGEST_B, DIGEST_B);
+        let first = provider_identity_digest(&ProviderIdentityBinding {
+            native_digest_blake3: DIGEST_A,
+            rust_digest_blake3: DIGEST_B,
+            closure_digest_blake3: DIGEST_A,
+        });
+        let repeated = provider_identity_digest(&ProviderIdentityBinding {
+            native_digest_blake3: DIGEST_A,
+            rust_digest_blake3: DIGEST_B,
+            closure_digest_blake3: DIGEST_A,
+        });
+        let swapped = provider_identity_digest(&ProviderIdentityBinding {
+            native_digest_blake3: DIGEST_B,
+            rust_digest_blake3: DIGEST_A,
+            closure_digest_blake3: DIGEST_A,
+        });
+        let substituted = provider_identity_digest(&ProviderIdentityBinding {
+            native_digest_blake3: DIGEST_A,
+            rust_digest_blake3: DIGEST_B,
+            closure_digest_blake3: DIGEST_B,
+        });
 
         assert_eq!(first, repeated);
         assert_ne!(first, swapped);

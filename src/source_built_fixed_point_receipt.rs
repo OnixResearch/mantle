@@ -44,7 +44,9 @@ use crate::source_built_fixed_point_trust_report::PROOF_PLAN_FILE;
 use crate::source_built_fixed_point_trust_report::PROOF_PROVIDER_KIND;
 use crate::source_built_fixed_point_trust_report::PROOF_TARGET_IDENTITY;
 use crate::source_built_fixed_point_trust_report::PROOF_WORKFLOW;
+use crate::source_built_fixed_point_trust_report::ProviderIdentityBinding;
 use crate::source_built_fixed_point_trust_report::REQUIRED_RUN_COUNT;
+use crate::source_built_fixed_point_trust_report::RecipeOutputBinding;
 use crate::source_built_fixed_point_trust_report::STAGE_EVIDENCE_COUNT;
 use crate::source_built_fixed_point_trust_report::STAGE_EVIDENCE_FILE;
 use crate::source_built_fixed_point_trust_report::STAGE_STATUS_COMPLETE;
@@ -193,7 +195,11 @@ pub(crate) fn write_cold_source_built_fixed_point_receipt(
     write_release_inputs(proof_root, &cold_provider.toolchain_closure.path)?;
     let bundle = proof_bundle_digest(proof_root)?;
     write_text_create_new(&proof_root.join(FINAL_BUNDLE_DIGEST_FILE), &format!("{}  .\n", bundle.digest_blake3))?;
-    let identity = provider_identity_digest(&measured.native_digest, &measured.rust_digest, &measured.closure_digest);
+    let identity = provider_identity_digest(&ProviderIdentityBinding {
+        native_digest_blake3: &measured.native_digest,
+        rust_digest_blake3: &measured.rust_digest,
+        closure_digest_blake3: &measured.closure_digest,
+    });
     let extension = SourceBuiltReceiptExtension {
         schema: EXTENSION_SCHEMA.into(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -261,7 +267,14 @@ fn measured_binding(
                 .map_err(receipt_error)?
         {
             for (output_id, observed) in &event.produced_outputs {
-                if observed == &digest && recipe_output_path(journal, stage_id, &action.id, output_id)? == relative {
+                if observed == &digest
+                    && recipe_output_path(&RecipeOutputBinding {
+                        journal_path: journal,
+                        stage_id,
+                        action_id: &action.id,
+                        output_id,
+                    })? == relative
+                {
                     return Ok(ColdArtifactBinding {
                         path: relative,
                         producer_action_id: action.id.clone(),

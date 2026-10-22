@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
+// pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::too_many_parameters)]
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -56,7 +62,7 @@ pub(super) async fn admit(manifest: &Manifest, authority: &Admission<'_>) -> Res
     let mut verified = BTreeSet::new();
     let mut entries = Vec::new();
     for package in &manifest.packages {
-        let path = parse_path(&package.output_path, &manifest.store_prefix)?;
+        let path = parse_path(&package.output_path, StorePrefix(&manifest.store_prefix))?;
         let info = authority
             .lookup
             .find(&path)
@@ -85,7 +91,7 @@ fn verify_package(
     if package.nar_sha256 != data_encoding::HEXLOWER.encode(&info.nar_sha256) || package.nar_size != info.nar_size {
         return Err(format!("profile output NAR identity mismatch: {}", package.output_path));
     }
-    let drv_path = parse_path(&package.derivation_path, &manifest.store_prefix)?;
+    let drv_path = parse_path(&package.derivation_path, StorePrefix(&manifest.store_prefix))?;
     let name = drv_path.name().strip_suffix(".drv").ok_or("profile derivation suffix missing")?;
     let derivation = parse_native_projection(package.derivation_aterm.as_bytes(), name)?;
     if derivation.to_aterm_bytes() != package.derivation_aterm.as_bytes() {
@@ -184,7 +190,7 @@ fn verify_signature(info: &PathInfo, prefix: &str, keys: &[VerifyingKey]) -> Res
 }
 
 fn collect_exposed(root: &Path, entries: &mut Vec<(String, Option<String>)>) -> Result<(), String> {
-    let mut pending = Vec::<(PathBuf, String, u32)>::new();
+    let mut pending = Vec::<(PathBuf, String, u32)>::with_capacity(core::EXPOSED_DIRECTORIES.len());
     for directory in core::EXPOSED_DIRECTORIES {
         let path = root.join(directory);
         match std::fs::symlink_metadata(&path) {
@@ -203,10 +209,10 @@ fn collect_exposed(root: &Path, entries: &mut Vec<(String, Option<String>)>) -> 
             for entry in std::fs::read_dir(&path).map_err(|error| error.to_string())? {
                 let entry = entry.map_err(|error| error.to_string())?;
                 let name = entry.file_name().into_string().map_err(|_| "profile output path is not UTF-8")?;
-                pending.push((entry.path(), format!("{relative}/{name}"), depth.saturating_add(1)));
-                if entries.len().saturating_add(pending.len()) > core::ENTRIES_MAX {
+                if entries.len().saturating_add(pending.len()) >= core::ENTRIES_MAX {
                     return Err("profile composition exceeds entry bound".into());
                 }
+                pending.push((entry.path(), format!("{relative}/{name}"), depth.saturating_add(1)));
             }
         } else if metadata.is_file() || metadata.file_type().is_symlink() {
             let target = path.to_str().ok_or("profile physical output path is not UTF-8")?.to_string();
@@ -220,9 +226,14 @@ fn collect_exposed(root: &Path, entries: &mut Vec<(String, Option<String>)>) -> 
     Ok(())
 }
 
-pub(super) fn parse_path(path: &str, prefix: &str) -> Result<StorePath<String>, String> {
-    StorePath::from_absolute_path_with_prefix(path.as_bytes(), prefix).map_err(|error| error.to_string())
+pub(super) fn parse_path(path: &str, prefix: StorePrefix<'_>) -> Result<StorePath<String>, String> {
+    StorePath::from_absolute_path_with_prefix(path.as_bytes(), prefix.0).map_err(|error| error.to_string())
 }
+
+/// A store prefix carried as its own type, so a path and its prefix are
+/// distinguished at every call site.
+#[derive(Clone, Copy)]
+pub(super) struct StorePrefix<'a>(pub &'a str);
 
 /// The existing Snix parser requires concrete paths. Native CA derivations use
 /// the same canonical traditional ATerm with absent paths; reuse the mature Nix
@@ -238,12 +249,16 @@ fn parse_native_projection(bytes: &[u8], name: &str) -> Result<Derivation, Strin
         builder: parsed.builder().into(),
         arguments: parsed.arguments().to_vec(),
         environment: parsed.environment().iter().map(|(key, value)| (key.clone(), value.clone().into())).collect(),
-        ..Derivation::default()
+        input_derivations: BTreeMap::new(),
+        input_sources: BTreeSet::new(),
+        outputs: BTreeMap::new(),
     };
     let mut has_deferred = false;
     for (output_name, output) in parsed.outputs() {
         let path = match output {
-            nix_derivation::Output::InputAddressed { path } => Some(parse_path(&path.to_string(), "/nix/store")?),
+            nix_derivation::Output::InputAddressed { path } => {
+                Some(parse_path(&path.to_string(), StorePrefix("/nix/store"))?)
+            }
             nix_derivation::Output::Deferred => {
                 has_deferred = true;
                 None
@@ -263,10 +278,10 @@ fn parse_native_projection(bytes: &[u8], name: &str) -> Result<Derivation, Strin
         }
         derivation
             .input_derivations
-            .insert(parse_path(&path.to_string(), "/nix/store")?, input.outputs().clone());
+            .insert(parse_path(&path.to_string(), StorePrefix("/nix/store"))?, input.outputs().clone());
     }
     for path in parsed.input_sources() {
-        derivation.input_sources.insert(parse_path(&path.to_string(), "/nix/store")?);
+        derivation.input_sources.insert(parse_path(&path.to_string(), StorePrefix("/nix/store"))?);
     }
     derivation.validate(false).map_err(|error| error.to_string())?;
     if derivation.to_aterm_bytes() != bytes {

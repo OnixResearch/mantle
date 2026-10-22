@@ -927,14 +927,14 @@ pub async fn bootstrap_fetch(request: BootstrapSeedFetchRequest<'_>) -> Result<(
     debug_assert!(request.store_dir.is_absolute());
     debug_assert!(!request.output.as_os_str().is_empty());
     use mantle_application_contract::bootstrap_effects::BootstrapEffect::*;
-    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[
+    let mut effect_ledger = crate::bootstrap_effect_port::BootstrapPort::new(&[
         (ReadInput, 1),
         (FetchSeed, 1),
         (WriteOutput, 2),
         (VerifyOutput, 2),
     ])?;
     let result = async {
-        let provider = port.call(ReadInput, load_fetch_seed_provider)?;
+        let provider = effect_ledger.call(ReadInput, load_fetch_seed_provider)?;
         let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
 
         eprintln!("Fetching bootstrap seed provider {}...", provider.provider.id);
@@ -950,7 +950,7 @@ pub async fn bootstrap_fetch(request: BootstrapSeedFetchRequest<'_>) -> Result<(
         }
 
         // 2-3. Set up services, build the raw tarball, and extract its output path.
-        let raw_display_path = port
+        let raw_display_path = effect_ledger
             .call_async(
                 FetchSeed,
                 fetch_raw_seed(FetchRawSeedRequest {
@@ -967,19 +967,20 @@ pub async fn bootstrap_fetch(request: BootstrapSeedFetchRequest<'_>) -> Result<(
             .await?;
 
         // 4. Reduce the raw tree on the host into the normalized provider layout.
-        let (logical_path, physical_path, reduced_cached) = port.call(WriteOutput, || {
+        let (logical_path, physical_path, reduced_cached) = effect_ledger.call(WriteOutput, || {
             materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), request.store_dir)
         })?;
-        port.call(VerifyOutput, || validate_reduced_seed_output(Path::new(&physical_path), &provider))?;
+        effect_ledger.call(VerifyOutput, || validate_reduced_seed_output(Path::new(&physical_path), &provider))?;
         // 5. Generate seed.ncl.
         let ncl = generate_fetch_seed_ncl(&provider, &logical_path);
-        port.call(WriteOutput, || std::fs::write(request.output, &ncl))
+        effect_ledger
+            .call(WriteOutput, || std::fs::write(request.output, &ncl))
             .map_err(|e| RunError::Internal(format!("writing {}: {e}", request.output.display())))?;
-        port.verify_bytes(request.output, ncl.as_bytes())?;
+        effect_ledger.verify_bytes(request.output, ncl.as_bytes())?;
         Ok((physical_path, reduced_cached))
     }
     .await;
-    let (physical_path, reduced_cached) = port.finish(result)?;
+    let (physical_path, reduced_cached) = effect_ledger.finish(result)?;
     if reduced_cached {
         eprintln!("  {} (reduced provider cached)", physical_path);
     } else {

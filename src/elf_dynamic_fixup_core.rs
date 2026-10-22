@@ -265,8 +265,8 @@ fn validate_table_placement(bytes: &[u8], sections: &[Section], table_index: usi
     let section_start = index(num(bytes, 0, Field::HeaderSectionOffset)?)?;
     let section_bytes = sections.len().checked_mul(SECTION_BYTES).ok_or(Refusal::LimitExceeded)?;
     let header_range = checked_range(bytes, ByteSpan::new(section_start, section_bytes))?;
-    let overlaps_header = table_range.start < header_range.end && header_range.start < table_range.end;
-    if overlaps_header || table.offset < ELF_HEADER_BYTES {
+    let is_header_overlapped = table_range.start < header_range.end && header_range.start < table_range.end;
+    if is_header_overlapped || table.offset < ELF_HEADER_BYTES {
         return Err(Refusal::InvalidLayout);
     }
     for (section_index, section) in sections.iter().enumerate() {
@@ -443,13 +443,17 @@ fn match_unique_entry(
     Ok(matched.1)
 }
 
-/// Rejects a rewrite whose string is also the target of another declared
-/// dynamic string.
-fn check_shared_string(layout: &DynamicLayout<'_>, offset_bytes: usize, end: usize) -> Result<(), Refusal> {
+/// Rejects a rewrite whose string, including its terminator, is also the target
+/// of another declared dynamic string.
+fn check_shared_string(
+    layout: &DynamicLayout<'_>,
+    string_span: core::ops::RangeInclusive<usize>,
+) -> Result<(), Refusal> {
+    let offset_bytes = *string_span.start();
     for (tag, other) in &layout.entries {
         let is_shared_tag = matches!(*tag, DT_NEEDED | DT_RPATH | DT_RUNPATH | DT_SONAME);
         let is_other_entry = *other != offset_bytes;
-        if is_shared_tag && is_other_entry && (offset_bytes..=end).contains(other) {
+        if is_shared_tag && is_other_entry && string_span.contains(other) {
             return Err(Refusal::SharedDynamicString);
         }
     }
@@ -482,7 +486,7 @@ fn admit_rewrite(
     }
     let (current, start) = string_at(bytes, layout.table, offset_bytes)?;
     let end = offset_bytes.checked_add(current.len()).ok_or(Refusal::InvalidString)?;
-    check_shared_string(layout, offset_bytes, end)?;
+    check_shared_string(layout, offset_bytes..=end)?;
     let tail_end = end.checked_add(1).ok_or(Refusal::InvalidString)?;
     symbol_tail_check(bytes, layout.sections, layout.table_index, offset_bytes..tail_end)?;
     let new = replacement(rewrite, depth)?;
