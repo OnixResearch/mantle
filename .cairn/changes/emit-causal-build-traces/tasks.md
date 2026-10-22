@@ -23,6 +23,6 @@ Contract, source, and fixtures have focused isolated proof; integrated root veri
 
 ## Phase 4: Verification
 
-- [ ] [serial] T4.1 Record the before-change dependency failure and cache-hit outcomes; after implementation run the chain, cache, retry, and negative rails, retaining exact observed results. Pre-change trace-validator rails cannot run before the trace schema exists. r[mantle.operator_diagnostics.causal_trace_cause_validation]
-- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.operator_diagnostics.causal_trace_records]
-- [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.operator_diagnostics.causal_trace_bounds]
+- [x] [serial] T4.1 Record the before-change dependency failure and cache-hit outcomes; after implementation run the chain, cache, retry, and negative rails, retaining exact observed results. Pre-change trace-validator rails cannot run before the trace schema exists. r[mantle.operator_diagnostics.causal_trace_cause_validation]
+- [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.operator_diagnostics.causal_trace_records]
+- [x] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.operator_diagnostics.causal_trace_bounds]
