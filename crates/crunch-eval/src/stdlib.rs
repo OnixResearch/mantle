@@ -57,13 +57,13 @@ const _: () = {
         let mut previous = 0;
         while previous < index {
             let existing = STDLIB_FILES[previous].0.as_bytes();
-            let mut same = name.len() == existing.len();
+            let mut is_same = name.len() == existing.len();
             let mut byte = 0;
-            while same && byte < name.len() {
-                same = name[byte] == existing[byte];
+            while is_same && byte < name.len() {
+                is_same = name[byte] == existing[byte];
                 byte += 1;
             }
-            assert!(!same, "embedded stdlib file name collision");
+            assert!(!is_same, "embedded stdlib file name collision");
             previous += 1;
         }
         index += 1;

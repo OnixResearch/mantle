@@ -20,7 +20,10 @@ use nickel_lang_core::parser::grammar::TermParser;
 use nickel_lang_core::parser::lexer::Lexer;
 use nickel_lang_core::position::PosTable;
 use nickel_lang_core::term::Import;
+use nickel_lang_core::term::RecRecordData;
 use nickel_lang_core::term::Term;
+use nickel_lang_core::term::record::Field;
+use nickel_lang_core::term::record::RecordAttrs;
 use nickel_lang_core::traverse::Traverse;
 use nickel_lang_core::traverse::TraverseControl;
 
@@ -29,6 +32,11 @@ use crate::Error;
 const MAX_WATCH_FILES: usize = 256;
 const MAX_WATCH_FILE_BYTES: usize = 2_097_152;
 const MAX_WATCH_TOTAL_BYTES: usize = 16_777_216;
+/// Record attributes of a manifest that carries no record annotation.
+const PLAIN_RECORD_ATTRS: RecordAttrs = RecordAttrs {
+    open: false,
+    frozen: false,
+};
 
 /// Return a stable, sorted set of the root and transitive on-disk imports.
 ///
@@ -174,37 +182,72 @@ pub(crate) fn independent_import_roots(
     let Some(Term::RecRecord(data)) = parsed.as_term() else {
         return Ok(None);
     };
-    if !data.includes.is_empty()
-        || !data.dyn_fields.is_empty()
-        || data.record.attrs != Default::default()
-        || data.record.sealed_tail.is_some()
-        || data.record.fields.keys().any(|key| key.label() == "name")
-    {
+    if !is_plain_manifest(data) {
         return Ok(None);
     }
-    let mut roots = std::collections::BTreeMap::new();
+    let mut collected = Vec::with_capacity(data.record.fields.len());
     for (label, field) in &data.record.fields {
-        if !field.metadata.is_empty() || !field.pending_contracts.is_empty() {
-            return Ok(None);
-        }
-        let Some(Term::Import(Import::Path {
-            path,
-            format: InputFormat::Nickel,
-        })) = field.value.as_ref().and_then(|value| value.as_term())
-        else {
+        let Some(dependencies) = independent_root_dependencies(field, root, scope)? else {
             return Ok(None);
         };
-        let mut pending = Vec::new();
-        enqueue_resolved_imports(root, vec![(path.clone(), InputFormat::Nickel)], scope, &mut pending)?;
-        let (path, _) = pending.pop().ok_or_else(|| boundary("root import did not resolve"))?;
-        let dependencies = source_dependencies_in_scope(&path, scope)?;
-        // An import of this manifest can introduce root/sibling recursion.
-        if dependencies.iter().any(|path| path == root) {
-            return Ok(None);
-        }
-        roots.insert(label.label().to_string(), dependencies);
+        collected.push((label.label().to_string(), dependencies));
     }
-    Ok(Some(roots))
+    assert_eq!(collected.len(), data.record.fields.len());
+    debug_assert!(collected.iter().all(|(_, dependencies)| !dependencies.is_empty()));
+    Ok(Some(collected.into_iter().collect()))
+}
+
+/// Whether a manifest is a plain record that can carry independent roots.
+fn is_plain_manifest(data: &RecRecordData) -> bool {
+    if !data.includes.is_empty() || !data.dyn_fields.is_empty() {
+        return false;
+    }
+    if data.record.attrs != PLAIN_RECORD_ATTRS {
+        return false;
+    }
+    if data.record.sealed_tail.is_some() {
+        return false;
+    }
+    if data.record.fields.keys().any(|key| key.label() == "name") {
+        return false;
+    }
+    true
+}
+
+/// The import path of a manifest field, when the field is a plain Nickel import.
+fn plain_import_path(field: &Field) -> Option<OsString> {
+    if !field.metadata.is_empty() || !field.pending_contracts.is_empty() {
+        return None;
+    }
+    let Some(Term::Import(Import::Path {
+        path,
+        format: InputFormat::Nickel,
+    })) = field.value.as_ref().and_then(|value| value.as_term())
+    else {
+        return None;
+    };
+    Some(path.clone())
+}
+
+/// The dependencies of one manifest field, when that field is an independent
+/// import whose own sources do not reach back into the manifest.
+fn independent_root_dependencies(
+    field: &Field,
+    root: &Path,
+    scope: &[OsString],
+) -> Result<Option<Vec<PathBuf>>, Error> {
+    let Some(import_path) = plain_import_path(field) else {
+        return Ok(None);
+    };
+    let mut pending = Vec::new();
+    enqueue_resolved_imports(root, vec![(import_path, InputFormat::Nickel)], scope, &mut pending)?;
+    let (path, _) = pending.pop().ok_or_else(|| boundary("root import did not resolve"))?;
+    let dependencies = source_dependencies_in_scope(&path, scope)?;
+    // An import of this manifest can introduce root/sibling recursion.
+    if dependencies.iter().any(|path| path == root) {
+        return Ok(None);
+    }
+    Ok(Some(dependencies))
 }
 
 #[cfg(test)]

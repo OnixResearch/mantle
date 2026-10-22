@@ -20,6 +20,10 @@ pub const MAX_RETAINED_VALUE_BYTES: u64 = 16_777_216;
 const MAX_SOURCE_BYTES: usize = 16_777_216;
 const MAX_FILE_BYTES: usize = 2_097_152;
 const MAX_CONFIGURATION_BYTES: usize = 65_536;
+/// Maximum number of ambient environment entries folded into one fingerprint.
+const MAX_ENVIRONMENT_ENTRIES: usize = MAX_CONFIGURATION_BYTES;
+/// Boundary message reported when the configuration fingerprint budget is exhausted.
+const CONFIGURATION_BUDGET: &str = "incremental configuration budget exhausted";
 
 /// Includes effective import scope, root/CWD, caller semantics and all ambient
 /// environment bytes. Hashes stay in memory; secret values are never logged.
@@ -54,29 +58,31 @@ struct Sources(BTreeMap<PathBuf, Vec<u8>>);
 impl Sources {
     fn capture(root: &Path, scope: &[OsString]) -> Result<Self, Error> {
         let paths = crate::watch_imports::source_dependencies_in_scope(root, scope)?;
-        let mut remaining = MAX_SOURCE_BYTES;
-        let mut files = BTreeMap::new();
+        let mut remaining_bytes = MAX_SOURCE_BYTES;
+        let mut captured = Vec::with_capacity(paths.len());
         for path in paths {
-            let limit = remaining.min(MAX_FILE_BYTES);
+            let limit_bytes = remaining_bytes.min(MAX_FILE_BYTES);
+            let read_limit_bytes =
+                u64::try_from(limit_bytes).map_err(|_| boundary("incremental source budget exhausted"))?;
             let mut bytes = Vec::new();
-            std::fs::File::open(&path)?
-                .take(u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1))
-                .read_to_end(&mut bytes)?;
-            if bytes.len() > limit {
+            std::fs::File::open(&path)?.take(read_limit_bytes.saturating_add(1)).read_to_end(&mut bytes)?;
+            if bytes.len() > limit_bytes {
                 return Err(boundary("incremental source budget exhausted"));
             }
-            remaining -= bytes.len();
-            files.insert(path, bytes);
+            remaining_bytes -= bytes.len();
+            captured.push((path, bytes));
         }
-        Ok(Self(files))
+        Ok(Self(captured.into_iter().collect()))
     }
 
     fn key(&self, paths: &[PathBuf], configuration: &[u8; 32]) -> Result<[u8; 32], Error> {
         let mut hash = blake3::Hasher::new();
         hash.update(configuration);
         for path in paths {
-            hash_part(&mut hash, path.as_os_str().as_encoded_bytes());
-            hash_part(&mut hash, self.0.get(path).ok_or_else(|| boundary("import resolution changed"))?);
+            hash_part(&mut hash, path.as_os_str().as_encoded_bytes())
+                .ok_or_else(|| boundary("incremental source budget exhausted"))?;
+            hash_part(&mut hash, self.0.get(path).ok_or_else(|| boundary("import resolution changed"))?)
+                .ok_or_else(|| boundary("incremental source budget exhausted"))?;
         }
         Ok(*hash.finalize().as_bytes())
     }
@@ -226,7 +232,7 @@ impl<T: DeserializeOwned + Serialize> PersistentRootCache<T> {
         }
         let identity = configuration_identity(configuration, &scope, &root)?;
         let mut diagnostics = ReuseDiagnostics::default();
-        let mut entries = BTreeMap::new();
+        let mut prepared = Vec::with_capacity(roots.len());
         for (label, dependencies) in roots {
             if cancelled() {
                 return Err(boundary("incremental evaluation cancelled"));
@@ -263,8 +269,9 @@ impl<T: DeserializeOwned + Serialize> PersistentRootCache<T> {
                 .checked_add(entry.bytes)
                 .filter(|bytes| *bytes <= self.byte_limit)
                 .ok_or_else(|| boundary("incremental retained value budget exhausted"))?;
-            entries.insert(label, entry);
+            prepared.push((label, entry));
         }
+        let entries: BTreeMap<String, Entry<T>> = prepared.into_iter().collect();
         diagnostics
             .invalidated_roots
             .extend(self.entries.keys().filter(|label| !entries.contains_key(*label)).cloned());
@@ -291,9 +298,10 @@ struct BoundedCounter {
 }
 impl Write for BoundedCounter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let written_bytes = u64::try_from(bytes.len()).map_err(|_| std::io::Error::other("retained value limit"))?;
         self.bytes = self
             .bytes
-            .checked_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+            .checked_add(written_bytes)
             .filter(|count| *count <= self.limit)
             .ok_or_else(|| std::io::Error::other("retained value limit"))?;
         Ok(bytes.len())
@@ -303,44 +311,88 @@ impl Write for BoundedCounter {
     }
 }
 
-fn hash_part(hash: &mut blake3::Hasher, bytes: &[u8]) {
-    hash.update(&u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_le_bytes());
+/// Hash one length-prefixed part of a fingerprint.
+///
+/// The length is encoded as a fixed-width little-endian counter. A length that
+/// does not fit that counter has no representation, so it is reported as
+/// absent instead of being hashed as an extreme sentinel value.
+fn hash_part(hash: &mut blake3::Hasher, bytes: &[u8]) -> Option<()> {
+    let length_bytes = u64::try_from(bytes.len()).ok()?;
+    hash.update(&length_bytes.to_le_bytes());
     hash.update(bytes);
+    Some(())
+}
+
+/// Bytes that one configuration fingerprint is allowed to cover.
+struct ConfigurationBudget {
+    total: usize,
+}
+
+impl ConfigurationBudget {
+    fn start(configuration: &[u8], root: &Path, cwd: &Path) -> Result<Self, Error> {
+        let total = configuration
+            .len()
+            .saturating_add(root.as_os_str().as_encoded_bytes().len())
+            .saturating_add(cwd.as_os_str().as_encoded_bytes().len());
+        if total > MAX_CONFIGURATION_BYTES {
+            return Err(boundary(CONFIGURATION_BUDGET));
+        }
+        Ok(Self { total })
+    }
+
+    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
+        self.total = self.total.saturating_add(bytes);
+        if self.total > MAX_CONFIGURATION_BYTES {
+            return Err(boundary(CONFIGURATION_BUDGET));
+        }
+        Ok(())
+    }
+
+    fn is_within_limit(&self) -> bool {
+        self.total <= MAX_CONFIGURATION_BYTES
+    }
 }
 
 fn configuration_identity(configuration: &[u8], scope: &[OsString], root: &Path) -> Result<[u8; 32], Error> {
-    let mut hash = blake3::Hasher::new();
     let cwd = std::env::current_dir()?;
-    let mut total = configuration
-        .len()
-        .saturating_add(root.as_os_str().as_encoded_bytes().len())
-        .saturating_add(cwd.as_os_str().as_encoded_bytes().len());
-    if total > MAX_CONFIGURATION_BYTES {
-        return Err(boundary("incremental configuration budget exhausted"));
+    let mut budget = ConfigurationBudget::start(configuration, root, &cwd)?;
+    let mut hash = blake3::Hasher::new();
+    hash_part(&mut hash, configuration).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
+    hash_part(&mut hash, root.as_os_str().as_encoded_bytes()).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
+    hash_part(&mut hash, cwd.as_os_str().as_encoded_bytes()).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
+    hash_scope(&mut hash, scope, &mut budget)?;
+    let environment = collect_environment(&mut budget)?;
+    for (key, value) in &environment {
+        hash_part(&mut hash, key.as_encoded_bytes()).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
+        hash_part(&mut hash, value.as_encoded_bytes()).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
     }
-    hash_part(&mut hash, configuration);
-    hash_part(&mut hash, root.as_os_str().as_encoded_bytes());
-    hash_part(&mut hash, cwd.as_os_str().as_encoded_bytes());
+    assert!(budget.is_within_limit(), "incremental configuration budget exceeded");
+    debug_assert!(environment.len() < MAX_ENVIRONMENT_ENTRIES, "environment entries are bounded");
+    Ok(*hash.finalize().as_bytes())
+}
+
+/// Hash the effective import scope into the configuration fingerprint.
+fn hash_scope(hash: &mut blake3::Hasher, scope: &[OsString], budget: &mut ConfigurationBudget) -> Result<(), Error> {
     for path in scope {
-        total = total.saturating_add(path.as_encoded_bytes().len());
-        if total > MAX_CONFIGURATION_BYTES {
-            return Err(boundary("incremental configuration budget exhausted"));
-        }
-        hash_part(&mut hash, path.as_encoded_bytes());
+        budget.charge(path.as_encoded_bytes().len())?;
+        hash_part(hash, path.as_encoded_bytes()).ok_or_else(|| boundary(CONFIGURATION_BUDGET))?;
     }
+    debug_assert!(budget.is_within_limit(), "incremental configuration budget exceeded");
+    Ok(())
+}
+
+/// Collect the ambient environment, in name order, within the byte budget.
+fn collect_environment(budget: &mut ConfigurationBudget) -> Result<BTreeMap<OsString, OsString>, Error> {
     let mut environment = BTreeMap::new();
     for (key, value) in std::env::vars_os() {
-        total = total.saturating_add(key.as_encoded_bytes().len()).saturating_add(value.as_encoded_bytes().len());
-        if total > MAX_CONFIGURATION_BYTES {
-            return Err(boundary("incremental configuration budget exhausted"));
+        budget.charge(key.as_encoded_bytes().len().saturating_add(value.as_encoded_bytes().len()))?;
+        if environment.len() >= MAX_ENVIRONMENT_ENTRIES {
+            return Err(boundary(CONFIGURATION_BUDGET));
         }
         environment.insert(key, value);
     }
-    for (key, value) in environment {
-        hash_part(&mut hash, key.as_encoded_bytes());
-        hash_part(&mut hash, value.as_encoded_bytes());
-    }
-    Ok(*hash.finalize().as_bytes())
+    debug_assert!(environment.len() < MAX_ENVIRONMENT_ENTRIES, "environment entries are bounded");
+    Ok(environment)
 }
 
 fn boundary(message: &str) -> Error {
