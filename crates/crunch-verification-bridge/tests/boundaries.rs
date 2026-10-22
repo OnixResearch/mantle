@@ -11,7 +11,7 @@ use crunch_verification_bridge_core::identity;
 use serde_json::Value;
 
 const OCTET_REV: &str = "4a540dff99aa2040e267e42bbafe09144f276572";
-const TRELLIS_REV: &str = "d91188e495d65bca87551b7a06330efb2c909edf";
+const TRELLIS_REV: &str = "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3";
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/verification-bridge").join(name)

@@ -13,7 +13,7 @@ import shlex
 import subprocess
 
 REVISIONS = {"octet": "4a540dff99aa2040e267e42bbafe09144f276572",
-             "trellis": "d91188e495d65bca87551b7a06330efb2c909edf"}
+             "trellis": "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3"}
 
 
 def run(argv, log, **kwargs):

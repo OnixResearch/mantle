@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import subprocess
 
 OCTET_REVISION = "4a540dff99aa2040e267e42bbafe09144f276572"
-TRELLIS_REVISION = "d91188e495d65bca87551b7a06330efb2c909edf"
+TRELLIS_REVISION = "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3"
 OCTET_RAIL = "standards/proof-rails/aeneas-lean"
 
 

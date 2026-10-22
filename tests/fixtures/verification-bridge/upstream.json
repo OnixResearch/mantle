@@ -27,7 +27,7 @@
       "src/arithmetic.rs"
     ],
     "repository": "https://github.com/OnixResearch/trellis",
-    "revision": "d91188e495d65bca87551b7a06330efb2c909edf",
+    "revision": "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3",
     "scope": "source/profile/artifact and opaque Verus receipt byte links only"
   }
 }

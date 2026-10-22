@@ -42,7 +42,7 @@ The inspected immutable upstream revisions are recorded in
 | Owner | Immutable source | Existing contracts consumed |
 |---|---|---|
 | Octet | `4a540dff99aa2040e267e42bbafe09144f276572` | `docs/aeneas-consumer-contract.md`; generated `octet-aeneas-consumer-profile/v1`; `octet-formal-proof-envelope/v1` with `octet-aeneas-consumer-receipt-binding/v1` |
-| Trellis | `d91188e495d65bca87551b7a06330efb2c909edf` | `docs/proof-artifact-manifest.md`; existing `trellis.proof-artifact-manifest.v1` reference boundary; representative pilot `trellis-aeneas-cross-verifier-profile/v1` and `trellis-aeneas-proof-receipt/v1` |
+| Trellis | `22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3` | `docs/proof-artifact-manifest.md`; existing `trellis.proof-artifact-manifest.v1` reference boundary; representative pilot `trellis-aeneas-cross-verifier-profile/v1` and `trellis-aeneas-proof-receipt/v1` |
 
 Octet profile identity:
 `b3:62bb3c01a2037eef1410e35d3902d73fb5e7439e8856d721d0823e14c0af4879`.
@@ -122,7 +122,7 @@ target/debug/mantle-verification-bridge octet \
 
 target/debug/mantle-verification-bridge trellis \
   tests/fixtures/verification-bridge/trellis profile.json receipt.json \
-  d91188e495d65bca87551b7a06330efb2c909edf /tmp/trellis-handoff
+  22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3 /tmp/trellis-handoff
 
 python3 scripts/prove-verification-bridge.py \
   --mantle target/debug/mantle \
