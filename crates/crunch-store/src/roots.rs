@@ -504,7 +504,10 @@ pub fn unpin_owned_root_declarations(
     owner: &str,
 ) -> Result<Option<GcRootRecord>, Error> {
     let normalized_path = normalize_logical_path(path)?;
-    crate::interest_store::release_owner_declarations(state_dir, owner, &normalized_path)
+    crate::interest_store::release_owner_declarations(state_dir, crate::interest_store::OwnerReleaseRequest {
+        owner,
+        path: &normalized_path,
+    })
 }
 
 pub(crate) fn load_registry(state_dir: &Path) -> Result<BTreeMap<String, GcRootRecord>, Error> {

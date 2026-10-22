@@ -1061,6 +1061,148 @@ fn make_directory_movable(path: &Path) -> std::io::Result<Option<std::fs::Permis
     Ok(Some(original))
 }
 
+/// The publication state of one admitted path export.
+struct PullExportPublication<'a> {
+    abs_path: &'a str,
+    destination: &'a Path,
+    parent: &'a Path,
+    store_path_text: &'a str,
+    transport: PullTransport,
+}
+
+/// An incomplete previous export moved aside before the complete tree is published.
+struct QuarantinedExport {
+    preserved_dir: PathBuf,
+    preserved: PathBuf,
+    #[cfg(unix)]
+    original_permissions: Option<std::fs::Permissions>,
+}
+
+impl PullExportPublication<'_> {
+    fn failure(&self, error: String) -> Error {
+        self.transport.export_error(PullExportFailure {
+            abs_path: self.abs_path,
+            error: &error,
+        })
+    }
+
+    /// Materialize the admitted NAR into a staging directory beside the root.
+    fn create_staging(&self) -> Result<tempfile::TempDir, Error> {
+        tempfile::Builder::new()
+            .prefix(".mantle-pull-stage-")
+            .tempdir_in(self.parent)
+            .map_err(|error| self.failure(format!("creating materialization staging directory: {error}")))
+    }
+
+    /// Write the signed NAR into the staging directory.
+    async fn export_staged_tree(
+        &self,
+        handle: &StoreHandle,
+        path_info: &PathInfo,
+        staged_path: &Path,
+    ) -> Result<(), Error> {
+        let staged_text = staged_path.to_str().ok_or_else(|| self.failure("non-UTF8 staged path".to_string()))?;
+        export_castore_to_disk(&path_info.node, staged_text, &handle.blob_service(), &handle.directory_service())
+            .await
+            .map_err(|error| self.failure(error))
+    }
+
+    /// Keep an interrupted or corrupt old export as evidence.
+    ///
+    /// Only the complete staged tree becomes the final root; a failed rename
+    /// restores the old one.
+    fn quarantine_existing_export(&self) -> Result<Option<QuarantinedExport>, Error> {
+        if std::fs::symlink_metadata(self.destination).is_err() {
+            return Ok(None);
+        }
+        // Some Unix filesystems deny renaming normalized 0555 directories even
+        // when their parent is owned. Only the root mode changes temporarily;
+        // directory modes are not encoded in the authenticated NAR.
+        #[cfg(unix)]
+        let original_permissions = make_directory_movable(self.destination)
+            .map_err(|error| self.failure(format!("making corrupt directory movable: {error}")))?;
+        let quarantine = tempfile::Builder::new()
+            .prefix(".mantle-pull-corrupt-")
+            .tempdir_in(self.parent)
+            .map_err(|error| self.failure(format!("creating corrupt-export quarantine: {error}")))?;
+        let preserved = quarantine.path().join(self.store_path_text);
+        assert!(preserved.starts_with(self.parent), "quarantined export must stay beside the published root");
+        assert_eq!(
+            preserved.file_name(),
+            Some(std::ffi::OsStr::new(self.store_path_text)),
+            "quarantined export must be named after the store path"
+        );
+        if let Err(error) = std::fs::rename(self.destination, &preserved) {
+            #[cfg(unix)]
+            if let Some(original) = original_permissions {
+                std::fs::set_permissions(self.destination, original).map_err(|restore| {
+                    self.failure(format!("preserving corrupt export: {error}; restoring permissions: {restore}"))
+                })?;
+            }
+            return Err(self.failure(format!("preserving corrupt export: {error}")));
+        }
+        // No failed publication or interrupted follow-up may erase the old
+        // physical tree: keep the quarantine immediately after moving it.
+        let preserved_dir = quarantine.keep();
+        #[cfg(unix)]
+        if let Some(original) = &original_permissions {
+            std::fs::set_permissions(&preserved, original.clone()).map_err(|error| {
+                self.failure(format!("restoring corrupt export mode at {}: {error}", preserved_dir.display()))
+            })?;
+        }
+        Ok(Some(QuarantinedExport {
+            preserved_dir,
+            preserved,
+            #[cfg(unix)]
+            original_permissions,
+        }))
+    }
+
+    /// Publish the staged export, restoring the quarantined export on failure.
+    fn publish_staged_tree(&self, staged_path: &Path, quarantine: Option<&QuarantinedExport>) -> Result<(), Error> {
+        if let Err(error) = std::fs::rename(staged_path, self.destination) {
+            if let Some(quarantined) = quarantine {
+                self.restore_quarantined_export(quarantined, &error)?;
+            }
+            return Err(self.failure(format!("publishing complete export: {error}")));
+        }
+        Ok(())
+    }
+
+    /// Restore the quarantined export after a failed publication.
+    fn restore_quarantined_export(
+        &self,
+        quarantined: &QuarantinedExport,
+        publish_error: &std::io::Error,
+    ) -> Result<(), Error> {
+        assert!(
+            quarantined.preserved.starts_with(self.parent),
+            "quarantined export must stay beside the published root"
+        );
+        assert_eq!(
+            quarantined.preserved.file_name(),
+            Some(std::ffi::OsStr::new(self.store_path_text)),
+            "quarantined export must be named after the store path"
+        );
+        #[cfg(unix)]
+        if quarantined.original_permissions.is_some() {
+            make_directory_movable(&quarantined.preserved).map_err(|restore| {
+                self.failure(format!("publishing complete export: {publish_error}; making original movable: {restore}"))
+            })?;
+        }
+        std::fs::rename(&quarantined.preserved, self.destination).map_err(|restore| {
+            self.failure(format!("publishing complete export: {publish_error}; restoring original: {restore}"))
+        })?;
+        #[cfg(unix)]
+        if let Some(original) = &quarantined.original_permissions {
+            std::fs::set_permissions(self.destination, original.clone()).map_err(|restore| {
+                self.failure(format!("publishing complete export: {publish_error}; restoring original mode: {restore}"))
+            })?;
+        }
+        Ok(())
+    }
+}
+
 async fn export_admitted_path(
     handle: &StoreHandle,
     path_info: &PathInfo,
@@ -1072,99 +1214,41 @@ async fn export_admitted_path(
         return Ok(());
     }
     let parent = destination.parent().expect("store output has a parent");
-    let failure = |error: String| {
-        transport.export_error(PullExportFailure {
-            abs_path: &abs_path,
-            error: &error,
-        })
+    let store_path_text = path_info.store_path.to_string();
+    assert!(!store_path_text.is_empty(), "store path must name the exported root");
+    let publication = PullExportPublication {
+        abs_path: &abs_path,
+        destination,
+        parent,
+        store_path_text: &store_path_text,
+        transport,
     };
-    let staging = tempfile::Builder::new()
-        .prefix(".mantle-pull-stage-")
-        .tempdir_in(parent)
-        .map_err(|error| failure(format!("creating materialization staging directory: {error}")))?;
-    let staged_path = staging.path().join(path_info.store_path.to_string());
-    export_castore_to_disk(
-        &path_info.node,
-        staged_path.to_str().ok_or_else(|| failure("non-UTF8 staged path".to_string()))?,
-        &handle.blob_service(),
-        &handle.directory_service(),
-    )
-    .await
-    .map_err(failure)?;
+    let staging = publication.create_staging()?;
+    let staged_path = staging.path().join(&store_path_text);
+    assert_eq!(
+        staged_path.file_name(),
+        Some(std::ffi::OsStr::new(&store_path_text)),
+        "staged export must be named after the store path"
+    );
+    publication.export_staged_tree(handle, path_info, &staged_path).await?;
     if !materialized_nar_matches(&staged_path, path_info).await? {
-        return Err(failure("staged export differs from signed NAR".to_string()));
+        return Err(publication.failure("staged export differs from signed NAR".to_string()));
     }
     // Some Unix filesystems deny renaming normalized 0555 directories even
     // when their parent is owned. Only the root mode changes temporarily;
     // directory modes are not encoded in the authenticated NAR.
     #[cfg(unix)]
     let staged_directory_permissions = make_directory_movable(&staged_path)
-        .map_err(|error| failure(format!("making staged directory movable: {error}")))?;
-
-    // Keep an interrupted or corrupt old export as evidence. Only the complete
-    // staged tree becomes the final root; a failed rename restores the old one.
-    #[cfg(unix)]
-    let old_permissions = if std::fs::symlink_metadata(destination).is_ok() {
-        make_directory_movable(destination)
-            .map_err(|error| failure(format!("making corrupt directory movable: {error}")))?
-    } else {
-        None
-    };
-    let quarantine = if std::fs::symlink_metadata(destination).is_ok() {
-        let quarantine = tempfile::Builder::new()
-            .prefix(".mantle-pull-corrupt-")
-            .tempdir_in(parent)
-            .map_err(|error| failure(format!("creating corrupt-export quarantine: {error}")))?;
-        let preserved = quarantine.path().join(path_info.store_path.to_string());
-        if let Err(error) = std::fs::rename(destination, &preserved) {
-            #[cfg(unix)]
-            if let Some(original) = old_permissions {
-                std::fs::set_permissions(destination, original).map_err(|restore| {
-                    failure(format!("preserving corrupt export: {error}; restoring permissions: {restore}"))
-                })?;
-            }
-            return Err(failure(format!("preserving corrupt export: {error}")));
-        }
-        // No failed publication or interrupted follow-up may erase the old
-        // physical tree: keep the quarantine immediately after moving it.
-        let preserved_dir = quarantine.keep();
-        #[cfg(unix)]
-        if let Some(original) = &old_permissions {
-            std::fs::set_permissions(&preserved, original.clone()).map_err(|error| {
-                failure(format!("restoring corrupt export mode at {}: {error}", preserved_dir.display()))
-            })?;
-        }
-        Some((preserved_dir, preserved))
-    } else {
-        None
-    };
-    if let Err(error) = std::fs::rename(&staged_path, destination) {
-        if let Some((_, preserved)) = &quarantine {
-            #[cfg(unix)]
-            if old_permissions.is_some() {
-                make_directory_movable(preserved).map_err(|restore| {
-                    failure(format!("publishing complete export: {error}; making original movable: {restore}"))
-                })?;
-            }
-            std::fs::rename(preserved, destination).map_err(|restore| {
-                failure(format!("publishing complete export: {error}; restoring original: {restore}"))
-            })?;
-            #[cfg(unix)]
-            if let Some(original) = &old_permissions {
-                std::fs::set_permissions(destination, original.clone()).map_err(|restore| {
-                    failure(format!("publishing complete export: {error}; restoring original mode: {restore}"))
-                })?;
-            }
-        }
-        return Err(failure(format!("publishing complete export: {error}")));
-    }
+        .map_err(|error| publication.failure(format!("making staged directory movable: {error}")))?;
+    let quarantine = publication.quarantine_existing_export()?;
+    publication.publish_staged_tree(&staged_path, quarantine.as_ref())?;
     #[cfg(unix)]
     if let Some(original) = staged_directory_permissions {
         std::fs::set_permissions(destination, original)
-            .map_err(|error| failure(format!("restoring published directory permissions: {error}")))?;
+            .map_err(|error| publication.failure(format!("restoring published directory permissions: {error}")))?;
     }
-    if let Some((preserved_dir, _)) = quarantine {
-        tracing::warn!(path = %abs_path, preserved = %preserved_dir.display(), "replaced incomplete imported NAR root");
+    if let Some(quarantined) = quarantine {
+        tracing::warn!(path = %abs_path, preserved = %quarantined.preserved_dir.display(), "replaced incomplete imported NAR root");
     }
     Ok(())
 }

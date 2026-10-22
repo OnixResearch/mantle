@@ -263,20 +263,36 @@ fn publish_with_replacement(state_dir: &Path, record: &InterestRecord, replace_o
     Ok(())
 }
 
+/// The owner and path of one owner scoped release.
+pub(crate) struct OwnerReleaseRequest<'a> {
+    pub owner: &'a str,
+    pub path: &'a str,
+}
+
+/// One release of retention interest records.
+struct ReleaseRequest<'a> {
+    state_dir: &'a Path,
+    records: &'a [(String, InterestRecord)],
+    identities: &'a [String],
+    expected_owner: Option<&'a str>,
+    expected_path: Option<&'a str>,
+    expected_reason: Option<&'a str>,
+}
+
 pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector) -> Result<Option<GcRootRecord>, Error> {
     crate::roots::ensure_root_mutation_allowed(state_dir)?;
     let _lock = lock(state_dir)?;
     let records = load(state_dir)?;
     let release = crunch_gc_core::interest::release_identities(facts(&records), selector).map_err(invalid)?;
     let selector = release.selector;
-    remove_released(
+    remove_released(ReleaseRequest {
         state_dir,
-        &records,
-        &release.identities,
-        Some(&selector.owner),
-        Some(&selector.path),
-        selector.reason.as_deref(),
-    )
+        records: &records,
+        identities: &release.identities,
+        expected_owner: Some(&selector.owner),
+        expected_path: Some(&selector.path),
+        expected_reason: selector.reason.as_deref(),
+    })
 }
 
 /// Release every declaration of one owner for one exact path.
@@ -288,51 +304,53 @@ pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector) -> Result<Opt
 /// choose between the reasons it declared itself.
 pub(crate) fn release_owner_declarations(
     state_dir: &Path,
-    owner: &str,
-    path: &str,
+    request: OwnerReleaseRequest<'_>,
 ) -> Result<Option<GcRootRecord>, Error> {
     crate::roots::ensure_root_mutation_allowed(state_dir)?;
     let _lock = lock(state_dir)?;
     let records = load(state_dir)?;
-    let release = crunch_gc_core::interest::release_owner_identities(facts(&records), ReleaseSelector {
-        owner: owner.to_string(),
-        path: path.to_string(),
+    let selector = ReleaseSelector {
+        owner: request.owner.to_string(),
+        path: request.path.to_string(),
         reason: None,
+    };
+    assert_eq!(selector.owner, request.owner, "release selector must carry the requested owner");
+    assert_eq!(selector.path, request.path, "release selector must carry the requested path");
+    let release = crunch_gc_core::interest::release_owner_identities(facts(&records), selector).map_err(invalid)?;
+    remove_released(ReleaseRequest {
+        state_dir,
+        records: &records,
+        identities: &release.identities,
+        expected_owner: Some(request.owner),
+        expected_path: Some(request.path),
+        expected_reason: None,
     })
-    .map_err(invalid)?;
-    remove_released(state_dir, &records, &release.identities, Some(owner), Some(path), None)
 }
 
-fn remove_released(
-    state_dir: &Path,
-    records: &[(String, InterestRecord)],
-    identities: &[String],
-    expected_owner: Option<&str>,
-    expected_path: Option<&str>,
-    expected_reason: Option<&str>,
-) -> Result<Option<GcRootRecord>, Error> {
+fn remove_released(request: ReleaseRequest<'_>) -> Result<Option<GcRootRecord>, Error> {
     let mut removed = None;
-    for id in identities {
-        let record = records
+    for id in request.identities {
+        let record = request
+            .records
             .iter()
             .find(|(identity, _)| identity == id)
             .ok_or_else(|| invalid("retention interest release identity disappeared"))?;
-        if let Some(owner) = expected_owner {
+        if let Some(owner) = request.expected_owner {
             assert_eq!(record.1.owner, owner, "release must not remove another owner's interest");
         }
-        if let Some(path) = expected_path {
+        if let Some(path) = request.expected_path {
             assert_eq!(record.1.logical_path, path, "release must not remove another path's interest");
         }
         assert!(
-            expected_reason.is_none_or(|reason| record.1.reason == reason),
+            request.expected_reason.is_none_or(|reason| record.1.reason == reason),
             "release must select only the requested reason"
         );
-        std::fs::remove_file(directory(state_dir).join(format!("{id}.{RECORD_EXTENSION}")))
+        std::fs::remove_file(directory(request.state_dir).join(format!("{id}.{RECORD_EXTENSION}")))
             .map_err(|error| invalid(format!("releasing interest {id}: {error}")))?;
         removed = Some(record.1.declaration.clone());
     }
     if removed.is_some() {
-        let dir = directory(state_dir);
+        let dir = directory(request.state_dir);
         std::fs::File::open(&dir)
             .and_then(|file| file.sync_all())
             .map_err(|error| invalid(format!("syncing {} after release: {error}", dir.display())))?;
