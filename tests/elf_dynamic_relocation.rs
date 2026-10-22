@@ -247,10 +247,7 @@ fn unwritable_output_directory_returns_publication_error_without_partial_bytes()
     let runpath = vec![fixture.runpath.clone(), MEMBER.to_owned(), "lib".to_owned()];
     let result = elf_dynamic_fixup_shell::relocate_declared_file(&fixture.binary, 1, &needed, &runpath);
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(
-        matches!(result, Err(elf_dynamic_fixup_shell::FileFixupError::Publication(_))),
-        "{result:?}"
-    );
+    assert!(matches!(result, Err(elf_dynamic_fixup_shell::FileFixupError::Publication(_))), "{result:?}");
     assert_eq!(fs::read(&fixture.binary).unwrap(), original);
     assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
 }
