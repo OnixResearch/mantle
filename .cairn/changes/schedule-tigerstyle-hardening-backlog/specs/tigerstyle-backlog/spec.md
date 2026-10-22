@@ -21,7 +21,8 @@ be rescanned after its repairs until it reports no further finding.
 r[mantle.tigerstyle_backlog.fix] A mechanical Tiger Style finding MUST be
 removed from the source. The fix MUST keep the accepted and rejected inputs,
 the error codes and error text, the published public APIs, the serde shapes
-and the `r[impl ...]` and `r[verify ...]` markers of the affected code.
+and the requirement implementation and verification markers of the affected
+code.
 
 #### Scenario: A compound condition is decomposed
 
