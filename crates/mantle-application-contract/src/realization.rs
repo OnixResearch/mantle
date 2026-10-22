@@ -158,7 +158,9 @@ pub fn realization_effect_plan(effect: RealizationEffect) -> Result<crate::Effec
         RealizationEffect::OutputSelection => ("realization-output", crate::EffectKind::ReadFiles),
         RealizationEffect::ImportPreparation => ("realization-imports", crate::EffectKind::WriteFiles),
         RealizationEffect::BinarySelection => ("realization-binary", crate::EffectKind::ReadFiles),
-        RealizationEffect::RuntimeEnvironment => ("realization-runtime-environment", crate::EffectKind::ReadEnvironment),
+        RealizationEffect::RuntimeEnvironment => {
+            ("realization-runtime-environment", crate::EffectKind::ReadEnvironment)
+        }
         RealizationEffect::RuntimeRead => ("realization-runtime-read", crate::EffectKind::ReadFiles),
         RealizationEffect::Reporting => ("realization-reporting", crate::EffectKind::WriteFiles),
         RealizationEffect::Interchange => ("realization-interchange", crate::EffectKind::WriteFiles),

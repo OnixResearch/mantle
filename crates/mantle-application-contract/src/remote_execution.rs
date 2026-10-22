@@ -213,9 +213,17 @@ impl RemoteOperation {
 
     pub const fn effect_kind(self) -> crate::EffectKind {
         match self {
-            Self::TicketList | Self::TicketInspect | Self::Status | Self::TicketMigratePreview
-            | Self::DebugInspect | Self::DebugReplayPlan | Self::ServerOpening | Self::EndpointConfiguration => crate::EffectKind::ReadFiles,
-            Self::ServeFixture | Self::SecretResolve | Self::SecretWorker | Self::UsageExecutor => crate::EffectKind::RunProcess,
+            Self::TicketList
+            | Self::TicketInspect
+            | Self::Status
+            | Self::TicketMigratePreview
+            | Self::DebugInspect
+            | Self::DebugReplayPlan
+            | Self::ServerOpening
+            | Self::EndpointConfiguration => crate::EffectKind::ReadFiles,
+            Self::ServeFixture | Self::SecretResolve | Self::SecretWorker | Self::UsageExecutor => {
+                crate::EffectKind::RunProcess
+            }
             Self::LiveServe | Self::LiveSubscribe | Self::ReadinessQuery => crate::EffectKind::UseNetwork,
             _ => crate::EffectKind::StoreAccess,
         }
@@ -243,7 +251,10 @@ pub fn plan_remote_operation(operation: RemoteOperation) -> Result<RemoteOperati
 /// No variant is a handler return status or an authorization to skip execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteOperationFacts<'a> {
-    Snapshot { source_records: usize, reported_records: usize },
+    Snapshot {
+        source_records: usize,
+        reported_records: usize,
+    },
     StatusSnapshot {
         expected_endpoint: &'a str,
         observed_endpoint: &'a str,
@@ -254,7 +265,10 @@ pub enum RemoteOperationFacts<'a> {
         source_tickets: usize,
         reported_tickets: usize,
     },
-    Identity { expected: &'a str, observed: &'a str },
+    Identity {
+        expected: &'a str,
+        observed: &'a str,
+    },
     TicketState {
         expected_sequence: u64,
         observed_sequence: u64,
@@ -262,64 +276,233 @@ pub enum RemoteOperationFacts<'a> {
         observed_records: usize,
         mismatched_records: usize,
     },
-    Migration { dry_run: bool, executed: bool, missing_invalidations: usize, schema: u32, expected_schema: u32 },
-    Readiness { schema: &'a str, expected_schema: &'a str, classification: &'a str, expected_classification: &'a str, evidence_eligible: bool, invalid_components: usize },
-    Bundle { bundle_digest: &'a str, replay_digest: Option<&'a str> },
-    Retention { failed_deletions: usize },
-    Keys { verifier_id: &'a str, signer_id: &'a str },
-    ServerOpening { expected_endpoint: &'a str, observed_endpoint: &'a str, expected_prefix: &'a str, observed_prefix: &'a str, request_id: &'a str, outputs: usize },
-    EndpointConfiguration { bytes: usize, bytes_max: u64, schema: &'a str, expected_schema: &'a str, bindings: usize, bindings_max: usize },
-    Socket { device: u64, inode: u64, shutdown_requested: bool },
-    Subscription { snapshots: u64, malformed_frames: u64 },
-    Outputs { expected: usize, admitted: usize, unevidenced: usize },
+    Migration {
+        dry_run: bool,
+        executed: bool,
+        missing_invalidations: usize,
+        schema: u32,
+        expected_schema: u32,
+    },
+    Readiness {
+        schema: &'a str,
+        expected_schema: &'a str,
+        classification: &'a str,
+        expected_classification: &'a str,
+        evidence_eligible: bool,
+        invalid_components: usize,
+    },
+    Bundle {
+        bundle_digest: &'a str,
+        replay_digest: Option<&'a str>,
+    },
+    Retention {
+        failed_deletions: usize,
+    },
+    Keys {
+        verifier_id: &'a str,
+        signer_id: &'a str,
+    },
+    ServerOpening {
+        expected_endpoint: &'a str,
+        observed_endpoint: &'a str,
+        expected_prefix: &'a str,
+        observed_prefix: &'a str,
+        request_id: &'a str,
+        outputs: usize,
+    },
+    EndpointConfiguration {
+        bytes: usize,
+        bytes_max: u64,
+        schema: &'a str,
+        expected_schema: &'a str,
+        bindings: usize,
+        bindings_max: usize,
+    },
+    Socket {
+        device: u64,
+        inode: u64,
+        shutdown_requested: bool,
+    },
+    Subscription {
+        snapshots: u64,
+        malformed_frames: u64,
+    },
+    Outputs {
+        expected: usize,
+        admitted: usize,
+        unevidenced: usize,
+    },
 }
 
 fn is_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-pub fn classify_remote_operation(plan: &RemoteOperationPlan, facts: RemoteOperationFacts<'_>) -> crate::ApplicationOutcome {
+pub fn classify_remote_operation(
+    plan: &RemoteOperationPlan,
+    facts: RemoteOperationFacts<'_>,
+) -> crate::ApplicationOutcome {
     use RemoteOperation as Op;
     use RemoteOperationFacts as Facts;
     let admitted = match (plan.operation, facts) {
-        (Op::TicketList, Facts::Snapshot { source_records, reported_records }) => source_records == reported_records,
-        (Op::Status, Facts::StatusSnapshot {
-            expected_endpoint, observed_endpoint, source_jobs, reported_jobs,
-            source_workers, reported_workers, source_tickets, reported_tickets,
-        }) => !expected_endpoint.is_empty() && expected_endpoint == observed_endpoint
-            && source_jobs == reported_jobs && source_workers == reported_workers && source_tickets == reported_tickets,
+        (
+            Op::TicketList,
+            Facts::Snapshot {
+                source_records,
+                reported_records,
+            },
+        ) => source_records == reported_records,
+        (
+            Op::Status,
+            Facts::StatusSnapshot {
+                expected_endpoint,
+                observed_endpoint,
+                source_jobs,
+                reported_jobs,
+                source_workers,
+                reported_workers,
+                source_tickets,
+                reported_tickets,
+            },
+        ) => {
+            !expected_endpoint.is_empty()
+                && expected_endpoint == observed_endpoint
+                && source_jobs == reported_jobs
+                && source_workers == reported_workers
+                && source_tickets == reported_tickets
+        }
         (Op::TicketInspect, Facts::Identity { expected, observed }) => !expected.is_empty() && expected == observed,
-        (Op::TicketCreate | Op::TicketRevoke | Op::RotateKeys, Facts::TicketState {
-            expected_sequence, observed_sequence, expected_records, observed_records, mismatched_records,
-        }) => expected_sequence == observed_sequence && expected_records == observed_records && mismatched_records == 0,
-        (Op::TicketMigrate | Op::TicketMigratePreview, Facts::Migration { dry_run, executed, missing_invalidations, schema, expected_schema }) =>
+        (
+            Op::TicketCreate | Op::TicketRevoke | Op::RotateKeys,
+            Facts::TicketState {
+                expected_sequence,
+                observed_sequence,
+                expected_records,
+                observed_records,
+                mismatched_records,
+            },
+        ) => expected_sequence == observed_sequence && expected_records == observed_records && mismatched_records == 0,
+        (
+            Op::TicketMigrate | Op::TicketMigratePreview,
+            Facts::Migration {
+                dry_run,
+                executed,
+                missing_invalidations,
+                schema,
+                expected_schema,
+            },
+        ) => {
             dry_run == (plan.operation == Op::TicketMigratePreview)
-                && executed != dry_run && missing_invalidations == 0 && schema == expected_schema,
-        (Op::DebugInspect, Facts::Bundle { bundle_digest, replay_digest: None }) => is_digest(bundle_digest),
-        (Op::DebugReplayPlan, Facts::Bundle { bundle_digest, replay_digest: Some(replay_digest) }) =>
-            is_digest(bundle_digest) && is_digest(replay_digest),
+                && executed != dry_run
+                && missing_invalidations == 0
+                && schema == expected_schema
+        }
+        (
+            Op::DebugInspect,
+            Facts::Bundle {
+                bundle_digest,
+                replay_digest: None,
+            },
+        ) => is_digest(bundle_digest),
+        (
+            Op::DebugReplayPlan,
+            Facts::Bundle {
+                bundle_digest,
+                replay_digest: Some(replay_digest),
+            },
+        ) => is_digest(bundle_digest) && is_digest(replay_digest),
         (Op::DebugGc, Facts::Retention { failed_deletions }) => failed_deletions == 0,
-        (Op::SecretResolve | Op::SecretWorker, Facts::Keys { verifier_id, signer_id }) =>
-            !verifier_id.is_empty() && !signer_id.is_empty(),
-        (Op::ServerOpening, Facts::ServerOpening { expected_endpoint, observed_endpoint, expected_prefix, observed_prefix, request_id, outputs }) =>
-            !request_id.is_empty() && outputs > 0 && expected_endpoint == observed_endpoint && expected_prefix == observed_prefix,
-        (Op::EndpointConfiguration, Facts::EndpointConfiguration { bytes, bytes_max, schema, expected_schema, bindings, bindings_max }) =>
-            bytes > 0 && u64::try_from(bytes).is_ok_and(|bytes| bytes <= bytes_max) && schema == expected_schema && bindings <= bindings_max,
-        (Op::ReadinessQuery, Facts::Readiness { schema, expected_schema, classification, expected_classification, evidence_eligible, invalid_components }) =>
-            schema == expected_schema && classification == expected_classification && !evidence_eligible && invalid_components == 0,
-        (Op::LiveServe, Facts::Socket { device: _, inode, shutdown_requested }) => inode != 0 && shutdown_requested,
-        (Op::LiveSubscribe, Facts::Subscription { snapshots, malformed_frames }) => snapshots > 0 && malformed_frames == 0,
-        (Op::Build | Op::Replay | Op::ServeFixture | Op::UsageExecutor, Facts::Outputs { expected, admitted, unevidenced }) =>
-            expected > 0 && expected == admitted && unevidenced == 0,
+        (Op::SecretResolve | Op::SecretWorker, Facts::Keys { verifier_id, signer_id }) => {
+            !verifier_id.is_empty() && !signer_id.is_empty()
+        }
+        (
+            Op::ServerOpening,
+            Facts::ServerOpening {
+                expected_endpoint,
+                observed_endpoint,
+                expected_prefix,
+                observed_prefix,
+                request_id,
+                outputs,
+            },
+        ) => {
+            !request_id.is_empty()
+                && outputs > 0
+                && expected_endpoint == observed_endpoint
+                && expected_prefix == observed_prefix
+        }
+        (
+            Op::EndpointConfiguration,
+            Facts::EndpointConfiguration {
+                bytes,
+                bytes_max,
+                schema,
+                expected_schema,
+                bindings,
+                bindings_max,
+            },
+        ) => {
+            bytes > 0
+                && u64::try_from(bytes).is_ok_and(|bytes| bytes <= bytes_max)
+                && schema == expected_schema
+                && bindings <= bindings_max
+        }
+        (
+            Op::ReadinessQuery,
+            Facts::Readiness {
+                schema,
+                expected_schema,
+                classification,
+                expected_classification,
+                evidence_eligible,
+                invalid_components,
+            },
+        ) => {
+            schema == expected_schema
+                && classification == expected_classification
+                && !evidence_eligible
+                && invalid_components == 0
+        }
+        (
+            Op::LiveServe,
+            Facts::Socket {
+                device: _,
+                inode,
+                shutdown_requested,
+            },
+        ) => inode != 0 && shutdown_requested,
+        (
+            Op::LiveSubscribe,
+            Facts::Subscription {
+                snapshots,
+                malformed_frames,
+            },
+        ) => snapshots > 0 && malformed_frames == 0,
+        (
+            Op::Build | Op::Replay | Op::ServeFixture | Op::UsageExecutor,
+            Facts::Outputs {
+                expected,
+                admitted,
+                unevidenced,
+            },
+        ) => expected > 0 && expected == admitted && unevidenced == 0,
         _ => false,
     };
     let observation = crate::Observation {
         effect_id: crate::EffectId(String::from(plan.operation.effect_id())),
         kind: plan.operation.effect_kind(),
-        status: if admitted { crate::ObservationStatus::Succeeded } else { crate::ObservationStatus::Failed },
+        status: if admitted {
+            crate::ObservationStatus::Succeeded
+        } else {
+            crate::ObservationStatus::Failed
+        },
         output: crate::EffectOutput::None,
         usage: crate::EffectMeasure::Calls(1),
-        diagnostics_code: if admitted { None } else { Some(String::from("remote-operation-evidence-contradicted")) },
+        diagnostics_code: if admitted {
+            None
+        } else {
+            Some(String::from("remote-operation-evidence-contradicted"))
+        },
     };
     crate::classify_observations(&plan.effects, &[observation])
 }
@@ -331,15 +514,34 @@ mod tests {
     #[test]
     fn remote_operation_build_requires_every_declared_evidenced_output() {
         let plan = plan_remote_operation(RemoteOperation::Build).unwrap();
-        assert_eq!(classify_remote_operation(&plan, RemoteOperationFacts::Outputs {
-            expected: 2, admitted: 2, unevidenced: 0,
-        }), crate::ApplicationOutcome::Completed);
+        assert_eq!(
+            classify_remote_operation(&plan, RemoteOperationFacts::Outputs {
+                expected: 2,
+                admitted: 2,
+                unevidenced: 0,
+            }),
+            crate::ApplicationOutcome::Completed
+        );
         for facts in [
-            RemoteOperationFacts::Outputs { expected: 2, admitted: 1, unevidenced: 0 },
-            RemoteOperationFacts::Outputs { expected: 2, admitted: 2, unevidenced: 1 },
-            RemoteOperationFacts::Outputs { expected: 0, admitted: 0, unevidenced: 0 },
+            RemoteOperationFacts::Outputs {
+                expected: 2,
+                admitted: 1,
+                unevidenced: 0,
+            },
+            RemoteOperationFacts::Outputs {
+                expected: 2,
+                admitted: 2,
+                unevidenced: 1,
+            },
+            RemoteOperationFacts::Outputs {
+                expected: 0,
+                admitted: 0,
+                unevidenced: 0,
+            },
         ] {
-            assert_eq!(classify_remote_operation(&plan, facts), crate::ApplicationOutcome::Failed { failed_effect_count: 1 });
+            assert_eq!(classify_remote_operation(&plan, facts), crate::ApplicationOutcome::Failed {
+                failed_effect_count: 1
+            });
         }
     }
 
@@ -347,19 +549,30 @@ mod tests {
     fn remote_operation_status_rejects_a_missing_active_job() {
         let plan = plan_remote_operation(RemoteOperation::Status).unwrap();
         let facts = RemoteOperationFacts::StatusSnapshot {
-            expected_endpoint: "worker-a", observed_endpoint: "worker-a",
-            source_jobs: 2, reported_jobs: 1, source_workers: 1, reported_workers: 1,
-            source_tickets: 0, reported_tickets: 0,
+            expected_endpoint: "worker-a",
+            observed_endpoint: "worker-a",
+            source_jobs: 2,
+            reported_jobs: 1,
+            source_workers: 1,
+            reported_workers: 1,
+            source_tickets: 0,
+            reported_tickets: 0,
         };
-        assert_eq!(classify_remote_operation(&plan, facts), crate::ApplicationOutcome::Failed { failed_effect_count: 1 });
+        assert_eq!(classify_remote_operation(&plan, facts), crate::ApplicationOutcome::Failed {
+            failed_effect_count: 1
+        });
     }
 
     #[test]
     fn remote_operation_rejects_facts_from_another_leaf() {
         let plan = plan_remote_operation(RemoteOperation::TicketRevoke).unwrap();
-        assert_eq!(classify_remote_operation(&plan, RemoteOperationFacts::Snapshot {
-            source_records: 1, reported_records: 1,
-        }), crate::ApplicationOutcome::Failed { failed_effect_count: 1 });
+        assert_eq!(
+            classify_remote_operation(&plan, RemoteOperationFacts::Snapshot {
+                source_records: 1,
+                reported_records: 1,
+            }),
+            crate::ApplicationOutcome::Failed { failed_effect_count: 1 }
+        );
     }
 
     fn sample_request() -> RemoteExecutionCommand {

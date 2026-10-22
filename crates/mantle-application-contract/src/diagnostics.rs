@@ -274,16 +274,28 @@ mod tests {
 
     #[test]
     fn failed_prerequisite_cannot_be_reported_healthy() {
-        use crate::{ApplicationOutcome, EffectId, EffectMeasure, EffectOutput, Observation, ObservationStatus};
+        use crate::ApplicationOutcome;
+        use crate::EffectId;
+        use crate::EffectMeasure;
+        use crate::EffectOutput;
+        use crate::Observation;
+        use crate::ObservationStatus;
         let plan = plan_doctor(false).unwrap();
-        let mut observations = doctor_probes(false).into_iter().map(|probe| Observation {
-            effect_id: EffectId(String::from(probe.id())),
-            kind: probe.authority(),
-            status: if probe == DoctorProbe::StoreDirectory { ObservationStatus::Failed } else { ObservationStatus::Succeeded },
-            output: EffectOutput::None,
-            usage: EffectMeasure::Calls(1),
-            diagnostics_code: None,
-        }).collect::<Vec<_>>();
+        let mut observations = doctor_probes(false)
+            .into_iter()
+            .map(|probe| Observation {
+                effect_id: EffectId(String::from(probe.id())),
+                kind: probe.authority(),
+                status: if probe == DoctorProbe::StoreDirectory {
+                    ObservationStatus::Failed
+                } else {
+                    ObservationStatus::Succeeded
+                },
+                output: EffectOutput::None,
+                usage: EffectMeasure::Calls(1),
+                diagnostics_code: None,
+            })
+            .collect::<Vec<_>>();
         observations.push(Observation {
             effect_id: EffectId(String::from(DOCTOR_ENVIRONMENT_EFFECT)),
             kind: crate::EffectKind::ReadEnvironment,
