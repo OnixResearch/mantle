@@ -1,0 +1,7 @@
+# Focused acceptance for the Tiger Style hardening backlog.
+CARGO_TARGET_DIR="$(mktemp -d /tmp/mantle-tigerstyle-accept.XXXXXX)" nix run .#tigerstyle -- check
+./scripts/check-first-party-clippy.sh
+cargo fmt --check -p mantle -p crunch-composition-core -p crunch-gc-core -p crunch-project-core -p crunch-release-core -p crunch-rust-cache -p crunch-rust-cache-core -p crunch-rustc-wrapper -p mantle-application-contract -p mantle-cargo-unit-plan
+cargo test --locked --offline -p mantle --test elf_dynamic_relocation -- --test-threads 1
+cargo test --locked --offline -p mantle --lib source_built_fixed_point -- --test-threads 1
+git diff --check
