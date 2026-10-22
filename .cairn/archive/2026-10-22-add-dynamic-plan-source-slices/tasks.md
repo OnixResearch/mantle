@@ -48,7 +48,7 @@ separately owned overlay/doctor repairs; no final source snapshot is accepted.
 - [x] [serial] T4.2 Prove accepted `mantle-plan-v1` golden fixtures keep their canonical bytes and plan digests. r[mantle.dynamic_plan_source_slices.versioned_schema]
 - [x] [serial] T4.3 Document `mantle-plan-v2` and slices in `docs/nominal-dynamic-plan-types.md`, including limits, rejection kinds, and non-claims. r[mantle.dynamic_plan_source_slices.provenance]
 - [x] [serial] T4.4 Run focused `crunch-build` lib and test suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.dynamic_plan_source_slices.content_admission]
-- [ ] [serial] T4.5 PRE-ARCHIVE readiness: synchronize accepted specs and verify readiness through the isolated branch workflow, retaining completion evidence without performing archive as part of this task. r[mantle.dynamic_plan_source_slices.provenance]
+- [x] [serial] T4.5 PRE-ARCHIVE readiness: synchronize accepted specs and verify readiness through the isolated branch workflow, retaining completion evidence without performing archive as part of this task. r[mantle.dynamic_plan_source_slices.provenance]
 
 ## Mandatory lifecycle actions outside task checkboxes
 
