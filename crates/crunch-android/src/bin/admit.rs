@@ -360,7 +360,7 @@ async fn preflight_inputs(
         let path: StorePath<String> =
             StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), &args.common.store_prefix)?;
         let actual_path = args.store.join(path.to_string());
-        if let Some(existing) = handle.pathinfo_service().get(*path.digest()).await.map_err(std::io::Error::other)? {
+        if let Some(existing) = handle.output_lookup().find(&path).await.map_err(std::io::Error::other)? {
             check_signed(&existing, &entry.store_path, &args.common.store_prefix, public_key)?;
             if observe_nar(&actual_path).await? != *expected {
                 return Err(format!("cached APK source physical NAR differs: {}", entry.store_path).into());
@@ -450,8 +450,8 @@ async fn admit_prepared(
         // This adoption MUST only read back an already-present PathInfo. Its
         // absent-PathInfo branch signs a new one, so never use it as a probe.
         let persisted = handle
-            .pathinfo_service()
-            .get(*path.digest())
+            .output_lookup()
+            .find(&path)
             .await
             .map_err(std::io::Error::other)?
             .ok_or("APK source PathInfo missing after ingest")?;
