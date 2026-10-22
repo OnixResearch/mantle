@@ -210,6 +210,7 @@ These commands inspect local build evidence. They are not release or witness pro
 | `examples/benchmark_eval_smoke.rs` | Cheap evaluation benchmark bundle. | `tests/benchmark_harness.rs` |
 | `examples/distributed_eval_assess.rs` | Distributed evaluation feasibility probe shell. | `cargo run -p mantle --example distributed_eval_assess` |
 | `examples/picolibc_compare.rs` | Picolibc StageX comparison report shell. | `picolibc_compare --self-test` |
+| `examples/resource_policy_replay.rs` | Offline replay of the production resource selector: reads declared quantities, machine classes, history, quota and policy as JSON on stdin and prints the observe-only rollout decision; the input confers no authority. | `cargo run -p mantle --example resource_policy_replay < replay.json` |
 | `examples/benchmark_suite.rs` | Full checked-in benchmark workload matrix. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_compare.rs` | Compares two benchmark bundles. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_eval_backends.rs` | Evaluation backend benchmark. | `tests/benchmark_harness.rs` |

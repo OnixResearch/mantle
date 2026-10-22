@@ -869,5 +869,17 @@ let Example = {
       validation_rails = ["cargo-example", "non-claim-doc"],
       skip_reason = "comparison harness needs a published picolibc target build; not yet exercised end to end",
     },
+    {
+      id = "resource-policy-replay",
+      path = "examples/resource_policy_replay.rs",
+      title = "Resource policy replay",
+      summary = "Bounded offline replay of the production resource selector over supplied JSON facts, printing the observe-only rollout decision; the facts confer no authority.",
+      lane = "diagnostics",
+      kind = "rust-example",
+      support_tier = "fast",
+      requirements = { network = false, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
+      validation_rails = ["cargo-example", "non-claim-doc"],
+      skip_reason = "",
+    },
   ],
 }
