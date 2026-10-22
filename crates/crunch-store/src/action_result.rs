@@ -939,7 +939,7 @@ fn write_and_link_no_clobber(
     // cache publication error classes and never enter production dependencies.
     #[cfg(test)]
     let write_result = (|| {
-        fault_injection::fallible!(temp.write_all(bytes));
+        crate::fault_scope::fallible!(temp.write_all(bytes));
         Ok::<(), std::io::Error>(())
     })();
     #[cfg(not(test))]
@@ -947,7 +947,7 @@ fn write_and_link_no_clobber(
     write_result.map_err(|error| format!("action-result-publication-write-temp:{}:{error}", temp_path.display()))?;
     #[cfg(test)]
     let sync_result = (|| {
-        fault_injection::fallible!(temp.sync_all());
+        crate::fault_scope::fallible!(temp.sync_all());
         Ok::<(), std::io::Error>(())
     })();
     #[cfg(not(test))]
@@ -1141,8 +1141,9 @@ mod tests {
         *FIRED_SITE.lock() = Some((crate_name, file, line));
     }
 
-    // r[impl mantle.io_fault.determinism] All four sites share one process
-    // counter; these fixtures also run with libtest --test-threads=1.
+    // r[impl mantle.io_fault.determinism] The four sites share one process
+    // counter, but only the thread that owns this fixture reaches it, so an
+    // unrelated test running in parallel cannot consume the armed counter.
     struct FaultFixture {
         _lock: FixtureMutexGuard<'static, ()>,
     }
@@ -1156,6 +1157,7 @@ mod tests {
             *FIRED_SITE.lock() = None;
             SLEEPINESS.store(0, Ordering::SeqCst);
             FAULT_INJECT_COUNTER.store(counter, Ordering::SeqCst);
+            crate::fault_scope::arm();
             Self { _lock: lock }
         }
 
@@ -1174,6 +1176,7 @@ mod tests {
         fn drop(&mut self) {
             // r[impl mantle.io_fault.verification] Restore the global default
             // even when a fixture assertion fails.
+            crate::fault_scope::disarm();
             FAULT_INJECT_COUNTER.store(u64::MAX, Ordering::SeqCst);
             SLEEPINESS.store(0, Ordering::SeqCst);
             *FIRED_SITE.lock() = None;

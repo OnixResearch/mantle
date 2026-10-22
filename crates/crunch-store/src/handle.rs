@@ -1880,7 +1880,7 @@ impl StoreHandle {
         // at the store adapter, without changing the production copy.
         #[cfg(test)]
         let copy_result = async {
-            let count = fault_injection::fallible!(tokio::io::copy(&mut reader, dest).await);
+            let count = crate::fault_scope::fallible!(tokio::io::copy(&mut reader, dest).await);
             Ok::<_, std::io::Error>(count)
         }
         .await;

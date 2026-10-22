@@ -21,6 +21,8 @@ mod completeness;
 mod composition;
 mod error;
 mod export;
+#[cfg(test)]
+mod fault_scope;
 mod gc;
 mod handle;
 mod http_closure;

@@ -47,7 +47,7 @@ pub async fn read_file_node(blob_service: &dyn BlobService, node: &Node, max_byt
     // failed blob read; production executes only the original I/O expression.
     #[cfg(test)]
     let read_result = async {
-        let size = fault_injection::fallible!(reader.read_to_end(&mut bytes).await);
+        let size = crate::fault_scope::fallible!(reader.read_to_end(&mut bytes).await);
         Ok::<_, std::io::Error>(size)
     }
     .await;
