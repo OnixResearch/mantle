@@ -181,6 +181,9 @@ fn check_root(root: &Path) -> Report {
             if path.extension().is_none_or(|extension| extension != "rs") {
                 continue;
             }
+            if is_test_module_file(path) {
+                continue;
+            }
             let Ok(metadata) = path.metadata() else { continue };
             if metadata.len() > MAX_FILE_BYTES {
                 continue;
@@ -197,6 +200,15 @@ fn check_root(root: &Path) -> Report {
 
 fn is_ignored_dir(name: &std::ffi::OsStr) -> bool {
     matches!(name.to_str(), Some("tests") | Some("target") | Some("vendor") | Some("fixtures"))
+}
+
+/// A test module file holds only `#[cfg(test)]` code.
+///
+/// The repository declares a test module as a sibling `tests.rs` file, so the
+/// guard skips it the same way it skips an inline `#[cfg(test)]` region. The
+/// boundary this guard enforces applies to production sources.
+fn is_test_module_file(path: &Path) -> bool {
+    path.file_name().and_then(|name| name.to_str()) == Some("tests.rs")
 }
 
 fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
@@ -438,6 +450,9 @@ fn fixture_report(files: BTreeMap<&'static str, &'static str>) -> Report {
 }
 
 fn self_test() {
+    assert!(is_test_module_file(Path::new("src/user_profile_cmd/tests.rs")), "a sibling test module file is excluded");
+    assert!(!is_test_module_file(Path::new("src/user_profile_cmd.rs")), "a production module file is scanned");
+    assert!(!is_test_module_file(Path::new("src/tests_helpers.rs")), "a helper file is scanned");
     let clean = fixture_report(BTreeMap::from([("lib.rs", POSITIVE_FIXTURE)]));
     assert!(clean.is_clean(), "positive fixture must pass: {}", clean);
     let casita_positive = fixture_report(BTreeMap::from([
