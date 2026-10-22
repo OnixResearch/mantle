@@ -134,6 +134,19 @@ copy of the pinned upstream Trellis revision, whose receipt pins an identity
 that does not match its own evidence bundle. That repair belongs upstream
 (issue 27).
 
+The current-system flake gate was executed on the same revision and fails in
+`checks.x86_64-linux.durable-file-publication-adoption`. Every other step of
+that check passes on the current tree: both Nickel typechecks, the export
+comparison, the publication identity bindings, the absence of an executable
+GitHub fallback, the absence of a sibling path, and the four source guards in
+`src/remote_attempt_log_store.rs`. The four recorded tree digests it binds
+the adoption to, for `Cargo.toml`, `Cargo.lock`, `flake.nix`, and `flake.lock`,
+no longer match, because the reconciliation changed the tree after the
+adoption was recorded. Re-recording them would assert that the published
+adoption covers the reconciled tree, which is a deliberate re-adoption rather
+than a mechanical regeneration, so it is tracked as issue 31 and left for that
+decision.
+
 G1 therefore remains unaccepted: the gate is executed and retained, and the
 one remaining failure belongs upstream.
 
