@@ -2720,7 +2720,8 @@ pub fn offline_vendor_cache_overrides(
         .await
         .map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
         let parts = store.into_pipeline_store_parts();
-        verified_offline_cache_path(&parts.output_lookup, catalog_path, catalog_name, store_prefix, trusted_keys).await?;
+        verified_offline_cache_path(&parts.output_lookup, catalog_path, catalog_name, store_prefix, trusted_keys)
+            .await?;
         let metadata = fs::metadata(catalog_path)
             .map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
         if metadata.len() > MAX_OFFLINE_VENDOR_CACHE_BYTES {
@@ -2835,15 +2836,14 @@ pub fn offline_vendor_cache_overrides(
             let stored_nar = if let Some(nar) = cache_paths.get(stored_name) {
                 *nar
             } else {
-                let (nar, _, _) =
-                    verified_offline_cache_path(
-                        &parts.output_lookup,
-                        &source_path,
-                        stored_name,
-                        store_prefix,
-                        trusted_keys,
-                    )
-                    .await?;
+                let (nar, _, _) = verified_offline_cache_path(
+                    &parts.output_lookup,
+                    &source_path,
+                    stored_name,
+                    store_prefix,
+                    trusted_keys,
+                )
+                .await?;
                 cache_paths.insert(stored_name.to_string(), nar);
                 nar
             };
