@@ -135,8 +135,11 @@ fn publish_relocated_file(
         Ok(())
     });
     if publication.is_err() {
+        // Best-effort cleanup: the port ledger records its outcome, and the
+        // staged file is already absent when creation failed or the rename
+        // consumed it. The publication error is returned either way.
         let removal = effects.call(WriteOutput, || fs::remove_file(&staged));
-        debug_assert!(removal.is_ok(), "the staged relocation file could not be removed");
+        drop(removal);
     }
     debug_assert!(!output.is_empty());
     debug_assert_eq!(staged.parent(), path.parent());
