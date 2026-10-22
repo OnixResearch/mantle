@@ -195,3 +195,22 @@ The evidence rail MUST perform bounded structural verification of the produced A
 - **WHEN** verification runs
 - **THEN** `apksigner verify` MUST fail
 - **AND** the failure MUST be recorded as evidence that verification observes content
+
+### Requirement: android_adapter.apk_offline_shape_tests
+
+r[android_adapter.apk_offline_shape_tests]
+
+The adapter MUST be covered by offline integration tests that use stub tool executables instead of real toolchain binaries. These tests MUST prove step ordering, input wiring, pinned environment values, and rejection paths without network access or prebuilt binary execution.
+
+#### Scenario: Shape test proves ordering and wiring
+
+- **GIVEN** stub executables that record their argv and environment
+- **WHEN** the offline shape test builds a plan
+- **THEN** the recorded invocations MUST appear in the required order with the declared inputs and pinned environment values
+
+#### Scenario: Rejection paths are exercised offline
+
+- **GIVEN** plans that trigger each typed rejection category
+- **WHEN** the offline tests evaluate them
+- **THEN** each MUST fail with its typed category before any step executes
+- **AND** no stub tool MUST be invoked for a rejected plan
