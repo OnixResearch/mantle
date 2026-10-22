@@ -1,0 +1,11 @@
+# Affected first-party package format check for the reconciled baseline.
+# The ordinary gate formats only its selected package list. Every changed
+# first-party package outside that selection is checked separately here.
+# Command: cargo fmt --check -p <the 36 changed packages outside the selection>
+
+packages: crunch-action-result-core crunch-attestation-core crunch-bootstrap-core crunch-composition-core crunch-eval-budget-core crunch-evaluation-stream-core crunch-gc-core crunch-hardware-simulation crunch-hardware-simulation-core crunch-kernelscript-adapter crunch-kernelscript-core crunch-nar crunch-nix-gateway crunch-nix-gateway-core crunch-overlay-core crunch-project-core crunch-release-core crunch-repair-core crunch-rust-cache crunch-rust-cache-core crunch-rustc-wrapper crunch-shell-core crunch-source-core crunch-spacewasm crunch-spacewasm-core crunch-wasm-component crunch-wasm-component-core mantle-application-contract mantle-build-contract mantle-cargo-unit-plan mantle-portable-client-core mantle-rust-differential mantle-rust-differential-core mantle-rust-plan-core mantle-wasm-consumer-verifier mantlepkgs-core
+
+result:
+  first run: FAILED. mantle-application-contract/src/store_administration.rs, diagnostics.rs, realization.rs, and remote_execution.rs were not rustfmt-formatted.
+  repair: cargo fmt -p mantle-application-contract, published as 07c27618f.
+  second run: FMT_EXIT=0, no output.
