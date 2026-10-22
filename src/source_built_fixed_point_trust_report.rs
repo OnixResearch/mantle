@@ -1390,7 +1390,7 @@ impl NativePublicationCheck<'_> {
         let producer = bound_output_event(self.actions, &BoundOutputRequest {
             stage_id: &self.stage.stage_id,
             producer_action_id: action_id,
-            output_id: output_id,
+            output_id,
         })?;
         let is_expected_kind = if NATIVE_EXECUTABLE_ROLES.contains(&role) {
             artifact.kind == "executable"

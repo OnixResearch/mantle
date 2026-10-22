@@ -641,10 +641,10 @@ fn validate_action_inputs<'a>(
     debug_assert!(!action.id.is_empty());
     Ok(())
 }
-fn validate_action_guard<'a>(
+fn validate_action_guard(
     action: &ActionSpec,
     guard: &ActionGuard,
-    preceding: &BTreeMap<String, (usize, &'a ActionSpec)>,
+    preceding: &BTreeMap<String, (usize, &ActionSpec)>,
 ) -> Result<(), String> {
     if !(1..=8).contains(&guard.conditions.len()) || action.protected_events_min == 0 {
         return Err("invalid guard condition count or unprotected guarded action".into());
@@ -827,13 +827,12 @@ impl ActionObservationState {
         let is_inventory_complete = self.provisional_outputs.get(&action.id).is_some_and(|outputs| {
             required_inventory_present(action, outputs, self.normal_exit_codes.get(&action.id).copied())
         });
-        if is_event_minimum_covered && is_inventory_complete {
-            if let Some((action_id, outputs)) = self.provisional_outputs.remove_entry(&action.id) {
-                self.phase_outcomes.insert(action_id.clone(), PhaseOutcome::Executed {
-                    output_digests: outputs.clone(),
-                });
-                self.produced.insert(action_id, outputs);
-            }
+        let is_promotable = is_event_minimum_covered && is_inventory_complete;
+        if is_promotable && let Some((action_id, outputs)) = self.provisional_outputs.remove_entry(&action.id) {
+            self.phase_outcomes.insert(action_id.clone(), PhaseOutcome::Executed {
+                output_digests: outputs.clone(),
+            });
+            self.produced.insert(action_id, outputs);
         }
         self.failed = false;
         Ok(())
