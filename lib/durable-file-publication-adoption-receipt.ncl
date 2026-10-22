@@ -16,10 +16,10 @@ let _expected = {
   producer_archive_receipt = "3a11ed34c922a32678f4e5e72bd9ea48b3e3d0eba35edf0c821c27f5a7920fe4",
   package = "durable-file-publication",
   package_version = "0.1.0",
-  cargo_manifest_blake3 = "0d016551043ed7884bc783432650c6fa5dce799bf4c14c321812b31b88ab28d6",
-  cargo_lock_blake3 = "ce93be39bed03654a8d97219b58b00581504e95b4c623790eb4d83673ccc63ad",
-  flake_blake3 = "f843962f4198a77939a9c3e6cf6fc64e60971a5172d38a4612cae1a104132cf7",
-  flake_lock_blake3 = "206b693fe08b816766359ceb1b776748309c953e094d807ed2eba62143a6cf74",
+  cargo_manifest_blake3 = "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+  cargo_lock_blake3 = "76c8935edc9af74c2866c8532ff034d07434668d782ff32830fb41ee12116e4e",
+  flake_blake3 = "506d6a26af501959daa7d0a326b17ad39ba2ed58d9180ea123b0c82aff9cc03b",
+  flake_lock_blake3 = "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc",
   nar_hash = "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
 }
 in

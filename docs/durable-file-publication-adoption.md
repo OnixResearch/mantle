@@ -151,3 +151,21 @@ regenerated adjacent JSON with BLAKE3
 `d51dce7621f396f4fec96375da411cfd11167e841e4cfd00c74f76be252ad13c`,
 recorded in the `.blake3` sidecar. This source-closure maintenance changes
 neither the original adoption outcome nor its authority and non-claim boundary.
+On 2026-10-22, the API reconciliation and the standard-library shape repair
+changed the workspace dependency and build inputs again. Direct BLAKE3 over
+these current files gives `Cargo.toml`
+`862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a`,
+`Cargo.lock`
+`76c8935edc9af74c2866c8532ff034d07434668d782ff32830fb41ee12116e4e`,
+`flake.nix`
+`506d6a26af501959daa7d0a326b17ad39ba2ed58d9180ea123b0c82aff9cc03b`,
+and `flake.lock`
+`a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc`.
+All four file bindings were remeasured, and the typed receipt and the
+independent validator bind these current hashes. Pinned Nickel 1.17.0
+regenerated the adjacent JSON with BLAKE3
+`43a6957c664ec31c58c2b9e1a04d9ae2a4c8db48934fbc155e17dacdd2a5d260`,
+recorded in the `.blake3` sidecar. This workspace-hash maintenance changes
+neither the reviewed publication source, the historical adoption date or
+outcome, nor the authority and non-claim boundaries above, and it establishes
+no fresh upstream fetch, no full-gate success, and no release claim.
