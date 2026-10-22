@@ -38,6 +38,100 @@ pub fn action_family_identity(public_action_kind: &str, features: &core::Feature
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+/// The canonical replay input hashed before the selector decisions.
+#[derive(Serialize)]
+struct Replay<'a> {
+    schema: &'static str,
+    requirements: &'a RemoteResourceRequirements,
+    features: &'a core::Features,
+    family: &'a str,
+    classes: &'a [core::MachineClass],
+    history: &'a [core::Observation],
+    now_unix_s: u64,
+    project_remaining_units: u64,
+    account_remaining_units: u64,
+    policy: core::SelectionPolicy,
+    switches: [bool; 6],
+}
+
+/// Canonicalized replay facts hashed into the decision replay input.
+struct ReplayFacts<'a> {
+    requirements: &'a RemoteResourceRequirements,
+    features: &'a core::Features,
+    family: &'a str,
+    classes: &'a [core::MachineClass],
+    history: &'a [core::Observation],
+    now_unix_s: u64,
+    quota: core::QuotaFacts,
+    policy: core::SelectionPolicy,
+    controls: core::Controls,
+}
+
+/// The reviewed class inventory, rechecked against live worker capacity.
+fn canonical_classes(
+    candidates: Vec<CatalogCandidate<'_>>,
+    requirements: &RemoteResourceRequirements,
+) -> Vec<core::MachineClass> {
+    let candidate_count = candidates.len();
+    let mut selected_requirements = requirements.clone();
+    let mut classes = Vec::with_capacity(candidate_count);
+    for candidate in candidates {
+        let mut class = candidate.class;
+        // Both advertised class and actual worker must fit all declared named
+        // resources; recheck quantities again after historical selection below.
+        class.existing_admission_compatible &= plan_remote_resource_availability(
+            candidate.worker_endpoint_id,
+            candidate.inventory,
+            requirements,
+            candidate.live_leases,
+        )
+        .is_ok();
+        selected_requirements.quantities.cpu_units = class.quantities.cpu_units;
+        selected_requirements.quantities.memory_bytes = class.quantities.memory_bytes;
+        selected_requirements.quantities.scratch_bytes = class.quantities.scratch_bytes;
+        class.available &= plan_remote_resource_availability(
+            candidate.worker_endpoint_id,
+            candidate.inventory,
+            &selected_requirements,
+            candidate.live_leases,
+        )
+        .is_ok();
+        classes.push(class);
+    }
+    debug_assert_eq!(classes.len(), candidate_count);
+    debug_assert!(classes.capacity() >= candidate_count);
+    classes
+}
+
+/// The replay input bytes and their digest, hashed in canonical order.
+fn replay_payload(facts: ReplayFacts<'_>) -> Result<(String, Vec<u8>), core::Reason> {
+    let replay = Replay {
+        schema: "mantle-resource-policy-replay-v1",
+        requirements: facts.requirements,
+        features: facts.features,
+        family: facts.family,
+        classes: facts.classes,
+        history: facts.history,
+        now_unix_s: facts.now_unix_s,
+        project_remaining_units: facts.quota.project_remaining_units,
+        account_remaining_units: facts.quota.account_remaining_units,
+        policy: facts.policy,
+        switches: [
+            facts.controls.mode == core::SelectionMode::ProjectOptIn,
+            facts.controls.project_opted_in,
+            facts.controls.selection_enabled,
+            facts.controls.oom_retry_enabled,
+            facts.controls.quota_enforcement_enabled,
+            facts.controls.sharing_enabled,
+        ],
+    };
+    let bytes = serde_json::to_vec(&replay).map_err(|_| core::Reason::InvalidInput)?;
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+    debug_assert!(!bytes.is_empty());
+    debug_assert_eq!(digest.len(), 64);
+    Ok((digest, bytes))
+}
+
 /// Canonicalizes class/history order before both hashing and decision. The
 /// output index refers to `PolicyEvaluation.classes`, not caller input order.
 // r[impl remote_builds.replayable_resource_selection]
@@ -66,49 +160,11 @@ pub fn evaluate_resource_policy(
         memory_bytes: requirements.quantities.memory_bytes,
         scratch_bytes: requirements.quantities.scratch_bytes,
     };
-    let mut selected_requirements = requirements.clone();
-    let mut classes = Vec::with_capacity(candidates.len());
-    for candidate in candidates {
-        let mut class = candidate.class;
-        // Both advertised class and actual worker must fit all declared named
-        // resources; recheck quantities again after historical selection below.
-        class.existing_admission_compatible &= plan_remote_resource_availability(
-            candidate.worker_endpoint_id,
-            candidate.inventory,
-            &requirements,
-            candidate.live_leases,
-        )
-        .is_ok();
-        selected_requirements.quantities.cpu_units = class.quantities.cpu_units;
-        selected_requirements.quantities.memory_bytes = class.quantities.memory_bytes;
-        selected_requirements.quantities.scratch_bytes = class.quantities.scratch_bytes;
-        class.available &= plan_remote_resource_availability(
-            candidate.worker_endpoint_id,
-            candidate.inventory,
-            &selected_requirements,
-            candidate.live_leases,
-        )
-        .is_ok();
-        classes.push(class);
-    }
+    let mut classes = canonical_classes(candidates, &requirements);
     classes.sort_by(|a, b| a.id.cmp(&b.id));
     history.sort_by(|a, b| a.attempt_id.as_str().cmp(b.attempt_id.as_str()));
     if history.windows(2).any(|pair| pair[0].attempt_id == pair[1].attempt_id) {
         return Err(core::Reason::HistoryDuplicate);
-    }
-    #[derive(Serialize)]
-    struct Replay<'a> {
-        schema: &'static str,
-        requirements: &'a RemoteResourceRequirements,
-        features: &'a core::Features,
-        family: &'a str,
-        classes: &'a [core::MachineClass],
-        history: &'a [core::Observation],
-        now_unix_s: u64,
-        project_remaining_units: u64,
-        account_remaining_units: u64,
-        policy: core::SelectionPolicy,
-        switches: [bool; 6],
     }
     let effective_quota = if controls.quota_active() {
         quota
@@ -118,31 +174,39 @@ pub fn evaluate_resource_policy(
             account_remaining_units: u64::MAX,
         }
     };
-    let replay = Replay {
-        schema: "mantle-resource-policy-replay-v1",
+    let (replay_input_blake3, bytes) = replay_payload(ReplayFacts {
         requirements: &requirements,
         features,
         family,
         classes: &classes,
         history,
         now_unix_s,
-        project_remaining_units: quota.project_remaining_units,
-        account_remaining_units: quota.account_remaining_units,
+        quota,
         policy,
-        switches: [
-            controls.mode == core::SelectionMode::ProjectOptIn,
-            controls.project_opted_in,
-            controls.selection_enabled,
-            controls.oom_retry_enabled,
-            controls.quota_enforcement_enabled,
-            controls.sharing_enabled,
-        ],
-    };
-    let bytes = serde_json::to_vec(&replay).map_err(|_| core::Reason::InvalidInput)?;
-    let replay_input_blake3 = blake3::hash(&bytes).to_hex().to_string();
-    let static_decision = core::select(declared, features, family, &classes, &[], now_unix_s, effective_quota, policy);
-    let historical_decision =
-        core::select(declared, features, family, &classes, history, now_unix_s, effective_quota, policy);
+        controls,
+    })?;
+    let static_decision = core::select(core::SelectionRequest {
+        declared,
+        features,
+        family,
+        classes: &classes,
+        history: &[],
+        now: now_unix_s,
+        quota: effective_quota,
+        policy,
+    });
+    let historical_decision = core::select(core::SelectionRequest {
+        declared,
+        features,
+        family,
+        classes: &classes,
+        history,
+        now: now_unix_s,
+        quota: effective_quota,
+        policy,
+    });
+    debug_assert!(classes.len() <= core::MAX_CLASSES);
+    debug_assert!(history.len() <= core::MAX_HISTORY);
     Ok(PolicyEvaluation {
         classes,
         decision: core::rollout(controls, static_decision, historical_decision),
@@ -165,8 +229,15 @@ pub fn admit_authorized_result<T, E>(
     checks: core::SharingChecks,
     existing_admission: impl FnOnce() -> Result<T, E>,
 ) -> Result<(T, core::SharingLink), SharingAdmissionError<E>> {
-    let link = core::authorize_sharing(controls, producer, consumer, result, scope, checks)
-        .map_err(SharingAdmissionError::Policy)?;
+    let link = core::authorize_sharing(core::SharingRequest {
+        controls,
+        producer,
+        consumer,
+        result,
+        scope,
+        checks,
+    })
+    .map_err(SharingAdmissionError::Policy)?;
     let admitted = existing_admission().map_err(SharingAdmissionError::ExistingAdmission)?;
     Ok((admitted, link))
 }

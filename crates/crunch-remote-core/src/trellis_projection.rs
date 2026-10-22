@@ -123,7 +123,7 @@ impl FiniteProjection {
             Some(digest) if digest == &report.identity.payload_digest => 1,
             Some(_) => 2,
         };
-        let report = ProjectedReport {
+        let projected = ProjectedReport {
             job: self.jobs.intern(report.identity.job_id.as_str())?,
             attempt: self.attempts.intern(report.identity.attempt_id.as_str())?,
             fence: report.identity.fence_generation.get(),
@@ -141,7 +141,10 @@ impl FiniteProjection {
                 _ => 0,
             },
         };
-        Ok(ProjectedInput { state, report })
+        Ok(ProjectedInput {
+            state,
+            report: projected,
+        })
     }
 
     /// Use the same context for current and next states so result/identity
@@ -217,6 +220,9 @@ fn validate_state(state: &RemoteAttemptState) -> Result<(), ProjectionError> {
             return Err(ProjectionError::InvalidDigest);
         }
     }
+    debug_assert!(state.fence_generation.get() > 0);
+    debug_assert!(state.applied_events.len() <= MAX_REMOTE_ATTEMPT_EVENTS);
+    debug_assert!(state.applied_events.values().all(|digest| valid_digest(digest.as_str())));
     Ok(())
 }
 
@@ -238,32 +244,47 @@ fn validate_report(current: &RemoteAttemptState, report: &RemoteAttemptReport) -
     validate_modeled_payload(current, &report.payload)
 }
 
+fn payload_is_current(current: &RemoteAttemptState, payload: &RemoteAttemptReportPayload) -> bool {
+    match payload {
+        RemoteAttemptReportPayload::Heartbeat { observed_unix_s } => {
+            *observed_unix_s >= current.started_unix_s && *observed_unix_s <= current.deadline_unix_s
+        }
+        RemoteAttemptReportPayload::TransferCheckpoint { transferred_bytes, .. } => {
+            *transferred_bytes >= current.transferred_bytes
+        }
+        RemoteAttemptReportPayload::ResultReady { output_digest_blake3 }
+        | RemoteAttemptReportPayload::Completion { output_digest_blake3 } => valid_digest(output_digest_blake3),
+        RemoteAttemptReportPayload::Start
+        | RemoteAttemptReportPayload::LogAppend { .. }
+        | RemoteAttemptReportPayload::Failure { .. } => true,
+    }
+}
+fn payload_is_advanced(current: &RemoteAttemptState, payload: &RemoteAttemptReportPayload) -> bool {
+    match payload {
+        RemoteAttemptReportPayload::Heartbeat { observed_unix_s } => {
+            current.last_heartbeat_unix_s.is_none_or(|previous| *observed_unix_s > previous)
+        }
+        RemoteAttemptReportPayload::TransferCheckpoint { checkpoint, .. } => {
+            current.transfer_checkpoint.is_none_or(|previous| *checkpoint > previous)
+        }
+        RemoteAttemptReportPayload::ResultReady { .. }
+        | RemoteAttemptReportPayload::Completion { .. }
+        | RemoteAttemptReportPayload::Start
+        | RemoteAttemptReportPayload::LogAppend { .. }
+        | RemoteAttemptReportPayload::Failure { .. } => true,
+    }
+}
 fn validate_modeled_payload(
     current: &RemoteAttemptState,
     payload: &RemoteAttemptReportPayload,
 ) -> Result<(), ProjectionError> {
-    let unsupported = match payload {
-        RemoteAttemptReportPayload::Heartbeat { observed_unix_s } => {
-            *observed_unix_s < current.started_unix_s
-                || *observed_unix_s > current.deadline_unix_s
-                || current.last_heartbeat_unix_s.is_some_and(|previous| *observed_unix_s <= previous)
-        }
-        RemoteAttemptReportPayload::TransferCheckpoint {
-            checkpoint,
-            transferred_bytes,
-        } => {
-            current.transfer_checkpoint.is_some_and(|previous| *checkpoint <= previous)
-                || *transferred_bytes < current.transferred_bytes
-        }
-        RemoteAttemptReportPayload::ResultReady { output_digest_blake3 }
-        | RemoteAttemptReportPayload::Completion { output_digest_blake3 } => !valid_digest(output_digest_blake3),
-        RemoteAttemptReportPayload::Start
-        | RemoteAttemptReportPayload::LogAppend { .. }
-        | RemoteAttemptReportPayload::Failure { .. } => false,
-    };
-    if unsupported {
+    let is_current = payload_is_current(current, payload);
+    let is_advanced = payload_is_advanced(current, payload);
+    if !is_current || !is_advanced {
         return Err(ProjectionError::UnmodeledPayload);
     }
+    debug_assert!(is_current);
+    debug_assert!(is_advanced);
     Ok(())
 }
 

@@ -90,12 +90,12 @@ impl DemandBook {
         if self.by_job.get(&fact.job_id) == Some(&fact) {
             return Ok(DemandChange::Unchanged);
         }
-        let replacing = self.by_job.contains_key(&fact.job_id);
-        if !replacing && self.by_job.len() >= MAX_DEMANDS {
+        let is_replacing = self.by_job.contains_key(&fact.job_id);
+        if !is_replacing && self.by_job.len() >= MAX_DEMANDS {
             return Err(DemandError::CountExceeded);
         }
         self.by_job.insert(fact.job_id.clone(), fact);
-        Ok(if replacing {
+        Ok(if is_replacing {
             DemandChange::Replaced
         } else {
             DemandChange::Published
@@ -123,7 +123,11 @@ impl WorkerDemand {
         admit_identity(policy_id)?;
         admit_identity(blocker_reason)?;
         requirement.validate()?;
-        let requirement_id_blake3 = requirement_identity(job_id, policy_id, &requirement);
+        let requirement_id_blake3 = requirement_identity(RequirementIdentity {
+            job: job_id,
+            policy: policy_id,
+            requirement: &requirement,
+        });
         Ok(Self {
             job_id: job_id.to_string(),
             policy_id: policy_id.to_string(),
@@ -140,7 +144,12 @@ impl WorkerDemand {
         admit_identity(&self.policy_id)?;
         admit_identity(&self.blocker_reason)?;
         self.requirement.validate()?;
-        if self.requirement_id_blake3 != requirement_identity(&self.job_id, &self.policy_id, &self.requirement) {
+        let identity = requirement_identity(RequirementIdentity {
+            job: self.job_id.as_str(),
+            policy: self.policy_id.as_str(),
+            requirement: &self.requirement,
+        });
+        if self.requirement_id_blake3 != identity {
             return Err(DemandError::IdentityMismatch);
         }
         Ok(())
@@ -149,12 +158,12 @@ impl WorkerDemand {
 
 impl Requirement {
     pub fn validate(&self) -> Result<(), DemandError> {
-        if self.cpu_units == 0
-            || self.cpu_units > MAX_RESOURCE_COUNT
-            || self.memory_bytes > MAX_RESOURCE_BYTES
-            || self.scratch_bytes > MAX_RESOURCE_BYTES
-            || !is_digest(&self.placement_key_blake3)
-        {
+        let has_valid_cpu = self.cpu_units != 0 && self.cpu_units <= MAX_RESOURCE_COUNT;
+        let has_valid_memory = self.memory_bytes <= MAX_RESOURCE_BYTES;
+        let has_valid_scratch = self.scratch_bytes <= MAX_RESOURCE_BYTES;
+        let has_valid_placement = is_digest(&self.placement_key_blake3);
+        let is_valid = has_valid_cpu && has_valid_memory && has_valid_scratch && has_valid_placement;
+        if !is_valid {
             return Err(DemandError::InvalidRequirement);
         }
         validate_named(&self.accelerators)?;
@@ -213,10 +222,18 @@ fn is_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn requirement_identity(job: &str, policy: &str, requirement: &Requirement) -> String {
+/// Identity inputs for one worker demand requirement.
+struct RequirementIdentity<'a> {
+    job: &'a str,
+    policy: &'a str,
+    requirement: &'a Requirement,
+}
+
+fn requirement_identity(input: RequirementIdentity<'_>) -> String {
+    let requirement = input.requirement;
     let mut hash = blake3::Hasher::new();
     hash.update(b"mantle-worker-demand-requirement-v1\0");
-    for value in [job, policy, &requirement.placement_key_blake3] {
+    for value in [input.job, input.policy, &requirement.placement_key_blake3] {
         hash_part(&mut hash, value);
     }
     hash.update(&requirement.cpu_units.to_le_bytes());
@@ -233,7 +250,10 @@ fn requirement_identity(job: &str, policy: &str, requirement: &Requirement) -> S
     for value in &requirement.semantic_accelerator_classes {
         hash_part(&mut hash, value);
     }
-    hash.finalize().to_hex().to_string()
+    let identity = hash.finalize().to_hex().to_string();
+    debug_assert_eq!(identity.len(), 64);
+    debug_assert!(is_digest(&identity));
+    identity
 }
 
 fn hash_part(hash: &mut blake3::Hasher, value: &str) {

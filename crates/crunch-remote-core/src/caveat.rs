@@ -255,11 +255,13 @@ impl<'a> Caveat<'a> {
 }
 
 fn validate_wire_bounds(wire: WireCaveat<'_>) -> Result<(), InvalidCaveat> {
-    if wire.kind.len() > MAX_CAVEAT_BYTES
-        || wire.pattern.is_some_and(|text| text.len() > MAX_PATTERN_BYTES)
-        || wire.template.is_some_and(|text| text.len() > MAX_PATTERN_BYTES)
-        || wire.alternatives.len() > MAX_ALTERNATIVES
-    {
+    let is_beyond_kind_bound = wire.kind.len() > MAX_CAVEAT_BYTES;
+    let is_beyond_pattern_bound = wire.pattern.is_some_and(|text| text.len() > MAX_PATTERN_BYTES);
+    let is_beyond_template_bound = wire.template.is_some_and(|text| text.len() > MAX_PATTERN_BYTES);
+    let is_beyond_alternative_bound = wire.alternatives.len() > MAX_ALTERNATIVES;
+    let is_beyond_bounds =
+        is_beyond_kind_bound || is_beyond_pattern_bound || is_beyond_template_bound || is_beyond_alternative_bound;
+    if is_beyond_bounds {
         return Err(InvalidCaveat::Oversized);
     }
     for rule in wire.alternatives {
@@ -297,9 +299,10 @@ impl<'a> FilterChain<'a> {
             if record.serialized_payload.len() > MAX_CAVEAT_BYTES {
                 return Err(InvalidCaveat::Oversized);
             }
+            let ordinal_digit = u8::try_from(index).map_err(|_| InvalidCaveat::InvalidOrdinal)?;
             let ordinal = [
                 b'0',
-                b'0' + u8::try_from(index).map_err(|_| InvalidCaveat::InvalidOrdinal)?,
+                b'0'.checked_add(ordinal_digit).ok_or(InvalidCaveat::InvalidOrdinal)?,
             ];
             if record.key.as_bytes() != ordinal.as_slice() {
                 return Err(InvalidCaveat::InvalidOrdinal);
@@ -372,12 +375,12 @@ fn validate_value(value: &str) -> Result<usize, InvalidCaveat> {
     for segment in body.split('/') {
         // A leading colon is reserved in patterns but remains valid canonical
         // value text only when followed by a valid binding name.
-        let valid = if let Some(name) = segment.strip_prefix(':') {
+        let is_valid_segment = if let Some(name) = segment.strip_prefix(':') {
             binding_name_is_valid(name)
         } else {
             literal_segment_is_valid(segment)
         };
-        if !valid {
+        if !is_valid_segment {
             return Err(InvalidCaveat::Malformed);
         }
         count += 1;
@@ -385,6 +388,8 @@ fn validate_value(value: &str) -> Result<usize, InvalidCaveat> {
             return Err(InvalidCaveat::Oversized);
         }
     }
+    debug_assert!(count >= 1);
+    debug_assert!(count <= MAX_SEGMENTS);
     Ok(count)
 }
 
@@ -414,16 +419,20 @@ pub fn admit_remote_job(
     if parents.is_empty() || parents.len() > MAX_CHAIN {
         return false;
     }
-    if parents.iter().any(|parent| {
+    let has_unusable_parent = parents.iter().any(|parent| {
         parent.jobs.is_empty()
             || parent.jobs.len() > MAX_REMOTE_GRANT_JOBS
             || parent.output_classes.is_empty()
             || parent.output_classes.len() > MAX_REMOTE_OUTPUT_CLASSES
             || receiver_now_unix_s >= parent.deadline_unix_s
             || parent.jobs.iter().chain(parent.output_classes).any(|value| !literal_segment_is_valid(value))
-    }) {
+    });
+    if has_unusable_parent {
         return false;
     }
+    debug_assert!(parents.len() <= MAX_CHAIN);
+    debug_assert!(parents.iter().all(|parent| parent.jobs.len() <= MAX_REMOTE_GRANT_JOBS));
+    debug_assert!(parents.iter().all(|parent| parent.output_classes.len() <= MAX_REMOTE_OUTPUT_CLASSES));
     chain
         .admit_with_policy(original, |value| {
             let Some(value) = value.strip_prefix("/job/") else {
@@ -439,26 +448,62 @@ pub fn admit_remote_job(
         .is_some()
 }
 
+/// Exact logical-path gate inputs: the receiver's admitted store prefix, the
+/// expected exact path and the requested path under the caller's filter chain.
+#[derive(Debug, Clone, Copy)]
+pub struct ExactStorePathRequest<'a> {
+    pub prefix: &'a str,
+    pub expected: &'a str,
+    pub requested: &'a str,
+}
+
+/// One exact child path below an admitted prefix.
+#[derive(Debug, Clone, Copy)]
+struct ExactChild<'a> {
+    prefix: &'a str,
+    path: &'a str,
+}
+
+/// One project goal declaration lowered against its owning project.
+#[derive(Debug, Clone, Copy)]
+struct ProjectGoalInput<'a> {
+    owner: &'a str,
+    value: &'a str,
+}
+
+/// Project goal gate inputs: the owning project and the original declaration.
+#[derive(Debug, Clone, Copy)]
+pub struct ProjectGoalRequest<'a> {
+    pub owner: &'a str,
+    pub declaration: &'a str,
+}
+
 /// Exact logical-path gate: no prefix lookalikes, nested content paths or broad
 /// listing. `expected` must come from the receiver's admitted StorePath codec;
 /// this helper does not authenticate or reimplement the store digest format.
 // r[impl mantle.authority_attenuation.attenuated_store_view]
-pub fn admit_exact_store_path(chain: &FilterChain<'_>, prefix: &str, expected: &str, requested: &str) -> bool {
-    if validate_value(prefix).is_err() || !exact_child(prefix, expected) {
+pub fn admit_exact_store_path(chain: &FilterChain<'_>, request: ExactStorePathRequest<'_>) -> bool {
+    let child = ExactChild {
+        prefix: request.prefix,
+        path: request.expected,
+    };
+    if validate_value(request.prefix).is_err() || !exact_child(child) {
         return false;
     }
-    chain.admit_with_policy(requested, |path| path == expected).is_some()
+    chain.admit_with_policy(request.requested, |path| path == request.expected).is_some()
 }
 
-fn exact_child(prefix: &str, path: &str) -> bool {
-    path.strip_prefix(prefix)
+fn exact_child(child: ExactChild<'_>) -> bool {
+    child
+        .path
+        .strip_prefix(child.prefix)
         .and_then(|rest| rest.strip_prefix('/'))
         .is_some_and(literal_segment_is_valid)
 }
 
-fn project_goal<'v>(owner: &str, value: &'v str) -> Option<(&'v str, &'v str)> {
-    let mut parts = value.strip_prefix('/')?.split('/');
-    if parts.next()? != "project" || parts.next()? != owner {
+fn project_goal<'v>(input: ProjectGoalInput<'v>) -> Option<(&'v str, &'v str)> {
+    let mut parts = input.value.strip_prefix('/')?.split('/');
+    if parts.next()? != "project" || parts.next()? != input.owner {
         return None;
     }
     let kind = parts.next()?;
@@ -478,19 +523,32 @@ fn project_goal<'v>(owner: &str, value: &'v str) -> Option<(&'v str, &'v str)> {
 // r[impl mantle.authority_attenuation.attenuated_remote_grant]
 pub fn admit_project_goal<'v>(
     chain: &FilterChain<'_>,
-    owner: &str,
-    declaration: &'v str,
+    request: ProjectGoalRequest<'v>,
     goal_is_admitted: impl Fn(&str) -> bool,
 ) -> Option<Cow<'v, str>> {
-    if !literal_segment_is_valid(owner) || project_goal(owner, declaration)?.0 != "declared" {
+    let declared = ProjectGoalInput {
+        owner: request.owner,
+        value: request.declaration,
+    };
+    if !literal_segment_is_valid(request.owner) || project_goal(declared)?.0 != "declared" {
         return None;
     }
-    let output = chain.admit_with_policy(declaration, |value| {
-        project_goal(owner, value).is_some_and(|(_, goal)| goal_is_admitted(goal))
+    let output = chain.admit_with_policy(request.declaration, |value| {
+        let candidate = ProjectGoalInput {
+            owner: request.owner,
+            value,
+        };
+        project_goal(candidate).is_some_and(|(_, goal)| goal_is_admitted(goal))
     })?;
-    if project_goal(owner, output.as_ref())?.0 != "goal" {
+    let lowered = ProjectGoalInput {
+        owner: request.owner,
+        value: output.as_ref(),
+    };
+    if project_goal(lowered)?.0 != "goal" {
         return None;
     }
+    debug_assert!(literal_segment_is_valid(request.owner));
+    debug_assert!(project_goal(declared).is_some());
     Some(output)
 }
 
@@ -834,7 +892,11 @@ mod tests {
     fn exact_store_gate_denies_prefix_lookalikes_traversal_and_rewrites() {
         let expected = "/mantle/store/00000000000000000000000000000000-approved";
         let chain = FilterChain::empty();
-        assert!(admit_exact_store_path(&chain, "/mantle/store", expected, expected));
+        assert!(admit_exact_store_path(&chain, ExactStorePathRequest {
+            prefix: "/mantle/store",
+            expected,
+            requested: expected,
+        }));
         for request in [
             "/mantle/storeX/00000000000000000000000000000000-approved",
             "/mantle/store/00000000000000000000000000000000-private",
@@ -842,17 +904,28 @@ mod tests {
             "/mantle/store/../private",
             "/mantle/store",
         ] {
-            assert!(!admit_exact_store_path(&chain, "/mantle/store", expected, request));
+            assert!(!admit_exact_store_path(&chain, ExactStorePathRequest {
+                prefix: "/mantle/store",
+                expected,
+                requested: request,
+            }));
         }
         let rewrite = chain.attenuate(rewrite("/mantle/store/:path", "/other/store/:path")).unwrap();
-        assert!(!admit_exact_store_path(&rewrite, "/mantle/store", expected, expected));
-        assert!(!admit_exact_store_path(&FilterChain::empty(), "/mantle/store/", expected, expected));
-        assert!(!admit_exact_store_path(
-            &FilterChain::empty(),
-            "/mantle/store",
-            "/mantle/store/a/b",
-            "/mantle/store/a/b"
-        ));
+        assert!(!admit_exact_store_path(&rewrite, ExactStorePathRequest {
+            prefix: "/mantle/store",
+            expected,
+            requested: expected,
+        }));
+        assert!(!admit_exact_store_path(&FilterChain::empty(), ExactStorePathRequest {
+            prefix: "/mantle/store/",
+            expected,
+            requested: expected,
+        }));
+        assert!(!admit_exact_store_path(&FilterChain::empty(), ExactStorePathRequest {
+            prefix: "/mantle/store",
+            expected: "/mantle/store/a/b",
+            requested: "/mantle/store/a/b",
+        }));
     }
 
     #[test]
@@ -861,12 +934,37 @@ mod tests {
             .attenuate(rewrite("/project/alpha/declared/:goal", "/project/alpha/goal/:goal"))
             .unwrap();
         assert_eq!(
-            admit_project_goal(&chain, "alpha", "/project/alpha/declared/build", |goal| goal == "build").as_deref(),
+            admit_project_goal(
+                &chain,
+                ProjectGoalRequest {
+                    owner: "alpha",
+                    declaration: "/project/alpha/declared/build",
+                },
+                |goal| goal == "build"
+            )
+            .as_deref(),
             Some("/project/alpha/goal/build")
         );
-        assert_eq!(admit_project_goal(&chain, "alpha", "/project/beta/declared/build", |_| true), None);
         assert_eq!(
-            admit_project_goal(&chain, "alpha", "/project/alpha/declared/private", |goal| goal == "build"),
+            admit_project_goal(
+                &chain,
+                ProjectGoalRequest {
+                    owner: "alpha",
+                    declaration: "/project/beta/declared/build",
+                },
+                |_| true
+            ),
+            None
+        );
+        assert_eq!(
+            admit_project_goal(
+                &chain,
+                ProjectGoalRequest {
+                    owner: "alpha",
+                    declaration: "/project/alpha/declared/private",
+                },
+                |goal| goal == "build"
+            ),
             None
         );
         for target in [
@@ -876,12 +974,39 @@ mod tests {
         ] {
             let escape = FilterChain::empty().attenuate(rewrite("/project/alpha/declared/:goal", target)).unwrap();
             assert_eq!(
-                admit_project_goal(&escape, "alpha", "/project/alpha/declared/build", |goal| goal == "build"),
+                admit_project_goal(
+                    &escape,
+                    ProjectGoalRequest {
+                        owner: "alpha",
+                        declaration: "/project/alpha/declared/build",
+                    },
+                    |goal| goal == "build"
+                ),
                 None
             );
         }
-        assert_eq!(admit_project_goal(&FilterChain::empty(), "alpha", "/project/alpha/declared/build", |_| true), None);
+        assert_eq!(
+            admit_project_goal(
+                &FilterChain::empty(),
+                ProjectGoalRequest {
+                    owner: "alpha",
+                    declaration: "/project/alpha/declared/build",
+                },
+                |_| true
+            ),
+            None
+        );
         let unknown = chain.attenuate(deny_all()).unwrap();
-        assert_eq!(admit_project_goal(&unknown, "alpha", "/project/alpha/declared/build", |_| true), None);
+        assert_eq!(
+            admit_project_goal(
+                &unknown,
+                ProjectGoalRequest {
+                    owner: "alpha",
+                    declaration: "/project/alpha/declared/build",
+                },
+                |_| true
+            ),
+            None
+        );
     }
 }

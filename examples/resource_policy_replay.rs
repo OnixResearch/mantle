@@ -40,18 +40,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         project_remaining_units: input.project_remaining_units,
         account_remaining_units: input.account_remaining_units,
     };
-    let select = |history: &[Observation]| {
-        policy::select(
-            input.declared,
-            &input.features,
-            &input.action_family,
-            &input.classes,
-            history,
-            input.now_unix_s,
-            quota,
-            input.policy,
-        )
-    };
+    let static_decision = policy::select(policy::SelectionRequest {
+        declared: input.declared,
+        features: &input.features,
+        family: &input.action_family,
+        classes: &input.classes,
+        history: &[],
+        now: input.now_unix_s,
+        quota,
+        policy: input.policy,
+    });
+    let historical_decision = policy::select(policy::SelectionRequest {
+        declared: input.declared,
+        features: &input.features,
+        family: &input.action_family,
+        classes: &input.classes,
+        history: &input.history,
+        now: input.now_unix_s,
+        quota,
+        policy: input.policy,
+    });
     let decision = policy::rollout(
         Controls {
             mode: SelectionMode::ObserveOnly,
@@ -61,8 +69,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             quota_enforcement_enabled: false,
             sharing_enabled: false,
         },
-        select(&[]),
-        select(&input.history),
+        static_decision,
+        historical_decision,
     );
     let stdout = std::io::stdout();
     let mut output = stdout.lock();

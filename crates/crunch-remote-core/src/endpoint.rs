@@ -175,7 +175,8 @@ impl EndpointBindingTable {
             binding: EndpointBinding { spec, generation: 1 },
             revoked: false,
         });
-        Ok(&self.records[self.records.len() - 1].binding)
+        let created = self.records.last().ok_or(EndpointBindingError::UnknownBinding)?;
+        Ok(&created.binding)
     }
 
     /// Retract exactly the supplied descriptor, never another generation or scope.
@@ -227,11 +228,12 @@ impl EndpointBindingTable {
         expected: EndpointReceiverRequirements<'_>,
         now_unix_s: u64,
     ) -> Result<ResolvedEndpoint<'_>, EndpointBindingError> {
-        if presented.spec.kind != expected.kind
-            || presented.spec.scope != expected.scope
-            || presented.spec.trust_requirement != expected.trust_requirement
-            || presented.spec.store_prefix != expected.store_prefix
-        {
+        let has_matching_kind = presented.spec.kind == expected.kind;
+        let has_matching_scope = presented.spec.scope == expected.scope;
+        let has_matching_trust = presented.spec.trust_requirement == expected.trust_requirement;
+        let has_matching_prefix = presented.spec.store_prefix == expected.store_prefix;
+        let is_matching = has_matching_kind && has_matching_scope && has_matching_trust && has_matching_prefix;
+        if !is_matching {
             return Err(EndpointBindingError::BindingMismatch);
         }
         self.resolve(presented, now_unix_s)
@@ -251,7 +253,9 @@ pub fn validate_endpoint_name(name: &str) -> Result<(), EndpointBindingError> {
         return Err(EndpointBindingError::InvalidName);
     }
     let edge = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
-    if !edge(name.as_bytes()[0]) || !edge(name.as_bytes()[name.len() - 1]) {
+    let bytes = name.as_bytes();
+    let has_valid_edge = bytes.first().is_some_and(|byte| edge(*byte)) && bytes.last().is_some_and(|byte| edge(*byte));
+    if !has_valid_edge {
         return Err(EndpointBindingError::InvalidName);
     }
     if !name.bytes().all(|byte| edge(byte) || matches!(byte, b'-' | b'_' | b'.')) || name.contains("..") {
@@ -269,11 +273,13 @@ fn validate_store_prefix(prefix: &str) -> Result<(), EndpointBindingError> {
         return Err(EndpointBindingError::InvalidStorePrefix);
     }
     for component in prefix[1..].split('/') {
-        if component.is_empty()
-            || component == "."
-            || component == ".."
-            || !component.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        {
+        let is_empty = component.is_empty();
+        let is_current = component == ".";
+        let is_parent = component == "..";
+        let has_safe_bytes =
+            component.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+        let is_valid = !is_empty && !is_current && !is_parent && has_safe_bytes;
+        if !is_valid {
             return Err(EndpointBindingError::InvalidStorePrefix);
         }
     }

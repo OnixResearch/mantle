@@ -151,24 +151,51 @@ pub struct Summary {
 fn reservation_key(r: &Reservation) -> &str {
     r.attempt.as_str()
 }
+/// One recorded observation bound to its reservation context and usage digest.
+fn observation_is_admissible(
+    observation: &crate::resource_policy::Observation,
+    usage_event_digest: &str,
+    context: Option<&ResourceContext>,
+) -> bool {
+    let has_valid_features = observation.features.valid();
+    let has_valid_family = valid_id(&observation.action_family);
+    let has_valid_class = valid_id(&observation.machine_class);
+    let has_valid_collector = valid_id(&observation.collector_version);
+    let has_valid_declared = observation.declared.valid();
+    let has_declared_fit = observation.selected.fits(observation.declared);
+    let has_valid_digest = crate::output::is_blake3_hex_digest(usage_event_digest);
+    let has_matching_context = context.is_some_and(|recorded| recorded.matches(observation));
+    has_valid_features
+        && has_valid_family
+        && has_valid_class
+        && has_valid_collector
+        && has_valid_declared
+        && has_declared_fit
+        && has_valid_digest
+        && has_matching_context
+}
+fn schedule_is_valid(schedule: &UnitSchedule) -> bool {
+    let has_version = schedule.version != 0;
+    let has_valid_unit = valid_id(&schedule.unit);
+    let has_valid_window = valid_id(&schedule.window_id);
+    let has_ordered_window = schedule.window_start_s < schedule.window_end_s;
+    let has_units = schedule.cpu_ms_per_unit != 0
+        && schedule.memory_byte_ms_per_unit != 0
+        && schedule.executor_output_bytes_per_unit != 0;
+    has_version && has_valid_unit && has_valid_window && has_ordered_window && has_units
+}
 fn validate_reservation(r: &Reservation) -> Result<(), QuotaError> {
-    if !valid_id(&r.project)
-        || !valid_id(&r.account)
-        || r.units == 0
-        || !valid_id(r.job.as_str())
-        || !valid_id(r.attempt.as_str())
-        || r.fence.get() == 0
-        || !crate::output::is_blake3_hex_digest(&r.request_digest)
-        || r.schedule.version == 0
-        || !valid_id(&r.schedule.unit)
-        || !valid_id(&r.schedule.window_id)
-        || r.schedule.window_start_s >= r.schedule.window_end_s
-        || r.schedule.cpu_ms_per_unit == 0
-        || r.schedule.memory_byte_ms_per_unit == 0
-        || r.schedule.executor_output_bytes_per_unit == 0
-    {
+    let has_valid_scope = valid_id(&r.project) && valid_id(&r.account);
+    let has_valid_attempt = valid_id(r.job.as_str()) && valid_id(r.attempt.as_str()) && r.fence.get() != 0;
+    let has_valid_digest = crate::output::is_blake3_hex_digest(&r.request_digest);
+    let has_valid_schedule = schedule_is_valid(&r.schedule);
+    let has_units = r.units != 0;
+    let is_valid = has_units && has_valid_scope && has_valid_attempt && has_valid_digest && has_valid_schedule;
+    if !is_valid {
         return Err(QuotaError::Invalid);
     }
+    debug_assert!(r.units > 0);
+    debug_assert!(r.schedule.window_start_s < r.schedule.window_end_s);
     Ok(())
 }
 impl Ledger {
@@ -204,18 +231,15 @@ impl Ledger {
         self.validate()?;
         let key = reservation.attempt.as_str();
         let admitted = self.entries.get(key).ok_or(QuotaError::UnknownAttempt)?;
-        if admitted.reservation != *reservation
-            || record.observation.attempt_id != reservation.attempt
-            || record.observation.schema != crate::resource_policy::OBSERVATION_SCHEMA
-            || self.resource_contexts.get(key).is_none_or(|context| !context.matches(&record.observation))
-            || !record.observation.features.valid()
-            || !valid_id(&record.observation.action_family)
-            || !valid_id(&record.observation.machine_class)
-            || !valid_id(&record.observation.collector_version)
-            || !record.observation.declared.valid()
-            || !record.observation.selected.fits(record.observation.declared)
-            || !crate::output::is_blake3_hex_digest(&record.usage_event_digest)
-        {
+        let has_matching_reservation = admitted.reservation == *reservation;
+        let has_matching_attempt = record.observation.attempt_id == reservation.attempt;
+        let has_matching_schema = record.observation.schema == crate::resource_policy::OBSERVATION_SCHEMA;
+        let context = self.resource_contexts.get(key);
+        let has_admissible_observation =
+            observation_is_admissible(&record.observation, &record.usage_event_digest, context);
+        let is_admissible =
+            has_matching_reservation && has_matching_attempt && has_matching_schema && has_admissible_observation;
+        if !is_admissible {
             return Err(QuotaError::Conflict);
         }
         if let Some(existing) = self.observations.get(key) {
@@ -262,18 +286,14 @@ impl Ledger {
         }
         for (key, record) in &self.observations {
             let observation = &record.observation;
-            if !self.entries.contains_key(key)
-                || observation.attempt_id.as_str() != key
-                || observation.schema != crate::resource_policy::OBSERVATION_SCHEMA
-                || self.resource_contexts.get(key).is_none_or(|context| !context.matches(observation))
-                || !observation.features.valid()
-                || !valid_id(&observation.action_family)
-                || !valid_id(&observation.machine_class)
-                || !valid_id(&observation.collector_version)
-                || !observation.declared.valid()
-                || !observation.selected.fits(observation.declared)
-                || !crate::output::is_blake3_hex_digest(&record.usage_event_digest)
-            {
+            let has_entry = self.entries.contains_key(key);
+            let has_matching_attempt = observation.attempt_id.as_str() == key;
+            let has_matching_schema = observation.schema == crate::resource_policy::OBSERVATION_SCHEMA;
+            let context = self.resource_contexts.get(key);
+            let has_admissible_observation =
+                observation_is_admissible(observation, &record.usage_event_digest, context);
+            let is_admissible = has_entry && has_matching_attempt && has_matching_schema && has_admissible_observation;
+            if !is_admissible {
                 return Err(QuotaError::Invalid);
             }
         }
@@ -393,7 +413,12 @@ pub enum UsageEvent {
     WorkerLost,
     Partial,
 }
-fn ceil_units(value: u64, divisor: u64) -> Result<u64, QuotaError> {
+/// One nonzero per-unit divisor taken from an admitted schedule.
+#[derive(Clone, Copy)]
+struct UnitDivisor(u64);
+
+fn ceil_units(value: u64, divisor: UnitDivisor) -> Result<u64, QuotaError> {
+    let divisor = divisor.0;
     value
         .checked_div(divisor)
         .and_then(|n| n.checked_add(u64::from(!value.is_multiple_of(divisor))))
@@ -407,11 +432,15 @@ impl UsageEvent {
                 usage,
                 trusted_and_complete: true,
             } => {
-                let charge = ceil_units(usage.cpu_ms, schedule.cpu_ms_per_unit)?
-                    .checked_add(ceil_units(usage.memory_byte_ms, schedule.memory_byte_ms_per_unit)?)
+                let charge = ceil_units(usage.cpu_ms, UnitDivisor(schedule.cpu_ms_per_unit))?
+                    .checked_add(ceil_units(usage.memory_byte_ms, UnitDivisor(schedule.memory_byte_ms_per_unit))?)
                     .and_then(|n| {
                         n.checked_add(
-                            ceil_units(usage.executor_output_bytes, schedule.executor_output_bytes_per_unit).ok()?,
+                            ceil_units(
+                                usage.executor_output_bytes,
+                                UnitDivisor(schedule.executor_output_bytes_per_unit),
+                            )
+                            .ok()?,
                         )
                     })
                     .ok_or(QuotaError::Overflow)?;

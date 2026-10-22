@@ -515,16 +515,16 @@ impl<'a> GatewayEvidence<'a> {
             .enumerate()
             .filter_map(|(index, class)| {
                 // The selector itself, not this adapter, owns hard-feature eligibility.
-                let fits = resource::select(
-                    replay.declared(),
-                    &replay.features,
-                    &replay.family,
-                    std::slice::from_ref(class),
-                    &[],
-                    replay.now_unix_s,
-                    replay.quota(),
-                    replay.policy,
-                )
+                let fits = resource::select(resource::SelectionRequest {
+                    declared: replay.declared(),
+                    features: &replay.features,
+                    family: &replay.family,
+                    classes: std::slice::from_ref(class),
+                    history: &[],
+                    now: replay.now_unix_s,
+                    quota: replay.quota(),
+                    policy: replay.policy,
+                })
                 .is_ok();
                 (class.available && class.existing_admission_compatible && fits).then(|| identities[index].clone())
             })
@@ -672,15 +672,15 @@ impl<'a> GatewayEvidence<'a> {
         let evidence = replay.evidence.borrowed();
         let quota = replay.quota.borrowed();
         let policy = replay.policy.into();
-        let plan = resource::plan_escalation(
-            replay.controls,
-            context.clone(),
-            evidence.clone(),
-            &replay.prior,
-            &replay.classes,
+        let plan = resource::plan_escalation(resource::EscalationRequest {
+            controls: replay.controls,
+            context: context.clone(),
+            evidence: evidence.clone(),
+            prior: &replay.prior,
+            classes: &replay.classes,
             quota,
             policy,
-        )
+        })
         .map_err(|_| Error("gateway-evidence-retry-denied"))?;
         if plan != replay.plan {
             return Err(Error("gateway-evidence-retry-replay-conflict"));
@@ -723,15 +723,15 @@ impl<'a> GatewayEvidence<'a> {
         if self.gateway.reuse.is_some() {
             return Err(Error("gateway-evidence-reuse-not-execution"));
         }
-        let planned = resource::plan_escalation(
-            facts.controls,
-            facts.context.clone(),
-            facts.evidence.clone(),
-            facts.prior,
-            facts.classes,
-            facts.quota,
-            facts.policy,
-        )
+        let planned = resource::plan_escalation(resource::EscalationRequest {
+            controls: facts.controls,
+            context: facts.context.clone(),
+            evidence: facts.evidence.clone(),
+            prior: facts.prior,
+            classes: facts.classes,
+            quota: facts.quota,
+            policy: facts.policy,
+        })
         .map_err(|_| Error("gateway-evidence-retry-denied"))?;
         let binding = self.gateway.binding.as_ref().ok_or(Error("gateway-evidence-binding-missing"))?;
         if planned != *facts.plan
@@ -832,14 +832,14 @@ impl<'a> GatewayEvidence<'a> {
         if projection.get("project").and_then(serde_json::Value::as_str) != Some(facts.producer_project) {
             return Err(Error("gateway-evidence-reuse-producer-scope"));
         }
-        let link = resource::authorize_sharing(
-            facts.controls,
-            facts.producer_project,
-            &self.gateway.project,
-            &result.result_id,
-            facts.scope,
-            facts.checks,
-        )
+        let link = resource::authorize_sharing(resource::SharingRequest {
+            controls: facts.controls,
+            producer: facts.producer_project,
+            consumer: &self.gateway.project,
+            result: &result.result_id,
+            scope: facts.scope,
+            checks: facts.checks,
+        })
         .map_err(|_| Error("gateway-evidence-reuse-denied"))?;
         let request = facts
             .producer_bundle
@@ -1205,18 +1205,26 @@ impl Replay {
         {
             return Err(Error("gateway-evidence-replay-scope"));
         }
-        let static_decision =
-            resource::select(r.declared(), &r.features, &r.family, &r.classes, &[], r.now_unix_s, r.quota(), r.policy);
-        let historical = resource::select(
-            r.declared(),
-            &r.features,
-            &r.family,
-            &r.classes,
-            &r.history,
-            r.now_unix_s,
-            r.quota(),
-            r.policy,
-        );
+        let static_decision = resource::select(resource::SelectionRequest {
+            declared: r.declared(),
+            features: &r.features,
+            family: &r.family,
+            classes: &r.classes,
+            history: &[],
+            now: r.now_unix_s,
+            quota: r.quota(),
+            policy: r.policy,
+        });
+        let historical = resource::select(resource::SelectionRequest {
+            declared: r.declared(),
+            features: &r.features,
+            family: &r.family,
+            classes: &r.classes,
+            history: &r.history,
+            now: r.now_unix_s,
+            quota: r.quota(),
+            policy: r.policy,
+        });
         if resource::rollout(r.controls(), static_decision, historical) != evaluation.decision {
             return Err(Error("gateway-evidence-replay-conflict"));
         }

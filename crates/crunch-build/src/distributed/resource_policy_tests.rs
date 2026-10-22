@@ -94,19 +94,19 @@ fn observation() -> Observation {
     }
 }
 fn select(classes: &[MachineClass], history: &[Observation], quota: u64) -> Result<core::Selection, Reason> {
-    core::select(
-        q(100),
-        &features(),
-        "family",
+    core::select(core::SelectionRequest {
+        declared: q(100),
+        features: &features(),
+        family: "family",
         classes,
         history,
-        100,
-        QuotaFacts {
+        now: 100,
+        quota: QuotaFacts {
             project_remaining_units: quota,
             account_remaining_units: quota,
         },
-        policy(),
-    )
+        policy: policy(),
+    })
 }
 #[test]
 fn history_enlarges_without_weakening_requirements_and_order_is_stable() {
@@ -214,7 +214,17 @@ fn oom_retry_needs_positive_current_fenced_evidence_and_all_limits() {
         account_remaining_units: 20,
     };
     let catalog = classes();
-    let run = |c, e, quota, p| core::plan_escalation(controls(), c, e, &catalog[0], &catalog, quota, p);
+    let run = |c: core::RetryContext<'_>, e: core::OomEvidence<'_>, quota: QuotaFacts, p: core::EscalationPolicy| {
+        core::plan_escalation(core::EscalationRequest {
+            controls: controls(),
+            context: c,
+            evidence: e,
+            prior: &catalog[0],
+            classes: &catalog,
+            quota,
+            policy: p,
+        })
+    };
     let retry = run(context(), evidence(), quota, p).unwrap();
     assert_eq!(retry.predecessor, attempt);
     assert_eq!(retry.next_attempt, next);
@@ -285,9 +295,26 @@ fn sharing_never_skips_existing_signed_result_admission() {
         )),
         Err(SharingAdmissionError::ExistingAdmission("bad signature"))
     ));
-    assert!(core::authorize_sharing(controls(), "producer", "producer", "signed-result", None, checks).is_ok());
+    assert!(
+        core::authorize_sharing(core::SharingRequest {
+            controls: controls(),
+            producer: "producer",
+            consumer: "producer",
+            result: "signed-result",
+            scope: None,
+            checks,
+        })
+        .is_ok()
+    );
     assert_eq!(
-        core::authorize_sharing(controls(), "producer", "consumer", "signed-result", None, checks),
+        core::authorize_sharing(core::SharingRequest {
+            controls: controls(),
+            producer: "producer",
+            consumer: "consumer",
+            result: "signed-result",
+            scope: None,
+            checks,
+        }),
         Err(Reason::SharingDenied)
     );
     for field in 0..6 {
@@ -319,7 +346,14 @@ fn sharing_never_skips_existing_signed_result_admission() {
             }
         };
         assert_eq!(
-            core::authorize_sharing(controls(), "producer", "consumer", "signed-result", scope(), broken),
+            core::authorize_sharing(core::SharingRequest {
+                controls: controls(),
+                producer: "producer",
+                consumer: "consumer",
+                result: "signed-result",
+                scope: scope(),
+                checks: broken,
+            }),
             Err(expected)
         );
     }
@@ -391,8 +425,16 @@ proptest::proptest! {
     fn declared_minima_never_decrease_and_input_order_is_irrelevant(memory in 1_u64..=200) {
         let catalog = classes();
         let mut reversed = catalog.clone(); reversed.reverse();
-        let evaluate = |classes: &[MachineClass]| core::select(q(memory), &features(), "family", classes, &[], 100,
-            QuotaFacts { project_remaining_units: 100, account_remaining_units: 100 }, policy()).unwrap();
+        let evaluate = |classes: &[MachineClass]| core::select(core::SelectionRequest {
+            declared: q(memory),
+            features: &features(),
+            family: "family",
+            classes,
+            history: &[],
+            now: 100,
+            quota: QuotaFacts { project_remaining_units: 100, account_remaining_units: 100 },
+            policy: policy(),
+        }).unwrap();
         let first = evaluate(&catalog);
         let second = evaluate(&reversed);
         proptest::prop_assert!(first.requested.fits(q(memory)));
@@ -412,19 +454,19 @@ fn missing_dimensions_and_sampled_scratch_never_become_resource_measurements() {
     o.transfer_bytes = None;
     let mut p = policy();
     p.margin_basis_points = 1000;
-    let result = core::select(
-        q(100),
-        &features(),
-        "family",
-        &classes(),
-        &[o.clone()],
-        100,
-        QuotaFacts {
+    let result = core::select(core::SelectionRequest {
+        declared: q(100),
+        features: &features(),
+        family: "family",
+        classes: &classes(),
+        history: &[o.clone()],
+        now: 100,
+        quota: QuotaFacts {
             project_remaining_units: 100,
             account_remaining_units: 100,
         },
-        p,
-    )
+        policy: p,
+    })
     .unwrap();
     assert_eq!(result.requested, Quantities {
         cpu_units: 2,
@@ -450,19 +492,19 @@ fn sample_threshold_applies_independently_to_each_known_dimension() {
     let mut p = policy();
     p.min_samples = 2;
     p.margin_basis_points = 1000;
-    let result = core::select(
-        q(100),
-        &features(),
-        "family",
-        &classes(),
-        &[first, second],
-        100,
-        QuotaFacts {
+    let result = core::select(core::SelectionRequest {
+        declared: q(100),
+        features: &features(),
+        family: "family",
+        classes: &classes(),
+        history: &[first, second],
+        now: 100,
+        quota: QuotaFacts {
             project_remaining_units: 100,
             account_remaining_units: 100,
         },
-        p,
-    )
+        policy: p,
+    })
     .unwrap();
     assert_eq!(result.requested.cpu_units, 2);
     assert_eq!(result.requested.scratch_bytes, 100);

@@ -333,19 +333,19 @@ impl ResourcePolicyHost {
         }
         // Exercise the pure validator without conferring any runtime availability.
         let first = &config.classes[0];
-        policy::select(
-            first.quantities,
-            &first.features,
-            "configuration-validation",
-            &[],
-            &[],
-            schedule.window_start_s,
-            policy::QuotaFacts {
+        policy::select(policy::SelectionRequest {
+            declared: first.quantities,
+            features: &first.features,
+            family: "configuration-validation",
+            classes: &[],
+            history: &[],
+            now: schedule.window_start_s,
+            quota: policy::QuotaFacts {
                 project_remaining_units: 0,
                 account_remaining_units: 0,
             },
-            config.selection,
-        )
+            policy: config.selection,
+        })
         .map(|_| ())
         .or_else(|reason| {
             if reason == policy::Reason::NoClass {
@@ -650,14 +650,14 @@ impl ResourcePolicyHost {
         }
         let controls = self.controls(consumer_project);
         if producer_project == consumer_project {
-            return Ok(policy::authorize_sharing(
+            return Ok(policy::authorize_sharing(policy::SharingRequest {
                 controls,
-                producer_project,
-                consumer_project,
-                result_digest,
-                None,
+                producer: producer_project,
+                consumer: consumer_project,
+                result: result_digest,
+                scope: None,
                 checks,
-            )?);
+            })?);
         }
         // Both projects must explicitly opt in; an operator scope is not a
         // substitute for either project's independent sharing rollback gate.
@@ -678,14 +678,14 @@ impl ResourcePolicyHost {
             producers: &producers,
             consumers: &consumers,
         };
-        Ok(policy::authorize_sharing(
+        Ok(policy::authorize_sharing(policy::SharingRequest {
             controls,
-            producer_project,
-            consumer_project,
-            result_digest,
-            Some(scope),
+            producer: producer_project,
+            consumer: consumer_project,
+            result: result_digest,
+            scope: Some(scope),
             checks,
-        )?)
+        })?)
     }
 
     fn reservation_matches(&self, r: &quota::Reservation, binding: &AttemptBinding) -> bool {
@@ -1042,15 +1042,15 @@ impl ResourcePolicyHost {
             category,
             trusted_positive_platform_evidence,
         };
-        let plan = policy::plan_escalation(
+        let plan = policy::plan_escalation(policy::EscalationRequest {
             controls,
-            context.clone(),
-            evidence.clone(),
-            &prior.machine_class,
-            &evaluation.classes,
+            context: context.clone(),
+            evidence: evidence.clone(),
+            prior: &prior.machine_class,
+            classes: &evaluation.classes,
             quota,
-            self.config.retry.into(),
-        )?;
+            policy: self.config.retry.into(),
+        })?;
         // These are the exact pure planner inputs, not a token granting replayed
         // evidence authority. The live opaque report remains independently bound.
         let replay_json = serde_json::json!({

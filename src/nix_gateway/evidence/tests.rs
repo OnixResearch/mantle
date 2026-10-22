@@ -531,8 +531,16 @@ fn retry_requires_positive_platform_evidence_and_links_new_fenced_attempt() {
         max_cumulative_units: 100,
         max_wall_ms: 1000,
     };
-    let plan =
-        resource::plan_escalation(controls, context.clone(), oom.clone(), prior, &classes, quota, policy).unwrap();
+    let plan = resource::plan_escalation(resource::EscalationRequest {
+        controls,
+        context: context.clone(),
+        evidence: oom.clone(),
+        prior,
+        classes: &classes,
+        quota,
+        policy,
+    })
+    .unwrap();
     let mut evidence = GatewayEvidence::new(&successor, [1; 32], &next_entry).unwrap();
     let mut ambiguous = oom.clone();
     ambiguous.trusted_positive_platform_evidence = false;
