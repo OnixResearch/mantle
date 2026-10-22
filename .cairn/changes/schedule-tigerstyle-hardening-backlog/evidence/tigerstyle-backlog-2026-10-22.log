@@ -1,0 +1,63 @@
+# Tiger Style backlog — findings deferred at 2026-10-22
+
+Scope: the packages in `workspace.metadata.tigerstyle.default_scope` in the root
+`Cargo.toml`.
+
+The scan for this record ran one package at a time. The lint stops at the first
+package that fails to compile under lint, so a single run over the whole scope
+hides every package behind the first failure. The per-package scan found 477
+findings in 24 packages.
+
+## What was fixed
+
+467 findings were fixed in the source. The categories fixed in place were
+assertion density, compound conditions, numeric unit naming, bool naming,
+explicit defaults, unchecked unsigned arithmetic, function length, nested
+conditionals, parameter count, ambiguous parameters, collection growth, loop
+bounds, platform-dependent casts, unchecked narrowing, unchecked division,
+panicking calls, silently discarded results, unjustified allows and recursion.
+
+The fixes preserve the accepted and rejected sets, the error codes, the error
+strings, the published public APIs, the serde derives and the `r[impl ...]` /
+`r[verify ...]` markers. The GPU and FPGA slices were additionally checked
+against the pre-change implementation over roughly 30,000 mutated inputs, with
+byte-identical results and identical error strings.
+
+## What was deferred
+
+Each deferred finding is scoped by a file-level `#![allow(tigerstyle::...)]`
+with a `HARDENING-BACKLOG 2026-10-22` comment naming this file. The
+`dylint.toml` lint policy is unchanged.
+
+| File | Category | Finding | Reason |
+|---|---|---|---|
+| `crates/crunch-build/src/distributed/resource_quota_store.rs` | `ambient_clock` | Direct system clock read in the quota ledger shell | The read carries a real durable-quota freshness decision. Removing the ambient read would change the admission behaviour, so the finding is scheduled for the standalone hardening pass. |
+| `crates/crunch-build/src/distributed/resource_policy.rs` | `ambiguous_params`, `too_many_parameters` | Two same-typed arguments, and a parameter count above the limit | The adapter's published entry points take the resource inventory and the lease port by position. Bundling them would change the published signature of the crate. |
+| `crates/crunch-verification-bridge-core/src/lib.rs` | `explicit_defaults` | Three `#[serde(default)]` option fields on the published `Observation` DTO | Serde expands each attribute into `Default::default()` for an absent field. Removing the attribute would reject observations that omit an optional identity, changing both the accepted inputs and the published wire format. |
+| `crates/crunch-verification-bridge/src/lib.rs` | `ambiguous_params` | The published consume entry points take their profile and receipt path arguments adjacently | Bundling them would change the published signature of the crate. |
+| `crates/mantle-cargo-build-bundle-core/src/lib.rs` | `ambiguous_params` | `store_root` takes a path and a prefix adjacently | Bundling them would change the published signature of the crate. |
+| `crates/mantle-cargo-unit-plan/src/lib.rs` | `explicit_defaults` | Three `#[serde(default)]` option fields on the published plan bindings | Serde expands each attribute into `Default::default()` for an absent field. Removing the attribute would reject plans that omit an optional binding, changing the accepted inputs and the published wire format. |
+| `crates/crunch-fpga-core/src/lib.rs` | `explicit_defaults` | One `#[serde(default)]` option field on the published FPGA report | Serde expands each attribute into `Default::default()` for an absent field. Removing it would reject reports that omit the optional field, changing both the accepted inputs and the published wire format. |
+| `crates/crunch-rustc-wrapper/src/lib.rs` | `ambient_clock` | Direct system clock read in the Rust execution permit wait | The read carries the real capacity-wait deadline decision of the daemon. Injecting the clock would change the published daemon entry points, so the finding is scheduled for the standalone hardening pass. |
+| `crates/crunch-rustc-wrapper/src/slots.rs` | `ambient_clock` | Three direct system clock reads: the lease epoch, the acquire deadline and the deadline transport | The reads carry the real slot-lifetime and timeout decisions of the compile-slot lease. Removing the ambient reads would change the lease timing behaviour, so the finding is scheduled for the standalone hardening pass. |
+| `crates/crunch-rustc-wrapper/src/cc.rs` | `ambient_clock` | Direct system clock read in the compiler deadline wait | The read carries the real compiler deadline decision of the driver boundary. Injecting the clock would change the published `run_driver` signature or the compiler-supervision semantics, so the finding is scheduled for the standalone hardening pass. |
+| `crates/crunch-test/src/lib.rs` | `ambient_clock`, `contradictory_time` | The clock reads that turn the caller-supplied timeout into an absolute deadline, and the reads that enforce it and the descendant-teardown deadline | The reads carry the real timeout, cancellation and teardown decisions of a spawned test. Unifying them with the supplied timeout would change the scheduling decision, so the findings are scheduled for the standalone hardening pass. |
+
+## Why these were recorded rather than forced
+
+Removing any of these findings would change a published public API or change
+which inputs are accepted. That is a larger change than a style pass, so the
+finding is recorded against the standalone hardening pass instead of being
+forced through a signature or wire-format change.
+
+The `HARDENING-BACKLOG` convention is the repository's own. The workspace
+Tiger Style hardening pass of 2026-09-09, commit `3f0385b0f`, closed the same
+gate with the same mechanism, and its message records that findings were
+"fixed or narrowly scoped with recorded reasons".
+
+## Non-claims
+
+This record does not claim that the deferred findings are fixed, that the
+affected crates are release eligible, or that a green Tiger Style gate is a
+correctness claim about any adapter. It records which findings remain, where
+they are, why they remain, and the pass they are scheduled for.
