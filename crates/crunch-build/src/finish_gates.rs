@@ -541,6 +541,12 @@ mod tests {
         assert!(parse_gate(&"x".repeat(MAX_DECLARATION_BYTES + 1)).is_err());
         assert!(parse_gate("{}").is_err());
     }
+    #[test]
+    fn embedded_policy_sources_match_recorded_digests() {
+        // Every adopted finish gate renders through this check, so a stale
+        // digest record fails each finish-gated build at dispatch.
+        assert_eq!(policy(), Ok(()));
+    }
     #[cfg(mantle_native_dlopen)]
     #[test]
     fn real_glibc_audit_distinguishes_missing_and_opened_sonames() {
