@@ -11,6 +11,8 @@ fun { name, adapter, config, python, uv, project, artifacts,
     env = std.record.map (fun _key value => value | String) native_inputs.env,
     path = native_inputs.path | Array String,
   } in
+  # Nickel records are recursive: `name = name` would refer to the field itself.
+  let derivation_name = name in
   let roots = unique (
     ([adapter, config, python, uv, project] | Array mantle.StorePath)
     @ (artifacts | Array mantle.StorePath)
@@ -18,7 +20,7 @@ fun { name, adapter, config, python, uv, project, artifacts,
     @ (runtime_inputs | Array mantle.StorePath)
     @ (git_sources | Array mantle.StorePath)
   ) in {
-    name = name,
+    name = derivation_name,
     builder = adapter,
     system = 'x86_64-linux,
     outputs = ["out"],

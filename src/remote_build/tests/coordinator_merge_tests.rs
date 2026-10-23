@@ -10,7 +10,8 @@ use crate::remote_build::gateway::GatewayPhase;
 
 fn gateway_record(public_byte: char, binding: Option<RemoteProductionAttemptBinding>) -> GatewayAttemptRecord {
     let request = fixture_derivation_request();
-    let drv_path = fixture_derivation_drv_path(&request);
+    // Gateway attempts admit Nix-client derivations, which live under /nix/store.
+    let drv_path = fixture_derivation_drv_path(&request).replacen("/mantle/store/", "/nix/store/", 1);
     let mut record = GatewayAttemptRecord {
         public_id: public_byte.to_string().repeat(64),
         subject: "subject".into(),

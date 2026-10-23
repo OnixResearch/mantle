@@ -62,7 +62,9 @@ let normalize_native = fun raw =>
       std.fail_with "native-input-env-reserved: %{key}"
     else resolve value
   ) (field_or "env" {} raw) in
-  let path = std.array.map (fun value =>
+  # Bound outside the record: Nickel records are recursive, so `path = path`
+  # inside the result would refer to the field itself.
+  let path_entries = std.array.map (fun value =>
     let resolved = resolve value in
     if !(std.string.is_match "^\\{\\{role:" value)
       || std.string.is_match ":" resolved then
@@ -72,9 +74,9 @@ let normalize_native = fun raw =>
   if !known then std.fail_with "native-input-invalid: unknown declaration field"
   else if std.array.length (std.record.fields roles) > 64
     || std.array.length (std.record.fields environment) > 64
-    || std.array.length path > 64 then
+    || std.array.length path_entries > 64 then
     std.fail_with "native-input-invalid: declaration exceeds 64 entries"
-  else { inputs = std.record.values roles, env = environment, path = path }
+  else { inputs = std.record.values roles, env = environment, path = path_entries }
 in
 let RustOfflineCargoPackage = {
   name | Name,

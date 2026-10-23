@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -1323,8 +1326,21 @@ impl ActionResultWorkflow {
         assert!(!trusted_key.is_empty());
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
+        let endpoint = tempfile::tempdir().unwrap();
+        let binding_config = endpoint.path().join("remote-endpoint-binding.json");
+        remote_endpoint_binding::write_endpoint_bindings(
+            endpoint.path(),
+            &binding_config,
+            remote_endpoint_binding::Bindings {
+                store_prefix: "/nix/store",
+                builder: None,
+                substituters: &[server.base_url.as_str()],
+            },
+        );
         let report = parse_successful_json(
             workflow_build_command(SHARED_ACTION_RESULT_PROJECT, store.path(), state.path())
+                .arg("--remote-binding-config")
+                .arg(&binding_config)
                 .args([
                     "--nix-compat",
                     "--substituters",

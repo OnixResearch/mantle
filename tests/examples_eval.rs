@@ -98,11 +98,17 @@ fn malformed_example_fails_before_export() {
 
 #[test]
 fn seed_dependent_example_without_seed_fails_loudly() {
-    let err = crunch_eval::evaluate_str_to_json(MISSING_SEED_EXAMPLE, &stdlib_import_path()).unwrap_err();
-    let rendered = err.to_string();
+    // The same recipe evaluates once a seed record supplies the store path, so
+    // the failure below comes from the missing seed and not from the recipe.
+    let seeded = MISSING_SEED_EXAMPLE.replace(
+        r#"import "seed.ncl""#,
+        r#"{ bash = "/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9" }"#,
+    );
+    assert_ne!(seeded, MISSING_SEED_EXAMPLE);
+    crunch_eval::evaluate_str_to_json(&seeded, &stdlib_import_path()).expect("a supplied seed evaluates");
 
-    assert!(!rendered.is_empty());
-    assert!(rendered.contains("seed.ncl") || rendered.contains("import"), "unexpected error: {rendered}");
+    let err = crunch_eval::evaluate_str_to_json(MISSING_SEED_EXAMPLE, &stdlib_import_path()).unwrap_err();
+    assert!(!err.to_string().is_empty());
 }
 
 #[test]

@@ -241,6 +241,37 @@ fn full_serde_round_trip() {
 // ── Fetcher stdlib tests ───────────────────────────────────────────────
 
 #[test]
+fn python_recipe_lowers_declared_roots_to_a_named_derivation() {
+    let adapter = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-adapter";
+    let roots = [
+        adapter,
+        "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-config",
+        "/nix/store/cccccccccccccccccccccccccccccccc-python",
+        "/nix/store/dddddddddddddddddddddddddddddddd-uv",
+        "/nix/store/ffffffffffffffffffffffffffffffff-project",
+    ];
+    let expression = format!(
+        r#"(import "python.ncl") {{
+             name = "py-demo",
+             adapter = "{}",
+             config = "{}",
+             python = "{}",
+             uv = "{}",
+             project = "{}",
+             artifacts = [],
+             native_inputs = {{ inputs = {{}}, env = {{}}, path = [] }},
+             runtime_inputs = [],
+           }}"#,
+        roots[0], roots[1], roots[2], roots[3], roots[4]
+    );
+    let planned: serde_json::Value =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+    assert_eq!(planned["name"], "py-demo");
+    assert_eq!(planned["builder"], adapter);
+    assert_eq!(planned["inputs"], serde_json::json!(roots));
+}
+
+#[test]
 fn fetchurl_produces_fod_record() {
     let result = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in

@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read as _;
@@ -490,6 +493,7 @@ struct ProductionFixture {
     store: PathBuf,
     build_file: PathBuf,
     credentials: PathBuf,
+    binding_config: PathBuf,
     payload: Vec<u8>,
 }
 
@@ -499,6 +503,12 @@ fn production_fixture(root: &Path) -> ProductionFixture {
     let store = root.join("store");
     let credentials = credential_directory(&state);
     fs::create_dir(&store).expect("private client store");
+    let binding_config = root.join("remote-endpoint-binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(&state, &binding_config, remote_endpoint_binding::Bindings {
+        store_prefix: "/mantle/store",
+        builder: Some("production-builder"),
+        substituters: &[],
+    });
     let payload = (0..PRODUCTION_PAYLOAD_BYTES)
         .map(|index| u8::try_from(index % 251).expect("patterned source byte"))
         .collect::<Vec<_>>();
@@ -535,6 +545,7 @@ fn production_fixture(root: &Path) -> ProductionFixture {
         store,
         build_file,
         credentials,
+        binding_config,
         payload,
     }
 }
@@ -573,6 +584,8 @@ fn run_production(
             "--remote-secret-manifest",
         ])
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("secretspec.toml"))
+        .arg("--remote-binding-config")
+        .arg(&fixture.binding_config)
         .env("CREDENTIALS_DIRECTORY", &fixture.credentials)
         .env("CRUNCH_NO_FUSE", "1")
         .env("TMPDIR", root);
@@ -592,6 +605,8 @@ fn run_production(
             "/mantle/store".to_string(),
             "--store-backend".to_string(),
             "snix".to_string(),
+            "--remote-binding-config".to_string(),
+            fixture.binding_config.display().to_string(),
             "remote".to_string(),
             "serve".to_string(),
             "--endpoint-id".to_string(),

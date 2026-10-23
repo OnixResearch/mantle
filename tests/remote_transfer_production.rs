@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::fd::AsRawFd as _;
@@ -68,6 +71,7 @@ const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const REMOTE_TICKET_INPUT_FD: i32 = 9;
 const REMOTE_TICKET_INPUT_FILENAME: &str = "remote-ticket.secret";
+const REMOTE_BINDING_CONFIG_FILENAME: &str = "remote-endpoint-binding.json";
 
 /// Serializes the transfer tests that spawn the binary with ticket descriptors.
 ///
@@ -1029,6 +1033,7 @@ fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_dige
         "--remote-secret-manifest",
         secret_manifest().to_str().expect("UTF-8 secret manifest"),
     ]);
+    command.arg("--remote-binding-config").arg(remote_binding_config_path(state_dir));
     command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
     configure_ticket_input_fd(&mut command, state_dir);
     command
@@ -1057,6 +1062,7 @@ fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -
         "--remote-secret-manifest",
         secret_manifest().to_str().expect("UTF-8 secret manifest"),
     ]);
+    command.arg("--remote-binding-config").arg(remote_binding_config_path(state_dir));
     command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
     configure_ticket_input_fd(&mut command, state_dir);
     command
@@ -1118,6 +1124,20 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
     fs::set_permissions(credential_path, fs::Permissions::from_mode(PRIVATE_FILE_MODE))
         .expect("private ticket input file");
     write_service_credentials(state_dir);
+    // The client and its generated local receiver both re-resolve this binding.
+    remote_endpoint_binding::write_endpoint_bindings(
+        state_dir,
+        &remote_binding_config_path(state_dir),
+        remote_endpoint_binding::Bindings {
+            store_prefix: STORE_PREFIX,
+            builder: Some(BUILDER_ID),
+            substituters: &[],
+        },
+    );
+}
+
+fn remote_binding_config_path(state_dir: &Path) -> PathBuf {
+    state_dir.parent().expect("state dir has a parent").join(REMOTE_BINDING_CONFIG_FILENAME)
 }
 
 fn test_unix_time_now_s() -> u64 {

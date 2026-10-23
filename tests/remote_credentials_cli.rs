@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::fs;
 use std::io::Read as _;
 use std::io::Seek as _;
@@ -33,6 +36,7 @@ const FAKE_SOPS_SLEEP_SECS: u64 = 60;
 const FAKE_SOPS_OUTPUT_BYTES: usize = 70_000;
 const REMOTE_TICKET_INPUT_LIMIT_BYTES: usize = 256;
 const TEST_CUSTOM_BUILDER_PROGRAM: &str = "/bin/false";
+const REMOTE_BINDING_CONFIG_FILENAME: &str = "remote-endpoint-binding.json";
 
 #[test]
 fn ticket_creation_delivers_only_to_fd_and_persists_verifier_only_state() {
@@ -107,13 +111,24 @@ fn ticket_creation_with_relative_state_dir_reaches_secret_worker_in_same_state()
 
 #[test]
 fn build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_terminal_inputs() {
+    let root = tempfile::tempdir().unwrap();
+    // Bind the builder so dispatch reaches ticket input before evaluation.
+    remote_endpoint_binding::write_endpoint_bindings(
+        &root.path().join("state"),
+        &root.path().join(REMOTE_BINDING_CONFIG_FILENAME),
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/mantle/store",
+            builder: Some("test-builder"),
+            substituters: &[],
+        },
+    );
     let valid_credential = format!("ticket-1:{}\n", "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI");
     let mut valid_file = tempfile::tempfile().unwrap();
     use std::io::Write as _;
     valid_file.write_all(valid_credential.as_bytes()).unwrap();
     valid_file.rewind().unwrap();
     inherit_fd(valid_file.as_raw_fd());
-    let valid = build_with_ticket_fd(valid_file.as_raw_fd());
+    let valid = build_with_ticket_fd(root.path(), valid_file.as_raw_fd());
     assert!(!valid.status.success());
     assert!(!String::from_utf8_lossy(&valid.stderr).contains("remote-ticket-input"));
     assert!(!String::from_utf8_lossy(&valid.stderr).contains(valid_credential.trim_end()));
@@ -122,7 +137,7 @@ fn build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_termina
     invalid_file.write_all(b"invalid-ticket").unwrap();
     invalid_file.rewind().unwrap();
     inherit_fd(invalid_file.as_raw_fd());
-    let invalid = build_with_ticket_fd(invalid_file.as_raw_fd());
+    let invalid = build_with_ticket_fd(root.path(), invalid_file.as_raw_fd());
     assert!(!invalid.status.success());
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("remote-ticket-token-missing-colon"));
     assert!(!String::from_utf8_lossy(&invalid.stderr).contains("invalid-ticket"));
@@ -132,7 +147,7 @@ fn build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_termina
     oversized_file.write_all(&vec![b'x'; oversized_bytes]).unwrap();
     oversized_file.rewind().unwrap();
     inherit_fd(oversized_file.as_raw_fd());
-    let oversized = build_with_ticket_fd(oversized_file.as_raw_fd());
+    let oversized = build_with_ticket_fd(root.path(), oversized_file.as_raw_fd());
     assert!(!oversized.status.success());
     assert!(String::from_utf8_lossy(&oversized.stderr).contains("remote-ticket-input-size-limit-exceeded"));
 
@@ -141,7 +156,7 @@ fn build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_termina
     assert_eq!(unsafe { libc::grantpt(terminal_fd) }, 0);
     assert_eq!(unsafe { libc::unlockpt(terminal_fd) }, 0);
     inherit_fd(terminal_fd);
-    let terminal = build_with_ticket_fd(terminal_fd);
+    let terminal = build_with_ticket_fd(root.path(), terminal_fd);
     assert_eq!(unsafe { libc::close(terminal_fd) }, 0);
     assert!(!terminal.status.success());
     assert!(String::from_utf8_lossy(&terminal.stderr).contains("remote-ticket-input-terminal-forbidden"));
@@ -291,8 +306,14 @@ fn oversized_sops_output_is_rejected_without_state_write() {
     assert!(!root.path().join("remote-builders/tickets.json").exists());
 }
 
-fn build_with_ticket_fd(ticket_fd: i32) -> std::process::Output {
+fn build_with_ticket_fd(root: &Path, ticket_fd: i32) -> std::process::Output {
     mantle_command()
+        .arg("--state-dir")
+        .arg(root.join("state"))
+        .arg("--store")
+        .arg(root.join("store"))
+        .arg("--remote-binding-config")
+        .arg(root.join(REMOTE_BINDING_CONFIG_FILENAME))
         .args([
             "build",
             "missing-remote-build-input.ncl",

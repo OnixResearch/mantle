@@ -12752,10 +12752,18 @@ fn reconcile_coordinator_log_summaries(state_dir: &Path, state: &mut RemoteCoord
         let manifest = crate::remote_attempt_log_store::load_remote_attempt_log_manifest(state_dir, &scope, policy)
             .map_err(|error| RunError::Internal(format!("reconciling immutable attempt log: {error}")))?;
         let observed = remote_attempt_log_control_summary(&manifest, retention_policy);
-        if job.immutable_log.as_ref() != Some(&observed) {
-            job.immutable_log = Some(observed);
+        if job.immutable_log.as_ref() == Some(&observed) {
+            continue;
+        }
+        // An attempt that has appended no record keeps no summary on disk. Its
+        // empty summary is derived on every load, so filling it in is not a
+        // durable change: a read must not advance the persisted revision that
+        // other holders of this coordinator state are fenced against.
+        let is_unlogged_attempt = job.immutable_log.is_none() && manifest.next_cursor == 0;
+        if !is_unlogged_attempt {
             is_changed = true;
         }
+        job.immutable_log = Some(observed);
     }
     debug_assert!(state.jobs.len() <= MAX_REMOTE_STATUS_ITEMS);
     debug_assert!(state.jobs.values().all(|job| job.current_attempt.is_none() || job.immutable_log.is_some()));
@@ -19249,6 +19257,28 @@ mod tests {
         assert_eq!(migration.non_claim, LEGACY_LOG_MIGRATION_NON_CLAIM);
         assert!(persisted_json.get("logs").is_none());
         assert!(job.immutable_log.is_none());
+    }
+
+    #[test]
+    fn coordinator_load_of_unlogged_attempt_keeps_the_persisted_revision() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let dispatch = admit_fixture_dispatch(&mut state, &fixture_coordinator_request()).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let persisted = fs::read(coordinator_state_path(temp.path())).expect("dispatched state persists");
+
+        let loaded = load_coordinator_state(temp.path()).expect("reader loads the dispatched state");
+
+        assert!(loaded.jobs[&job_id].immutable_log.is_some(), "the empty attempt-log summary is derived");
+        assert_eq!(fs::read(coordinator_state_path(temp.path())).expect("state after read"), persisted);
+        assert_eq!(loaded.persistence_revision.get(), state.persistence_revision.get());
+        save_coordinator_state(temp.path(), &state).expect("the writer holding the read revision still commits");
     }
 
     #[test]

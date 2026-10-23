@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -425,6 +428,16 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
     let remote_cache = FakeBinaryCache::serve(&path_info, nar_bytes);
     let trusted_key = trusted_public_key_arg(local_state_dir.path());
     let ncl_file = work_dir.path().join("attest-remote-subst.ncl");
+    let binding_config = work_dir.path().join("remote-endpoint-binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(
+        &work_dir.path().join("endpoint-state"),
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/nix/store",
+            builder: None,
+            substituters: &[remote_cache.url.as_str()],
+        },
+    );
 
     let second_output = crunch_cmd()
         .arg("--json")
@@ -433,6 +446,8 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
         .arg("--state-dir")
         .arg(substitute_state_dir.path())
         .arg("--nix-compat")
+        .arg("--remote-binding-config")
+        .arg(&binding_config)
         .arg("build")
         .arg("--substituters")
         .arg(&remote_cache.url)
@@ -551,9 +566,21 @@ fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
     let excluded_policy = format!("{local_key}\n");
     std::fs::write(&policy, &excluded_policy).unwrap();
     let ncl_file = work.path().join("casita-unlisted-cache-signer.ncl");
+    let binding_config = work.path().join("remote-endpoint-binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(
+        &work.path().join("endpoint-state"),
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/nix/store",
+            builder: None,
+            substituters: &[cache.url.as_str()],
+        },
+    );
     let build = || {
         crunch_cmd()
             .args(["--json", "--store-backend", "casita", "--nix-compat"])
+            .arg("--remote-binding-config")
+            .arg(&binding_config)
             .arg("--store")
             .arg(destination_store.path())
             .arg("--state-dir")

@@ -1,3 +1,6 @@
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::fs;
 use std::io::BufRead as _;
 use std::io::BufReader;
@@ -218,6 +221,17 @@ fn selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets
     let worker_store = root.path().join("worker-store");
     let coordinator_state = root.path().join("coordinator-state");
     let missing_manifest = root.path().join("missing-secretspec.toml");
+    let binding_config = root.path().join("remote-endpoint-binding.json");
+    // The default receiver identity; the binding table stays outside both states.
+    remote_endpoint_binding::write_endpoint_bindings(
+        &root.path().join("endpoint-state"),
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/mantle/store",
+            builder: Some("local-builder"),
+            substituters: &[],
+        },
+    );
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
             crunch_store::StoreBackend::Snix,
@@ -235,6 +249,7 @@ fn selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets
     let failure = Command::cargo_bin("mantle")
         .unwrap()
         .args(["--state-dir", coordinator_state.to_str().unwrap()])
+        .args(["--remote-binding-config", binding_config.to_str().unwrap()])
         .args(["--store", worker_store.to_str().unwrap()])
         .args(["--store-backend", "casita", "remote", "serve"])
         .args(["--binding", "stdio-once", "--executor", "local-build"])

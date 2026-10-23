@@ -6021,7 +6021,7 @@ fn remote_stdio_builder_command(
     let worker_root = local_remote_worker_root(ctx, builder);
     let worker_state_dir = worker_root.join("state");
     let worker_store_dir = worker_root.join("store");
-    let args = vec![
+    let mut args = vec![
         "--state-dir".to_string(),
         ctx.resolved_state_dir.display().to_string(),
         "--store".to_string(),
@@ -6047,6 +6047,14 @@ fn remote_stdio_builder_command(
         "--secret-provider".to_string(),
         secret_request.provider.clone(),
     ];
+    // The generated local receiver independently loads the operator's binding
+    // file at startup; without it, a `local-build` receiver fails closed.
+    if let Some(binding_config) = ctx.remote_binding_config.as_deref() {
+        args.extend([
+            "--remote-binding-config".to_string(),
+            binding_config.display().to_string(),
+        ]);
+    }
     Ok((program, args))
 }
 

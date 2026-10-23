@@ -112,6 +112,10 @@ fn production_shared_binding_lease_allows_independent_ticket_commit_once() {
     let now = crate::unix_time_now_s().unwrap();
     let key = fixture_ticket_verifier_key();
     let mut ticket = fixture_ticket();
+    // Durable ticket state admits only generated IDs; this commit has no
+    // authenticated peer, so the ticket is not endpoint-bound.
+    ticket.id = "c".repeat(32);
+    ticket.bound_client_endpoint = None;
     ticket.created_unix_s = now - 1;
     ticket.expires_unix_s = now + 3600;
     let ticket_id = ticket.id.clone();

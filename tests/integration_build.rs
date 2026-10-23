@@ -1518,6 +1518,29 @@ fn casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_s
             "/mantle/store".to_string(),
         );
         config.remote_cache_urls.push(remote.url.clone());
+        // Isolated adapter seam: this test proves the destination signer policy,
+        // not durable endpoint/binding acceptance (covered separately).
+        #[derive(Debug)]
+        struct CacheSourceLease;
+        impl crunch_store::StoreSourceLease for CacheSourceLease {}
+        #[derive(Debug)]
+        struct CacheSourceAdmission(String);
+        impl crunch_store::StoreSourceAdmission for CacheSourceAdmission {
+            fn admit(
+                &self,
+                source: crunch_store::StoreSource<'_>,
+                prefix: &str,
+            ) -> Result<std::sync::Arc<dyn crunch_store::StoreSourceLease>, crunch_store::Error> {
+                match source {
+                    crunch_store::StoreSource::Substituter(url) if url == self.0 && prefix == "/mantle/store" => {
+                        Ok(std::sync::Arc::new(CacheSourceLease))
+                    }
+                    _ => Err(crunch_store::Error::Store("cache-test-source-out-of-scope".into())),
+                }
+            }
+        }
+        let canonical_url = url::Url::parse(&remote.url).unwrap().as_str().to_string();
+        config.source_admission = Some(std::sync::Arc::new(CacheSourceAdmission(canonical_url)));
         let mut destination = crunch_store::StoreHandle::open(config).await.unwrap();
         let error = destination.try_substitute_remote(*path.digest(), &path, "out", true, None).await.unwrap_err();
         assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");

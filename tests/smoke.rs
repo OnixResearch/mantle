@@ -4,6 +4,8 @@
 //! directory without needing a writable /nix/store. Requires bwrap.
 
 mod audit_support;
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -1232,12 +1234,24 @@ fn smoke_build_push_http_pull_round_trip() {
     std::fs::create_dir_all(&state_b).unwrap();
 
     let logical_store_path = format!("{DEFAULT_LOGICAL_STORE_PREFIX}/{}", out.file_name().unwrap().to_string_lossy());
+    let binding_config = work.path().join("remote-endpoint-binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(
+        &work.path().join("endpoint-state"),
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: DEFAULT_LOGICAL_STORE_PREFIX,
+            builder: None,
+            substituters: &[server.base_url.as_str()],
+        },
+    );
     let mut pull_cmd = crunch_cmd();
     pull_cmd
         .arg("--store")
         .arg(&store_b)
         .arg("--state-dir")
         .arg(&state_b)
+        .arg("--remote-binding-config")
+        .arg(&binding_config)
         .arg("store")
         .arg("pull")
         .arg("--from")
