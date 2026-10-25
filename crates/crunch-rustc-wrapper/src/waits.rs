@@ -325,7 +325,13 @@ fn capture(socket: UnixDatagram, stop: Arc<AtomicBool>, context: WaitContext, or
                 let receipt_ns = monotonic_ns().unwrap_or(origin_ns).saturating_sub(origin_ns);
                 capture_datagram(&mut result, &buffer[..received_bytes], &context, receipt_ns);
             }
-            Err(error) if matches!(error.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+            // A timed receive is never restarted after a signal. EINTR, like a timeout, consumed no datagram.
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut | io::ErrorKind::Interrupted
+                ) =>
+            {
                 if stop.load(Ordering::Acquire) {
                     return result;
                 }
@@ -1922,5 +1928,52 @@ mod tests {
         let library = binding_for(&["--crate-name", "demo", "src/lib.rs", "--crate-type", "lib"]);
         assert_eq!(attempt_role(Some(&library), None), ProcessRole::TargetCompiler);
         assert_eq!(attempt_role(None, None), ProcessRole::ToolProbe);
+    }
+
+    extern "C" fn ignore_interrupt(_signal: libc::c_int) {}
+
+    #[test]
+    fn an_interrupted_receive_keeps_capturing_compiler_frames() {
+        use std::os::unix::thread::JoinHandleExt as _;
+        let handler = ignore_interrupt as extern "C" fn(libc::c_int) as libc::sighandler_t;
+        // SAFETY: the handler is empty, so it is async-signal-safe. SIGURG is ignored by default and
+        // only this test sends it, to one collector receive thread.
+        assert_ne!(unsafe { libc::signal(libc::SIGURG, handler) }, libc::SIG_ERR);
+        let (root, collector) = collector();
+        let sender = UnixDatagram::unbound().unwrap();
+        sender.connect(collector.socket_path()).unwrap();
+        let receiver = collector.receiver.as_ref().unwrap().as_pthread_t();
+        // A receive with a timeout is never restarted: each interrupted wait fails with EINTR.
+        for _ in 0..8 {
+            // SAFETY: the receive thread is joinable and not yet joined, so its handle stays valid.
+            assert_eq!(unsafe { libc::pthread_kill(receiver, libc::SIGURG) }, 0);
+            thread::sleep(Duration::from_millis(5));
+        }
+        let binding = binding_for(&["--crate-name", "demo", "src/lib.rs", "--crate-type", "lib"]);
+        let kinds = [
+            FrameKind::Started,
+            FrameKind::Exited {
+                outcome: RunOutcome::Success,
+            },
+            FrameKind::Reaped,
+        ];
+        for (sequence, kind) in (1..).zip(kinds) {
+            let frame = Frame {
+                invocation: collector.context.invocation.clone(),
+                clock: collector.context.clock.clone(),
+                token: Digest::from_slice(b"interrupted-receive"),
+                sequence,
+                source_offset_ns: 0,
+                binding: matches!(kind, FrameKind::Started).then(|| binding.clone()),
+                kind,
+            };
+            sender.send(&serde_json::to_vec(&frame).unwrap()).unwrap();
+        }
+        let origin_ns = collector.origin_ns;
+        let report = collector.finish(RunOutcome::Success, origin_ns, 10, Some(20)).report;
+        assert_eq!(report.timeline.dropped_records, 0);
+        assert!(report.timeline.complete);
+        assert_eq!(report.timeline.events.len(), 3);
+        fs::remove_dir_all(root).unwrap();
     }
 }

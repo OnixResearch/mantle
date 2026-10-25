@@ -375,8 +375,11 @@ capture cannot provide first-error, metadata-ready, enqueue, pause or resume
 times. Unsupported compiler phases and paused residency remain unavailable,
 not zero or reconstructed from files/mtimes/process completion. Process-tree
 sampling names its CPU/RSS scope, sampling gaps and observed-peak lower bound;
-summed RSS can double-count shared mappings. A failed diagnostic sink never
-changes ordinary compilation, output acceptance, scheduling or cache identity.
+summed RSS can double-count shared mappings. A receive interrupted by a signal
+is retried: it consumes no record and does not end capture. A failed diagnostic
+sink never changes ordinary compilation, output acceptance, scheduling or cache
+identity. See the
+[wait capture release note](release-notes/rust-wait-capture-2026-10-25.md).
 
 Diagnostic budgets include 4,096 unit identities, 16,384 attempts, 65,536 shared
 event/resource records, 2 KiB per record and 16 MiB per sidecar; sampling is no
