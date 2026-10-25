@@ -565,12 +565,7 @@ fn assemble_attempts(
         let is_unique = matches.next().is_none()
             && first_match.is_some_and(|fact| bindings.values().filter(|b| matches_binding(b, fact)).count() == 1);
         let fact = first_match.filter(|_| is_unique);
-        let role = match (binding, fact) {
-            (_, Some(f)) if f.host => ProcessRole::HostCompiler,
-            (Some(b), _) if b.proc_macro => ProcessRole::HostCompiler,
-            (Some(b), _) if b.source_path.is_some() => ProcessRole::TargetCompiler,
-            _ => ProcessRole::ToolProbe,
-        };
+        let role = attempt_role(binding, fact);
         let unit = assemble_unit(timeline, context, binding, fact, &role);
         let resolved_process = digest_json(
             "wait-resolved-wrapper-process-v1",
@@ -602,6 +597,19 @@ fn assemble_attempts(
     assert_eq!(ids.len(), timeline.attempts.len());
     // Tokens are a set, so every collected key is unique.
     ids.into_iter().collect()
+}
+/// A host-target fact, or a proc-macro compile of a source file, runs on the host.
+/// Cargo's target-information probe reads its source from stdin while listing
+/// every crate type, proc-macro included, so a launch without a source file
+/// stays a tool probe whatever crate types it names.
+fn attempt_role(binding: Option<&Binding>, fact: Option<&CargoFact>) -> ProcessRole {
+    match (binding, fact) {
+        (_, Some(f)) if f.host => ProcessRole::HostCompiler,
+        (Some(b), _) if b.source_path.is_none() => ProcessRole::ToolProbe,
+        (Some(b), _) if b.proc_macro => ProcessRole::HostCompiler,
+        (Some(_), _) => ProcessRole::TargetCompiler,
+        (None, _) => ProcessRole::ToolProbe,
+    }
 }
 fn assemble_unit(
     timeline: &mut Timeline,
@@ -1860,5 +1868,59 @@ mod tests {
         assert!(matches!(report.error_drain_ns, Metric::Unavailable(Unavailable::Censored)));
         assert_eq!(report.ordinary_outcome, RunOutcome::Success);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    fn binding_for(args: &[&str]) -> Binding {
+        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+        let (parsed, arguments) = parse_wrapper_arguments(&args).unwrap();
+        Binding {
+            manifest: None,
+            source_path: parsed.source_path,
+            features: parsed.features,
+            opt_level: parsed.opt_level,
+            debuginfo: parsed.debuginfo,
+            test: parsed.is_test,
+            explicit_target: parsed.explicit_target,
+            proc_macro: parsed.is_proc_macro,
+            arguments,
+            compiler: Digest::from_slice(b"rustc"),
+        }
+    }
+
+    #[test]
+    fn target_info_probe_listing_proc_macro_stays_a_tool_probe() {
+        let probe = binding_for(&[
+            "-",
+            "--crate-name",
+            "___",
+            "--print=file-names",
+            "--crate-type",
+            "bin",
+            "--crate-type",
+            "rlib",
+            "--crate-type",
+            "dylib",
+            "--crate-type",
+            "cdylib",
+            "--crate-type",
+            "staticlib",
+            "--crate-type",
+            "proc-macro",
+            "--print=sysroot",
+            "--print=cfg",
+        ]);
+        assert!(probe.proc_macro);
+        assert!(probe.source_path.is_none());
+        assert_eq!(attempt_role(Some(&probe), None), ProcessRole::ToolProbe);
+    }
+
+    #[test]
+    fn compiles_of_source_files_keep_their_host_and_target_roles() {
+        let proc_macro = binding_for(&["--crate-name", "demo_macro", "src/lib.rs", "--crate-type", "proc-macro"]);
+        assert!(proc_macro.source_path.is_some());
+        assert_eq!(attempt_role(Some(&proc_macro), None), ProcessRole::HostCompiler);
+        let library = binding_for(&["--crate-name", "demo", "src/lib.rs", "--crate-type", "lib"]);
+        assert_eq!(attempt_role(Some(&library), None), ProcessRole::TargetCompiler);
+        assert_eq!(attempt_role(None, None), ProcessRole::ToolProbe);
     }
 }
