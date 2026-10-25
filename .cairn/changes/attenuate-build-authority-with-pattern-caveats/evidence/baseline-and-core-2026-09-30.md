@@ -82,3 +82,32 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
 This remains a scratch-only integration observation, not a production CLI, transport, Basalt reviewed-policy invocation, durable revocation service, restricted store backend or live project evaluator. Neither the scratch compatibility check nor the cached Radicle revision changes Basalt's pinned authority source or proves that Mantle's root Cargo window is ready.
+
+## Current-source integration handoff (2026-10-23; unverified)
+
+The scratch-only descriptions above are historical observations, not receipts
+for the current source. The production filter now lives in
+`crates/crunch-remote-core/src/caveat.rs`; the registered strict JSON adapter is
+`src/remote_build/authority_caveats.rs`. The live consumer is
+`src/nix_gateway/authority.rs`, which obtains the exact first canonically
+selected authenticated UCAN capability and invokes the registered policy through
+the final holder/replay verifier. Project declaration admission preserves the
+original owner and checks the exact rewritten goal; store/build operations bind
+the original exact target. Existing bearer tickets are still not portable
+holder-attenuable UCAN grants, and the pure site helpers alone do not confer
+authority on an unauthenticated caller.
+
+The boolean `admit_remote_job` gate now requires the final rewrite output to
+equal the original executed target, even when both targets happen to be inside
+all parent job/output scopes. Otherwise a caller could execute an unfiltered
+original effect after observing approval of a different rewritten effect.
+The regression fixture distinguishes that case from an identity rewrite and
+from ordinary parent-scope/deadline intersection. Project lowering remains a
+value-returning API and may forward its independently admitted rewritten goal.
+
+No build, test, formatter or proof was run for this handoff. Required current
+rails include the core `caveat::tests`, registered adapter tests, and the signed
+gateway/project receiver fixtures (including real selector effects and silent
+unknown/cross-owner/parent-widening rejection). Current acceptance must bind
+fresh source and results; none of the historical scratch counts above closes a
+current receiver verification task.

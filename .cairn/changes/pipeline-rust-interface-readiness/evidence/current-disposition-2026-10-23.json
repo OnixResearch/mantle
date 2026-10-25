@@ -1,0 +1,89 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "pipeline-rust-interface-readiness",
+  "maintenance_owner": "Rust compiler/provider and execution maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Selected compiler/Cargo explicitly reject actual feature options; pinned Headstart has documented UNFIXED SVH and unsafe residency/reservation behavior. No sandbox trial or native early-interface executor accepted.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "T1.3"
+      ],
+      "level": "partial-proposed-admission",
+      "support": "Exact selected tool/source/probe identities, provider source defects and hook boundaries retained; ADR 0126 remains Proposed, not enablement/approval."
+    },
+    {
+      "task_ids": [
+        "T1.1",
+        "T1.2",
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T4.1",
+        "T4.2",
+        "T4.3",
+        "T4.4",
+        "T5.1",
+        "T5.2",
+        "T5.3"
+      ],
+      "level": "unaccepted",
+      "support": "Prerequisite ordinary differential/session acceptance, source-fixed same-binary off/on identity, one-sandbox trial and native actual phase-notification route remain distinct uncompleted obligations."
+    }
+  ],
+  "local_remaining_actions": [
+    "Use retained failed processing probes; --version success never qualifies flags. Do not rerun known upstream unfixed workload.",
+    "Complete ordinary baseline/serial and default/native checks independently; preserve unsupported experimental cells.",
+    "Review source-fixed provider admission, exact patch/source/closure/license identities and finite containment policy; keep default path unchanged.",
+    "Only with qualified provider and accepted provisional-session machinery, implement/run trial and native route separately, including full-metadata-before-codegen, LTO/proc-macro/build-script barriers and after-publication body-failure/crash/cancel regressions."
+  ],
+  "external_missing_authority_or_capability": [
+    "Source-fixed Headstart-compatible rustc/Cargo closure proving default-hash ordinary incremental identity and same-binary off/on regressions.",
+    "Accepted bounded-session prerequisite and finite aggregate resident memory/task/teardown containment."
+  ],
+  "evidence_references": [
+    ".cairn/changes/pipeline-rust-interface-readiness/tasks.md:7-44",
+    ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500",
+    "adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md:16-41,58-86",
+    "target/cairn-finish-20261023/production-repaired-cohort-build/rustc.txt"
+  ],
+  "repeatability_recipe": [
+    "Do not repeat rejected probes just to confirm them; only requalify a genuinely changed provider identity.",
+    "Complete original T1 admission and separate T2 sandbox trial before T3/T4 native same-binary off/on acceptance.",
+    "Run independent supported ordinary commands in docs/native-rust-plan-validation.md:210-240 now; source-built full-provider admission is not experimental early-metadata qualification."
+  ],
+  "observed_commands": [
+    {
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "-Zearly-metadata",
+        "--print",
+        "cfg"
+      ],
+      "exit_code": 1,
+      "result": "unknown unstable option: early-metadata",
+      "evidence": ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500"
+    },
+    {
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "-Zheadstart",
+        "locate-project"
+      ],
+      "exit_code": 101,
+      "result": "unknown -Z flag: headstart",
+      "evidence": ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500"
+    }
+  ],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

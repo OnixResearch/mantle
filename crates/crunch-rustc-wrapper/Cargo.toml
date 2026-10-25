@@ -15,6 +15,7 @@ libc = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tempfile = "3"
+mantle-rust-differential-core = { path = "../mantle-rust-differential-core" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "time", "fs"] }
@@ -30,3 +31,7 @@ path = "src/bin/mantle-rust-cache-daemon.rs"
 [[bin]]
 name = "mantle-rustc-manifest"
 path = "src/bin/mantle-rustc-manifest.rs"
+
+[[bin]]
+name = "mantle-rust-wait-wrapper"
+path = "src/bin/mantle-rust-wait-wrapper.rs"

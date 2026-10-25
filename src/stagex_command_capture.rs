@@ -578,32 +578,6 @@ mod tests {
     use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
 
     const DRIVER_MODE: &str = "MANTLE_STAGEX_CAPTURE_TEST_MODE";
-    const HELPER_MODE: &str = "MANTLE_STAGEX_CAPTURE_HELPER_MODE";
-    const HELPER_OUTPUT: &str = "MANTLE_STAGEX_CAPTURE_HELPER_OUTPUT";
-
-    // Invoked only as a real subprocess by the isolated protected driver.
-    fn protected_capture_helper(mode: &str) {
-        let output = PathBuf::from(std::env::var_os(HELPER_OUTPUT).unwrap());
-        match mode {
-            "copy" => {
-                fs::copy(std::env::current_exe().unwrap(), output).unwrap();
-            }
-            "write" => {
-                fs::write(output, b"stagex-command-output\n").unwrap();
-            }
-            "child" => {
-                let status = std::process::Command::new(std::env::current_exe().unwrap())
-                    .args(["--exact".to_owned(), helper_test_name()])
-                    .env_clear()
-                    .env(HELPER_MODE, "write")
-                    .env(HELPER_OUTPUT, output)
-                    .status()
-                    .unwrap();
-                assert!(status.success());
-            }
-            _ => panic!("unknown capture fixture mode"),
-        }
-    }
 
     fn fixed(path: PathBuf, digest: &str) -> PlannedInput {
         PlannedInput {
@@ -614,17 +588,19 @@ mod tests {
         }
     }
 
-    fn fixture_command(id: &str, executable: PlannedInput, root: &Path, mode: &str, output: &Path) -> PlannedCommand {
+    fn fixture_command(
+        id: &str,
+        executable: PlannedInput,
+        root: &Path,
+        arguments: Vec<String>,
+        output: &Path,
+    ) -> PlannedCommand {
         PlannedCommand {
             command_id: id.to_owned(),
             executable,
-            // module_path! includes the crate root; libtest names do not.
-            arguments: vec!["--exact".to_owned(), helper_test_name()],
+            arguments,
             current_dir: root.to_path_buf(),
-            environment: BTreeMap::from([
-                (HELPER_MODE.to_owned(), mode.to_owned()),
-                (HELPER_OUTPUT.to_owned(), output.display().to_string()),
-            ]),
+            environment: BTreeMap::new(),
             inputs: Vec::new(),
             outputs: vec![PlannedOutput {
                 output_id: "output".to_owned(),
@@ -637,9 +613,25 @@ mod tests {
         }
     }
 
-    fn helper_test_name() -> String {
-        let path = module_path!();
-        format!("{}::protected_commands_bind_producers_and_preserve_rejections", path.split_once("::").unwrap().1)
+    fn fixture_executable(name: &str) -> PathBuf {
+        let path = std::env::var_os("PATH").unwrap();
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(name))
+            .find(|candidate| candidate.is_file())
+            .map(|candidate| fs::canonicalize(candidate).unwrap())
+            .unwrap_or_else(|| panic!("test executable is absent: {name}"))
+    }
+
+    /// Arguments that select `cp` behavior from the resolved copy executable.
+    ///
+    /// nixpkgs installs coreutils as one multi-call binary. Its canonical path,
+    /// and any renamed copy of it, must name the selected program explicitly.
+    fn copy_program_arguments(executable: &Path) -> Vec<String> {
+        if executable.file_name().is_some_and(|name| name == "coreutils") {
+            vec!["--coreutils-prog=cp".to_owned()]
+        } else {
+            Vec::new()
+        }
     }
 
     fn run(command: &PlannedCommand, stderr: &Path) -> Result<(), MesLibraryPlanError> {
@@ -654,10 +646,6 @@ mod tests {
 
     #[test]
     fn protected_commands_bind_producers_and_preserve_rejections() {
-        if let Ok(mode) = std::env::var(HELPER_MODE) {
-            protected_capture_helper(&mode);
-            return;
-        }
         if let Ok(mode) = std::env::var(DRIVER_MODE) {
             run_protected_driver(&mode);
             return;
@@ -680,13 +668,32 @@ mod tests {
 
     fn run_protected_driver(mode: &str) {
         let root = tempfile::tempdir().unwrap();
-        let executable = std::env::current_exe().unwrap();
-        let digest = blake3_file_hex(&executable).unwrap();
+        // Keep measured and copied inputs independent of the debug libtest binary's size.
+        let executable = fixture_executable("cp");
+        let copy_program = copy_program_arguments(&executable);
+        let digest = measure_file(&executable, FILE_BYTES_MAX).unwrap().digest_blake3;
         let generated = root.path().join("generated-helper");
         let output = root.path().join("output");
-        let first =
-            fixture_command("produce-helper", fixed(executable.clone(), &digest), root.path(), "copy", &generated);
-        let second = fixture_command(
+        let payload = root.path().join("payload");
+        fs::write(&payload, b"stagex-command-output\n").unwrap();
+        let payload_input = fixed(payload.clone(), &blake3_file_hex(&payload).unwrap());
+        let mut first = fixture_command(
+            "produce-helper",
+            fixed(executable.clone(), &digest),
+            root.path(),
+            copy_program
+                .iter()
+                .cloned()
+                .chain([
+                    "--".to_owned(),
+                    executable.display().to_string(),
+                    generated.display().to_string(),
+                ])
+                .collect(),
+            &generated,
+        );
+        first.inputs.push(first.executable.clone());
+        let mut second = fixture_command(
             "consume-helper",
             PlannedInput {
                 path: generated.clone(),
@@ -696,38 +703,66 @@ mod tests {
                 },
             },
             root.path(),
-            "write",
+            copy_program
+                .iter()
+                .cloned()
+                .chain([
+                    "--".to_owned(),
+                    payload.display().to_string(),
+                    output.display().to_string(),
+                ])
+                .collect(),
             &output,
         );
+        second.inputs.push(payload_input.clone());
         let policy = ProtectedExecPolicy::from_stagex_plan(executable, digest, &["fixture".to_owned()], &[]).unwrap();
         let supervisor = Arc::new(install_current_thread_exec_supervisor(policy).unwrap());
         let journal = root.path().join("commands.jsonl");
         let plan = if mode == "unknown-child" {
-            vec![fixture_command(
+            let shell = fixture_executable("bash");
+            let shell_digest = measure_file(&shell, FILE_BYTES_MAX).unwrap().digest_blake3;
+            supervisor
+                .promote_verified_output("fixture", &[], &[crate::protected_exec::PromotedExecutable {
+                    path: shell.clone(),
+                    digest_hex: shell_digest.clone(),
+                }])
+                .unwrap();
+            let mut nested = fixture_command(
                 "nested",
-                first.executable.clone(),
+                fixed(shell, &shell_digest),
                 root.path(),
-                "child",
+                ["-c".to_owned(), "\"$@\"; :".to_owned(), "fixture".to_owned()]
+                    .into_iter()
+                    .chain([first.executable.path.display().to_string()])
+                    .chain(copy_program.iter().cloned())
+                    .chain([
+                        "--".to_owned(),
+                        payload.display().to_string(),
+                        output.display().to_string(),
+                    ])
+                    .collect(),
                 &output,
-            )]
+            );
+            nested.inputs = vec![first.executable.clone(), payload_input];
+            vec![nested]
         } else {
             vec![first.clone(), second.clone()]
         };
         let capture = StagexCommandCapture::begin(plan.clone(), Arc::clone(&supervisor), &journal).unwrap();
         if mode == "missing" {
-            assert!(capture.finish().unwrap_err().to_string().contains("incomplete"));
+            assert!(capture.finish().is_err());
+            assert!(!generated.exists());
+            assert!(!output.exists());
+            assert!(supervisor.audit_events().is_empty());
         } else if mode == "cached-output" {
             fs::write(&generated, b"cached").unwrap();
-            assert!(run(&first, &root.path().join("first.stderr")).unwrap_err().to_string().contains("preexisting"));
+            assert!(run(&first, &root.path().join("first.stderr")).is_err());
+            assert_eq!(fs::read(&generated).unwrap(), b"cached");
+            assert!(!output.exists());
             assert!(supervisor.audit_events().is_empty());
             assert!(capture.finish().is_err());
         } else if mode == "unknown-child" {
-            assert!(
-                run(&plan[0], &root.path().join("first.stderr"))
-                    .unwrap_err()
-                    .to_string()
-                    .contains("unplanned protected")
-            );
+            assert!(run(&plan[0], &root.path().join("first.stderr")).is_err());
             assert_eq!(supervisor.audit_events().len(), 2);
             assert_eq!(fs::read(&output).unwrap(), b"stagex-command-output\n");
             assert!(capture.finish().is_err());
@@ -740,10 +775,11 @@ mod tests {
                 }])
                 .unwrap();
             if mode == "drift" {
+                // The produced helper keeps its read-only source mode; substitute the file itself.
+                fs::remove_file(&generated).unwrap();
                 fs::write(&generated, b"substituted executable").unwrap();
-                assert!(
-                    run(&second, &root.path().join("second.stderr")).unwrap_err().to_string().contains("digest drift")
-                );
+                assert!(run(&second, &root.path().join("second.stderr")).is_err());
+                assert!(!output.exists());
                 assert_eq!(supervisor.audit_events().len(), 1);
                 assert!(capture.finish().is_err());
             } else {
@@ -779,8 +815,13 @@ mod tests {
     #[test]
     fn generated_authority_requires_preceding_exact_producer() {
         let root = Path::new("/stagex-proof");
-        let first =
-            fixture_command("produce", fixed(root.join("seed"), &"a".repeat(64)), root, "copy", &root.join("helper"));
+        let first = fixture_command(
+            "produce",
+            fixed(root.join("seed"), &"a".repeat(64)),
+            root,
+            Vec::new(),
+            &root.join("helper"),
+        );
         let mut second = fixture_command(
             "consume",
             PlannedInput {
@@ -791,7 +832,7 @@ mod tests {
                 },
             },
             root,
-            "write",
+            Vec::new(),
             &root.join("result"),
         );
         validate_plan(&[first.clone(), second.clone()]).unwrap();

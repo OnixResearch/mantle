@@ -76,8 +76,35 @@ pub fn advance<'a>(
             .binary_search_by_key(&declaration.id, |row| row.id)
             .ok()
             .map(|position| &previous.components[position]);
+        if old.is_some_and(|row| row.restart_policy != declaration.restart_policy) {
+            return Err(ReadinessError::new(ErrorCode::DeclarationChanged, Some(declaration.id), None));
+        }
         if declaration.kind == ComponentKind::ProofStage {
             let previous_generation = old.and_then(|row| row.generation);
+            if let Some(generation) = previous_generation {
+                if current.generation.is_some_and(|next| next < generation) {
+                    return Err(ReadinessError::new(ErrorCode::StaleGeneration, Some(declaration.id), None));
+                }
+                if old.is_some_and(|row| has(&row.states, "failed") || has(&row.states, "complete"))
+                    && (current.generation.is_none()
+                        || current.generation == previous_generation
+                            && old.is_some_and(|row| row.states != current.states))
+                {
+                    return Err(ReadinessError::new(ErrorCode::RevivedTerminal, Some(declaration.id), None));
+                }
+                if current.generation.is_some()
+                    && current.generation != previous_generation
+                    && old.is_none_or(|row| !has(&row.states, "failed") && !has(&row.states, "complete"))
+                {
+                    return Err(ReadinessError::new(ErrorCode::UnobservedExit, Some(declaration.id), None));
+                }
+            }
+            if current.generation.is_some()
+                && current.generation != previous_generation
+                && !has(&current.states, "started")
+            {
+                return Err(ReadinessError::new(ErrorCode::UnobservedStart, Some(declaration.id), None));
+            }
             if current.generation != previous_generation
                 && has(&current.states, "started")
                 && let Some(blocker) = current.blocked_by.first()
@@ -115,6 +142,12 @@ fn validate_transition<'a>(
                 && old.is_none_or(|row| row.states != current.states || row.restart_action != current.restart_action)
             {
                 return Err(ReadinessError::new(ErrorCode::RevivedTerminal, Some(id), None));
+            }
+            if current.restart_action.is_some()
+                && current.request_acknowledged
+                && old.is_none_or(|row| !row.request_acknowledged)
+            {
+                return Err(ReadinessError::new(ErrorCode::MissingRequestAcknowledgement, Some(id), None));
             }
             return Ok(());
         }
@@ -187,6 +220,7 @@ fn derive_row<'a>(
         restart_policy: declaration.restart_policy,
         restart_action,
         ready: is_ready,
+        request_acknowledged: observation.is_some_and(|entry| entry.request_acknowledged),
         blocked_by,
     })
 }

@@ -14,3 +14,33 @@
 - [ ] [serial] V2 Run the full proof on Leviathan (`leviathan.cymric-daggertooth.ts.net`) as the sole execution host. Use a fresh hydrated source root and set `CRUNCH_NO_FUSE=1`. Before launch, retain exact source and profile transfer parity. Also retain observed host, system, architecture, kernel, resource, sandbox-tool, and pueue-task facts. Use SSH, rsync, and pueue only for outer transfer, launch, observation, and evidence retrieval. Do not use Mantle `--builder`, Nix remote-action dispatch, split-host stages, or route-name trust. Preserve exact provider, closure, stage, smoke, action-trust, reconciliation, audit, v2 receipt, and BLAKE3 evidence. Require stage1/stage2 binary equality and complete planned-versus-observed action coverage. Require all proof actions to execute locally on Leviathan. Require zero unknown events, missing events, live fetches, Cargo invocations, or fallback events. Require strict hermeticity. r[bootstrap_inventory.source_built_mantle_fixed_point]
 
 - [ ] [serial] V3 Run `nix develop -c cargo test -p mantle --test release_cli`, `nix develop -c cargo test -p mantle --test bootstrap_parity_cli`, focused action-trust core and CLI tests, the machine-contract checker, `nix develop -c cargo fmt --check -p mantle -v`, focused first-party Clippy, `git diff --check`, release-evidence verification, Cairn validation, and all three gates; do not mark the proof complete from preflight, a partial trust report, provider smoke, one-shot build, or a mismatched fixed point. r[bootstrap_inventory.source_built_mantle_fixed_point]
+
+## Current source handoff (2026-10-23)
+
+No build, test, formatter, or proof was run by this source/provider slice.
+Earlier receipts and checked historical tasks do not accept the current tree.
+`src/source_built_fixed_point_shell.rs` now validates all declared resource
+bounds before hydration, and the current cold route rejects inherited compiler
+cache/scheduling authority. See the current source-built section of
+`docs/operator-proof-guide.md` for the two distinct preparation/proof commands,
+profile identity handoff, 500 GiB example budget, and independent receipt and
+parity gates. Preparation must start from unexpanded authenticated source and
+publishes `source-profile.json` plus `source-program-preparation.json`; its
+output profile identity replaces the input profile identity at proof launch.
+
+Current host access is not the old blocker: Leviathan is reachable through the
+configured SSH route. Its retained `proof-inputs/` contains StageX, native, and
+Rust host-tool source manifests and Rust archive inputs. Those retained inputs
+are not a qualified current cohort: the final frozen Mantle/lock/vendor source
+must be rebound, every current source declaration covered, and inert programs
+prepared and reviewed before the cold proof. The historical native output pin
+in `bootstrap/evidence/full-source-provider-admission.json` remains an explicit
+expected value, not an observation of this tree. Do not replace it with an
+unreviewed output observed from the same run merely to obtain success.
+
+The integration owner must run the source-core/source-bundle/source-observation
+and source-built shell checks, then execute the real Leviathan cold proof and
+validate its v2 receipt, complete action reconciliation, stage1/stage2 binary
+equality, provider/closure links, and release evidence. I3–I5 and V1–V3 remain
+unaccepted until that current evidence exists; old wrappers, provider-only
+smokes, and successful source preparation do not substitute for it.

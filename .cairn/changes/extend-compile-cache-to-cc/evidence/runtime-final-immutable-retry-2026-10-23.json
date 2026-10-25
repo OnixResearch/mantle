@@ -1,0 +1,3612 @@
+{
+  "pueue_terminal_result": "Success",
+  "prior_harness_failure_and_repair": {"task": 38, "error": "rustc-wrapper-policy-readable-roots-invalid", "original_rail_blake3": "f73d720d66d03d35eb26d39f357478308f674d54f37d8a8159e43d28aaa8f189", "repaired_canonical_rail_blake3": "4228eb6231bd48924f284092a0ef8467c5cdee7916b4cc7a67d12bab7364b7a4", "repair_owner": "parent", "repair": "Canonical readable_roots sorted and deduplicated; no assertion weakened", "failed_attempt_retained": "/tmp/mantle-cc-runtime-20261023-c17"},
+  "inspected_runtime_summary": {"cache_cases": 20, "fifo_contention_grants": 5, "fifo_contention_releases": 5, "observed_live_compiler_peak": 2, "observed_per_build_peak": 1, "small_build_before_large_backlog": true, "authority_death_daemon_exit_status": -9, "receipt_storage_failure_compiler_exit_status": 0, "expected_syntax_probe_exit_status": 1, "expected_syntax_probe_diagnostic": "error: expected expression before ';' token", "saturated_backlog_elapsed_ns": 115318807, "source_identity_scope": "Observed source digests are retained identities, not an independent assertion that the build receipt binds every listed source file"},
+  "build_receipt": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/build.command": {
+      "blake3": "87540910521bd9e3f6a633a1e5950b1fcf2e2c4ece1a71e313f4ec3ff7047135",
+      "text": "cargo build --locked --offline --release -p mantle -p crunch-rustc-wrapper -p mantle-cargo-unit-plan -p mantle-rust-differential --bin mantle --bin mantle-rust-wait-wrapper --bin mantle-cc-driver --bin mantle-rust-cache-daemon --bin mantle-cargo-unit-producer --bin mantle-cargo-unit-helper --bin mantle-rust-differential --example resource_policy_replay\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/build.exit": {
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+      "text": "0\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-after.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "text": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na0bc9f4dfca3bacd1e6ecfa706d82b0de07d392eeba1d566144c6a406ba11b88  crates/crunch-build/Cargo.toml\n7694ae7e48d8a2c666a11b7ed8f3c4b849ad6d0e1f6ef50956b244e619a0fa42  crates/crunch-build/src/fetcher.rs\n490eb427726385362481238517d34add94d0a37351714e487c08639405af8e74  src/rust_plan.rs\ne394c28026106d7033c9ce4c434d550a81df92b375bf3c46b6abe5c74be7c04c  lib/durable-file-publication-adoption-receipt.ncl\n088223412653f804971d9ae34fc4271b62bc95049ae21dd7901f12bdbfefb387  crates/crunch-rustc-wrapper/src/observed_process.rs\nb2f0f5ec64815261ab7548a6214d3d6db997cc6d43ce10be04f2e329332d43d0  crates/mantle-rust-differential/src/runner.rs\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-before.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "text": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na0bc9f4dfca3bacd1e6ecfa706d82b0de07d392eeba1d566144c6a406ba11b88  crates/crunch-build/Cargo.toml\n7694ae7e48d8a2c666a11b7ed8f3c4b849ad6d0e1f6ef50956b244e619a0fa42  crates/crunch-build/src/fetcher.rs\n490eb427726385362481238517d34add94d0a37351714e487c08639405af8e74  src/rust_plan.rs\ne394c28026106d7033c9ce4c434d550a81df92b375bf3c46b6abe5c74be7c04c  lib/durable-file-publication-adoption-receipt.ncl\n088223412653f804971d9ae34fc4271b62bc95049ae21dd7901f12bdbfefb387  crates/crunch-rustc-wrapper/src/observed_process.rs\nb2f0f5ec64815261ab7548a6214d3d6db997cc6d43ce10be04f2e329332d43d0  crates/mantle-rust-differential/src/runner.rs\n"
+    }
+  },
+  "change": "extend-compile-cache-to-cc",
+  "commands": [
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "--version"
+      ],
+      "elapsed_ns": 3049256,
+      "exit_status": 0,
+      "label": "native-c-version",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-version.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-version.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-prog-name=as"
+      ],
+      "elapsed_ns": 4148830,
+      "exit_status": 0,
+      "label": "native-c-as",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-as.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-as.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-prog-name=cc1"
+      ],
+      "elapsed_ns": 3672786,
+      "exit_status": 0,
+      "label": "native-c-frontend",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-frontend.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-frontend.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-search-dirs"
+      ],
+      "elapsed_ns": 1644528,
+      "exit_status": 0,
+      "label": "native-c-search-dirs",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-search-dirs.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-c-search-dirs.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "--version"
+      ],
+      "elapsed_ns": 4116209,
+      "exit_status": 0,
+      "label": "native-cxx-version",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-version.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-version.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-prog-name=as"
+      ],
+      "elapsed_ns": 2183019,
+      "exit_status": 0,
+      "label": "native-cxx-as",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-as.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-as.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-prog-name=cc1plus"
+      ],
+      "elapsed_ns": 2021666,
+      "exit_status": 0,
+      "label": "native-cxx-frontend",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-frontend.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-frontend.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-search-dirs"
+      ],
+      "elapsed_ns": 4861870,
+      "exit_status": 0,
+      "label": "native-cxx-search-dirs",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-search-dirs.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/native-cxx-search-dirs.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin/python3",
+        "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py",
+        "--driver",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+        "--daemon",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon",
+        "--compiler",
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "--cxx",
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "--work-dir",
+        "/tmp/mantle-cc-runtime-20261023-c19"
+      ],
+      "elapsed_ns": 4236720866,
+      "exit_status": 0,
+      "label": "real-cc-cache-slots",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c19-control/real-cc-cache-slots.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c19-control/real-cc-cache-slots.stdout"
+    }
+  ],
+  "control": "/tmp/mantle-cc-runtime-20261023-c19-control",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "dependency_task": {
+    "command": "nix develop /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell -c bash target/cairn-finish-20261023/build-supervisor-final-cohort.sh",
+    "dependencies": [
+      30
+    ],
+    "group": "mantle-cairn-final-checks-20261023",
+    "id": 33,
+    "status": {
+      "Done": {
+        "end": "2026-10-23T16:28:22.204693310-04:00",
+        "enqueued_at": "2026-10-23T16:18:07.860170239-04:00",
+        "result": "Success",
+        "start": "2026-10-23T16:28:05.595569141-04:00"
+      }
+    }
+  },
+  "environment": {
+    "CC": "x86_64-unknown-linux-musl-gcc",
+    "CXX": "x86_64-unknown-linux-musl-g++",
+    "LD_LIBRARY_PATH": "/etc/sane-libs",
+    "NIX_CC": "/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0",
+    "NIX_CFLAGS_COMPILE": " -frandom-seed=c97vbm9alk -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include",
+    "NIX_LDFLAGS": "-rpath /home/brittonr/git/OnixResearch/mantle/outputs/out/lib  -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib",
+    "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin"
+  },
+  "environment_tools": {
+    "as": {
+      "blake3": "898ca1293d4b3ee882fd4dc9df8a33eae3aa38e53f98bd5a09f0945932ca962a",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/as",
+      "resolved_path": "/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin/as"
+    },
+    "b3sum": {
+      "blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "path": "/run/current-system/sw/bin/b3sum",
+      "resolved_path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+    },
+    "bwrap": {
+      "blake3": "cd5be4481cfe2e79bbf4183ef9122dd15c3ce379594b67121a4b540ac920864e",
+      "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap",
+      "resolved_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap"
+    },
+    "cc": {
+      "blake3": "2629a2bca9cac14f7bcf24c736e31efe929beba9c498deab3ab064799ad9eb58",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/cc",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"
+    },
+    "clang": {
+      "blake3": "fc25a97da93786ead702958ff07535fc187fbb5ae0b92854f21cf3b7ba24ff3a",
+      "path": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "resolved_path": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang"
+    },
+    "g++": {
+      "blake3": "b15835ee28db67b427d9f35df586c7f90ef0098bc2a585701f9855c739a8e2b7",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/g++",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/g++"
+    },
+    "gcc": {
+      "blake3": "2629a2bca9cac14f7bcf24c736e31efe929beba9c498deab3ab064799ad9eb58",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"
+    },
+    "ldd": {
+      "blake3": "700aa0e31451589ca0da759dd58303873f4b7f07fe417f2948e13978689c7091",
+      "path": "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+      "resolved_path": "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd"
+    }
+  },
+  "executables_after": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver": {
+      "blake3": "42ada46d09f51a5f9344075d7162708a87a522e97dc503412090e0ce1e4c613f",
+      "bytes": 1571792,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon": {
+      "blake3": "7616cd7c2b8388492008f28ddc2cf783f95f1c5ceb16939f271d48413b915ba6",
+      "bytes": 63048264,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon"
+    }
+  },
+  "executables_before": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver": {
+      "blake3": "42ada46d09f51a5f9344075d7162708a87a522e97dc503412090e0ce1e4c613f",
+      "bytes": 1571792,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon": {
+      "blake3": "7616cd7c2b8388492008f28ddc2cf783f95f1c5ceb16939f271d48413b915ba6",
+      "bytes": 63048264,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon"
+    }
+  },
+  "executables_unchanged": true,
+  "finished_at_unix_ns": 1792787536922724876,
+  "native_compiler_selection": {
+    "compiler": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+    "cxx": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+    "identities": {
+      "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++": {
+        "blake3": "24b10a22f2128621a0b14c387a2d9ac291d475c37e0a08f446c622c5fc404ffa",
+        "bytes": 2436096,
+        "mode": "0o555",
+        "resolved_path": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++"
+      },
+      "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc": {
+        "blake3": "3d0434c64bfbf12be7d793460894aa73b03f17c648ddbbbcc1cadfe6c4962b06",
+        "bytes": 2431920,
+        "mode": "0o555",
+        "resolved_path": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc"
+      }
+    },
+    "reason": "Exact native matched pair explicitly named by both task instructions; environment GCC wrapper is observed, not substituted."
+  },
+  "non_claims": [
+    "Bounded machine-local compiler smoke only; not representative concurrent bootstrap contention.",
+    "Not representative-chain cache-on/off or slot-on/off derivation/output parity.",
+    "Not a cache-off fixed-point proof, compiler-correctness proof, protected compiler inventory audit or performance benchmark.",
+    "Cache and scheduling receipts are advisory observations, not strict-lane rebuild evidence.",
+    "Absent, unreachable, rejected or failed-handshake authority compiles plainly; degraded compiles have no machine-wide concurrency bound.",
+    "Concurrency ownership requires cooperative compiler descendants retaining the fresh process group; no escaped-descendant containment or daemon-restart reclamation claim.",
+    "No task checkbox, spec, product source or archive was changed by this runtime runner."
+  ],
+  "pinned_shell": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell",
+    "resolved_path": "/nix/store/c97vbm9alkcbqvcsdl8k0jshygy130wh-nix-shell-env"
+  },
+  "prior_failed_attempt": "/tmp/mantle-cc-runtime-20261023-c17-control/result.json",
+  "pueue_dependency": 33,
+  "pueue_task_id": 40,
+  "rail_evidence": {
+    "authority_death": {
+      "compiler_completed_after_authority_exit": true,
+      "daemon_exit_status": -9,
+      "observation": {
+        "active": [],
+        "at_ns": 11108063403570,
+        "event": "compiler-exit",
+        "name": "authoritydeath"
+      },
+      "scope": "one real cooperative compiler group; no restart reclamation claim"
+    },
+    "backlog_degradation": {
+      "elapsed_ns": 115318807,
+      "label": "saturated-backlog",
+      "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+      "observed": {
+        "cache": {
+          "bypass": null,
+          "disposition": "degraded",
+          "key": null,
+          "probe": true,
+          "schema": "mantle-cc-cache-receipt-v1"
+        },
+        "cache_disposition": "daemon-unavailable",
+        "claim_class": "machine-local-performance-only",
+        "compiler_status": 0,
+        "key": null,
+        "proof_evidence": false,
+        "schema": "mantle-cc-driver-receipt-v1",
+        "slot_disposition": "degraded-no-grant"
+      },
+      "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-hYDaOI.json",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    "cache_receipts_are_proof": false,
+    "cases": [
+      {
+        "elapsed_ns": 314753442,
+        "label": "c-cold",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-H4LoMa.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 74397007,
+        "label": "c-warm",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "hit",
+            "key": "34306c22426858704ffed3967327b10d872022bb12f499107900a8a166bafbc1",
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "object-hit",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": "34306c22426858704ffed3967327b10d872022bb12f499107900a8a166bafbc1",
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "not-requested-cache-hit"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-5WI4nO.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 46714727,
+        "label": "c-off",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "forwarded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-off",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-6XUp8s.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 86208917,
+        "label": "relocated-identical",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "hit",
+            "key": "34306c22426858704ffed3967327b10d872022bb12f499107900a8a166bafbc1",
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "object-hit",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": "34306c22426858704ffed3967327b10d872022bb12f499107900a8a166bafbc1",
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "not-requested-cache-hit"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-jCu5O1.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 234310201,
+        "label": "changed-source",
+        "object_blake3": "edfd510e6b14dbc60f8b0e10319ecf63d142a799e3ac9801bfc0c899d274aa94",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-sNpp0J.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 185727285,
+        "label": "changed-header",
+        "object_blake3": "59bd65fda4e9aef8b8181fe136ac40c8e85f4061db53c6b8a3b104164f4398fd",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-mFzE1Z.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 216386135,
+        "label": "changed-options",
+        "object_blake3": "59bd65fda4e9aef8b8181fe136ac40c8e85f4061db53c6b8a3b104164f4398fd",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-rVHnQn.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 184081976,
+        "label": "changed-tool",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-AN2zvy.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 191209249,
+        "label": "changed-probe",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-PZVVGi.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 66768333,
+        "label": "changed-probe-warm",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "hit",
+            "key": "c7888996ecc81de6a80811a978bfe39bc387e7f136835ccb4c2c15bfcf400b94",
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "object-hit",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": "c7888996ecc81de6a80811a978bfe39bc387e7f136835ccb4c2c15bfcf400b94",
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "not-requested-cache-hit"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-S4lO2c.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 213500625,
+        "label": "cpp-cold",
+        "object_blake3": "ca33d971afa877e71866d73343f9613366506700359d282e2de4126ddb1010cd",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-fy3NuT.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 67213729,
+        "label": "cpp-warm",
+        "object_blake3": "ca33d971afa877e71866d73343f9613366506700359d282e2de4126ddb1010cd",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "hit",
+            "key": "06b8d26dbf264aeec357cc0c7c1699f127a6ab25615a7c5a6203abc0d7238901",
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "object-hit",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": "06b8d26dbf264aeec357cc0c7c1699f127a6ab25615a7c5a6203abc0d7238901",
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "not-requested-cache-hit"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-CBW2Gb.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 44338205,
+        "label": "cpp-off",
+        "object_blake3": "ca33d971afa877e71866d73343f9613366506700359d282e2de4126ddb1010cd",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "forwarded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-off",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-91WgdR.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "label": "failure-cold",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 1,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        }
+      },
+      {
+        "label": "failure-warm",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "failure-hit",
+            "key": "300fa5fb89af8d5827f6e7f6e516ab98bf6e49f4daa638484d271783973715fe",
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "failure-hit",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 1,
+          "key": "300fa5fb89af8d5827f6e7f6e516ab98bf6e49f4daa638484d271783973715fe",
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "not-requested-cache-hit"
+        }
+      },
+      {
+        "label": "failure-changed-probe",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "compiled",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "cache-miss",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 1,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        }
+      },
+      {
+        "elapsed_ns": 189528062,
+        "label": "volatile-header-cold",
+        "object_blake3": "7065345c2f105ef73dc00aeba6dbbd4b46d04829872cdad35fb303bd6cc45bcc",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "degraded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "publish-unavailable",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-TdfVVZ.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 215032532,
+        "label": "volatile-header-repeat",
+        "object_blake3": "7065345c2f105ef73dc00aeba6dbbd4b46d04829872cdad35fb303bd6cc45bcc",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "degraded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "publish-unavailable",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "granted"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-vdpAXl.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 115318807,
+        "label": "saturated-backlog",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "degraded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "daemon-unavailable",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "degraded-no-grant"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-hYDaOI.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "elapsed_ns": 122111963,
+        "label": "daemon-loss",
+        "object_blake3": "38499dffb920be2acef9cd1ea8fee8be096dd837f63abbaf4375bd309c905103",
+        "observed": {
+          "cache": {
+            "bypass": null,
+            "disposition": "degraded",
+            "key": null,
+            "probe": true,
+            "schema": "mantle-cc-cache-receipt-v1"
+          },
+          "cache_disposition": "daemon-unavailable",
+          "claim_class": "machine-local-performance-only",
+          "compiler_status": 0,
+          "key": null,
+          "proof_evidence": false,
+          "schema": "mantle-cc-driver-receipt-v1",
+          "slot_disposition": "degraded-no-grant"
+        },
+        "receipt": "/tmp/mantle-cc-runtime-20261023-c19/receipts/cc-h9a63Q.json",
+        "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    ],
+    "claim_class": "bounded-machine-local-observation",
+    "commands": [
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-print-prog-name=cc1"
+        ],
+        "elapsed_ns": 4270409,
+        "exit_status": 0,
+        "label": "query-cc1"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-print-prog-name=as"
+        ],
+        "elapsed_ns": 4024537,
+        "exit_status": 0,
+        "label": "query-as-0"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+          "-print-prog-name=cc1plus"
+        ],
+        "elapsed_ns": 2699178,
+        "exit_status": 0,
+        "label": "query-cc1plus"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+          "-print-prog-name=as"
+        ],
+        "elapsed_ns": 2636771,
+        "exit_status": 0,
+        "label": "query-as-1"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++"
+        ],
+        "elapsed_ns": 35718570,
+        "exit_status": 0,
+        "label": "runtime-0"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc"
+        ],
+        "elapsed_ns": 23048770,
+        "exit_status": 0,
+        "label": "runtime-1"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1"
+        ],
+        "elapsed_ns": 14824826,
+        "exit_status": 0,
+        "label": "runtime-2"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1plus"
+        ],
+        "elapsed_ns": 16711570,
+        "exit_status": 0,
+        "label": "runtime-3"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin/as"
+        ],
+        "elapsed_ns": 21383904,
+        "exit_status": 0,
+        "label": "runtime-4"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap"
+        ],
+        "elapsed_ns": 19722243,
+        "exit_status": 0,
+        "label": "digest-bwrap"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/daemon-policy.json",
+          "--state-dir",
+          "/tmp/mantle-cc-runtime-20261023-c19/state",
+          "--store-backend",
+          "snix",
+          "--store-output-dir",
+          "/tmp/mantle-cc-runtime-20261023-c19/store",
+          "--receipt-dir",
+          "/tmp/mantle-cc-runtime-20261023-c19/daemon-receipts"
+        ],
+        "label": "daemon",
+        "pid": 309967
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-cold.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-cold.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 314753442,
+        "exit_status": 0,
+        "label": "c-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-cold.o"
+        ],
+        "elapsed_ns": 6879097,
+        "exit_status": 0,
+        "label": "digest-c-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-cold.stdout"
+        ],
+        "elapsed_ns": 11885608,
+        "exit_status": 0,
+        "label": "digest-c-cold-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-cold.stderr"
+        ],
+        "elapsed_ns": 3253679,
+        "exit_status": 0,
+        "label": "digest-c-cold-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-warm.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-warm.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 74397007,
+        "exit_status": 0,
+        "label": "c-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-warm.o"
+        ],
+        "elapsed_ns": 15860241,
+        "exit_status": 0,
+        "label": "digest-c-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-warm.stdout"
+        ],
+        "elapsed_ns": 8210758,
+        "exit_status": 0,
+        "label": "digest-c-warm-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-warm.stderr"
+        ],
+        "elapsed_ns": 3951711,
+        "exit_status": 0,
+        "label": "digest-c-warm-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-off.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-off.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 46714727,
+        "exit_status": 0,
+        "label": "c-off"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/c-off.o"
+        ],
+        "elapsed_ns": 5476834,
+        "exit_status": 0,
+        "label": "digest-c-off"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-off.stdout"
+        ],
+        "elapsed_ns": 7099551,
+        "exit_status": 0,
+        "label": "digest-c-off-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/c-off.stderr"
+        ],
+        "elapsed_ns": 3934117,
+        "exit_status": 0,
+        "label": "digest-c-off-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/relocated-identical.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/relocated/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/relocated-identical.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/relocated=src"
+        ],
+        "elapsed_ns": 86208917,
+        "exit_status": 0,
+        "label": "relocated-identical"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/relocated-identical.o"
+        ],
+        "elapsed_ns": 6771004,
+        "exit_status": 0,
+        "label": "digest-relocated-identical"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/relocated-identical.stdout"
+        ],
+        "elapsed_ns": 5846979,
+        "exit_status": 0,
+        "label": "digest-relocated-identical-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/relocated-identical.stderr"
+        ],
+        "elapsed_ns": 11047164,
+        "exit_status": 0,
+        "label": "digest-relocated-identical-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-source.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-source.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 234310201,
+        "exit_status": 0,
+        "label": "changed-source"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-source.o"
+        ],
+        "elapsed_ns": 3014852,
+        "exit_status": 0,
+        "label": "digest-changed-source"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-source.stdout"
+        ],
+        "elapsed_ns": 4502785,
+        "exit_status": 0,
+        "label": "digest-changed-source-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-source.stderr"
+        ],
+        "elapsed_ns": 4578146,
+        "exit_status": 0,
+        "label": "digest-changed-source-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-header.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-header.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 185727285,
+        "exit_status": 0,
+        "label": "changed-header"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-header.o"
+        ],
+        "elapsed_ns": 4728258,
+        "exit_status": 0,
+        "label": "digest-changed-header"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-header.stdout"
+        ],
+        "elapsed_ns": 10023591,
+        "exit_status": 0,
+        "label": "digest-changed-header-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-header.stderr"
+        ],
+        "elapsed_ns": 7313823,
+        "exit_status": 0,
+        "label": "digest-changed-header-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-options.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-options.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src",
+          "-UOPTION_VALUE",
+          "-DOPTION_VALUE=9"
+        ],
+        "elapsed_ns": 216386135,
+        "exit_status": 0,
+        "label": "changed-options"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-options.o"
+        ],
+        "elapsed_ns": 5854854,
+        "exit_status": 0,
+        "label": "digest-changed-options"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-options.stdout"
+        ],
+        "elapsed_ns": 3812980,
+        "exit_status": 0,
+        "label": "digest-changed-options-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-options.stderr"
+        ],
+        "elapsed_ns": 2423250,
+        "exit_status": 0,
+        "label": "digest-changed-options-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-tool.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-tool.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 184081976,
+        "exit_status": 0,
+        "label": "changed-tool"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-tool.o"
+        ],
+        "elapsed_ns": 3154904,
+        "exit_status": 0,
+        "label": "digest-changed-tool"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-tool.stdout"
+        ],
+        "elapsed_ns": 3401527,
+        "exit_status": 0,
+        "label": "digest-changed-tool-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-tool.stderr"
+        ],
+        "elapsed_ns": 2658471,
+        "exit_status": 0,
+        "label": "digest-changed-tool-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-probe.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 191209249,
+        "exit_status": 0,
+        "label": "changed-probe"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-probe.o"
+        ],
+        "elapsed_ns": 3682776,
+        "exit_status": 0,
+        "label": "digest-changed-probe"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe.stdout"
+        ],
+        "elapsed_ns": 3717330,
+        "exit_status": 0,
+        "label": "digest-changed-probe-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe.stderr"
+        ],
+        "elapsed_ns": 4165471,
+        "exit_status": 0,
+        "label": "digest-changed-probe-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe-warm.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-probe-warm.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 66768333,
+        "exit_status": 0,
+        "label": "changed-probe-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/changed-probe-warm.o"
+        ],
+        "elapsed_ns": 2576147,
+        "exit_status": 0,
+        "label": "digest-changed-probe-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe-warm.stdout"
+        ],
+        "elapsed_ns": 3208996,
+        "exit_status": 0,
+        "label": "digest-changed-probe-warm-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/changed-probe-warm.stderr"
+        ],
+        "elapsed_ns": 2588030,
+        "exit_status": 0,
+        "label": "digest-changed-probe-warm-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-cold.policy.json",
+          "--",
+          "-x",
+          "c++",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.cpp",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-cold.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src",
+          "-nostdinc++"
+        ],
+        "elapsed_ns": 213500625,
+        "exit_status": 0,
+        "label": "cpp-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-cold.o"
+        ],
+        "elapsed_ns": 4139002,
+        "exit_status": 0,
+        "label": "digest-cpp-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-cold.stdout"
+        ],
+        "elapsed_ns": 3702433,
+        "exit_status": 0,
+        "label": "digest-cpp-cold-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-cold.stderr"
+        ],
+        "elapsed_ns": 2740776,
+        "exit_status": 0,
+        "label": "digest-cpp-cold-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-warm.policy.json",
+          "--",
+          "-x",
+          "c++",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.cpp",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-warm.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src",
+          "-nostdinc++"
+        ],
+        "elapsed_ns": 67213729,
+        "exit_status": 0,
+        "label": "cpp-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-warm.o"
+        ],
+        "elapsed_ns": 4061997,
+        "exit_status": 0,
+        "label": "digest-cpp-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-warm.stdout"
+        ],
+        "elapsed_ns": 2221231,
+        "exit_status": 0,
+        "label": "digest-cpp-warm-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-warm.stderr"
+        ],
+        "elapsed_ns": 3635737,
+        "exit_status": 0,
+        "label": "digest-cpp-warm-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-off.policy.json",
+          "--",
+          "-x",
+          "c++",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.cpp",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-off.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src",
+          "-nostdinc++"
+        ],
+        "elapsed_ns": 44338205,
+        "exit_status": 0,
+        "label": "cpp-off"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/cpp-off.o"
+        ],
+        "elapsed_ns": 4010210,
+        "exit_status": 0,
+        "label": "digest-cpp-off"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-off.stdout"
+        ],
+        "elapsed_ns": 3169121,
+        "exit_status": 0,
+        "label": "digest-cpp-off-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/cpp-off.stderr"
+        ],
+        "elapsed_ns": 3257066,
+        "exit_status": 0,
+        "label": "digest-cpp-off-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/forward.policy.json",
+          "--",
+          "-E",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c"
+        ],
+        "elapsed_ns": 45731571,
+        "exit_status": 0,
+        "label": "unknown-forward"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-E",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c"
+        ],
+        "elapsed_ns": 9683362,
+        "exit_status": 0,
+        "label": "unknown-direct"
+      },
+      {
+        "argv": [
+          "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap",
+          "--die-with-parent",
+          "--unshare-pid",
+          "--new-session",
+          "--ro-bind",
+          "/",
+          "/",
+          "--dev-bind",
+          "/dev",
+          "/dev",
+          "--proc",
+          "/proc",
+          "--bind",
+          "/tmp/mantle-cc-runtime-20261023-c19",
+          "/tmp/mantle-cc-runtime-20261023-c19",
+          "--",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/namespace.policy.json",
+          "--",
+          "-E",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c"
+        ],
+        "elapsed_ns": 40110497,
+        "exit_status": 0,
+        "label": "pid-namespace-slot"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/failure.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/failure.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/failure.o",
+          "-nostdinc",
+          "-g0",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 217227333,
+        "exit_status": 1,
+        "label": "failure-cold"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/failure.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/failure.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/failure.o",
+          "-nostdinc",
+          "-g0",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 78401256,
+        "exit_status": 1,
+        "label": "failure-warm"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/failure.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/failure.o",
+          "-nostdinc",
+          "-g0",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 8489341,
+        "exit_status": 1,
+        "label": "failure-direct"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/failure.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/failure.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/failure.o",
+          "-nostdinc",
+          "-g0",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 191990295,
+        "exit_status": 1,
+        "label": "failure-changed-probe"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-cold.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/volatile-header-cold.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 189528062,
+        "exit_status": 0,
+        "label": "volatile-header-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/volatile-header-cold.o"
+        ],
+        "elapsed_ns": 3212001,
+        "exit_status": 0,
+        "label": "digest-volatile-header-cold"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-cold.stdout"
+        ],
+        "elapsed_ns": 4155022,
+        "exit_status": 0,
+        "label": "digest-volatile-header-cold-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-cold.stderr"
+        ],
+        "elapsed_ns": 3983219,
+        "exit_status": 0,
+        "label": "digest-volatile-header-cold-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-repeat.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/volatile-header-repeat.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 215032532,
+        "exit_status": 0,
+        "label": "volatile-header-repeat"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/volatile-header-repeat.o"
+        ],
+        "elapsed_ns": 3332036,
+        "exit_status": 0,
+        "label": "digest-volatile-header-repeat"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-repeat.stdout"
+        ],
+        "elapsed_ns": 2671356,
+        "exit_status": 0,
+        "label": "digest-volatile-header-repeat-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/volatile-header-repeat.stderr"
+        ],
+        "elapsed_ns": 3732599,
+        "exit_status": 0,
+        "label": "digest-volatile-header-repeat-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/bad-receipt.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/bad-receipt.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-DADVISORY_PROOF=1",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 173887613,
+        "exit_status": 0,
+        "label": "receipt-storage-failure"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a0/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a0/input.c"
+        ],
+        "label": "contention-a0",
+        "pid": 313517
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a1/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a1/input.c"
+        ],
+        "label": "contention-a1",
+        "pid": 313556
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a2/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/a2/input.c"
+        ],
+        "label": "contention-a2",
+        "pid": 313590
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/b0/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/b0/input.c"
+        ],
+        "label": "contention-b0",
+        "pid": 313593
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/c0/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/c0/input.c"
+        ],
+        "label": "contention-c0",
+        "pid": 313630
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/saturated-backlog.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/saturated-backlog.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 115318807,
+        "exit_status": 0,
+        "label": "saturated-backlog"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/saturated-backlog.o"
+        ],
+        "elapsed_ns": 3030631,
+        "exit_status": 0,
+        "label": "digest-saturated-backlog"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/saturated-backlog.stdout"
+        ],
+        "elapsed_ns": 1422671,
+        "exit_status": 0,
+        "label": "digest-saturated-backlog-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/saturated-backlog.stderr"
+        ],
+        "elapsed_ns": 1881723,
+        "exit_status": 0,
+        "label": "digest-saturated-backlog-stderr"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/authoritydeath/policy.json",
+          "--",
+          "-E",
+          "-P",
+          "-x",
+          "c",
+          "/tmp/mantle-cc-runtime-20261023-c19/contention/authoritydeath/input.c"
+        ],
+        "label": "contention-authoritydeath",
+        "pid": 313871
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c19/daemon-loss.policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-cc-runtime-20261023-c19/source/a.c",
+          "-o",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/daemon-loss.o",
+          "-O2",
+          "-g0",
+          "-nostdinc",
+          "-DOPTION_VALUE=3",
+          "-ffile-prefix-map=/tmp/mantle-cc-runtime-20261023-c19/source=src"
+        ],
+        "elapsed_ns": 122111963,
+        "exit_status": 0,
+        "label": "daemon-loss"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/outputs/daemon-loss.o"
+        ],
+        "elapsed_ns": 9571734,
+        "exit_status": 0,
+        "label": "digest-daemon-loss"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/daemon-loss.stdout"
+        ],
+        "elapsed_ns": 2013712,
+        "exit_status": 0,
+        "label": "digest-daemon-loss-stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/tmp/mantle-cc-runtime-20261023-c19/daemon-loss.stderr"
+        ],
+        "elapsed_ns": 2256377,
+        "exit_status": 0,
+        "label": "digest-daemon-loss-stderr"
+      }
+    ],
+    "contention": {
+      "observations": [
+        {
+          "active": [
+            "a0"
+          ],
+          "at_ns": 11107670983281,
+          "event": "compiler-input-open",
+          "name": "a0"
+        },
+        {
+          "active": [
+            "a0",
+            "b0"
+          ],
+          "at_ns": 11107726931447,
+          "event": "compiler-input-open",
+          "name": "b0"
+        },
+        {
+          "active": [
+            "a0"
+          ],
+          "at_ns": 11107761280595,
+          "event": "compiler-exit",
+          "name": "b0"
+        },
+        {
+          "active": [
+            "a0",
+            "c0"
+          ],
+          "at_ns": 11107771456793,
+          "event": "compiler-input-open",
+          "name": "c0"
+        },
+        {
+          "active": [
+            "a0"
+          ],
+          "at_ns": 11107798357185,
+          "event": "compiler-exit",
+          "name": "c0"
+        },
+        {
+          "active": [],
+          "at_ns": 11107820494713,
+          "event": "compiler-exit",
+          "name": "a0"
+        },
+        {
+          "active": [
+            "a1"
+          ],
+          "at_ns": 11107830692782,
+          "event": "compiler-input-open",
+          "name": "a1"
+        },
+        {
+          "active": [],
+          "at_ns": 11107863114712,
+          "event": "compiler-exit",
+          "name": "a1"
+        },
+        {
+          "active": [
+            "a2"
+          ],
+          "at_ns": 11107873287974,
+          "event": "compiler-input-open",
+          "name": "a2"
+        },
+        {
+          "active": [],
+          "at_ns": 11107904559283,
+          "event": "compiler-exit",
+          "name": "a2"
+        }
+      ],
+      "observed_peak_live_compilers": 2,
+      "per_build_peak": 1,
+      "receipts": [
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3385,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3385,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3405,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3425,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-other",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3446,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-other",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3446,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-small",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3466,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-other",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3488,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-small",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3488,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 22
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-small",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3525,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 22
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3547,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3547,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 142
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3589,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 142
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3589,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 164
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3631,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 164
+        }
+      ],
+      "scope": "cooperative compiler process groups; real FIFO-gated preprocessor commands"
+    },
+    "forward_receipt": {
+      "cache": {
+        "bypass": null,
+        "disposition": "forwarded",
+        "key": null,
+        "probe": true,
+        "schema": "mantle-cc-cache-receipt-v1"
+      },
+      "cache_disposition": "forward-unchanged",
+      "claim_class": "machine-local-performance-only",
+      "compiler_status": 0,
+      "key": null,
+      "proof_evidence": false,
+      "schema": "mantle-cc-driver-receipt-v1",
+      "slot_disposition": "granted"
+    },
+    "pid_namespace_slot": {
+      "cache": {
+        "bypass": null,
+        "disposition": "forwarded",
+        "key": null,
+        "probe": true,
+        "schema": "mantle-cc-cache-receipt-v1"
+      },
+      "cache_disposition": "forward-unchanged",
+      "claim_class": "machine-local-performance-only",
+      "compiler_status": 0,
+      "key": null,
+      "proof_evidence": false,
+      "schema": "mantle-cc-driver-receipt-v1",
+      "slot_disposition": "granted"
+    },
+    "scheduling": {
+      "concurrency_fairness_claim": true,
+      "observed_peak_active_slots": 2,
+      "receipts": [
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 202,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 1,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 202,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 1,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 259,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 1,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 465,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 2,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 465,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 2,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 504,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 2,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 746,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 3,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 747,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 3,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 1
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 796,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 3,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 1
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 967,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 4,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 967,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 4,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 1010,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 4,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 1188,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 5,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 1189,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 5,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 1
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 1253,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 5,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 1
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 1411,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 6,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 1411,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 6,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 1452,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 6,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 1612,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 7,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 1612,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 7,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 1644,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 7,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 1894,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 8,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 1894,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 8,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 1939,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 8,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2115,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 9,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2115,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 9,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2152,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 9,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2175,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 10,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2175,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 10,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2209,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 10,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2236,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 11,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2236,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 11,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2259,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 11,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2358,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 12,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2358,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 12,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2394,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 12,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2658,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 13,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2658,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 13,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2698,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 13,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 2840,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 14,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 2840,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 14,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 2893,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 14,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3063,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 15,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3063,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 15,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3127,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 15,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3285,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 16,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "cc-cache-proof",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3285,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 16,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "cc-cache-proof",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3315,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 16,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3385,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3385,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3405,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3425,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-other",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3446,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-other",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3446,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-small",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3466,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-other",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3488,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 3,
+          "reason": null,
+          "request_id": 20,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 2,
+          "build_id": "contention-small",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3488,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 22
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-small",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3525,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 21,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 22
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3547,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 2,
+          "reason": null,
+          "request_id": 17,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3547,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 142
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3589,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 18,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 142
+        },
+        {
+          "active_slots": 1,
+          "build_id": "contention-large",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3589,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 164
+        },
+        {
+          "active_slots": 0,
+          "build_id": "contention-large",
+          "decision": "released",
+          "fairness": "round_robin",
+          "observed_ms": 3631,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 19,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 164
+        },
+        {
+          "active_slots": 0,
+          "build_id": "authority-death",
+          "decision": "queued",
+          "fairness": "round_robin",
+          "observed_ms": 3767,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 1,
+          "reason": null,
+          "request_id": 22,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        },
+        {
+          "active_slots": 1,
+          "build_id": "authority-death",
+          "decision": "granted",
+          "fairness": "round_robin",
+          "observed_ms": 3767,
+          "per_build_max": 1,
+          "per_build_queue": 8,
+          "queued_requests": 0,
+          "reason": null,
+          "request_id": 22,
+          "schema": "mantle-compile-slot-receipt-v1",
+          "total_queue": 16,
+          "total_slots": 2,
+          "wait_timeout_ms": 30000,
+          "waited_ms": 0
+        }
+      ],
+      "scope": "bounded FIFO-gated real compiler fixture; not build/provenance evidence"
+    },
+    "schema": "mantle-cc-cache-slots-proof-v1",
+    "status": "passed",
+    "timing_ns": {
+      "cache_off_compile": 46714727,
+      "cold_cached_compile": 314753442,
+      "warm_cached_lookup": 74397007
+    }
+  },
+  "rail_evidence_path": "/tmp/mantle-cc-runtime-20261023-c19/evidence.json",
+  "rail_exit_status": 0,
+  "schema": "mantle-final-cc-slots-runtime-observation-v1",
+  "scratch": "/tmp/mantle-cc-runtime-20261023-c19",
+  "source_identities_after": {
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.lock": {
+      "blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "bytes": 271564,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.lock"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.toml": {
+      "blake3": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "bytes": 12646,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.toml"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl": {
+      "blake3": "63526fe284328a00f7fa9d4dae0b78b70996eb4fd782413c6b84c1afce956e90",
+      "bytes": 1883,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl": {
+      "blake3": "f6b3c195f00812635068b118fadcdd6a73ae3266581bf432319841c2fa27d0f8",
+      "bytes": 941,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs": {
+      "blake3": "e30221031230ed0989ef80b21afb0e5ea56159565544005b5e71c5689a095c53",
+      "bytes": 39542,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs": {
+      "blake3": "695176b14c24a8b93fc2369057c188482b6587b2cffb9cf85db85f17828af88a",
+      "bytes": 17761,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs": {
+      "blake3": "94ce7185feb732baeff0c60b3101d7850d2f936dfc837780ce1d9bbb163672df",
+      "bytes": 9889,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs": {
+      "blake3": "f46a068db3166e23af090c1d0eda1fc29bc8f7e6758da21e74b7b9565495b0e9",
+      "bytes": 54906,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs": {
+      "blake3": "9faafadc583f187e2b9784ffb29f52afd0d16ff4b57e6eeaed8a396fdecd08f4",
+      "bytes": 47402,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py": {
+      "blake3": "4228eb6231bd48924f284092a0ef8467c5cdee7916b4cc7a67d12bab7364b7a4",
+      "bytes": 35424,
+      "mode": "0o755",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py"
+    },
+    "/tmp/mantle-cc-runtime-20261023-c19-control/effective-run.py": {
+      "blake3": "5c3109d51b69d86e2ee38b070360e2ca965b8c3a0e290d9e97e226be6efbcf27",
+      "bytes": 7560,
+      "mode": "0o644",
+      "resolved_path": "/tmp/mantle-cc-runtime-20261023-c19-control/effective-run.py"
+    }
+  },
+  "source_identities_before": {
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.lock": {
+      "blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "bytes": 271564,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.lock"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.toml": {
+      "blake3": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "bytes": 12646,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.toml"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl": {
+      "blake3": "63526fe284328a00f7fa9d4dae0b78b70996eb4fd782413c6b84c1afce956e90",
+      "bytes": 1883,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl": {
+      "blake3": "f6b3c195f00812635068b118fadcdd6a73ae3266581bf432319841c2fa27d0f8",
+      "bytes": 941,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs": {
+      "blake3": "e30221031230ed0989ef80b21afb0e5ea56159565544005b5e71c5689a095c53",
+      "bytes": 39542,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs": {
+      "blake3": "695176b14c24a8b93fc2369057c188482b6587b2cffb9cf85db85f17828af88a",
+      "bytes": 17761,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs": {
+      "blake3": "94ce7185feb732baeff0c60b3101d7850d2f936dfc837780ce1d9bbb163672df",
+      "bytes": 9889,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs": {
+      "blake3": "f46a068db3166e23af090c1d0eda1fc29bc8f7e6758da21e74b7b9565495b0e9",
+      "bytes": 54906,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs": {
+      "blake3": "9faafadc583f187e2b9784ffb29f52afd0d16ff4b57e6eeaed8a396fdecd08f4",
+      "bytes": 47402,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py": {
+      "blake3": "4228eb6231bd48924f284092a0ef8467c5cdee7916b4cc7a67d12bab7364b7a4",
+      "bytes": 35424,
+      "mode": "0o755",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py"
+    },
+    "/tmp/mantle-cc-runtime-20261023-c19-control/effective-run.py": {
+      "blake3": "5c3109d51b69d86e2ee38b070360e2ca965b8c3a0e290d9e97e226be6efbcf27",
+      "bytes": 7560,
+      "mode": "0o644",
+      "resolved_path": "/tmp/mantle-cc-runtime-20261023-c19-control/effective-run.py"
+    }
+  },
+  "sources_unchanged": true,
+  "started_at_unix_ns": 1792787532216042960,
+  "status": "passed",
+  "wrapper_native_paths": {
+    "g++": [
+      "/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin/g++"
+    ],
+    "gcc": [
+      "/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin/gcc"
+    ]
+  }
+}

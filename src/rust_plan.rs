@@ -11,6 +11,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use crunch_rust_cache::RustCache;
@@ -29,6 +30,7 @@ use crunch_rust_cache_core::RustUnitAction;
 use crunch_rust_cache_core::RustUnitActionInput;
 use crunch_rust_cache_core::shared::RustResultProducerIdentity;
 use crunch_rust_cache_core::shared::RustResultTrustPolicy;
+use crunch_rustc_wrapper::waits as rust_waits;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -57,6 +59,7 @@ use crate::cargo_profile_manifest::resolve_profile;
 use crate::cargo_profile_manifest::select_command_profile;
 use crate::cargo_profile_manifest::select_unit_profile;
 use crate::errors::RunError;
+const NATIVE_WAIT_MAX_ATTEMPTS: usize = 256;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
@@ -909,6 +912,378 @@ pub(crate) struct RustUnitExecutionOptions {
     pub(crate) output_root: PathBuf,
     pub(crate) compiler_policy: RustCompilerPolicySelection,
     pub(crate) local_cache: Option<RustUnitLocalCacheSelection>,
+    /// Runtime-only observations; never included in derivation or receipt preimages.
+    pub(crate) wait_diagnostics: Option<Arc<Mutex<NativeWaitRuntime>>>,
+}
+
+/// Invocation-local observation state. Nothing here is serialized into execution evidence.
+pub(crate) struct NativeWaitRuntime {
+    collector: Option<rust_waits::NativeWaitCollector>,
+    compiler_path: PathBuf,
+    compiler_content: rust_waits::Digest,
+    sampler: Option<rust_waits::ProcessTreeSampler>,
+    units: BTreeMap<String, rust_waits::Digest>,
+    attempts: BTreeMap<String, rust_waits::Digest>,
+    previous: BTreeMap<String, rust_waits::Digest>,
+}
+
+impl std::fmt::Debug for NativeWaitRuntime {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("NativeWaitRuntime").finish_non_exhaustive()
+    }
+}
+
+impl NativeWaitRuntime {
+    pub(crate) fn start(options: &rust_waits::RuntimeOptions, rustc: &Path) -> Result<Self, RunError> {
+        if options.wrapper.is_some() {
+            return Err(RunError::Build("native Rust wait diagnostics do not accept a Cargo wrapper".into()));
+        }
+        let compiler_content = native_wait_compiler_content(rustc)?;
+        crunch_rustc_wrapper::observed_process::private_dir(&options.directory)
+            .map_err(|error| RunError::Build(format!("creating private Rust wait directory: {error}")))?;
+        let mut nonce = [0u8; 32];
+        fs::File::open("/dev/urandom")
+            .and_then(|mut file| file.read_exact(&mut nonce))
+            .map_err(|error| RunError::Internal(format!("creating Rust wait invocation: {error}")))?;
+        let invocation = rust_waits::Digest::from_slice(&nonce);
+        let clock = wait_digest("native-clock", &nonce)?;
+        let collector = rust_waits::NativeWaitCollector::start(&options.directory, invocation, clock)
+            .map_err(|error| RunError::Build(format!("starting native Rust wait collector: {error}")))?;
+        Ok(Self {
+            collector: Some(collector),
+            compiler_path: rustc.to_path_buf(),
+            compiler_content,
+            sampler: Some(rust_waits::ProcessTreeSampler::new(std::process::id())),
+            units: BTreeMap::new(),
+            attempts: BTreeMap::new(),
+            previous: BTreeMap::new(),
+        })
+    }
+
+    fn sample(&mut self) {
+        if let Some(collector) = &mut self.collector {
+            collector.drain_native_frames();
+        }
+        if let (Some(collector), Some(sampler)) = (&self.collector, &mut self.sampler) {
+            sampler.sample(collector.offset_ns());
+        }
+    }
+
+    pub(crate) fn finish(&mut self, outcome: rust_waits::RunOutcome) -> Option<rust_waits::DiagnosticOutcome> {
+        self.sample();
+        let mut collector = self.collector.take()?;
+        if let Some(sampler) = self.sampler.take() {
+            let mut resources = sampler.finish(collector.offset_ns());
+            resources.scope = "native_cli_process_tree".into();
+            collector.set_resources(resources);
+        }
+        Some(collector.finish(outcome))
+    }
+
+    fn attempt(
+        &mut self,
+        effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+        unit: &RustUnitDerivationSummary,
+    ) -> Option<rust_waits::Digest> {
+        if effect.facts.role != mantle_rust_plan_core::ProcessEffectRole::RustCompiler {
+            return None;
+        }
+        if let Some(id) = self.attempts.get(effect.resolved_blake3.as_str()) {
+            return Some(id.clone());
+        }
+        let result = self.register_attempt(effect, unit);
+        match result {
+            Ok(id) => Some(id),
+            Err(_) => {
+                if let Some(collector) = &mut self.collector {
+                    collector.observation_lost();
+                }
+                None
+            }
+        }
+    }
+
+    fn register_attempt(
+        &mut self,
+        effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+        unit: &RustUnitDerivationSummary,
+    ) -> Result<rust_waits::Digest, RunError> {
+        if effect.facts.unit_id.0 != unit.unit_id || self.attempts.len() >= NATIVE_WAIT_MAX_ATTEMPTS {
+            return Err(RunError::Internal("native wait attempt is outside admitted bounds".into()));
+        }
+        let facts = native_wait_unit(unit, effect, &self.units, &self.compiler_content)?;
+        let collector = self
+            .collector
+            .as_mut()
+            .ok_or_else(|| RunError::Internal("native wait collector already finished".into()))?;
+        let unit_id = collector
+            .register_unit(facts)
+            .map_err(|error| RunError::Internal(format!("registering native wait unit: {error:?}")))?;
+        let prior = if effect.facts.prior_attempt_identity.is_some() {
+            self.previous.get(&unit.unit_id).cloned()
+        } else {
+            None
+        };
+        let role = if unit.execution_kind == TARGET_EXECUTION_KIND {
+            rust_waits::ProcessRole::TargetCompiler
+        } else {
+            rust_waits::ProcessRole::HostCompiler
+        };
+        let attempt = rust_waits::Attempt {
+            id: rust_waits::Digest::from_slice(b"unassigned"),
+            invocation: collector.invocation().clone(),
+            clock: collector.clock().clone(),
+            unit: Some(unit_id.clone()),
+            role,
+            number: effect
+                .facts
+                .attempt
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("native wait attempt ordinal overflow".into()))?,
+            resolved_process: wait_digest("resolved-process", &(&effect.resolved_blake3, &self.compiler_content))?,
+            prior,
+            unmapped: None,
+        };
+        let id = collector
+            .register_attempt(attempt)
+            .map_err(|error| RunError::Internal(format!("registering native wait attempt: {error:?}")))?;
+        self.units.insert(unit.unit_id.clone(), unit_id);
+        self.previous.insert(unit.unit_id.clone(), id.clone());
+        self.attempts.insert(effect.resolved_blake3.as_str().to_string(), id.clone());
+        // The serial adapter requests work only after admitted producer observations exist.
+        // No actual ready queue or live prerequisite readiness boundary is exposed here.
+        collector.observe(&id, rust_waits::EventKind::Requested {
+            prerequisites: Vec::new(),
+        });
+        Ok(id)
+    }
+
+    fn cache_restored(
+        &mut self,
+        effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+        unit: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) {
+        if let Some(id) = self.attempt(effect, unit) {
+            match wait_digest("cache-receipt", receipt) {
+                Ok(receipt) => self.collector.as_mut().expect("native collector").cache_restored(&id, receipt),
+                Err(_) => self.collector.as_mut().expect("native collector").observation_lost(),
+            }
+        }
+    }
+}
+
+fn wait_digest<T: Serialize>(domain: &str, value: &T) -> Result<rust_waits::Digest, RunError> {
+    serde_json::to_vec(&(domain, value))
+        .map(|bytes| rust_waits::Digest::from_slice(&bytes))
+        .map_err(|error| RunError::Internal(format!("encoding native wait identity: {error}")))
+}
+
+fn native_wait_compiler_content(rustc: &Path) -> Result<rust_waits::Digest, RunError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::PermissionsExt;
+    const MAX_COMPILER_BYTES: u64 = 512 * 1024 * 1024;
+    if !rustc.is_absolute() {
+        return Err(RunError::Build("native wait diagnostics require an explicit absolute rustc executable".into()));
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(rustc)
+        .map_err(|error| RunError::Build(format!("opening selected native compiler: {error}")))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| RunError::Build(format!("reading selected native compiler metadata: {error}")))?;
+    if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 || metadata.len() > MAX_COMPILER_BYTES {
+        return Err(RunError::Build("native wait compiler must be a regular executable no larger than 512 MiB".into()));
+    }
+    let mut input = file.take(MAX_COMPILER_BYTES + 1);
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0u8; 64 * 1024];
+    let mut bytes = 0u64;
+    loop {
+        let count = input
+            .read(&mut buffer)
+            .map_err(|error| RunError::Build(format!("hashing selected native compiler: {error}")))?;
+        if count == 0 {
+            break;
+        }
+        bytes += count as u64;
+        if bytes > MAX_COMPILER_BYTES {
+            return Err(RunError::Build("native wait compiler grew beyond its content bound".into()));
+        }
+        hasher.update(&buffer[..count]);
+    }
+    wait_digest("native-compiler-content", hasher.finalize().as_bytes())
+}
+
+fn native_wait_unit(
+    unit: &RustUnitDerivationSummary,
+    effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    registered: &BTreeMap<String, rust_waits::Digest>,
+    compiler_content: &rust_waits::Digest,
+) -> Result<rust_waits::UnitIdentity, RunError> {
+    if effect.facts.dependency_observations.len() > rust_waits::MAX_PREREQUISITES
+        || unit.derivation.args.windows(2).filter(|pair| pair[0] == RUSTC_CFG_FLAG).count()
+            > rust_waits::MAX_PREREQUISITES
+    {
+        return Err(RunError::Internal("native wait unit exceeds diagnostic identity bounds".into()));
+    }
+    let mut features = rust_cache_features(&unit.derivation.args)
+        .iter()
+        .map(|feature| wait_digest("feature", feature))
+        .collect::<Result<Vec<_>, _>>()?;
+    features.sort();
+    features.dedup();
+    let mut dependencies = Vec::new();
+    for producer in &effect.facts.dependency_observations {
+        let id = registered
+            .get(&producer.producer_unit_id.0)
+            .ok_or_else(|| RunError::Internal("native wait producer association unavailable".into()))?;
+        let role = if unit
+            .consumed_host_artifacts
+            .iter()
+            .any(|artifact| artifact.producer_unit_id.as_ref() == Some(&producer.producer_unit_id.0))
+        {
+            rust_waits::ArtifactRole::HostExecutable
+        } else if unit
+            .metadata_dependencies
+            .iter()
+            .any(|metadata| metadata.producer_unit_id.as_ref() == Some(&producer.producer_unit_id.0))
+        {
+            rust_waits::ArtifactRole::CompletionObserved
+        } else {
+            rust_waits::ArtifactRole::Linkable
+        };
+        dependencies.push(rust_waits::Dependency { unit: id.clone(), role });
+    }
+    Ok(rust_waits::UnitIdentity {
+        package: wait_digest("package", &unit.package_id)?,
+        source: wait_digest("source", &unit.source_digest)?,
+        target: wait_digest("selected-unit-target", &(&unit.unit_id, &unit.target_name))?,
+        target_kind: wait_digest("target-kind", &unit.target_kind)?,
+        host: wait_digest(
+            "host",
+            &unit
+                .derivation
+                .env
+                .get(BUILD_SCRIPT_HOST_ENV)
+                .ok_or_else(|| RunError::Internal("native wait compiler host is not declared".into()))?,
+        )?,
+        target_triple: wait_digest("target-triple", &unit.selected_triple)?,
+        role: if unit.execution_kind == TARGET_EXECUTION_KIND {
+            rust_waits::ProcessRole::TargetCompiler
+        } else {
+            rust_waits::ProcessRole::HostCompiler
+        },
+        features,
+        profile: wait_digest("profile", &unit.profile)?,
+        mode: wait_digest("mode", &unit.mode)?,
+        compiler: wait_digest("toolchain", &(&effect.facts.toolchain_identity, compiler_content))?,
+        arguments: wait_digest("semantic-arguments", &unit.rustc_args_digest_blake3)?,
+        inputs: wait_digest("inputs", &unit.derivation.inputs)?,
+        dependencies,
+    })
+}
+
+fn request_native_wait_attempt(
+    options: &RustUnitExecutionOptions,
+    effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    unit: &RustUnitDerivationSummary,
+) {
+    if let Some(runtime) = &options.wait_diagnostics {
+        let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = runtime.attempt(effect, unit);
+    }
+}
+
+fn record_native_wait_cache(
+    options: &RustUnitExecutionOptions,
+    effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    unit: &RustUnitDerivationSummary,
+    receipt: &RustUnitExecutionReceipt,
+) {
+    if let Some(runtime) = &options.wait_diagnostics {
+        let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        runtime.cache_restored(effect, unit, receipt);
+    }
+}
+
+fn observed_native_output(
+    mut command: Command,
+    effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    unit: &RustUnitDerivationSummary,
+    runtime: &Arc<Mutex<NativeWaitRuntime>>,
+) -> std::io::Result<std::process::Output> {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Stdio;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use crunch_rustc_wrapper::observed_process::ProcessEvent;
+    let attempt = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner).attempt(effect, unit);
+    if let Some(id) = &attempt {
+        let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(collector) = &mut runtime.collector {
+            collector.observe(id, rust_waits::EventKind::Dispatched);
+        }
+    }
+    command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Same command, environment, pipes and wait/drain contract as Command::output.
+    // No fixture supervisor deadlines, resource limits or stream truncation are introduced.
+    let child = command.spawn()?;
+    {
+        let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(collector) = &mut runtime.collector {
+            collector.process_event(attempt.as_ref(), ProcessEvent::Spawned(child.id()));
+        }
+        runtime.sample();
+    }
+    let stopped = AtomicBool::new(false);
+    let output = std::thread::scope(|scope| {
+        let sampling = std::thread::Builder::new().spawn_scoped(scope, || {
+            while !stopped.load(Ordering::Acquire) {
+                runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sample();
+                std::thread::park_timeout(std::time::Duration::from_millis(100));
+            }
+        });
+        let output = child.wait_with_output();
+        stopped.store(true, Ordering::Release);
+        let sampled = match sampling {
+            Ok(sampling) => {
+                sampling.thread().unpark();
+                sampling.join().is_ok()
+            }
+            Err(_) => false,
+        };
+        if !sampled {
+            let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(collector) = &mut runtime.collector {
+                collector.observation_lost();
+            }
+        }
+        output
+    });
+    let mut runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    runtime.sample();
+    if let Some(collector) = &mut runtime.collector {
+        match &output {
+            Ok(output) => {
+                collector.process_event(attempt.as_ref(), ProcessEvent::Exited {
+                    code: output.status.code(),
+                    signal: output.status.signal(),
+                    timeout: false,
+                });
+                // wait_with_output reaped the direct child and drained its pipes. It does
+                // not prove that every descendant was reaped: keep tree lifetime censored.
+                if let Some(id) = &attempt {
+                    collector.reaped(id);
+                }
+            }
+            Err(_) => collector.observation_lost(),
+        }
+    }
+    output
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1682,11 +2057,11 @@ pub(crate) fn plan_cargo_free_unit_topology(
     if let Some(blocker) = validate_role_sensitive_artifact_graph(&graph, &options.host_triple) {
         return Err(reject(blocker));
     }
-    let ordered_indices = combined_topology_execution_order(&graph).map_err(reject)?;
-    if ordered_indices.is_empty() {
+    let topology = combined_unit_topology(&graph).map_err(reject)?;
+    if topology.ordered_indices.is_empty() {
         return Err(RunError::Internal("Cargo-free source topology has no executable units".to_string()));
     }
-    let facts = existing_topology_unit_facts(&graph, &ordered_indices).map_err(reject)?;
+    let facts = existing_topology_unit_facts(&graph, &topology).map_err(reject)?;
     let effects = mantle_rust_plan_app::plan_existing_unit_effects(facts)
         .map_err(|blockers| RunError::Internal(format!("Cargo-free unit effects are blocked: {blockers:?}")))?;
     Ok(CargoFreeUnitTopology {
@@ -2833,7 +3208,12 @@ fn run_checked_bytes(result: Result<CargoOutput, RunError>, label: &str) -> Resu
 }
 
 fn metadata_args() -> Vec<String> {
-    vec!["metadata".to_string(), "--format-version".to_string(), "1".to_string()]
+    vec![
+        "metadata".to_string(),
+        "--locked".to_string(),
+        "--format-version".to_string(),
+        "1".to_string(),
+    ]
 }
 
 fn unit_graph_args(options: &RustPlanOptions) -> Vec<String> {
@@ -2844,6 +3224,7 @@ fn unit_graph_args(options: &RustPlanOptions) -> Vec<String> {
         "-Z".to_string(),
         "unstable-options".to_string(),
         "--unit-graph".to_string(),
+        "--locked".to_string(),
         "--profile".to_string(),
         options.profile.clone(),
     ];
@@ -11402,9 +11783,15 @@ struct CombinedTopologyOrderInputs<'a> {
     graph: &'a UnitDerivationGraphSummary,
 }
 
-fn plan_combined_unit_topology_order(
+#[derive(Debug)]
+struct CombinedUnitTopology {
+    ordered_indices: Vec<usize>,
+    dependency_indices: BTreeMap<usize, Vec<usize>>,
+}
+
+fn plan_combined_unit_topology(
     inputs: CombinedTopologyOrderInputs<'_>,
-) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+) -> Result<CombinedUnitTopology, RustUnitExecutionBlocker> {
     debug_assert!(inputs.host_producers.len() <= inputs.graph.derivations.len());
     let host_dependency_plan = plan_host_dependency_topology(
         inputs.host_indices,
@@ -11462,7 +11849,11 @@ fn plan_combined_unit_topology_order(
         deps.dedup();
     }
 
-    topologically_order_units(&participant_indices, &combined_edges, graph)
+    let ordered_indices = topologically_order_units(&participant_indices, &combined_edges, graph)?;
+    Ok(CombinedUnitTopology {
+        ordered_indices,
+        dependency_indices: combined_edges,
+    })
 }
 
 fn combined_topology_participant_indices(
@@ -11784,13 +12175,13 @@ fn combined_topology_target_edges(
     Ok(edges)
 }
 
-fn combined_topology_execution_order(
+fn combined_unit_topology(
     graph: &UnitDerivationGraphSummary,
-) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+) -> Result<CombinedUnitTopology, RustUnitExecutionBlocker> {
     let indices = combined_topology_indices(graph)?;
     let producers = combined_topology_producers(graph, &indices)?;
     let edges = combined_topology_target_edges(graph, &indices, &producers)?;
-    plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+    plan_combined_unit_topology(CombinedTopologyOrderInputs {
         target_indices: &indices.target,
         host_indices: &indices.host,
         lib_producers: &producers.host_dependency_lib,
@@ -11898,26 +12289,23 @@ fn record_host_topology_outputs(
 // identities, and the native rank preserves the accepted stable tie-break.
 fn existing_topology_unit_facts(
     graph: &UnitDerivationGraphSummary,
-    ordered_indices: &[usize],
+    topology: &CombinedUnitTopology,
 ) -> Result<Vec<mantle_rust_plan_core::ExistingUnitFacts>, RustUnitExecutionBlocker> {
-    let mut units = Vec::with_capacity(ordered_indices.len());
-    for (rank, index) in ordered_indices.iter().copied().enumerate() {
+    let mut units = Vec::with_capacity(topology.ordered_indices.len());
+    for (rank, index) in topology.ordered_indices.iter().copied().enumerate() {
         let execution_order = u32::try_from(rank).map_err(|_| RustUnitExecutionBlocker {
             class: "unit-limit".to_string(),
             message: "selected Rust unit topology exceeds the execution order bound".to_string(),
         })?;
         let unit = &graph.derivations[index];
-        let dependency_unit_ids = unit
-            .dependency_artifacts
-            .iter()
-            .filter_map(|artifact| artifact.producer_unit_id.as_ref())
-            .chain(unit.consumed_host_artifacts.iter().filter_map(|artifact| artifact.producer_unit_id.as_ref()))
-            .chain(unit.metadata_dependencies.iter().filter_map(|dependency| dependency.producer_unit_id.as_ref()))
-            .filter(|producer_unit_id| *producer_unit_id != &unit.unit_id)
-            .cloned()
-            .collect::<BTreeSet<_>>()
+        let mut dependency_unit_ids = topology
+            .dependency_indices
+            .get(&index)
             .into_iter()
-            .collect();
+            .flatten()
+            .map(|producer_index| graph.derivations[*producer_index].unit_id.clone())
+            .collect::<Vec<_>>();
+        dependency_unit_ids.sort_unstable();
         units.push(existing_rust_unit_facts(unit, dependency_unit_ids, execution_order));
     }
     Ok(units)
@@ -12139,7 +12527,17 @@ fn execute_admitted_rust_process(
     effect: &mantle_rust_plan_core::ResolvedUnitEffect,
     unit: &RustUnitDerivationSummary,
     compiler_policy_report: Option<&Path>,
+    options: &RustUnitExecutionOptions,
 ) -> Result<std::process::Output, RunError> {
+    if options.wait_diagnostics.is_some()
+        && (effect.facts.unit_id.0 != unit.unit_id
+            || (effect.facts.role == mantle_rust_plan_core::ProcessEffectRole::RustCompiler
+                && effect.facts.executable != rust_process_word(options.rustc.as_os_str())))
+    {
+        return Err(RunError::Build(
+            "native wait diagnostics require the exact admitted unit and selected direct compiler".into(),
+        ));
+    }
     if let Some(report_path) = compiler_policy_report
         && let Some(report_dir) = report_path.parent()
     {
@@ -12159,7 +12557,12 @@ fn execute_admitted_rust_process(
     if let Some(cwd) = &effect.facts.working_directory {
         command.current_dir(Path::new(&*rust_os_word(cwd)?));
     }
-    command.output().map_err(|error| {
+    let output = if let Some(runtime) = &options.wait_diagnostics {
+        observed_native_output(command, effect, unit, runtime)
+    } else {
+        command.output()
+    };
+    output.map_err(|error| {
         if effect.facts.role == mantle_rust_plan_core::ProcessEffectRole::BuildScriptRun {
             RunError::Internal(format!("running build-script unit {}: {error}", unit.unit_id))
         } else {
@@ -12346,8 +12749,10 @@ fn restored_compiler_evidence(
     };
     let output_artifact_set_identity =
         mantle_rust_plan_core::hash_legacy_receipt_preimage(&receipt.output_artifact_digests)
-            .and_then(|identity| Blake3Digest::parse(identity).map_err(|error| error.to_string()))
-            .map_err(RunError::Internal)?;
+            .map_err(|error| RunError::Internal(error.to_string()))
+            .and_then(|identity| {
+                Blake3Digest::parse(identity).map_err(|error| RunError::Internal(error.to_string()))
+            })?;
     let cache_receipt_identity = Blake3Digest::parse(receipt.receipt_hash.clone())
         .map_err(|error| RunError::Internal(format!("cached Rust unit receipt identity: {error}")))?;
     let output_artifact_count = u32::try_from(receipt.output_artifact_digests.len())
@@ -12562,6 +12967,7 @@ impl mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitE
         prepared: &mut NativePreparedTopologyUnit,
         effect: &mantle_rust_plan_core::ResolvedUnitEffect,
     ) -> Result<mantle_rust_plan_app::CacheRestore<RustUnitExecutionReceipt>, mantle_rust_plan_app::AdapterError> {
+        request_native_wait_attempt(self.options, effect, &prepared.unit);
         let result = restore_or_miss_rust_unit(
             &prepared.unit,
             self.options,
@@ -12569,6 +12975,7 @@ impl mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitE
         );
         match result {
             Ok(Some((receipt, cache))) => {
+                record_native_wait_cache(self.options, effect, &prepared.unit, &receipt);
                 if prepared.unit.target_kind == "custom-build"
                     && matches!(
                         cache,
@@ -12620,14 +13027,14 @@ pub(crate) fn execute_rust_unit_topology(
     if let Some(blocker) = validate_role_sensitive_artifact_graph(graph, &host_target_triple()) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
-    let ordered_indices = match combined_topology_execution_order(graph) {
-        Ok(indices) => indices,
+    let topology = match combined_unit_topology(graph) {
+        Ok(topology) => topology,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
-    if ordered_indices.is_empty() {
+    if topology.ordered_indices.is_empty() {
         return topology_receipt("success", Vec::new(), Vec::new(), None);
     }
-    let facts = match existing_topology_unit_facts(graph, &ordered_indices) {
+    let facts = match existing_topology_unit_facts(graph, &topology) {
         Ok(facts) => facts,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
@@ -15304,7 +15711,7 @@ fn observed_build_script_attempt(
         } else {
             mantle_rust_plan_core::hash_legacy_receipt_preimage(&digest_build_script_out_dir(out_dir)?)
         }
-        .map_err(RunError::Internal)?;
+        .map_err(|error| RunError::Internal(error.to_string()))?;
         let stdout_identity = receipt.map_or_else(
             || blake3::hash(&output.stdout).to_hex().to_string(),
             |receipt| receipt.stdout_digest_blake3.clone(),
@@ -15393,7 +15800,7 @@ fn run_build_script_metadata(
             });
         }
     };
-    let output = execute_admitted_rust_process(&admitted, unit, None)?;
+    let output = execute_admitted_rust_process(&admitted, unit, None, options)?;
     let receipt = if !output.status.success() {
         let diagnostic = redacted_diagnostic(&output.stderr);
         Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref()))
@@ -16576,6 +16983,17 @@ fn prepare_rust_unit_execution_inputs(
 ) -> Result<Result<RustUnitExecutionInputs, RustUnitExecutionReceipt>, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+    if options.wait_diagnostics.is_some() && !options.compiler_policy.mode.is_plain() {
+        return Err(RunError::Build(
+            "native wait diagnostics require direct admitted rustc execution, not compiler-policy adapters".into(),
+        ));
+    }
+    if let Some(runtime) = &options.wait_diagnostics {
+        let runtime = runtime.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if runtime.compiler_path != options.rustc {
+            return Err(RunError::Build("native wait compiler differs from its admitted content pin".into()));
+        }
+    }
     if unit.derivation.builder != "rustc" {
         return blocked_execution_receipt(BlockedExecutionReceiptInputs {
             unit: Some(unit),
@@ -16702,7 +17120,8 @@ fn observed_compiler_attempt(
         if artifacts.is_empty() {
             Vec::new()
         } else {
-            let digest = mantle_rust_plan_core::hash_legacy_receipt_preimage(&artifacts).map_err(RunError::Internal)?;
+            let digest = mantle_rust_plan_core::hash_legacy_receipt_preimage(&artifacts)
+                .map_err(|error| RunError::Internal(error.to_string()))?;
             effect.facts.expected_outputs.iter().map(|name| (name.clone(), digest.clone())).collect()
         }
     } else {
@@ -16800,7 +17219,7 @@ fn failed_rust_compiler_execution(
         }
     };
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let fallback_output = execute_admitted_rust_process(&fallback, unit, None)?;
+    let fallback_output = execute_admitted_rust_process(&fallback, unit, None, options)?;
     if !fallback_output.status.success() {
         let diagnostic = redacted_diagnostic(&fallback_output.stderr);
         let policy = inputs
@@ -17555,6 +17974,7 @@ fn execute_uncached_rust_unit(
         &primary,
         unit,
         inputs.compiler_policy_invocation.as_ref().map(|policy| policy.report_path.as_path()),
+        options,
     )?;
     let mut attempts = Vec::with_capacity(2);
     let (final_effect, final_output) = if output.status.success() {
@@ -17641,7 +18061,9 @@ fn execute_planned_rust_unit(
             return stopped(&blocker.code, &blocker.message);
         }
     };
+    request_native_wait_attempt(options, &primary, unit);
     if let Some((receipt, cache)) = restore_or_miss_rust_unit(unit, options, &mut inputs)? {
+        record_native_wait_cache(options, &primary, unit, &receipt);
         let restored_compiler = if unit.target_kind == "custom-build"
             && matches!(
                 cache,
@@ -19051,7 +19473,7 @@ fn normalize_json_value(value: Value) -> Value {
 
 fn receipt_hash(receipt: &RustPlanReceipt) -> Result<String, RunError> {
     debug_assert!(receipt.receipt_hash.is_empty());
-    mantle_rust_plan_core::hash_legacy_receipt_preimage(receipt).map_err(RunError::Internal)
+    mantle_rust_plan_core::hash_legacy_receipt_preimage(receipt).map_err(|error| RunError::Internal(error.to_string()))
 }
 
 fn sorted_strings(mut strings: Vec<String>) -> Vec<String> {
@@ -19179,6 +19601,42 @@ esac
             run("stderr"),
             Err(RunError::Build(message)) if message == "Cargo oracle stderr exceeds the 128-byte capture limit"
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cargo_oracle_preserves_readonly_noncanonical_lock_and_rejects_stale_lock() {
+        let directory = TempDir::new().unwrap();
+        let options = source_only_topology_fixture(directory.path());
+        let lock_path = directory.path().join("Cargo.lock");
+        let original = std::fs::read(&lock_path).unwrap();
+        std::fs::set_permissions(&lock_path, std::fs::Permissions::from_mode(0o444)).unwrap();
+        let cargo = Path::new(env!("CARGO"));
+        let observe = |args: Vec<String>| {
+            let mut command = Command::new(cargo);
+            command
+                .args(args)
+                .current_dir(directory.path())
+                .env("CARGO_HOME", directory.path().join("cargo-home"))
+                .env("CARGO_TARGET_DIR", directory.path().join("target"))
+                .env("CARGO_NET_OFFLINE", "true");
+            run_bounded_cargo_process(command, cargo, CARGO_ORACLE_STDOUT_MAX_BYTES, CARGO_ORACLE_STDERR_MAX_BYTES)
+                .unwrap()
+        };
+        let metadata = observe(metadata_args());
+        assert_eq!(metadata.status_code, 0, "{}", String::from_utf8_lossy(&metadata.stderr));
+        assert_eq!(std::fs::read(&lock_path).unwrap(), original);
+        let graph = observe(unit_graph_args(&options));
+        assert_eq!(graph.status_code, 0, "{}", String::from_utf8_lossy(&graph.stderr));
+        assert_eq!(std::fs::read(&lock_path).unwrap(), original);
+        std::fs::write(
+            directory.path().join("Cargo.toml"),
+            "[package]\nname = \"static-topology\"\nversion = \"0.2.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        let stale = observe(metadata_args());
+        assert_ne!(stale.status_code, 0, "a stale lock must not be silently updated");
+        assert_eq!(std::fs::read(&lock_path).unwrap(), original);
     }
 
     #[test]
@@ -19346,8 +19804,10 @@ esac
         ).unwrap();
         let error = plan_cargo_free_unit_topology(&options, &[])
             .err()
-            .expect("missing declared source must block topology");
-        assert!(error.to_string().contains("blocked"));
+            .expect("missing declared source must block topology")
+            .to_string();
+        let missing = dir.path().join("missing.rs").display().to_string();
+        assert!(error.contains(&missing), "rejection must name the missing declared source: {error}");
     }
 
     fn test_c_compiler_route() -> crate::source_toolchain_closure::ReceiptBoundCCompilerRoute {
@@ -20771,6 +21231,7 @@ esac
             output_root: execution_root.clone(),
             compiler_policy: rust_compiler_policy_selection("plain", None, None).unwrap(),
             local_cache: None,
+            wait_diagnostics: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, Some(&package_root), Some(&route));
@@ -22010,6 +22471,7 @@ rust-version = "1.80"
                 output_root: dir.path().join("unit-out"),
                 compiler_policy: RustCompilerPolicySelection::default(),
                 local_cache: None,
+                wait_diagnostics: None,
             },
             &dir.path().join("out"),
             None,
@@ -22152,6 +22614,7 @@ rust-version = "1.80"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, None, None);
@@ -22190,6 +22653,7 @@ rust-version = "1.80"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         };
 
         let root = build_script_package_root(&unit).expect("source path has package root");
@@ -22225,6 +22689,7 @@ rust-version = "1.80"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref(), None);
@@ -22252,6 +22717,7 @@ rust-version = "1.80"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, None, None);
@@ -23471,7 +23937,7 @@ rust-version = "1.80"
         target_edges.insert(0usize, Vec::new());
         target_edges.insert(2usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[0usize, 2usize],
             host_indices: &[1usize],
             lib_producers: &lib_producers,
@@ -23480,7 +23946,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         assert_eq!(order, vec![0usize, 1usize, 2usize]);
     }
@@ -23989,7 +24456,7 @@ rust-version = "1.80"
         target_edges.insert(1usize, Vec::new());
         target_edges.insert(3usize, vec![0usize]);
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[0usize, 3usize],
             host_indices: &[2usize],
             lib_producers: &host_dependency_lib_producers,
@@ -23998,7 +24465,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         let host_dependency_position = order.iter().position(|index| *index == 1usize).unwrap();
         let host_consumer_position = order.iter().position(|index| *index == 2usize).unwrap();
@@ -24028,7 +24496,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(2usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[2usize],
             host_indices: &[0usize, 1usize],
             lib_producers: &lib_producers,
@@ -24037,7 +24505,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         assert_eq!(order, vec![0usize, 1usize, 2usize]);
     }
@@ -24065,7 +24534,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(0usize, Vec::new());
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[0usize],
             host_indices: &[1usize, 2usize],
             lib_producers: &lib_producers,
@@ -24074,7 +24543,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         assert_eq!(order, vec![2usize, 1usize, 0usize]);
     }
@@ -24198,7 +24668,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(TARGET_INDEX, Vec::new());
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[TARGET_INDEX],
             host_indices: &[LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX],
             lib_producers: &lib_producers,
@@ -24207,7 +24677,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         assert_eq!(order, vec![LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX, TARGET_INDEX]);
     }
@@ -24234,7 +24705,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(TARGET_INDEX, Vec::new());
 
-        let err = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let err = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[TARGET_INDEX],
             host_indices: &[DEPENDENT_BUILD_INDEX],
             lib_producers: &lib_producers,
@@ -24267,7 +24738,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(target_index, Vec::new());
 
-        let order = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let order = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[target_index],
             host_indices: &[standalone_host_index],
             lib_producers: &lib_producers,
@@ -24276,7 +24747,8 @@ rust-version = "1.80"
             target_edges: &target_edges,
             graph: &graph,
         })
-        .unwrap();
+        .unwrap()
+        .ordered_indices;
 
         assert_eq!(order.len(), expected_unit_count);
         assert!(order.contains(&target_index));
@@ -24294,7 +24766,7 @@ rust-version = "1.80"
         let mut target_edges = BTreeMap::new();
         target_edges.insert(0usize, Vec::new());
 
-        let err = plan_combined_unit_topology_order(CombinedTopologyOrderInputs {
+        let err = plan_combined_unit_topology(CombinedTopologyOrderInputs {
             target_indices: &[0usize],
             host_indices: &[],
             lib_producers: &lib_producers,
@@ -26970,6 +27442,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -26997,6 +27470,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
         assert_eq!(repeated.execution_status, "success");
@@ -27017,6 +27491,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
         assert_eq!(stale.execution_status, "blocked");
@@ -27081,6 +27556,7 @@ checksum = "0123456789abcdef"
             output_root: output_root.clone(),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(selection),
+            wait_diagnostics: None,
         };
 
         let first_started = Instant::now();
@@ -27103,6 +27579,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("uncached-execution"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         };
         let uncached_started = Instant::now();
         let uncached = execute_first_supported_rust_unit(&graph, &uncached_options).unwrap();
@@ -27144,6 +27621,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("producer-output"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(producer_cache),
+            wait_diagnostics: None,
         };
 
         let produced = execute_first_supported_rust_unit(&graph, &producer_options).unwrap();
@@ -27159,6 +27637,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("client-output"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(client_cache),
+            wait_diagnostics: None,
         };
 
         let restored = execute_first_supported_rust_unit(&graph, &client_options).unwrap();
@@ -27188,6 +27667,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("producer-output"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(producer_cache),
+            wait_diagnostics: None,
         };
         execute_first_supported_rust_unit(&graph, &producer_options).unwrap();
 
@@ -27204,6 +27684,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("client-output"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(client_cache),
+            wait_diagnostics: None,
         };
 
         let receipt = execute_first_supported_rust_unit(&graph, &client_options).unwrap();
@@ -27240,6 +27721,7 @@ checksum = "0123456789abcdef"
             output_root: output_root.clone(),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: Some(selection),
+            wait_diagnostics: None,
         };
 
         let first = execute_rust_target_unit_topology(&graph, &options).unwrap();
@@ -27279,6 +27761,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("audit-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27327,6 +27810,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("json-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
         let json = serde_json::to_value(&receipt).unwrap();
@@ -27356,6 +27840,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("deny-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Deny, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27380,6 +27865,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("required-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27423,6 +27909,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("missing-driver-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27447,6 +27934,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("missing-lint-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27469,6 +27957,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("toolchain-mismatch-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27491,6 +27980,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("digest-mismatch-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27513,6 +28003,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("missing-standards-out"),
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27535,6 +28026,7 @@ checksum = "0123456789abcdef"
             output_root: output_root.clone(),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
         let required = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
@@ -27542,6 +28034,7 @@ checksum = "0123456789abcdef"
             output_root,
             compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27568,6 +28061,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("manifest-digest-out"),
             compiler_policy: selection,
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27645,6 +28139,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("chain-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27695,6 +28190,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("chain-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27742,6 +28238,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27796,6 +28293,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 
@@ -27848,6 +28346,7 @@ checksum = "0123456789abcdef"
             output_root: dir.path().join("unit-out"),
             compiler_policy: RustCompilerPolicySelection::default(),
             local_cache: None,
+            wait_diagnostics: None,
         })
         .unwrap();
 

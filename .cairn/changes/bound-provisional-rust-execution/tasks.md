@@ -3,6 +3,15 @@
 Proposed implementation work. No item below is completed by authoring this
 package or by structural Cairn validation.
 
+Implementation admission rechecked 2026-10-23: blocked, not accepted. The
+selected compiler rejects the required early-metadata option; the pinned
+reference is not a source-fixed qualified provider, and the current user has
+no delegated finite cgroup session boundary. No provisional session runtime
+or tests were delivered. See the [fresh probes and success/publication hook
+map](../pipeline-rust-interface-readiness/evidence/authoring-validation.md#current-implementation-admission-inspection-2026-10-23)
+and [proposed ADR 0126](../../../adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md).
+Existing serial execution is not completion of any provisional-session task.
+
 ## Phase 1: Contract and existing boundaries
 
 - [ ] [serial] T1.1 Capture the current successful/failing serial Rust execution and cache-publication behavior using the differential baseline, and map every success/publication hook that the session must gate. r[rust_package_planning.provisional_session.confirmation]

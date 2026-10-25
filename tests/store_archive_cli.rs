@@ -1397,6 +1397,48 @@ fn rail_compare_prechange_gc(golden: &Value, root: &Path, observed: &Value) {
     assert_eq!(observed["execution_complete"], historical["execution_complete"]);
 }
 
+fn rail_fresh_process_reuse(
+    backend: crunch_store::StoreBackend,
+    state: &Path,
+    output: &Path,
+    retained: &PathInfo,
+    child: &PathInfo,
+) -> Value {
+    let root = state.parent().unwrap();
+    let fixture = root.join("fresh-output-input.json");
+    std::fs::write(&fixture, serde_json::to_vec(&(retained, child)).unwrap()).unwrap();
+    for info in [retained, child] {
+        std::fs::remove_file(output.join(info.store_path.to_string())).unwrap();
+    }
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail",
+            "--nocapture",
+        ])
+        .env("MANTLE_BACKEND_RAIL_OUTPUT_CHILD", root)
+        .env("MANTLE_BACKEND_RAIL_OUTPUT_BACKEND", backend.as_str())
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{backend:?} fresh-process signed output reuse: stdout={} stderr={}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(std::fs::read(output.join(retained.store_path.to_string())).unwrap(), b"retained NAR\n");
+    assert_eq!(std::fs::read(output.join(child.store_path.to_string())).unwrap(), b"referenced NAR\n");
+    assert!(!state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).exists());
+    if backend == crunch_store::StoreBackend::Casita {
+        run_async(async {
+            let repository = casita::Repository::local(state.join("casita")).await.unwrap();
+            let prefix = casita::RootName::try_from("mantle/castore").unwrap();
+            assert!(repository.roots_under(&prefix).await.unwrap().is_empty());
+        });
+    }
+    serde_json::from_slice(&std::fs::read(root.join("fresh-output-report.json")).unwrap()).unwrap()
+}
+
 fn rail_reopen_and_reuse(
     backend: crunch_store::StoreBackend,
     state: &Path,
@@ -1415,7 +1457,7 @@ fn rail_reopen_and_reuse(
         .unwrap();
         let observed = reopened.pathinfo_service().get(*retained.store_path.digest()).await.unwrap().unwrap();
         assert_eq!(observed, *retained);
-        let ports = reopened.into_builder_store_parts();
+        let mut ports = reopened.into_builder_store_parts();
         let closure = ports.build_store.resolve_closure(&retained.store_path, StoreFallbackMode::Strict).await.unwrap();
         assert!(closure.audit_events.is_empty());
         assert_eq!(closure.paths, vec![retained.store_path.clone(), child.store_path.clone()]);
@@ -1442,6 +1484,13 @@ fn rail_reopen_and_reuse(
         let reused = ports.action_results.probe_outputs(&action).await.unwrap();
         assert_eq!(reused.outputs.get("out"), Some(retained));
         assert_eq!(reused.reused_nar_bytes, retained.nar_size);
+        assert_eq!(reused.transferred_nar_bytes, 0);
+        for info in [retained, child] {
+            let (nar_size, nar_sha256) = ports.build_store.calculate_nar(&info.node).await.unwrap();
+            assert_eq!(nar_size, info.nar_size);
+            assert_eq!(nar_sha256, info.nar_sha256);
+            assert_eq!(ports.build_store.materialize_persisted_output(&info.store_path).await.unwrap(), *info);
+        }
         serde_json::json!({
             "reopened_signed_pathinfo_hex": data_encoding::HEXLOWER.encode(&serde_json::to_vec(&observed).unwrap()),
             "closure_paths": closure.paths.iter().map(ToString::to_string).collect::<Vec<_>>(),
@@ -1756,6 +1805,21 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
         writes_enabled: true,
         ..LocalCachePolicy::default()
     };
+    if let Some(expected_result) = std::env::var_os("MANTLE_BACKEND_RAIL_CACHE_RESULT") {
+        let restored = root.join("rust-cache-restored");
+        assert!(!root.join("rust-cache-built").exists(), "producer artifacts must be absent in the fresh child");
+        let reopened = run_async(crunch_rust_cache::RustCache::open_async(config())).unwrap();
+        let hit = run_async(reopened.restore(&action, &restored, &policy)).unwrap();
+        assert_eq!(hit.disposition, crunch_rust_cache::CACHE_DISPOSITION_HIT);
+        assert_eq!(hit.selected_result_ref.as_deref(), expected_result.to_str());
+        assert!(!hit.compiler_executed);
+        assert_eq!(
+            std::fs::read(restored.join("librail_crate.rlib")).unwrap(),
+            b"real backend-selected rust cache artifact\n"
+        );
+        assert!(!restored.join(crunch_rust_cache::RUST_UNIT_EXECUTION_RECEIPT_FILE).exists());
+        return;
+    }
     let built = root.join("rust-cache-built");
     let restored = root.join("rust-cache-restored");
     std::fs::create_dir(&built).unwrap();
@@ -1769,7 +1833,12 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
         policy: &policy,
     }))
     .unwrap();
+    assert_eq!(
+        first.retention().unwrap().retained_results.get(&published.result_ref),
+        Some(&published.input.root_node)
+    );
     drop(first);
+    std::fs::remove_dir_all(&built).unwrap();
     if backend == crunch_store::StoreBackend::Casita {
         let fence = state.join("casita-gc-fence.json");
         std::fs::write(&fence, br#"{"plan_id":"interrupted-plan","entries":[]}"#).unwrap();
@@ -1795,12 +1864,27 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
             .output()
             .unwrap();
         assert!(executed.status.success(), "{}", String::from_utf8_lossy(&executed.stderr));
+        let executed: Value = serde_json::from_slice(&executed.stdout).unwrap();
+        assert_eq!(executed["execution_complete"], true);
+        assert_eq!(executed["failed_operations"], serde_json::json!([]));
     }
-    let reopened = run_async(crunch_rust_cache::RustCache::open_async(config())).unwrap();
-    let hit = run_async(reopened.restore(&action, &restored, &policy)).unwrap();
-    assert_eq!(hit.disposition, crunch_rust_cache::CACHE_DISPOSITION_HIT);
-    assert_eq!(hit.selected_result_ref.as_deref(), Some(published.result_ref.as_str()));
-    assert!(!hit.compiler_executed);
+    let child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail",
+            "--nocapture",
+        ])
+        .env("MANTLE_BACKEND_RAIL_CACHE_ROOT", root)
+        .env("MANTLE_BACKEND_RAIL_CACHE_BACKEND", backend.as_str())
+        .env("MANTLE_BACKEND_RAIL_CACHE_RESULT", &published.result_ref)
+        .output()
+        .unwrap();
+    assert!(
+        child.status.success(),
+        "{backend:?} fresh-process public cache restore: stdout={} stderr={}",
+        String::from_utf8_lossy(&child.stdout),
+        String::from_utf8_lossy(&child.stderr)
+    );
     assert_eq!(
         std::fs::read(restored.join("librail_crate.rlib")).unwrap(),
         b"real backend-selected rust cache artifact\n"
@@ -1994,6 +2078,20 @@ fn rail_assert_snix_prechange(
 
 #[test]
 fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail() {
+    if let Some(root) = std::env::var_os("MANTLE_BACKEND_RAIL_OUTPUT_CHILD") {
+        let root = Path::new(&root);
+        let backend = std::env::var("MANTLE_BACKEND_RAIL_OUTPUT_BACKEND").unwrap().parse().unwrap();
+        let (retained, child): (PathInfo, PathInfo) =
+            serde_json::from_slice(&std::fs::read(root.join("fresh-output-input.json")).unwrap()).unwrap();
+        let report = rail_reopen_and_reuse(backend, &root.join("state"), &root.join("output"), &retained, &child);
+        std::fs::write(root.join("fresh-output-report.json"), serde_json::to_vec(&report).unwrap()).unwrap();
+        return;
+    }
+    if let Some(root) = std::env::var_os("MANTLE_BACKEND_RAIL_CACHE_ROOT") {
+        let backend = std::env::var("MANTLE_BACKEND_RAIL_CACHE_BACKEND").unwrap().parse().unwrap();
+        rail_check_rust_cache(backend, Path::new(&root));
+        return;
+    }
     let golden: Value = serde_json::from_str(include_str!(
         "../.cairn/archive/2026-10-04-add-store-backend-selection/evidence/prechange-snix-rail-unsorted-observed-2026-10-04.json"
     ))
@@ -2025,7 +2123,7 @@ fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail(
         } else {
             snix_signed_pathinfo = Some(signed_bytes);
         }
-        let reopen = rail_reopen_and_reuse(backend, &state, &output, &retained, &child);
+        let reopen = rail_fresh_process_reuse(backend, &state, &output, &retained, &child);
         let (capabilities, archive) = rail_archive_roundtrip(
             backend,
             root,

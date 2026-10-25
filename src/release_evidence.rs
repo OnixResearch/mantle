@@ -1947,12 +1947,16 @@ fn path_to_forward_slash_string(path: &Path) -> Result<String, RunError> {
 
 /// Read bounded exact artifacts through the release capability, then independently
 /// verify signatures and source association. No producer status grants authority.
+/// The manifest returns with the verification, as for the other release evaluators.
 pub(crate) fn verify_source_review_evidence(
-    manifest: &ReleaseEvidenceManifest,
+    manifest: ReleaseEvidenceManifest,
     bundle_dir: &Path,
     trusted_policy: Option<&Path>,
     required: bool,
-) -> Result<crunch_release_core::source_review::SourceReviewVerification, RunError> {
+) -> Result<
+    crunch_release_core::ReleaseEvidenceEvaluation<crunch_release_core::source_review::SourceReviewVerification>,
+    RunError,
+> {
     use crunch_release_core::source_review::*;
     let root = ReleaseCapabilityRoot::open_ambient_nofollow(
         crate::release_capability::ReleaseRootKind::ReleaseEvidence,
@@ -1960,10 +1964,10 @@ pub(crate) fn verify_source_review_evidence(
     )
     .map_err(|error| RunError::Internal(format!("opening release source-review root: {error}")))?;
     let attachment =
-        read_source_review_artifact(&root, manifest, SOURCE_REVIEW_ATTACHMENT_ROLE, SOURCE_REVIEW_ATTACHMENT_SCHEMA)?;
-    let policy = read_source_review_artifact(&root, manifest, SOURCE_REVIEW_POLICY_ROLE, SOURCE_REVIEW_POLICY_SCHEMA)?;
+        read_source_review_artifact(&root, &manifest, SOURCE_REVIEW_ATTACHMENT_ROLE, SOURCE_REVIEW_ATTACHMENT_SCHEMA)?;
+    let policy = read_source_review_artifact(&root, &manifest, SOURCE_REVIEW_POLICY_ROLE, SOURCE_REVIEW_POLICY_SCHEMA)?;
     let valence =
-        read_source_review_artifact(&root, manifest, SOURCE_REVIEW_VALENCE_ROLE, SOURCE_REVIEW_VALENCE_SCHEMA)?;
+        read_source_review_artifact(&root, &manifest, SOURCE_REVIEW_VALENCE_ROLE, SOURCE_REVIEW_VALENCE_SCHEMA)?;
     let trusted = trusted_policy.map(read_source_review_trusted_policy).transpose()?;
     if attachment.is_some() || required || trusted.is_some() {
         let measured = compute_path_blake3_digest(&bundle_dir.join(&manifest.source_archive.relative_path))?;
@@ -1973,12 +1977,12 @@ pub(crate) fn verify_source_review_evidence(
             ));
         }
     }
-    Ok(verify_release_source_review(&crunch_release_core::source_review::SourceReviewVerificationRequest {
+    Ok(verify_release_source_review(crunch_release_core::source_review::SourceReviewVerificationRequest {
         manifest,
-        attachment_bytes: attachment.as_deref(),
-        policy_bytes: policy.as_deref(),
-        valence_bytes: valence.as_deref(),
-        trusted_policy_bytes: trusted.as_deref(),
+        attachment_bytes: attachment,
+        policy_bytes: policy,
+        valence_bytes: valence,
+        trusted_policy_bytes: trusted,
         require_review: required,
     }))
 }

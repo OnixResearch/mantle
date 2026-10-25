@@ -35,6 +35,19 @@ mutation and post-archive validation above describe their recorded subjects,
 not new acceptance of this combined tree. Active pending tasks remain pending;
 fresh library-handle smoke is not fresh-process proof or full-gate evidence.
 
+Current-source review (2026-10-23): ADR 0122 supersedes this decision's
+original BLAKE3 `=1.8.2` admission constraint with `=1.8.5`; the manifest,
+lock, Nix source assertion and vendor generator agree on the newer pin.
+Historical receipts below retain their original dependency subjects. The
+signed core conformance fixture now uses fresh child processes for output
+and public Rust cache rehydration; the fixed-output CLI fixture additionally
+removes its source and repeats reuse after plan-bound GC. These fixture
+extensions have not yet run on the final source and do not advance acceptance.
+The current upstream RustSec RUSTSEC-2024-0370 entry still lists no patched
+`proc-macro-error` version; see the
+[current dependency review](../docs/dependency-audit.md#casita-current-source-review-2026-10-23)
+for precise source/vendor/audit commands and remaining upstream prerequisites.
+
 ## Context
 
 Mantle persists admitted outputs in one engine, and the choice is implicit.
@@ -524,8 +537,8 @@ releases only roots marked evictable, and Mantle never marks one.
   the 0.1.0 adopted in
   [ADR 0071](0071-adopt-nix-archive-at-the-filesystem-nar-boundary.md),
   `bao-tree`, `iroh-io`, and a git-pinned `turso`. `astral-tokio-tar` moves
-  from 0.6.3 to exactly 0.6.4. `blake3` must stay at `=1.8.2`, which Casita's
-  `1.8` requirement allows.
+  from 0.6.3 to exactly 0.6.4. The original admission kept `blake3 =1.8.2`;
+  ADR 0122 now requires `=1.8.5`, also allowed by Casita's `1.8` requirement.
 - An initial full `cargo-deny 0.19.0 check --config deny.toml` after the
   APK lock handoff exited 9: bans and licenses passed, advisories and sources
   failed. Neither Casita nor Turso failed source admission. The Casita-only

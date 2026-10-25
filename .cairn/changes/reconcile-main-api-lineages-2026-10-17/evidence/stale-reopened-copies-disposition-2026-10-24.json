@@ -1,0 +1,219 @@
+{
+  "schema": "mantle-lifecycle-subject-disposition-v1",
+  "recorded_on": "2026-10-24",
+  "change": "reconcile-main-api-lineages-2026-10-17",
+  "requirement": "mantle.semantic_reconciliation.evidence_scope",
+  "maintenance_owner": "Mantle lifecycle maintainers",
+  "acceptance_claimed": false,
+  "context": "The preserved local parent d20459c6d restored working copies of five changes that 7adde3027, 2f737c04d and 6e457afa3 had already archived, and the two-parent reconciliation 36a7c0cf3 kept both. Each of these names therefore existed as an active change and as an archive.",
+  "head": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+  "copies": [
+    {
+      "change": "run-cargo-build-scripts-as-plan-units",
+      "head_copy": ".cairn/changes/run-cargo-build-scripts-as-plan-units/",
+      "archive": ".cairn/archive/2026-10-12-run-cargo-build-scripts-as-plan-units/",
+      "archive_commit": "7adde3027",
+      "last_copy_commit": "e2f3f2477 2026-10-22 chore: record the build script unit plan baseline and focused validation",
+      "copy_files": 163,
+      "byte_identical_in_archive": 5,
+      "different_in_archive": 2,
+      "absent_from_archive": 156,
+      "copy_tasks": {
+        "done": 15,
+        "open": 1
+      },
+      "archive_tasks": {
+        "done": 16,
+        "open": 0
+      },
+      "absent_examples": [
+        "evidence/cairn-gates-2026-10-13.txt",
+        "evidence/cairn-gates-and-sync-2026-10-22.md",
+        "evidence/current-client-cached-app-timeout-2026-10-14.txt",
+        "evidence/current-client-cfgfix-focused-checks-2026-10-14.txt",
+        "evidence/current-client-gpt61-continuation-readiness-2026-10-14.txt",
+        "evidence/current-client-lean-toolchain-preflight-2026-10-14.txt"
+      ],
+      "decision": "retained-as-open-change",
+      "reason": "The copy holds 156 files absent from its 2026-10-12 archive, recorded after that archive (2026-10-13 to 2026-10-22), including the t41 and t42 records that live sources cite as support for two supported compatibility-matrix rows. Retiring it would leave those citations without evidence in the tree. Its T4.6 stays unchecked.",
+      "cited_by_live_sources": [
+        "examples/rust_compatibility_surface_matrix.ncl",
+        "docs/operator-workflows.md",
+        "docs/release-notes/cargo-build-script-units-2026-10-15.md"
+      ]
+    },
+    {
+      "change": "prove-apk-adapter-real-build",
+      "head_copy": ".cairn/changes/prove-apk-adapter-real-build/",
+      "archive": ".cairn/archive/1970-01-01-prove-apk-adapter-real-build/",
+      "archive_commit": "2f737c04d",
+      "last_copy_commit": "d20459c6d 2026-10-16 WIP: preserve Mantle research progress and bounded evidence",
+      "copy_files": 16,
+      "byte_identical_in_archive": 12,
+      "different_in_archive": 3,
+      "absent_from_archive": 1,
+      "copy_tasks": {
+        "done": 5,
+        "open": 8
+      },
+      "archive_tasks": {
+        "done": 13,
+        "open": 0
+      },
+      "absent_examples": [
+        "evidence/official-build-blocker.json"
+      ],
+      "decision": "retired",
+      "reason": "The copy is an older pre-archive state: fewer tasks checked than its archive, last changed by the preserved parent d20459c6d, and no live source cites it. The archive is the lifecycle record; the copy stays readable in Git history at the recorded HEAD.",
+      "cited_by_live_sources": []
+    },
+    {
+      "change": "add-lock-driven-vendor-fetches",
+      "head_copy": ".cairn/changes/add-lock-driven-vendor-fetches/",
+      "archive": ".cairn/archive/2026-10-12-add-lock-driven-vendor-fetches/",
+      "archive_commit": "7adde3027",
+      "last_copy_commit": "d20459c6d 2026-10-16 WIP: preserve Mantle research progress and bounded evidence",
+      "copy_files": 13,
+      "byte_identical_in_archive": 12,
+      "different_in_archive": 1,
+      "absent_from_archive": 0,
+      "copy_tasks": {
+        "done": 5,
+        "open": 9
+      },
+      "archive_tasks": {
+        "done": 14,
+        "open": 0
+      },
+      "absent_examples": [],
+      "decision": "retired",
+      "reason": "The copy is an older pre-archive state: fewer tasks checked than its archive, last changed by the preserved parent d20459c6d, and no live source cites it. The archive is the lifecycle record; the copy stays readable in Git history at the recorded HEAD.",
+      "cited_by_live_sources": []
+    },
+    {
+      "change": "build-cargo-units-as-dynamic-plans",
+      "head_copy": ".cairn/changes/build-cargo-units-as-dynamic-plans/",
+      "archive": ".cairn/archive/2026-10-12-build-cargo-units-as-dynamic-plans/",
+      "archive_commit": "7adde3027",
+      "last_copy_commit": "d20459c6d 2026-10-16 WIP: preserve Mantle research progress and bounded evidence",
+      "copy_files": 13,
+      "byte_identical_in_archive": 9,
+      "different_in_archive": 2,
+      "absent_from_archive": 2,
+      "copy_tasks": {
+        "done": 14,
+        "open": 4
+      },
+      "archive_tasks": {
+        "done": 18,
+        "open": 0
+      },
+      "absent_examples": [
+        "evidence/pre-archive-readiness-approval-2026-10-16.md",
+        "evidence/pre-archive-readiness-document-checks-2026-10-16.json"
+      ],
+      "decision": "retired",
+      "reason": "The copy is an older pre-archive state: fewer tasks checked than its archive, last changed by the preserved parent d20459c6d, and no live source cites it. The archive is the lifecycle record; the copy stays readable in Git history at the recorded HEAD.",
+      "cited_by_live_sources": []
+    },
+    {
+      "change": "separate-rust-plan-hexagon",
+      "head_copy": ".cairn/changes/separate-rust-plan-hexagon/",
+      "archive": ".cairn/archive/2026-10-10-separate-rust-plan-hexagon/",
+      "archive_commit": "6e457afa3",
+      "last_copy_commit": "d20459c6d 2026-10-16 WIP: preserve Mantle research progress and bounded evidence",
+      "copy_files": 6,
+      "byte_identical_in_archive": 4,
+      "different_in_archive": 2,
+      "absent_from_archive": 0,
+      "copy_tasks": {
+        "done": 9,
+        "open": 2
+      },
+      "archive_tasks": {
+        "done": 11,
+        "open": 0
+      },
+      "absent_examples": [],
+      "decision": "retired",
+      "reason": "The copy is an older pre-archive state: fewer tasks checked than its archive, last changed by the preserved parent d20459c6d, and no live source cites it. The archive is the lifecycle record; the copy stays readable in Git history at the recorded HEAD.",
+      "cited_by_live_sources": []
+    }
+  ],
+  "citation_repairs": [
+    {
+      "paths": [
+        "README.md"
+      ],
+      "from": ".cairn/changes/prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt",
+      "to": ".cairn/archive/1970-01-01-prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt",
+      "reason": "The cited file is absent from the HEAD copy and present in the archive."
+    },
+    {
+      "paths": [
+        "README.md"
+      ],
+      "from": ".cairn/changes/add-apk-build-adapter/design.md",
+      "to": ".cairn/archive/2026-10-21-add-apk-build-adapter/design.md",
+      "reason": "Commit 5c4d6e511 moved the cited design unchanged into this archive."
+    },
+    {
+      "paths": [
+        "crates/crunch-build/src/distributed/resource_policy.rs",
+        "crates/crunch-build/src/distributed/resource_quota_store.rs",
+        "crates/crunch-fpga-core/src/lib.rs",
+        "crates/crunch-rustc-wrapper/src/cc.rs",
+        "crates/crunch-rustc-wrapper/src/lib.rs",
+        "crates/crunch-rustc-wrapper/src/slots.rs",
+        "crates/crunch-test/src/lib.rs",
+        "crates/crunch-verification-bridge-core/src/lib.rs",
+        "crates/crunch-verification-bridge/src/lib.rs",
+        "crates/mantle-cargo-build-bundle-core/src/lib.rs",
+        "crates/mantle-cargo-unit-plan/src/lib.rs",
+        "src/bootstrap_effect_port.rs",
+        "src/elf_dynamic_fixup_core.rs",
+        "src/elf_dynamic_fixup_shell.rs",
+        "src/source_built_fixed_point_action_controller.rs",
+        "src/user_profile_cmd/admission.rs"
+      ],
+      "from": ".cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/",
+      "to": ".cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/",
+      "reason": "HARDENING-BACKLOG header comments; commit 3c0a77c01 archived the change. Same-line edit."
+    },
+    {
+      "paths": [
+        "crates/crunch-release-core/src/chapter_transport.rs",
+        "crates/crunch-store/src/composition.rs",
+        "crates/crunch-store/src/gc.rs",
+        "crates/crunch-store/src/handle.rs",
+        "crates/crunch-store/src/http_closure.rs",
+        "crates/crunch-store/src/layer.rs",
+        "crates/crunch-store/src/nario.rs",
+        "crates/crunch-store/src/overlay.rs",
+        "crates/crunch-store/src/provenance.rs",
+        "crates/crunch-store/src/publisher.rs",
+        "crates/crunch-store/src/pull.rs",
+        "crates/crunch-store/src/query.rs",
+        "crates/crunch-store/src/retention.rs",
+        "crates/crunch-store/src/roots.rs",
+        "crates/mantlepkgs-core/src/versions.rs"
+      ],
+      "from": ".cairn/changes/complete-store-capability-migration/evidence/",
+      "to": ".cairn/archive/1970-01-01-complete-store-capability-migration/evidence/",
+      "reason": "HARDENING-BACKLOG header comments; commit 10d2e5b3e archived the change. Same-line edit."
+    }
+  ],
+  "checked_unchanged": [
+    {
+      "path": "docs/bounded-tree-adoption.md",
+      "citation": ".cairn/archive/2026-10-21-admit-mantle-blake3-cohort/evidence/",
+      "resolution": "The path belongs to the bounded-tree owner repository and is present at the pinned revision cc9e0fb611e75bb2d7f662435d1918653c93ce07."
+    }
+  ],
+  "non_claims": [
+    "This record classifies lifecycle copies and repairs citations; it accepts, archives or completes no change.",
+    "Retiring a copy removes it from the working tree only; its bytes remain in Git history at the recorded HEAD.",
+    "The retained build-script copy is not re-accepted by this record; its open task and archive obligation stand.",
+    "Comment-only header edits change no lint scope; the HARDENING-BACKLOG allow blocks are unchanged."
+  ]
+}

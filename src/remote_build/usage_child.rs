@@ -48,8 +48,13 @@ struct ExecutorChildInput<'a> {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum ExecutorChildOutput {
-    Success { outcome: RemoteExecutionOutcome },
-    Failed,
+    Success {
+        outcome: RemoteExecutionOutcome,
+    },
+    /// Failure text stays in the child; only a validated debug reference crosses.
+    Failed {
+        worker_debug: Option<crate::remote_failure_debug::RemoteWorkerFailureDebugReport>,
+    },
 }
 
 pub(super) struct MeasuredExecution {
@@ -138,12 +143,26 @@ pub(super) fn execute_measured(
                     })
                     .map(|()| outcome)
             }
+            Ok(ExecutorChildOutput::Failed { worker_debug }) => Err(redacted_executor_failure(worker_debug)),
             // Fixed redacted failure, including OOM-killed children which
             // never got an opportunity to serialize a response.
             _ => Err("remote-usage-executor-failed".into()),
         }
     };
     Ok(MeasuredExecution { outcome, completion })
+}
+
+/// The fixed failure, plus the child's debug reference only if it revalidates here.
+fn redacted_executor_failure(
+    worker_debug: Option<crate::remote_failure_debug::RemoteWorkerFailureDebugReport>,
+) -> String {
+    let reference = worker_debug.and_then(crate::remote_failure_debug::RemoteWorkerFailureDebugReport::validated);
+    let mut reason = String::from("remote-usage-executor-failed");
+    if let Some(reference) = reference {
+        reason.push_str(&reference.render_fields());
+    }
+    debug_assert!(reason.starts_with("remote-usage-executor-failed"));
+    reason
 }
 
 struct BoundedWriter<W> {
@@ -183,7 +202,9 @@ pub fn run_stdio_executor_child() -> Result<(), String> {
     drop(bytes);
     let response = match execute_child(input, &operation_plan) {
         Ok(outcome) => ExecutorChildOutput::Success { outcome },
-        Err(_) => ExecutorChildOutput::Failed,
+        Err(reason) => ExecutorChildOutput::Failed {
+            worker_debug: crate::remote_failure_debug::parse_remote_worker_failure_debug_report(&reason),
+        },
     };
     let stdout = std::io::stdout();
     let mut bounded = BoundedWriter {

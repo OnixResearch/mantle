@@ -273,6 +273,10 @@ pub enum WatchWorkerEvent {
         generation: u64,
         commit: oneshot::Sender<()>,
     },
+    /// Capacity or input policy failed before any live goal was mutated.
+    Rejected {
+        generation: u64,
+    },
     PendingCancellation {
         generation: u64,
         stale: Vec<String>,
@@ -1514,6 +1518,12 @@ pub struct Worker {
     scheduling_epoch: u32,
     pressure_cache: BTreeMap<String, KnownGraphPressure>,
     pressure_dirty_goals: BTreeSet<String>,
+    /// Goals first requested as roots after they finished; settled before dispatch.
+    late_roots: BTreeSet<String>,
+    /// Failures of goals that were not roots when they failed, kept for a later root request.
+    dependency_failures: BTreeMap<String, FailedGoal>,
+    /// Bounded build logs of failed non-root goals, kept once per failed goal.
+    dependency_failure_logs: BTreeMap<String, String>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
     plan_output_bindings: BTreeMap<String, Vec<PlanOutputBindingState>>,
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
@@ -1561,6 +1571,9 @@ impl Worker {
             scheduling_epoch: 0,
             pressure_cache: BTreeMap::new(),
             pressure_dirty_goals: BTreeSet::new(),
+            late_roots: BTreeSet::new(),
+            dependency_failures: BTreeMap::new(),
+            dependency_failure_logs: BTreeMap::new(),
             priority_decisions: Vec::new(),
             plan_output_bindings: BTreeMap::new(),
             native_plan_binding_facts: BTreeMap::new(),
@@ -1813,6 +1826,11 @@ impl Worker {
             if let Some(goal) = self.registry.get_mut(&key) {
                 if root && !goal.is_root {
                     goal.is_root = true;
+                    // A dispatched goal exports at completion. A finished goal still
+                    // needs its root export and exactly one root result.
+                    if matches!(goal.state, GoalState::Done | GoalState::Failed) {
+                        self.late_roots.insert(key.clone());
+                    }
                     self.pressure_dirty_goals.insert(key);
                 }
                 continue;
@@ -2485,6 +2503,13 @@ impl Worker {
                 .map(|entry| &entry.2)
                 .or_else(|| known_paths.get_by_drv_path(&path).map(|entry| entry.derivation.as_ref()))
                 .ok_or_else(|| Error::Store(format!("watch incoming derivation missing: {path}")))?;
+            if let Some(raw_bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+                let records = decode_binding_records(raw_bindings.as_ref(), prefix)
+                    .map_err(|kind| Error::Store(format!("{}: invalid watched static input", kind.as_str())))?;
+                if records.is_empty() {
+                    return Err(Error::Store("plan-output-invalid: empty watched binding list".to_string()));
+                }
+            }
             queue.extend(
                 derivation
                     .input_derivations
@@ -2500,7 +2525,8 @@ impl Worker {
         update: WatchWorkerUpdate,
         known_paths: &mut DerivationRegistry,
     ) -> Result<WatchPending, Error> {
-        self.watch_preflight_update(&update, known_paths)?;
+        // The watch loop preflights the complete generation before entering
+        // this mutating phase; rejection must not cancel admitted work.
         let generation = update.generation;
         let keep: BTreeSet<_> = update.roots.iter().map(|root| root.drv_path.to_absolute_path()).collect();
         for root in update.roots {
@@ -2543,6 +2569,9 @@ impl Worker {
         state.outcomes.retain(|outcome| !keys.contains(&outcome.drv_path.to_absolute_path()));
         state.all_outcomes.retain(|outcome| !keys.contains(&outcome.drv_path.to_absolute_path()));
         state.failed.retain(|failure| !keys.contains(&failure.drv_key));
+        self.late_roots.retain(|key| !keys.contains(key));
+        self.dependency_failures.retain(|key, _| !keys.contains(key));
+        self.dependency_failure_logs.retain(|key, _| !keys.contains(key));
         self.pressure_dirty_goals.extend(self.registry.iter().map(|(key, _)| key.to_owned()));
         self.watch_retain_metadata(builder, known_paths)?;
         Ok(())
@@ -2659,8 +2688,15 @@ impl Worker {
             if pending.is_none() {
                 if let Some(update) = queued.take() {
                     candidate = None;
-                    pending = Some(self.watch_begin_update(update, known_paths)?);
-                    active = None;
+                    if self.watch_preflight_update(&update, known_paths).is_err() {
+                        Self::watch_emit(events, WatchWorkerEvent::Rejected {
+                            generation: update.generation,
+                        })
+                        .await?;
+                    } else {
+                        pending = Some(self.watch_begin_update(update, known_paths)?);
+                        active = None;
+                    }
                 } else if is_closed {
                     candidate = None;
                     let stale = self.registry.watch_retract_roots(&BTreeSet::new())?;
@@ -2799,8 +2835,9 @@ impl Worker {
                 }
                 _ = tokio::time::sleep_until(deadline), if pending.as_ref().is_some_and(|wait| !wait.reported) => {
                     if let Some(wait) = pending.as_mut() {
+                        let stale = wait.stale.iter().filter(|key| state.pending_meta.contains_key(*key)).cloned().collect();
                         Self::watch_emit(events, WatchWorkerEvent::PendingCancellation {
-                            generation: wait.generation, stale: wait.stale.clone(),
+                            generation: wait.generation, stale,
                         }).await?;
                         wait.reported = true;
                     }
@@ -3003,10 +3040,12 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let prepared = state
+        let mut prepared = state
             .pending_meta
             .remove(drv_key)
             .ok_or_else(|| Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}")))?;
+        // A root request can arrive while the build runs; export follows the current request.
+        prepared.is_root = self.registry.get(drv_key).is_some_and(|goal| goal.is_root);
 
         let build_log = bounded_failed_build_log(build_result.log.as_deref());
         let outcome = match builder.finish_build(&prepared, build_result, known_paths).await {
@@ -3209,6 +3248,11 @@ impl Worker {
         };
         match decoded {
             Ok(plan) => {
+                if let (Some(registry), CanonicalNativePlan::V2(native)) = (&builder.rust_wait_units, &plan)
+                    && let Err(error) = crate::rust_waits::admit_native_provenance(registry, &native.plan.provenance)
+                {
+                    tracing::warn!(%error, "Rust wait identity attribution unavailable; ordinary plan admission continues");
+                }
                 Ok(NativeDynamicPlanOutputScan::Accepted(Box::new(accepted_native_plan(AcceptedNativePlanInput {
                     identity: NativePlanIdentity {
                         producer_key,
@@ -3702,6 +3746,7 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
+        self.settle_late_roots(builder, state).await?;
         let running_jobs = u32::try_from(state.join_set.len())
             .map_err(|_| Error::Store("running job count exceeds u32".to_string()))?;
         let mut available_build_slots = self.max_jobs.checked_sub(running_jobs).ok_or_else(|| {
@@ -3975,6 +4020,81 @@ impl Worker {
         Ok(())
     }
 
+    /// Report a root failure now. A dependency failure is kept without a log
+    /// copy so that a later root request for the goal reports it once.
+    fn record_goal_failure(&mut self, is_root: bool, mut failure: FailedGoal, failed: &mut Vec<FailedGoal>) {
+        assert!(!failure.drv_key.is_empty(), "a failed goal has a key");
+        if is_root {
+            failed.push(failure);
+            return;
+        }
+        failure.build_log = None;
+        self.dependency_failures.insert(failure.drv_key.clone(), failure);
+        debug_assert!(u32::try_from(self.dependency_failures.len()).is_ok_and(|count| count <= MAX_GOALS));
+    }
+
+    /// Settle goals that were requested as roots only after they finished.
+    ///
+    /// A streamed root can name a goal that already finished as a dependency.
+    /// Its signed outputs were persisted without a physical export, and its
+    /// terminal state was not reported as a root result.
+    async fn settle_late_roots<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let late_roots = std::mem::take(&mut self.late_roots);
+        assert!(u32::try_from(late_roots.len()).is_ok_and(|count| count <= MAX_GOALS));
+        state.outcomes.reserve(late_roots.len());
+        state.failed.reserve(late_roots.len());
+        for key in late_roots {
+            let (is_root, goal_state) = self
+                .registry
+                .get(&key)
+                .map(|goal| (goal.is_root, goal.state.clone()))
+                .ok_or_else(|| Error::Store(format!("late root goal vanished: {key}")))?;
+            if !is_root {
+                continue;
+            }
+            match goal_state {
+                GoalState::Done => {
+                    if state.outcomes.iter().any(|outcome| outcome.drv_path.to_absolute_path() == key) {
+                        continue;
+                    }
+                    let outcome = state
+                        .all_outcomes
+                        .iter()
+                        .find(|outcome| outcome.drv_path.to_absolute_path() == key)
+                        .cloned()
+                        .ok_or_else(|| Error::Store(format!("late root has no completed outcome: {key}")))?;
+                    builder.export_late_root(&outcome).await?;
+                    state.outcomes.push(outcome);
+                }
+                GoalState::Failed => {
+                    if state.failed.iter().any(|failure| failure.drv_key == key) {
+                        continue;
+                    }
+                    let mut failure = self
+                        .dependency_failures
+                        .remove(&key)
+                        .ok_or_else(|| Error::Store(format!("late root has no recorded failure: {key}")))?;
+                    let build_log = self.dependency_failure_logs.get(&failure.origin_drv_key).cloned().or_else(|| {
+                        let origin = state.failed.iter().find(|row| row.drv_key == failure.origin_drv_key);
+                        origin.and_then(|row| row.build_log.clone())
+                    });
+                    failure.build_log = build_log;
+                    state.failed.push(failure);
+                }
+                _ => return Err(Error::Store(format!("late root is not terminal: {key}"))),
+            }
+        }
+        assert!(self.late_roots.is_empty(), "settling late roots admits no new roots");
+        Ok(())
+    }
+
     /// Reject a bound consumer before dispatch, regardless of which other
     /// static dependencies have already completed.
     fn fail_binding_consumer(
@@ -4001,15 +4121,17 @@ impl Worker {
         if let Some(trace) = self.causal_trace.as_mut() {
             trace.failed(key, reason);
         }
-        if is_root {
-            failed.push(FailedGoal {
+        self.record_goal_failure(
+            is_root,
+            FailedGoal {
                 drv_key: key.to_owned(),
                 origin_drv_key: key.to_owned(),
                 error: reason.to_owned(),
                 origin_error: reason.to_owned(),
                 build_log: None,
-            });
-        }
+            },
+            failed,
+        );
         for waiter in waiters {
             self.propagate_failure(&waiter, key, key, &name, reason, None, failed)?;
         }
@@ -4065,15 +4187,20 @@ impl Worker {
             }
         }
 
-        if is_root {
-            failed.push(FailedGoal {
+        if !is_root && let Some(log) = build_log {
+            self.dependency_failure_logs.insert(drv_key.to_string(), log.to_string());
+        }
+        self.record_goal_failure(
+            is_root,
+            FailedGoal {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: drv_key.to_string(),
                 error: error_msg.to_string(),
                 origin_error: error_msg.to_string(),
                 build_log: build_log.map(str::to_string),
-            });
-        }
+            },
+            failed,
+        );
 
         info!(
             drv = drv_key,
@@ -4121,15 +4248,17 @@ impl Worker {
             trace.dependency_failed(drv_key, immediate_failed_dep_key, origin_error);
         }
 
-        if is_root {
-            failed.push(FailedGoal {
+        self.record_goal_failure(
+            is_root,
+            FailedGoal {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: origin_drv_key.to_string(),
                 error: format!("dependency {failed_dep_name} failed"),
                 origin_error: origin_error.to_string(),
                 build_log: build_log.map(str::to_string),
-            });
-        }
+            },
+            failed,
+        );
 
         for waiter_key in &waiters {
             self.propagate_failure(waiter_key, origin_drv_key, drv_key, &drv_name, origin_error, build_log, failed)?;
@@ -4416,6 +4545,63 @@ mod tests {
             assert_eq!(paths.len(), 1);
             assert!(worker.registry.contains(&path.to_absolute_path()));
         }
+    }
+
+    #[test]
+    fn watch_preflight_policy_failure_preserves_running_root_and_cancellation() {
+        let mut paths = DerivationRegistry::default();
+        let running = register_drv(&mut paths, "watch-policy-running.drv", &make_drv());
+        let mut worker = Worker::new(1);
+        worker.want(&running, &paths, true).unwrap();
+        let key = running.to_absolute_path();
+        worker.ready_goals.remove(&key);
+        worker.registry.get_mut(&key).unwrap().mark_building().unwrap();
+        let (sender, receiver) = watch::channel(false);
+        worker.build_cancellations = Some(HashMap::from([(key.clone(), sender)]));
+        let candidate = fake_sp("watch-policy-invalid.drv");
+        let mut invalid = make_drv();
+        invalid.environment.insert(PLAN_OUTPUT_BINDINGS_ENV_KEY.into(), "not valid bindings".into());
+        let update = WatchWorkerUpdate {
+            generation: 2,
+            roots: vec![EvalMessage {
+                label: "invalid".into(),
+                drv_path: candidate.clone(),
+                new_entries: vec![(candidate.clone(), [8; 32], invalid, false, vec![], None)],
+            }],
+        };
+        assert!(worker.watch_preflight_update(&update, &paths).is_err());
+        assert!(worker.registry.get(&key).unwrap().is_root);
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(!*receiver.borrow());
+        assert!(!receiver.has_changed().unwrap(), "policy rejection requested cancellation");
+        assert!(!worker.registry.contains(&candidate.to_absolute_path()));
+        assert!(paths.get_by_drv_path(&candidate.to_absolute_path()).is_none());
+    }
+
+    #[test]
+    fn watch_preflight_transitive_goal_limit_keeps_the_admitted_root() {
+        let mut paths = DerivationRegistry::default();
+        let admitted = register_drv(&mut paths, "watch-bound-admitted.drv", &make_drv());
+        let mut worker = Worker::new(1);
+        worker.want(&admitted, &paths, true).unwrap();
+        let dependencies = (0..MAX_GOALS)
+            .map(|index| register_drv(&mut paths, &format!("watch-bound-{index:05}.drv"), &make_drv()))
+            .collect::<Vec<_>>();
+        let candidate = fake_sp("watch-bound-candidate.drv");
+        let update = WatchWorkerUpdate {
+            generation: 2,
+            roots: vec![EvalMessage {
+                label: "oversized-closure".into(),
+                drv_path: candidate.clone(),
+                new_entries: vec![(candidate.clone(), [9; 32], make_drv_with_deps(&dependencies), false, vec![], None)],
+            }],
+        };
+        let error = worker.watch_preflight_update(&update, &paths).unwrap_err();
+        assert!(error.to_string().contains("live goal capacity exceeded"));
+        assert!(worker.registry.get(&admitted.to_absolute_path()).unwrap().is_root);
+        assert_eq!(worker.registry.len(), 1);
+        assert!(!worker.registry.contains(&candidate.to_absolute_path()));
+        assert!(paths.get_by_drv_path(&candidate.to_absolute_path()).is_none());
     }
 
     // ── want() tests ────────────────────────────────────────────
@@ -5034,6 +5220,105 @@ mod tests {
         assert!(started_rx.try_recv().is_err(), "a new build dispatched after cancellation");
         for output in outputs {
             assert!(pis.get(*output.digest()).await.unwrap().is_none(), "cancelled success published signed PathInfo");
+        }
+    }
+
+    #[tokio::test]
+    async fn watch_deletion_waits_for_teardown_and_never_signs_late_success() {
+        let blobs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let (started, mut started_rx) = mpsc::unbounded_channel();
+        let (cancellation_observed, mut cancelled_rx) = mpsc::unbounded_channel();
+        let (release_tx, release_teardown) = watch::channel(false);
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("watch-deletion-pis".into(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            TeardownGatedBuildService {
+                mock,
+                started,
+                cancellation_observed,
+                release_teardown,
+            },
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (running, _) = build_and_register("watch-delete-running", &[], &mut paths);
+        let (queued, _) = build_and_register("watch-delete-queued", &[(running.clone(), "out")], &mut paths);
+        let outputs = [&running, &queued].map(|path| paths.get_output_path(&path.to_absolute_path(), "out").unwrap());
+        let (tx, mut updates) = mpsc::channel(2);
+        let (events_tx, mut events) = mpsc::channel(4);
+        let mut worker = Worker::new(1);
+        let controller = async {
+            tx.send(WatchWorkerUpdate {
+                generation: 1,
+                roots: [running.clone(), queued]
+                    .into_iter()
+                    .map(|drv_path| EvalMessage {
+                        label: drv_path.name().to_string(),
+                        drv_path,
+                        new_entries: vec![],
+                    })
+                    .collect(),
+            })
+            .await
+            .unwrap();
+            match events.recv().await {
+                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected initial candidate: {event:?}"),
+            }
+            assert_eq!(started_rx.recv().await, Some(()));
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![],
+            })
+            .await
+            .unwrap();
+            assert_eq!(cancelled_rx.recv().await, Some(()));
+            match events.recv().await {
+                Some(WatchWorkerEvent::PendingCancellation { generation: 2, stale }) => {
+                    assert_eq!(
+                        stale,
+                        vec![running.to_absolute_path()],
+                        "queued goals are not pending sandbox teardown"
+                    );
+                }
+                event => panic!("retraction committed before teardown: {event:?}"),
+            }
+            assert!(events.try_recv().is_err(), "pending teardown published another terminal event");
+            assert!(pis.get(*outputs[0].digest()).await.unwrap().is_none());
+            release_tx.send(true).unwrap();
+            match events.recv().await {
+                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected post-teardown candidate: {event:?}"),
+            }
+            assert!(matches!(events.recv().await,
+                Some(WatchWorkerEvent::Settled { generation: 2, outcomes, failed, .. })
+                    if outcomes.is_empty() && failed.is_empty()));
+            assert!(started_rx.try_recv().is_err(), "deleted queued root dispatched");
+            drop(tx);
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller)
+        })
+        .await
+        .expect("watch deletion regression exceeded cleanup guard");
+        let result = result.unwrap();
+        assert!(result.outcomes.is_empty());
+        assert!(result.all_outcomes.is_empty());
+        for output in outputs {
+            assert!(pis.get(*output.digest()).await.unwrap().is_none(), "deleted goal published signed PathInfo");
         }
     }
 
@@ -6171,51 +6456,112 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn committed_candidate_builds_once_and_publishes_signed_pathinfo() {
+    async fn watch_edits_and_additions_retain_signed_outputs_without_redispatch() {
         let blobs = MemoryBlobService::default();
         let (mut builder, pis, calls) = watch_mock_builder(&blobs);
         let mut paths = DerivationRegistry::default();
-        let (root, _) = build_and_register("watch-committed", &[], &mut paths);
-        let output = paths.get_output_path(&root.to_absolute_path(), "out").unwrap();
+        let mut roots = Vec::new();
+        let mut outputs = Vec::new();
+        for name in ["watch-first", "watch-retained", "watch-edited", "watch-added"] {
+            let (path, derivation) = build_and_register(name, &[], &mut paths);
+            outputs.push(paths.get_output_path(&path.to_absolute_path(), "out").unwrap());
+            let hdm = paths.get_hdm_by_drv_path(&path.to_absolute_path()).unwrap();
+            roots.push(EvalMessage {
+                label: name.into(),
+                drv_path: path.clone(),
+                new_entries: vec![(path, hdm, derivation, false, vec![], None)],
+            });
+        }
         let (tx, mut updates) = mpsc::channel(2);
         let (events_tx, mut events) = mpsc::channel(4);
-        tx.send(WatchWorkerUpdate {
-            generation: 5,
-            roots: vec![EvalMessage {
-                label: "committed".into(),
-                drv_path: root.clone(),
-                new_entries: vec![],
-            }],
-        })
-        .await
-        .unwrap();
-        let mut worker = Worker::new(1);
-        let controller = async move {
-            match events.recv().await {
-                Some(WatchWorkerEvent::CandidateReady { generation: 5, commit }) => commit.send(()).unwrap(),
-                event => panic!("unexpected candidate: {event:?}"),
-            }
-            match events.recv().await {
-                Some(WatchWorkerEvent::Settled {
-                    generation: 5,
-                    outcomes,
-                    failed,
-                    ..
-                }) => {
-                    assert_eq!(outcomes.len(), 1);
-                    assert!(failed.is_empty());
+        let mut worker = Worker::new(2);
+        let controller = async {
+            for (generation, selection, expected_dispatches) in [
+                (1, vec![roots[0].clone(), roots[1].clone()], 2),
+                (2, vec![roots[2].clone(), roots[1].clone()], 3),
+                (3, vec![roots[2].clone(), roots[1].clone(), roots[3].clone()], 4),
+                // Duplicate requests collapse to the same admitted identities.
+                (4, vec![roots[3].clone(), roots[1].clone(), roots[2].clone(), roots[1].clone()], 4),
+            ] {
+                let expected: BTreeSet<_> = selection.iter().map(|root| root.drv_path.clone()).collect();
+                tx.send(WatchWorkerUpdate {
+                    generation,
+                    roots: selection,
+                })
+                .await
+                .unwrap();
+                match events.recv().await {
+                    Some(WatchWorkerEvent::CandidateReady {
+                        generation: received,
+                        commit,
+                    }) if received == generation => {
+                        commit.send(()).unwrap();
+                    }
+                    event => panic!("unexpected candidate: {event:?}"),
                 }
-                event => panic!("unexpected settlement: {event:?}"),
+                match events.recv().await {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: received,
+                        outcomes,
+                        failed,
+                        ..
+                    }) if received == generation => {
+                        assert!(failed.is_empty());
+                        assert_eq!(
+                            outcomes.iter().map(|outcome| outcome.drv_path.clone()).collect::<BTreeSet<_>>(),
+                            expected
+                        );
+                        for outcome in outcomes {
+                            assert!(!outcome.outputs.is_empty());
+                            for output in outcome.outputs.values() {
+                                assert!(pis.get(*output.store_path.digest()).await.unwrap().is_some());
+                            }
+                        }
+                    }
+                    event => panic!("unexpected settlement: {event:?}"),
+                }
+                assert_eq!(calls.load(Ordering::Relaxed), expected_dispatches);
             }
+            // A malformed scheduler candidate must not terminate the watch or
+            // destroy the completed generation; the shell can restore it.
+            tx.send(WatchWorkerUpdate {
+                generation: 5,
+                roots: vec![EvalMessage {
+                    label: "missing".into(),
+                    drv_path: fake_sp("watch-missing.drv"),
+                    new_entries: vec![],
+                }],
+            })
+            .await
+            .unwrap();
+            assert!(matches!(events.recv().await, Some(WatchWorkerEvent::Rejected { generation: 5 })));
+            tx.send(WatchWorkerUpdate {
+                generation: 6,
+                roots: roots[1..].to_vec(),
+            })
+            .await
+            .unwrap();
+            match events.recv().await {
+                Some(WatchWorkerEvent::CandidateReady { generation: 6, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected restoration: {event:?}"),
+            }
+            assert!(matches!(events.recv().await,
+                Some(WatchWorkerEvent::Settled { generation: 6, outcomes, failed, .. })
+                    if outcomes.len() == 3 && failed.is_empty()));
+            assert_eq!(calls.load(Ordering::Relaxed), 4, "rejected candidate discarded completed work");
             drop(tx);
         };
-        let (result, ()) =
-            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller,);
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller)
+        })
+        .await
+        .expect("watch edit regression exceeded cleanup guard");
         result.unwrap();
-        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
-        assert!(pis.get(*output.digest()).await.unwrap().is_some(), "committed output has no signed PathInfo");
+        for output in outputs {
+            assert!(pis.get(*output.digest()).await.unwrap().is_some(), "completed signed output was lost");
+        }
         let digest = blake3::hash(b"mock output").into();
-        assert!(blobs.has(&digest).await.unwrap(), "committed builder output never reached CAS");
+        assert!(blobs.has(&digest).await.unwrap());
     }
 
     // ── run_streaming() tests ───────────────────────────────
@@ -6339,6 +6685,178 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2);
+    }
+
+    /// Holds one named build until the test releases it, so a root request can
+    /// arrive while that build is still running.
+    struct LateRootGatedBuildService {
+        mock: MockBuildService,
+        gated_name: &'static str,
+        release: Arc<tokio::sync::Notify>,
+    }
+
+    #[async_trait::async_trait]
+    impl BuildService for LateRootGatedBuildService {
+        async fn do_build(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            if request.command_args.iter().any(|argument| argument.contains(self.gated_name)) {
+                self.release.notified().await;
+            }
+            self.mock.do_build(request).await
+        }
+    }
+
+    fn late_root_builder<S: BuildService + 'static>(
+        blobs: MemoryBlobService,
+        service: S,
+        output_dir: &std::path::Path,
+    ) -> Builder<S> {
+        Builder::new(
+            blobs,
+            tmp_ds(),
+            service,
+            test_pis(),
+            output_dir.to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+    }
+
+    fn late_root_message(label: &str, drv_path: &StorePath<String>) -> EvalMessage {
+        EvalMessage {
+            label: label.to_owned(),
+            drv_path: drv_path.clone(),
+            new_entries: vec![],
+        }
+    }
+
+    fn assert_late_root_exported(result: &WorkerResult, late_root: &StorePath<String>, output_dir: &std::path::Path) {
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2, "each requested root is reported once");
+        let outcome = result
+            .outcomes
+            .iter()
+            .find(|outcome| outcome.drv_path == *late_root)
+            .expect("late root is reported");
+        for path_info in outcome.outputs.values() {
+            assert!(output_dir.join(path_info.store_path.to_string()).is_file(), "late root output is exported");
+        }
+    }
+
+    #[tokio::test]
+    async fn streaming_dependency_requested_as_root_after_completion_is_exported_and_reported() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(blobs.clone());
+        let mut builder = late_root_builder(blobs, mock, output_dir.path());
+        let mut kp = DerivationRegistry::default();
+        let (dependency, _) = build_and_register("late-root-finished-dependency", &[], &mut kp);
+        let (consumer, _) = build_and_register("late-root-finished-consumer", &[(dependency.clone(), "out")], &mut kp);
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.try_send(late_root_message("consumer", &consumer)).unwrap();
+        let mut tx = Some(tx);
+        let dependency_key = dependency.to_absolute_path();
+        let mut request_late_root = |goals: &GoalRegistry| {
+            if goals.get(&dependency_key).is_some_and(|goal| goal.state == GoalState::Done)
+                && let Some(sender) = tx.take()
+            {
+                sender.try_send(late_root_message("dependency", &dependency)).unwrap();
+            }
+        };
+        let mut worker = Worker::new(1);
+        let result = worker
+            .run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut request_late_root))
+            .await
+            .unwrap();
+        assert!(tx.is_none(), "the dependency root was requested after the dependency finished");
+        assert_late_root_exported(&result, &dependency, output_dir.path());
+    }
+
+    #[tokio::test]
+    async fn streaming_dependency_requested_as_root_while_building_is_exported() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(blobs.clone());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let service = LateRootGatedBuildService {
+            mock,
+            gated_name: "late-root-running-dependency",
+            release: Arc::clone(&release),
+        };
+        let mut builder = late_root_builder(blobs, service, output_dir.path());
+        let mut kp = DerivationRegistry::default();
+        let (dependency, _) = build_and_register("late-root-running-dependency", &[], &mut kp);
+        let (consumer, _) = build_and_register("late-root-running-consumer", &[(dependency.clone(), "out")], &mut kp);
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.try_send(late_root_message("consumer", &consumer)).unwrap();
+        let mut tx = Some(tx);
+        let mut is_released = false;
+        let dependency_key = dependency.to_absolute_path();
+        let mut request_late_root = |goals: &GoalRegistry| {
+            let Some(goal) = goals.get(&dependency_key) else {
+                return;
+            };
+            if goal.state != GoalState::Building {
+                return;
+            }
+            if !goal.is_root {
+                if let Some(sender) = tx.take() {
+                    sender.try_send(late_root_message("dependency", &dependency)).unwrap();
+                }
+            } else if !is_released {
+                // Release the build only after the root request was admitted.
+                is_released = true;
+                release.notify_one();
+            }
+        };
+        let mut worker = Worker::new(1);
+        let result = worker
+            .run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut request_late_root))
+            .await
+            .unwrap();
+        assert!(is_released, "the dependency root was admitted while its build ran");
+        assert_late_root_exported(&result, &dependency, output_dir.path());
+    }
+
+    #[tokio::test]
+    async fn streaming_failed_dependency_requested_as_root_later_reports_its_own_failure() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mock, _calls) =
+            FailingMockBuildService::new(blobs.clone(), vec!["late-root-failed-dependency".to_string()]);
+        let mut builder = late_root_builder(blobs, mock, output_dir.path());
+        let mut kp = DerivationRegistry::default();
+        let (dependency, _) = build_and_register("late-root-failed-dependency", &[], &mut kp);
+        let (consumer, _) = build_and_register("late-root-failed-consumer", &[(dependency.clone(), "out")], &mut kp);
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.try_send(late_root_message("consumer", &consumer)).unwrap();
+        let mut tx = Some(tx);
+        let dependency_key = dependency.to_absolute_path();
+        let mut request_late_root = |goals: &GoalRegistry| {
+            if goals.get(&dependency_key).is_some_and(|goal| goal.state == GoalState::Failed)
+                && let Some(sender) = tx.take()
+            {
+                sender.try_send(late_root_message("dependency", &dependency)).unwrap();
+            }
+        };
+        let mut worker = Worker::new(1);
+        let result = worker
+            .run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut request_late_root))
+            .await
+            .unwrap();
+        assert!(tx.is_none(), "the dependency root was requested after the dependency failed");
+        assert!(result.outcomes.is_empty());
+        assert_eq!(result.failed.len(), 2, "each requested root is reported once: {:?}", result.failed);
+        let own = result.failed.iter().find(|failure| failure.drv_key == dependency_key).expect("late root failure");
+        assert_eq!(own.origin_drv_key, dependency_key);
+        let consumer_key = consumer.to_absolute_path();
+        let waiting = result.failed.iter().find(|failure| failure.drv_key == consumer_key).expect("consumer failure");
+        assert_eq!(waiting.origin_drv_key, dependency_key);
     }
 
     #[tokio::test]

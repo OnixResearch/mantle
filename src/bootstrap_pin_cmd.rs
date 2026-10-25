@@ -106,7 +106,8 @@ pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, St
             }
             let mut hashes = BTreeMap::new();
             for (role, artifact) in &mut pin.artifacts {
-                let rendered = render_pin_url(std::mem::take(&mut artifact.url_template), version)?;
+                let rendered = render_pin_url(std::mem::take(&mut artifact.url_template), version)
+                    .map_err(|error| error.to_string())?;
                 artifact.url_template = rendered.url_template;
                 version = rendered.version;
                 let url = rendered.url;
@@ -137,7 +138,7 @@ pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, St
             decision,
         });
     }
-    let plan = seal_plan(entries)?;
+    let plan = seal_plan(entries).map_err(|error| error.to_string())?;
     let pending = plan.entries.iter().any(|entry| !matches!(entry.decision, PinDecision::Current));
     let mut bytes = serde_json::to_vec_pretty(&plan).map_err(|e| format!("encoding plan: {e}"))?;
     bytes.push(b'\n');
@@ -161,7 +162,7 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
     let pins = capability(BootstrapEffect::ReadInput, || load_pins(root))?;
     let bytes = capability(BootstrapEffect::ReadInput, || read_limited(plan_path, MAX_PLAN_BYTES))?;
     let plan: PinPlan = serde_json::from_slice(&bytes).map_err(|e| format!("invalid plan: {e}"))?;
-    let VerifiedPinPlan { plan, mut pins } = verify_plan(plan, pins)?;
+    let VerifiedPinPlan { plan, mut pins } = verify_plan(plan, pins).map_err(|error| error.to_string())?;
     // Verify *all* remote fixed-output hashes before staging *any* write.
     let resolver = LiveResolver::new(root);
     let mut host_counts = BTreeMap::new();
@@ -175,7 +176,8 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
         next.release_date.clone_from(&candidate.release_date);
         for (role, artifact) in &mut next.artifacts {
             let rendered =
-                render_pin_url(std::mem::take(&mut artifact.url_template), std::mem::take(&mut next.version))?;
+                render_pin_url(std::mem::take(&mut artifact.url_template), std::mem::take(&mut next.version))
+                    .map_err(|error| error.to_string())?;
             artifact.url_template = rendered.url_template;
             next.version = rendered.version;
             artifact.url = rendered.url;
@@ -196,7 +198,7 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
             }
             artifact.hash = actual;
         }
-        let next = validate_pin(next)?;
+        let next = validate_pin(next).map_err(|error| error.to_string())?;
         let toml = toml::to_string_pretty(&next).map_err(|e| format!("serialize pin: {e}"))?;
         let mut json = serde_json::to_vec_pretty(&next).map_err(|e| format!("serialize reader: {e}"))?;
         json.push(b'\n');
@@ -204,7 +206,8 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
         replacements.push((root.join("bootstrap/pins/generated").join(format!("{}.json", entry.source)), json));
     }
     // Recheck after potentially long downloads while the directory mutation lock is held.
-    verify_plan(plan, capability(BootstrapEffect::ReadInput, || load_pins(root))?)?;
+    verify_plan(plan, capability(BootstrapEffect::ReadInput, || load_pins(root))?)
+        .map_err(|error| error.to_string())?;
     // Stage every replacement before the first rename; rollback committed paths on failure.
     if !replacements.is_empty() {
         capability(BootstrapEffect::PublishPins, || publish_replacements(&replacements))?;
@@ -241,7 +244,7 @@ fn load_pins(root: &Path) -> Result<BTreeMap<String, LoadedPin>, String> {
         let bytes = read_limited(&path, MAX_CACHE_BYTES)?;
         let pin: BootstrapPin = toml::from_str(std::str::from_utf8(&bytes).map_err(|e| e.to_string())?)
             .map_err(|e| format!("{}: {e}; known fields: schema, source, package_url, version, release_date, artifacts, resolve, recipes; artifact fields: url_template, url, hash_kind, hash", path.display()))?;
-        let pin = validate_pin(pin)?;
+        let pin = validate_pin(pin).map_err(|error| error.to_string())?;
         if path.file_stem().and_then(|stem| stem.to_str()) != Some(&pin.source) {
             return Err(format!("{}: source differs from filename", path.display()));
         }
@@ -250,7 +253,7 @@ fn load_pins(root: &Path) -> Result<BTreeMap<String, LoadedPin>, String> {
         let mut expected = serde_json::to_vec_pretty(&pin).map_err(|e| format!("rendering reader: {e}"))?;
         expected.push(b'\n');
         let reader_matches = reader == expected;
-        if parse_pin(reader)? != pin || !reader_matches {
+        if parse_pin(reader).map_err(|error| error.to_string())? != pin || !reader_matches {
             return Err(format!(
                 "{}: stale generated Nickel reader; run bootstrap/pins/generate_readers.py",
                 pin.source

@@ -21,6 +21,20 @@ A closed `mantle-derivation-finish-gates-v1` record enables the common post-inst
 
 The declared builder script is passed as an argument to a fixed wrapper and executed by a checked child shell: its `exit`, `exec`, or shell syntax cannot skip post-install gates, and recipe-authored log text cannot substitute for a gate's successful exit status.
 
+Builder version defaults are field defaults, not an all-or-nothing fallback:
+declaring only `finish_gates.relocation.enabled = true` retains the derived
+`bin/<pname> --version` command and pinned package version. Explicit command and
+expected-version fields override those defaults. Loader-audit observations from
+the original and relocated runs are evaluated separately; a provider opened by
+one run does not satisfy a missing soname in another. Slash-bearing dependency
+lookups are not treated as sonames.
+
+Pure policy admission, declaration validation, bounded observations and execution
+evidence use explicit `GateDenial` variants. Diagnostics retain their existing
+text through `Display`, formatted only when the build shell returns an error or
+the versioned report is created. Filesystem/process I/O errors are not converted
+into generic gate denials. The denial enum is not a new wire representation.
+
 ## Consequences
 
 The compatibility boundary is visible but staged: only adopted raw recipes receive gate enforcement. The default version command for builder records derives from `pname` and the declared `version`; static or non-runnable outputs must opt out explicitly. Empty-environment execution rejects accidental ambient dependencies. Relocation copies may be expensive and stay opt-in. Dlopen auditing requires dynamic Linux loader support and names optional sonames as exceptions, not successful resolutions. These checks make no claim about compiler correctness, global reproducibility, or release eligibility.

@@ -50,6 +50,13 @@ Admission reserves usage against explicit project and account ledgers. Completio
 
 Ledger operations are idempotent and reference attempt identity. Duplicate completion does not double-charge. Cancellation, worker loss, partial observation, and accounting-store failure have explicit reconciliation states. A failed accounting mutation cannot silently grant more quota.
 
+Observation replay is idempotent only when the entire retained observation and
+its usage-event digest match. Reusing one digest with changed measurements or
+terminal facts is a conflict and does not mutate the ledger. Resource-host
+terminal observations take an explicit shell-observed timestamp; fixture clocks
+are deterministic, and a repeated authenticated event retains its first recorded
+timestamp rather than manufacturing new observation identity.
+
 API responses expose public units, windows, reservations, charges, and reason codes. Pricing, if added later, is a separate policy surface.
 
 ## Authorized result sharing
@@ -248,4 +255,53 @@ facts arrive. Neither case manufactures settlement from a disconnect. These
 implementation paths do not close the real benchmark, ChaosControl campaign,
 Valence consumer, delegated-OOM or OnixOS deployment evidence gates; those require
 their separately retained actual runs.
+
+### Local benchmark and focused verification handoff
+
+The local benchmark driver emits `mantle-resource-observation-v2` and a
+`mantle-resource-benchmark-v2` report. BusyBox timer RSS remains process RSS; it is
+not dedicated-cgroup memory or a scratch peak. Unknown CPU capacity, tree memory,
+scratch, queue, transfer and executor-output-byte dimensions remain unknown.
+These local timer records are not authenticated worker reports: observe-only
+replay explicitly excludes them as `HistoryUntrusted`, retains declared minima
+and the static active decision, and checks identical input replays. This is a
+real local output/measurement and fail-closed comparison, not evidence of
+historical placement benefits, positive OOM, remote usage settlement or billing.
+
+The existing captured resource-host failures are the three `StoreUnavailable`
+cases in
+`.cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22/head-crunch-bin-16-isolated.log`.
+Their fixture repair follows the quota-store tests' explicit 0700-directory
+pattern. Production private-directory and exact reservation/fence checks are
+unchanged. Added negative coverage rejects changed scope/fence before accounting
+mutation and rejects conflicting observation content under one retained digest.
+None of these new edits or the commands below has been executed in this handoff.
+
+After integration:
+
+```bash
+cargo test -p mantle --bin mantle nix_gateway::resource_host::tests::
+cargo test -p crunch-build resource_policy_tests
+cargo test -p crunch-build resource_quota_store_tests
+cargo build -p mantle --example resource_policy_replay
+python3 scripts/benchmark-resource-policy.py \
+  --mantle "$mantle_binary" --replay "$replay_binary" \
+  --nickel "$nickel_1_17_binary" --b3sum "$b3sum_binary" \
+  --signing-key "$signing_key_file" --input-cache "$signed_inputs_cache" \
+  --trusted-public-key "$trusted_public_key" \
+  --busybox-root "$signed_static_busybox_store_path" --output "$fresh_artifact_directory"
+```
+
+The replay binary is the `resource_policy_replay` example built into the chosen
+Cargo target directory. The benchmark requires x86_64 Linux, exact Nickel 1.17.0,
+the explicitly admitted signed static BusyBox closure, real configured signing
+and full trust keys, and a fresh retained output directory. No fallback cache or
+worker trust is supplied. The actual gateway usage API smoke commands are in the
+gateway change's design; the dedicated-cgroup/OOM path additionally needs the
+existing delegated cgroup-v2 subtree and signed worker facts. Historical-placement
+performance requires those authenticated dimension measurements, not promotion
+of this local timer corpus. The bounded VM execution commands and acceptance
+artifacts remain those in the fault-validation section above; no campaign,
+replay verdict, OnixOS class or Valence consumer acceptance is claimed here.
+
 

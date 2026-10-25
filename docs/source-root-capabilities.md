@@ -12,6 +12,11 @@ The report is derived by a pure planner from shell-probed observations. It names
 an executable command only when the operation has an implementation and its
 required host tools were observed.
 
+The make and tar probes execute `--version` with closed stdin and discarded
+stdout/stderr. Availability requires a successful exit, not merely a successful
+process launch. Each attempted probe, including a failed launch or nonzero exit,
+counts against the declared host-process budget.
+
 ## Supported operation
 
 `mantle bootstrap --source-root <manifest.json>` materializes the declared

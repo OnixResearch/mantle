@@ -244,7 +244,11 @@ impl Ledger {
         }
         if let Some(existing) = self.observations.get(key) {
             if existing.usage_event_digest == record.usage_event_digest {
-                return Ok(());
+                return if existing == &record {
+                    Ok(())
+                } else {
+                    Err(QuotaError::Conflict)
+                };
             }
             if existing.observation.trusted_collector || !record.observation.trusted_collector {
                 return Err(QuotaError::Conflict);

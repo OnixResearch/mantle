@@ -150,6 +150,8 @@ pub struct BuildConfig {
     /// Explicit local execution-only driver policy. Proof and self-build callers
     /// must use None; this never participates in derivation/action identity.
     pub compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    /// Local execution-only Rust wait observation; absent in proof and remote paths.
+    pub rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     /// Optional directory for owner-emitted interchange records.
     pub interchange_dir: Option<PathBuf>,
 }
@@ -364,7 +366,7 @@ async fn build_with_stream_sender(
     causal_trace_slot: Option<&mut Option<CausalTraceObservation>>,
     owned_cancellation: bool,
 ) -> Result<PipelineResult, Error> {
-    validate_build_config(config)?;
+    validate_stream_build_config(config, owned_cancellation)?;
     let store_config = crunch_store::StoreConfig {
         backend: config.backend,
         state_dir: config.state_dir.clone(),
@@ -647,6 +649,10 @@ pub async fn build_registered_derivations(
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
 ) -> Result<RegisteredBuildResult, Error> {
+    validate_build_config(config)?;
+    if request.cache_only && config.rust_wait_runtime.is_some() {
+        return Err(Error::Build("Rust wait diagnostics are unsupported for cache-only proof execution".into()));
+    }
     #[cfg(not(target_os = "linux"))]
     {
         let _ = (config, store, known_paths, request);
@@ -859,10 +865,34 @@ fn create_pipeline_builder_with_source_policy(
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     let runtime = config.compile_driver_runtime.clone();
+    let wait_runtime = config.rust_wait_runtime.clone();
     let runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
     create_pipeline_builder_with_sandbox(config, store, source_policy, move |build_service_store| {
         use crunch_build::compile_driver::CompileDriverBuildService;
         use crunch_build::compile_driver::CompileDriverExecutionService;
+        use crunch_build::rust_waits::RustWaitBuildService;
+        use crunch_build::rust_waits::RustWaitExecutionService;
+        if let Some(wait_runtime) = wait_runtime {
+            if let Some(runtime) = &runtime {
+                crunch_build::compile_driver::reject_inherited_runtime_environment()
+                    .and_then(|()| runtime.validate())
+                    .map_err(|error| Error::Build(error.to_string()))?;
+            }
+            let store = build_service_store.clone();
+            let factory = move |socket: Option<PathBuf>| {
+                let local = store.bubblewrap_build_service_with_runtime_sockets(
+                    std::env::temp_dir().join("crunch-builds-local"),
+                    crunch_store::LocalRuntimeSockets {
+                        compile_cache: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
+                        rust_waits: socket,
+                    },
+                )?;
+                CompileDriverBuildService::new(local, runtime.clone())
+            };
+            return RustWaitBuildService::new(factory, wait_runtime)
+                .map(RustWaitExecutionService::Observed)
+                .map_err(|error| Error::Build(error.to_string()));
+        }
         if let Some(runtime) = runtime {
             if runtime_forbidden {
                 return Err(Error::Build("compile driver runtime requires non-proof local execution".into()));
@@ -877,7 +907,7 @@ fn create_pipeline_builder_with_source_policy(
                 )
                 .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
             return CompileDriverBuildService::new(local, Some(runtime))
-                .map(CompileDriverExecutionService::Enabled)
+                .map(|service| RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Enabled(service)))
                 .map_err(|error| Error::Build(error.to_string()));
         }
         let workdir = std::env::temp_dir().join("crunch-builds");
@@ -895,10 +925,8 @@ fn create_pipeline_builder_with_source_policy(
             build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
         let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
         let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
-        Ok(CompileDriverExecutionService::Default(RemoteFirstBuildService::new(
-            remote_realizer,
-            local_bwrap,
-            RemoteBuildFallbackPolicy::OnRemoteFailure,
+        Ok(RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Default(
+            RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure),
         )))
     })
 }
@@ -910,6 +938,9 @@ fn create_watch_pipeline_builder(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    if config.rust_wait_runtime.is_some() {
+        return Err(Error::Build("Rust wait diagnostics are unsupported for watch execution".into()));
+    }
     if config.compile_driver_runtime.is_some() {
         return Err(Error::Build("compile driver runtime is unsupported for watch execution".into()));
     }
@@ -962,6 +993,7 @@ where
         config.verbose,
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
+    builder.set_rust_wait_units(config.rust_wait_runtime.as_ref().and_then(|runtime| runtime.native_units.clone()));
     let has_managed_registration = config.root_registration.is_some();
     builder.set_root_retention_source(if has_managed_registration {
         None
@@ -1108,6 +1140,15 @@ fn store_fallback_mode(mode: HermeticityMode) -> crunch_store::StoreFallbackMode
 }
 
 fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
+    if let Some(runtime) = &config.rust_wait_runtime {
+        if config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict {
+            return Err(Error::Build("Rust wait diagnostics require non-proof local execution".into()));
+        }
+        crunch_build::rust_waits::validate_runtime(runtime).map_err(|error| Error::Build(error.to_string()))?;
+        if runtime.directory.starts_with(&config.output_dir) {
+            return Err(Error::Build("Rust wait diagnostics must remain outside build outputs".into()));
+        }
+    }
     if !config.output_dir.exists() {
         return Err(Error::Internal(format!(
             "output store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
@@ -1122,6 +1163,14 @@ fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
     }
     if !config.store_dir.starts_with('/') {
         return Err(Error::Internal(format!("store_dir must be an absolute path: {}", config.store_dir,)));
+    }
+    Ok(())
+}
+
+fn validate_stream_build_config(config: &BuildConfig, owned_cancellation: bool) -> Result<(), Error> {
+    validate_build_config(config)?;
+    if owned_cancellation && config.rust_wait_runtime.is_some() {
+        return Err(Error::Build("Rust wait diagnostics are unsupported for owned cancellation execution".into()));
     }
     Ok(())
 }

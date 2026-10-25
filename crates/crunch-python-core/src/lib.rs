@@ -16,6 +16,40 @@ pub const MAX_SELECTIONS: usize = 64;
 pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 pub const MAX_INPUT_BYTES: u64 = (64u64 * 1024).saturating_mul(1024);
 
+/// Rejections at the bounded Python package admission boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdmissionError {
+    UnsupportedTarget,
+    UnsupportedVersion,
+    UnsupportedWheelTags,
+    ArtifactLimit,
+    ArtifactName,
+    ArtifactUrl,
+    ArtifactHash,
+    DuplicateArtifact,
+    SelectionLimit,
+    InvalidSelection,
+}
+
+impl core::fmt::Display for AdmissionError {
+    fn fmt(&self, output: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        output.write_str(match self {
+            Self::UnsupportedTarget => "python-target-unsupported: requires CPython cp312 Linux x86_64",
+            Self::UnsupportedVersion => "python-version-unsupported",
+            Self::UnsupportedWheelTags => "python-wheel-tags-unsupported",
+            Self::ArtifactLimit => "python-artifact-limit",
+            Self::ArtifactName => "python-artifact-name",
+            Self::ArtifactUrl => "python-artifact-url",
+            Self::ArtifactHash => "python-artifact-hash: expected lowercase SHA-256",
+            Self::DuplicateArtifact => "python-artifact-duplicate",
+            Self::SelectionLimit => "python-selection-limit",
+            Self::InvalidSelection => "python-selection-invalid",
+        })
+    }
+}
+
+impl core::error::Error for AdmissionError {}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
@@ -36,13 +70,13 @@ pub struct Target {
     pub wheel_tags: Vec<String>,
 }
 
-pub fn admit_target(target: Target) -> Result<Target, String> {
+pub fn admit_target(target: Target) -> Result<Target, AdmissionError> {
     if target.implementation != "cpython" || target.abi != "cp312" || target.platform != "linux_x86_64" {
-        return Err("python-target-unsupported: requires CPython cp312 Linux x86_64".into());
+        return Err(AdmissionError::UnsupportedTarget);
     }
-    let patch = target.python.strip_prefix("3.12.").ok_or("python-version-unsupported")?;
+    let patch = target.python.strip_prefix("3.12.").ok_or(AdmissionError::UnsupportedVersion)?;
     if patch.is_empty() || patch.len() > 4 || !patch.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err("python-version-unsupported".into());
+        return Err(AdmissionError::UnsupportedVersion);
     }
     let is_tag_count_valid = !target.wheel_tags.is_empty() && target.wheel_tags.len() <= 2;
     let has_unknown_tag = target
@@ -51,34 +85,34 @@ pub fn admit_target(target: Target) -> Result<Target, String> {
         .any(|tag| !["py3-none-any", "cp312-cp312-linux_x86_64"].contains(&tag.as_str()));
     let has_duplicate_tags = target.wheel_tags.len() == 2 && target.wheel_tags[0] == target.wheel_tags[1];
     if !is_tag_count_valid || has_unknown_tag || has_duplicate_tags {
-        return Err("python-wheel-tags-unsupported".into());
+        return Err(AdmissionError::UnsupportedWheelTags);
     }
     debug_assert!(target.python.starts_with("3.12."));
     debug_assert!(!patch.is_empty());
     Ok(target)
 }
 
-pub fn admit_artifacts(artifacts: Vec<Artifact>) -> Result<Vec<Artifact>, String> {
+pub fn admit_artifacts(artifacts: Vec<Artifact>) -> Result<Vec<Artifact>, AdmissionError> {
     if artifacts.is_empty() || artifacts.len() > MAX_PACKAGES {
-        return Err("python-artifact-limit".into());
+        return Err(AdmissionError::ArtifactLimit);
     }
     for (index, artifact) in artifacts.iter().enumerate() {
         if artifact.filename.is_empty()
             || artifact.filename.len() > 240
             || artifact.filename.bytes().any(|byte| !byte.is_ascii_alphanumeric() && !b"._+-".contains(&byte))
         {
-            return Err("python-artifact-name".into());
+            return Err(AdmissionError::ArtifactName);
         }
         if artifact.url.len() > 4096 || !artifact.url.starts_with("https://") || artifact.url.contains('\0') {
-            return Err("python-artifact-url".into());
+            return Err(AdmissionError::ArtifactUrl);
         }
         if artifact.sha256.len() != 64
             || !artifact.sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         {
-            return Err("python-artifact-hash: expected lowercase SHA-256".into());
+            return Err(AdmissionError::ArtifactHash);
         }
         if artifacts[..index].iter().any(|prior| prior.filename == artifact.filename) {
-            return Err("python-artifact-duplicate".into());
+            return Err(AdmissionError::DuplicateArtifact);
         }
     }
     debug_assert!(artifacts.len() <= MAX_PACKAGES);
@@ -86,9 +120,9 @@ pub fn admit_artifacts(artifacts: Vec<Artifact>) -> Result<Vec<Artifact>, String
     Ok(artifacts)
 }
 
-pub fn admit_selections(selections: Vec<String>) -> Result<Vec<String>, String> {
+pub fn admit_selections(selections: Vec<String>) -> Result<Vec<String>, AdmissionError> {
     if selections.len() > MAX_SELECTIONS {
-        return Err("python-selection-limit".into());
+        return Err(AdmissionError::SelectionLimit);
     }
     for (index, selection) in selections.iter().enumerate() {
         let is_empty = selection.is_empty();
@@ -99,7 +133,7 @@ pub fn admit_selections(selections: Vec<String>) -> Result<Vec<String>, String> 
         let is_duplicate = selections[..index].contains(selection);
         let is_invalid = is_empty || is_too_long || has_invalid_char || is_duplicate;
         if is_invalid {
-            return Err("python-selection-invalid".into());
+            return Err(AdmissionError::InvalidSelection);
         }
     }
     debug_assert!(selections.len() <= MAX_SELECTIONS);

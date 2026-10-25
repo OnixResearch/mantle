@@ -1,0 +1,54 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "reuse-warm-rust-workspaces",
+  "maintenance_owner": "Rust execution/cache and resident-provider maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Blocked resident-provider/enforced-session admission, not an ordinary baseline blocker. No retained compiler workspace runtime delivered or accepted.",
+  "supported_criteria": [
+    {
+      "criteria": [
+        "Phase 1 item 1 ADR/identity authority"
+      ],
+      "level": "partial-proposed-decision",
+      "support": "ADR 0126 maps real publication hooks and rejects simulated or restart-per-edit substitutions; review/acceptance remains open."
+    },
+    {
+      "criteria": [
+        "Phase 1 items 2-3",
+        "Phases 2-4 all criteria"
+      ],
+      "level": "unaccepted",
+      "support": "Pinned rustd retains a database but has unbounded sync/patch line requests and mtime updates, without revision-qualified content update/ack/stop/drain. No finite delegated session boundary or original retained-state qualification matrix accepted."
+    }
+  ],
+  "local_remaining_actions": [
+    "Retain existing exact provider/source/capability observations; do not rerun known unfixed workload to reconfirm the blocker.",
+    "Review proposed ADR and select a real provider bridge with closure/provenance/license/ABI and content-qualified session protocol.",
+    "Coordinate delegated finite aggregate memory/task/teardown boundary; inspect current cgroup fact as scope-specific, not proof no host/service can supply enforcement.",
+    "Continue independently usable ordinary differential and serial verification; do not call compiler-cache cold/warm hits retained-query-state reuse."
+  ],
+  "external_missing_authority_or_capability": [
+    "Admitted actual provider closure with bounded versioned partition/base/revision/request acknowledgment, quiescent content-bound updates, coherent error retention and stop/drain.",
+    "Owner-approved reuse/license/ABI terms and selected enforceable aggregate session containment."
+  ],
+  "evidence_references": [
+    ".cairn/changes/reuse-warm-rust-workspaces/tasks.md:1-37",
+    ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500",
+    "adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md:24-41,69-86,96-125",
+    "docs/native-rust-plan-validation.md:198-306"
+  ],
+  "repeatability_recipe": [
+    "No accepted warm-workspace CLI is declared; do not fabricate a runnable provider command.",
+    "On a genuinely changed/admitted provider, record exact closure hashes and processing capability probes, then run original Phase 3 retained valid/broken/still-broken/repair/later-edit/revert matrix against isolated clean references, same-mtime/rename/delete/wrong-reply/drift tests and hard-bound teardown.",
+    "Use ordinary baseline/serial commands in docs/native-rust-plan-validation.md:210-240 now; they cannot close warm tasks."
+  ],
+  "observed_commands": [],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

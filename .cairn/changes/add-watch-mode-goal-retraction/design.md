@@ -9,11 +9,11 @@ in-flight work.
 
 ## Current behavior
 
-`mantle build` evaluates, converts, dispatches, and exits. The scheduler
-deduplicates goals by store identity and tracks waiters. Existing cooperative
-cancellation covers selected-root evaluation, not teardown of a running
-sandbox child. No component diffs two plan generations or retracts a goal
-after dispatch.
+`mantle build --watch` is implemented as an opt-in, persistent local Worker.
+The shell polls the selected source and parsed transitive imports, buffers
+complete evaluation/conversion, and stages an identity diff. A one-use token
+gates dispatch after stale sandbox teardown and a fresh source snapshot check.
+Ordinary `mantle build` remains one-shot.
 
 ## Approach review
 
@@ -63,20 +63,25 @@ proof of running sandbox-build cancellation.
 
 ## Watch transition event boundary
 
-The opt-in watch channel uses `mantle-watch-transition-v1` NDJSON with one
-object per event, carrying `schema`, a session-stable `run_identity`, bounded
-`generation` and `sequence`, and `kind`. Goal events (`added`, `retained`,
-`retracted`, `cancelled`, `pending-cancellation`) carry the scheduler
-`goal_identity`; a `rejected` generation carries a bounded, redacted
-diagnostic and no goal identity. Each admitted generation has at most 10,000
-live goals and at most 20,000 diff events; a caller-specified event budget
-may be tighter. Identical goal identities coalesce before event emission.
-The shell enforces a bounded re-evaluation window (at most 60 attempts per
-declared window), timestamps/coalesces observed source and declared-import
-changes, and guards the output writer against partial event lines. An event
-count, goal count, or evaluation-rate violation rejects the new generation
-without retracting the last admitted set. Events record coordination, not
-build success or release evidence.
+The in-process `WatchNotice` channel carries bounded goal transitions with
+one session-stable `GoalDiff.run_identity`, a monotonic generation, and ordered
+`added`, `retained`, or `retracted` identities. The CLI prints that identity on
+admission and rejection lines. Watch output is human-readable; it is **not**
+an implemented `mantle-watch-transition-v1` NDJSON contract and does not change
+one-shot JSON or the evaluation stream. Pending cancellation and settled root
+outcomes are separate notices. There is no separate fabricated `cancelled`
+success event: retraction is admitted only after the worker's teardown fence.
+
+Each admitted generation has at most 10,000 goals, with at most 20,000 sorted
+diff events. The scheduler independently bounds the complete dependency closure
+and staged registry capacity before mutating live roots. A scheduler capacity,
+missing-input, or static-binding-policy rejection restores the last committed
+generation rather than terminating the session. Duplicate identities coalesce.
+The shell polls once per second and allows at most 60 actual evaluations per
+rolling 60-second window; exhaustion reports one bounded rejection until the
+window admits another attempt. The live set is unchanged on rejected input.
+Snapshots admit at most 256 parsed source files, 2 MiB per file, 16 MiB total.
+Events are coordination, not build success or release evidence.
 
 ## Decisions
 
@@ -119,3 +124,60 @@ reloaded successfully.
 - Watch events are coordination facts, not build evidence.
 - A retained goal is not proof that its output is current after the edit; the
   normal identity checks still decide reuse.
+
+## Current fixtures and required fresh execution
+
+The existing pure `crunch-watch-core` fixtures cover deterministic edit/add
+classification, superseded candidates, invalid input retention, exact event
+limits, raw goal-input limits, and evaluation-attempt limits. Worker fixtures
+exercise completed signed outputs across edit/add/dedup generations, malformed
+scheduler-candidate recovery without redispatch, input policy retention,
+transitive live-goal rejection, superseded commit tokens, and a running-root
+deletion whose successful late result cannot receive signed PathInfo. The
+deletion fixture deliberately holds teardown past the five-second reporting
+deadline and requires `PendingCancellation` to name only running tasks, not
+queued stale goals. These are fixtures to run, not fresh execution evidence.
+
+After rebuilding the actual CLI from the final integrated source, run:
+
+```sh
+cargo test -p crunch-watch-core
+cargo test -p crunch-build --lib watch_
+cargo test -p crunch-build --lib superseded_candidate_token
+cargo test -p crunch-pipeline --lib watch::tests
+python3 scripts/watch-goal-retraction-smoke.py \
+  --mantle /absolute/path/to/fresh/mantle \
+  --scratch /tmp/mantle-watch-goal-retraction-UNIQUE
+```
+
+The scratch directory must not exist; its basename uses letters, digits,
+hyphens, or underscores. The rail requires Linux `/proc`, working Bubblewrap
+with pidfds, and the ordinary `/bin/sh`/`/bin/busybox` sandbox tool mapping.
+It performs real edit, addition, invalid imported source, coalesced edits, and
+delete-during-build operations in **one** watch process, without invoking Cargo
+or rebuilding Mantle. Failure retains logs and does not silently force-kill a
+worker still owning sandbox teardown. Only a successfully executed rail writes
+`result.json` with `status: passed`; no receipt is present merely from adding it.
+
+Expected retained artifacts are `command.json`, `watch.stdout.log`,
+`watch.stderr.log`, `owned-slow-processes.json`, `result.json`, all edited Nickel
+files, the isolated store, and state. For scratch basename `RUN`, the physical
+store contains exactly one output each named `watch-RUN-keep`,
+`watch-RUN-moving-v1`, `watch-RUN-moving-v2`, `watch-RUN-added`, and
+`watch-RUN-rapid-20` (each with its store digest prefix). Retraction does not
+garbage-collect already completed historical outputs. It must contain no
+`watch-RUN-rapid-1` through `watch-RUN-rapid-19` and no `watch-RUN-slow` output.
+The `keep` artifact's bytes, inode, and mtime must remain unchanged.
+
+Expected notices: initial two-root settlement; one-root replacement with one
+`added`, one `retracted`, one `retained`; addition with one `added` and two
+`retained`; invalid import with `edit rejected` and no retraction; one coalesced
+replacement; slow-root retraction followed by three-root settlement only after
+its captured child identities stop. Every admission/rejection reports the same
+run identity. The real deletion waits beyond the payload's twenty-second late
+write opportunity and rejects any physical or reported slow-root output. A fast
+real teardown need not emit pending cancellation; the gated Worker fixture
+covers the deadline case. Neither rail nor event proves reproducibility,
+source authenticity, or release eligibility. No commands in this section were
+run during the source-only finishing pass.
+

@@ -16,6 +16,7 @@ mantle-causal-trace-core = { path = "../mantle-causal-trace-core" }
 crunch-remote-core = { path = "../crunch-remote-core", features = ["serde"] }
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-store = { path = "../crunch-store" }
+crunch-rustc-wrapper = { path = "../crunch-rustc-wrapper" }
 nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
 snix-build = { path = "../../vendor/snix-build" }
 snix-castore = { path = "../../vendor/snix-castore" }
@@ -44,7 +45,7 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 tar = "0.4"
 lzma-rs = "0.3"
 bzip2-rs = "0.1"
-ruzstd = "0.8"
+ruzstd = "0.9.1"
 tempfile = "3"
 url = "2"
 gix = { version = "0.81.0", features = ["blocking-http-transport-reqwest-rust-tls"] }

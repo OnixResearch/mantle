@@ -80,7 +80,9 @@ pub fn plan_ingest(
         }
         ExistingObservation::Present(canonical) => {
             let canonical = canonical.as_ref();
-            if canonical.observation_blake3 == incoming.observation_blake3 {
+            if existing_observation_valid(canonical, policy)
+                && canonical.observation_blake3 == incoming.observation_blake3
+            {
                 IngestPlan {
                     outcome: IngestOutcome::ReuseIdentical,
                     observation: Some(incoming),
@@ -103,6 +105,22 @@ pub fn plan_ingest(
             }
         }
     }
+}
+
+fn existing_observation_valid(observation: &SourceObservation, policy: &LocatorBoundaryPolicy) -> bool {
+    let request = SourceObservationRequest {
+        kind: observation.kind,
+        locator: observation.locator.clone(),
+        mutable_ref_hint: observation.mutable_ref_hint.clone(),
+        git_object_format: observation.git_object_format,
+        git_revision: observation.git_revision.clone(),
+        projection: observation.projection.clone(),
+        snapshot_profile: observation.snapshot_profile.clone(),
+        payload_blake3: observation.payload_blake3.clone(),
+    };
+    let admitted = admit_source_observation(&request, policy);
+    debug_assert!(admitted.observation.is_some() || !admitted.diagnostics.is_empty());
+    admitted.observation.as_ref() == Some(observation)
 }
 
 /// Structural facts available from a legacy source-bundle v1 record.
@@ -138,22 +156,21 @@ pub fn project_legacy_v1(
     facts: &LegacyV1Facts,
     policy: &LocatorBoundaryPolicy,
 ) -> Result<LegacyProvenanceProjection, Vec<SourceDiagnostic>> {
-    let projection_field = lookup(facts, "projection").unwrap_or_else(|| String::from("source"));
+    let Some(projection_field) = lookup(facts, "projection") else {
+        return Ok(unavailable("legacy-projection-unavailable"));
+    };
+    for key in ["projection", "snapshot_profile", "snapshot_profile_version"] {
+        if facts.metadata.iter().filter(|(name, _)| name == key).count() != 1 {
+            return Ok(unavailable("legacy-metadata-ambiguous"));
+        }
+    }
     let projection = match crate::model::ProjectionPath::parse(&projection_field) {
         Ok(projection) => projection,
         Err(_) => return Ok(unavailable("legacy-projection-unavailable")),
     };
-    let profile_name = lookup(facts, "snapshot_profile");
-    let profile_version = lookup(facts, "snapshot_profile_version");
-    let (Some(profile_name), Some(profile_version)) = (profile_name, profile_version) else {
-        return Ok(unavailable("legacy-snapshot-profile-unavailable"));
-    };
-    let Ok(profile_version) = profile_version.parse::<u32>() else {
-        return Ok(unavailable("legacy-snapshot-profile-version-invalid"));
-    };
-    let profile = crate::model::SnapshotProfile {
-        name: profile_name,
-        version: profile_version,
+    let profile = match legacy_snapshot_profile(facts) {
+        Ok(profile) => profile,
+        Err(error) => return Ok(error.projection()),
     };
     let Some(locator_value) = facts.locator.clone() else {
         return Ok(unavailable("legacy-locator-unavailable"));
@@ -204,6 +221,37 @@ pub fn project_legacy_v1(
         }
         None => Ok(unavailable("legacy-metadata-inadmissible")),
     }
+}
+
+enum LegacyProfileError {
+    MissingFacts,
+    InvalidVersion,
+}
+
+impl LegacyProfileError {
+    fn projection(self) -> LegacyProvenanceProjection {
+        match self {
+            Self::MissingFacts => unavailable("legacy-snapshot-profile-unavailable"),
+            Self::InvalidVersion => unavailable("legacy-snapshot-profile-version-invalid"),
+        }
+    }
+}
+
+fn legacy_snapshot_profile(facts: &LegacyV1Facts) -> Result<crate::model::SnapshotProfile, LegacyProfileError> {
+    let profile_name = lookup(facts, "snapshot_profile");
+    let profile_version = lookup(facts, "snapshot_profile_version");
+    let (Some(profile_name), Some(profile_version)) = (profile_name, profile_version) else {
+        return Err(LegacyProfileError::MissingFacts);
+    };
+    let Ok(version) = profile_version.parse::<u32>() else {
+        return Err(LegacyProfileError::InvalidVersion);
+    };
+    debug_assert!(!profile_version.is_empty());
+    debug_assert!(facts.metadata.len() >= 2);
+    Ok(crate::model::SnapshotProfile {
+        name: profile_name,
+        version,
+    })
 }
 
 fn unavailable(reason_code: &str) -> LegacyProvenanceProjection {

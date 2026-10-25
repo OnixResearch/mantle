@@ -270,8 +270,10 @@ fn select_generation(
         .unwrap_or_else(|| Manifest::empty(context.binding.platform.clone(), context.binding.store_prefix.clone()));
     require_binding(&manifest, context.binding)?;
     let candidate = match operation {
-        ProfileOperation::Install { package, replace } => manifest.install(package, replace)?,
-        ProfileOperation::Remove { name } => manifest.remove(&name)?,
+        ProfileOperation::Install { package, replace } => {
+            manifest.install(package, replace).map_err(|error| error.to_string())?
+        }
+        ProfileOperation::Remove { name } => manifest.remove(&name).map_err(|error| error.to_string())?,
         ProfileOperation::Switch { generation } => {
             return Ok((publication::read_generation(context.profile, generation)?, false));
         }
@@ -383,7 +385,7 @@ fn remove_generation(
 }
 
 fn require_binding(manifest: &Manifest, binding: &publication::Binding) -> Result<(), String> {
-    manifest.validate()?;
+    manifest.validate().map_err(|error| error.to_string())?;
     if manifest.platform != binding.platform || manifest.store_prefix != binding.store_prefix {
         return Err("profile generation belongs to a different platform/store prefix".into());
     }

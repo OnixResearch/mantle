@@ -1,0 +1,1707 @@
+{
+  "schema": "mantle-cairn-bounded-runtime-reconciliation-v1",
+  "observed_date": "2026-10-23",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-completed-bounded-local-runtime",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject": {
+    "cohort": "wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "boundary": "Immutable wait-request-repaired cohort used for the existing service and remote runtime observations. This is NOT the not-yet-pinned exact-exec cohort, current evolving worktree, final gate subject, or release identity.",
+    "ready_executable_pins": {
+      "schema": "mantle-runtime-executable-pins-v1",
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+      "roles": {
+        "mantle": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+        },
+        "wrapper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+          "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+        },
+        "producer": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+          "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+        },
+        "helper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+          "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+        },
+        "replay": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+          "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+        }
+      },
+      "policy": "Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution."
+    },
+    "service_additional_executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "rust_readiness_helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30",
+    "source_identity_limit": "Executable BLAKE3 and selected input bytes are retained; a complete atomic source/build provenance is not asserted."
+  },
+  "scope_of_this_record": "Only already completed result files and their raw captures were inspected. No service, runtime, test, build, formatter, linter or gate was launched by this evidence worker. Running Pueue tasks 87/88 and their outputs were not inspected. No claim about their result is made.",
+  "historical_receipts": "Earlier failed receipts and current-status snapshots are immutable observations. This additive record supplements them, does not reinterpret a failed aggregate as success, and does not authorize task completion.",
+  "non_claims": [
+    "No full acceptance, review signature, provider authority, bootstrap/release readiness, spec sync or archive claim.",
+    "Local bearer-authenticated stdio and signed outputs are NOT signed UCAN requests, authenticated caveat-chain receiver proof, Nix/API interoperability or entire surface parity.",
+    "Manual restart is not a supervising restart loop. Coordination state is not build evidence.",
+    "Executable local actions not yet run remain local work, not external blockers."
+  ],
+  "change": "separate-remote-build-hexagon",
+  "maintenance_owner": "Mantle remote core/application/adapter maintainers; Main owns migration acceptance",
+  "after_runtime": {
+    "schema": "mantle-local-remote-production-smoke-v1",
+    "status": "local-controls-passed-signed-request-not-exercised",
+    "classification": "bounded-local-runtime-observation",
+    "acceptance_claimed": false,
+    "work": "/tmp/mantle-remote-20261023-main-01",
+    "commands": [
+      {
+        "label": "mantle-blake3-before",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-before.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-before.stderr",
+        "started_unix": 1792796052.8644845,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3047,
+        "exit_code": 0,
+        "finished_unix": 1792796052.8981302
+      },
+      {
+        "label": "input-blake3-0",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/input-blake3-0.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/input-blake3-0.stderr",
+        "started_unix": 1792796052.8987358,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3080,
+        "exit_code": 0,
+        "finished_unix": 1792796052.9036186
+      },
+      {
+        "label": "input-blake3-1",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/input-blake3-1.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/input-blake3-1.stderr",
+        "started_unix": 1792796052.903913,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3113,
+        "exit_code": 0,
+        "finished_unix": 1792796052.908224
+      },
+      {
+        "label": "input-blake3-2",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/input-blake3-2.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/input-blake3-2.stderr",
+        "started_unix": 1792796052.9084344,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3146,
+        "exit_code": 0,
+        "finished_unix": 1792796052.9124951
+      },
+      {
+        "label": "input-blake3-3",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/remote-production-runtime.py"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/input-blake3-3.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/input-blake3-3.stderr",
+        "started_unix": 1792796052.9127214,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3179,
+        "exit_code": 0,
+        "finished_unix": 1792796052.914683
+      },
+      {
+        "label": "accepted-issue",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/accepted/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "remote",
+          "ticket",
+          "create",
+          "--ticket-fd",
+          "3",
+          "--ttl-secs",
+          "600",
+          "--uses",
+          "1",
+          "--max-build-time-secs",
+          "60",
+          "--max-upload-bytes",
+          "16777216",
+          "--display-name",
+          "private-local-production-smoke",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/accepted-issue.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/accepted-issue.stderr",
+        "started_unix": 1792796052.9192884,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3212,
+        "exit_code": 0,
+        "finished_unix": 1792796052.9358199
+      },
+      {
+        "label": "accepted-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/accepted/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/accepted/binding.json",
+          "build",
+          "/tmp/mantle-remote-20261023-main-01/accepted/request.ncl",
+          "--no-substitute",
+          "--builder",
+          "cairn-local-production",
+          "--ticket-fd",
+          "3",
+          "--remote-build-time-secs",
+          "60",
+          "--remote-secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--remote-secret-profile",
+          "production",
+          "--remote-secret-provider",
+          "systemd-credential://",
+          "--trusted-builder-key",
+          "cache.example.com-1",
+          "--builder-program",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--builder-arg=--state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--builder-arg=--store",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/accepted/worker-store",
+          "--builder-arg=--store-prefix",
+          "--builder-arg=/mantle/store",
+          "--builder-arg=--store-backend",
+          "--builder-arg=snix",
+          "--builder-arg=--remote-binding-config",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/accepted/binding.json",
+          "--builder-arg=remote",
+          "--builder-arg=serve",
+          "--builder-arg=--endpoint-id",
+          "--builder-arg=cairn-local-production",
+          "--builder-arg=--binding",
+          "--builder-arg=stdio-once",
+          "--builder-arg=--executor",
+          "--builder-arg=local-build",
+          "--builder-arg=--execution-state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/accepted/worker-state",
+          "--builder-arg=--secret-manifest",
+          "--builder-arg=/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--builder-arg=--secret-profile",
+          "--builder-arg=production",
+          "--builder-arg=--secret-provider",
+          "--builder-arg=systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/accepted-build.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/accepted-build.stderr",
+        "started_unix": 1792796052.9362001,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3218,
+        "exit_code": 0,
+        "finished_unix": 1792796053.1514134
+      },
+      {
+        "label": "accepted-info",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/accepted/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "store",
+          "info",
+          "1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/accepted-info.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/accepted-info.stderr",
+        "started_unix": 1792796053.1521041,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3377,
+        "exit_code": 0,
+        "finished_unix": 1792796053.160886
+      },
+      {
+        "label": "accepted-verify",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/accepted/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "store",
+          "verify",
+          "--trusted-public-keys",
+          "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM="
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/accepted-verify.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/accepted-verify.stderr",
+        "started_unix": 1792796053.161407,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3412,
+        "exit_code": 0,
+        "finished_unix": 1792796053.1698565
+      },
+      {
+        "label": "ticket-revoked-issue",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "remote",
+          "ticket",
+          "create",
+          "--ticket-fd",
+          "3",
+          "--ttl-secs",
+          "600",
+          "--uses",
+          "1",
+          "--max-build-time-secs",
+          "60",
+          "--max-upload-bytes",
+          "16777216",
+          "--display-name",
+          "private-local-production-smoke",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-issue.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-issue.stderr",
+        "started_unix": 1792796053.171021,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3450,
+        "exit_code": 0,
+        "finished_unix": 1792796053.1876483
+      },
+      {
+        "label": "ticket-revoked-revoke",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "remote",
+          "ticket",
+          "revoke",
+          "d62b1559793288cff3ee1a54d7e9107f"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-revoke.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-revoke.stderr",
+        "started_unix": 1792796053.188115,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3458,
+        "exit_code": 0,
+        "finished_unix": 1792796053.1965144
+      },
+      {
+        "label": "ticket-revoked-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/binding.json",
+          "build",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/request.ncl",
+          "--no-substitute",
+          "--builder",
+          "cairn-local-production",
+          "--ticket-fd",
+          "3",
+          "--remote-build-time-secs",
+          "60",
+          "--remote-secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--remote-secret-profile",
+          "production",
+          "--remote-secret-provider",
+          "systemd-credential://",
+          "--trusted-builder-key",
+          "cache.example.com-1",
+          "--builder-program",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--builder-arg=--state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--builder-arg=--store",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/ticket-revoked/worker-store",
+          "--builder-arg=--store-prefix",
+          "--builder-arg=/mantle/store",
+          "--builder-arg=--store-backend",
+          "--builder-arg=snix",
+          "--builder-arg=--remote-binding-config",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/ticket-revoked/binding.json",
+          "--builder-arg=remote",
+          "--builder-arg=serve",
+          "--builder-arg=--endpoint-id",
+          "--builder-arg=cairn-local-production",
+          "--builder-arg=--binding",
+          "--builder-arg=stdio-once",
+          "--builder-arg=--executor",
+          "--builder-arg=local-build",
+          "--builder-arg=--execution-state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/ticket-revoked/worker-state",
+          "--builder-arg=--secret-manifest",
+          "--builder-arg=/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--builder-arg=--secret-profile",
+          "--builder-arg=production",
+          "--builder-arg=--secret-provider",
+          "--builder-arg=systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-build.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-build.stderr",
+        "started_unix": 1792796053.1968923,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3460,
+        "exit_code": 3,
+        "finished_unix": 1792796053.3113284
+      },
+      {
+        "label": "ticket-revoked-verify-empty",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "store",
+          "verify",
+          "--trusted-public-keys",
+          "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM="
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-verify-empty.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-verify-empty.stderr",
+        "started_unix": 1792796053.311948,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3547,
+        "exit_code": 0,
+        "finished_unix": 1792796053.3201885
+      },
+      {
+        "label": "quota-rejected-issue",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "remote",
+          "ticket",
+          "create",
+          "--ticket-fd",
+          "3",
+          "--ttl-secs",
+          "600",
+          "--uses",
+          "1",
+          "--max-build-time-secs",
+          "60",
+          "--max-upload-bytes",
+          "1",
+          "--display-name",
+          "private-local-production-smoke",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/quota-rejected-issue.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/quota-rejected-issue.stderr",
+        "started_unix": 1792796053.3213036,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3582,
+        "exit_code": 0,
+        "finished_unix": 1792796053.337566
+      },
+      {
+        "label": "quota-rejected-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/binding.json",
+          "build",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/request.ncl",
+          "--no-substitute",
+          "--builder",
+          "cairn-local-production",
+          "--ticket-fd",
+          "3",
+          "--remote-build-time-secs",
+          "60",
+          "--remote-secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--remote-secret-profile",
+          "production",
+          "--remote-secret-provider",
+          "systemd-credential://",
+          "--trusted-builder-key",
+          "cache.example.com-1",
+          "--builder-program",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--builder-arg=--state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/quota-rejected/state",
+          "--builder-arg=--store",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/quota-rejected/worker-store",
+          "--builder-arg=--store-prefix",
+          "--builder-arg=/mantle/store",
+          "--builder-arg=--store-backend",
+          "--builder-arg=snix",
+          "--builder-arg=--remote-binding-config",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/quota-rejected/binding.json",
+          "--builder-arg=remote",
+          "--builder-arg=serve",
+          "--builder-arg=--endpoint-id",
+          "--builder-arg=cairn-local-production",
+          "--builder-arg=--binding",
+          "--builder-arg=stdio-once",
+          "--builder-arg=--executor",
+          "--builder-arg=local-build",
+          "--builder-arg=--execution-state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/quota-rejected/worker-state",
+          "--builder-arg=--secret-manifest",
+          "--builder-arg=/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--builder-arg=--secret-profile",
+          "--builder-arg=production",
+          "--builder-arg=--secret-provider",
+          "--builder-arg=systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/quota-rejected-build.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/quota-rejected-build.stderr",
+        "started_unix": 1792796053.3381095,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3595,
+        "exit_code": 3,
+        "finished_unix": 1792796053.4540665
+      },
+      {
+        "label": "quota-rejected-verify-empty",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "store",
+          "verify",
+          "--trusted-public-keys",
+          "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM="
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/quota-rejected-verify-empty.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/quota-rejected-verify-empty.stderr",
+        "started_unix": 1792796053.4549704,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3649,
+        "exit_code": 0,
+        "finished_unix": 1792796053.4638715
+      },
+      {
+        "label": "binding-revoked-issue",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "remote",
+          "ticket",
+          "create",
+          "--ticket-fd",
+          "3",
+          "--ttl-secs",
+          "600",
+          "--uses",
+          "1",
+          "--max-build-time-secs",
+          "60",
+          "--max-upload-bytes",
+          "16777216",
+          "--display-name",
+          "private-local-production-smoke",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/binding-revoked-issue.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/binding-revoked-issue.stderr",
+        "started_unix": 1792796053.4650085,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3684,
+        "exit_code": 0,
+        "finished_unix": 1792796053.4820352
+      },
+      {
+        "label": "binding-revoked-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/binding.json",
+          "build",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/request.ncl",
+          "--no-substitute",
+          "--builder",
+          "cairn-local-production",
+          "--ticket-fd",
+          "3",
+          "--remote-build-time-secs",
+          "60",
+          "--remote-secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--remote-secret-profile",
+          "production",
+          "--remote-secret-provider",
+          "systemd-credential://",
+          "--trusted-builder-key",
+          "cache.example.com-1",
+          "--builder-program",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--builder-arg=--state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/binding-revoked/state",
+          "--builder-arg=--store",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/binding-revoked/worker-store",
+          "--builder-arg=--store-prefix",
+          "--builder-arg=/mantle/store",
+          "--builder-arg=--store-backend",
+          "--builder-arg=snix",
+          "--builder-arg=--remote-binding-config",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/binding-revoked/binding.json",
+          "--builder-arg=remote",
+          "--builder-arg=serve",
+          "--builder-arg=--endpoint-id",
+          "--builder-arg=cairn-local-production",
+          "--builder-arg=--binding",
+          "--builder-arg=stdio-once",
+          "--builder-arg=--executor",
+          "--builder-arg=local-build",
+          "--builder-arg=--execution-state-dir",
+          "--builder-arg=/tmp/mantle-remote-20261023-main-01/binding-revoked/worker-state",
+          "--builder-arg=--secret-manifest",
+          "--builder-arg=/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--builder-arg=--secret-profile",
+          "--builder-arg=production",
+          "--builder-arg=--secret-provider",
+          "--builder-arg=systemd-credential://"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/binding-revoked-build.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/binding-revoked-build.stderr",
+        "started_unix": 1792796053.482835,
+        "timeout_secs": 100,
+        "status": "exited",
+        "inherited_fds": [
+          3
+        ],
+        "pid": 3691,
+        "exit_code": 3,
+        "finished_unix": 1792796053.4916124
+      },
+      {
+        "label": "binding-revoked-verify-empty",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "store",
+          "verify",
+          "--trusted-public-keys",
+          "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM="
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/binding-revoked-verify-empty.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/binding-revoked-verify-empty.stderr",
+        "started_unix": 1792796053.4921675,
+        "timeout_secs": 100,
+        "status": "exited",
+        "pid": 3693,
+        "exit_code": 0,
+        "finished_unix": 1792796053.500732
+      },
+      {
+        "label": "mantle-blake3-after",
+        "argv": [
+          "b3sum",
+          "--no-names",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "stdout": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-after.stdout",
+        "stderr": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-after.stderr",
+        "started_unix": 1792796053.5014396,
+        "timeout_secs": 20,
+        "status": "exited",
+        "pid": 3728,
+        "exit_code": 0,
+        "finished_unix": 1792796053.5189257
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "accepted",
+        "status": "passed",
+        "checks": {
+          "bytes_equal": true,
+          "streaming_import": true,
+          "nar_sha256": "5924b56ca803f92ebe954fd0787313c7fe091c8e6ddb5112d1f0a22983299b03",
+          "nar_size": 4208,
+          "full_key_signature_verified": true,
+          "imported_path": "/tmp/mantle-remote-20261023-main-01/accepted/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output",
+          "ticket_uses": 0,
+          "coordinator_admission_checked": true
+        },
+        "root": "/tmp/mantle-remote-20261023-main-01/accepted",
+        "worker_argv_requested": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/accepted/worker-store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/accepted/binding.json",
+          "remote",
+          "serve",
+          "--endpoint-id",
+          "cairn-local-production",
+          "--binding",
+          "stdio-once",
+          "--executor",
+          "local-build",
+          "--execution-state-dir",
+          "/tmp/mantle-remote-20261023-main-01/accepted/worker-state",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "environment": {
+          "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin",
+          "LANG": "C",
+          "LC_ALL": "C",
+          "HOME": "/tmp/mantle-remote-20261023-main-01/accepted/home",
+          "XDG_CONFIG_HOME": "/tmp/mantle-remote-20261023-main-01/accepted/home/config",
+          "TMPDIR": "/tmp/mantle-remote-20261023-main-01/accepted/tmp",
+          "CRUNCH_NO_FUSE": "1",
+          "CREDENTIALS_DIRECTORY": "/tmp/mantle-remote-20261023-main-01/accepted/credentials"
+        },
+        "binding_config": "/tmp/mantle-remote-20261023-main-01/accepted/binding.json",
+        "build_exit_code": 0
+      },
+      {
+        "name": "ticket-revoked",
+        "status": "passed",
+        "checks": {
+          "rejection_reason": "ticket-revoked",
+          "no_client_publication": true,
+          "no_worker_output": true,
+          "no_client_pathinfo": true,
+          "ticket_uses": 1,
+          "coordinator_admission_checked": true
+        },
+        "root": "/tmp/mantle-remote-20261023-main-01/ticket-revoked",
+        "worker_argv_requested": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/worker-store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/binding.json",
+          "remote",
+          "serve",
+          "--endpoint-id",
+          "cairn-local-production",
+          "--binding",
+          "stdio-once",
+          "--executor",
+          "local-build",
+          "--execution-state-dir",
+          "/tmp/mantle-remote-20261023-main-01/ticket-revoked/worker-state",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "environment": {
+          "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin",
+          "LANG": "C",
+          "LC_ALL": "C",
+          "HOME": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/home",
+          "XDG_CONFIG_HOME": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/home/config",
+          "TMPDIR": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/tmp",
+          "CRUNCH_NO_FUSE": "1",
+          "CREDENTIALS_DIRECTORY": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/credentials"
+        },
+        "binding_config": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/binding.json",
+        "build_exit_code": 3
+      },
+      {
+        "name": "quota-rejected",
+        "status": "passed",
+        "checks": {
+          "rejection_reason": "upload-byte-limit-exceeded",
+          "no_client_publication": true,
+          "no_worker_output": true,
+          "no_client_pathinfo": true,
+          "ticket_uses": 1,
+          "coordinator_admission_checked": true
+        },
+        "root": "/tmp/mantle-remote-20261023-main-01/quota-rejected",
+        "worker_argv_requested": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/worker-store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/binding.json",
+          "remote",
+          "serve",
+          "--endpoint-id",
+          "cairn-local-production",
+          "--binding",
+          "stdio-once",
+          "--executor",
+          "local-build",
+          "--execution-state-dir",
+          "/tmp/mantle-remote-20261023-main-01/quota-rejected/worker-state",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "environment": {
+          "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin",
+          "LANG": "C",
+          "LC_ALL": "C",
+          "HOME": "/tmp/mantle-remote-20261023-main-01/quota-rejected/home",
+          "XDG_CONFIG_HOME": "/tmp/mantle-remote-20261023-main-01/quota-rejected/home/config",
+          "TMPDIR": "/tmp/mantle-remote-20261023-main-01/quota-rejected/tmp",
+          "CRUNCH_NO_FUSE": "1",
+          "CREDENTIALS_DIRECTORY": "/tmp/mantle-remote-20261023-main-01/quota-rejected/credentials"
+        },
+        "binding_config": "/tmp/mantle-remote-20261023-main-01/quota-rejected/binding.json",
+        "build_exit_code": 3
+      },
+      {
+        "name": "binding-revoked",
+        "status": "passed",
+        "checks": {
+          "rejection_reason": "remote-endpoint-binding-Revoked",
+          "no_client_publication": true,
+          "no_worker_output": true,
+          "no_client_pathinfo": true,
+          "ticket_uses": 1,
+          "coordinator_state_absent_before_dispatch": true
+        },
+        "root": "/tmp/mantle-remote-20261023-main-01/binding-revoked",
+        "worker_argv_requested": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--state-dir",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/state",
+          "--store",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/worker-store",
+          "--store-prefix",
+          "/mantle/store",
+          "--store-backend",
+          "snix",
+          "--remote-binding-config",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/binding.json",
+          "remote",
+          "serve",
+          "--endpoint-id",
+          "cairn-local-production",
+          "--binding",
+          "stdio-once",
+          "--executor",
+          "local-build",
+          "--execution-state-dir",
+          "/tmp/mantle-remote-20261023-main-01/binding-revoked/worker-state",
+          "--secret-manifest",
+          "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+          "--secret-profile",
+          "production",
+          "--secret-provider",
+          "systemd-credential://"
+        ],
+        "environment": {
+          "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin",
+          "LANG": "C",
+          "LC_ALL": "C",
+          "HOME": "/tmp/mantle-remote-20261023-main-01/binding-revoked/home",
+          "XDG_CONFIG_HOME": "/tmp/mantle-remote-20261023-main-01/binding-revoked/home/config",
+          "TMPDIR": "/tmp/mantle-remote-20261023-main-01/binding-revoked/tmp",
+          "CRUNCH_NO_FUSE": "1",
+          "CREDENTIALS_DIRECTORY": "/tmp/mantle-remote-20261023-main-01/binding-revoked/credentials"
+        },
+        "binding_config": "/tmp/mantle-remote-20261023-main-01/binding-revoked/binding.json",
+        "build_exit_code": 3
+      }
+    ],
+    "operator_selection": {
+      "authority": "repository-public-test-only",
+      "endpoint_id": "cairn-local-production",
+      "transport": "stdio-once",
+      "executor": "local-build",
+      "store_backend": "snix"
+    },
+    "source_prerequisites": [
+      "tests/remote_hexagon_v2_parity.rs:33-35,500-645,949-1002",
+      "tests/support/remote_endpoint_binding.rs:42-105",
+      "src/main.rs:6236-6317",
+      "src/remote_build.rs:14035-14138",
+      "src/remote_credentials.rs:827-828",
+      "secretspec.toml"
+    ],
+    "missing_signed_request_prerequisite": {
+      "status": "not-exercised",
+      "detail": "Production build --ticket-fd / remote serve stdio-once carries bearer authentication, not an operator-signed UCAN request. No authenticated gateway/project grant chain, holder signing authority, current revocation view and receiver configuration were selected for that distinct consumer.",
+      "scope": "An accepted signed output is not an accepted cryptographically signed request or authenticated pattern-caveat receiver proof."
+    },
+    "non_claims": [
+      "Bearer authentication is not a signed request or portable holder-attenuable UCAN grant.",
+      "Ticket quota/revocation and endpoint revocation do not exercise signed pattern caveats or gateway/project receivers.",
+      "Public repository test keys authorize only this owner-private scratch observation; they are not secret production credentials.",
+      "Local child stdio is not SSH/P2P deployment, remote-machine independence, authenticated peer identity or production readiness.",
+      "No retry, resume, crash consistency, provider capability, whole-CLI parity, global Cairn acceptance or release eligibility is claimed.",
+      "Signed PathInfo plus measured NAR/content is scoped output evidence, not compiler correctness, hermeticity or hostile-worker honesty."
+    ],
+    "executable": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "inspected_input_blake3": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json": "776ed0998926f9501646c9d28f8ded2a2d49470d41ca2cedb28ebd41556d11d0",
+      "/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl": "a30164a76a05d689faffa050f251348e0b58037ebe2b3493eef59a09144c4a5b",
+      "/home/brittonr/git/OnixResearch/mantle/secretspec.toml": "1a6fd10c07f747b93be63aed1ba8a14d8263f2e6438def67333524ba4e33af03",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/remote-production-runtime.py": "859db5cc9737b3a3957fd3ad21872d0d8867a77e83a09f5278f0af138daba97e"
+    },
+    "local_controls_status": "passed",
+    "finished_unix": 1792796053.5194712
+  },
+  "retained_raw_streams": [
+    {
+      "command": "mantle-blake3-before",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-before.stdout",
+      "byte_count": 65,
+      "blake3": "07b7a24f93f7e06528e2516d153ea67962fa009fa108a8567264afcd981f5f3e",
+      "text": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85\n"
+    },
+    {
+      "command": "mantle-blake3-before",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-before.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "input-blake3-0",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-0.stdout",
+      "byte_count": 65,
+      "blake3": "c9c50b95065c45b7471675cb185e9328f4b5e5fab42dabe15d0e420abcc371b1",
+      "text": "776ed0998926f9501646c9d28f8ded2a2d49470d41ca2cedb28ebd41556d11d0\n"
+    },
+    {
+      "command": "input-blake3-0",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-0.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "input-blake3-1",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-1.stdout",
+      "byte_count": 65,
+      "blake3": "47c2ed13c593dcaf3f10d99796f75eebd23bd6810e3c9ec726269ba75acec7e6",
+      "text": "a30164a76a05d689faffa050f251348e0b58037ebe2b3493eef59a09144c4a5b\n"
+    },
+    {
+      "command": "input-blake3-1",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-1.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "input-blake3-2",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-2.stdout",
+      "byte_count": 65,
+      "blake3": "5d5a8717b7c2eb41c128bcf9e8efc4f90582bdc3400cf234fbb13e5cbb057a46",
+      "text": "1a6fd10c07f747b93be63aed1ba8a14d8263f2e6438def67333524ba4e33af03\n"
+    },
+    {
+      "command": "input-blake3-2",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-2.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "input-blake3-3",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-3.stdout",
+      "byte_count": 65,
+      "blake3": "1b52769b31b0099116cdcf88a2d32ec11bec38ee4b64b56c860b934f3bd64627",
+      "text": "859db5cc9737b3a3957fd3ad21872d0d8867a77e83a09f5278f0af138daba97e\n"
+    },
+    {
+      "command": "input-blake3-3",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/input-blake3-3.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "accepted-issue",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-issue.stdout",
+      "byte_count": 451,
+      "blake3": "c0017f8c6395c133e9a38ac8d9b11c40aef964345a50fadade27195b87c3a372",
+      "text": "{\n  \"ticket\": {\n    \"id\": \"bbc65e8c1090bfa6026459f7591fc0ca\",\n    \"display_name\": \"private-local-production-smoke\",\n    \"verifier_key_id\": \"ticket-key-1\",\n    \"created_unix_s\": 1792796052,\n    \"expires_unix_s\": 1792796652,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 60,\n    \"max_upload_bytes\": 16777216,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n"
+    },
+    {
+      "command": "accepted-issue",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-issue.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "accepted-build",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-build.stdout",
+      "byte_count": 13218,
+      "blake3": "7e9ae7f7ff599dd5d5b24eb9dffda091fb5cda5c8fca5540621b459750ebcb7a",
+      "text": "{\n  \"action_result_reports\": [],\n  \"ast_grep_structural_evidence\": [],\n  \"ast_grep_structural_evidence_diagnostics\": [],\n  \"build_environment_reports\": [],\n  \"cargo_build_evidence\": [],\n  \"cargo_build_evidence_diagnostics\": [],\n  \"counts\": {\n    \"built_total\": 0,\n    \"cached_total\": 1,\n    \"failed_total\": 0,\n    \"succeeded_total\": 1\n  },\n  \"diagnostic_persistence_failures\": [],\n  \"failed\": [],\n  \"file\": \"/tmp/mantle-remote-20261023-main-01/accepted/request.ncl\",\n  \"fod_mismatches\": [],\n  \"frontend_artifact_attestations\": [],\n  \"hermeticity_audit_events\": [],\n  \"hermeticity_mode\": \"practical\",\n  \"native_dynamic_plans\": [],\n  \"network_policy_reports\": [],\n  \"outcomes\": [\n    {\n      \"cached\": true,\n      \"drv_key\": \"a009036f37dc5a0d3390e780223f08e24e6bb1fbe25f3cd7015462b2d8117fcf\",\n      \"label\": \"production-remote-output\",\n      \"log_file\": null,\n      \"outputs\": [\n        {\n          \"artifact_attestation\": {\n            \"logical_path\": \"/mantle/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output\",\n            \"path\": \"/tmp/mantle-remote-20261023-main-01/accepted/state/attestations/artifacts/9551206a13dbaacd794844f41a57757d07776614746e7146bcbb7eac3396fdef.json\"\n          },\n          \"name\": \"out\",\n          \"path\": \"/tmp/mantle-remote-20261023-main-01/accepted/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output\",\n          \"substitution\": {\n            \"mode\": \"streaming\",\n            \"reused_bytes\": 0,\n            \"transferred_bytes\": 4908\n          }\n        }\n      ]\n    }\n  ],\n  \"output_dir\": \"/tmp/mantle-remote-20261023-main-01/accepted/store\",\n  \"remote_observability\": [\n    {\n      \"health\": {\n        \"exporters\": {\n          \"events_dropped\": 0,\n          \"events_received\": 14,\n          \"intake\": {\n            \"reason_code\": \"remote-telemetry-intake-admitted\",\n            \"status\": \"succeeded\"\n          },\n          \"metrics_admitted\": 14,\n          \"metrics_rejected\": 0,\n          \"non_claim\": \"telemetry delivery health is diagnostic only and does not prove build success, output validity, reproducibility, or release eligibility\",\n          \"otlp\": {\n            \"reason_code\": \"remote-telemetry-otlp-disabled\",\n            \"status\": \"disabled\"\n          },\n          \"prometheus\": {\n            \"reason_code\": \"remote-telemetry-prometheus-disabled\",\n            \"status\": \"disabled\"\n          },\n          \"schema\": \"mantle-remote-telemetry-export-report-v1\"\n        },\n        \"immutable_log\": {\n          \"reason_code\": \"remote-observability-log-persisted\",\n          \"status\": \"succeeded\"\n        },\n        \"non_claim\": \"remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism\",\n        \"telemetry\": {\n          \"accepted_events\": 14,\n          \"dropped_events\": 0\n        },\n        \"trace_context\": {\n          \"non_claim\": \"trace context is diagnostic only and does not affect request identity, authorization, scheduling, fencing, cache identity, output trust, or build results\",\n          \"reason_code\": \"remote-trace-context-disabled\",\n          \"status\": \"disabled\"\n        }\n      },\n      \"immutable_log\": {\n        \"head_record_blake3\": \"8f5689ceeb55599014f83ab7dba52cd5e7d8f7fbb7047e3baaf1e18eec3b1493\",\n        \"head_segment_blake3\": \"8c7d51e155fafb133b029d3e5a2b45dce382929f2b624e8d12a3b558a9ef7fb8\",\n        \"manifest_blake3\": \"1f45563370d2f0b46ec16c7d4564a902d7866d19f99d5d64b5103f614cf6733e\",\n        \"next_cursor\": 1,\n        \"retained_payload_bytes\": 6099,\n        \"retained_record_count\": 1,\n        \"retained_start_cursor\": 0,\n        \"retention_policy\": {\n          \"max_bytes\": 1048576,\n          \"max_chunks\": 1024\n        },\n        \"scope\": {\n          \"attempt_id\": \"58acb45fa06224594ca1133bdde62a3133d3256e4d0334ec79f133bcd730a8e5\",\n          \"fence_generation\": 1,\n          \"job_id\": \"12168ca23163c606799d4536fb056dad278c9163fbfbc176ef7950690d7fde33\"\n        },\n        \"truncated\": false,\n        \"truncation_anchor_blake3\": null\n      }\n    }\n  ],\n  \"remote_telemetry_events\": [\n    {\n      \"capability\": \"exact\",\n      \"category\": \"queue\",\n      \"measurement\": \"candidate-count\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"planning\",\n      \"reason\": \"priority-selected\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"route\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"planning\",\n      \"reason\": \"route-selected\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"queue\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"queued\",\n      \"reason\": \"queue-admitted\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"assignment\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"assigned\",\n      \"reason\": \"worker-assigned\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"retry-fencing\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"running\",\n      \"reason\": \"fence-accepted\",\n      \"result\": \"accepted\",\n      \"retry\": \"current-fence\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"objects\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-demand\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"bytes\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-credit\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 4208\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"bytes\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-completed\",\n      \"result\": \"succeeded\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 4208\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"execution\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"running\",\n      \"reason\": \"attempt-transition\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"execution\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"running\",\n      \"reason\": \"execution-completed\",\n      \"result\": \"succeeded\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"objects\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-demand\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 2\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"bytes\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-credit\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 4908\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"transfer\",\n      \"measurement\": \"bytes\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"transferring\",\n      \"reason\": \"transfer-completed\",\n      \"result\": \"succeeded\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"streaming\",\n      \"value\": 4908\n    },\n    {\n      \"capability\": \"exact\",\n      \"category\": \"admission\",\n      \"measurement\": \"occurrences\",\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\",\n      \"phase\": \"admitting\",\n      \"reason\": \"output-admitted\",\n      \"result\": \"accepted\",\n      \"retry\": \"none\",\n      \"route\": \"remote-stdio\",\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"transfer\": \"none\",\n      \"value\": 1\n    }\n  ],\n  \"scheduler_policy\": {\n    \"aged_after_epochs\": 4,\n    \"policy_id\": \"mantle-lazy-priority-v1\",\n    \"preference_order\": [\n      \"known-graph\",\n      \"resource-fit\",\n      \"locality-transfer\"\n    ],\n    \"protected_after_epochs\": 8,\n    \"schema\": \"mantle-scheduling-policy-v1\"\n  },\n  \"scheduler_priority_decisions\": [\n    {\n      \"age_epochs\": 0,\n      \"blocked_root_count\": 0,\n      \"blocked_root_count_saturated\": false,\n      \"candidate_snapshot_digest_blake3\": \"19a9615d66806ffc4f24c78eb66ede85fa0a62f88a330121b844900252f9dc60\",\n      \"claim_scope\": \"configured-known-fact-ordering\",\n      \"competing_goal_count\": 1,\n      \"content_locality_class\": \"unknown\",\n      \"history_basis\": \"structural-fallback-missing\",\n      \"history_snapshot_digest_blake3\": null,\n      \"known_critical_path_nodes\": 0,\n      \"known_critical_path_work_units\": 0,\n      \"known_graph_basis\": \"known-graph\",\n      \"non_claims\": [\n        \"global-optimality\",\n        \"future-graph-knowledge\",\n        \"execution-success\",\n        \"output-trust\",\n        \"release-reproducibility\"\n      ],\n      \"operator_policy_class\": \"ordinary\",\n      \"policy_digest_blake3\": \"93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58\",\n      \"policy_id\": \"mantle-lazy-priority-v1\",\n      \"resource_fit_class\": \"unknown\",\n      \"runner_up\": null,\n      \"scheduling_epoch\": 0,\n      \"schema\": \"mantle-priority-decision-v1\",\n      \"selected_goal_key_blake3\": \"4622f73a15a48af307a8fe26ff5b0fa08ad35aae5c6edb54b4bd26fbbb9ac6e6\",\n      \"selection_reason\": \"sole-candidate\",\n      \"stable_tie_break_class\": \"stable-goal-key\",\n      \"starvation_class\": \"fresh\",\n      \"transfer_cost_class\": \"unknown\"\n    }\n  ],\n  \"schema\": \"crunch-build-report-v1\",\n  \"state_dir\": \"/tmp/mantle-remote-20261023-main-01/accepted/state\",\n  \"store_dir\": \"/mantle/store\"\n}\n"
+    },
+    {
+      "command": "accepted-build",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-build.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "accepted-info",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-info.stdout",
+      "byte_count": 1883,
+      "blake3": "da9458b797ea93f5e711025a361bfc47515d72efb654ad6355c8670437ca0e19",
+      "text": "{\n  \"backend\": \"snix\",\n  \"backend_capabilities\": {\n    \"atomic_batch_import\": true,\n    \"core\": [\n      \"output-admission\",\n      \"lookup\",\n      \"fresh-process-reopen\",\n      \"closure-resolution\",\n      \"export\",\n      \"store-archive-export\",\n      \"store-archive-import\",\n      \"gc-plan\",\n      \"plan-bound-gc\",\n      \"action-result-pathinfo-output-reuse\",\n      \"store-sign\",\n      \"store-repair-final-nar\"\n    ],\n    \"max_root_changes\": null,\n    \"overlay_composition\": true,\n    \"rust_unit_cache\": true,\n    \"unsigned_admission\": true\n  },\n  \"overlay\": null,\n  \"paths\": [\n    {\n      \"ca\": \"Flat(Sha256([214, 124, 101, 110, 1, 117, 102, 80, 215, 119, 23, 176, 131, 153, 133, 160, 86, 236, 40, 255, 225, 116, 96, 29, 105, 15, 196, 7, 162, 206, 255, 202]))\",\n      \"deriver\": \"cwdbr7mnpsjj556ad3rn81cx2a9b01rh-production-remote-output\",\n      \"layer\": {\n        \"kind\": \"overlay\"\n      },\n      \"nar_sha256\": \"5924b56ca803f92ebe954fd0787313c7fe091c8e6ddb5112d1f0a22983299b03\",\n      \"nar_size\": 4208,\n      \"node\": \"File { digest: blake3-AVCUAT9XpSd7WdhHXAUBBCwLZC5TGwocj1jSFjIp6Wk=, size: 4096, executable: false }\",\n      \"references\": [],\n      \"retention_interests\": {\n        \"interests\": [\n          {\n            \"owner\": \"legacy-unmanaged\",\n            \"reason\": \"legacy-root-registered\",\n            \"record_id\": \"85bcaa69d028ff392142586896ec15b48330c72989c855278c64f8fe9eba2923\"\n          }\n        ],\n        \"legacy_unmanaged\": false,\n        \"logical_path\": \"/mantle/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output\",\n        \"record_count\": 1\n      },\n      \"shadows\": [],\n      \"signatures\": [\n        \"cache.example.com-1:8A5tLswuTa3CeY5QUtoCkImAJxVl6dDVI7OkTtEfW4EWZA1uTtIk3pFj9+iLtdVINpux8KeHL1ODVu2WWgJRDg==\"\n      ],\n      \"store_path\": \"1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output\"\n    }\n  ],\n  \"schema\": \"mantle-store-info-v3\"\n}\n"
+    },
+    {
+      "command": "accepted-info",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-info.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "accepted-verify",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-verify.stdout",
+      "byte_count": 85,
+      "blake3": "dd5f23e4629c69ef185b2edd00611cb6c25aab8ab773ca0675e62a5e488b6ea5",
+      "text": "OK 1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output  trusted_signatures=1/1\n"
+    },
+    {
+      "command": "accepted-verify",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted-verify.stderr",
+      "byte_count": 137,
+      "blake3": "ae39551fd93c3fb07e46e56b5e5c36c52adfe863d0064d25b65e4fe928bff7be",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/tmp/mantle-remote-20261023-main-01/accepted/state/signing-key)\n1 checked, 0 mismatches\n"
+    },
+    {
+      "command": "ticket-revoked-issue",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-issue.stdout",
+      "byte_count": 451,
+      "blake3": "cf5ba406e75e44e965d71c027bb8132635db4f5afb2f1e2e6875c9e777cb53af",
+      "text": "{\n  \"ticket\": {\n    \"id\": \"d62b1559793288cff3ee1a54d7e9107f\",\n    \"display_name\": \"private-local-production-smoke\",\n    \"verifier_key_id\": \"ticket-key-1\",\n    \"created_unix_s\": 1792796053,\n    \"expires_unix_s\": 1792796653,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 60,\n    \"max_upload_bytes\": 16777216,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n"
+    },
+    {
+      "command": "ticket-revoked-issue",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-issue.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "ticket-revoked-revoke",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-revoke.stdout",
+      "byte_count": 336,
+      "blake3": "54f8ed002aecca79342afe3de7b191ebc9603f43c12b36816c0001cee86a2300",
+      "text": "{\n  \"id\": \"d62b1559793288cff3ee1a54d7e9107f\",\n  \"display_name\": \"private-local-production-smoke\",\n  \"verifier_key_id\": \"ticket-key-1\",\n  \"created_unix_s\": 1792796053,\n  \"expires_unix_s\": 1792796653,\n  \"uses_remaining\": 1,\n  \"max_build_time_secs\": 60,\n  \"max_upload_bytes\": 16777216,\n  \"bound_client_endpoint\": null,\n  \"revoked\": true\n}\n"
+    },
+    {
+      "command": "ticket-revoked-revoke",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-revoke.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "ticket-revoked-build",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-build.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "ticket-revoked-build",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-build.stderr",
+      "byte_count": 626,
+      "blake3": "5d234519c6d00b361a4d64ca8ce221e2f1f6808ae69936c3b25c876990d61886",
+      "text": "{\"error\":\"error: error: stdio remote child failed phase=TransportSetup: reading remote frame header: failed to fill whole buffer; stderr=error: remote production stdio serve once: ticket-revoked\\n; bundle_ref=remote-failure-debug:4c53290765bc506be00aa915da682843a381b5cc412dcb0d333097882adb9faa; capture_outcome=metadata-only; cleanup_status=cleanup-not-observed; immutable_log_available=true; non_claim=remote failure debug evidence is diagnostic only; it does not authorize execution, admit outputs, prove determinism, reproduce a sandbox byte-for-byte, or rewrite the original execution result\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "command": "ticket-revoked-verify-empty",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-verify-empty.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "ticket-revoked-verify-empty",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked-verify-empty.stderr",
+      "byte_count": 143,
+      "blake3": "6ea71d142adc22062f093caeff6dd5af3767b3b21d2e2c5f7ef2b427f510f790",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/tmp/mantle-remote-20261023-main-01/ticket-revoked/state/signing-key)\n0 checked, 0 mismatches\n"
+    },
+    {
+      "command": "quota-rejected-issue",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-issue.stdout",
+      "byte_count": 444,
+      "blake3": "2292320fc4731f63fa4f2b9a17bea5b5a878dc6f681d70ee48f73056dc602468",
+      "text": "{\n  \"ticket\": {\n    \"id\": \"d62b1559793288cff3ee1a54d7e9107f\",\n    \"display_name\": \"private-local-production-smoke\",\n    \"verifier_key_id\": \"ticket-key-1\",\n    \"created_unix_s\": 1792796053,\n    \"expires_unix_s\": 1792796653,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 60,\n    \"max_upload_bytes\": 1,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n"
+    },
+    {
+      "command": "quota-rejected-issue",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-issue.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "quota-rejected-build",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-build.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "quota-rejected-build",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-build.stderr",
+      "byte_count": 638,
+      "blake3": "44cc66d86b65c077dd20dff39f2f9522e78fb8921ffc78e9ee1cb03a12edeaa5",
+      "text": "{\"error\":\"error: error: stdio remote child failed phase=TransportSetup: reading remote frame header: failed to fill whole buffer; stderr=error: remote production stdio serve once: upload-byte-limit-exceeded\\n; bundle_ref=remote-failure-debug:914fb41c6271cfdc55e91d0c1164c3c2c82ff3a0d3bf5f32ea95d6d2f5f9b810; capture_outcome=metadata-only; cleanup_status=cleanup-not-observed; immutable_log_available=true; non_claim=remote failure debug evidence is diagnostic only; it does not authorize execution, admit outputs, prove determinism, reproduce a sandbox byte-for-byte, or rewrite the original execution result\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "command": "quota-rejected-verify-empty",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-verify-empty.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "quota-rejected-verify-empty",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected-verify-empty.stderr",
+      "byte_count": 143,
+      "blake3": "85ad69a2ce44369e13bc2ca99df868debb95d8569747c957a34b9fd72d420b81",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/tmp/mantle-remote-20261023-main-01/quota-rejected/state/signing-key)\n0 checked, 0 mismatches\n"
+    },
+    {
+      "command": "binding-revoked-issue",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-issue.stdout",
+      "byte_count": 451,
+      "blake3": "cf5ba406e75e44e965d71c027bb8132635db4f5afb2f1e2e6875c9e777cb53af",
+      "text": "{\n  \"ticket\": {\n    \"id\": \"d62b1559793288cff3ee1a54d7e9107f\",\n    \"display_name\": \"private-local-production-smoke\",\n    \"verifier_key_id\": \"ticket-key-1\",\n    \"created_unix_s\": 1792796053,\n    \"expires_unix_s\": 1792796653,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 60,\n    \"max_upload_bytes\": 16777216,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n"
+    },
+    {
+      "command": "binding-revoked-issue",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-issue.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "binding-revoked-build",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-build.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "binding-revoked-build",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-build.stderr",
+      "byte_count": 71,
+      "blake3": "3a441901f767c9d6f07178194c01e4a2d2feacf31576a501f446b6ad64e23b20",
+      "text": "{\"error\":\"remote-endpoint-binding-Revoked\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "command": "binding-revoked-verify-empty",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-verify-empty.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "binding-revoked-verify-empty",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked-verify-empty.stderr",
+      "byte_count": 144,
+      "blake3": "718bba5f897c186db828844a35d5c917285b84d55db41dcbb8cc77acba410dc5",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/tmp/mantle-remote-20261023-main-01/binding-revoked/state/signing-key)\n0 checked, 0 mismatches\n"
+    },
+    {
+      "command": "mantle-blake3-after",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-after.stdout",
+      "byte_count": 65,
+      "blake3": "07b7a24f93f7e06528e2516d153ea67962fa009fa108a8567264afcd981f5f3e",
+      "text": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85\n"
+    },
+    {
+      "command": "mantle-blake3-after",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-remote-20261023-main-01/mantle-blake3-after.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    }
+  ],
+  "retained_inputs_and_observation_files": [
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/result.json",
+      "byte_count": 58498,
+      "blake3": "f3c9401c32d82f9960cb0e6e63a838fe97d8bd406ceba3e6bb3d1ef8e6fe01de",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/remote-production-runtime.py",
+      "byte_count": 22613,
+      "blake3": "859db5cc9737b3a3957fd3ad21872d0d8867a77e83a09f5278f0af138daba97e",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "byte_count": 1658,
+      "blake3": "776ed0998926f9501646c9d28f8ded2a2d49470d41ca2cedb28ebd41556d11d0",
+      "text": "{\n  \"schema\": \"mantle-runtime-executable-pins-v1\",\n  \"cohort\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort\",\n  \"roles\": {\n    \"mantle\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle\",\n      \"blake3\": \"c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85\"\n    },\n    \"wrapper\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper\",\n      \"blake3\": \"ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21\"\n    },\n    \"producer\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer\",\n      \"blake3\": \"380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805\"\n    },\n    \"helper\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper\",\n      \"blake3\": \"2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3\"\n    },\n    \"replay\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay\",\n      \"blake3\": \"e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9\"\n    }\n  },\n  \"policy\": \"Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution.\"\n}\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl",
+      "byte_count": 4362,
+      "blake3": "a30164a76a05d689faffa050f251348e0b58037ebe2b3493eef59a09144c4a5b",
+      "text": "# crunch stdlib entry point.\n#\n# Usage: let crunch = import \"lib.ncl\" in { ... } | crunch.Derivation\n\nlet contracts = import \"contracts.ncl\" in\nlet { FixedOutput } = import \"fixed_output.ncl\" in\nlet FixedOutputContract = FixedOutput in\nlet helpers = import \"helpers.ncl\" in\nlet fetch = import \"fetch.ncl\" in\nlet offline_cargo = import \"offline_cargo.ncl\" in\nlet wasm_component = import \"wasm_component.ncl\" in\nlet kernelscript_experiment = import \"kernelscript_experiment.ncl\" in\nlet android = import \"android.ncl\" in\nlet scheduling = import \"scheduling.ncl\" in\nlet cmake = import \"cmake.ncl\" in\nlet esp_idf = import \"esp_idf.ncl\" in\nlet pnpm = import \"pnpm.ncl\" in\n\n{\n  # The main derivation contract. Apply with: record | crunch.Derivation\n  Derivation = import \"derivation.ncl\",\n\n  # Fixed-output derivation parameters contract.\n  FixedOutput = FixedOutputContract,\n\n  # Validators\n  StorePath = contracts.StorePath,\n  Name = contracts.Name,\n\n  # Enum contracts\n  System = contracts.System,\n  HashAlgo = contracts.HashAlgo,\n  HashMode = contracts.HashMode,\n  Sandbox = contracts.Sandbox,\n  Input = contracts.Input,\n\n  # Conversion helpers\n  system_to_string = helpers.system_to_string,\n  hash_algo_to_string = helpers.hash_algo_to_string,\n  hash_mode_to_string = helpers.hash_mode_to_string,\n\n  # Fetchers\n  fetchurl = fetch.fetchurl,\n  fetchTarball = fetch.fetchTarball,\n  fetchGit = fetch.fetchGit,\n\n  # Fetch validators\n  Url = fetch.Url,\n  Hash = fetch.Hash,\n\n  # Fixed-output Android toolchain cohort and explicit identity binding.\n  AndroidSources = android,\n\n  # Project outputs contract. Apply with: record | crunch.Project\n  Project = import \"project_outputs.ncl\",\n\n  # Bounded Rust project package helper.\n  offlineCargoPackage = offline_cargo.offlineCargoPackage,\n  offlineCargoEvidence = offline_cargo.offlineCargoEvidence,\n\n  # Typed WebAssembly component build manifest and deterministic export.\n  WasmComponentBuildManifest = wasm_component.ComponentBuildManifest,\n  WasmComponentExportRequest = wasm_component.ComponentExportRequest,\n  exportWasmComponentBuild = wasm_component.exportComponentBuild,\n  WasmComponentOutputClass = wasm_component.OutputClass,\n\n  # Explicitly beta, non-default KernelScript experiment profile.\n  KernelScriptExperimentProfile = kernelscript_experiment.KernelScriptExperimentProfile,\n  KernelScriptExperimentOutputClass = kernelscript_experiment.ArtifactOutputClass,\n  KernelScriptGeneratedFileClass = kernelscript_experiment.GeneratedFileClass,\n\n  # Deterministic lazy build-goal scheduling policy and defaults.\n  SchedulingPolicy = scheduling.SchedulingPolicy,\n  schedulingPolicy = scheduling.default_policy,\n  schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,\n  schedulingHistoryPolicy = scheduling.default_history_policy,\n\n  # Reviewed APK metadata is a distinct prebuilt-record-v1 domain, not the\n  # published Android source-v1 cohort exposed through AndroidSources above.\n  AndroidReviewedSources = android.reviewed,\n  # APK adapter plan authoring; the Rust adapter checks independently\n  # admitted bytes before any SDK tool executes.\n  ReviewedApkPlan = android.reviewed.Plan,\n  mkReviewedApk = android.reviewed.mkApk,\n\n  # Ecosystem adapters lower to ordinary declared derivations.\n  CMake = cmake,\n  EspIdfPlan = esp_idf.Plan,\n  mkEspIdfFirmware = esp_idf.mkFirmware,\n  fpga = import \"fpga.ncl\",\n  gpu = import \"gpu.ncl\",\n  model_conversion = import \"model_conversion.ncl\",\n  mkPnpmWorkspace = pnpm.mkWorkspace,\n  python = import \"python.ncl\",\n  zephyr = import \"zephyr.ncl\",\n\n  # Lazy derivation file edge. The pipeline resolves this relative path before\n  # conversion, keeping large derivation DAGs out of one Nickel value.\n  derivationFile\n    | doc \"Reference a relative .ncl derivation file without embedding its transitive value.\"\n    = fun relative_path => { derivation_file = relative_path },\n\n  derivationFileOutput\n    | doc \"Reference one output from a relative .ncl derivation file.\"\n    = fun relative_path output_name => { derivation_file = relative_path, output = output_name },\n\n  # Output selection\n  select\n    | doc \"Select a single output from a multi-output derivation. Returns a record suitable for the `inputs` array.\"\n    = fun drv output_name =>\n      let the_drv = drv in\n      let the_output = output_name in\n      { drv = the_drv, output = the_output },\n}\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/secretspec.toml",
+      "byte_count": 896,
+      "blake3": "1a6fd10c07f747b93be63aed1ba8a14d8263f2e6438def67333524ba4e33af03",
+      "text": "[project]\nname = \"mantle\"\nrevision = \"1.0\"\nrequire_reason = false\n\n[profiles.production]\nTICKET_VERIFIER_KEY = { description = \"Versioned keyed-BLAKE3 verifier key as <key-id>:<base64url-32-bytes>\", required = true }\nRESULT_SIGNING_KEY = { description = \"Nix-format Ed25519 result-signing keypair\", required = true }\n\n[profiles.bootstrap]\nTICKET_VERIFIER_KEY = { description = \"Versioned keyed-BLAKE3 verifier key as <key-id>:<base64url-32-bytes>\", required = true }\nRESULT_SIGNING_KEY = { description = \"Nix-format Ed25519 result-signing keypair\", required = true }\n\n[profiles.rotation]\nTICKET_VERIFIER_KEY = { description = \"Versioned keyed-BLAKE3 verifier key as <key-id>:<base64url-32-bytes>\", required = true }\nRESULT_SIGNING_KEY = { description = \"Nix-format Ed25519 result-signing keypair\", required = true }\n\n[scopes.mantle-remote]\nsecrets = [\"TICKET_VERIFIER_KEY\", \"RESULT_SIGNING_KEY\"]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted/request.ncl",
+      "byte_count": 561,
+      "blake3": "cf91b01098923f6a06b087f6ab6acd96e96a708bbc2049ffe8ddbbbcf18ba23d",
+      "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\n{\n  name = \"production-remote-output\",\n  builder = \"builtin:fetchurl\",\n  system = 'x86_64-linux,\n  args = [], outputs = [\"out\"],\n  env = { url = \"file:///tmp/mantle-remote-20261023-main-01/accepted/source.bin\" },\n  inputs = [\"/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input\"],\n  fixed_output = { hash = \"sha256-1nxlbgF1ZlDXdxewg5mFoFbsKP/hdGAdaQ/EB6LO/8o=\", algo = 'sha256, mode = 'flat },\n  addressing_mode = 'input-addressed, sandbox = 'native,\n} | mantle.Derivation\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted/binding.json",
+      "byte_count": 595,
+      "blake3": "91efd3abfab3c8683e4a4078c332226bc8a2b998ef80ae2c283e5bbf36611fb1",
+      "text": "{\n  \"schema\": \"mantle-remote-endpoint-binding-config-v1\",\n  \"endpoint_state_directory\": \"/tmp/mantle-remote-20261023-main-01/accepted/state\",\n  \"build\": {\n    \"endpoint_binding\": {\n      \"spec\": {\n        \"kind\": \"builder-ticket\",\n        \"name\": \"cairn-local-production\",\n        \"scope\": \"remote-build-test\",\n        \"trust_requirement\": \"signed-builder-output\",\n        \"store_prefix\": \"/mantle/store\",\n        \"expires_unix_s\": 1792796952\n      },\n      \"generation\": 1\n    },\n    \"scope\": \"remote-build-test\",\n    \"trust_requirement\": \"signed-builder-output\"\n  },\n  \"source_bindings\": []\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/accepted/state/remote-builders/endpoint-bindings.json",
+      "byte_count": 420,
+      "blake3": "a07a829fd6c9c2e56f3ba6e4a9c688c5035448238f59cbb5429588c93237affc",
+      "text": "{\n  \"schema_version\": 1,\n  \"records\": [\n    {\n      \"binding\": {\n        \"spec\": {\n          \"kind\": \"builder-ticket\",\n          \"name\": \"cairn-local-production\",\n          \"scope\": \"remote-build-test\",\n          \"trust_requirement\": \"signed-builder-output\",\n          \"store_prefix\": \"/mantle/store\",\n          \"expires_unix_s\": 1792796952\n        },\n        \"generation\": 1\n      },\n      \"revoked\": false\n    }\n  ]\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/request.ncl",
+      "byte_count": 567,
+      "blake3": "e8d430e7c3e5fd012bece85ca3c2dbef0e41b07b3d2d83411b09b5f821cfc107",
+      "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\n{\n  name = \"production-remote-output\",\n  builder = \"builtin:fetchurl\",\n  system = 'x86_64-linux,\n  args = [], outputs = [\"out\"],\n  env = { url = \"file:///tmp/mantle-remote-20261023-main-01/ticket-revoked/source.bin\" },\n  inputs = [\"/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input\"],\n  fixed_output = { hash = \"sha256-1nxlbgF1ZlDXdxewg5mFoFbsKP/hdGAdaQ/EB6LO/8o=\", algo = 'sha256, mode = 'flat },\n  addressing_mode = 'input-addressed, sandbox = 'native,\n} | mantle.Derivation\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/binding.json",
+      "byte_count": 601,
+      "blake3": "1cb207505e00115f3c66952a1983bc2d9b2fe844032825146a98e5970cb974f6",
+      "text": "{\n  \"schema\": \"mantle-remote-endpoint-binding-config-v1\",\n  \"endpoint_state_directory\": \"/tmp/mantle-remote-20261023-main-01/ticket-revoked/state\",\n  \"build\": {\n    \"endpoint_binding\": {\n      \"spec\": {\n        \"kind\": \"builder-ticket\",\n        \"name\": \"cairn-local-production\",\n        \"scope\": \"remote-build-test\",\n        \"trust_requirement\": \"signed-builder-output\",\n        \"store_prefix\": \"/mantle/store\",\n        \"expires_unix_s\": 1792796953\n      },\n      \"generation\": 1\n    },\n    \"scope\": \"remote-build-test\",\n    \"trust_requirement\": \"signed-builder-output\"\n  },\n  \"source_bindings\": []\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/ticket-revoked/state/remote-builders/endpoint-bindings.json",
+      "byte_count": 420,
+      "blake3": "067bd92786d0d80d2e03f8378b1ed6421a86c0f6d479fe8a250ea0e268515a3d",
+      "text": "{\n  \"schema_version\": 1,\n  \"records\": [\n    {\n      \"binding\": {\n        \"spec\": {\n          \"kind\": \"builder-ticket\",\n          \"name\": \"cairn-local-production\",\n          \"scope\": \"remote-build-test\",\n          \"trust_requirement\": \"signed-builder-output\",\n          \"store_prefix\": \"/mantle/store\",\n          \"expires_unix_s\": 1792796953\n        },\n        \"generation\": 1\n      },\n      \"revoked\": false\n    }\n  ]\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected/request.ncl",
+      "byte_count": 567,
+      "blake3": "d6cccc5d28b4313da63bb9d9d8d3c5d2eb5fa9a6d43aa79e23954705e165a55a",
+      "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\n{\n  name = \"production-remote-output\",\n  builder = \"builtin:fetchurl\",\n  system = 'x86_64-linux,\n  args = [], outputs = [\"out\"],\n  env = { url = \"file:///tmp/mantle-remote-20261023-main-01/quota-rejected/source.bin\" },\n  inputs = [\"/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input\"],\n  fixed_output = { hash = \"sha256-1nxlbgF1ZlDXdxewg5mFoFbsKP/hdGAdaQ/EB6LO/8o=\", algo = 'sha256, mode = 'flat },\n  addressing_mode = 'input-addressed, sandbox = 'native,\n} | mantle.Derivation\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected/binding.json",
+      "byte_count": 601,
+      "blake3": "bcae0fcddff896d4f590fd351d8a01ceb6ecaf6b534b557eabf5caf54ba2eaba",
+      "text": "{\n  \"schema\": \"mantle-remote-endpoint-binding-config-v1\",\n  \"endpoint_state_directory\": \"/tmp/mantle-remote-20261023-main-01/quota-rejected/state\",\n  \"build\": {\n    \"endpoint_binding\": {\n      \"spec\": {\n        \"kind\": \"builder-ticket\",\n        \"name\": \"cairn-local-production\",\n        \"scope\": \"remote-build-test\",\n        \"trust_requirement\": \"signed-builder-output\",\n        \"store_prefix\": \"/mantle/store\",\n        \"expires_unix_s\": 1792796953\n      },\n      \"generation\": 1\n    },\n    \"scope\": \"remote-build-test\",\n    \"trust_requirement\": \"signed-builder-output\"\n  },\n  \"source_bindings\": []\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/quota-rejected/state/remote-builders/endpoint-bindings.json",
+      "byte_count": 420,
+      "blake3": "067bd92786d0d80d2e03f8378b1ed6421a86c0f6d479fe8a250ea0e268515a3d",
+      "text": "{\n  \"schema_version\": 1,\n  \"records\": [\n    {\n      \"binding\": {\n        \"spec\": {\n          \"kind\": \"builder-ticket\",\n          \"name\": \"cairn-local-production\",\n          \"scope\": \"remote-build-test\",\n          \"trust_requirement\": \"signed-builder-output\",\n          \"store_prefix\": \"/mantle/store\",\n          \"expires_unix_s\": 1792796953\n        },\n        \"generation\": 1\n      },\n      \"revoked\": false\n    }\n  ]\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked/request.ncl",
+      "byte_count": 568,
+      "blake3": "476682414b184e77b0ec61e773707ac47892d38720cd36c4e443035b684ef708",
+      "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\n{\n  name = \"production-remote-output\",\n  builder = \"builtin:fetchurl\",\n  system = 'x86_64-linux,\n  args = [], outputs = [\"out\"],\n  env = { url = \"file:///tmp/mantle-remote-20261023-main-01/binding-revoked/source.bin\" },\n  inputs = [\"/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input\"],\n  fixed_output = { hash = \"sha256-1nxlbgF1ZlDXdxewg5mFoFbsKP/hdGAdaQ/EB6LO/8o=\", algo = 'sha256, mode = 'flat },\n  addressing_mode = 'input-addressed, sandbox = 'native,\n} | mantle.Derivation\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked/binding.json",
+      "byte_count": 602,
+      "blake3": "bbfb106428d045d54461a570ad4ef3acfd1e5c29d8acee1b57dac501725a8a12",
+      "text": "{\n  \"schema\": \"mantle-remote-endpoint-binding-config-v1\",\n  \"endpoint_state_directory\": \"/tmp/mantle-remote-20261023-main-01/binding-revoked/state\",\n  \"build\": {\n    \"endpoint_binding\": {\n      \"spec\": {\n        \"kind\": \"builder-ticket\",\n        \"name\": \"cairn-local-production\",\n        \"scope\": \"remote-build-test\",\n        \"trust_requirement\": \"signed-builder-output\",\n        \"store_prefix\": \"/mantle/store\",\n        \"expires_unix_s\": 1792796953\n      },\n      \"generation\": 1\n    },\n    \"scope\": \"remote-build-test\",\n    \"trust_requirement\": \"signed-builder-output\"\n  },\n  \"source_bindings\": []\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-remote-20261023-main-01/binding-revoked/state/remote-builders/endpoint-bindings.json",
+      "byte_count": 419,
+      "blake3": "6d1fdbb1d350a6208f23a5f5e141e7900e6a1a22437da53fe30c05cb8b4ca0cd",
+      "text": "{\n  \"schema_version\": 1,\n  \"records\": [\n    {\n      \"binding\": {\n        \"spec\": {\n          \"kind\": \"builder-ticket\",\n          \"name\": \"cairn-local-production\",\n          \"scope\": \"remote-build-test\",\n          \"trust_requirement\": \"signed-builder-output\",\n          \"store_prefix\": \"/mantle/store\",\n          \"expires_unix_s\": 1792796953\n        },\n        \"generation\": 1\n      },\n      \"revoked\": true\n    }\n  ]\n}\n"
+    }
+  ],
+  "criteria": [
+    {
+      "task": "I1",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:5",
+      "exact_task_text": "- [ ] [task:I1][serial] Create the strict `no_std + alloc` remote core and application contract crates. Define bounded commands, admitted values, states, events, blockers, effects, observations, outcomes, and receipt preimages. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "I2",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:6",
+      "exact_task_text": "- [ ] [task:I2][serial] Move protocol admission, normalized identities, fencing, retry, resource, transfer, output-admission inputs, transition, and receipt logic from `src/remote_build.rs` and `crunch-build::distributed` into the core without changing behavior. r[remote_builds.hexagonal_core]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "One local production stdio request reached finished/output admission; ticket, upload quota and binding revocation controls failed closed. Not a complete extraction/resource/fencing/retry audit.",
+      "acceptance_established": false
+    },
+    {
+      "task": "I3",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:7",
+      "exact_task_text": "- [ ] [task:I3][after:I2] Add application-owned ports for transport, attempt persistence, executor, store admission, credential verification, clock observation, random identifiers, and telemetry. Split stdio, SSH, local, external-batch, store, and telemetry adapters. r[remote_builds.application_owned_ports] r[remote_builds.remote_effect_plans]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Existing local child stdio, local-build executor and streaming store adapter ran. SSH, external-batch/provider coverage and every owned port were not exercised.",
+      "acceptance_established": false
+    },
+    {
+      "task": "I4",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:8",
+      "exact_task_text": "- [ ] [task:I4][after:I3] Replace Snix `PathInfo`, build request, build result, substitution report, provider SDK, transport, and CLI error values in application contracts with Mantle-owned facts and adapter projections. r[remote_builds.application_owned_ports]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Measured signed PathInfo and streaming import are externally visible results of the current adapter path; API ownership and prohibited type absence require separate architecture checks.",
+      "acceptance_established": false
+    },
+    {
+      "task": "I5",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:9",
+      "exact_task_text": "- [ ] [task:I5][after:I4] Implement the transition loop that executes typed effects through ports, returns typed observations to the core, and preserves effect, authority, limit, and attempt identities. r[remote_builds.remote_effect_plans]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Accepted coordinator state reached finished with output_admission_completed=true and a live output claim. Each rejected control had no admitted output claim; revoked binding had no coordinator state before dispatch. Per-effect identities/observations and every failure transition were not audited by this smoke.",
+      "acceptance_established": false
+    },
+    {
+      "task": "I6",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:10",
+      "exact_task_text": "- [ ] [task:I6][after:I5] Keep active gateway, resource-policy, nominal-type, and Trellis requirements attached to their existing owners. Update their adapters and trace links without redefining behavior. r[remote_builds.hexagonal_compatibility]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Existing local ticket/quota/binding checks are retained in this one production path. Does not validate all gateway, resource-policy, nominal or Trellis owners.",
+      "acceptance_established": false
+    },
+    {
+      "task": "V1",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:14",
+      "exact_task_text": "- [ ] [task:V1][after:I6] Add positive transition, transport, execution, transfer, output-admission, and replay tests. Add negative malformed request, stale fence, untrusted output, exceeded limit, wrong effect identity, adapter failure, and unknown observation tests. r[remote_builds.hexagonal_core] r[remote_builds.remote_effect_plans]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Accepted output bytes, canonical NAR and full-key signature verified; revoked ticket, exceeded upload limit and revoked binding refused with no client PathInfo/worker output and no consumed ticket use. Missing malformed request, stale fence, untrusted output, wrong effect identity, adapter failure, unknown observation and other transport/runtime controls.",
+      "acceptance_established": false
+    },
+    {
+      "task": "V2",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:15",
+      "exact_task_text": "- [ ] [task:V2][after:V1] Add wire and receipt golden fixtures plus dual-path compatibility tests for accepted and rejected remote sessions. Prove stable bytes, identities, states, events, effects, outcomes, and diagnostics. r[remote_builds.hexagonal_compatibility]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "One extracted production path executed. No legacy/new dual-path run or byte-for-byte whole-wire/receipt compatibility comparison occurred. Historical golden fixtures remain separate evidence.",
+      "acceptance_established": false
+    },
+    {
+      "task": "V3",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:16",
+      "exact_task_text": "- [ ] [task:V3][after:V2] Add dependency, API-shape, compile-fail, host, and `wasm32-unknown-unknown` checks. Include negative fixtures for Snix, store, Tokio, filesystem, process, environment, clock, random, network, credential, CLI, and rendering authority in the core. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "V4",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:17",
+      "exact_task_text": "- [ ] [task:V4][after:V3] Run `nix develop -c cargo test -p crunch-remote-core`, focused remote application and adapter tests, `nix develop -c cargo test -p crunch-build distributed`, and `nix develop -c cargo test -p mantle --bin mantle remote_build::`. Preserve exact output in `cairn/changes/separate-remote-build-hexagon/evidence/focused-validation.md`. r[remote_builds.hexagonal_core] r[remote_builds.hexagonal_compatibility]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "V5",
+      "task_source": ".cairn/changes/separate-remote-build-hexagon/tasks.md:18",
+      "exact_task_text": "- [ ] [task:V5][after:V4] Run `nix develop -c cargo check -p crunch-remote-core --target wasm32-unknown-unknown`, focused first-party Clippy with `-D warnings`, `git diff --check`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal separate-remote-build-hexagon --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design separate-remote-build-hexagon --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks separate-remote-build-hexagon --root .`, and `nix flake check -L`. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    }
+  ],
+  "passed_controls": [
+    {
+      "scenario": "accepted",
+      "build_exit_code": 0,
+      "checks": {
+        "bytes_equal": true,
+        "streaming_import": true,
+        "nar_sha256": "5924b56ca803f92ebe954fd0787313c7fe091c8e6ddb5112d1f0a22983299b03",
+        "nar_size": 4208,
+        "full_key_signature_verified": true,
+        "imported_path": "/tmp/mantle-remote-20261023-main-01/accepted/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output",
+        "ticket_uses": 0,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "ticket-revoked",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "ticket-revoked",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "quota-rejected",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "upload-byte-limit-exceeded",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "binding-revoked",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "remote-endpoint-binding-Revoked",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_state_absent_before_dispatch": true
+      }
+    }
+  ],
+  "missing_controls": [
+    "No dual-path legacy/extracted wire/receipt parity, complete surface/provider port audit or core/API-shape/wasm rail was run by this driver.",
+    "No malformed request, stale fence, untrusted output, wrong effect identity, adapter failure, unknown observation, replay/retry/resume/crash or SSH/external-batch transport controls in this runtime.",
+    "No Nix gateway/API call, UCAN signed request, authenticated pattern-caveat receiver, store-view or project-goal isolation observation.",
+    "No current gate or lifecycle acceptance result is inferred."
+  ],
+  "reproduction": {
+    "owner": "Main / Mantle remote maintainers",
+    "driver_entry_argv": [
+      "python3",
+      "target/cairn-finish-20261023/remote-production-runtime.py",
+      "--authority",
+      "repository-public-test-only",
+      "--endpoint-id",
+      "cairn-local-production",
+      "--work",
+      "/tmp/mantle-remote-20261023-FRESH-OWNER-SELECTED",
+      "--pins",
+      "target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json"
+    ],
+    "status": "Fresh-root reproduction recipe inferred from retained driver and observed operator_selection; not a captured outer-shell invocation. Exact executed subprocess argv/environment/exit/streams are in after_runtime.",
+    "constraints": [
+      "Use a nonexistent fresh /tmp/mantle-remote-20261023-* path; never reuse the observed root or retry over old receipt bytes.",
+      "Verify immutable Mantle pin. Requires local repository Nickel lib/lib.ncl, SecretSpec metadata, local file URL input, private writable paths, BLAKE3 and explicit repository-public-test-only authority selection.",
+      "The driver uses public repository test verifier/result-signing constants, never production authority. Ticket bearer is only delivered/passed on private FDs; ticket.secret, credentials, mutable ticket tables and signing keys are not included in this retained record.",
+      "Only snix local child stdio-once/local-build is selected; success cannot establish remote-host independence."
+    ]
+  },
+  "related_historical_evidence": [
+    {
+      "path": ".cairn/changes/resolve-remote-entry-points-through-one-binding/evidence/signed-cache-export-parent-repair-2026-10-23.json",
+      "boundary": "Passing cache/source-binding repair subsets are historical regression evidence; the task59 later aggregate failure remains a failure. This local stdio production build is not a signed HTTP cache-pull rerun."
+    }
+  ],
+  "remaining_local_actions": [
+    "Main: finish exact I1-I6 and V1-V5 architecture/transition/API-shape/provider/compatibility controls and integrated gates; this smoke closes none by itself.",
+    "Main: select a separate local authenticated gateway/project harness and request-signing/revocation configuration to exercise signed-request/caveat controls; unselected local setup is not external denial.",
+    "Main: preserve completed 87/88 receipts if relevant after their own completion; this worker did not inspect them."
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [],
+  "historical_status_ref": ".cairn/changes/separate-remote-build-hexagon/evidence/current-status-2026-10-23.json"
+}

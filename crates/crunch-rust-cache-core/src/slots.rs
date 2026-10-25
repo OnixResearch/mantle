@@ -106,6 +106,35 @@ pub struct SlotReceipt {
     pub wait_timeout_ms: u64,
 }
 
+impl SlotReceipt {
+    /// Validate an untrusted authority grant before starting a leased child.
+    /// Scheduling receipts cannot enlarge the client's declared protocol bounds.
+    pub fn is_grant_for(&self, build_id: &str) -> bool {
+        self.schema == SLOT_RECEIPT_SCHEMA
+            && self.request_id != 0
+            && self.build_id == build_id
+            && !build_id.is_empty()
+            && build_id.len() <= MAX_BUILD_ID_BYTES
+            && self.decision == SlotDecision::Granted
+            && self.reason.is_none()
+            && self.total_slots > 0
+            && self.total_slots <= MAX_SLOTS
+            && self.per_build_max > 0
+            && self.per_build_max <= self.total_slots
+            && self.total_queue > 0
+            && self.total_queue <= MAX_QUEUE
+            && self.per_build_queue > 0
+            && self.per_build_queue <= self.total_queue
+            && self.wait_timeout_ms > 0
+            && self.wait_timeout_ms <= MAX_WAIT_TIMEOUT_MS
+            && self.waited_ms < self.wait_timeout_ms
+            && self.waited_ms <= self.observed_ms
+            && self.active_slots > 0
+            && self.active_slots <= self.total_slots
+            && self.queued_requests <= self.total_queue
+    }
+}
+
 #[derive(Debug)]
 struct Pending {
     request: SlotRequest,
@@ -370,6 +399,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn grants_require_matching_identity_and_possible_policy_state() {
+        let mut state = SlotState::new(policy()).unwrap();
+        state.admit(request(1, "consumer"), 10);
+        let grant = state.reserve(12).unwrap();
+        assert!(grant.is_grant_for("consumer"));
+        assert!(!grant.is_grant_for("other-build"));
+        let corruptions: [fn(&mut SlotReceipt); 12] = [
+            |r| r.request_id = 0,
+            |r| r.schema.clear(),
+            |r| r.reason = Some(SlotRejectReason::WaitTimeout),
+            |r| r.total_slots = MAX_SLOTS + 1,
+            |r| r.per_build_max = r.total_slots + 1,
+            |r| r.total_queue = MAX_QUEUE + 1,
+            |r| r.per_build_queue = r.total_queue + 1,
+            |r| r.wait_timeout_ms = MAX_WAIT_TIMEOUT_MS + 1,
+            |r| r.waited_ms = r.wait_timeout_ms,
+            |r| r.active_slots = 0,
+            |r| r.active_slots = r.total_slots + 1,
+            |r| r.queued_requests = r.total_queue + 1,
+        ];
+        for corrupt in corruptions {
+            let mut invalid = grant.clone();
+            corrupt(&mut invalid);
+            assert!(!invalid.is_grant_for("consumer"), "accepted invalid grant: {invalid:?}");
+        }
+        assert!(!state.release(1, 13).unwrap().is_grant_for("consumer"));
+    }
     #[test]
     fn monopolizing_build_yields_to_other_waiting_build() {
         let mut state = SlotState::new(policy()).unwrap();

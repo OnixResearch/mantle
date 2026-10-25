@@ -2,7 +2,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::ambiguous_params)]
@@ -11,7 +11,6 @@
 extern crate alloc;
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
-use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec;
@@ -29,6 +28,94 @@ pub const MAX_MANIFEST_BYTES: usize = 8 << 20;
 pub const MAX_ENTRIES: usize = 4096;
 pub const MAX_TEXT_BYTES: usize = 16_384;
 pub const NON_CLAIM: &str = "exported Cargo graph replay; source availability, plan admission, trusted cached results and execution are separate; no Cargo-free, compiler, reproducibility or release claim";
+
+/// Validation and serialization failures of the Cargo handoff contract.
+#[derive(Debug)]
+pub enum BundleError {
+    CompatibilityMismatch,
+    NoncanonicalOrTampered,
+    ManifestLimit,
+    SchemaUnsupported,
+    PlanningVersionUnsupported,
+    ProducerRevisionInvalid,
+    ArtifactMissing { name: &'static str },
+    ArtifactFileDuplicate,
+    OracleProvenanceMissing { name: &'static str },
+    OracleInputIdentityMismatch,
+    TargetUnsupported,
+    PrefixUnsupported,
+    PolicyUnsupported,
+    MandatorySchemaUnsupported,
+    AdmissionLimitsUnsupported,
+    EntryLimit,
+    RequiredInputMissing,
+    TextLimit,
+    NestingLimit,
+    ToolMissing { role: &'static str },
+    ProducerOutputMissing { name: &'static str },
+    UnitCycle,
+    RootsMissing,
+    RootMissing,
+    DependencyLimit,
+    DependencyMissing,
+    PackageSourceMissing,
+    AuxiliaryUnitInvalid,
+    NativeSchemaUnsupported,
+    NativePackageMissing,
+    NativeResolutionMismatch,
+    PayloadUndeclared { path: String },
+    StorePathInvalid,
+    ArtifactPathInvalid,
+    DigestInvalid,
+    NativeResolution(mantle_rust_plan_core::NativeInputError),
+    Serialization(serde_json::Error),
+}
+
+impl core::fmt::Display for BundleError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::CompatibilityMismatch => formatter.write_str("cargo-bundle-compatibility-mismatch"),
+            Self::NoncanonicalOrTampered => formatter.write_str("cargo-bundle-noncanonical-or-tampered"),
+            Self::ManifestLimit => formatter.write_str("cargo-bundle-manifest-limit"),
+            Self::SchemaUnsupported => formatter.write_str("cargo-bundle-schema-unsupported"),
+            Self::PlanningVersionUnsupported => formatter.write_str("cargo-bundle-planning-version-unsupported"),
+            Self::ProducerRevisionInvalid => formatter.write_str("cargo-bundle-producer-revision-invalid"),
+            Self::ArtifactMissing { name } => write!(formatter, "cargo-bundle-artifact-missing:{name}"),
+            Self::ArtifactFileDuplicate => formatter.write_str("cargo-bundle-artifact-file-duplicate"),
+            Self::OracleProvenanceMissing { name } => {
+                write!(formatter, "cargo-bundle-oracle-provenance-missing:{name}")
+            }
+            Self::OracleInputIdentityMismatch => formatter.write_str("cargo-bundle-oracle-input-identity-mismatch"),
+            Self::TargetUnsupported => formatter.write_str("cargo-bundle-target-unsupported"),
+            Self::PrefixUnsupported => formatter.write_str("cargo-bundle-prefix-unsupported"),
+            Self::PolicyUnsupported => formatter.write_str("cargo-bundle-policy-unsupported"),
+            Self::MandatorySchemaUnsupported => formatter.write_str("cargo-bundle-mandatory-schema-unsupported"),
+            Self::AdmissionLimitsUnsupported => formatter.write_str("cargo-bundle-admission-limits-unsupported"),
+            Self::EntryLimit => formatter.write_str("cargo-bundle-entry-limit"),
+            Self::RequiredInputMissing => formatter.write_str("cargo-bundle-required-input-missing"),
+            Self::TextLimit => formatter.write_str("cargo-bundle-text-limit"),
+            Self::NestingLimit => formatter.write_str("cargo-bundle-nesting-limit"),
+            Self::ToolMissing { role } => write!(formatter, "cargo-bundle-tool-missing:{role}"),
+            Self::ProducerOutputMissing { name } => write!(formatter, "cargo-bundle-producer-output-missing:{name}"),
+            Self::UnitCycle => formatter.write_str("cargo-bundle-unit-cycle"),
+            Self::RootsMissing => formatter.write_str("cargo-bundle-roots-missing"),
+            Self::RootMissing => formatter.write_str("cargo-bundle-root-missing"),
+            Self::DependencyLimit => formatter.write_str("cargo-bundle-dependency-limit"),
+            Self::DependencyMissing => formatter.write_str("cargo-bundle-dependency-missing"),
+            Self::PackageSourceMissing => formatter.write_str("cargo-bundle-package-source-missing"),
+            Self::AuxiliaryUnitInvalid => formatter.write_str("cargo-bundle-auxiliary-unit-invalid"),
+            Self::NativeSchemaUnsupported => formatter.write_str("cargo-bundle-native-schema-unsupported"),
+            Self::NativePackageMissing => formatter.write_str("cargo-bundle-native-package-missing"),
+            Self::NativeResolutionMismatch => formatter.write_str("cargo-bundle-native-resolution-mismatch"),
+            Self::PayloadUndeclared { path } => write!(formatter, "cargo-bundle-payload-undeclared:{path}"),
+            Self::StorePathInvalid => formatter.write_str("cargo-bundle-store-path-invalid"),
+            Self::ArtifactPathInvalid => formatter.write_str("cargo-bundle-artifact-path-invalid"),
+            Self::DigestInvalid => formatter.write_str("cargo-bundle-digest-invalid"),
+            Self::NativeResolution(error) => core::fmt::Display::fmt(error, formatter),
+            Self::Serialization(error) => core::fmt::Display::fmt(error, formatter),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -123,7 +210,7 @@ pub fn digest(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 
-pub fn canonicalize(mut manifest: Manifest) -> Result<Manifest, String> {
+pub fn canonicalize(mut manifest: Manifest) -> Result<Manifest, BundleError> {
     manifest.selected_features.sort();
     manifest.selected_features.dedup();
     manifest.required_store_paths.sort();
@@ -142,27 +229,27 @@ pub fn canonicalize(mut manifest: Manifest) -> Result<Manifest, String> {
     Ok(manifest)
 }
 
-pub fn verify(manifest: &Manifest, expected: &Compatibility) -> Result<(), String> {
+pub fn verify(manifest: &Manifest, expected: &Compatibility) -> Result<(), BundleError> {
     validate_shape(manifest)?;
     if &manifest.compatibility != expected {
-        return Err("cargo-bundle-compatibility-mismatch".to_string());
+        return Err(BundleError::CompatibilityMismatch);
     }
     let canonical = canonicalize(manifest.clone())?;
     if &canonical != manifest {
-        return Err("cargo-bundle-noncanonical-or-tampered".to_string());
+        return Err(BundleError::NoncanonicalOrTampered);
     }
     Ok(())
 }
 
-pub fn encode(manifest: &Manifest) -> Result<Vec<u8>, String> {
-    let bytes = serde_json::to_vec(manifest).map_err(|error| error.to_string())?;
+pub fn encode(manifest: &Manifest) -> Result<Vec<u8>, BundleError> {
+    let bytes = serde_json::to_vec(manifest).map_err(BundleError::Serialization)?;
     if bytes.len() > MAX_MANIFEST_BYTES {
-        return Err("cargo-bundle-manifest-limit".to_string());
+        return Err(BundleError::ManifestLimit);
     }
     Ok(bytes)
 }
 
-fn validate_shape(m: &Manifest) -> Result<(), String> {
+fn validate_shape(m: &Manifest) -> Result<(), BundleError> {
     validate_manifest_schema(m)?;
     validate_compatibility(&m.compatibility)?;
     validate_planning_versions(m)?;
@@ -182,9 +269,9 @@ fn validate_shape(m: &Manifest) -> Result<(), String> {
 }
 
 /// The manifest declares exactly the supported schema, version and non-claim.
-fn validate_manifest_schema(m: &Manifest) -> Result<(), String> {
+fn validate_manifest_schema(m: &Manifest) -> Result<(), BundleError> {
     if m.schema != SCHEMA || m.version != 1 || m.non_claim != NON_CLAIM {
-        return Err("cargo-bundle-schema-unsupported".to_string());
+        return Err(BundleError::SchemaUnsupported);
     }
     debug_assert_eq!(m.schema, SCHEMA);
     debug_assert_eq!(m.version, 1);
@@ -192,10 +279,10 @@ fn validate_manifest_schema(m: &Manifest) -> Result<(), String> {
 }
 
 /// The planner must have produced the supported graph and receipt versions.
-fn validate_planning_versions(m: &Manifest) -> Result<(), String> {
+fn validate_planning_versions(m: &Manifest) -> Result<(), BundleError> {
     let provenance = &m.provenance;
     if provenance.cargo_unit_graph_version != 1 || provenance.planner_receipt_schema_version != 1 {
-        return Err("cargo-bundle-planning-version-unsupported".to_string());
+        return Err(BundleError::PlanningVersionUnsupported);
     }
     debug_assert_eq!(provenance.cargo_unit_graph_version, 1);
     debug_assert_eq!(provenance.planner_receipt_schema_version, 1);
@@ -203,16 +290,16 @@ fn validate_planning_versions(m: &Manifest) -> Result<(), String> {
 }
 
 /// The producer revision must be a full hexadecimal commit identity.
-fn validate_producer_revision(m: &Manifest) -> Result<(), String> {
+fn validate_producer_revision(m: &Manifest) -> Result<(), BundleError> {
     if !is_hex(&m.provenance.producer_revision, 40) {
-        return Err("cargo-bundle-producer-revision-invalid".to_string());
+        return Err(BundleError::ProducerRevisionInvalid);
     }
     debug_assert!(is_hex(&m.provenance.producer_revision, 40));
     Ok(())
 }
 
 /// The four manifest-level digests must be well formed.
-fn validate_manifest_digests(m: &Manifest) -> Result<(), String> {
+fn validate_manifest_digests(m: &Manifest) -> Result<(), BundleError> {
     for value in [
         &m.source_manifest_blake3,
         &m.receipt_bundle_blake3,
@@ -227,10 +314,10 @@ fn validate_manifest_digests(m: &Manifest) -> Result<(), String> {
 }
 
 /// Every role artifact must be present in the manifest.
-fn validate_required_artifacts(m: &Manifest) -> Result<(), String> {
+fn validate_required_artifacts(m: &Manifest) -> Result<(), BundleError> {
     for name in ["source", "receipts", "plan", "goals", "store", "lock", "config"] {
         if !m.artifacts.contains_key(name) {
-            return Err(format!("cargo-bundle-artifact-missing:{name}"));
+            return Err(BundleError::ArtifactMissing { name });
         }
     }
     debug_assert!(m.artifacts.contains_key("source"));
@@ -239,12 +326,12 @@ fn validate_required_artifacts(m: &Manifest) -> Result<(), String> {
 }
 
 /// Artifact transport names are unique across artifacts and provenance evidence.
-fn validate_artifact_files(m: &Manifest) -> Result<(), String> {
+fn validate_artifact_files(m: &Manifest) -> Result<(), BundleError> {
     let mut files = BTreeSet::new();
     for artifact in m.artifacts.values().chain(m.provenance.evidence.values()) {
         validate_artifact(artifact)?;
         if !files.insert(&artifact.file) {
-            return Err("cargo-bundle-artifact-file-duplicate".to_string());
+            return Err(BundleError::ArtifactFileDuplicate);
         }
     }
     debug_assert!(!files.is_empty());
@@ -253,7 +340,7 @@ fn validate_artifact_files(m: &Manifest) -> Result<(), String> {
 }
 
 /// Each oracle input must name the exact evidence artifact it was derived from.
-fn validate_oracle_evidence(m: &Manifest) -> Result<(), String> {
+fn validate_oracle_evidence(m: &Manifest) -> Result<(), BundleError> {
     for name in [
         "cargo-metadata",
         "cargo-unit-graph",
@@ -261,13 +348,9 @@ fn validate_oracle_evidence(m: &Manifest) -> Result<(), String> {
         "cargo-unit-plan-evidence",
         "cargo-unit-bindings",
     ] {
-        let artifact = m
-            .provenance
-            .evidence
-            .get(name)
-            .ok_or_else(|| format!("cargo-bundle-oracle-provenance-missing:{name}"))?;
+        let artifact = m.provenance.evidence.get(name).ok_or(BundleError::OracleProvenanceMissing { name })?;
         if m.provenance.oracle_inputs.get(name) != Some(&artifact.blake3) {
-            return Err("cargo-bundle-oracle-input-identity-mismatch".to_string());
+            return Err(BundleError::OracleInputIdentityMismatch);
         }
     }
     debug_assert!(m.provenance.evidence.contains_key("cargo-unit-graph"));
@@ -276,7 +359,7 @@ fn validate_oracle_evidence(m: &Manifest) -> Result<(), String> {
 }
 
 /// Every recorded oracle input identity must be a well-formed digest.
-fn validate_oracle_digests(m: &Manifest) -> Result<(), String> {
+fn validate_oracle_digests(m: &Manifest) -> Result<(), BundleError> {
     for value in m.provenance.oracle_inputs.values() {
         require_digest(value)?;
     }
@@ -284,7 +367,7 @@ fn validate_oracle_digests(m: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_compatibility(c: &Compatibility) -> Result<(), String> {
+fn validate_compatibility(c: &Compatibility) -> Result<(), BundleError> {
     validate_target_identity(c)?;
     validate_store_prefix(c)?;
     validate_sandbox_policy(c)?;
@@ -295,74 +378,74 @@ fn validate_compatibility(c: &Compatibility) -> Result<(), String> {
 }
 
 /// The bundle only describes the admitted native x86_64 target.
-fn validate_target_identity(c: &Compatibility) -> Result<(), String> {
+fn validate_target_identity(c: &Compatibility) -> Result<(), BundleError> {
     let is_admitted_system = c.system == "x86_64-linux";
     let is_admitted_host_triple = c.host_triple == "x86_64-unknown-linux-gnu";
     let is_matching_target_triple = c.target_triple == c.host_triple;
     if !is_admitted_system || !is_admitted_host_triple || !is_matching_target_triple {
-        return Err("cargo-bundle-target-unsupported".to_string());
+        return Err(BundleError::TargetUnsupported);
     }
     debug_assert_eq!(c.target_triple, c.host_triple);
     Ok(())
 }
 
 /// The store prefix must be one of the two admitted roots.
-fn validate_store_prefix(c: &Compatibility) -> Result<(), String> {
+fn validate_store_prefix(c: &Compatibility) -> Result<(), BundleError> {
     if c.store_prefix != "/nix/store" && c.store_prefix != "/mantle/store" {
-        return Err("cargo-bundle-prefix-unsupported".to_string());
+        return Err(BundleError::PrefixUnsupported);
     }
     debug_assert!(c.store_prefix == "/nix/store" || c.store_prefix == "/mantle/store");
     Ok(())
 }
 
 /// The admitted policy is a native sandbox with no network.
-fn validate_sandbox_policy(c: &Compatibility) -> Result<(), String> {
+fn validate_sandbox_policy(c: &Compatibility) -> Result<(), BundleError> {
     if c.sandbox != "native" || c.network != "denied" {
-        return Err("cargo-bundle-policy-unsupported".to_string());
+        return Err(BundleError::PolicyUnsupported);
     }
     debug_assert_eq!(c.network, "denied");
     Ok(())
 }
 
 /// The mandatory plan, source and receipt schemas are fixed.
-fn validate_mandatory_schemas(c: &Compatibility) -> Result<(), String> {
+fn validate_mandatory_schemas(c: &Compatibility) -> Result<(), BundleError> {
     if c.plan_schema != "mantle-plan-v2"
         || c.source_schema != "mantle-source-bundle-v1"
         || c.receipt_schema != "mantle-build-receipt-bundle-v1"
     {
-        return Err("cargo-bundle-mandatory-schema-unsupported".to_string());
+        return Err(BundleError::MandatorySchemaUnsupported);
     }
     debug_assert_eq!(c.plan_schema, "mantle-plan-v2");
     Ok(())
 }
 
 /// The admission limits are fixed by the build contract.
-fn validate_admission_limits(c: &Compatibility) -> Result<(), String> {
+fn validate_admission_limits(c: &Compatibility) -> Result<(), BundleError> {
     let is_admitted_plan_budget = c.max_plan_bytes == 4_194_304;
     let is_admitted_unit_budget = c.max_units == 4096;
     if !is_admitted_plan_budget || !is_admitted_unit_budget {
-        return Err("cargo-bundle-admission-limits-unsupported".to_string());
+        return Err(BundleError::AdmissionLimitsUnsupported);
     }
     let is_admitted_source_budget = c.max_sources == 256;
     let is_admitted_direct_input_budget = c.max_direct_inputs == 256;
     if !is_admitted_source_budget || !is_admitted_direct_input_budget {
-        return Err("cargo-bundle-admission-limits-unsupported".to_string());
+        return Err(BundleError::AdmissionLimitsUnsupported);
     }
     debug_assert_eq!(c.max_plan_bytes, 4_194_304);
     debug_assert_eq!(c.max_units, 4096);
     Ok(())
 }
 
-fn validate_collections(m: &Manifest) -> Result<(), String> {
+fn validate_collections(m: &Manifest) -> Result<(), BundleError> {
     validate_collection_sizes(m)?;
     validate_required_inputs(m)?;
     // This bounds every string, including nested declarations, before downstream effects.
-    let value = serde_json::to_value(m).map_err(|error| error.to_string())?;
+    let value = serde_json::to_value(m).map_err(BundleError::Serialization)?;
     validate_value(&value, 0)
 }
 
 /// Every manifest collection is bounded by the entry limit.
-fn validate_collection_sizes(m: &Manifest) -> Result<(), String> {
+fn validate_collection_sizes(m: &Manifest) -> Result<(), BundleError> {
     for count in [
         m.tools.len(),
         m.required_store_paths.len(),
@@ -378,7 +461,7 @@ fn validate_collection_sizes(m: &Manifest) -> Result<(), String> {
         m.selected_features.len(),
     ] {
         if count > MAX_ENTRIES {
-            return Err("cargo-bundle-entry-limit".to_string());
+            return Err(BundleError::EntryLimit);
         }
     }
     debug_assert!(m.units.len() <= MAX_ENTRIES);
@@ -387,14 +470,14 @@ fn validate_collection_sizes(m: &Manifest) -> Result<(), String> {
 }
 
 /// The profile, the unit set and the package source set must all be present.
-fn validate_required_inputs(m: &Manifest) -> Result<(), String> {
+fn validate_required_inputs(m: &Manifest) -> Result<(), BundleError> {
     let is_profile_present = !m.profile.is_empty();
     let is_profile_admissible = m.profile.len() <= MAX_TEXT_BYTES;
     if !is_profile_present || !is_profile_admissible {
-        return Err("cargo-bundle-required-input-missing".to_string());
+        return Err(BundleError::RequiredInputMissing);
     }
     if m.units.is_empty() || m.package_sources.is_empty() {
-        return Err("cargo-bundle-required-input-missing".to_string());
+        return Err(BundleError::RequiredInputMissing);
     }
     debug_assert!(!m.profile.is_empty());
     debug_assert!(!m.units.is_empty());
@@ -414,7 +497,7 @@ enum ValueStep<'a> {
 
 /// Walk the manifest value with an explicit stack, so nesting depth stays bounded
 /// and the walk never re-enters itself.
-fn validate_value(value: &serde_json::Value, depth: usize) -> Result<(), String> {
+fn validate_value(value: &serde_json::Value, depth: usize) -> Result<(), BundleError> {
     let mut pending = Vec::with_capacity(MAX_VALUE_DEPTH);
     pending.push(ValueStep::Value(value, depth));
     while let Some(step) = pending.pop() {
@@ -424,16 +507,16 @@ fn validate_value(value: &serde_json::Value, depth: usize) -> Result<(), String>
     Ok(())
 }
 
-fn apply_value_step<'a>(step: ValueStep<'a>, pending: &mut Vec<ValueStep<'a>>) -> Result<(), String> {
+fn apply_value_step<'a>(step: ValueStep<'a>, pending: &mut Vec<ValueStep<'a>>) -> Result<(), BundleError> {
     match step {
         ValueStep::Key(key) => {
             if key.len() > MAX_TEXT_BYTES {
-                return Err("cargo-bundle-text-limit".to_string());
+                return Err(BundleError::TextLimit);
             }
         }
         ValueStep::Value(current, current_depth) => {
             if current_depth > MAX_VALUE_DEPTH {
-                return Err("cargo-bundle-nesting-limit".to_string());
+                return Err(BundleError::NestingLimit);
             }
             push_value_steps(current, current_depth, pending)?;
         }
@@ -447,14 +530,14 @@ fn push_value_steps<'a>(
     value: &'a serde_json::Value,
     depth: usize,
     pending: &mut Vec<ValueStep<'a>>,
-) -> Result<(), String> {
+) -> Result<(), BundleError> {
     match value {
         serde_json::Value::String(text) if text.len() > MAX_TEXT_BYTES || text.contains('\0') => {
-            Err("cargo-bundle-text-limit".to_string())
+            Err(BundleError::TextLimit)
         }
         serde_json::Value::Array(items) => {
             if items.len() > MAX_ENTRIES {
-                return Err("cargo-bundle-entry-limit".to_string());
+                return Err(BundleError::EntryLimit);
             }
             let child_depth = depth.saturating_add(1);
             for item in items.iter().rev() {
@@ -466,7 +549,7 @@ fn push_value_steps<'a>(
         }
         serde_json::Value::Object(items) => {
             if items.len() > MAX_ENTRIES {
-                return Err("cargo-bundle-entry-limit".to_string());
+                return Err(BundleError::EntryLimit);
             }
             let child_depth = depth.saturating_add(1);
             for (key, item) in items.iter().rev() {
@@ -481,17 +564,16 @@ fn push_value_steps<'a>(
     }
 }
 
-fn validate_tools(m: &Manifest) -> Result<(), String> {
+fn validate_tools(m: &Manifest) -> Result<(), BundleError> {
     for role in ["rustc", "cargo", "toolchain", "producer", "planner", "helper", "linker"] {
-        let path = m.tools.get(role).ok_or_else(|| format!("cargo-bundle-tool-missing:{role}"))?;
+        let path = m.tools.get(role).ok_or(BundleError::ToolMissing { role })?;
         require_covered(path, m)?;
     }
     for path in &m.required_store_paths {
         store_root(path, &m.compatibility.store_prefix)?;
     }
     for name in ["out", "plan", "sources"] {
-        let path =
-            m.producer_outputs.get(name).ok_or_else(|| format!("cargo-bundle-producer-output-missing:{name}"))?;
+        let path = m.producer_outputs.get(name).ok_or(BundleError::ProducerOutputMissing { name })?;
         require_covered(path, m)?;
     }
     if let Some(vendor) = &m.vendor_store_path {
@@ -508,12 +590,12 @@ struct UnitGraph {
     indegree: Vec<usize>,
 }
 
-fn validate_graph(m: &Manifest) -> Result<(), String> {
+fn validate_graph(m: &Manifest) -> Result<(), BundleError> {
     validate_graph_roots(m)?;
     let mut graph = build_unit_graph(m)?;
     let admitted = admit_graph_units(&graph.dependents, &mut graph.indegree);
     if admitted != m.units.len() {
-        return Err("cargo-bundle-unit-cycle".to_string());
+        return Err(BundleError::UnitCycle);
     }
     debug_assert!(admitted <= m.units.len());
     debug_assert_eq!(graph.dependents.len(), m.units.len());
@@ -521,13 +603,13 @@ fn validate_graph(m: &Manifest) -> Result<(), String> {
 }
 
 /// Every declared root must name a unit of the graph.
-fn validate_graph_roots(m: &Manifest) -> Result<(), String> {
+fn validate_graph_roots(m: &Manifest) -> Result<(), BundleError> {
     if m.roots.is_empty() {
-        return Err("cargo-bundle-roots-missing".to_string());
+        return Err(BundleError::RootsMissing);
     }
     for root in &m.roots {
         if !m.units.contains_key(root) {
-            return Err("cargo-bundle-root-missing".to_string());
+            return Err(BundleError::RootMissing);
         }
     }
     debug_assert!(!m.roots.is_empty());
@@ -536,7 +618,7 @@ fn validate_graph_roots(m: &Manifest) -> Result<(), String> {
 }
 
 /// Build the unit adjacency, rejecting unknown dependencies and over-wide edges.
-fn build_unit_graph(m: &Manifest) -> Result<UnitGraph, String> {
+fn build_unit_graph(m: &Manifest) -> Result<UnitGraph, BundleError> {
     let ids: Vec<&str> = m.units.keys().map(|id| id.as_str()).collect();
     let index_of: BTreeMap<&str, usize> = ids.iter().enumerate().map(|(index, id)| (*id, index)).collect();
     let mut dependents: Vec<Vec<usize>> = vec![Vec::new(); ids.len()];
@@ -544,12 +626,11 @@ fn build_unit_graph(m: &Manifest) -> Result<UnitGraph, String> {
     for (index, unit) in m.units.values().enumerate() {
         validate_unit_identity(m, unit)?;
         if unit.dependencies.len() > 256 {
-            return Err("cargo-bundle-dependency-limit".to_string());
+            return Err(BundleError::DependencyLimit);
         }
         indegree[index] = unit.dependencies.len();
         for dependency in &unit.dependencies {
-            let dependency_index =
-                *index_of.get(dependency.as_str()).ok_or_else(|| "cargo-bundle-dependency-missing".to_string())?;
+            let dependency_index = *index_of.get(dependency.as_str()).ok_or(BundleError::DependencyMissing)?;
             dependents[dependency_index].push(index);
         }
     }
@@ -559,13 +640,13 @@ fn build_unit_graph(m: &Manifest) -> Result<UnitGraph, String> {
 }
 
 /// A unit either names an admitted package source or carries no facts at all.
-fn validate_unit_identity(m: &Manifest, unit: &Unit) -> Result<(), String> {
+fn validate_unit_identity(m: &Manifest, unit: &Unit) -> Result<(), BundleError> {
     if let Some(package) = &unit.package_id {
         if !m.package_sources.contains_key(package) {
-            return Err("cargo-bundle-package-source-missing".to_string());
+            return Err(BundleError::PackageSourceMissing);
         }
     } else if !unit.features.is_empty() || !unit.dependencies.is_empty() {
-        return Err("cargo-bundle-auxiliary-unit-invalid".to_string());
+        return Err(BundleError::AuxiliaryUnitInvalid);
     }
     debug_assert!(unit.package_id.is_some() || unit.dependencies.is_empty());
     Ok(())
@@ -597,17 +678,17 @@ fn admit_graph_consumer(index: usize, dependents: &[Vec<usize>], indegree: &mut 
     }
 }
 
-fn validate_native(m: &Manifest) -> Result<(), String> {
+fn validate_native(m: &Manifest) -> Result<(), BundleError> {
     for (package, native) in &m.native_inputs {
         if native.schema_version != 1 {
-            return Err("cargo-bundle-native-schema-unsupported".to_string());
+            return Err(BundleError::NativeSchemaUnsupported);
         }
         if !m.package_sources.contains_key(package) {
-            return Err("cargo-bundle-native-package-missing".to_string());
+            return Err(BundleError::NativePackageMissing);
         }
-        let resolved = resolve_native_inputs(&native.declaration).map_err(|error| error.to_string())?;
+        let resolved = resolve_native_inputs(&native.declaration).map_err(BundleError::NativeResolution)?;
         if resolved != native.resolved {
-            return Err("cargo-bundle-native-resolution-mismatch".to_string());
+            return Err(BundleError::NativeResolutionMismatch);
         }
         for path in &resolved.inputs {
             require_covered(path, m)?;
@@ -616,34 +697,34 @@ fn validate_native(m: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
-fn require_covered(path: &str, m: &Manifest) -> Result<(), String> {
+fn require_covered(path: &str, m: &Manifest) -> Result<(), BundleError> {
     let root = store_root(path, &m.compatibility.store_prefix)?;
     if !m.required_store_paths.iter().any(|candidate| candidate == root) {
-        return Err(format!("cargo-bundle-payload-undeclared:{path}"));
+        return Err(BundleError::PayloadUndeclared { path: path.to_string() });
     }
     Ok(())
 }
 
-pub fn store_root<'a>(path: &'a str, prefix: &str) -> Result<&'a str, String> {
+pub fn store_root<'a>(path: &'a str, prefix: &str) -> Result<&'a str, BundleError> {
     let tail = path
         .strip_prefix(prefix)
         .and_then(|tail| tail.strip_prefix('/'))
-        .ok_or_else(|| "cargo-bundle-store-path-invalid".to_string())?;
+        .ok_or(BundleError::StorePathInvalid)?;
     let root = tail.split('/').next().unwrap_or("");
-    let (hash, name) = root.split_once('-').ok_or_else(|| "cargo-bundle-store-path-invalid".to_string())?;
+    let (hash, name) = root.split_once('-').ok_or(BundleError::StorePathInvalid)?;
     let is_hash_valid =
         hash.len() == 32 && hash.bytes().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte));
     let is_name_present = !name.is_empty();
     let has_traversal_part = path.split('/').any(|part| part == "." || part == "..");
     let is_valid_root = is_hash_valid && is_name_present && !has_traversal_part;
     if !is_valid_root {
-        return Err("cargo-bundle-store-path-invalid".to_string());
+        return Err(BundleError::StorePathInvalid);
     }
     let root_end = prefix.len().saturating_add(1).saturating_add(root.len());
     debug_assert!(root_end <= path.len());
     Ok(&path[..root_end])
 }
-fn validate_artifact(a: &Artifact) -> Result<(), String> {
+fn validate_artifact(a: &Artifact) -> Result<(), BundleError> {
     let is_name_present = !a.file.is_empty();
     let is_relative_name = !a.file.starts_with('/');
     let is_plain_name = !a.file.contains('\\');
@@ -651,13 +732,13 @@ fn validate_artifact(a: &Artifact) -> Result<(), String> {
     let is_well_formed_name = is_name_present && is_relative_name && is_plain_name;
     let is_empty_payload = a.bytes == 0;
     if !is_well_formed_name || has_bad_segment || is_empty_payload {
-        return Err("cargo-bundle-artifact-path-invalid".to_string());
+        return Err(BundleError::ArtifactPathInvalid);
     }
     require_digest(&a.blake3)
 }
-fn require_digest(value: &str) -> Result<(), String> {
+fn require_digest(value: &str) -> Result<(), BundleError> {
     if !is_hex(value, 64) {
-        return Err("cargo-bundle-digest-invalid".to_string());
+        return Err(BundleError::DigestInvalid);
     }
     Ok(())
 }

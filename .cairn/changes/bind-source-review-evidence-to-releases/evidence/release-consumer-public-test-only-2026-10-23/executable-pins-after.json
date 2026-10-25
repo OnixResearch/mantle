@@ -1,0 +1,34 @@
+{
+  "mantle": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+    "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+  },
+  "wrapper": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+    "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+  },
+  "producer": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+    "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+  },
+  "helper": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+    "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+  },
+  "replay": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+    "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+  },
+  "cairn": {
+    "path": "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+    "blake3": "8ba55fe02cdf478210a472fdc8232791b33773609b8a82803e0609b5eb4ca743"
+  },
+  "valence": {
+    "path": "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+    "blake3": "b5d95a18fabfb5a109543503829aa63c73e1e85f16e5cb556fc238628285917b"
+  },
+  "openssl": {
+    "path": "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+    "blake3": "ddb4505852b3d7a71ff6e12afda57419e969ea56a24d9824d9feefa5d4267fd1"
+  }
+}

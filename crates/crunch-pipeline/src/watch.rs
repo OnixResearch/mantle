@@ -329,6 +329,7 @@ struct WatchCoordinator<'a> {
     updates: mpsc::Sender<WatchWorkerUpdate>,
     attempts: VecDeque<Instant>,
     max_evaluations: usize,
+    rate_rejection_reported: bool,
     candidate: Option<SourceSnapshot>,
     committed_roots: Vec<EvalMessage>,
     pending_roots: Vec<EvalMessage>,
@@ -350,6 +351,12 @@ impl WatchCoordinator<'_> {
     async fn on_event(&mut self, event: WatchWorkerEvent) -> Result<(), Error> {
         match event {
             WatchWorkerEvent::CandidateReady { generation, commit } => self.candidate_ready(generation, commit).await,
+            WatchWorkerEvent::Rejected { generation } => {
+                if self.pending == Some(generation) {
+                    self.restore_pending("watched scheduler capacity or input policy rejected generation").await?;
+                }
+                Ok(())
+            }
             WatchWorkerEvent::PendingCancellation { generation, stale } => self
                 .notices
                 .send(WatchNotice::PendingCancellation { generation, stale })
@@ -556,11 +563,17 @@ impl WatchCoordinator<'_> {
             self.attempts.pop_front();
         }
         if self.attempts.len() >= self.max_evaluations {
-            if self.pending.is_some() && !self.rollback_pending {
-                self.restore_pending("watched source evaluation rate limit reached").await?;
+            if !self.rate_rejection_reported {
+                if self.pending.is_some() && !self.rollback_pending {
+                    self.restore_pending("watched source evaluation rate limit reached").await?;
+                } else if self.pending.is_none() {
+                    reject(&mut self.watch_loop, self.notices, "watched source evaluation rate limit reached").await?;
+                }
+                self.rate_rejection_reported = true;
             }
             return Ok(());
         }
+        self.rate_rejection_reported = false;
         let evaluations = u32::try_from(self.attempts.len())
             .map_err(|_| Error::Internal("watch evaluation count exceeds platform limit".to_string()))?;
         crunch_watch_core::admit_evaluation(evaluations).map_err(watch_error)?;
@@ -702,6 +715,7 @@ async fn coordinate(
         updates,
         attempts: VecDeque::new(),
         max_evaluations,
+        rate_rejection_reported: false,
         candidate: None,
         committed_roots: Vec::new(),
         pending_roots: Vec::new(),
@@ -758,6 +772,9 @@ async fn watch_build_configured(
     notices: &mpsc::Sender<WatchNotice>,
     incremental: bool,
 ) -> Result<(), Error> {
+    if config.rust_wait_runtime.is_some() {
+        return Err(Error::Build("Rust wait diagnostics are unsupported for watch execution".into()));
+    }
     if config.remote_enabled {
         return Err(Error::WatchRemoteUnsupported);
     }
@@ -906,6 +923,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         }
     }

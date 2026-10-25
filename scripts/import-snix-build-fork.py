@@ -6,7 +6,7 @@ mechanism are unknown. The unmodified source is a pinned Mantle commit/tree;
 tracked patch files are applied in order, then the exact result is checked.
 Requires a full-history Mantle clone with the pinned commit available plus
 the repo dev shell's b3sum (BLAKE3 v1.8.7). Explicit sync accepts only the
-pinned unmodified source or the recorded watch-only postimage in an existing
+pinned unmodified source or either recorded watch/compile postimage in an existing
 full-history checkout; it stages and verifies the entire postimage before
 atomic file replaces.
 No fetch, network access, or repository writes are implicit.
@@ -25,10 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_REV = "da00f58425740adea559ef926c9dfa97b2cb8240"
 SOURCE_TREE = "a0979715301705e77c8567cb1bea054dc996000c"
 SOURCE_PREFIX = PurePosixPath("vendor/snix-build")
-PATCHES = ["patches/snix-build-watch-pidfd.patch", "patches/snix-build-compile-socket.patch"]
+PATCHES = ["patches/snix-build-watch-pidfd.patch", "patches/snix-build-compile-socket.patch", "patches/snix-build-rust-wait-socket.patch"]
 # BLAKE3 over sorted (relative path, mode, byte length, bytes) entries.
 WATCH_POSTIMAGE_BLAKE3 = "c6c6578b808adf15551e55f733f7702d3ec59899f22599f58e7a4a48a1a4a897"
-POSTIMAGE_BLAKE3 = "bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645"
+COMPILE_POSTIMAGE_BLAKE3 = "bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645"
+POSTIMAGE_BLAKE3 = "82c4b973eb0e0aca2b60edbf29d96704f8d6c580f3b5c851a05b886f038d4491"
 PATCHED_FILES = frozenset({
     "Cargo.toml",
     "src/buildservice/bwrap.rs",
@@ -156,11 +157,11 @@ def sync_existing_checkout(target, archive, pristine, previous, expected, digest
     if current == expected:
         print(f"local snix-build fork already synchronized tree={SOURCE_TREE} patched_blake3={digest}")
         return
-    if current != pristine and current != previous:
+    if current != pristine and current not in previous:
         differing = sorted(set(current) ^ set(pristine) | {
             path for path in current.keys() & pristine.keys() if current[path] != pristine[path]
         })
-        raise ValueError(f"sync target vendor preimage differs from both recorded sources: {differing[:16]}")
+        raise ValueError(f"sync target vendor preimage differs from recorded sources: {differing[:16]}")
 
     # Stage the complete postimage on the target filesystem and compare it
     # before replacing *any* of the five reviewed files. Never remove or
@@ -242,11 +243,14 @@ def main():
         reconstructed = Path(name)
         unpack_source(archive, reconstructed)
         pristine = contents(reconstructed)
-        apply_patches(reconstructed, PATCHES[:1])
-        previous = contents(reconstructed)
-        if manifest_digest(previous) != WATCH_POSTIMAGE_BLAKE3:
-            raise ValueError("watch-only fork predecessor no longer matches recorded postimage")
-        apply_patches(reconstructed, PATCHES[1:])
+        previous = []
+        for patch, predecessor_digest in zip(PATCHES[:2], (WATCH_POSTIMAGE_BLAKE3, COMPILE_POSTIMAGE_BLAKE3)):
+            apply_patches(reconstructed, [patch])
+            predecessor = contents(reconstructed)
+            if manifest_digest(predecessor) != predecessor_digest:
+                raise ValueError("local fork predecessor no longer matches recorded postimage")
+            previous.append(predecessor)
+        apply_patches(reconstructed, PATCHES[2:])
         expected = contents(reconstructed)
         digest = manifest_digest(expected)
         if POSTIMAGE_BLAKE3 and digest != POSTIMAGE_BLAKE3:

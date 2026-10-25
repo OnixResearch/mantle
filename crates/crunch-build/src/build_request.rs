@@ -441,7 +441,7 @@ pub(crate) fn build_request_from_environment(
     let gates = if let Some(declared) = derivation.environment.get(finish_gates::POLICY_ENV) {
         let declared = std::str::from_utf8(declared.as_ref())
             .map_err(|_| crate::Error::Store("finish-gate declaration must be UTF-8".into()))?;
-        Some(finish_gates::parse_gate(declared).map_err(crate::Error::Store)?)
+        Some(finish_gates::parse_gate(declared).map_err(|denial| crate::Error::Store(denial.to_string()))?)
     } else {
         None
     };
@@ -452,7 +452,8 @@ pub(crate) fn build_request_from_environment(
         if command_args.len() != 3 || !shell_builder || command_args[1] != "-c" {
             return Err(crate::Error::Store("finish gates require a declared shell -c builder".into()));
         }
-        let shell = finish_gates::render_finish_shell(gates).map_err(crate::Error::Store)?;
+        let shell =
+            finish_gates::render_finish_shell(gates).map_err(|denial| crate::Error::Store(denial.to_string()))?;
         // Shell source is a positional argument, never text interpolated into
         // the gate wrapper. `exit`, `exec`, `)`, and heredocs stay in the
         // builder child and cannot change the post-install control flow.

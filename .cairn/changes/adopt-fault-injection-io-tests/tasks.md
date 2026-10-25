@@ -19,3 +19,25 @@
 - [ ] [parallel] Add negative fixtures at each wrapped site asserting the existing store/export error or cache-publication diagnostic, while preserving CA-required fail-closed publication. r[mantle.io_fault.verification]
 - [ ] [parallel] Add boundary fixtures asserting the crate/file/line annotation, default counter restoration, and fixture-serialized counter ownership. r[mantle.io_fault.verification]
 - [ ] [serial] Run package, workspace, Clippy, Cairn, and Nix checks; append the komora-io reference under `## References` in `README.md`; document non-claims. r[mantle.io_fault.verification]
+
+## Current implementation and remaining evidence
+
+The named store read, NAR stream copy, and action-result write/pre-link fsync wrappers already exist under `cfg(test)` in `crunch-store`; production expressions are unchanged. The fixture completion adds a thread-bound serialized guard, restoration assertions under the owner mutex, unarmed-thread isolation and unwind cases, the record/index failure-and-retry matrix, and complete NAR size/hash comparison using `crunch-nar`. `crunch-build` additionally covers ordinary diagnostic-only publication and fail-closed floating CA / CA-resolved IA intermediate publication with a real filesystem obstruction; the dependent must not execute. These statements describe source, not accepted runtime results, so the evidence-dependent boxes above remain open.
+
+Original fixture-worker handoff commands (not executed by that worker):
+
+```sh
+cargo test --locked --offline -p crunch-store --lib io_fault_ -- --test-threads=4 --nocapture
+cargo test --locked --offline -p crunch-build --lib io_fault_publication_is_diagnostic_only_for_ordinary_builds -- --nocapture
+cargo test --locked --offline -p mantle --test smoke smoke_build_cached_on_second_run -- --exact --nocapture
+```
+
+The last scenario requires `/nix/store` and a working bwrap sandbox; its skip message is not build/cache-cycle evidence. Package/workspace, Clippy, Cairn, Nix, dev-edge dependency classification, and current-source lifecycle receipts remain the integration owner's gates. The existing source-only receipt is historical, not evidence for these new fixtures. No archive/sync or accepted-spec change is authorized by this source completion.
+
+## Completed bounded runtime observation (2026-10-23)
+
+`evidence/parallel-fault-and-finish-runtime-2026-10-23.json` retains the completed driver, exact child commands/environment overrides, result, executable pins, raw streams and BLAKE3. The release `crunch-store --lib io_fault_` command with four test threads completed **6 passed, 0 failed, 0 ignored**: default-counter store/NAR/cache, classified read/export faults, all four record/index write/fsync failure-and-retry phases, thread-owned isolation/serialization and caught-unwind restoration. The expected caught panic and independent kache disk-I/O warnings remain in raw stderr.
+
+Real bwrap admission exited 0; release `smoke_build_cached_on_second_run` completed **1 passed, 0 failed, 0 ignored**, with no skip in either stream. Thus the reachable actual build/cache cycle is exercised, not still wholly unrun. Cargo compiled separate fixture/smoke executables; this driver did not BLAKE3-pin those test executables. Its immutable wait-request-repaired CLI pins bind the separately retained finish CLI observations, not a new exact-exec or final integrated cohort.
+
+The store wrapped-site matrix is now observed for the recorded subject. Completed source-bound `crunch-build` ordinary/floating-CA/CA-resolved intermediate publication evidence, every-CI SLEEPINESS/dev-edge classification and final integration gates remain local actions. This worker launches no checks; Main owns integration, and store/action-result maintainers own interpretation/repeatability. No external blocker is asserted for executable local actions. The tracked receipt maps original criteria precisely; no checkbox, lifecycle acceptance, hermeticity/store-correctness or release claim changes.

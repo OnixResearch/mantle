@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `12e74923e80c41b28cede8a16c566e129a9ebce7b1fa3bbffe2a908b876fb7c7`
+Catalog BLAKE3: `6c07f186fba58536ecc8554e894ad05a046cda74220f96cbf1b70e49933cfcb0`
 
 ## Daily commands
 
@@ -330,6 +330,15 @@ Materialize or import a source-built Rust provider after validation
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
+### `mantle bootstrap trust-report`
+
+Verify a copied fixed-point evidence bundle without executing a proof
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-source-built-fixed-point-trust-report-v1`
+
 ### `mantle bootstrap validate`
 
 Run build-profile preflight, build a bootstrap derivation, and save evidence
@@ -365,6 +374,51 @@ Poll all declared upstream releases and save a preimage-bound plan
 - Network: `required`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-bootstrap-pin-plan-v1`
+
+### `mantle cargo-build-bundle`
+
+Export, verify, or replay an immutable Cargo-planned build bundle
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle cargo-build-bundle export`
+
+Copy explicitly supplied existing transports into a canonical immutable directory
+
+- Mutation: `project-files`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-cargo-build-bundle-report-v1`
+
+### `mantle cargo-build-bundle inspect`
+
+Read bounded canonical metadata without importing, trusting, or executing it
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-cargo-build-bundle-v1`
+
+### `mantle cargo-build-bundle replay`
+
+Verify first, import the existing transports, then replay the frozen graph without planning
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-cargo-build-bundle-report-v1`
+
+### `mantle cargo-build-bundle verify`
+
+Verify all payloads, native admission and existing signed receipt chains without writes
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-cargo-build-bundle-report-v1`
 
 ### `mantle dependents`
 
@@ -816,6 +870,78 @@ Validate a Nix-free demo bundle machine summary JSON file
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
+### `mantle profile`
+
+Compose exact admitted packages into atomic, retained user generations
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle profile generations`
+
+Inspect retained and pending generations
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile install`
+
+Install an exact admitted package request, optionally replacing its named slot
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile list`
+
+Inspect the selected package manifest
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile remove`
+
+Remove a named slot, retaining earlier generations
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile remove-generation`
+
+Delete an inactive generation and release only its own retention pins
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile rollback`
+
+Select the preceding retained generation
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
+### `mantle profile switch`
+
+Select an existing generation after current output admission
+
+- Mutation: `project-and-store`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-user-profile-report-v1`
+
 ### `mantle receipt`
 
 Export, list, verify, and import portable receipt bundles
@@ -1136,6 +1262,114 @@ Execute the stored request as a new fenced attempt through ordinary admission
 Validate and render a side-effect-free replay plan
 
 - Mutation: `none`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway`
+
+Explicitly configured owner-private Nix and asynchronous build gateway
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway binding`
+
+Print the exact public tuple digest which a holder invocation must sign
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway call`
+
+Send one bounded credential envelope without printing its credentials
+
+- Mutation: `none`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-import-once`
+
+Serve one exactly authorized bounded signed NAR import, never a shell
+
+- Mutation: `store-state`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-once`
+
+Serve one Nix connection with one explicitly signed concrete build grant
+
+- Mutation: `store-state`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-store-read-binding`
+
+Print the public binding for one exact store path, opcode and generation
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-store-read-once`
+
+Serve one exact holder-authorized Nix store query on a private socket
+
+- Mutation: `none`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-upload-binding`
+
+Print the public operation digest for an exact NAR header and byte bound
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway provision-quota`
+
+Explicitly initialize an empty owner-private quota ledger, never keys
+
+- Mutation: `store-state`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway quota-fault-campaign`
+
+Run the real isolated quota journal fault fixture; not a VM campaign
+
+- Mutation: `store-state`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway read`
+
+Serve only verified Nix store reads on the existing private socket
+
+- Mutation: `none`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway serve`
+
+Serve bounded asynchronous requests on an explicit owner-private socket
+
+- Mutation: `store-state`
 - Network: `required`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -1598,6 +1832,15 @@ Verify NAR hash and trusted signatures of stored paths
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
+
+### `mantle test`
+
+Run a declared libtest target through strict signed build admission
+
+- Mutation: `store-state`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-test-report-v1`
 
 ### `mantle transcript`
 

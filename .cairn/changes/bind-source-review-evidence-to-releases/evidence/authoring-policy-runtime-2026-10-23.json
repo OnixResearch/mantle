@@ -1,0 +1,65 @@
+{
+  "schema": "mantle-source-review-authoring-acceptance-subset-v1",
+  "recorded_on": "2026-10-23",
+  "maintenance_owner": "Mantle release and source-review policy maintainers",
+  "classification": "typed-authoring-contract-and-fixture-execution",
+  "acceptance_claimed": false,
+  "accepted_implementation_criteria": ["I2", "I11"],
+  "scope": "Typed Nickel policy, closed runtime DTOs and documented authoring/producer/consumer workflow only. Not genuine reviewer authorization or end-to-end change acceptance.",
+  "nickel": {
+    "path": "/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin/nickel",
+    "version": "nickel-lang-cli nickel 1.17.0 (rev 1320a98)",
+    "blake3": "7f456b69a70cdcbdc32aa05edb8ed1f143493eba5b69e6417367180b2049e2cf"
+  },
+  "source_bindings": {
+    "config/source-review/contracts.ncl": "4803e5aa34d282641a64c3d3a54c6ef6d60086378ff8ecc96738a6c99a805a01",
+    "config/source-review/default.ncl": "0d48d1c76019713c2c6bf0ee15270fb55901b7ed667884e5ebab519cb93672e0"
+  },
+  "authoring_execution": {
+    "command": "nix develop target/cairn-finish-20261023/patched-dev-shell -c python3 target/cairn-finish-20261023/source-review-authoring.py",
+    "exit_code": 0,
+    "capture": "target/cairn-finish-20261023/source-review-authoring/result.json",
+    "capture_blake3": "d0948e12d9a22c8a49ef6e379d45b6c4aba0725836cc98d5c90937ddee24438d",
+    "all_13_consumed_source_bindings_unchanged": true,
+    "default_typecheck_exit_code": 0,
+    "default_export_exit_code": 0,
+    "admitted_exports": [
+      "valid-reviewed.ncl",
+      "valid-stagex.ncl",
+      "valid-64-reviewer-bound.ncl"
+    ],
+    "contract_denied_exports": [
+      "invalid-zero-threshold.ncl",
+      "invalid-mismatched-threshold.ncl",
+      "invalid-reviewer-role.ncl",
+      "invalid-currentness-context.ncl",
+      "invalid-stagex-author-exclusion.ncl",
+      "invalid-duplicate-full-key.ncl",
+      "invalid-65-reviewer-bound.ncl"
+    ],
+    "all_expected_denials_exit_code": 1,
+    "denials_checked_as_contract_failures_not_parser_import_or_tool_failures": true,
+    "repeatability": "From the pinned shell, run nickel typecheck config/source-review/default.ncl; export the default and each valid fixture with nickel export --format json; require each invalid fixture export to fail its contract. Preserve exact stdout/stderr separately."
+  },
+  "previous_captured_runtime_subset": {
+    "pueue_task": 56,
+    "command": "cargo test --locked --offline --release -p crunch-release-core --no-default-features --lib source_review::tests:: -- --nocapture --test-threads=1",
+    "exit_code": 0,
+    "stdout": "target/cairn-finish-20261023/production-repair-bin-regressions/no-std-source-review.stdout.log",
+    "stdout_blake3": "12a1045ae5e99b3d8294c70bcc54dc2c19d386fc0d8dbd43d37ee9d5fcb43430",
+    "test_result": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.02s",
+    "limit": "Selected completed core test leg only. The task56 aggregate failed in another leg; this is not aggregate success or a whole-source acceptance binding."
+  },
+  "documentation": "docs/cairn-release-evidence-handoff.md",
+  "still_required": [
+    "Final integrated release CLI, external-profile compatibility, machine-contract and repository gates",
+    "Operator-selected real source, policy, full reviewer keys and currentness/revocation facts",
+    "Genuine external reviewer signatures and independently issued Valence acceptance for the exact release cohort"
+  ],
+  "non_claims": [
+    "Fixture identities are synthetic and are never release policies or approvals.",
+    "Nickel validates supplied authoring facts; it does not authenticate signatures, discover trust, decide reviewer authority or replace runtime verification.",
+    "No source/build correctness, witness independence, release eligibility, whole-Cairn acceptance, archive, spec sync or publication claim.",
+    "Full local command captures remain at their named retained paths; this record preserves selected observations, source bindings and capture identity."
+  ]
+}

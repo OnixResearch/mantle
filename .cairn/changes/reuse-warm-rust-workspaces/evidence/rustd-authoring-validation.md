@@ -353,3 +353,15 @@ exit_code=0
 ```text
 (empty)
 ```
+
+## Current provider inspection (2026-10-23)
+
+The exact pinned rustd source and toolchain were reread, not inferred from an
+old receipt. `Request` supports only `sync`/`patch`, both socket sides use
+unbounded `read_line`, and the update path uses modification times. This does
+not supply versioned content-bound base/revision acknowledgment or stop/drain.
+No real provider bridge has been admitted and no retained-state execution ran.
+Exact source links, current compiler probes and host containment observations
+are retained in [the interface-readiness admission record](../../pipeline-rust-interface-readiness/evidence/authoring-validation.md#current-implementation-admission-inspection-2026-10-23).
+All warm-workspace implementation and acceptance tasks remain unchecked;
+neither ordinary cache reuse nor repeated serial compilation satisfies them.

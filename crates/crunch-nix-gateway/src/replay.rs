@@ -1,7 +1,8 @@
 //! Private durable replay storage for the pinned UCAN `DurableHolderReplayAdmission`.
 //!
 //! This is only a `ReplayLedgerPort`, not token, holder, revocation, or
-//! application-policy verification. No gateway request currently calls it.
+//! application-policy verification. The gateway verifier supplies its exact
+//! operation-bound context after those independent admission checks.
 
 use std::collections::BTreeMap;
 use std::fs::File;

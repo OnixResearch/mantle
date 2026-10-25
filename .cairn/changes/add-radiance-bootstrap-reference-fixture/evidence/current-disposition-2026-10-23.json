@@ -1,0 +1,61 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "add-radiance-bootstrap-reference-fixture",
+  "maintenance_owner": "External-reference fixture/source-transport and execution maintainers; Main integrates",
+  "scope": "Candidate source acquisition and additive evidence; no product, source-profile, toolchain or policy admission.",
+  "disposition": "Discovery and explicit tagged SHA-256 observation DTO support exist; no admitted three-repository source cohort, fixed toolchain, build graph or two-route receipt accepted.",
+  "supported_criteria": [
+    {
+      "criteria": [
+        "Phase 1 source-cohort discovery",
+        "Phase 2 recipe prerequisites"
+      ],
+      "level": "candidate-acquisition-only",
+      "support": "Native Git 2.55.0 acquired all three exact proposal revisions over HTTPS, verified SHA-256 commit/object format and strict object integrity, and measured raw archive bytes/BLAKE3 and MIT notices. Raw archives are not admitted Mantle source-profile identities or a production SHA-256 ingestion cutover."
+    },
+    {
+      "criteria": [
+        "Phases 1-5 all unchecked criteria"
+      ],
+      "level": "unaccepted",
+      "support": "No observed admitted snapshots/payload BLAKE3/licenses/profile, fixed seed/C99/emulator toolchain roots, protected lineage, route-local convergence, separate cross-route observation, publication or full optional proof."
+    }
+  ],
+  "local_remaining_actions": [
+    "Integrate an authenticated SHA-256-capable production source acquisition path; measured native-Git candidate preparation does not change the pinned gix SHA-1/local 40-hex product path.",
+    "Review the measured proposal-pinned candidate cohort and license facts in candidate-source-acquisition-2026-10-23.json, select exact projections/profile and canonical source-tree identities, and prepare one authenticated offline Mantle source bundle.",
+    "Select explicit Clang/lld/emulator closure and CPU/code-generation policy (upstream emulator uses -march=native -flto); do not invent GCC-compatible recipes or ambient command -v authority.",
+    "After authorities/dependency contracts accepted, implement and run bounded seed/C99 route graphs, immediate predecessor checks, route-local exact byte/BLAKE3/length comparisons and separate cross-route match/divergence observation; publication needs exact immutable artifact identities."
+  ],
+  "external_missing_authority_or_capability": [
+    "Independent source cohort/profile/payload/license review and fixed toolchain/seed/emulator authority are not yet admitted.",
+    "Stabilized accepted source-observation and fixed-point/predecessor/protected-execution dependencies."
+  ],
+  "evidence_references": [
+    ".cairn/changes/add-radiance-bootstrap-reference-fixture/tasks.md:3-71",
+    "src/source_observation.rs:55-85",
+    "evidence/candidate-source-acquisition-2026-10-23.json"
+  ],
+  "repeatability_recipe": [
+    "Use discovery-only immutable revision links in tasks.md:46-48 as acquisition candidates, not automatic approved pins.",
+    "Retain connected acquisition argv/exits and measured cohort; verify complete offline bundle before adding protected build authority.",
+    "Only after accepted dependency/cohort/toolchain inputs, run Phase 5 optional offline proof with no fetch/substitution/fallback and all original mutation/non-claim cases. No current executable fixture command is claimed."
+  ],
+  "observed_commands": [
+    {
+      "argv": ["python3", "target/cairn-finish-20261023/radiance-candidate-acquisition.py"],
+      "exit_code": 0,
+      "result": "acquired-unadmitted-candidates",
+      "script_blake3": "848bc5be0618831e20d29c4532c5e26d04b310e247079601d1977467844da33d",
+      "evidence": "evidence/candidate-source-acquisition-2026-10-23.json"
+    }
+  ],
+  "verification_performed_by_this_record": "Actual bounded HTTPS Git acquisition, exact SHA-256 commit/object checks, strict object integrity checks, archive BLAKE3/length and license observation. No build, compiler/emulator execution, proof, product source admission, formatter, linter, gate or policy approval.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

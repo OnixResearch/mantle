@@ -28,6 +28,15 @@ pub(crate) fn print_operator_json<T: serde::Serialize>(value: &T, label: &str) -
     write_report_to(&mut std::io::stdout().lock(), &rendered, label)
 }
 
+/// Publish operator text without changing its newline framing or staging a copy.
+pub(crate) fn print_operator_text(rendered: impl std::fmt::Display, label: &str) -> Result<(), RunError> {
+    let mut writer = std::io::stdout().lock();
+    writer
+        .write_fmt(format_args!("{rendered}"))
+        .and_then(|()| writer.flush())
+        .map_err(|error| RunError::Internal(format!("writing {label}: {error}")))
+}
+
 /// Render one remote-failure replay report.
 ///
 /// JSON output is the compact machine payload; human output is four labelled

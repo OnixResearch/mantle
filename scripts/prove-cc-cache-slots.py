@@ -4,7 +4,8 @@
 Requires prebuilt binaries, GCC-compatible native compilers, bwrap, b3sum and
 ldd. Fails rather than substituting mocks or skipped checks. Covers complete
 compile-mode probe failures, volatile headers, advisory receipt loss, and real
-FIFO-gated concurrency/fairness. Link/preprocess probe caching is not supported;
+FIFO-gated concurrency/fairness, saturated Unix backlogs and authority death
+during compilation. Link/preprocess probe caching is not supported;
 preprocessing in the contention fixture is forwarded unchanged, with slots only.
 Process-tree ownership is cooperative: descendants must retain their fresh PGID.
 """
@@ -159,7 +160,7 @@ def main():
             "schema": "mantle-rustc-wrapper-policy-v1", "policy_id": "cc-cache-proof",
             "cache_mode": "local-read-write", "failure_mode": "fail-open",
             "socket_path": str(work / "daemon.sock"), "allowed_peer_uids": [os.getuid()],
-            "readable_roots": [str(work)] + [str(path) for path in sorted(tool_files)],
+            "readable_roots": sorted({str(work)} | {str(path) for path in tool_files}),
             "writable_roots": [str(work / "outputs")], "allowed_environment": sorted(admitted_env),
             "effects": {"filesystem": "declared-roots", "network": "deny", "clock": "allow", "randomness": "allow"},
             "limits": {"elapsed_millis": 120000, "stdout_bytes": 1048576,
@@ -496,13 +497,64 @@ def main():
         require({row["request_id"] for row in grants} == {row["request_id"] for row in releases}, "contention lease leak")
         require(all(row["waited_ms"] < row["wait_timeout_ms"] and row["fairness"] == "round_robin" for row in grants),
                 "contention grant exceeded declared fairness/wait bounds")
-        evidence["contention"] = {"observations": observations, "receipts": concurrent_receipts,
+        evidence["contention"] = {"observations": list(observations), "receipts": concurrent_receipts,
                                    "observed_peak_live_compilers": 2, "per_build_peak": 1,
                                    "scope": "cooperative compiler process groups; real FIFO-gated preprocessor commands"}
 
-        daemon.terminate()
-        daemon.wait(timeout=30)
-        daemon = None
+        # A full real Unix accept backlog must not strand an otherwise valid
+        # compile in connect(). No daemon responses or compiler mocks are used.
+        backlog_path = work / "backlog.sock"
+        pending_connections = []
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as backlog:
+            backlog.bind(str(backlog_path))
+            backlog.listen(1)
+            try:
+                saturated = False
+                for _ in range(32):
+                    pending = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    pending.setblocking(False)
+                    outcome = pending.connect_ex(str(backlog_path))
+                    pending_connections.append(pending)
+                    if outcome != 0:
+                        require(outcome in (errno.EAGAIN, errno.EWOULDBLOCK),
+                                f"unexpected backlog saturation result: {outcome}")
+                        saturated = True
+                        break
+                require(saturated, "could not establish a saturated Unix backlog")
+                process_env["MANTLE_CC_CACHE_SOCKET"] = str(backlog_path)
+                backlog_case, backlog_output = compile_case("saturated-backlog", expected="daemon-unavailable")
+                require(backlog_output.read_bytes() == cold_path.read_bytes(),
+                        "backlog degradation changed actual compiler bytes")
+                require(backlog_case["observed"]["slot_disposition"] == "degraded-no-grant",
+                        "backlogged authority did not report advisory slot degradation")
+                evidence["backlog_degradation"] = backlog_case
+            finally:
+                process_env["MANTLE_CC_CACHE_SOCKET"] = str(work / "daemon.sock")
+                for pending in pending_connections:
+                    pending.close()
+
+        # Kill the authority while a real compiler owns a grant and is blocked
+        # on its source FIFO. The compiler must complete normally after death;
+        # subsequent invocations must compile without an authority.
+        launch("authoritydeath", "authority-death")
+        try:
+            await_gate("authoritydeath")
+            daemon.kill()
+            daemon_status = daemon.wait(timeout=30)
+            daemon = None
+            finish("authoritydeath")
+            evidence["authority_death"] = {
+                "daemon_exit_status": daemon_status,
+                "compiler_completed_after_authority_exit": True,
+                "observation": observations[-1],
+                "scope": "one real cooperative compiler group; no restart reclamation claim"}
+        finally:
+            contender = contenders["authoritydeath"]
+            if contender["writer"] is not None:
+                os.close(contender["writer"])
+            if contender["process"].poll() is None:
+                contender["process"].terminate()
+                contender["process"].communicate(timeout=15)
         _, degraded_path = compile_case("daemon-loss", expected="daemon-unavailable")
         require(degraded_path.read_bytes() == cold_path.read_bytes(), "daemon-loss plain compilation changed bytes")
         # Scheduling receipts are observations, not independent compiler proofs.

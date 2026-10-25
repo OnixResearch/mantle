@@ -353,6 +353,23 @@ struct State {
 }
 
 impl State {
+    fn admits_new_demand(&self, owner: &str, value: &LiveBuildFactValue) -> bool {
+        let LiveBuildFactValue::WorkerDemand { demand } = value else {
+            return true;
+        };
+        let mut count = 0;
+        for entry in self.facts.values() {
+            if let LiveBuildFactValue::WorkerDemand { demand: existing } = &entry.fact.value {
+                count += 1;
+                if entry.owner == owner && existing.job_id == demand.job_id {
+                    // Requirement changes must retract the old lifetime first.
+                    return false;
+                }
+            }
+        }
+        count < crunch_remote_core::demand::MAX_DEMANDS
+    }
+
     fn broadcast(&mut self, event: Event, owner: &str, value: &LiveBuildFactValue) {
         self.subscribers.retain(|_, subscriber| {
             if !subscriber.filter.matches(owner, value) {
@@ -974,7 +991,9 @@ fn handle_client(
                                 if existing.fact == fact {
                                     continue;
                                 }
-                            } else if state.facts.len() == MAX_LIVE_FACTS {
+                            } else if state.facts.len() == MAX_LIVE_FACTS
+                                || !state.admits_new_demand(owner_id, &fact.value)
+                            {
                                 break 'read;
                             }
                             state.facts.insert(fact_id.clone(), Entry {
@@ -1220,10 +1239,9 @@ fn handle_readiness_request(
                         && matches!(observation.states.as_slice(), [state] if state == "complete" || state == "failed")
                 });
             if (state.shutting_down && !owned_terminal_exit)
-                || state
-                    .readiness_records
-                    .get(&component.id)
-                    .is_some_and(|record| record.owner.is_some_and(|other| other != client))
+                || state.readiness_records.get(&component.id).is_some_and(|record| {
+                    record.owner != Some(client) && (record.owner.is_some() || record.observation.is_none())
+                })
             {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
@@ -1574,11 +1592,78 @@ mod tests {
         assert_eq!(read(&mut fresh)["op"], "snapshot-end");
         let mut forged = fixture.connect();
         send(&mut forged, json!({"schema": LIVE_PROTOCOL_SCHEMA, "op": "open", "owner_run_id": "forged-owner"}));
-        let mut changed = fact;
+        let mut changed = fact.clone();
         changed.requirement.cpu_units += 1;
         publish(&mut forged, "forged-owner", LiveBuildFactValue::WorkerDemand { demand: changed });
         let mut response = [0_u8; 1];
         assert_eq!(forged.read(&mut response).unwrap(), 0, "invalid demand gets no feedback");
+        let mut duplicate_snapshot = subscribe(&fixture, vec!["duplicate-owner"], vec![], vec!["worker-demand"]);
+        assert_eq!(read(&mut duplicate_snapshot)["op"], "snapshot-end");
+        let mut duplicate = fixture.connect();
+        send(
+            &mut duplicate,
+            json!({"schema": LIVE_PROTOCOL_SCHEMA, "op": "open", "owner_run_id": "duplicate-owner"}),
+        );
+        let mut changed_requirement = fact.requirement.clone();
+        changed_requirement.memory_bytes += 1;
+        let replacement =
+            WorkerDemand::new(&fact.job_id, &fact.policy_id, changed_requirement, &fact.blocker_reason).unwrap();
+        let first_id = publish(&mut duplicate, "duplicate-owner", LiveBuildFactValue::WorkerDemand { demand: fact });
+        assert_eq!(read(&mut duplicate_snapshot)["fact_id"], first_id);
+        publish(&mut duplicate, "duplicate-owner", LiveBuildFactValue::WorkerDemand { demand: replacement });
+        assert_eq!(
+            duplicate.read(&mut response).unwrap(),
+            0,
+            "requirement changes must retract the previous fact first"
+        );
+        assert_eq!(read(&mut duplicate_snapshot)["op"], "retract");
+    }
+
+    #[test]
+    fn demand_count_bound_is_global_and_retraction_restores_admission() {
+        use crunch_remote_core::demand::MAX_DEMANDS;
+        use crunch_remote_core::demand::Requirement;
+        use crunch_remote_core::demand::WorkerDemand;
+        let make = |job: &str| LiveBuildFactValue::WorkerDemand {
+            demand: WorkerDemand::new(
+                job,
+                "policy",
+                Requirement {
+                    cpu_units: 1,
+                    memory_bytes: 0,
+                    scratch_bytes: 0,
+                    accelerators: Vec::new(),
+                    named_tokens: Vec::new(),
+                    semantic_accelerator_classes: Vec::new(),
+                    placement_key_blake3: "a".repeat(64),
+                },
+                "no-workers-registered",
+            )
+            .unwrap(),
+        };
+        let mut state = State::default();
+        for index in 0..MAX_DEMANDS {
+            let owner = format!("owner-{index}");
+            let value = make(&format!("job-{index}"));
+            assert!(state.admits_new_demand(&owner, &value));
+            let id = fact_identity(&owner, &value).unwrap();
+            state.facts.insert(id, Entry {
+                owner,
+                fact: LiveBuildFact {
+                    schema: LIVE_BUILD_FACT_SCHEMA,
+                    value,
+                },
+            });
+        }
+        assert!(!state.admits_new_demand("overflow-owner", &make("overflow-job")));
+        assert!(
+            state.admits_new_demand("observer", &goal("unrelated")),
+            "the demand bound must not reduce other fact kinds"
+        );
+        let id = state.facts.keys().next().unwrap().clone();
+        let owner = state.facts[&id].owner.clone();
+        state.retract(&owner, &id);
+        assert!(state.admits_new_demand("overflow-owner", &make("overflow-job")));
     }
 
     #[test]
@@ -1652,6 +1737,15 @@ mod tests {
             !row.ready && row.generation.is_none()
         });
         assert!(retracted, "a dropped readiness publisher must not remain ready");
+        assert!(
+            ReadinessPublisher::start_service(
+                &fixture.path,
+                "cache-test".to_owned(),
+                crunch_service_readiness_core::RestartPolicy::Never,
+            )
+            .is_err(),
+            "a disconnected invocation cannot revive without a new identity"
+        );
     }
 
     #[test]
@@ -1677,7 +1771,7 @@ mod tests {
             crunch_service_readiness_core::RestartPolicy::Never,
         )
         .unwrap();
-        early.exited(false).unwrap();
+        early.exited(true).unwrap();
         drop(early);
         let early_report = query_readiness(&fixture.path).unwrap();
         let early_row = early_report.components.iter().find(|row| row.id == "remote-early").unwrap();

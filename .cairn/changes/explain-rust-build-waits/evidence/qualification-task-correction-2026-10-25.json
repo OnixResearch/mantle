@@ -1,0 +1,112 @@
+{
+  "schema": "mantle-evidence-correction-v1",
+  "date": "2026-10-25",
+  "change": "explain-rust-build-waits",
+  "maintenance_owner": "Rust wait-diagnostics maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "corrected_records": [
+    {
+      "record": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/explain-rust-build-waits/evidence/native-dynamic-plan-diagnostics-final-cohort-2026-10-24.json",
+      "blake3": "89a3245836b0dd09c603553313d5f70b00e9245bb634ee35dd41ea15cf97f953",
+      "field": [
+        "subject",
+        "qualification"
+      ],
+      "recorded_value": "Pueue task 53 focused checks (late-root-repair-checks-v7), all exit 0",
+      "corrected_value": "Pueue task 63 focused checks (late-root-repair-checks-v7), all exit 0"
+    },
+    {
+      "record": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/explain-rust-build-waits/evidence/ordinary-cargo-sandbox-diagnostics-final-cohort-2026-10-24.json",
+      "blake3": "ad8bd7c74ed31c284432a787be7d10cb212e8d6f0082144610bb640b511dc40d",
+      "field": [
+        "subject",
+        "qualification"
+      ],
+      "recorded_value": "Pueue task 53 focused checks (late-root-repair-checks-v7), all exit 0",
+      "corrected_value": "Pueue task 63 focused checks (late-root-repair-checks-v7), all exit 0"
+    }
+  ],
+  "task_identities": {
+    "53": {
+      "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-repair-checks-v5",
+      "step_exits": {
+        "build": 0,
+        "changed-leaf-format": 0,
+        "crunch-build-lib": 0,
+        "elf-fixup": 0,
+        "focused-clippy": 0,
+        "focused-format": 0,
+        "focused-tigerstyle": 0,
+        "no-std-api": 0,
+        "release-evidence": 0,
+        "release-verification": 0,
+        "review-core": 0,
+        "source-invariance": 0,
+        "source-topology": 0,
+        "stagex-capture": 0,
+        "wrapper-regressions": 0
+      },
+      "exit_digests": {
+        "build.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "changed-leaf-format.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "crunch-build-lib.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "elf-fixup.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-clippy.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-format.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-tigerstyle.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "no-std-api.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "release-evidence.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "release-verification.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "review-core.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "source-invariance.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "source-topology.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "stagex-capture.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "wrapper-regressions.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369"
+      }
+    },
+    "63": {
+      "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-repair-checks-v7",
+      "step_exits": {
+        "build": 0,
+        "changed-leaf-format": 0,
+        "crunch-build-lib": 0,
+        "elf-fixup": 0,
+        "focused-clippy": 0,
+        "focused-format": 0,
+        "focused-tigerstyle": 0,
+        "no-std-api": 0,
+        "release-evidence": 0,
+        "release-verification": 0,
+        "review-core": 0,
+        "source-invariance": 0,
+        "source-topology": 0,
+        "stagex-capture": 0,
+        "wrapper-regressions": 0
+      },
+      "exit_digests": {
+        "build.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "changed-leaf-format.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "crunch-build-lib.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "elf-fixup.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-clippy.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-format.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "focused-tigerstyle.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "no-std-api.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "release-evidence.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "release-verification.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "review-core.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "source-invariance.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "source-topology.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "stagex-capture.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+        "wrapper-regressions.exit": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369"
+      }
+    }
+  },
+  "source": "The session transcript retains each queue command with the id it printed: checks=53 for check-late-root-repair-v5.sh (queued 2026-10-25T01:13Z) and checks=63 for check-late-root-repair-v7.sh (queued 2026-10-25T02:59Z). The 2026-10-23 records name task 53 with late-root-repair-checks-v5, which agrees. Pueue no longer lists either task.",
+  "unchanged": "Only the task number was wrong. Both check directories retain every step exit as 0, so the outcome each record states is unchanged.",
+  "non_claims": [
+    "The corrected records are retained byte-for-byte; this note does not rewrite them.",
+    "No acceptance, checkbox change, archive or publication is performed."
+  ]
+}

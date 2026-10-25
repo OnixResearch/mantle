@@ -1,0 +1,46 @@
+{
+  "schema": "mantle-rust-differential-observer-deadlock-v1",
+  "recorded_on": "2026-10-24",
+  "change": "validate-rust-pipelining-equivalence",
+  "maintenance_owner": "Rust differential harness and execution-adapter maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "subject": {
+    "cohort": "target/cairn-finish-20261023/exact-exec-repaired-v2-immutable-release-cohort",
+    "mantle_rust_differential_blake3": "e42a4c85dfdeed7316a9d14e86becbd45e84622310631c51a7bc7367c2b30bf5",
+    "mantle_rust_wait_wrapper_blake3": "2a3fbac656d627ac33788def1d577a29a07401143980368fcbc833416480ba4f"
+  },
+  "retained_run": {
+    "result": "target/cairn-finish-20261023/exact-exec-differential-runtime-deadlock-v2/result.json",
+    "result_blake3": "7851b3a03ef6f877aecdc18d7081cbd7821d95abe4d5df23172190217a940ed8",
+    "recorded_verdict": "running",
+    "stage": "negatives",
+    "stage_started": "2026-10-24T21:28:44-04:00",
+    "data_root": "/home/brittonr/.cargo-target/mantle-cairn-differential-exact-exec-v2/negatives",
+    "data_root_last_modification": "2026-10-24T21:29:07-04:00 (deadline, ordered-clean, stream-bound and successful-clean case roots)",
+    "stopped": "pueue kill at about 2026-10-24T22:45-04:00 after the observations below; no rerun reused this root"
+  },
+  "observed_process_state": {
+    "inspected_at": "2026-10-24T22:38-04:00",
+    "harness": "pid 356979 `mantle-rust-differential negatives`, one thread, state S, wait channel do_wait",
+    "open_files": "fd 3/4 were negatives/deadline/stdout.raw and stderr.raw: the deadline case was being supervised",
+    "zombie": "pid 360318 comm rustc, state Zl (multi-threaded zombie), parent 356979, TracerPid 356979",
+    "method": "ps, /proc/<pid>/{status,task/*/wchan,fd}; /proc/<pid>/syscall and stack were not readable without privilege"
+  },
+  "diagnosis": "Clone tracing makes every rustc thread a tracee, and a traced thread-group leader is reapable only after each traced thread is reaped. Teardown reaped only thread IDs whose clone events it had drained; threads killed before their events were drained stayed unreaped, so the owned-child drop blocked forever in a leader wait that only the blocked tracer could unblock.",
+  "repair": {
+    "source": ["crates/crunch-rustc-wrapper/src/observed_process.rs", "crates/crunch-rustc-wrapper/src/observed_process/exec.rs"],
+    "behavior": [
+      "Teardown and the tracer drop reap the owned process group with waitpid(-root, WNOHANG | __WALL), including untracked traced threads.",
+      "The owned-child drop waits at most the teardown deadline instead of blocking.",
+      "An observation error during teardown is recorded as the run's failure; teardown still completes.",
+      "A group too large to observe gets no further grace before SIGKILL, and is reported incomplete rather than as a harness error."
+    ],
+    "regression": "observed_process::tests::traced_threads_beyond_the_task_bound_are_reaped_without_blocking (256-thread child past the 128-task bound): incomplete, fully reaped and returned within the deadline",
+    "decision_record": "adr/0130-observe-owned-descendant-execs-at-kernel-transition.md"
+  },
+  "non_claims": [
+    "This record retains a failed run and its diagnosis; it is not a passing differential campaign.",
+    "No ordinary baseline, repeat, serial, population or fault acceptance follows from it."
+  ]
+}

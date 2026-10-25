@@ -1,0 +1,3336 @@
+{
+  "change": "add-evidence-driven-resource-policy",
+  "claim_classification": [
+    {
+      "basis": "Repository-owned load_manifest accepts original; each BLAKE3 independently recomputed.",
+      "claim": "All 39 recorded source/artifact bindings still match current imported bytes",
+      "classification": "supported"
+    },
+    {
+      "basis": "Actual immutable guest, summarizer and quality gate executed; positive guest/quality exits0/0, each negative1/1 and correct named failure; four invalid CLI cases exit2.",
+      "claim": "Local positive instrumentation and all four named negative controls are effective",
+      "classification": "supported"
+    },
+    {
+      "basis": "Actual repository-owned load_manifest rejects changed-digest and missing-artifact copies, preserving original manifest/artifacts.",
+      "claim": "Changed manifest digest or missing artifact can reuse campaign acceptance",
+      "classification": "contradicted"
+    },
+    {
+      "basis": "Per-assertion identities/verdicts plus bound source predicates and observed outcome/progress sites; assertion count alone is not the proof.",
+      "claim": "Seeds64001 and64002 observe every named workload oracle passing in authoritative v2 summaries",
+      "classification": "supported"
+    },
+    {
+      "basis": "18 exact named sites unexercised, all progress absent, explore exit3; success-only execution-classification.json absent.",
+      "claim": "Seed64003 completed the ledger/crash/CAS workload or the full reviewed three-seed campaign passed",
+      "classification": "contradicted"
+    },
+    {
+      "basis": "The frontier trace records eight probe-only rounds and bounded stop, while seed64003 lacks outcomes. Report explicitly denies exhaustive schedule coverage.",
+      "claim": "Eight rounds/eight branches/no bugs/Stop completed proves exhaustive coverage",
+      "classification": "contradicted"
+    },
+    {
+      "basis": "All three bugs arrays empty; actual export-bugs depth>=1 exports0/0 for each with exit0.",
+      "claim": "An actual replay/minimization candidate exists among retained checkpoint bugs",
+      "classification": "contradicted"
+    },
+    {
+      "basis": "No observed selected bug, retained matching parent snapshot, replay verdict or minimized same-oracle artifact; conditional command templates are not executed replay evidence.",
+      "claim": "snapshot_backed_reproduced for this workload",
+      "classification": "missing"
+    },
+    {
+      "basis": "The harness supplies OOM/trust/compatibility facts and exercises production core/store only. External integration/gates are separate.",
+      "claim": "Real trusted cgroup OOM, signed result/CAS admission, remote worker teardown/settlement, Valence consumer, benchmark benefit or roll-out acceptance",
+      "classification": "missing"
+    }
+  ],
+  "command_evidence": {
+    "bounded_continuation_negative_command": {
+      "argv": [
+        "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+        "resume",
+        "--corpus",
+        "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check",
+        "--rounds",
+        "8",
+        "--frontier-policy",
+        "campaign"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "evidence_class": "negative-continuation-admission-check",
+      "exit_code": 1,
+      "explanation": "Existing CLI rejects zero remaining rounds before bootstrap; increasing above8 would exceed reviewed workload campaign.ncl round bound.",
+      "isolated_checkpoint": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check/checkpoint.json",
+      "isolated_checkpoint_identity": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+      "original_checkpoint": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/checkpoint.json",
+      "original_checkpoint_identity": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+      "replay_evidence": false,
+      "stderr": "Error: checkpoint already completed 8 rounds (max: 8)\nUse --rounds to increase the round limit\n",
+      "stdout": "",
+      "vm_execution": false
+    },
+    "fresh_local_and_export_commands": [
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+          "export-bugs",
+          "--checkpoint",
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/checkpoint.json",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-64001",
+          "--min-replay-parent-depth",
+          "1",
+          "--max-bugs",
+          "1",
+          "--no-overwrite"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "export-no-candidate-64001",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64001.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64001.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+          "export-bugs",
+          "--checkpoint",
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/checkpoint.json",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-64002",
+          "--min-replay-parent-depth",
+          "1",
+          "--max-bugs",
+          "1",
+          "--no-overwrite"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "export-no-candidate-64002",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64002.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64002.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+          "export-bugs",
+          "--checkpoint",
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/checkpoint.json",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-64003",
+          "--min-replay-parent-depth",
+          "1",
+          "--max-bugs",
+          "1",
+          "--no-overwrite"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "export-no-candidate-64003",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64003.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64003.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/sdk.jsonl"
+        },
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "positive-guest",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-guest.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-guest.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/sdk.jsonl",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "positive-summary",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-summary.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-summary.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "positive-quality",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-quality.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-quality.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "broken-retry-link"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/sdk.jsonl"
+        },
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "broken-retry-link-guest",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-guest.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-guest.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/sdk.jsonl",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "broken-retry-link-summary",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-summary.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-summary.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "broken-retry-link-quality",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-quality.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-quality.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "double-charge"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/sdk.jsonl"
+        },
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "double-charge-guest",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-guest.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-guest.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/sdk.jsonl",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "double-charge-summary",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-summary.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-summary.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "double-charge-quality",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-quality.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-quality.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "lost-reservation"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/sdk.jsonl"
+        },
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "lost-reservation-guest",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-guest.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-guest.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/sdk.jsonl",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "lost-reservation-summary",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-summary.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-summary.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "lost-reservation-quality",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-quality.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-quality.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "cas-bypass"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/sdk.jsonl"
+        },
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "cas-bypass-guest",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-guest.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-guest.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/sdk.jsonl",
+          "--output",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 0,
+        "expected_exit_code": 0,
+        "label": "cas-bypass-summary",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-summary.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-summary.stdout"
+      },
+      {
+        "argv": [
+          "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality",
+          "--input",
+          "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/report.json"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {},
+        "exit_code": 1,
+        "expected_exit_code": 1,
+        "label": "cas-bypass-quality",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-quality.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-quality.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-0.jsonl"
+        },
+        "exit_code": 2,
+        "expected_exit_code": 2,
+        "label": "rejected-input-0",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-0.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-0.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "unknown"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-1.jsonl"
+        },
+        "exit_code": 2,
+        "expected_exit_code": 2,
+        "label": "rejected-input-1",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-1.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-1.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--unknown"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-2.jsonl"
+        },
+        "exit_code": 2,
+        "expected_exit_code": 2,
+        "label": "rejected-input-2",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-2.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-2.stdout"
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ],
+        "cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "environment_overrides": {
+          "CHAOSCONTROL_SDK_LOCAL_OUTPUT": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-3.jsonl"
+        },
+        "exit_code": 2,
+        "expected_exit_code": 2,
+        "label": "rejected-input-3",
+        "matches_expected": true,
+        "stderr": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-3.stderr",
+        "stdout": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-3.stdout"
+      }
+    ],
+    "inspection_entrypoint": {
+      "argv": [
+        "python3",
+        ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/inspect.py"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "exit_code": 0
+    },
+    "original_stages": {
+      "commands_manifest": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/commands.json",
+      "error": "RuntimeError('vm-boot: exit 1')",
+      "evidence_class": "instrumentation-dry-run",
+      "finished_unix": 1792780742.8826115,
+      "non_claims": [
+        "Local SDK assertions are instrumentation only.",
+        "No VM or replay claim without validated retained artifacts.",
+        "Unchanged campaign bounds and seeds; no policy authority."
+      ],
+      "prior_attempt": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/result.json",
+      "public_source": "github:brittonr/chaoscontrol/a154ddd1320129a133bb84b8e13ad3df7e55a55f",
+      "run": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot",
+      "schema": "mantle-resource-chaos-boot-runtime-v1",
+      "stages": [
+        {
+          "argv": [
+            "b3sum",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/src/main.rs",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/src/decisions.rs",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/Cargo.lock",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/resume-boot.py"
+          ],
+          "cwd": "/home/brittonr/git/OnixResearch/mantle",
+          "exit_code": 0,
+          "finished_unix": 1792779902.727133,
+          "label": "boot-source-identities",
+          "started_unix": 1792779902.7127845,
+          "stderr": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/boot-source-identities.stderr.log",
+          "stdout": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/boot-source-identities.stdout.log"
+        },
+        {
+          "argv": [
+            "nix",
+            "develop",
+            "github:brittonr/chaoscontrol/a154ddd1320129a133bb84b8e13ad3df7e55a55f",
+            "-c",
+            "env",
+            "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target",
+            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-unknown-linux-musl-gcc",
+            "CC_x86_64_unknown_linux_musl=x86_64-unknown-linux-musl-gcc",
+            "RUSTFLAGS=-C target-feature=+crt-static",
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-musl",
+            "--manifest-path",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/Cargo.toml"
+          ],
+          "cwd": "/home/brittonr/git/OnixResearch/mantle",
+          "exit_code": 0,
+          "finished_unix": 1792779909.7821722,
+          "label": "build-guest-boot",
+          "started_unix": 1792779902.727502,
+          "stderr": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/build-guest-boot.stderr.log",
+          "stdout": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/build-guest-boot.stdout.log"
+        },
+        {
+          "argv": [
+            "python3",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.py",
+            "prepare",
+            "--guest",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+            "--kernel",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/kernel/vmlinux",
+            "--tools",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/tools",
+            "--output",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot"
+          ],
+          "cwd": "/home/brittonr/git/OnixResearch/mantle",
+          "exit_code": 0,
+          "finished_unix": 1792779910.7190237,
+          "label": "prepare-boot",
+          "started_unix": 1792779909.7826512,
+          "stderr": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/prepare-boot.stderr.log",
+          "stdout": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/prepare-boot.stdout.log"
+        },
+        {
+          "argv": [
+            "python3",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.py",
+            "local",
+            "--manifest",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/commands.json"
+          ],
+          "cwd": "/home/brittonr/git/OnixResearch/mantle",
+          "exit_code": 0,
+          "finished_unix": 1792779911.664676,
+          "label": "local-boot",
+          "started_unix": 1792779910.7213924,
+          "stderr": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/local-boot.stderr.log",
+          "stdout": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/local-boot.stdout.log"
+        },
+        {
+          "argv": [
+            "python3",
+            "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.py",
+            "vm",
+            "--manifest",
+            "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/commands.json"
+          ],
+          "cwd": "/home/brittonr/git/OnixResearch/mantle",
+          "exit_code": 1,
+          "finished_unix": 1792780742.8824184,
+          "label": "vm-boot",
+          "started_unix": 1792779911.6650994,
+          "stderr": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/vm-boot.stderr.log",
+          "stdout": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/vm-boot.stdout.log"
+        }
+      ],
+      "verdict": "blocked"
+    },
+    "pueue": "Historical boot task ID is not present in the scoped boot-result/commands receipts; not guessed from the unrelated run-private task12 receipt. No long VM command was started during this inspection.",
+    "repository_owned_manifest_validator": {
+      "cases": [
+        {
+          "accepted": true,
+          "case": "current",
+          "manifest": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/commands.json"
+        },
+        {
+          "accepted": false,
+          "case": "changed-digest",
+          "error": "artifact drift: /home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/initrd.gz; prepare a fresh run, never reuse stale reports",
+          "manifest": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/changed-digest-commands.json"
+        },
+        {
+          "accepted": false,
+          "case": "missing-artifact",
+          "error": "exit 1, expected 0: b3sum --no-names /home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/absent-artifact\nb3sum: /home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/absent-artifact: No such file or directory (os error 2)\n",
+          "manifest": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/missing-artifact-commands.json"
+        }
+      ],
+      "execution": "AST declarations only, preserving __file__; no CLI/VM dispatch",
+      "function": "load_manifest",
+      "identity": "blake3:1b86cb7be64113b311bf09fbc8819843b0ddee4caf3343cd76b741697def176a",
+      "source": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.py"
+    }
+  },
+  "configuration": {
+    "bootstrap_budget": 100000,
+    "branches": 4,
+    "fault_profile": {
+      "accounting_faults": [
+        "missing",
+        "malformed",
+        "missing-fields",
+        "over-byte-limit",
+        "lost-state-with-sentinel"
+      ],
+      "crash_boundaries": [
+        "before-reconcile",
+        "after-durable-reconcile",
+        "race-publication"
+      ],
+      "event_faults": [
+        "worker-loss",
+        "duplicate-completion",
+        "delayed-stale-fence",
+        "delayed-worker-loss"
+      ],
+      "oom_inputs": "explicit trusted positive versus ambiguous/untrusted/stale core facts; not a platform OOM collector",
+      "reuse_faults": [
+        "removed-cas-object",
+        "missing-sharing-scope"
+      ]
+    },
+    "max_frontier": 16,
+    "memory_mib": 256,
+    "mode": "input-tree",
+    "non_claims": [
+      "intent is not observed fault effectiveness",
+      "local dry-run is instrumentation only",
+      "VM evidence covers this guest and the imported production decisions/store only",
+      "no whole remote service, cgroup collector, persistent block power-loss, performance or fairness proof",
+      "no snapshot replay claim without observed bug and valid retained parent snapshot"
+    ],
+    "quantum": 100,
+    "rounds": 8,
+    "schema": "mantle-resource-policy-campaign-v1",
+    "seeds": [
+      64001,
+      64002,
+      64003
+    ],
+    "ticks": 20000,
+    "vcpus": 1,
+    "vms": 1,
+    "workers": 1
+  },
+  "continuation_inspection": {
+    "contract": "workloads/resource-policy/campaign.ncl:6-17 and design.md:98-107 select seeds64001..64003, rounds8/branches4/ticks20000/quantum100/bootstrap100000/input-tree; all recorded maxima are already used.",
+    "decision": "No admitted extension of this retained run is available: resume at the reviewed max8 exits1 before bootstrap; increasing rounds/ticks/bootstrap/quantum beyond recorded maxima widens admitted bounds. The repository runner exposes no per-seed continuation override, and changing mode/seed/frontier/artifacts changes the recorded contract. No unchanged-input VM rerun was used to reconfirm the failure.",
+    "frontier_observation": "All eight seed64003 trace branches are probes; first admits seq1, following seven select seq1, no alternate branches. This explains unused branch-factor alternatives without pretending eight probes are32 executions.",
+    "non_claim": "This is not a proof that every conceivable different configuration below numeric ceilings is unreachable. It is the precise missing admitted continuation path for the retained exact campaign; the deficient progress cause remains unproven.",
+    "observed_negative_resume": {
+      "argv": [
+        "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+        "resume",
+        "--corpus",
+        "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check",
+        "--rounds",
+        "8",
+        "--frontier-policy",
+        "campaign"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "evidence_class": "negative-continuation-admission-check",
+      "exit_code": 1,
+      "explanation": "Existing CLI rejects zero remaining rounds before bootstrap; increasing above8 would exceed reviewed workload campaign.ncl round bound.",
+      "isolated_checkpoint": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check/checkpoint.json",
+      "isolated_checkpoint_identity": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+      "original_checkpoint": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/checkpoint.json",
+      "original_checkpoint_identity": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+      "replay_evidence": false,
+      "stderr": "Error: checkpoint already completed 8 rounds (max: 8)\nUse --rounds to increase the round limit\n",
+      "stdout": "",
+      "vm_execution": false
+    },
+    "phase_boundary": "main.rs:228-239 executes retry_scenario then ledger_scenario before its only random_choice(3). Seed64003 has retry oracles but no ledger outcomes; checkpoint events contain workload_init/scenario_start and no completion event. The precise reason for lack of ledger progress is not established.",
+    "pinned_source_constraints": "Pinned a154 explorer.rs:1418-1433 drains choice histories and returns without alternatives when empty; :1444-1461 limits alternatives to branch_factor-1 and returns if none. Guest choice is after the missing ledger phase. Pinned CLI chaoscontrol-explore.rs:2061-2070 computes max_rounds.saturating_sub(checkpoint.rounds_completed) and rejects zero before bootstrap with exit1. The actual isolated --rounds8 resume produced this rejection.",
+    "pinned_source_urls": [
+      "https://raw.githubusercontent.com/brittonr/chaoscontrol/a154ddd1320129a133bb84b8e13ad3df7e55a55f/crates/chaoscontrol-explore/src/explorer.rs",
+      "https://raw.githubusercontent.com/brittonr/chaoscontrol/a154ddd1320129a133bb84b8e13ad3df7e55a55f/crates/chaoscontrol-explore/src/bin/chaoscontrol-explore.rs"
+    ]
+  },
+  "date": "2026-10-23",
+  "evidence": {
+    "captures": [
+      {
+        "blake3": "blake3:079f9113f2e7b4358a909af7d63cc9378b1ed5749acbe52c904a9b776f8380ee",
+        "bytes": 10309,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/inspect.py"
+      },
+      {
+        "blake3": "blake3:5c2df6d1285993a845ae24a18995b037053686668df676b182c1a9f22b846633",
+        "bytes": 36145,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/report.json"
+      },
+      {
+        "blake3": "blake3:3e164f37c781445658e54e6d273c2e23317914d5711b60058eb3799492fda6ec",
+        "bytes": 41097,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link/sdk.jsonl"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-guest.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-guest.stdout"
+      },
+      {
+        "blake3": "blake3:d47bcf6c04e6a57a3054630b0077c3ffa7638cc6f86e63e7dfefcb2d3b6b6ce7",
+        "bytes": 89,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-quality.stderr"
+      },
+      {
+        "blake3": "blake3:8509be3bfb9866e4ab9f7071d8901202a26b5ea5ba733212cb74a45a1de2049f",
+        "bytes": 409,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-quality.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-summary.stderr"
+      },
+      {
+        "blake3": "blake3:443baf531127b7ff1081c744cf0f32c040db5e2df1966b2ca3f4d5c939ef9b92",
+        "bytes": 28999,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/broken-retry-link-summary.stdout"
+      },
+      {
+        "blake3": "blake3:375bda59dd26094e218bf2ea6bf3289556349307d956ac28224c36825c57cce1",
+        "bytes": 36145,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/report.json"
+      },
+      {
+        "blake3": "blake3:d06450c798eb5b0706c2706b044dcd3d1db2d7d35f252e9885af87fd04be9c33",
+        "bytes": 41098,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass/sdk.jsonl"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-guest.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-guest.stdout"
+      },
+      {
+        "blake3": "blake3:d47bcf6c04e6a57a3054630b0077c3ffa7638cc6f86e63e7dfefcb2d3b6b6ce7",
+        "bytes": 89,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-quality.stderr"
+      },
+      {
+        "blake3": "blake3:8509be3bfb9866e4ab9f7071d8901202a26b5ea5ba733212cb74a45a1de2049f",
+        "bytes": 409,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-quality.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-summary.stderr"
+      },
+      {
+        "blake3": "blake3:ad301d6218a66133fc086ed948cbdc1bfdabc32618929a935696d0e85fdf67ca",
+        "bytes": 28999,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/cas-bypass-summary.stdout"
+      },
+      {
+        "blake3": "blake3:e456109298f92b104a5f16fb831e860fa086c33876e0e9dd41fcc0942502fcba",
+        "bytes": 17804,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/changed-digest-commands.json"
+      },
+      {
+        "blake3": "blake3:66279cf81e995b06f9268c81658c5ce24f415a6016ec606e89ce997400a88fa5",
+        "bytes": 36145,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/report.json"
+      },
+      {
+        "blake3": "blake3:abeab73bbdac25ff338e76301d7172c6deab78998b34d1ba249638d503b988ba",
+        "bytes": 41098,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge/sdk.jsonl"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-guest.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-guest.stdout"
+      },
+      {
+        "blake3": "blake3:d47bcf6c04e6a57a3054630b0077c3ffa7638cc6f86e63e7dfefcb2d3b6b6ce7",
+        "bytes": 89,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-quality.stderr"
+      },
+      {
+        "blake3": "blake3:8509be3bfb9866e4ab9f7071d8901202a26b5ea5ba733212cb74a45a1de2049f",
+        "bytes": 409,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-quality.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-summary.stderr"
+      },
+      {
+        "blake3": "blake3:abf79d17f3f3124ecd662e924bbea0332938c2a092b351b34d8d5f67c137f472",
+        "bytes": 28999,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/double-charge-summary.stdout"
+      },
+      {
+        "blake3": "blake3:af423e5108ca69a15cbda20407a23c67c9a5df904c0ceb3ceb2ac358489f3ee9",
+        "bytes": 219,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64001.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64001.stdout"
+      },
+      {
+        "blake3": "blake3:ce7d8f7cb02b014703a7980e9e14e1aca568540492fc532226f9fd3eb5393ae4",
+        "bytes": 219,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64002.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64002.stdout"
+      },
+      {
+        "blake3": "blake3:63f19273bae5f295c1d33d7f12fdc0b5d04654a31c7fcdec9443ba2a967551e1",
+        "bytes": 219,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64003.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/export-no-candidate-64003.stdout"
+      },
+      {
+        "blake3": "blake3:4a36f7d47427d4e4b592e60d19ac7748f87bac1225d4fca4298c06687e16c575",
+        "bytes": 106295,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/inspection.json"
+      },
+      {
+        "blake3": "blake3:04df7b6c8de50ba85d5e652a4f4211513cdaac306fff9b662f6db53c893c8f90",
+        "bytes": 36145,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/report.json"
+      },
+      {
+        "blake3": "blake3:5003a287a2e7f85e4dcda676bc052c8b28d4ea266407120a7ebb86f5f8bb6593",
+        "bytes": 41100,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation/sdk.jsonl"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-guest.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-guest.stdout"
+      },
+      {
+        "blake3": "blake3:d47bcf6c04e6a57a3054630b0077c3ffa7638cc6f86e63e7dfefcb2d3b6b6ce7",
+        "bytes": 89,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-quality.stderr"
+      },
+      {
+        "blake3": "blake3:8509be3bfb9866e4ab9f7071d8901202a26b5ea5ba733212cb74a45a1de2049f",
+        "bytes": 409,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-quality.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-summary.stderr"
+      },
+      {
+        "blake3": "blake3:39b2b87d795e91aeb2521cf23510023e8b1b20ebdc979af76cb4da25abee92b6",
+        "bytes": 28999,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/lost-reservation-summary.stdout"
+      },
+      {
+        "blake3": "blake3:2a08e809fc7add248b7548c45981c587531fe7f60da5b432ded60eb899607a9d",
+        "bytes": 17885,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/missing-artifact-commands.json"
+      },
+      {
+        "blake3": "blake3:0ff2c1eb1e82d0d4ab143d70e8b05fe6a19670664ffbdcd64430879511ae5490",
+        "bytes": 36145,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/report.json"
+      },
+      {
+        "blake3": "blake3:d5d943a02016b27a6ccdd47633fa9b7ba7a43b17cf258667f4e718e142387dcd",
+        "bytes": 41098,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive/sdk.jsonl"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-guest.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-guest.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-quality.stderr"
+      },
+      {
+        "blake3": "blake3:88f4f93a3aa72c5ab42754a3540eb62c7112c44b9b35bc89aa101a22508051d3",
+        "bytes": 408,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-quality.stdout"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-summary.stderr"
+      },
+      {
+        "blake3": "blake3:09a50c4cdee4c201912056a9df4a70cda2596b7be14718f46f14b11706c586c9",
+        "bytes": 28999,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/positive-summary.stdout"
+      },
+      {
+        "blake3": "blake3:2891f09d71d142e68735fa3cadfe2e1ded7033bf9a602551203359d0e851a44e",
+        "bytes": 117,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-0.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-0.stdout"
+      },
+      {
+        "blake3": "blake3:2891f09d71d142e68735fa3cadfe2e1ded7033bf9a602551203359d0e851a44e",
+        "bytes": 117,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-1.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-1.stdout"
+      },
+      {
+        "blake3": "blake3:2891f09d71d142e68735fa3cadfe2e1ded7033bf9a602551203359d0e851a44e",
+        "bytes": 117,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-2.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-2.stdout"
+      },
+      {
+        "blake3": "blake3:2891f09d71d142e68735fa3cadfe2e1ded7033bf9a602551203359d0e851a44e",
+        "bytes": 117,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-3.stderr"
+      },
+      {
+        "blake3": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "bytes": 0,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/rejected-input-3.stdout"
+      },
+      {
+        "blake3": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+        "bytes": 579109,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check/checkpoint.json"
+      },
+      {
+        "blake3": "blake3:9fbc24aff58d5cc13e2d0fe53f495f990ab8fa2af63bd758506e862607bb7f9f",
+        "bytes": 1379,
+        "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/resume-bound-check/result.json"
+      }
+    ],
+    "external_receipts_and_logs": [
+      {
+        "blake3": "blake3:5c090d077cc58fbafd77dd3820181c421a72c2681c81f5d3d639d204af393679",
+        "bytes": 17804,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/commands.json"
+      },
+      {
+        "blake3": "blake3:d0e466e259038423b3a87b6c56c9b31e74372ec2da1c59c7a4f1b0a512c2175b",
+        "bytes": 1349,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/campaign.json"
+      },
+      {
+        "blake3": "blake3:73d631cac7b2ba89bcaa294f4a758c5078d8c504db6ffe2197bb673575d07c60",
+        "bytes": 807,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/local/receipt.json"
+      },
+      {
+        "blake3": "blake3:0ff2c1eb1e82d0d4ab143d70e8b05fe6a19670664ffbdcd64430879511ae5490",
+        "bytes": 36145,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/local/positive/report.json"
+      },
+      {
+        "blake3": "blake3:9163ace41446d1eb6d4d851b271b4d083e1b1476e853ddd9c87b9a7a9695ee0f",
+        "bytes": 5136,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/boot-result.json"
+      },
+      {
+        "blake3": "blake3:fa810e4376f1153004181d730c4f4c83d6a2bd4ac6fc9c1b319ed3f8c184cb5c",
+        "bytes": 3570,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/resume-boot.py"
+      },
+      {
+        "blake3": "blake3:bf0fbdf122ee95bf74bd62f844ee2328dbc1d8065d982f577ba4147dae5914b7",
+        "bytes": 4008,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/vm-boot.stderr.log"
+      },
+      {
+        "blake3": "blake3:6c13feea736d6b978d7fa2c51b127096c8a7e33c2cb046e8cb2913876c589370",
+        "bytes": 26159,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001.log"
+      },
+      {
+        "blake3": "blake3:030ccfd7373f77912ba03487385ed983b8dd0bafa8ba30b79889d89f037fc394",
+        "bytes": 26161,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002.log"
+      },
+      {
+        "blake3": "blake3:81c9deb776689786399794767c3dccb0ec451b1dffad28be504ed480a236de82",
+        "bytes": 26208,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003.log"
+      }
+    ],
+    "inspection": ".cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-capture-2026-10-23/observed/inspection.json",
+    "seed_artifacts_and_journals": [
+      {
+        "bytes": 34975,
+        "identity": "blake3:4bda6f208b04501b11c297ff72f5f5baf5e9735c08ab1fa28d942f96e3c870d3",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/assertions.json"
+      },
+      {
+        "bytes": 72,
+        "identity": "blake3:cf1b71074f3511ed7679e3735dfc97f5e515ebac9aee799f46315da2d3ff4cb2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/branch-marker-coverage.json"
+      },
+      {
+        "bytes": 0,
+        "identity": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/LOCK"
+      },
+      {
+        "bytes": 6139,
+        "identity": "blake3:989b206d7b61bba2542033d4bb043b7fed656d402042b24013fc82a0578c4b3c",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000000.cbor"
+      },
+      {
+        "bytes": 3416,
+        "identity": "blake3:d551d341b49dd90e03283f19d367aa89e060e9163dd6e1ac5668e15ab6e7b340",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000001.cbor"
+      },
+      {
+        "bytes": 6934,
+        "identity": "blake3:4edc1c98e0b0a490b96c4b4a89aea02a6d47b74f9405957d213e30ab512370e2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000002.cbor"
+      },
+      {
+        "bytes": 3411,
+        "identity": "blake3:3cd386ec3a60f9606d345ceac7695ad94314fab1239cb0c55bc8a3053eb5cc3e",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000003.cbor"
+      },
+      {
+        "bytes": 2895,
+        "identity": "blake3:23f190b5ce5ec7285e24185bf0500070971b2febad51e67fe75719f7b5b8fd97",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000004.cbor"
+      },
+      {
+        "bytes": 3392,
+        "identity": "blake3:535e6a0fbb4837f2f4024c0fabdcc8ff08bd2dbf7dadb46e5db4599000fa59a1",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000005.cbor"
+      },
+      {
+        "bytes": 2888,
+        "identity": "blake3:c579d10761f8d80babd20250939fe20197a484397c5b76d81fdd92c371401610",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000006.cbor"
+      },
+      {
+        "bytes": 3406,
+        "identity": "blake3:565efac07be17fb051c7404d1150bf3f6ba7fea39c9eb7039ec0140bb6495943",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000007.cbor"
+      },
+      {
+        "bytes": 2888,
+        "identity": "blake3:9391b5f9fd01660b504a3e9767e62d2bc4ac9485f8668806db79310484270cd2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000008.cbor"
+      },
+      {
+        "bytes": 3412,
+        "identity": "blake3:3c1d786d51661552df92e59957c7a60a8df5d61c0a73cfa90ce7ded5fd3fc736",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000009.cbor"
+      },
+      {
+        "bytes": 2877,
+        "identity": "blake3:abbc4ba163bba6ff62ee21ab847e21f687eb676fa022a0566422c919ebd54163",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000010.cbor"
+      },
+      {
+        "bytes": 3400,
+        "identity": "blake3:c78e2e93e27524035c8d8d6ba6efbcd94b1cc8e3229665d8707f14186c7cd640",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000011.cbor"
+      },
+      {
+        "bytes": 2890,
+        "identity": "blake3:77b9985c31572b7aee824f06160988c920d80c9c9c0531ad7fd5efce491f486f",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000012.cbor"
+      },
+      {
+        "bytes": 3399,
+        "identity": "blake3:00436d54496853d10a5f14541e5eeeb29a0f391174aa54bbd4c33248aeea9ac6",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000013.cbor"
+      },
+      {
+        "bytes": 2883,
+        "identity": "blake3:eaa6a4bb6ae418ca5e04e193117c9fa7cd04e6d979910c2dc0cdb2c34eae5d62",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000014.cbor"
+      },
+      {
+        "bytes": 3408,
+        "identity": "blake3:1705de3605aeac3a40b54ce862abb1d330ad740f0da7970e8f544dcfba2f9b47",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000015.cbor"
+      },
+      {
+        "bytes": 2890,
+        "identity": "blake3:81c05320520b71d2f83d3b4a5de918776f735bf2797d53da509a56a6880d1600",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000016.cbor"
+      },
+      {
+        "bytes": 933,
+        "identity": "blake3:a0a0e781f00eae674c09d8e04c83f38ec43c5749a604c092b850fd3243cb1780",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/campaign-journal/epoch-0000/seg-00000017.cbor"
+      },
+      {
+        "bytes": 579568,
+        "identity": "blake3:36d985b4bef12cd58c66d113ffb8cbadf84932f286a125e7a517053600782cf2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/checkpoint.json"
+      },
+      {
+        "bytes": 4266,
+        "identity": "blake3:97960992b011cd6fd43b0e15e045d8bbc2f7c08dc91732c485e67d48a479319f",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/frontier-trace.jsonl"
+      },
+      {
+        "bytes": 6829,
+        "identity": "blake3:b24674ecbc59edccdb41f02c2594c9fd9783999c2034f2606326de003ec1c39c",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001/report.txt"
+      },
+      {
+        "bytes": 34975,
+        "identity": "blake3:4bda6f208b04501b11c297ff72f5f5baf5e9735c08ab1fa28d942f96e3c870d3",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/assertions.json"
+      },
+      {
+        "bytes": 72,
+        "identity": "blake3:cf1b71074f3511ed7679e3735dfc97f5e515ebac9aee799f46315da2d3ff4cb2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/branch-marker-coverage.json"
+      },
+      {
+        "bytes": 0,
+        "identity": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/LOCK"
+      },
+      {
+        "bytes": 6165,
+        "identity": "blake3:568637ffa4548401264046594d2e4afa0f08a17a22700191ab19dbf4e6c424d6",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000000.cbor"
+      },
+      {
+        "bytes": 3387,
+        "identity": "blake3:7db68411825e753c906cbfb2f2daae010bb138e9441b9d55171946f5fcf4c436",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000001.cbor"
+      },
+      {
+        "bytes": 6922,
+        "identity": "blake3:175114a8446e045d2363f27e0e78faa8eee7de438ccf2db27d78a8881d9b9ad1",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000002.cbor"
+      },
+      {
+        "bytes": 3399,
+        "identity": "blake3:99f33249c855d4dafd52138ea3a707f94a26701195244fbe86a0d62ea90c2941",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000003.cbor"
+      },
+      {
+        "bytes": 2881,
+        "identity": "blake3:61ba771139381f6e8e8f914b3e8d488806dcd6ba71b32cab5b5d4b62257b6770",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000004.cbor"
+      },
+      {
+        "bytes": 3402,
+        "identity": "blake3:bc6a7e73c0de3d2438aa7d513cbc1361a9205e8213c747d3ce62bd512cf7510a",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000005.cbor"
+      },
+      {
+        "bytes": 2870,
+        "identity": "blake3:4e0412e32bce7d15610d64ed4b4deeba54358e269135ada5a1c37034a7bf0eef",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000006.cbor"
+      },
+      {
+        "bytes": 3385,
+        "identity": "blake3:57e8f5e904e846ef8ed5b925fe2dce932b9477acbbdd7a11a7e9ffabd473c120",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000007.cbor"
+      },
+      {
+        "bytes": 2867,
+        "identity": "blake3:e0628a2e74ab3e003853a544a829e80a1ab425df320884073b49807f610739e1",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000008.cbor"
+      },
+      {
+        "bytes": 3401,
+        "identity": "blake3:aa8141e8e8f8a67d4bc76ab7a9b8a3c1b0b492aeb8ec390cf074d4be5845e4aa",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000009.cbor"
+      },
+      {
+        "bytes": 2869,
+        "identity": "blake3:4edf5cfc2954a47ac6b71077eb53a5de7958cb25c553df9c8a01f7f00f09e9a8",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000010.cbor"
+      },
+      {
+        "bytes": 3386,
+        "identity": "blake3:5e58b9807d944bf8764f28e5a41a4e097abee00531ac70a497400d6466ee36d8",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000011.cbor"
+      },
+      {
+        "bytes": 2880,
+        "identity": "blake3:50929a84ff3f1c586457f4c16b2fba3179e5e5dde42875e3b8b37ec6a0788af2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000012.cbor"
+      },
+      {
+        "bytes": 3407,
+        "identity": "blake3:8dc87de4c84ccaaca48aaa6607e843bebc39829715b586c9b7c3de3065d8ca75",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000013.cbor"
+      },
+      {
+        "bytes": 2876,
+        "identity": "blake3:fa256f431af750ea496d42ae6aac09398d9fa0832dcde56d2771bb7fec5789fb",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000014.cbor"
+      },
+      {
+        "bytes": 3395,
+        "identity": "blake3:a4eeb9a29c2a5cb78abeaad459a5ff081f15ce07c556789a81e7ef831828dddb",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000015.cbor"
+      },
+      {
+        "bytes": 2868,
+        "identity": "blake3:0af57f61fc52cd5f0a158af1f986404c24077506109a4e33e26508c5150067ad",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000016.cbor"
+      },
+      {
+        "bytes": 926,
+        "identity": "blake3:d1d6598b9f76db123e41723473710da091a2c361a757edf6576b6bebdab8b23c",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/campaign-journal/epoch-0000/seg-00000017.cbor"
+      },
+      {
+        "bytes": 579534,
+        "identity": "blake3:0088314e7d8f729e3ea547342c82927c280b15b73382940b56c7eccafc86b844",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/checkpoint.json"
+      },
+      {
+        "bytes": 4266,
+        "identity": "blake3:2118ed79cfdc678807c690ffec3a865657eabf4908be851d86a876612f3bfe62",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/frontier-trace.jsonl"
+      },
+      {
+        "bytes": 6831,
+        "identity": "blake3:0c1296ee3b393f3eab592a979f569973384e14d545d85836e69fd19d41de1bc3",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002/report.txt"
+      },
+      {
+        "bytes": 35065,
+        "identity": "blake3:6a950fd83ccf443f7626a15eab37a4670533921671f888d761ba86bb6e52f437",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/assertions.json"
+      },
+      {
+        "bytes": 72,
+        "identity": "blake3:cf1b71074f3511ed7679e3735dfc97f5e515ebac9aee799f46315da2d3ff4cb2",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/branch-marker-coverage.json"
+      },
+      {
+        "bytes": 0,
+        "identity": "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/LOCK"
+      },
+      {
+        "bytes": 6168,
+        "identity": "blake3:ca0428b88fa448217c6aa140ce00c6426f4308cfaa8878202f82f19156a4f905",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000000.cbor"
+      },
+      {
+        "bytes": 3395,
+        "identity": "blake3:c38ff71789c7218883a27ce9ec325dfb2a4c0277e3caa91cf6d7a829ac6bc5c5",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000001.cbor"
+      },
+      {
+        "bytes": 6932,
+        "identity": "blake3:1f6ec7577c7a80d735b3155688d2778527dca1d51b5926a56270d46f832117eb",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000002.cbor"
+      },
+      {
+        "bytes": 3398,
+        "identity": "blake3:69f8c2dc87c47ab8f97f29cd4c3297f16a04e75f23e137b356d3b39e6e31c17c",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000003.cbor"
+      },
+      {
+        "bytes": 2886,
+        "identity": "blake3:dbd575759c9086b8fc6c917626c0d67d6f555c1078bb552499411978cab2bc73",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000004.cbor"
+      },
+      {
+        "bytes": 3410,
+        "identity": "blake3:e958d24c8a9de4e6161c4f39709d7e0a95c1deddf92260c02da628151edf3514",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000005.cbor"
+      },
+      {
+        "bytes": 2887,
+        "identity": "blake3:c35b1d6bef283265db4804d88c9a88bc4fefeef4418da771d2e9ba91480b2d9c",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000006.cbor"
+      },
+      {
+        "bytes": 3405,
+        "identity": "blake3:d24c8057124096894bc57eb8cd66db7c6d2947d0fa68cb3c12cd4cd42c20fd8e",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000007.cbor"
+      },
+      {
+        "bytes": 2873,
+        "identity": "blake3:4d5f0b4a4ddce9a895932faa2193a499ad56b4f202de305291dff276060aae77",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000008.cbor"
+      },
+      {
+        "bytes": 3404,
+        "identity": "blake3:9bb35ec2b964585c93af6fdef76a6bca05ea9d1982ae9fdda4dc6622dbe31676",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000009.cbor"
+      },
+      {
+        "bytes": 2873,
+        "identity": "blake3:f27d79645e26fa3a0052448a8ec17099cb8b6c5ca3516b49e06e607e9fd5d092",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000010.cbor"
+      },
+      {
+        "bytes": 3388,
+        "identity": "blake3:18fb52198762ca6cd41a2a1ac779b0a9c3eb7c6ee0fdecd79e09929ba348a22a",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000011.cbor"
+      },
+      {
+        "bytes": 2869,
+        "identity": "blake3:3d3d2c06788b2e051e3fec9ede36f28092f84e20d8344e96ee465adc4f2e223b",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000012.cbor"
+      },
+      {
+        "bytes": 3399,
+        "identity": "blake3:0a6af4a19a69b9e6048464352e63ea2810a44b3e8eb5c5b6b5e9c74e8eccec72",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000013.cbor"
+      },
+      {
+        "bytes": 2872,
+        "identity": "blake3:65e3a1d9ca9eb980f82529fc9486f46eef4af9b508073e2a3ba6a1a27c6e0e18",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000014.cbor"
+      },
+      {
+        "bytes": 3400,
+        "identity": "blake3:1bfb131153c09b2e9c01d9c576c3dd1e26c32ef7cf053c86f3fa4be378dcb9a3",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000015.cbor"
+      },
+      {
+        "bytes": 2878,
+        "identity": "blake3:40941a02842bb4258ca90fe8720d67c71f46ba0798c201eec9941eab46817c86",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000016.cbor"
+      },
+      {
+        "bytes": 934,
+        "identity": "blake3:271928ba1cf1027e312dad2d418617eba67a062af32b5f8c9e0a515ef5fce539",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/campaign-journal/epoch-0000/seg-00000017.cbor"
+      },
+      {
+        "bytes": 579109,
+        "identity": "blake3:79bf69e21124d08ecb06718771a5f733cb1a9de25121e4f0dd2f4647606e3665",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/checkpoint.json"
+      },
+      {
+        "bytes": 4266,
+        "identity": "blake3:5801da3cec5aaccbbcbd7473055bd881a308785f2f54db36d74efcdf6d385eaf",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/frontier-trace.jsonl"
+      },
+      {
+        "bytes": 6791,
+        "identity": "blake3:0a0fac16b8b3b3da7a4f7ab5392d0683975107818cbe4b33450fdcb401ac3cb5",
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003/report.txt"
+      }
+    ]
+  },
+  "evidence_classes": [
+    "source-definition",
+    "instrumentation-dry-run",
+    "bounded-vm-execution-for-seeds-64001-64002",
+    "incomplete-vm-execution-for-seed-64003",
+    "negative-continuation-admission-check"
+  ],
+  "local_instrumentation": {
+    "boundary": "Negative controls corrupt only the oracle-observed retry/charge/crash/CAS result; their SDK failures demonstrate local oracle sensitivity, not production bugs or VM replay.",
+    "fresh_cases": [
+      {
+        "case": "positive",
+        "expected_failure_observed": true,
+        "failing_assertions": [],
+        "guest_exit": 0,
+        "quality_exit": 0,
+        "summary_exit": 0
+      },
+      {
+        "case": "broken-retry-link",
+        "expected_failure_observed": true,
+        "failing_assertions": [
+          {
+            "failures": 1,
+            "message": "resource retry has fresh fence and exact predecessor"
+          }
+        ],
+        "guest_exit": 1,
+        "quality_exit": 1,
+        "summary_exit": 0
+      },
+      {
+        "case": "double-charge",
+        "expected_failure_observed": true,
+        "failing_assertions": [
+          {
+            "failures": 1,
+            "message": "resource duplicate completion charges once across reopen"
+          }
+        ],
+        "guest_exit": 1,
+        "quality_exit": 1,
+        "summary_exit": 0
+      },
+      {
+        "case": "lost-reservation",
+        "expected_failure_observed": true,
+        "failing_assertions": [
+          {
+            "failures": 3,
+            "message": "resource killed accounting leaves complete old or new transaction"
+          }
+        ],
+        "guest_exit": 1,
+        "quality_exit": 1,
+        "summary_exit": 0
+      },
+      {
+        "case": "cas-bypass",
+        "expected_failure_observed": true,
+        "failing_assertions": [
+          {
+            "failures": 1,
+            "message": "resource absent CAS denies result reuse"
+          }
+        ],
+        "guest_exit": 1,
+        "quality_exit": 1,
+        "summary_exit": 0
+      }
+    ],
+    "invalid_argument_cases": [
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control"
+        ],
+        "case": "rejected-input-0",
+        "exit_code": 2,
+        "expected_exit_code": 2
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "unknown"
+        ],
+        "case": "rejected-input-1",
+        "exit_code": 2,
+        "expected_exit_code": 2
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--unknown"
+        ],
+        "case": "rejected-input-2",
+        "exit_code": 2,
+        "expected_exit_code": 2
+      },
+      {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos",
+          "--negative-control",
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ],
+        "case": "rejected-input-3",
+        "exit_code": 2,
+        "expected_exit_code": 2
+      }
+    ],
+    "retained_receipt": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/local/receipt.json",
+    "retained_receipt_validation": {
+      "evidence_class": "instrumentation-dry-run",
+      "manifest_binding_matches": true,
+      "positive_report_binding_matches": true,
+      "replay_evidence": false
+    }
+  },
+  "map_semantics": "supported applies only to the entire named addition/definition criterion at the explicitly stated source/core/store scope, not broad requirement acceptance. missing means not established by these scoped campaign artifacts, not a claim that code or evidence elsewhere is absent. No task checkboxes, approvals or rollout gates were changed.",
+  "next_smallest_action": "Parent must resolve missing seed64003 progress under an explicitly admitted runtime/source contract; current exact bounds offer no remaining-round continuation. Preserve this failure and the passing bounded seed64001/64002 observations. Obtain full worker/platform/service/benchmark/Valence/lifecycle evidence independently; replay remains conditional on a real finding.",
+  "non_claims": [
+    "intent is not observed fault effectiveness",
+    "local dry-run is instrumentation only",
+    "VM evidence covers this guest and the imported production decisions/store only",
+    "no whole remote service, cgroup collector, persistent block power-loss, performance or fairness proof",
+    "no snapshot replay claim without observed bug and valid retained parent snapshot",
+    "No universal determinism, exhaustive input/schedule coverage or replay claim follows from no-bug output.",
+    "Guest-driven SIGKILL/waitpid and quota-store reopen do not model persistent block-device power loss.",
+    "WorkerLost enum events do not prove actual remote-worker teardown; sharing facts do not prove cryptographic result admission.",
+    "No product builds, Cargo tests, lint, formatters, Nix checks, lifecycle approvals, policy changes, dependencies, commits, archives or sibling modifications were performed by this inspection."
+  ],
+  "overall_task_acceptance": false,
+  "per_task_criterion_map": [
+    {
+      "basis": "No before-core-change scheduler/declaration/lease/report/discovery/accounting test receipt is established by this campaign.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 1.1 Run existing scheduler, resource declaration, lease, report, result-discovery, and accounting tests before core changes. r[remote_builds.resource_observations]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "1.1"
+    },
+    {
+      "basis": "Observation v2 is bound source, but this campaign does not establish the canonical public action-family identity schema or its exclusion properties.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 1.2 Define versioned resource-observation and action-family identity schemas. r[remote_builds.resource_observations]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "1.2"
+    },
+    {
+      "basis": "Bound production source defines sample/age/margin/measurement bounds in SelectionPolicy, MAX_CLASSES/MAX_HISTORY/MAX_PUBLIC_ID_BYTES, and retry/class/charge/wall limits in EscalationPolicy. This is a source-definition criterion, not a historical-selection or platform measurement acceptance claim.",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 1.3 Define named sample, age, margin, retry, class, charge, time, and measurement bounds. r[remote_builds.replayable_resource_selection] r[remote_builds.positive_oom_retry]",
+      "evidence_scope": "source-definition-only",
+      "task": "1.3"
+    },
+    {
+      "basis": "The guest does not construct resource-observation history fixtures for all missing/stale/incompatible/oversized/untrusted cases.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 1.4 Add positive observations and negative missing, stale, incompatible, oversized, and untrusted fixtures. r[remote_builds.resource_observations]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "1.4"
+    },
+    {
+      "basis": "Bound resource_policy.rs defines Quantities, Features, MachineClass, Observation, SelectionPolicy, QuotaFacts, Selection and typed Reason; definitions only. The campaign exercises escalation and sharing, not select().",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 2.1 Add typed policy inputs, eligible machine classes, quota facts, observations, decisions, and reason codes. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "source-definition-only",
+      "task": "2.1"
+    },
+    {
+      "basis": "The workload does not exercise select() across required architecture/platform/KVM/trust/isolation and declared minima.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 2.2 Enforce declared minima and required architecture, platform, KVM, trust, and isolation features. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "2.2"
+    },
+    {
+      "basis": "The campaign is not canonical input/output selection replay or tie-breaking evidence.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 2.3 Add deterministic tie-breaking and canonical replay serialization. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "2.3"
+    },
+    {
+      "basis": "No focused selection test command or complete named negative-selection fixture set was executed in this inspection.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 2.4 Add positive selection tests and negative no-class, stale-history, quota-denial, and feature-mismatch tests. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "2.4"
+    },
+    {
+      "basis": "No property-test receipt for determinism/monotonic minima/stable ordering/bounded selection output is established here.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 2.5 Add property tests for determinism, monotonic minima, stable ordering, and bounded output. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "2.5"
+    },
+    {
+      "basis": "OomEvidence is an explicit harness fact. No worker-platform collector or authenticated dedicated-cgroup OOM observation was exercised.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 3.1 Define trusted positive OOM evidence for each supported worker platform. r[remote_builds.positive_oom_retry]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "3.1"
+    },
+    {
+      "basis": "The imported production planner has named retry/class/cumulative-unit/wall limits. The immutable guest exercises positive escalation and exact typed denials for ambiguous/untrusted evidence, retry limit, stale/new fence, wall limit, charge limit, quota denial, unavailable class and invalid policy. Source bounds and bounded core execution only; no real OOM collection.",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 3.2 Implement the pure escalation planner with named retry, class, charge, and wall-time limits. r[remote_builds.positive_oom_retry]",
+      "evidence_scope": "bounded-production-core-or-store",
+      "task": "3.2"
+    },
+    {
+      "basis": "The harness observes an EscalationPlan with fresh next fence and exact predecessor; it does not create/reserve/dispatch a successor through the real coordinator.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 3.3 Create each retry as a new fenced attempt with predecessor linkage. r[remote_builds.positive_oom_retry]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "3.3"
+    },
+    {
+      "basis": "Observed harness denials cover bounded planner inputs but do not establish the full requested permanent test suite or authenticated arbitrary-failure/OOM integration.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 3.4 Add positive OOM escalation tests and negative arbitrary-failure, ambiguous-exit, exhausted-limit, unavailable-class, and quota-denial tests. r[remote_builds.positive_oom_retry]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "3.4"
+    },
+    {
+      "basis": "Actual imported ResourceQuotaStore reserves and reconciles explicit project/account Reservation records and reopens them. Units and attempt/fence identities are harness inputs; not authenticated worker settlement or billing.",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 4.1 Add explicit project and account reservation and reconciliation records. r[remote_builds.usage_reservation_and_reconciliation]",
+      "evidence_scope": "bounded-production-core-or-store",
+      "task": "4.1"
+    },
+    {
+      "basis": "The named duplicate-completion oracle compares duplicate reconciliation result and unchanged revision, then reopens actual production store and requires project/account charges=3 and reservations=0. This proves the recorded exact-repeat case only; not every conflicting-observation or concurrency case.",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 4.2 Make ledger mutations idempotent by attempt identity. r[remote_builds.usage_reservation_and_reconciliation]",
+      "evidence_scope": "bounded-production-core-or-store",
+      "task": "4.2"
+    },
+    {
+      "basis": "No real bounded resource-usage API response was invoked or inspected; core UnitSchedule/Summary is not API acceptance.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 4.3 Add bounded API summaries with public units and reason codes. r[remote_builds.usage_reservation_and_reconciliation]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "4.3"
+    },
+    {
+      "basis": "The guest observes duplicate, worker-loss, stale-fence, corrupt/missing/oversized store and interrupted-publication paths, but does not establish all cancellation/partial-observation/overflow tests or the complete permanent test command.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 4.4 Add positive charge tests and negative duplicate, cancellation, worker-loss, partial-observation, overflow, and store-failure tests. r[remote_builds.usage_reservation_and_reconciliation]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "4.4"
+    },
+    {
+      "basis": "Bound authorize_sharing source requires an explicit permitted producer/consumer scope for cross-project reuse and has the same-project path. Guest observes permitted named scope and missing-scope denial. Pure policy definition only, not signed result admission.",
+      "checkbox_changed": false,
+      "classification": "supported",
+      "criterion": "- [ ] [serial] 5.1 Add private, project, and explicitly named sharing-scope policy. r[remote_builds.authorized_result_sharing]",
+      "evidence_scope": "bounded-production-core-or-store",
+      "task": "5.1"
+    },
+    {
+      "basis": "Harness supplies true request/signature/policy/platform/output booleans. Only a real availability file is removed; no signature, output identity or complete current CAS/result admission is performed.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 5.2 Require request identity, producer signature, policy and platform compatibility, authorized scopes, output identity, and CAS availability. r[remote_builds.authorized_result_sharing]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "5.2"
+    },
+    {
+      "basis": "SharingLink is a core return type; the harness checks is_ok() and does not retain actual producer-to-consumer evidence links through the service/Valence consumer.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 5.3 Record producer-to-consumer evidence links. r[remote_builds.authorized_result_sharing]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "5.3"
+    },
+    {
+      "basis": "Only named-scope and CAS policy outcomes are exercised. Complete same-project/signature/platform/policy/identity fixtures and test receipts are not established.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 5.4 Add positive same-project and explicit-sharing fixtures plus negative signature, scope, platform, policy, identity, and CAS fixtures. r[remote_builds.authorized_result_sharing]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "5.4"
+    },
+    {
+      "basis": "benchmark.ncl records a pinned nixbench reference and Apache-2.0 attribution, but this campaign does not establish the required pre-adaptation review receipt.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 6.1 Review `nixbench` workload patterns and licenses before adapting any fixture. r[remote_builds.resource_benchmark_evidence]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "6.1"
+    },
+    {
+      "basis": "The VM guest is not the declared fixed-input benchmark workload corpus. Corpus metadata exists in benchmark.ncl, but actual benchmark execution/outcome/measurement evidence is outside these retained campaign inputs.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 6.2 Add fixed-input workloads with public source, license, platform, outcome, and measurement metadata. r[remote_builds.resource_benchmark_evidence]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "6.2"
+    },
+    {
+      "basis": "No observe-only versus static benchmark comparison was run by this campaign; neither historical placement benefit nor performance is established.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 6.3 Compare observe-only policy decisions with the declared static baseline. r[remote_builds.resource_benchmark_evidence] r[remote_builds.resource_policy_rollout]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "6.3"
+    },
+    {
+      "basis": "Campaigns and bounded successful seed64001/64002 observations exist for explicit OOM facts, WorkerLost events, duplicates, real accounting-child SIGKILL/reopen and removed CAS availability file. The full reviewed three-seed acceptance is blocked: seed64003 exits3 with 18 named sites unexercised. No task checkbox is closed.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 6.4 Add ChaosControl campaigns for OOM, worker loss, duplicate events, accounting interruption, and CAS failure. r[remote_builds.positive_oom_retry] r[remote_builds.usage_reservation_and_reconciliation]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "6.4"
+    },
+    {
+      "basis": "No Valence consumer export/acceptance or Cairn gate receipt was run here.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 6.5 Export observations and non-claims through Valence and gate them through Cairn. r[remote_builds.resource_benchmark_evidence]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "6.5"
+    },
+    {
+      "basis": "Guest controls are all enabled/project-opted-in facts; this does not prove real observe-only and project opt-in transitions through product control surfaces.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.1 Add observe-only mode and project opt-in controls. r[remote_builds.resource_policy_rollout]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.1"
+    },
+    {
+      "basis": "Independent core flags are not exercised as real rollback transitions for selection/retry/quota/sharing.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.2 Add independent rollback controls for selection, retry, quota enforcement, and sharing. r[remote_builds.resource_policy_rollout]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.2"
+    },
+    {
+      "basis": "No formatter was run; parent owns canonical first-party validation rather than the stale all-workspace formatting command.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.3 Run `cargo fmt --all -- --check`. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.3"
+    },
+    {
+      "basis": "Fresh local SDK negative controls and retained VM outcomes are evidence, not a completed focused replay/property/benchmark/fault test gate. In particular VM seed64003 acceptance fails and replay candidate is unavailable.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.4 Run focused positive, negative, replay, property, benchmark, and fault tests. r[remote_builds.resource_benchmark_evidence]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.4"
+    },
+    {
+      "basis": "No workspace tests or Clippy were run; parent owns the final canonical first-party/vendored-exclusion gates.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.5 Run `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.replayable_resource_selection]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.5"
+    },
+    {
+      "basis": "No Nix flake check was run by this inspection.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.6 Run the relevant Nix flake checks. r[remote_builds.resource_benchmark_evidence]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.6"
+    },
+    {
+      "basis": "No Cairn validation/coverage/design/tasks gate was run by this inspection; no approval, policy decision, archive or waiver is inferred.",
+      "checkbox_changed": false,
+      "classification": "missing",
+      "criterion": "- [ ] [serial] 7.7 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.resource_policy_rollout]",
+      "evidence_scope": "not-established-by-this-campaign",
+      "task": "7.7"
+    }
+  ],
+  "remaining_blockers": [
+    "Seed64003 required workload progress and ledger/crash/CAS outcomes are unobserved; all eight admitted rounds are consumed and within-bound resume explicitly rejects zero remaining rounds. Diagnose the missing progress and obtain an admitted, fresh artifact-bound continuation/repair run; do not relabel the historical failure or widen limits silently.",
+    "No selected actual bug exists, so snapshot reproduction/minimization is unavailable and remains a non-claim. No bug needs to be planted to pass bounded execution.",
+    "Real authenticated platform OOM/worker dimensions, full remote coordinator/signed result/CAS usage APIs, benchmark comparison, Valence consumer and final Cairn/product gates are not supplied by this harness. External approvals/OnixOS rollout remain separate."
+  ],
+  "replay_evidence": false,
+  "replay_negative_paths": {
+    "observed_no_candidate_export": "All three genuine checkpoints export zero matching depth>=1 bugs; exit0 is successful inspection, not replay acceptance.",
+    "missing_snapshot_ref": "not exercised: no selected actual bug; no snapshot-replay promotion attempted",
+    "missing_snapshot_artifact": "not exercised: no selected actual bug or snapshot artifact; no fixture bug invented",
+    "changed_snapshot_digest": "not exercised: no selected actual bug or parent snapshot; manifest artifact-digest drift rejection is a different observed negative path",
+    "schedule_only_replay": "not exercised; not admitted as snapshot proof",
+    "non_reproducing_bug": "not exercised: no actual selected bug; reproduce/minimize unavailable",
+    "unsupported_workload_or_hosted_promotion": "not requested or attempted; historical admitted sample proofs cannot promote this resource workload",
+    "stale_source_manifest": "observed: original39 bindings accepted; changed-digest and missing-artifact manifest copies rejected by repository-owned load_manifest"
+  },
+  "schema": "mantle-resource-policy-runtime-campaign-status-v1",
+  "scope": "Receipt/claim inspection of the recorded external Rust harness, imported production pure decisions and filesystem quota shell; not whole resource policy or remote service acceptance.",
+  "seed_results": [
+    {
+      "acceptance_predicates_pass": true,
+      "assertions": [
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2891170249,
+          "identity_fingerprint": "0c6691cbd287a8e2e2dd4e553da6a68526356c41e1b4aff79a37327757cde929",
+          "kind": "always",
+          "message": "resource pending usage cannot mint quota",
+          "source_site": {
+            "source_site": "src/main.rs:86:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 333190529,
+          "identity_fingerprint": "12da0e96287b84ddfab0bcd2ba8a684d1594d230842212894a81d07878d91776",
+          "kind": "always",
+          "message": "resource oversized ledger fails closed",
+          "source_site": {
+            "source_site": "src/main.rs:200:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 279347663,
+          "identity_fingerprint": "26ca469aac4289b069f423133573eda15f6926ebd40202310e3140030351cda1",
+          "kind": "reachable",
+          "message": "resource actual accounting child killed and reopened",
+          "source_site": {
+            "source_site": "src/main.rs:174:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2784988989,
+          "identity_fingerprint": "2f140d0e24a7527a6acf1ef027f65c5ef97a298594edb6d739f2a142691e805e",
+          "kind": "sometimes",
+          "message": "resource fault workload completes bounded operations",
+          "source_site": {
+            "source_site": "src/main.rs:279:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3186486826,
+          "identity_fingerprint": "4f8b96b910ec0b0e8a9d8e4d01e89770b4c151562bd593a07e04ee7f261b4827",
+          "kind": "always",
+          "message": "resource retry has fresh fence and exact predecessor",
+          "source_site": {
+            "source_site": "src/main.rs:54:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 10,
+          "id": 2894693466,
+          "identity_fingerprint": "53ef3221fcd6dc0a97301895fa06e4d3646a0771c2669df9726fef9f050886bf",
+          "kind": "always",
+          "message": "resource retry rejects ambiguous stale and exhausted evidence",
+          "source_site": {
+            "source_site": "src/main.rs:61:9",
+            "type": "automatic"
+          },
+          "true_count": 10,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2406710440,
+          "identity_fingerprint": "573b3dcfc5c50b57c3c03853b16a3bb597890b69c26d34d1b8f8ae8f86cb097f",
+          "kind": "always",
+          "message": "resource missing ledger cannot admit usage",
+          "source_site": {
+            "source_site": "src/main.rs:184:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1514011219,
+          "identity_fingerprint": "5ae02b145007d78cbfac5964f0cf3357828a1ec852a08c36223565a5c80e23ac",
+          "kind": "always",
+          "message": "resource lost ledger sentinel prevents silent reprovision",
+          "source_site": {
+            "source_site": "src/main.rs:202:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2842890220,
+          "identity_fingerprint": "88bf74598a656f3d3d3f73110b0214b64a9504e3af47009d3770cdc76d8db5cf",
+          "kind": "always",
+          "message": "resource delayed worker loss cannot overwrite settlement",
+          "source_site": {
+            "source_site": "src/main.rs:113:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3693036661,
+          "identity_fingerprint": "8f042d1315e0e055c3def3b0fbdb4d5deed84403149842132370056e7f5385f7",
+          "kind": "sometimes",
+          "message": "resource delayed trusted completion settles pending accounting",
+          "source_site": {
+            "source_site": "src/main.rs:125:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 624531258,
+          "identity_fingerprint": "b36b8cf3a3dc9104a2937c44790317623d36dc348956c0e00d7d28142facd1a0",
+          "kind": "always",
+          "message": "resource malformed schedule rejected before reservation",
+          "source_site": {
+            "source_site": "src/main.rs:120:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1109878492,
+          "identity_fingerprint": "b75c6aad17dc76ee944f407ce77d39bb33e5158968d83349e0130b5ee8dba10e",
+          "kind": "reachable",
+          "message": "resource positive and denied retry outcomes observed",
+          "source_site": {
+            "source_site": "src/main.rs:67:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 88970808,
+          "identity_fingerprint": "cf08630541a73fe7519fe8b41903567f59d2cf2aa2b50c9e97ef3ce2a1c9fe67",
+          "kind": "always",
+          "message": "resource killed accounting leaves complete old or new transaction",
+          "source_site": {
+            "source_site": "src/main.rs:153:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 906048319,
+          "identity_fingerprint": "cf54780c95b67162b7eed894d5f04b69ee51f1a33ffc8183be0884265b4778ac",
+          "kind": "always",
+          "message": "resource worker loss retains project and account reservation",
+          "source_site": {
+            "source_site": "src/main.rs:80:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 755650068,
+          "identity_fingerprint": "df797db248692f98a38f388757a3cd131ac7d5b5a3f34ad3e66977d44e32611b",
+          "kind": "always",
+          "message": "resource authorized available result policy accepts scoped reuse",
+          "source_site": {
+            "source_site": "src/main.rs:210:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3392063767,
+          "identity_fingerprint": "ea371d1ba39284b7016672887c34efb5b3aabe60829b49c1f26d303231e101bc",
+          "kind": "always",
+          "message": "resource absent CAS denies result reuse",
+          "source_site": {
+            "source_site": "src/main.rs:220:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1273207368,
+          "identity_fingerprint": "f194a4040264808a41072a7495f6270d3047eafd57010e28a5324c34e3250ba9",
+          "kind": "always",
+          "message": "resource delayed stale fence cannot reconcile current reservation",
+          "source_site": {
+            "source_site": "src/main.rs:89:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1042711673,
+          "identity_fingerprint": "f501926e3e84161c6c3c3e379ac18078bbc69511dae14653b9f656996017c23d",
+          "kind": "always",
+          "message": "resource duplicate completion charges once across reopen",
+          "source_site": {
+            "source_site": "src/main.rs:103:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 2686929132,
+          "identity_fingerprint": "f879d75c8e453e4e9903dbe9c1148a589d0c42570059485e3b8aeae2499d29b6",
+          "kind": "always",
+          "message": "resource interrupted accounting recovers exactly one charge",
+          "source_site": {
+            "source_site": "src/main.rs:166:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3087862600,
+          "identity_fingerprint": "fa46939921e348ae167af074d861973ef090bf5eb0e56919b3207a2d319f358e",
+          "kind": "always",
+          "message": "resource CAS presence alone grants no cross project authority",
+          "source_site": {
+            "source_site": "src/main.rs:221:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 2,
+          "id": 334936807,
+          "identity_fingerprint": "fa9129ad478dbba157c9490a6a959ef9d6d79c9265175621a85b312e2fce987e",
+          "kind": "always",
+          "message": "resource malformed or missing accounting fields fail closed",
+          "source_site": {
+            "source_site": "src/main.rs:192:9",
+            "type": "automatic"
+          },
+          "true_count": 2,
+          "verdict": "passed"
+        }
+      ],
+      "branches_explored": 8,
+      "catalog_status": "accepted",
+      "checkpoint_bugs": [],
+      "checkpoint_journal_binding": {
+        "epoch": 0,
+        "segment_digest": "870dbd79d9574aaa887d370d9b1b7ef67a2d8c87ea493a7649c4f44aea0b04ea",
+        "segment_seq": 16
+      },
+      "exact_vm_argv": [
+        "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+        "run",
+        "--kernel",
+        "/nix/store/sxfyw375xwpr7v0jnqdnydcy6y5drz9g-linux-6.19-dev/vmlinux",
+        "--initrd",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/initrd.gz",
+        "--seed",
+        "64001",
+        "--mode",
+        "input-tree",
+        "--frontier-policy",
+        "campaign",
+        "--scheduling",
+        "round-robin",
+        "--memory-mb",
+        "256",
+        "--vms",
+        "1",
+        "--vcpus",
+        "1",
+        "--rounds",
+        "8",
+        "--branches",
+        "4",
+        "--ticks",
+        "20000",
+        "--quantum",
+        "100",
+        "--bootstrap-budget",
+        "100000",
+        "--max-frontier",
+        "16",
+        "--workers",
+        "1",
+        "--output",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64001",
+        "--min-assertion-exercise",
+        "1"
+      ],
+      "exported_bug_files": [],
+      "frontier_stop": {
+        "kind": "stop",
+        "rounds_completed": 8,
+        "stop": "completed"
+      },
+      "missing_local_messages": [],
+      "predicates": {
+        "all_local_messages_observed_passing": true,
+        "authoritative_v2": true,
+        "every_catalog_verdict_passed": true,
+        "no_standalone_bug_files": true
+      },
+      "rounds_completed": 8,
+      "seed": 64001
+    },
+    {
+      "acceptance_predicates_pass": true,
+      "assertions": [
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2891170249,
+          "identity_fingerprint": "0c6691cbd287a8e2e2dd4e553da6a68526356c41e1b4aff79a37327757cde929",
+          "kind": "always",
+          "message": "resource pending usage cannot mint quota",
+          "source_site": {
+            "source_site": "src/main.rs:86:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 333190529,
+          "identity_fingerprint": "12da0e96287b84ddfab0bcd2ba8a684d1594d230842212894a81d07878d91776",
+          "kind": "always",
+          "message": "resource oversized ledger fails closed",
+          "source_site": {
+            "source_site": "src/main.rs:200:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 279347663,
+          "identity_fingerprint": "26ca469aac4289b069f423133573eda15f6926ebd40202310e3140030351cda1",
+          "kind": "reachable",
+          "message": "resource actual accounting child killed and reopened",
+          "source_site": {
+            "source_site": "src/main.rs:174:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2784988989,
+          "identity_fingerprint": "2f140d0e24a7527a6acf1ef027f65c5ef97a298594edb6d739f2a142691e805e",
+          "kind": "sometimes",
+          "message": "resource fault workload completes bounded operations",
+          "source_site": {
+            "source_site": "src/main.rs:279:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3186486826,
+          "identity_fingerprint": "4f8b96b910ec0b0e8a9d8e4d01e89770b4c151562bd593a07e04ee7f261b4827",
+          "kind": "always",
+          "message": "resource retry has fresh fence and exact predecessor",
+          "source_site": {
+            "source_site": "src/main.rs:54:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 10,
+          "id": 2894693466,
+          "identity_fingerprint": "53ef3221fcd6dc0a97301895fa06e4d3646a0771c2669df9726fef9f050886bf",
+          "kind": "always",
+          "message": "resource retry rejects ambiguous stale and exhausted evidence",
+          "source_site": {
+            "source_site": "src/main.rs:61:9",
+            "type": "automatic"
+          },
+          "true_count": 10,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2406710440,
+          "identity_fingerprint": "573b3dcfc5c50b57c3c03853b16a3bb597890b69c26d34d1b8f8ae8f86cb097f",
+          "kind": "always",
+          "message": "resource missing ledger cannot admit usage",
+          "source_site": {
+            "source_site": "src/main.rs:184:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1514011219,
+          "identity_fingerprint": "5ae02b145007d78cbfac5964f0cf3357828a1ec852a08c36223565a5c80e23ac",
+          "kind": "always",
+          "message": "resource lost ledger sentinel prevents silent reprovision",
+          "source_site": {
+            "source_site": "src/main.rs:202:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 2842890220,
+          "identity_fingerprint": "88bf74598a656f3d3d3f73110b0214b64a9504e3af47009d3770cdc76d8db5cf",
+          "kind": "always",
+          "message": "resource delayed worker loss cannot overwrite settlement",
+          "source_site": {
+            "source_site": "src/main.rs:113:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3693036661,
+          "identity_fingerprint": "8f042d1315e0e055c3def3b0fbdb4d5deed84403149842132370056e7f5385f7",
+          "kind": "sometimes",
+          "message": "resource delayed trusted completion settles pending accounting",
+          "source_site": {
+            "source_site": "src/main.rs:125:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 624531258,
+          "identity_fingerprint": "b36b8cf3a3dc9104a2937c44790317623d36dc348956c0e00d7d28142facd1a0",
+          "kind": "always",
+          "message": "resource malformed schedule rejected before reservation",
+          "source_site": {
+            "source_site": "src/main.rs:120:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1109878492,
+          "identity_fingerprint": "b75c6aad17dc76ee944f407ce77d39bb33e5158968d83349e0130b5ee8dba10e",
+          "kind": "reachable",
+          "message": "resource positive and denied retry outcomes observed",
+          "source_site": {
+            "source_site": "src/main.rs:67:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 88970808,
+          "identity_fingerprint": "cf08630541a73fe7519fe8b41903567f59d2cf2aa2b50c9e97ef3ce2a1c9fe67",
+          "kind": "always",
+          "message": "resource killed accounting leaves complete old or new transaction",
+          "source_site": {
+            "source_site": "src/main.rs:153:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 906048319,
+          "identity_fingerprint": "cf54780c95b67162b7eed894d5f04b69ee51f1a33ffc8183be0884265b4778ac",
+          "kind": "always",
+          "message": "resource worker loss retains project and account reservation",
+          "source_site": {
+            "source_site": "src/main.rs:80:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 755650068,
+          "identity_fingerprint": "df797db248692f98a38f388757a3cd131ac7d5b5a3f34ad3e66977d44e32611b",
+          "kind": "always",
+          "message": "resource authorized available result policy accepts scoped reuse",
+          "source_site": {
+            "source_site": "src/main.rs:210:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3392063767,
+          "identity_fingerprint": "ea371d1ba39284b7016672887c34efb5b3aabe60829b49c1f26d303231e101bc",
+          "kind": "always",
+          "message": "resource absent CAS denies result reuse",
+          "source_site": {
+            "source_site": "src/main.rs:220:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1273207368,
+          "identity_fingerprint": "f194a4040264808a41072a7495f6270d3047eafd57010e28a5324c34e3250ba9",
+          "kind": "always",
+          "message": "resource delayed stale fence cannot reconcile current reservation",
+          "source_site": {
+            "source_site": "src/main.rs:89:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1042711673,
+          "identity_fingerprint": "f501926e3e84161c6c3c3e379ac18078bbc69511dae14653b9f656996017c23d",
+          "kind": "always",
+          "message": "resource duplicate completion charges once across reopen",
+          "source_site": {
+            "source_site": "src/main.rs:103:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 3,
+          "id": 2686929132,
+          "identity_fingerprint": "f879d75c8e453e4e9903dbe9c1148a589d0c42570059485e3b8aeae2499d29b6",
+          "kind": "always",
+          "message": "resource interrupted accounting recovers exactly one charge",
+          "source_site": {
+            "source_site": "src/main.rs:166:5",
+            "type": "automatic"
+          },
+          "true_count": 3,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3087862600,
+          "identity_fingerprint": "fa46939921e348ae167af074d861973ef090bf5eb0e56919b3207a2d319f358e",
+          "kind": "always",
+          "message": "resource CAS presence alone grants no cross project authority",
+          "source_site": {
+            "source_site": "src/main.rs:221:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 2,
+          "id": 334936807,
+          "identity_fingerprint": "fa9129ad478dbba157c9490a6a959ef9d6d79c9265175621a85b312e2fce987e",
+          "kind": "always",
+          "message": "resource malformed or missing accounting fields fail closed",
+          "source_site": {
+            "source_site": "src/main.rs:192:9",
+            "type": "automatic"
+          },
+          "true_count": 2,
+          "verdict": "passed"
+        }
+      ],
+      "branches_explored": 8,
+      "catalog_status": "accepted",
+      "checkpoint_bugs": [],
+      "checkpoint_journal_binding": {
+        "epoch": 0,
+        "segment_digest": "4868128852f31ea7f48e8ff3b0f19056b4eacf989c618446eb978f7e76dfd1af",
+        "segment_seq": 16
+      },
+      "exact_vm_argv": [
+        "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+        "run",
+        "--kernel",
+        "/nix/store/sxfyw375xwpr7v0jnqdnydcy6y5drz9g-linux-6.19-dev/vmlinux",
+        "--initrd",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/initrd.gz",
+        "--seed",
+        "64002",
+        "--mode",
+        "input-tree",
+        "--frontier-policy",
+        "campaign",
+        "--scheduling",
+        "round-robin",
+        "--memory-mb",
+        "256",
+        "--vms",
+        "1",
+        "--vcpus",
+        "1",
+        "--rounds",
+        "8",
+        "--branches",
+        "4",
+        "--ticks",
+        "20000",
+        "--quantum",
+        "100",
+        "--bootstrap-budget",
+        "100000",
+        "--max-frontier",
+        "16",
+        "--workers",
+        "1",
+        "--output",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64002",
+        "--min-assertion-exercise",
+        "1"
+      ],
+      "exported_bug_files": [],
+      "frontier_stop": {
+        "kind": "stop",
+        "rounds_completed": 8,
+        "stop": "completed"
+      },
+      "missing_local_messages": [],
+      "predicates": {
+        "all_local_messages_observed_passing": true,
+        "authoritative_v2": true,
+        "every_catalog_verdict_passed": true,
+        "no_standalone_bug_files": true
+      },
+      "rounds_completed": 8,
+      "seed": 64002
+    },
+    {
+      "acceptance_predicates_pass": false,
+      "assertions": [
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 2891170249,
+          "identity_fingerprint": "0c6691cbd287a8e2e2dd4e553da6a68526356c41e1b4aff79a37327757cde929",
+          "kind": "always",
+          "message": "resource pending usage cannot mint quota",
+          "source_site": {
+            "source_site": "src/main.rs:86:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 333190529,
+          "identity_fingerprint": "12da0e96287b84ddfab0bcd2ba8a684d1594d230842212894a81d07878d91776",
+          "kind": "always",
+          "message": "resource oversized ledger fails closed",
+          "source_site": {
+            "source_site": "src/main.rs:200:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 279347663,
+          "identity_fingerprint": "26ca469aac4289b069f423133573eda15f6926ebd40202310e3140030351cda1",
+          "kind": "reachable",
+          "message": "resource actual accounting child killed and reopened",
+          "source_site": {
+            "source_site": "src/main.rs:174:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 2784988989,
+          "identity_fingerprint": "2f140d0e24a7527a6acf1ef027f65c5ef97a298594edb6d739f2a142691e805e",
+          "kind": "sometimes",
+          "message": "resource fault workload completes bounded operations",
+          "source_site": {
+            "source_site": "src/main.rs:279:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 2406710440,
+          "identity_fingerprint": "573b3dcfc5c50b57c3c03853b16a3bb597890b69c26d34d1b8f8ae8f86cb097f",
+          "kind": "always",
+          "message": "resource missing ledger cannot admit usage",
+          "source_site": {
+            "source_site": "src/main.rs:184:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 1514011219,
+          "identity_fingerprint": "5ae02b145007d78cbfac5964f0cf3357828a1ec852a08c36223565a5c80e23ac",
+          "kind": "always",
+          "message": "resource lost ledger sentinel prevents silent reprovision",
+          "source_site": {
+            "source_site": "src/main.rs:202:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 2842890220,
+          "identity_fingerprint": "88bf74598a656f3d3d3f73110b0214b64a9504e3af47009d3770cdc76d8db5cf",
+          "kind": "always",
+          "message": "resource delayed worker loss cannot overwrite settlement",
+          "source_site": {
+            "source_site": "src/main.rs:113:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "progress",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 3693036661,
+          "identity_fingerprint": "8f042d1315e0e055c3def3b0fbdb4d5deed84403149842132370056e7f5385f7",
+          "kind": "sometimes",
+          "message": "resource delayed trusted completion settles pending accounting",
+          "source_site": {
+            "source_site": "src/main.rs:125:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 624531258,
+          "identity_fingerprint": "b36b8cf3a3dc9104a2937c44790317623d36dc348956c0e00d7d28142facd1a0",
+          "kind": "always",
+          "message": "resource malformed schedule rejected before reservation",
+          "source_site": {
+            "source_site": "src/main.rs:120:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 88970808,
+          "identity_fingerprint": "cf08630541a73fe7519fe8b41903567f59d2cf2aa2b50c9e97ef3ce2a1c9fe67",
+          "kind": "always",
+          "message": "resource killed accounting leaves complete old or new transaction",
+          "source_site": {
+            "source_site": "src/main.rs:153:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 906048319,
+          "identity_fingerprint": "cf54780c95b67162b7eed894d5f04b69ee51f1a33ffc8183be0884265b4778ac",
+          "kind": "always",
+          "message": "resource worker loss retains project and account reservation",
+          "source_site": {
+            "source_site": "src/main.rs:80:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 755650068,
+          "identity_fingerprint": "df797db248692f98a38f388757a3cd131ac7d5b5a3f34ad3e66977d44e32611b",
+          "kind": "always",
+          "message": "resource authorized available result policy accepts scoped reuse",
+          "source_site": {
+            "source_site": "src/main.rs:210:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 3392063767,
+          "identity_fingerprint": "ea371d1ba39284b7016672887c34efb5b3aabe60829b49c1f26d303231e101bc",
+          "kind": "always",
+          "message": "resource absent CAS denies result reuse",
+          "source_site": {
+            "source_site": "src/main.rs:220:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 1273207368,
+          "identity_fingerprint": "f194a4040264808a41072a7495f6270d3047eafd57010e28a5324c34e3250ba9",
+          "kind": "always",
+          "message": "resource delayed stale fence cannot reconcile current reservation",
+          "source_site": {
+            "source_site": "src/main.rs:89:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 1042711673,
+          "identity_fingerprint": "f501926e3e84161c6c3c3e379ac18078bbc69511dae14653b9f656996017c23d",
+          "kind": "always",
+          "message": "resource duplicate completion charges once across reopen",
+          "source_site": {
+            "source_site": "src/main.rs:103:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 2686929132,
+          "identity_fingerprint": "f879d75c8e453e4e9903dbe9c1148a589d0c42570059485e3b8aeae2499d29b6",
+          "kind": "always",
+          "message": "resource interrupted accounting recovers exactly one charge",
+          "source_site": {
+            "source_site": "src/main.rs:166:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 3087862600,
+          "identity_fingerprint": "fa46939921e348ae167af074d861973ef090bf5eb0e56919b3207a2d319f358e",
+          "kind": "always",
+          "message": "resource CAS presence alone grants no cross project authority",
+          "source_site": {
+            "source_site": "src/main.rs:221:5",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 0,
+          "id": 334936807,
+          "identity_fingerprint": "fa9129ad478dbba157c9490a6a959ef9d6d79c9265175621a85b312e2fce987e",
+          "kind": "always",
+          "message": "resource malformed or missing accounting fields fail closed",
+          "source_site": {
+            "source_site": "src/main.rs:192:9",
+            "type": "automatic"
+          },
+          "true_count": 0,
+          "verdict": "unexercised"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 3186486826,
+          "identity_fingerprint": "4f8b96b910ec0b0e8a9d8e4d01e89770b4c151562bd593a07e04ee7f261b4827",
+          "kind": "always",
+          "message": "resource retry has fresh fence and exact predecessor",
+          "source_site": {
+            "source_site": "src/main.rs:54:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        },
+        {
+          "category": "resource-invariant",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 10,
+          "id": 2894693466,
+          "identity_fingerprint": "53ef3221fcd6dc0a97301895fa06e4d3646a0771c2669df9726fef9f050886bf",
+          "kind": "always",
+          "message": "resource retry rejects ambiguous stale and exhausted evidence",
+          "source_site": {
+            "source_site": "src/main.rs:61:9",
+            "type": "automatic"
+          },
+          "true_count": 10,
+          "verdict": "passed"
+        },
+        {
+          "category": "outcome",
+          "false_count": 0,
+          "guest": "mantle-resource-policy",
+          "hit_count": 1,
+          "id": 1109878492,
+          "identity_fingerprint": "b75c6aad17dc76ee944f407ce77d39bb33e5158968d83349e0130b5ee8dba10e",
+          "kind": "reachable",
+          "message": "resource positive and denied retry outcomes observed",
+          "source_site": {
+            "source_site": "src/main.rs:67:5",
+            "type": "automatic"
+          },
+          "true_count": 1,
+          "verdict": "passed"
+        }
+      ],
+      "branches_explored": 8,
+      "catalog_status": "accepted",
+      "checkpoint_bugs": [],
+      "checkpoint_journal_binding": {
+        "epoch": 0,
+        "segment_digest": "005d18350c9b4ce2737ec144f95aede47dcfa186c94faf46d15ca5fa89329b4e",
+        "segment_seq": 16
+      },
+      "exact_vm_argv": [
+        "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore",
+        "run",
+        "--kernel",
+        "/nix/store/sxfyw375xwpr7v0jnqdnydcy6y5drz9g-linux-6.19-dev/vmlinux",
+        "--initrd",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/initrd.gz",
+        "--seed",
+        "64003",
+        "--mode",
+        "input-tree",
+        "--frontier-policy",
+        "campaign",
+        "--scheduling",
+        "round-robin",
+        "--memory-mb",
+        "256",
+        "--vms",
+        "1",
+        "--vcpus",
+        "1",
+        "--rounds",
+        "8",
+        "--branches",
+        "4",
+        "--ticks",
+        "20000",
+        "--quantum",
+        "100",
+        "--bootstrap-budget",
+        "100000",
+        "--max-frontier",
+        "16",
+        "--workers",
+        "1",
+        "--output",
+        "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/seed-64003",
+        "--min-assertion-exercise",
+        "1"
+      ],
+      "exported_bug_files": [],
+      "frontier_stop": {
+        "kind": "stop",
+        "rounds_completed": 8,
+        "stop": "completed"
+      },
+      "missing_local_messages": [
+        "resource CAS presence alone grants no cross project authority",
+        "resource absent CAS denies result reuse",
+        "resource actual accounting child killed and reopened",
+        "resource authorized available result policy accepts scoped reuse",
+        "resource delayed stale fence cannot reconcile current reservation",
+        "resource delayed trusted completion settles pending accounting",
+        "resource delayed worker loss cannot overwrite settlement",
+        "resource duplicate completion charges once across reopen",
+        "resource fault workload completes bounded operations",
+        "resource interrupted accounting recovers exactly one charge",
+        "resource killed accounting leaves complete old or new transaction",
+        "resource lost ledger sentinel prevents silent reprovision",
+        "resource malformed or missing accounting fields fail closed",
+        "resource malformed schedule rejected before reservation",
+        "resource missing ledger cannot admit usage",
+        "resource oversized ledger fails closed",
+        "resource pending usage cannot mint quota",
+        "resource worker loss retains project and account reservation"
+      ],
+      "predicates": {
+        "all_local_messages_observed_passing": false,
+        "authoritative_v2": true,
+        "every_catalog_verdict_passed": false,
+        "no_standalone_bug_files": true
+      },
+      "rounds_completed": 8,
+      "seed": 64003
+    }
+  ],
+  "source_identity": {
+    "bindings": [
+      {
+        "actual": "blake3:b2c84d65af751b476ad7ad11747e925cefcf07860d24cb6a1622c922f5008be3",
+        "expected": "blake3:b2c84d65af751b476ad7ad11747e925cefcf07860d24cb6a1622c922f5008be3",
+        "matches": true,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/run-boot/initrd.gz"
+      },
+      {
+        "actual": "blake3:7eb65832abf4cbec4f872b0490b9869d28ea39dd93761dbdfca4573eb7bed651",
+        "expected": "blake3:7eb65832abf4cbec4f872b0490b9869d28ea39dd93761dbdfca4573eb7bed651",
+        "matches": true,
+        "path": "/home/brittonr/.cargo-target/mantle-resource-chaos-20261023/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos"
+      },
+      {
+        "actual": "blake3:4cc1b559a609adbfbd7cb654660a0ea4e37d1c57d6d687f398e7aad22397cf11",
+        "expected": "blake3:4cc1b559a609adbfbd7cb654660a0ea4e37d1c57d6d687f398e7aad22397cf11",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/resource_quota_store.rs"
+      },
+      {
+        "actual": "blake3:1210ff30f7ec935045893c98f508dd7f0efd9cf231be1665e8da69ac691847e4",
+        "expected": "blake3:1210ff30f7ec935045893c98f508dd7f0efd9cf231be1665e8da69ac691847e4",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/Cargo.toml"
+      },
+      {
+        "actual": "blake3:9d4d9fac625b9756bbb285b181a73364a2f527363ef9e1b981ff3e4341b3d487",
+        "expected": "blake3:9d4d9fac625b9756bbb285b181a73364a2f527363ef9e1b981ff3e4341b3d487",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/admission.rs"
+      },
+      {
+        "actual": "blake3:c00313bece5cde731b0c4f25e72ac34b40fbd174387e467699c6146da8230dd6",
+        "expected": "blake3:c00313bece5cde731b0c4f25e72ac34b40fbd174387e467699c6146da8230dd6",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/attempt.rs"
+      },
+      {
+        "actual": "blake3:94da682440261a8d852ff986b4b3762b122857f1ef514143c6c604b4a67ed8d7",
+        "expected": "blake3:94da682440261a8d852ff986b4b3762b122857f1ef514143c6c604b4a67ed8d7",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/attempt_log.rs"
+      },
+      {
+        "actual": "blake3:5adfc793f8334bab1fe29a3ae970b4a7bd240e2095d00d65e6eb30424de44a1c",
+        "expected": "blake3:5adfc793f8334bab1fe29a3ae970b4a7bd240e2095d00d65e6eb30424de44a1c",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/caveat.rs"
+      },
+      {
+        "actual": "blake3:0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+        "expected": "blake3:0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/demand.rs"
+      },
+      {
+        "actual": "blake3:df64928ef9a7950ec56c52ab4d93828864efbf1de7318a8cb2307c46de3d1648",
+        "expected": "blake3:df64928ef9a7950ec56c52ab4d93828864efbf1de7318a8cb2307c46de3d1648",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/effect.rs"
+      },
+      {
+        "actual": "blake3:728e362380571d7d32eb8156fdca96f6bcd6bd970b3a034053c8e85b4f59b050",
+        "expected": "blake3:728e362380571d7d32eb8156fdca96f6bcd6bd970b3a034053c8e85b4f59b050",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/endpoint.rs"
+      },
+      {
+        "actual": "blake3:3a03ec919d1cd8f323d0c0d2cf9e9ce871938dc6e3e17204763c291919927879",
+        "expected": "blake3:3a03ec919d1cd8f323d0c0d2cf9e9ce871938dc6e3e17204763c291919927879",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/external_batch.rs"
+      },
+      {
+        "actual": "blake3:5164d04072308a7b4078bb2463fb4264b4d8a955ab618193ea3e8f90ee2a15e7",
+        "expected": "blake3:5164d04072308a7b4078bb2463fb4264b4d8a955ab618193ea3e8f90ee2a15e7",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/failure.rs"
+      },
+      {
+        "actual": "blake3:083ca40c31fc557e8f6248389a2542c93a59ae21e045462f09e48943df4c257d",
+        "expected": "blake3:083ca40c31fc557e8f6248389a2542c93a59ae21e045462f09e48943df4c257d",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/identity.rs"
+      },
+      {
+        "actual": "blake3:74558cedd9cb6bb8efe10974719d5994039d74e8cba3525b90d432e5a6c08bc9",
+        "expected": "blake3:74558cedd9cb6bb8efe10974719d5994039d74e8cba3525b90d432e5a6c08bc9",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/lease.rs"
+      },
+      {
+        "actual": "blake3:c8e463a2887666b6e042ff71dcfabc32c25a6dd8a2fe47248d2674fec2301968",
+        "expected": "blake3:c8e463a2887666b6e042ff71dcfabc32c25a6dd8a2fe47248d2674fec2301968",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/lib.rs"
+      },
+      {
+        "actual": "blake3:c9067d2d296639bba787889fbd545cb4307bdeb4974ed97b2b9b80fb79575de0",
+        "expected": "blake3:c9067d2d296639bba787889fbd545cb4307bdeb4974ed97b2b9b80fb79575de0",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/nominal.rs"
+      },
+      {
+        "actual": "blake3:f8b041dd9d1df80392cde7491031ab27a6a404e3124a2f0eee5cfcee96fe1e69",
+        "expected": "blake3:f8b041dd9d1df80392cde7491031ab27a6a404e3124a2f0eee5cfcee96fe1e69",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/output.rs"
+      },
+      {
+        "actual": "blake3:bd1b02e5f43180cb5254727fdcfd8d9db633364c529a4332cc8bd79830903e3a",
+        "expected": "blake3:bd1b02e5f43180cb5254727fdcfd8d9db633364c529a4332cc8bd79830903e3a",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/protocol.rs"
+      },
+      {
+        "actual": "blake3:e167e1201f89441fbe305d0d34bbf0620e622b71adfcf0287f631ee8f70e7228",
+        "expected": "blake3:e167e1201f89441fbe305d0d34bbf0620e622b71adfcf0287f631ee8f70e7228",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/provider.rs"
+      },
+      {
+        "actual": "blake3:9816bfb206b0af203fc4820d0c9be40789eeb096519b009421a4b65ed0501939",
+        "expected": "blake3:9816bfb206b0af203fc4820d0c9be40789eeb096519b009421a4b65ed0501939",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/receipt.rs"
+      },
+      {
+        "actual": "blake3:797e3127e636b5a2ccaa840155b45de3d3c51026bb59a74d94c177bdb3e51a61",
+        "expected": "blake3:797e3127e636b5a2ccaa840155b45de3d3c51026bb59a74d94c177bdb3e51a61",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/recovery.rs"
+      },
+      {
+        "actual": "blake3:e8baf2b64154bd03100f03e1983de7dfd23c76b1848eeb07d70adae00aff0474",
+        "expected": "blake3:e8baf2b64154bd03100f03e1983de7dfd23c76b1848eeb07d70adae00aff0474",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/resource.rs"
+      },
+      {
+        "actual": "blake3:0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+        "expected": "blake3:0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/resource_policy.rs"
+      },
+      {
+        "actual": "blake3:f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+        "expected": "blake3:f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/resource_quota.rs"
+      },
+      {
+        "actual": "blake3:9b22cd605455c3af574b5664784ed5d22f678c2937349bafd4c93aee9a67ea3e",
+        "expected": "blake3:9b22cd605455c3af574b5664784ed5d22f678c2937349bafd4c93aee9a67ea3e",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/transfer.rs"
+      },
+      {
+        "actual": "blake3:d789cdceda53345e2c6758ccbaae224cd64c0a7f15862f21d2a0224f49af5933",
+        "expected": "blake3:d789cdceda53345e2c6758ccbaae224cd64c0a7f15862f21d2a0224f49af5933",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/trellis_projection.rs"
+      },
+      {
+        "actual": "blake3:f54fd0398a05003fe6f1224823cdf48e09c668756a068a92b9c6ffb39e4945ba",
+        "expected": "blake3:f54fd0398a05003fe6f1224823cdf48e09c668756a068a92b9c6ffb39e4945ba",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core/src/trellis_projection_tests.rs"
+      },
+      {
+        "actual": "blake3:9ddeb9d564b16b6226b0817bebce4ca80a88b84149e5c69fca510313f71d5e35",
+        "expected": "blake3:9ddeb9d564b16b6226b0817bebce4ca80a88b84149e5c69fca510313f71d5e35",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/Cargo.lock"
+      },
+      {
+        "actual": "blake3:4f49141a6bcadda9f000a708fbaee7097960f7e19d7cb4cfef336ce01771d6af",
+        "expected": "blake3:4f49141a6bcadda9f000a708fbaee7097960f7e19d7cb4cfef336ce01771d6af",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/Cargo.toml"
+      },
+      {
+        "actual": "blake3:5eb2c8661c41355f492f787f0941ca1e7e957647405508658603743ef3bdb710",
+        "expected": "blake3:5eb2c8661c41355f492f787f0941ca1e7e957647405508658603743ef3bdb710",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.ncl"
+      },
+      {
+        "actual": "blake3:1b86cb7be64113b311bf09fbc8819843b0ddee4caf3343cd76b741697def176a",
+        "expected": "blake3:1b86cb7be64113b311bf09fbc8819843b0ddee4caf3343cd76b741697def176a",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/campaign.py"
+      },
+      {
+        "actual": "blake3:a595c520132c5c81a6a3746eeffbf1e57287346243181a461bbdb89cbd61d92c",
+        "expected": "blake3:a595c520132c5c81a6a3746eeffbf1e57287346243181a461bbdb89cbd61d92c",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/src/crash.rs"
+      },
+      {
+        "actual": "blake3:07416098023919b1e570741acebb8c8dc311478caf46126d4d9fdd08cfb5b1dc",
+        "expected": "blake3:07416098023919b1e570741acebb8c8dc311478caf46126d4d9fdd08cfb5b1dc",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/src/decisions.rs"
+      },
+      {
+        "actual": "blake3:92945db705524c934185398910bf1eb17a372f4078a15c837e5aaa5e88de5e2f",
+        "expected": "blake3:92945db705524c934185398910bf1eb17a372f4078a15c837e5aaa5e88de5e2f",
+        "matches": true,
+        "path": "/home/brittonr/git/OnixResearch/mantle/workloads/resource-policy/src/main.rs"
+      },
+      {
+        "actual": "blake3:19b1eb8c7f9dcc01a8b32761f9c232d47b885efc2087e374e79f7caaeb2a1dcb",
+        "expected": "blake3:19b1eb8c7f9dcc01a8b32761f9c232d47b885efc2087e374e79f7caaeb2a1dcb",
+        "matches": true,
+        "path": "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/chaoscontrol-explore"
+      },
+      {
+        "actual": "blake3:24b1be995fd5b77ec87d3e452d608aa06430cd5a034533d60396e773cc5386e1",
+        "expected": "blake3:24b1be995fd5b77ec87d3e452d608aa06430cd5a034533d60396e773cc5386e1",
+        "matches": true,
+        "path": "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/check-sdk-assertion-quality"
+      },
+      {
+        "actual": "blake3:a698addd68be41831e998297505149e93cc41314bca9c03353502e213e50ccc6",
+        "expected": "blake3:a698addd68be41831e998297505149e93cc41314bca9c03353502e213e50ccc6",
+        "matches": true,
+        "path": "/nix/store/p8ph9cfj5q0k4wsa09nfgiih04csj3rp-chaoscontrol-0.1.0/bin/summarize-sdk-local-output"
+      },
+      {
+        "actual": "blake3:3c0823c6c9480670479bdaf7916a57885c89315a560456c6191197ef7b469b7b",
+        "expected": "blake3:3c0823c6c9480670479bdaf7916a57885c89315a560456c6191197ef7b469b7b",
+        "matches": true,
+        "path": "/nix/store/sxfyw375xwpr7v0jnqdnydcy6y5drz9g-linux-6.19-dev/vmlinux"
+      }
+    ],
+    "bindings_checked": 39,
+    "chaoscontrol_inspected_sibling_revision": "cf368fc601706dfde4f6c6eead6222017babab82",
+    "cohort_caution": "Sibling checkout is newer than pinned a154; continuation conclusions use the pinned public a154 source URL and observed immutable CLI, not newer sibling implementation.",
+    "current_bindings_verified": true,
+    "current_revision_command": {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "exit_code": 0
+    },
+    "freshness_boundary": "Matches were observed at capture time; file identities, not Git revision alone, bind uncommitted bytes. No current whole-Mantle executable or worker source acceptance is inferred.",
+    "mantle_current_revision_observed": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+    "mantle_recorded_revision": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+    "sdk_public_source": "https://github.com/brittonr/chaoscontrol?rev=a154ddd1320129a133bb84b8e13ad3df7e55a55f"
+  },
+  "verdict": "blocked-three-seed-execution-acceptance",
+  "vm_command_exit_provenance": [
+    {
+      "basis": "[INFERENCE] Bound fail-fast runner reached seed64002; each invoke requires exit0 before evaluating its assertions and advancing. No independent per-process exit receipt was retained.",
+      "exit_code": 0,
+      "seed": 64001
+    },
+    {
+      "basis": "[INFERENCE] Bound fail-fast runner reached seed64003, proving prior invokes returned expected0 under the recorded runner. No independent per-process exit receipt was retained.",
+      "exit_code": 0,
+      "seed": 64002
+    },
+    {
+      "basis": "vm-boot.stderr.log records RuntimeError exit3 for this exact command and assertion exercise-floor rejection; vm-boot stage exits1.",
+      "exit_code": 3,
+      "seed": 64003
+    }
+  ]
+}

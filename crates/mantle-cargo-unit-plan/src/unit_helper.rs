@@ -12,11 +12,17 @@ use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::io::{self};
+use std::os::unix::net::UnixDatagram;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
+use mantle_rust_differential_core::waits::MAX_RECORD_BYTES;
+use mantle_rust_differential_core::waits::NativeContext;
+use mantle_rust_differential_core::waits::NativeEvent;
+use mantle_rust_differential_core::waits::NativeFrame;
+use mantle_rust_differential_core::waits::RunOutcome;
 use mantle_rust_plan_core::BuildScriptFlagsFiles;
 use mantle_rust_plan_core::ImmediateArgTarget;
 use mantle_rust_plan_core::MAX_BUILD_SCRIPT_OUTPUT_BYTES;
@@ -36,6 +42,167 @@ use serde::Serialize;
 const MANIFEST: &str = "share/mantle/unit-dependencies-v1.json";
 const MAX_CLOSURE: usize = 4096;
 const SCRIPT_STDERR_MAX_BYTES: usize = 1_048_576;
+
+struct NativeFrameBuffer {
+    bytes: [u8; MAX_RECORD_BYTES],
+    len: usize,
+}
+
+impl core::fmt::Write for NativeFrameBuffer {
+    fn write_str(&mut self, value: &str) -> core::fmt::Result {
+        let end = self.len.checked_add(value.len()).ok_or(core::fmt::Error)?;
+        self.bytes.get_mut(self.len..end).ok_or(core::fmt::Error)?.copy_from_slice(value.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+
+impl NativeFrameBuffer {
+    fn encode(frame: &NativeFrame) -> Result<Self, core::fmt::Error> {
+        use core::fmt::Write as _;
+
+        let mut output = Self {
+            bytes: [0u8; MAX_RECORD_BYTES],
+            len: 0,
+        };
+        // This closed DTO contains only validated lowercase hex digests, u64s,
+        // and fixed tags. No field needs escaping; serde_json's std feature is
+        // deliberately unnecessary for the lowerer's no_std dependency closure.
+        write!(
+            output,
+            "{{\"invocation\":\"{}\",\"clock\":\"{}\",\"attempt\":\"{}\",\"sequence\":{},\"source_offset_ns\":{},\"event\":",
+            frame.invocation.as_str(),
+            frame.clock.as_str(),
+            frame.attempt.as_str(),
+            frame.sequence,
+            frame.source_offset_ns,
+        )?;
+        match &frame.event {
+            NativeEvent::Started => output.write_str(r#"{"kind":"started"}"#)?,
+            NativeEvent::ErrorObserved => output.write_str(r#"{"kind":"error_observed"}"#)?,
+            NativeEvent::Exited { outcome } => {
+                let outcome = match outcome {
+                    RunOutcome::Success => "success",
+                    RunOutcome::Rejected => "rejected",
+                    RunOutcome::Crash => "crash",
+                    RunOutcome::Cancelled => "cancelled",
+                    RunOutcome::Timeout => "timeout",
+                    RunOutcome::Infrastructure => "infrastructure",
+                    RunOutcome::Unrun => "unrun",
+                };
+                write!(output, "{{\"kind\":\"exited\",\"outcome\":\"{outcome}\"}}")?;
+            }
+            NativeEvent::Reaped => output.write_str(r#"{"kind":"reaped"}"#)?,
+        }
+        output.write_str("}")?;
+        Ok(output)
+    }
+}
+
+/// Execution-only transport: the adapter supplies an already admitted attempt.
+/// No unit identity, readiness, or scheduler phase is inferred by this helper.
+struct NativeObserver {
+    socket: UnixDatagram,
+    frame: NativeFrame,
+    origin_ns: u64,
+    available: bool,
+}
+
+impl NativeObserver {
+    fn from_environment() -> Option<Self> {
+        // Check the opt-in first: the ordinary path allocates no observer state.
+        let path = env::var_os("MANTLE_NATIVE_WAIT_SOCKET")?;
+        let context = env::var("MANTLE_NATIVE_WAIT_CONTEXT").ok()?;
+        if context.len() > MAX_RECORD_BYTES {
+            return None;
+        }
+        let context: NativeContext = serde_json::from_str(&context).ok()?;
+        // Reject a foreign/future origin instead of saturating it into a timestamp.
+        monotonic_ns()?.checked_sub(context.origin_ns)?;
+        let socket = UnixDatagram::unbound().ok()?;
+        socket.set_nonblocking(true).ok()?;
+        socket.connect(path).ok()?;
+        Some(Self {
+            socket,
+            frame: NativeFrame {
+                invocation: context.invocation,
+                clock: context.clock,
+                attempt: context.attempt,
+                sequence: 0,
+                source_offset_ns: 0,
+                event: NativeEvent::Started,
+            },
+            origin_ns: context.origin_ns,
+            available: true,
+        })
+    }
+
+    fn emit_at(&mut self, event: NativeEvent, now_ns: Option<u64>) {
+        if !self.available {
+            return;
+        }
+        let Some(offset) = now_ns.and_then(|now| now.checked_sub(self.origin_ns)) else {
+            self.available = false;
+            return;
+        };
+        // This source emits at most Started, Exited, Reaped, starting at zero.
+        if self.frame.sequence > 2 || offset < self.frame.source_offset_ns {
+            self.available = false;
+            return;
+        }
+        self.frame.source_offset_ns = offset;
+        self.frame.event = event;
+        let Ok(encoded) = NativeFrameBuffer::encode(&self.frame) else {
+            self.available = false;
+            return;
+        };
+        // One bounded JSON datagram per frame; loss leaves an incomplete prefix.
+        // Never retry/block, print, or change compilation on diagnostic failure.
+        if self.socket.send(&encoded.bytes[..encoded.len]).ok() != Some(encoded.len) {
+            self.available = false;
+            return;
+        }
+        self.frame.sequence += 1;
+    }
+}
+
+fn monotonic_ns() -> Option<u64> {
+    let mut time = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    // SAFETY: time is writable and CLOCK_MONOTONIC is the adapter's host clock.
+    if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut time) } != 0 {
+        return None;
+    }
+    let seconds = u64::try_from(time.tv_sec).ok()?;
+    let nanos = u64::try_from(time.tv_nsec).ok()?;
+    if nanos >= 1_000_000_000 {
+        return None;
+    }
+    seconds.checked_mul(1_000_000_000)?.checked_add(nanos)
+}
+
+fn rustc_status(command: &mut Command) -> io::Result<std::process::ExitStatus> {
+    let Some(mut observer) = NativeObserver::from_environment() else {
+        return command.status();
+    };
+    let mut child = command.spawn()?;
+    observer.emit_at(NativeEvent::Started, monotonic_ns());
+    // Preserve inherited stdin/stdout/stderr, including non-UTF-8 output and
+    // ordinary signal behavior. Without a live structured stream there is no
+    // ErrorObserved event: completed stderr must never fabricate error timing.
+    let status = child.wait()?;
+    let outcome = if status.success() {
+        RunOutcome::Success
+    } else if status.code().is_none() {
+        RunOutcome::Crash
+    } else {
+        RunOutcome::Rejected
+    };
+    // wait observes both facts together, not an invented exit-to-reap interval.
+    let observed_ns = monotonic_ns();
+    observer.emit_at(NativeEvent::Exited { outcome }, observed_ns);
+    observer.emit_at(NativeEvent::Reaped, observed_ns);
+    Ok(status)
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -202,15 +369,15 @@ fn run_rustc() -> Result<(), String> {
     arguments.push(out.join("lib").to_string_lossy().into_owned());
     let response = out.join("rustc-arguments.rsp");
     write_response_file(&response, &arguments)?;
-    let status = Command::new(&rustc)
+    let mut command = Command::new(&rustc);
+    command
         .arg(format!("@{}", response.display()))
         .env_clear()
         .env("HOME", out.as_os_str())
         .env("TMPDIR", out.as_os_str())
         .envs(compile_env)
-        .envs(script_env)
-        .status()
-        .map_err(|error| format!("unit-helper-rustc-failed: {error}"))?;
+        .envs(script_env);
+    let status = rustc_status(&mut command).map_err(|error| format!("unit-helper-rustc-failed: {error}"))?;
     if !status.success() {
         return Err(format!("unit-helper-rustc-failed: {status}"));
     }

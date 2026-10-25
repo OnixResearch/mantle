@@ -17,3 +17,23 @@
 - [ ] [depends:prove-source-built-mantle-fixed-point] [serial] V3 Run a fresh promoted cold proof and make sure that it starts from empty authority, ignores dev state, and emits no cache-adoption disposition. r[source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
 - [x] [serial] V4 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, all three gates, and relevant Nix checks. r[source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
   Evidence: `evidence/v4-rails-2026-09-11.md` (67 focused tests pass; fmt check exit 0; `git diff --check` exit 0; Cairn validate `valid: True findings: 0`; Tracey coverage 155/155; all three gates PASS; Tiger Style check exit 0).
+
+## Current runtime handoff (2026-10-23)
+
+No dev cycle, proof, build, test, formatter, or gate was run by this slice;
+historical checked evidence above is not fresh acceptance. The existing
+bounded planner/stage-bundle/store-adoption paths remain a development lane.
+Cold source preparation rejects all dev modes, and the promoted cold route
+does not use restored stage bundles or adopted stores. Current resource-bound
+validation rejects invalid requests before hydration, including development
+attempts. See `docs/operator-proof-guide.md` for the separate cold command and
+its independently reviewed prepared-profile identity.
+
+V2 still requires the integration owner to execute the actual complete
+cold-to-cached-to-adopt cycle with the same final source/policy cohort, retain
+restored/executed stage dispositions and alias evidence, and prove rejection
+of stale/tampered stage bundles. V3 requires a separate fresh cold authority
+and store with no dev flags or inherited compiler-cache/scheduling authority.
+A reported prior success, an adoption marker, or a cached provider must never
+stand in for that new v2 receipt, action reconciliation, or stage equality.
+

@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::ambient_clock)]
@@ -539,10 +539,7 @@ pub fn acquire_slot(socket: &Path, build_id: &str, wait_timeout: Duration) -> Sl
         Ok(stream) => stream,
         Err(_) => return degraded_outcome(build_id, SlotDegradedReason::AuthorityUnavailable, None),
     };
-    let mut deadline_io = DeadlineIo {
-        stream: &mut stream,
-        deadline: started + wait_timeout,
-    };
+    let mut deadline_io = DeadlineIo::new(&mut stream, started + wait_timeout);
     let request = SlotAcquireRequest {
         schema: SLOT_ACQUIRE_SCHEMA.to_string(),
         build_id: build_id.to_string(),
@@ -552,7 +549,7 @@ pub fn acquire_slot(socket: &Path, build_id: &str, wait_timeout: Duration) -> Sl
     }
     let response = read_frame::<SlotReceipt>(&mut deadline_io, SLOT_FRAME_BYTES);
     match response {
-        Ok(receipt) if is_granted_receipt(&receipt, build_id) => SlotClientOutcome::Granted(SlotLease {
+        Ok(receipt) if receipt.is_grant_for(build_id) => SlotClientOutcome::Granted(SlotLease {
             stream,
             grant_receipt: receipt,
             spawn_attempted: false,
@@ -582,19 +579,16 @@ fn degraded_outcome(
     })
 }
 
-/// A grant is only honoured when the receipt matches this exact request.
-fn is_granted_receipt(receipt: &SlotReceipt, build_id: &str) -> bool {
-    receipt.schema == crunch_rust_cache_core::slots::SLOT_RECEIPT_SCHEMA
-        && receipt.build_id == build_id
-        && receipt.decision == SlotDecision::Granted
-}
-
-struct DeadlineIo<'a> {
+pub(crate) struct DeadlineIo<'a> {
     stream: &'a mut UnixStream,
     deadline: Instant,
 }
 
-impl DeadlineIo<'_> {
+impl<'a> DeadlineIo<'a> {
+    pub(crate) fn new(stream: &'a mut UnixStream, deadline: Instant) -> Self {
+        Self { stream, deadline }
+    }
+
     fn remaining(&self) -> io::Result<Duration> {
         let remaining = self.deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
@@ -841,7 +835,7 @@ fn child_handshake(descriptor: RawFd) -> io::Result<()> {
 }
 
 /// Nonblocking connect avoids an unbounded wait on a full Unix accept backlog.
-fn connect_bounded(path: &Path, timeout: Duration) -> io::Result<UnixStream> {
+pub(crate) fn connect_bounded(path: &Path, timeout: Duration) -> io::Result<UnixStream> {
     let address = unix_socket_address(path)?;
     // SAFETY: socket arguments specify a Linux Unix stream with owned CLOEXEC fd.
     let raw = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };

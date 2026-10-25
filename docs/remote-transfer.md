@@ -102,6 +102,12 @@ The production `--remote-delta` option advertises delta/full/streaming capabilit
 
 Transfer reports always set `output_admission_claimed` to false. Signed PathInfo, store-prefix, requested-output, artifact-attestation, producer-policy, and claim-strength checks remain separate.
 
+A failed remote execution ends the session with one `BuildExecution` error frame.
+The client reports `remote-worker-execution-failed` with the worker's
+failure-debug reference, which `mantle remote status` links to the worker's
+debug bundle; the executor's own failure text stays on the worker. See the
+[remote execution failure release note](release-notes/remote-execution-failure-report-2026-10-25.md).
+
 ## Operator and validation workflow
 
 The supported local production workflow is under

@@ -1,0 +1,98 @@
+{
+  "schema": "mantle-configured-dependency-audit-observation-v1",
+  "argv": [
+    "cargo",
+    "deny",
+    "check",
+    "--config",
+    "deny.toml"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "exit_code": 1,
+  "observed_summary": "advisories FAILED, bans ok, licenses ok, sources ok\n",
+  "raw_stderr_gzip": "configured-audit-after-remediation-2026-10-23.stderr.log.gz",
+  "raw_stderr_blake3": "2c4502454dac3fc5e56255ee627ccb055fdbd2545c78ea8fee14e302e651aaba",
+  "compressed_stderr_blake3": "a48c1e09185131db441a0755ad15d20d01369c62dc025f0043905b4872e47161",
+  "raw_stderr_bytes": 6692949,
+  "compressed_stderr_bytes": 446294,
+  "fatal_advisories": [
+    {
+      "category": "unmaintained",
+      "message": "bitmaps is unmaintained",
+      "advisory": "RUSTSEC-2026-0247",
+      "package": "bitmaps 3.2.1",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Double free / use-after-free in `Chunk` and `InlineArray` removal methods when an element's `Drop` panics",
+      "advisory": "RUSTSEC-2026-0292",
+      "package": "imbl-sized-chunks 0.1.3",
+      "solution": "Upgrade to >=0.2.0 (try `cargo update -p imbl-sized-chunks`)"
+    },
+    {
+      "category": "unmaintained",
+      "message": "proc-macro-error is unmaintained",
+      "advisory": "RUSTSEC-2024-0370",
+      "package": "proc-macro-error 0.4.12",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Marvin Attack: potential key recovery through timing sidechannels",
+      "advisory": "RUSTSEC-2023-0071",
+      "package": "rsa 0.9.10",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "unmaintained",
+      "message": "unsafe-libyaml is unmaintained",
+      "advisory": "RUSTSEC-2024-0449",
+      "package": "unsafe-libyaml 0.2.11",
+      "solution": "No safe upgrade is available!"
+    }
+  ],
+  "resolved_observed_advisories": [
+    "RUSTSEC-2026-0344",
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0347",
+    "RUSTSEC-2026-0348",
+    "RUSTSEC-2026-0349",
+    "RUSTSEC-2026-0381",
+    "RUSTSEC-2026-0382",
+    "RUSTSEC-2026-0383"
+  ],
+  "selected_input_identities_recorded_after_execution": {
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "crates/crunch-build/Cargo.toml": "a0bc9f4dfca3bacd1e6ecfa706d82b0de07d392eeba1d566144c6a406ba11b88",
+    "deny.toml": "13d0a8617b9fa1f0a191425183fdd4ee767e79d71c3a7534643e348d03116745",
+    "flake.lock": "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc"
+  },
+  "compatible_upgrades": {
+    "ruzstd": "0.9.1",
+    "rustls": "0.23.46",
+    "rustls-webpki": "0.103.16",
+    "webpki-roots": "1.0.10",
+    "webpki-root-certs": "1.0.10"
+  },
+  "protected_dependency_identities_unchanged": true,
+  "compatible_nickel_vector_update": {
+    "argv": [
+      "cargo",
+      "update",
+      "--dry-run",
+      "-p",
+      "nickel-lang-vector@0.2.0"
+    ],
+    "exit_code": 0,
+    "observed_result": "Locking 0 packages to latest compatible versions; not updating lockfile due to dry run"
+  },
+  "limitations": [
+    "Observed audit still fails; no clean-audit or release-eligibility claim.",
+    "Selected identities were measured after execution, not an atomic full-source before/after snapshot.",
+    "Unavailable Cargo registry-index/yanked-status warnings are retained losslessly in stderr.",
+    "No new waivers, vendor edits, provider forks, or source-policy bypasses.",
+    "Protected Casita/Turso/astral-tokio-tar/BLAKE3 pins remain unchanged; upstream-owned incompatible dependency migrations remain separate."
+  ]
+}

@@ -35,3 +35,48 @@
 - [ ] [serial] Add the Radiant repositories to the README references with their exact roles and claim boundaries. r[mantle.bootstrap.radiance_reference.source_cohort]
 - [ ] [serial] Run focused core, source, build, execution, receipt, publication, formatting, Clippy, Octet, Cairn, and Nix validation. r[mantle.bootstrap.radiance_reference.receipt]
 - [ ] [serial] Run all Cairn gates. Sync and archive only after dependency changes and the optional full proof are accepted. r[mantle.bootstrap.radiance_reference.claim_boundary]
+
+## Current source and prerequisite inspection (2026-10-23)
+
+No build/test/proof was run and no source cohort was admitted. The upstream
+repositories and actual recipes are accessible; absence of upstream source is
+not a current blocker. Observed immutable revision links (discovery only, not
+reviewed/admitted cohort pins) are:
+
+- Radiance: [743d57d378abb4cce0b061d03ed2c562f4d32a63dca15067f10df9e351c1bcd2](https://code.radiant.computer/radiance/commit/743d57d378abb4cce0b061d03ed2c562f4d32a63dca15067f10df9e351c1bcd2).
+- Radiance.s0: [7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3](https://code.radiant.computer/radiance.s0/commit/7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3).
+- Emulator: [92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535](https://code.radiant.computer/emulator/commit/92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535).
+
+The inspected [Radiance recipe](https://code.radiant.computer/radiance/tree/master/Makefile)
+uses `seed/radiance.rv64`, `std.lib` module enumeration, and explicit emulator
+limits (`-memory-size=385024 -data-size=348160 -stack-size=512`). Its ambient
+`command -v` emulator discovery must not become proof authority. The actual
+[C99 recipe](https://code.radiant.computer/radiance.s0/tree/master/Makefile)
+requires Clang and lld; the [emulator recipe](https://code.radiant.computer/emulator/tree/master/Makefile)
+also requires them and includes `-march=native -flto`. A fixed host/toolchain
+root and declared CPU/code-generation policy are required, not ambient compiler
+substitution or an invented GCC-compatible recipe.
+
+Reachable source-observation corrections now preserve explicit tagged SHA-256
+revision facts without defaulting legacy projection/profile/format metadata.
+That is separate from acquiring actual SHA-256 repositories: the pinned
+`gix` 0.81.0 backend in `crates/crunch-build/Cargo.toml` has the SHA-1 feature
+surface, while `src/source_bundle.rs` local ref resolution still requires
+40-hex object IDs. No admitted snapshots, independently reviewed payload BLAKE3
+values, tagged cohort/profile contract, or fixed C99/emulator toolchain root
+was found in the declared fixture. The full source-built predecessor proof
+also remains unaccepted. Until these exact authorities exist, adding a build
+graph or receipt with guessed pins would violate Phase 1. All fixture tasks
+therefore remain open; upstream availability and observation DTO support alone
+do not claim the optional two-route proof or authorize publication.
+
+Connected candidate acquisition subsequently completed for the three exact
+proposal revisions, including Radiance `673ae4f6...`, not the later master
+revision listed above. Native Git verified SHA-256 object format, exact commit
+and strict object integrity; raw archive lengths/BLAKE3 and MIT notices are in
+`evidence/candidate-source-acquisition-2026-10-23.json`. This is measured input
+preparation, not a Mantle SHA-256 ingestion cutover, admitted snapshot profile,
+authenticated offline Mantle bundle, toolchain approval or compiler proof.
+Every fixture task therefore remains open under its original acceptance scope.
+
+

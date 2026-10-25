@@ -8,11 +8,11 @@ edition = "2024"
 //!
 //! The contract crate owns typed commands, blockers, and ports; presentation
 //! modules render typed values; adapters own host capability. This guard checks
-//! those three boundaries from source text. The host-authority rail ignores
-//! comments, literals, and `#[cfg(test)]` items, including their external modules.
-//! It recognizes direct paths and grouped imports, not semantic or transitive
-//! purity: aliases, macros, conditional compilation, and dependency internals
-//! still require review.
+//! lexical boundaries from source text; comments, literals and cfg(test) items
+//! do not introduce production host authority. `--semantic` delegates to the
+//! existing no-std rail for macro-expanded HIR, typed HIR and resolved normal
+//! runtime dependency checks. `--semantic --self-test` executes real compiler
+//! and Cargo fixtures. Neither rail claims arbitrary semantic/domain correctness.
 
 use std::env;
 use std::fs;
@@ -88,7 +88,11 @@ const CONTRACT_FORBIDDEN: &[&str] = &[
     // Clock values such as Duration remain allowed; ambient clock reads do not.
     "std::time::Instant", "std::time::SystemTime", "web_time::Instant",
     "web_time::SystemTime", "chrono::Utc", "chrono::Local",
-    "rand", "getrandom", "fastrand", "rand_core::OsRng", "uuid::Uuid::new_v4",
+    "rand::random", "rand::random_iter", "rand::random_range", "rand::random_bool",
+    "rand::random_ratio", "rand::fill", "rand::rng", "rand::thread_rng", "rand::rngs::thread",
+    "rand::rngs::ThreadRng", "rand::rngs::OsRng", "getrandom",
+    "rand_core::OsRng", "rand_core::os::OsRng", "uuid::Uuid::new_v4",
+    "fastrand::Rng::new", "fastrand::global_rng",
     "std::net", "reqwest", "ureq", "hyper", "rustix::net",
     // Concrete provider adapters, not provider evidence or policy records.
     "crate::full_source_provider", "crate::rust_source_provider",
@@ -96,6 +100,7 @@ const CONTRACT_FORBIDDEN: &[&str] = &[
     "crate::provider_output_publication",
     // Operator output belongs to presentation, not pure decision code.
     "std::io::stdout", "std::io::stderr", "std::io::stdin",
+    "std::io::stdio::_print", "std::io::stdio::_eprint",
     "print!", "println!", "eprint!", "eprintln!",
 ];
 
@@ -117,6 +122,29 @@ const PRESENTATION_FORBIDDEN: &[&str] = &[
 const ROOT_FORBIDDEN: &[&str] = &["std::process::Command", "std::fs::write", "std::fs::read"];
 
 fn main() -> ExitCode {
+    if env::args().any(|argument| matches!(argument.as_str(), "--semantic" | "--semantic-self-test")) {
+        let mode = if env::args().any(|argument| matches!(argument.as_str(), "--self-test" | "--semantic-self-test")) {
+            "architecture-self-test"
+        } else {
+            "architecture"
+        };
+        let mut command = std::process::Command::new("python3");
+        command.args(["scripts/no_std_core_checks.py", mode]);
+        for authority in CONTRACT_FORBIDDEN {
+            command.args(["--authority", authority]);
+        }
+        for authority in CORE_DIRECTION_FORBIDDEN {
+            command.args(["--core-authority", authority]);
+        }
+        return match command.status() {
+            Ok(status) if status.success() => ExitCode::SUCCESS,
+            Ok(_) => ExitCode::FAILURE,
+            Err(error) => {
+                eprintln!("cli architecture compiler rail: FAIL: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if env::args().any(|argument| argument == "--self-test") {
         return match self_test() {
             Ok(()) => {
@@ -432,8 +460,13 @@ fn host_production_tokens<'a>(tokens: &[SourceToken<'a>]) -> (Vec<SourceToken<'a
     (production, tests)
 }
 
-/// Expand nested use trees, including multiline and aliased grouped imports.
-fn import_paths(tokens: &[SourceToken<'_>], prefix: &str, paths: &mut Vec<(String, usize)>) {
+/// Expand nested use trees and retain their local bindings for alias resolution.
+fn import_paths(
+    tokens: &[SourceToken<'_>],
+    prefix: &str,
+    paths: &mut Vec<(String, usize)>,
+    aliases: &mut Vec<(String, String)>,
+) {
     let mut path = prefix.to_string();
     let mut index = 0;
     while index < tokens.len() {
@@ -447,12 +480,25 @@ fn import_paths(tokens: &[SourceToken<'_>], prefix: &str, paths: &mut Vec<(Strin
                     match tokens[index].text { "{" => depth += 1, "}" => depth -= 1, _ => {} }
                     index += 1;
                 }
-                import_paths(&tokens[start..index.saturating_sub(1)], &path, paths);
+                import_paths(&tokens[start..index.saturating_sub(1)], &path, paths, aliases);
+                path.clear();
                 index = index.saturating_sub(1);
             }
-            "," => path = prefix.to_string(),
-            "as" => { index += 1; }
-            ";" => {}
+            "," | ";" => {
+                record_import_binding(&path, None, aliases);
+                path = prefix.to_string();
+            }
+            "as" => {
+                if let Some(alias) = tokens.get(index + 1) {
+                    record_import_binding(&path, Some(alias.text), aliases);
+                }
+                path.clear();
+                index += 1;
+            }
+            "self" if !path.is_empty() => {
+                path.truncate(path.trim_end_matches("::").len());
+                paths.push((path.clone(), token.line));
+            }
             _ if !token.literal => {
                 path.push_str(token.text);
                 paths.push((path.clone(), token.line));
@@ -461,11 +507,41 @@ fn import_paths(tokens: &[SourceToken<'_>], prefix: &str, paths: &mut Vec<(Strin
         }
         index += 1;
     }
+    record_import_binding(&path, None, aliases);
+}
+
+fn record_import_binding(path: &str, alias: Option<&str>, aliases: &mut Vec<(String, String)>) {
+    let path = path.trim_start_matches("::").trim_end_matches("::");
+    let name = alias.unwrap_or_else(|| path.rsplit("::").next().unwrap_or(path));
+    if !name.is_empty() && name != "_" && name != "*" && name != path {
+        aliases.push((name.to_string(), path.to_string()));
+    }
+}
+
+/// Expand lexical aliases to a fixed point without following cyclic bindings.
+/// Scope/shadowing and cross-module re-exports remain semantic review obligations.
+fn expand_aliases(paths: &mut Vec<(String, usize)>, aliases: &[(String, String)]) {
+    let mut seen: std::collections::BTreeSet<(String, usize)> = paths.iter().cloned().collect();
+    for _ in 0..aliases.len() {
+        let start = seen.len();
+        let current: Vec<_> = seen.iter().cloned().collect();
+        for (path, line) in current {
+            for (name, target) in aliases {
+                let path = path.trim_start_matches("::");
+                if path == name || path.strip_prefix(name).is_some_and(|suffix| suffix.starts_with("::")) {
+                    seen.insert((format!("{target}{}", &path[name.len()..]), line));
+                }
+            }
+        }
+        if seen.len() == start { break; }
+    }
+    *paths = seen.into_iter().collect();
 }
 
 /// Match a whole authority path, not lookalikes such as `ProviderOutputRole`.
 fn authority_matches(path: &str, forbidden: &str) -> bool {
     let path = path.trim_start_matches("::");
+    let path = if forbidden.ends_with('!') { path } else { path.trim_end_matches('!') };
     path == forbidden || path.strip_prefix(forbidden).is_some_and(|suffix| suffix.starts_with("::"))
 }
 
@@ -573,12 +649,24 @@ fn scan_host_sources(directory: &Path, boundary: &str) -> Result<Vec<String>, St
         let tokens = source_tokens(text);
         let (production, _) = host_production_tokens(&tokens);
         let mut paths = Vec::new();
+        let mut aliases = Vec::new();
         let mut index = 0;
         while index < production.len() {
             if production[index].text == "use" {
                 let start = index + 1;
                 while index < production.len() && production[index].text != ";" { index += 1; }
-                import_paths(&production[start..index], "", &mut paths);
+                import_paths(&production[start..index], "", &mut paths, &mut aliases);
+            } else if production[index].text == "extern"
+                && production.get(index + 1).is_some_and(|token| token.text == "crate")
+            {
+                if let Some(target) = production.get(index + 2) {
+                    paths.push((target.text.to_string(), target.line));
+                    if production.get(index + 3).is_some_and(|token| token.text == "as") {
+                        if let Some(alias) = production.get(index + 4) {
+                            record_import_binding(target.text, Some(alias.text), &mut aliases);
+                        }
+                    }
+                }
             } else if !production[index].literal {
                 let line = production[index].line;
                 let mut path = production[index].text.to_string();
@@ -589,10 +677,19 @@ fn scan_host_sources(directory: &Path, boundary: &str) -> Result<Vec<String>, St
                     next += 2;
                 }
                 if production.get(next).is_some_and(|token| token.text == "!") { path.push('!'); }
-                paths.push((path, line));
+                // Bare lower-case values are not crate authority. Imports and
+                // extern crates are recorded above; qualified paths/macros and
+                // concrete authority types remain lexical evidence. Resolved
+                // scope/shadowing is the compiler rail's responsibility.
+                if next > index + 1 || path.ends_with('!')
+                    || path.chars().next().is_some_and(char::is_uppercase)
+                {
+                    paths.push((path, line));
+                }
             }
             index += 1;
         }
+        expand_aliases(&mut paths, &aliases);
         for (path_text, line) in paths {
             for forbidden in CONTRACT_FORBIDDEN {
                 if authority_matches(&path_text, forbidden) {
@@ -610,11 +707,25 @@ fn scan_host_sources(directory: &Path, boundary: &str) -> Result<Vec<String>, St
 fn scan_no_std_declaration(path: &Path) -> Result<Vec<String>, String> {
     let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
     let mut violations = Vec::new();
-    if !text.contains("#![no_std]") {
+    let tokens = source_tokens(&text);
+    let marker = ["#", "!", "[", "no_std", "]"];
+    let mut depth = 0_usize;
+    let mut declared = false;
+    for (index, token) in tokens.iter().enumerate() {
+        if depth == 0 && tokens[index..].iter().take(marker.len()).map(|token| token.text).eq(marker) {
+            declared = true;
+            break;
+        }
+        match token.text {
+            "(" | "[" | "{" => depth += 1,
+            ")" | "]" | "}" => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    if !declared {
         violations.push(format!("contract no-std boundary: {}: must declare `#![no_std]`", path.display()));
     }
     debug_assert!(!text.is_empty());
-    debug_assert!(violations.is_empty() || !text.contains("#![no_std]"));
     Ok(violations)
 }
 
@@ -759,6 +870,13 @@ fn self_test() -> Result<(), String> {
     let rejected_authority = [
         ("CLI parser", "use clap::Parser;\n"),
         ("CLI shell", "use mantle::command_input::CommandInput;\n"),
+        ("bare crate import", "use mantle;\n"),
+        ("grouped crate import", "use {mantle as shell};\n"),
+        ("bare extern crate", "extern crate mantle;\n"),
+        ("renamed shell crate", "extern crate mantle as shell;\npub fn sample() { shell::command_input::CommandInput::new(); }\n"),
+        ("qualified shell crate", "pub fn sample() { mantle::command_input::sample(); }\n"),
+        ("nested shell module", "mod nested { pub fn sample() { mantle::command_input::sample(); } }\n"),
+        ("shell macro", "pub fn sample() { mantle!(); }\n"),
         ("Snix", "use snix_store::path_info::PathInfo;\n"),
         ("filesystem", "use std::{fs as host_fs};\n"),
         ("platform filesystem", "use std::os::unix::fs::PermissionsExt;\n"),
@@ -781,6 +899,10 @@ fn self_test() -> Result<(), String> {
         ("operator rendering", "pub fn render() { println!(\"plan\"); }\n"),
         ("operator stream", "use std::io::{self, stdout};\n"),
         ("nested import sibling", "use std::{collections::{BTreeMap}, fs};\n"),
+        ("module alias", "use std as host;\npub fn sample() { host::env::vars(); }\n"),
+        ("chained grouped alias", "use std::{self as host};\nuse host::{time as clocks};\npub fn sample() { clocks::SystemTime::now(); }\n"),
+        ("extern crate alias", "extern crate std as host;\npub fn sample() { host::fs::read(\"input\"); }\n"),
+        ("re-exported module alias", "pub use std as host;\npub fn sample() { host::process::Command::new(\"cc\"); }\n"),
         ("production after tests", "#[cfg(test)]\nmod tests { use std::fs; }\npub fn execute() { std::env::vars(); }\n"),
     ];
     for (directory, boundary) in [(&core, "core host authority"), (&contract, "contract host authority")] {
@@ -800,7 +922,10 @@ fn self_test() -> Result<(), String> {
     let accepted_authority = [
         "extern crate alloc;\nuse alloc::{string::String, vec::Vec};\nuse serde::{Serialize, Deserialize};\n#[derive(Serialize, Deserialize)]\npub struct Plan { pub paths: Vec<String> }\n",
         "use core::time::Duration;\nuse std::{collections::{BTreeMap}, time::Duration as Interval};\npub struct Observed { pub epoch_seconds: u64, pub random_seed: u64, pub environment: BTreeMap<String, String> }\n",
+        "use std as host;\nuse host::{collections::BTreeMap, time::Duration};\npub struct Facts { pub values: BTreeMap<u64, Duration> }\n",
         "pub struct ProviderOutputRole;\npub struct StoreObservation;\npub struct StoreHandleId;\npub fn render(value: u64) -> String { format!(\"{value}\") }\n",
+        "pub fn compare(mantle: &str, clap: &str, getrandom: u32) -> bool { let mantle = mantle.trim(); mantle == clap && getrandom == 7 }\n",
+        "pub fn compare() { let mantle = 1; let observed = mantle; let _ = (mantle, observed); }\n",
         "// std::fs and clap::Parser document the boundary.\n/* outer /* std::process::Command */ tokio::spawn */\npub const HELP: &str = \"std::env and rand::random\";\npub const RAW: &str = r##\"fake \\\" #[cfg(test)] mod tests { } std::net::TcpStream\"##;\n",
         "#[cfg(test)]\nextern crate std;\n#[cfg(test)]\nmod host_helpers { use std::fs; fn output() { println!(\"test\"); } }\npub fn plan() {}\n",
     ];
@@ -958,10 +1083,18 @@ fn self_test() -> Result<(), String> {
     fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\nserde = \"1.0\"\n")
         .map_err(|error| format!("fixture: {error}"))?;
 
-    fs::write(contract.join("lib.rs"), "pub fn plan() {}\n").map_err(|error| format!("fixture: {error}"))?;
-    let no_std_violations = scan_repository(&root)?;
-    if !no_std_violations.iter().any(|entry| entry.contains("contract no-std boundary")) {
-        return Err(format!("contract fixture must report the missing no-std declaration, saw {no_std_violations:?}"));
+    for source in [
+        "pub fn plan() {}\n",
+        "// #![no_std]\npub fn plan() {}\n",
+        "pub const DOCUMENTATION: &str = \"#![no_std]\";\n",
+        "#[cfg(test)]\nmod tests { #![no_std]\npub fn plan() {} }\n",
+        "macro_rules! documented { () => (#![no_std]); }\n",
+    ] {
+        fs::write(contract.join("lib.rs"), source).map_err(|error| format!("fixture: {error}"))?;
+        let no_std_violations = scan_repository(&root)?;
+        if !no_std_violations.iter().any(|entry| entry.contains("contract no-std boundary")) {
+            return Err(format!("contract fixture must report the missing no-std declaration, saw {no_std_violations:?}"));
+        }
     }
     fs::write(contract.join("lib.rs"), "#![no_std]\npub fn plan() {}\n")
         .map_err(|error| format!("fixture: {error}"))?;

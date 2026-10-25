@@ -23,7 +23,7 @@ pub fn reservation(name: &str) -> Reservation {
             window_end_s: 100,
             cpu_ms_per_unit: 10,
             memory_byte_ms_per_unit: 10,
-            transfer_bytes_per_unit: 10,
+            executor_output_bytes_per_unit: 10,
         },
     }
 }
@@ -33,7 +33,7 @@ pub fn complete() -> UsageEvent {
         usage: Usage {
             cpu_ms: 10,
             memory_byte_ms: 10,
-            transfer_bytes: 10,
+            executor_output_bytes: 10,
         },
         trusted_and_complete: true,
     }
@@ -118,7 +118,15 @@ pub fn retry(case: u32) -> Result<EscalationPlan, Reason> {
         10 => evidence.fence = r.fence.advance().unwrap(),
         _ => {}
     }
-    plan_escalation(controls(), context, evidence, &class(1024, 1), &[larger], quota, policy)
+    plan_escalation(EscalationRequest {
+        controls: controls(),
+        context,
+        evidence,
+        prior: &class(1024, 1),
+        classes: &[larger],
+        quota,
+        policy,
+    })
 }
 pub const RETRY_REASONS: [Reason; 10] = [
     Reason::NotPositiveOom,
@@ -145,12 +153,19 @@ pub fn sharing(cas_available: bool, scope_present: bool) -> Result<SharingLink, 
         producers: &["producer"],
         consumers: &["consumer"],
     };
-    authorize_sharing(controls(), "producer", "consumer", "result", scope_present.then_some(scope), SharingChecks {
-        request_and_action_match: true,
-        trusted_producer_signature: true,
-        policy_compatible: true,
-        platform_compatible: true,
-        verified_output_identities: true,
-        current_cas_available: cas_available,
+    authorize_sharing(SharingRequest {
+        controls: controls(),
+        producer: "producer",
+        consumer: "consumer",
+        result: "result",
+        scope: scope_present.then_some(scope),
+        checks: SharingChecks {
+            request_and_action_match: true,
+            trusted_producer_signature: true,
+            policy_compatible: true,
+            platform_compatible: true,
+            verified_output_identities: true,
+            current_cas_available: cas_available,
+        },
     })
 }

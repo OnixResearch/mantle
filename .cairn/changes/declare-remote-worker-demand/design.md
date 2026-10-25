@@ -30,6 +30,44 @@ prohibits replacing a missing capacity fact with an inferred one.
 - Supervisor: outside Mantle. It may read demand facts and start a worker. Its
   decisions re-enter Mantle only through ordinary worker registration.
 
+## Implemented source boundary (execution not yet accepted)
+
+`crates/crunch-remote-core/src/demand.rs` owns bounded canonical resource
+vectors, requirement hashing, one-current-fact-per-job deduplication, and
+explicit retraction. `src/remote_build/demand.rs` derives only from validated,
+quantified pending placement facts. Neither interface accepts worker presence,
+concurrency, or historical execution as a resource vector. Requirement identity
+binds the job, default scheduling policy, quantities, named resources,
+semantic classes, and normalized placement key; the blocker is reported
+verbatim but does not change that requirement identity.
+
+The book and daemon each cap demand at 1,024 facts. The daemon's global demand
+cap is independent of the existing 4,096 all-fact cap. An existing fact may
+update its blocker without consuming another slot, but publishing a changed
+requirement for the same owned job before retracting its old fact is rejected.
+The building-plane diff emits retractions before replacement publications.
+
+Production admission temporarily represents a no-fit result as internal
+`Pending` so the building plane can project its unmet requirement. It still
+returns the original error immediately: no wait loop, provisioning, or queue
+was added. The shared dispatch-preparation shell emits the complete bounded
+demand diagnostic even without a daemon, queues its scoped publication, then
+retracts it with `OwnerStopped` and queues the terminal diff. This is the entire
+lifetime of a fail-fast request. Existing direct coordinator callers continue
+to own longer pending, placed, cancelled, timed-out, and changed-requirement
+lifetimes explicitly. Durable state omits the demand book.
+
+Publication uses the existing bounded, nonblocking best-effort publisher. It
+does not wait for daemon acknowledgement or join a socket worker. In a
+long-lived adapter, queued publication and retraction drain in order; an
+immediately exiting CLI may terminate its worker before delivery. A demand
+diagnostic, queued write, or connected socket is not captured subscriber
+evidence. Positive delivery must be observed with a real long-lived adapter;
+daemon absence must retain the original blocker. No runtime acceptance is
+inferred from the presence of source fixtures. Proposed ADR 0127 records these
+decisions without accepting their execution gates.
+
+
 ## Decisions
 
 ### Decision: Demand restates admitted facts only

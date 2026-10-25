@@ -72,15 +72,53 @@ fn unknown_fields_truncation_ice_and_bad_cleanup_are_not_equivalence() {
 }
 
 #[test]
+fn rustc_diagnostic_discriminator_is_validated_without_accepting_other_records() {
+    let mut observed = rejection(vec![diagnostic("E0425", "cannot find value")]);
+    observed.units[0].records[0]["$message_type"] = json!("diagnostic");
+    assert_eq!(compare(&observed, &observed, &expected(&["E0425"])), Verdict::Equivalent);
+    for message_type in [json!("artifact"), Value::Null, json!(true)] {
+        let mut invalid = observed.clone();
+        invalid.units[0].records[0]["$message_type"] = message_type;
+        assert_eq!(validate_observation(&invalid), Err(Error::Malformed));
+        assert_eq!(compare(&invalid, &invalid, &expected(&["E0425"])), Verdict::HarnessError);
+    }
+    observed.units[0].records[0]["new_semantic_fact"] = json!(true);
+    assert_eq!(validate_observation(&observed), Err(Error::UnknownSemanticField));
+}
+
+#[test]
 fn expected_rejection_does_not_accept_success_crash_or_wrong_error() {
     let oracle = expected(&["E0308"]);
     let mut wrong = rejection(vec![diagnostic("E0425", "cannot find value")]);
     assert_eq!(compare(&wrong, &wrong, &oracle), Verdict::Mismatch);
     wrong.status = Status::Crash;
     assert_eq!(compare(&wrong, &wrong, &oracle), Verdict::HarnessError);
-    wrong.status = Status::Success;
-    wrong.units.clear();
-    assert_eq!(compare(&wrong, &wrong, &oracle), Verdict::Mismatch);
+}
+
+#[test]
+fn successful_compilation_requires_current_accepted_output_identity() {
+    let mut observed = Observation {
+        status: Status::Success,
+        units: vec![],
+        program_stdout: None,
+        program_stderr: None,
+        accepted_outputs: vec![Identity {
+            role: "current-check-output".into(),
+            digest: Digest::from_slice(b"current"),
+        }],
+        complete: true,
+        teardown_complete: true,
+        ice: false,
+    };
+    let oracle = Expected {
+        status: Status::Success,
+        diagnostic_codes: vec![],
+        diagnostic_messages: vec![],
+        program_stdout: None,
+    };
+    assert_eq!(compare(&observed, &observed, &oracle), Verdict::Equivalent);
+    observed.accepted_outputs.clear();
+    assert_eq!(compare(&observed, &observed, &oracle), Verdict::HarnessError);
 }
 
 fn manifest() -> Manifest {

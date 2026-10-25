@@ -1,7 +1,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(
@@ -45,7 +45,7 @@ pub struct ProfileInputs {
 }
 
 fn read_bounded(root: &Path, relative: String, limit_bytes: usize) -> Result<Material, String> {
-    let relative = relative_path(relative)?;
+    let relative = relative_path(relative).map_err(|error| error.to_string())?;
     if fs::symlink_metadata(root).map_err(|error| error.to_string())?.file_type().is_symlink() {
         return Err("handoff root may not be a symlink".into());
     }
@@ -181,7 +181,8 @@ fn consume_profile(
         Producer::Octet => crunch_verification_bridge_core::observe_octet(request),
         Producer::OctetVerified => crunch_verification_bridge_core::observe_octet_verified(request),
         Producer::Trellis => crunch_verification_bridge_core::observe_trellis(request),
-    }?;
+    }
+    .map_err(|error| error.to_string())?;
     debug_assert!(!observed.observation.schema.is_empty());
     debug_assert!(!observed.observation.producer.is_empty());
     Ok(Handoff {
@@ -347,7 +348,8 @@ pub fn consume_octet_job(root: &Path, producer_export: &Path, source_revision: &
             flake_lock,
             root_derivation,
         },
-    )?;
+    )
+    .map_err(|error| error.to_string())?;
     debug_assert!(bound.handoff.observation.producer_job_identity.is_some());
     debug_assert!(bound.handoff.observation.tool_graph_identity.is_some());
     Ok(Handoff {

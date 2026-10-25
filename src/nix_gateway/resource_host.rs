@@ -788,13 +788,14 @@ impl ResourcePolicyHost {
         &self,
         binding: &AttemptBinding,
         reason: PendingUsage,
+        now_unix_s: u64,
     ) -> Result<quota::Entry, ResourceHostError> {
         let entry = self.existing_entry(binding)?;
         // Losing telemetry after an already committed completion cannot undo it.
         if matches!(entry.reconciliation, quota::Reconciliation::Settled { .. }) {
             return Ok(entry);
         }
-        self.record_missing_observation(binding, &entry.reservation, reason)?;
+        self.record_missing_observation(binding, &entry.reservation, reason, now_unix_s)?;
         let event = match reason {
             PendingUsage::Missing | PendingUsage::Partial => quota::UsageEvent::Partial,
             PendingUsage::WorkerLost => quota::UsageEvent::WorkerLost,
@@ -808,6 +809,7 @@ impl ResourcePolicyHost {
         binding: &AttemptBinding,
         reservation: &quota::Reservation,
         reason: PendingUsage,
+        terminal_unix_s: u64,
     ) -> Result<(), ResourceHostError> {
         let ledger = self.store.snapshot()?;
         if ledger.observations.contains_key(binding.attempt.as_str()) {
@@ -820,8 +822,6 @@ impl ResourcePolicyHost {
             PendingUsage::Cancelled => (policy::Outcome::Cancelled, "cancelled-without-final-usage"),
             PendingUsage::Partial | PendingUsage::Missing => (policy::Outcome::Unknown, "usage-incomplete"),
         };
-        let terminal_unix_s = crate::remote_build::remote_cli_now_unix_s(&binding.request_id)
-            .map_err(|_| ResourceHostError::BindingMismatch)?;
         let observation = policy::Observation {
             schema: policy::OBSERVATION_SCHEMA.into(),
             attempt_id: binding.attempt.clone(),
@@ -865,6 +865,7 @@ impl ResourcePolicyHost {
         binding: &AttemptBinding,
         usage: &RemoteAuthenticatedUsage,
         reservation: &quota::Reservation,
+        terminal_unix_s: u64,
     ) -> Result<(), ResourceHostError> {
         let ledger = self.store.snapshot()?;
         let context =
@@ -891,8 +892,6 @@ impl ResourcePolicyHost {
         };
         let failed = usage.result_digest_blake3()
             == crate::remote_build::usage::failure_result_digest(&production_binding, &binding.request_id);
-        let terminal_unix_s = crate::remote_build::remote_cli_now_unix_s(&binding.request_id)
-            .map_err(|_| ResourceHostError::BindingMismatch)?;
         let observation = policy::Observation {
             schema: policy::OBSERVATION_SCHEMA.into(),
             attempt_id: binding.attempt.clone(),
@@ -946,16 +945,17 @@ impl ResourcePolicyHost {
         &self,
         binding: &AttemptBinding,
         usage: &RemoteAuthenticatedUsage,
+        now_unix_s: u64,
     ) -> Result<quota::Entry, ResourceHostError> {
         self.check_usage(binding, usage)?;
         let entry = self.existing_entry(binding)?;
-        self.record_usage_observation(binding, usage, &entry.reservation)?;
+        self.record_usage_observation(binding, usage, &entry.reservation, now_unix_s)?;
         let max = self.config.selection;
         if usage.measurement_completeness() != RemoteUsageCompleteness::DedicatedCgroup {
-            return self.mark_pending(binding, PendingUsage::Partial);
+            return self.mark_pending(binding, PendingUsage::Partial, now_unix_s);
         }
         let Some(memory_peak_bytes) = usage.cgroup_peak_memory_bytes() else {
-            return self.mark_pending(binding, PendingUsage::Partial);
+            return self.mark_pending(binding, PendingUsage::Partial, now_unix_s);
         };
         let memory_byte_ms =
             memory_peak_bytes.checked_mul(usage.wall_time_millis()).ok_or(quota::QuotaError::Overflow)?;
@@ -966,7 +966,7 @@ impl ResourcePolicyHost {
             || usage.output_bytes() > max.max_io_bytes
             || usage.cpu_time_millis() > max.max_duration_ms.saturating_mul(u64::from(max.max_measurement.cpu_units))
         {
-            return self.mark_pending(binding, PendingUsage::Partial);
+            return self.mark_pending(binding, PendingUsage::Partial, now_unix_s);
         }
         Ok(self.store.reconcile(&entry.reservation, quota::UsageEvent::Complete {
             event_digest: usage.event_digest_blake3(),

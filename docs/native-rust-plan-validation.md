@@ -86,6 +86,14 @@ it never waits for an unbounded `Command::output()` capture. The focused
 `cargo test -p mantle --bin mantle rust_plan::tests::cargo_oracle_` rail covers
 a real small `/bin/sh` child and both oversized pipe directions.
 
+Both Cargo-oracle observations (`metadata` and `build --unit-graph`) use
+`--locked`. The supplied `Cargo.lock` is an input, not a file for the planner
+to generate or normalize. A semantically valid, noncanonical lock must work
+when read-only without changing its bytes; a stale lock must fail rather
+than select new dependencies. Dependency acquisition remains subject to the
+caller's existing Cargo configuration and sandbox network policy.
+
+
 ## Local castore cache
 
 The local Rust unit cache is optional and disabled by default. Select one mode
@@ -200,9 +208,10 @@ The standalone executable is built with its explicit Cargo wrapper (this command
 is separate from the source-built no-Cargo proof):
 
 ```sh
-cargo build --offline --locked -p mantle-rust-differential --bins
+cargo build --offline --locked -p mantle-rust-differential -p crunch-rustc-wrapper --bin mantle-rust-differential --bin mantle-rust-wait-wrapper
 target/debug/mantle-rust-differential fixtures
 target/debug/mantle-rust-differential baseline "$DIFFERENTIAL_OPTIONS"
+target/debug/mantle-rust-differential serial "$SERIAL_OPTIONS"
 target/debug/mantle-rust-differential negatives "$NEGATIVE_OPTIONS"
 target/debug/mantle-rust-differential cohorts "$COHORT_OPTIONS"
 ```
@@ -221,6 +230,7 @@ fields (unknown fields are rejected):
 | `wrapper` | `null` for completion-only baseline/negatives, or the resolved absolute built `mantle-rust-wait-wrapper` path. Required for cohorts; wrapper contents are pinned, not discovered ambiently. |
 | `baseline` | `null` for a new baseline freeze. For a baseline repeat only, the previous retained `coverage-baseline.json` path; cohorts and negatives reject this field when non-null. |
 | `toolchain` | Optional; the runner computes and replaces this digest from the actual tools, sysroot, linker and declared runtime closures. A caller cannot assert its identity. |
+| `diagnostics` | Optional boolean, default `false`. Explicitly enables native serial sidecars. Serial requires `wrapper: null`; Cargo observation is enabled only by its declared wrapper. |
 
 All commands use the frozen built-in offline source/lock/edit recipe emitted by
 `fixtures`; they do not fetch registry packages or accept arbitrary commands.
@@ -230,6 +240,14 @@ host linker/CRT/runtime and Linux `/proc`/subreaper/signal support are genuine
 execution prerequisites. No experimental compiler input is needed. This is not
 a network sandbox or proof that an undeclared host dependency cannot be read.
 
+Cargo still reads ancestor `.cargo/config.toml` files with a private
+`CARGO_HOME`. The runner explicitly empties both `RUSTC_WRAPPER` and
+`RUSTC_WORKSPACE_WRAPPER`; only the declared diagnostic wrapper may replace
+`RUSTC_WRAPPER`. The frozen environment identity includes this policy, so retain
+old reports and create new baselines rather than reusing a pre-isolation
+baseline. This disables implicit compiler wrappers, not all filesystem Cargo
+configuration, and does not establish hermeticity.
+
 `baseline` retains `report.json`, all per-attempt records/raw captures, frozen
 fixtures/manifest/coverage baseline, actual crash/cancel triggers, and independent
 post-fault successor/clean references. A successor starts fresh Cargo state but
@@ -238,6 +256,35 @@ interruption or claims uninterrupted continuity. Old state excluded from the
 successor is retained on disk for inspection, not secretly deleted. Unit reuse
 and execution coverage refer to the cumulative campaign, not work borrowed from
 its clean reference. Dependency and application error/repair states are distinct.
+
+`serial` retains `serial.json` and runs a separately labelled direct-rustc
+whole-unit lane for the four-library chain and eight-library wide join, in
+independent build/check cells. It really compiles the host proc macro and build
+script, executes the script against its declared input, and waits for each unit
+to finish before starting its dependent. It is not Cargo `--jobs=1`, an
+early-interface mode, a resident compiler, or a replacement production adapter.
+Every cumulative edit has a separately materialized clean reference and its
+frozen expected current program value or compiler error. All regular units
+re-enter rustc on every step with side-private incremental scratch; no internal
+query reuse or disk-result-cache hit is inferred. Final outputs are step-owned,
+so a failed current compile cannot execute a prior binary. Required successful
+step units must be observed, even when surviving program outputs still agree.
+Expected rejection steps retain their legitimately unrun downstream units.
+
+For an exact repeat, give `serial` a new root and the first serial run's
+`coverage-baseline.json`; do not feed it the Cargo lane's distinct baseline.
+Use `diagnostics: true` for actual native spawn/exit/reap sidecars. These contain
+no fabricated queue, metadata, pause/resume or live-error boundaries. Individual
+unit captures retain sampled process-tree resources with their own origins;
+these are not merged into an invented session peak or idle footprint. Diagnostic
+publication failure and incomplete observations do not alter compiler outcome
+or semantic equivalence. Incomplete process teardown prevents continuation.
+
+Production native, default Cargo and dynamic per-unit collection have separate
+explicit opt-ins described below. The collector and sole wait-wrapper binary
+are owned by `crunch-rustc-wrapper`; the standalone differential executable is
+not a production execution adapter. Its evidence cannot prove a production
+sandbox or helper ran. See ADR 0125 for authority and comparison boundaries.
 
 `negatives` actually compiles clean successful and rejected snapshots, then
 retains explicitly labelled adversarial comparator inputs for alleged rejection
@@ -261,8 +308,9 @@ no absent or unsupported compiler phase is counted as observed work.
 
 Exit 0 means only that the requested campaign's own qualification predicate
 passed; exit 1 retains a nonpassing report; exit 2 names a prerequisite or harness
-error. None of these exits admits a future early-publication mode, native lane,
-release result or speedup. Repeat `baseline` in fresh roots with the original
+error. None of these exits admits a future early-publication mode, resident
+provider, production per-unit compatibility, release result or speedup.
+Repeat either baseline lane in fresh roots with its own original coverage
 baseline input and inspect the actual reports before making any acceptance claim.
 
 The frozen `mantle-rust-differential-manifest-v1` binds the source recipe,
@@ -297,10 +345,15 @@ roles and unrelated cross-unit interleaving are normalized; timing/progress
 records remain raw evidence outside diagnostic comparison. Unknown fields,
 malformed/truncated capture, ICE, cleanup failure and infrastructure errors
 cannot become equivalent expected compiler rejections. The operation-specific
-accepted output projection binds observed status, structured unit artifact
-facts, diagnostics and current executable behavior for build. Raw artifact
+accepted output v2 projection binds the exact current source and toolchain,
+operation/status, structured unit artifact facts, diagnostics and current
+executable behavior for build. Raw artifact
 digests remain evidence; this semantic projection is **not raw-byte artifact
 reproducibility**, a signed result or release authority.
+Two successful observations without a current accepted-output identity are
+nonpassing, not empty-set artifact equivalence. Ordinary Cargo rejection is
+exit 101; direct-rustc rejection is exit 1. Other exits, signals, deadlines and
+incomplete capture/cleanup remain distinct infrastructure/fault observations.
 
 Core ceilings are 32 cells, 64 steps per cell, one concurrent cell, 64 owned
 processes, 256 source files/4 MiB source, 1 GiB per artifact tree, 2 GiB live
@@ -332,6 +385,17 @@ does not block compiler cleanup. Sidecars contain opaque typed identities and
 safe/redacted labels, not raw argv, environments, host paths or source text.
 Raw compiler captures live separately under private evidence roots.
 
+Request identities hash input names as exact byte sequences, not JSON object
+keys, and canonically order unordered build constraints. Non-UTF-8 names remain
+distinct; adding an input or changing its node changes the diagnostic identity.
+This encoding is diagnostic-only and does not change derivation, output, cache,
+attestation or receipt identities.
+
+The native collector applies stricter per-attempt ceilings: 256 identities and
+attempts, 4,096 events and 2 MiB encoded event bytes, with 512 terminal event
+slots and 1 MiB terminal-byte capacity reserved from optional observations.
+Missing start/exit/reap endpoints leave the timeline explicitly incomplete.
+
 Repeated measurements predeclare five alternating AB/BA pairs per exact
 fixture/operation/profile/cache cohort. Retain setup, warm-up, first-edit,
 failed, censored and excluded runs, including incomplete sessions. Only
@@ -358,4 +422,94 @@ retaining full reports/raw captures and observing fault cleanup and negative
 reports, followed by the parent-owned focused tests/no-std/quality/Cairn gates.
 No full Mantle self-hosting, compiler correctness, network sandboxing, source
 admission, cache trust or release reproducibility follows from baseline parity.
+
+## Production native wait diagnostics
+
+The ordinary `mantle rust-plan` executor accepts explicit
+`--rust-wait-diagnostics /absolute/private-new-directory` for supported local
+execution. This is the production adapter, not the standalone differential
+fixture runner described above. Direct native execution does not use a Cargo
+wrapper and rejects `--rust-wait-wrapper`; compiler-policy adapters are not a
+supported diagnostic transport. Strict/proof/remote contexts must be refused
+by root admission before state, output, or diagnostic-directory mutation.
+The selected `--rustc` must be an explicit absolute regular executable no larger
+than 512 MiB. Its content is streamed once through a fixed 64 KiB buffer before
+the diagnostic directory is created; this diagnostic-only pin joins the existing
+admitted toolchain/resolved-process identities without changing those identities.
+There is no ambient compiler search or wrapper injection.
+
+Disabled execution constructs no native collector, socket, resource sampler,
+or sampling thread. Enabled execution retains the same admitted compiler
+arguments, cleared child environment, pipe capture and wait contract. It does
+not apply the research supervisor's deadlines, resource limits or truncation.
+Exact selected-unit/configuration and admitted resolved-process identities are
+hashed into diagnostic-only unit/attempt records. The serial adapter observes
+request and dispatch, actual successful spawn, completion-observed exit status,
+and direct-child reap/pipe drain. It has no ready queue, live compiler-phase
+protocol, or precise first-error receipt. Those durations remain unavailable;
+request-to-dispatch is not evidence of an actual ready-queue interval.
+
+Native resource samples cover the invocation's CLI process tree, including its
+compiler descendants and the CLI itself, at no faster than 100 ms. They are
+not isolated compiler-only RSS or complete CPU accounting. Short-lived processes
+can be missed; summed RSS can double-count shared mappings; sampled peaks and
+CPU observations are sampled lower bounds with retained gaps; CLI CPU counters
+are cumulative and can include setup before collector construction, not an
+isolated interval delta. Direct-child reaping does
+not establish last-descendant cleanup, so tree lifetime/error drain stays
+censored where no such boundary is observed. Unsupported phases, pause/resume,
+and first-error time are unavailable, not inferred from stderr or exit.
+
+### Parent-owned production smoke recipe
+
+These commands are a recipe, not retained execution evidence. Set `MANTLE` and
+`RUSTC` to the pinned absolute executables, `FIXTURE` to an existing admitted
+small offline workspace, and `SCRATCH` to an existing absolute scratch parent
+outside that workspace with no symlink ancestors. All named diagnostic/output
+directories must initially be absent. Keep source/tool/semantic environment
+fixed throughout. For a single-library fixture, substitute
+`--execute-first-supported-unit` for `--execute-topology` in the first two runs;
+the topology flag exercises the ordinary serial local unit session on a chain
+or wide workspace.
+
+```sh
+"$MANTLE" --json rust-plan --root "$FIXTURE" --rustc "$RUSTC" \
+  --no-cargo-oracle --execute-topology \
+  --execution-output-root "$SCRATCH/native-output" > "$SCRATCH/native-off.json"
+mv "$SCRATCH/native-output" "$SCRATCH/native-off-output"
+"$MANTLE" --json rust-plan --root "$FIXTURE" --rustc "$RUSTC" \
+  --no-cargo-oracle --execute-topology \
+  --execution-output-root "$SCRATCH/native-output" \
+  --rust-wait-diagnostics "$SCRATCH/native-on-waits" > "$SCRATCH/native-on.json"
+cmp "$SCRATCH/native-off.json" "$SCRATCH/native-on.json"
+
+# Existing-output reuse: keep the successful output directory in place.
+"$MANTLE" --json rust-plan --root "$FIXTURE" --rustc "$RUSTC" \
+  --no-cargo-oracle --execute-topology \
+  --execution-output-root "$SCRATCH/native-output" \
+  --rust-wait-diagnostics "$SCRATCH/native-reuse-waits" > "$SCRATCH/native-reuse.json"
+
+# Seed then restore an eligible local-castore fixture in the same explicit state.
+"$MANTLE" --json --state-dir "$SCRATCH/native-state" rust-plan \
+  --root "$FIXTURE" --rustc "$RUSTC" --no-cargo-oracle --execute-topology \
+  --local-rust-cache read-write --execution-output-root "$SCRATCH/native-cache-output" \
+  --rust-wait-diagnostics "$SCRATCH/native-seed-waits" > "$SCRATCH/native-seed.json"
+mv "$SCRATCH/native-cache-output" "$SCRATCH/native-seeded-output"
+"$MANTLE" --json --state-dir "$SCRATCH/native-state" rust-plan \
+  --root "$FIXTURE" --rustc "$RUSTC" --no-cargo-oracle --execute-topology \
+  --local-rust-cache read --execution-output-root "$SCRATCH/native-cache-output" \
+  --rust-wait-diagnostics "$SCRATCH/native-restore-waits" > "$SCRATCH/native-restore.json"
+```
+
+Inspect each enabled `rust-waits.json` separately from ordinary JSON receipts.
+The off/on pair must preserve ordinary plan, receipt and output identities; its
+diagnostic invocation/clock/timing values are intentionally fresh. Reuse and
+eligible castore restores must show their actual cache disposition and
+`CacheRestored` without `Started`/compiler exit/reap events for restored units.
+Cache reports and reuse reasons legitimately differ from a compilation receipt;
+do not compare those different dispositions as byte-identical receipts. Confirm
+actual cache eligibility/hits rather than treating a rejected cache candidate
+followed by compilation as a restoration. Repeat with a real compiler error and
+retain the ordinary failure plus unavailable precise first-error timing. No
+commands in this section assert completed verification or a performance result.
 

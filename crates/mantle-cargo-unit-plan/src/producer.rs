@@ -23,6 +23,11 @@ use mantle_cargo_unit_plan::SourceSlice;
 use mantle_cargo_unit_plan::TargetLinkerBinding;
 use mantle_cargo_unit_plan::UnitBinding;
 use mantle_cargo_unit_plan::lower;
+use mantle_rust_differential_core::Digest;
+use mantle_rust_differential_core::waits::ArtifactRole;
+use mantle_rust_differential_core::waits::Dependency;
+use mantle_rust_differential_core::waits::ProcessRole;
+use mantle_rust_differential_core::waits::UnitIdentity as WaitUnitIdentity;
 use mantle_rust_plan_core::ExistingUnitFacts;
 use mantle_rust_plan_core::NativeInputDeclaration;
 use mantle_rust_plan_core::ResolvedNativeInputs;
@@ -78,8 +83,14 @@ struct GraphUnit {
     mode: String,
     profile: Option<GraphProfile>,
     dependencies: Vec<GraphEdge>,
-    #[serde(default)]
-    features: Vec<String>,
+    features: Option<Vec<String>>,
+}
+
+impl GraphUnit {
+    /// Preserve the oracle's original semantic default without claiming observed metadata.
+    fn semantic_features(&self) -> &[String] {
+        self.features.as_deref().unwrap_or_default()
+    }
 }
 #[derive(Debug, Deserialize)]
 struct GraphTarget {
@@ -88,11 +99,14 @@ struct GraphTarget {
     src_path: String,
     edition: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct GraphProfile {
     name: String,
     opt_level: String,
     debuginfo: Option<u32>,
+    /// Preserve every admitted Cargo profile setting, including codegen and panic policy.
+    #[serde(flatten)]
+    settings: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -356,6 +370,7 @@ fn run_oracle(
 struct PackageSource {
     source_id: String,
     kind: String,
+    nar_blake3: String,
     root: String,
     links: Option<String>,
 }
@@ -427,12 +442,13 @@ fn source_paths(
             producer_output: "sources".into(),
             subpath,
             store_name,
-            nar_blake3: digest,
+            nar_blake3: digest.clone(),
         });
         let kind = if package.source.is_some() { "registry" } else { "path" };
         package_bindings.insert(package.id.clone(), PackageSource {
             source_id,
             kind: kind.into(),
+            nar_blake3: digest,
             root: package_root.to_string_lossy().into_owned(),
             links: package.links.clone(),
         });
@@ -503,7 +519,7 @@ fn normalize_args(unit: &PlannerUnit, graph: &GraphUnit) -> Result<Vec<String>, 
         args.push(word.clone());
         index += 1;
     }
-    for feature in graph.features.iter().collect::<BTreeSet<_>>() {
+    for feature in graph.semantic_features().iter().collect::<BTreeSet<_>>() {
         if feature.contains('\"') || feature.as_bytes().contains(&0) || feature.len() > 128 {
             return Err(block("unit-plan-mode-unsupported", &unit.unit_id, "invalid Cargo feature name"));
         }
@@ -584,7 +600,7 @@ fn match_planner<'a>(
         [only] => Ok(*only), // Cargo's features replace planner features at the rustc boundary.
         [] => Err(block("unit-plan-oracle-failure", &unit.pkg_id, format!("missing Rust-plan {role} unit"))),
         _ => {
-            let features = unit.features.iter().cloned().collect::<BTreeSet<_>>();
+            let features = unit.semantic_features().iter().cloned().collect::<BTreeSet<_>>();
             let exact = candidates
                 .iter()
                 .copied()
@@ -631,6 +647,7 @@ struct PlannedUnitFacts {
     facts: Vec<ExistingUnitFacts>,
     bindings: Vec<UnitBinding>,
     identities: BTreeMap<String, UnitIdentity>,
+    wait_units: BTreeMap<String, WaitUnitIdentity>,
     roots: Vec<String>,
 }
 
@@ -809,7 +826,7 @@ fn unit_environment(
     }
     env.push(("CARGO_MANIFEST_DIR".into(), format!("{{{{mantle-source:{source_id}}}}}")));
     env.extend(
-        unit.features
+        unit.semantic_features()
             .iter()
             .map(|feature| (feature_env_name(feature), "1".to_string()))
             .collect::<BTreeMap<_, _>>(),
@@ -962,7 +979,13 @@ fn build_facts(
             execution_kind: fact.execution_kind.clone(),
             source_id: binding.source_id.clone(),
             triple: binding.triple.clone(),
-            features: graph.units[index].features.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect(),
+            features: graph.units[index]
+                .semantic_features()
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
         });
         facts.push(fact);
         bindings.push(binding);
@@ -977,11 +1000,226 @@ fn build_facts(
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(PlannedUnitFacts {
+        // Optional observation metadata cannot veto an otherwise admitted semantic plan.
+        wait_units: wait_units(config, graph, &facts, &bindings, package_sources).unwrap_or_default(),
         facts,
         bindings,
         roots,
         identities,
     })
+}
+
+/// Domain separation keeps opaque semantic facts distinct without retaining argv or paths.
+fn wait_digest<T: Serialize>(role: &str, value: &T) -> Result<Digest, Vec<Blocker>> {
+    mantle_rust_plan_core::domain_digest(role.as_bytes(), value)
+        .map_err(|_| block("unit-plan-wait-identity-invalid", role, "semantic identity serialization"))
+}
+
+/// Traverse only execution-only nodes. Compiler nodes carry their own dependency closure.
+fn wait_dependencies(
+    graph: &OracleGraph,
+    index: usize,
+    digests: &[Option<Digest>],
+) -> Result<Vec<Dependency>, Vec<Blocker>> {
+    let mut pending = graph.units[index].dependencies.iter().map(|edge| edge.index).collect::<Vec<_>>();
+    let mut seen = BTreeSet::new();
+    let mut dependencies = BTreeMap::new();
+    while let Some(next) = pending.pop() {
+        if !seen.insert(next) {
+            continue;
+        }
+        let unit = graph
+            .units
+            .get(next)
+            .ok_or_else(|| block("unit-plan-oracle-failure", "wait dependencies", "dependency outside graph"))?;
+        if is_run(unit) {
+            pending.extend(unit.dependencies.iter().map(|edge| edge.index));
+            continue;
+        }
+        let digest = digests[next]
+            .as_ref()
+            .ok_or_else(|| block("unit-plan-wait-identity-invalid", &unit.pkg_id, "unresolved compiler dependency"))?;
+        let role = if matches!(graph_kind(unit)?, "custom-build" | "proc-macro") {
+            ArtifactRole::HostExecutable
+        } else {
+            ArtifactRole::Linkable
+        };
+        dependencies.insert((digest.clone(), role), ());
+        if dependencies.len() > mantle_rust_differential_core::waits::MAX_PREREQUISITES {
+            return Err(block("unit-plan-limit", &unit.pkg_id, "more than 256 compiler prerequisites"));
+        }
+    }
+    Ok(dependencies.into_keys().map(|(unit, role)| Dependency { unit, role }).collect())
+}
+
+fn wait_input_digest(
+    config: &Config,
+    fact: &ExistingUnitFacts,
+    binding: &UnitBinding,
+    source: &PackageSource,
+    dependencies: &[&Digest],
+) -> Result<Digest, Vec<Blocker>> {
+    let linker = config.target_linker.as_ref().filter(|_| fact.execution_kind == "target");
+    wait_digest(
+        "mantle-cargo-wait-inputs-v1",
+        &(
+            &source.nar_blake3,
+            &fact.input_identities,
+            &fact.environment,
+            &fact.expected_outputs,
+            &binding.source_entry,
+            &binding.source_label,
+            &binding.source_kind,
+            &binding.rustc_metadata_hash,
+            &binding.externs,
+            &binding.build_script_run,
+            dependencies,
+            (&config.helper, &config.linker, linker, &config.runtime_inputs),
+        ),
+    )
+}
+
+fn wait_compiler_identity(
+    config: &Config,
+    unit: &GraphUnit,
+    fact: &ExistingUnitFacts,
+    binding: &UnitBinding,
+    source: &PackageSource,
+    inputs: Digest,
+    dependencies: Vec<Dependency>,
+) -> Result<WaitUnitIdentity, Vec<Blocker>> {
+    let profile = unit
+        .profile
+        .as_ref()
+        .ok_or_else(|| block("unit-plan-wait-identity-missing", &fact.unit_id, "missing Cargo compiler profile"))?;
+    if profile.name.is_empty() || profile.opt_level.is_empty() || binding.rustc_metadata_hash.is_empty() {
+        return Err(block("unit-plan-wait-identity-missing", &fact.unit_id, "incomplete compiler metadata"));
+    }
+    let role = match fact.execution_kind.as_str() {
+        "host" | "host-dependency" => ProcessRole::HostCompiler,
+        "target" => ProcessRole::TargetCompiler,
+        _ => return Err(block("unit-plan-mode-unsupported", &fact.unit_id, "not a compiler execution")),
+    };
+    let observed_features = unit
+        .features
+        .as_ref()
+        .ok_or_else(|| block("unit-plan-wait-identity-missing", &fact.unit_id, "missing Cargo feature metadata"))?;
+    let mut features = observed_features
+        .iter()
+        .map(|feature| wait_digest("mantle-cargo-wait-feature-v1", feature))
+        .collect::<Result<Vec<_>, _>>()?;
+    features.sort();
+    features.dedup();
+    let identity = WaitUnitIdentity {
+        package: wait_digest("mantle-cargo-wait-package-v1", &fact.package_id)?,
+        source: wait_digest("mantle-cargo-wait-source-nar-v1", &source.nar_blake3)?,
+        target: wait_digest("mantle-cargo-wait-target-v1", &(&fact.target_name, &binding.source_entry))?,
+        target_kind: wait_digest("mantle-cargo-wait-target-kind-v1", &unit.target.kind)?,
+        host: wait_digest("mantle-cargo-wait-host-v1", &config.host_triple)?,
+        target_triple: wait_digest("mantle-cargo-wait-triple-v1", &binding.triple)?,
+        role,
+        features,
+        profile: wait_digest("mantle-cargo-wait-profile-v1", profile)?,
+        mode: wait_digest("mantle-cargo-wait-mode-v1", &unit.mode)?,
+        compiler: wait_digest("mantle-cargo-wait-compiler-v1", &(&config.rustc, &config.toolchain))?,
+        arguments: wait_digest("mantle-cargo-wait-arguments-v1", &fact.arguments)?,
+        inputs,
+        dependencies,
+    };
+    Ok(identity)
+}
+
+/// Kahn reduction includes build-script runs in input identities, never in compiler inventory.
+/// All graph storage is bounded by the existing unit and per-unit prerequisite ceilings.
+fn wait_units(
+    config: &Config,
+    graph: &OracleGraph,
+    facts: &[ExistingUnitFacts],
+    bindings: &[UnitBinding],
+    sources: &BTreeMap<String, PackageSource>,
+) -> Result<BTreeMap<String, WaitUnitIdentity>, Vec<Blocker>> {
+    let mut remaining = Vec::with_capacity(graph.units.len());
+    let mut consumers = vec![Vec::new(); graph.units.len()];
+    for (index, unit) in graph.units.iter().enumerate() {
+        let features = unit
+            .features
+            .as_ref()
+            .ok_or_else(|| block("unit-plan-wait-identity-missing", &unit.pkg_id, "missing Cargo feature metadata"))?;
+        if unit.dependencies.len() > mantle_cargo_unit_plan::MAX_INPUTS_PER_UNIT
+            || features.len() > mantle_rust_differential_core::waits::MAX_PREREQUISITES
+        {
+            return Err(block("unit-plan-limit", &unit.pkg_id, "more than 256 prerequisites or features"));
+        }
+        remaining.push(unit.dependencies.len());
+        for edge in &unit.dependencies {
+            consumers
+                .get_mut(edge.index)
+                .ok_or_else(|| block("unit-plan-oracle-failure", &unit.pkg_id, "dependency outside graph"))?
+                .push(index);
+        }
+    }
+    let mut ready =
+        remaining.iter().enumerate().filter_map(|(i, count)| (*count == 0).then_some(i)).collect::<Vec<_>>();
+    let mut digests = vec![None; graph.units.len()];
+    let mut inventory = BTreeMap::new();
+    let mut completed = 0;
+    while let Some(index) = ready.pop() {
+        let fact = &facts[index];
+        let unit = &graph.units[index];
+        let source = sources
+            .get(&unit.pkg_id)
+            .ok_or_else(|| block("unit-plan-source-unsupported", &unit.pkg_id, "missing NAR identity"))?;
+        let mut inputs = unit
+            .dependencies
+            .iter()
+            .map(|edge| {
+                digests[edge.index].as_ref().ok_or_else(|| {
+                    block("unit-plan-wait-identity-invalid", &fact.unit_id, "unresolved dependency identity")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        inputs.sort();
+        inputs.dedup();
+        let input = wait_input_digest(config, fact, &bindings[index], source, &inputs)?;
+        let digest = if is_run(unit) {
+            wait_digest(
+                "mantle-cargo-wait-build-script-run-v1",
+                &(
+                    input,
+                    unit.semantic_features().iter().collect::<BTreeSet<_>>(),
+                    &unit.profile,
+                    &unit.mode,
+                    &bindings[index].triple,
+                ),
+            )?
+        } else {
+            let dependencies = wait_dependencies(graph, index, &digests)?;
+            let identity = wait_compiler_identity(config, unit, fact, &bindings[index], source, input, dependencies)?;
+            let digest = identity
+                .identity()
+                .map_err(|_| block("unit-plan-wait-identity-invalid", &fact.unit_id, "invalid compiler identity"))?;
+            if inventory.insert(fact.unit_id.clone(), identity).is_some() {
+                return Err(block("unit-plan-wait-identity-invalid", &fact.unit_id, "duplicate compiler unit"));
+            }
+            digest
+        };
+        digests[index] = Some(digest);
+        completed += 1;
+        for consumer in &consumers[index] {
+            remaining[*consumer] -= 1;
+            if remaining[*consumer] == 0 {
+                ready.push(*consumer);
+            }
+        }
+    }
+    if completed != graph.units.len() {
+        return Err(block(
+            "unit-plan-wait-identity-invalid",
+            "unit-graph",
+            "cyclic compiler or build-script dependencies",
+        ));
+    }
+    Ok(inventory)
 }
 
 fn is_store_root(path: &str, prefix: &str) -> bool {
@@ -1168,6 +1406,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         bindings: units,
         roots,
         identities,
+        wait_units,
     } = build_facts(&config, &graph, &receipt, &package_bindings, &native)?;
     let effects = plan_existing_unit_effects(facts).map_err(|blockers| {
         blockers
@@ -1190,6 +1429,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         target_linker: config.target_linker,
         toolchain: config.toolchain,
         runtime_inputs: config.runtime_inputs,
+        wait_units,
         sources,
         units,
         roots,

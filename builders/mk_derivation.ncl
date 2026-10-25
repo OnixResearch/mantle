@@ -262,14 +262,12 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     inputs = src_inputs @ all_inputs,
     pname | not_exported = resolved.pname,
     version | not_exported = resolved.version,
-    finish_gates =
-      if std.record.has_field "finish_gates" resolved then resolved.finish_gates
-      else ({
-        version = {
-          command = ["bin/%{resolved.pname}", "--version"],
-          expected = resolved.version,
-        },
-      } | Gate),
+    finish_gates = ({
+      version = {
+        command | default = ["bin/%{resolved.pname}", "--version"],
+        expected | default = resolved.version,
+      },
+    } & (if std.record.has_field "finish_gates" resolved then resolved.finish_gates else {}) | Gate),
     meta | not_exported = resolved.meta,
     passthru | not_exported = resolved.passthru,
     overrideAttrs | not_exported = fun f =>

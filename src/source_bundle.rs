@@ -4248,6 +4248,9 @@ fn validate_source_record(record: &SourceRecord, payload_mode: ManifestPayloadVa
         )));
     }
     validate_source_record_files(record, payload_mode)?;
+    // Typed provenance is optional for legacy bytes, but explicit facts must
+    // satisfy the same admission boundary during export, verify, and import.
+    crate::source_observation::observation_for_record(record)?;
     let expected_digest = if let Some(attestation) = &record.store_path_attestation {
         validate_store_path_attestation(record, attestation)?;
         digest_attested_store_path_record(&record.kind, &record.metadata, attestation)?
@@ -8843,12 +8846,10 @@ mod tests {
         let state_dir = temp.path().join("state-file");
         fs::write(&state_dir, b"not-a-directory").unwrap();
 
-        let error =
-            hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
+        hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
 
-        assert!(error.to_string().contains("creating source records dir"));
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
-        assert!(state_dir.is_file());
+        assert_eq!(fs::read(&state_dir).unwrap(), b"not-a-directory");
     }
 
     #[test]
@@ -10034,6 +10035,7 @@ let Derivation = import "derivation.ncl" in
             source_fetch_overrides: plan.overrides.clone(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drifted = crunch_pipeline::build(&config).await.unwrap();

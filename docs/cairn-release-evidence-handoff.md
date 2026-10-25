@@ -70,6 +70,40 @@ human verification checks include the separate `source-review` contributor;
 reviewer counts never become release-signer, build-witness, StageX-no-quorum, or
 verified-property counts.
 
+The pure Rust API, `crunch_release_core::source_review::verify_release_source_review`,
+takes an owned `SourceReviewVerificationRequest` and returns
+`ReleaseEvidenceEvaluation<SourceReviewVerification>`, like the other release
+evaluators. The manifest and artifact payloads move into the request without
+copying, and the manifest returns with the verification. The trusted policy
+remains an explicit operator input; this boundary form does not change review
+acceptance or signature checks.
+
+### Nickel policy authoring
+
+`config/source-review/contracts.ncl` validates supplied policy facts;
+`config/source-review/default.ncl` defines optional-by-default authoring and two
+required presets. `reviewed` requires one approval; `stagex_inspired` requires
+two and excludes authors. Neither preset selects operator trust or creates
+review approval.
+
+The defaults declare 64-row review, trusted-key and author-key limits. The
+policy contract enforces the trusted-key and author-key list bounds and
+requires the approval count to match the authentication threshold.
+Reviewer purposes are exclusively `source-review-approval`; duplicate full-key
+identities and currentness references from a different verifier context are
+rejected. Current, overlap, superseded, revoked and unknown currentness values
+are supplied observations, not permission for an ineligible key to count.
+
+Apply `contracts.admit` with the selected preset to the operator's frozen
+subject, claim-root, key and currentness facts, then export that authored input
+with `nickel export --format json POLICY.ncl`. Use the resulting exact
+`POLICY.json` bytes for the external producer workflow and explicit Mantle
+selection below. The paired fixtures in `config/source-review/tests/` are
+synthetic contract controls, never actual release policies or approvals. The
+Rust `SourceReviewVerificationPolicy` and related closed DTOs in
+`crunch-release-core::source_review` remain the runtime admission contract;
+successful Nickel export does not replace signature or Valence verification.
+
 ### Real evidence preparation
 
 Prerequisites are actual reviewed source bytes, the current explicit Cairn claim

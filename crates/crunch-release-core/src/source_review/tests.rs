@@ -1,3 +1,5 @@
+use alloc::format;
+
 use artifact_auth_core::KeyCurrentness;
 use artifact_auth_core::TrustedKeyObservation;
 use ed25519_dalek::Signer;
@@ -203,16 +205,16 @@ impl Fixture {
     }
 
     fn verify(&self) -> SourceReviewVerification {
-        let attachment = serde_json::to_vec(&self.attachment).unwrap();
         let policy = serde_json::to_vec(&self.policy).unwrap();
-        verify_release_source_review(&SourceReviewVerificationRequest {
-            manifest: &self.manifest,
-            attachment_bytes: Some(&attachment),
-            policy_bytes: Some(&policy),
-            valence_bytes: Some(&self.receipt),
-            trusted_policy_bytes: Some(&policy),
+        verify_release_source_review(SourceReviewVerificationRequest {
+            manifest: self.manifest.clone(),
+            attachment_bytes: Some(serde_json::to_vec(&self.attachment).unwrap()),
+            policy_bytes: Some(policy.clone()),
+            valence_bytes: Some(self.receipt.clone()),
+            trusted_policy_bytes: Some(policy),
             require_review: true,
         })
+        .verification
     }
 }
 
@@ -236,24 +238,26 @@ fn distinct_full_keys_with_identical_labels_satisfy_only_the_selected_review_gat
     assert!(result.valid);
     assert_eq!(result.approved_key_blake3.len(), 2);
     assert_eq!(result.approved_key_blake3, acceptance.approved_key_blake3);
-    let optional = verify_release_source_review(&SourceReviewVerificationRequest {
-        manifest: &fixture.manifest,
+    let optional = verify_release_source_review(SourceReviewVerificationRequest {
+        manifest: fixture.manifest.clone(),
         attachment_bytes: None,
         policy_bytes: None,
         valence_bytes: None,
         trusted_policy_bytes: None,
         require_review: false,
     });
-    assert_eq!(optional.status, SourceReviewStatus::NotRequired);
-    assert!(optional.valid);
-    let required = verify_release_source_review(&SourceReviewVerificationRequest {
-        manifest: &fixture.manifest,
+    assert_eq!(optional.manifest, fixture.manifest, "the evaluated manifest is returned unchanged");
+    assert_eq!(optional.verification.status, SourceReviewStatus::NotRequired);
+    assert!(optional.verification.valid);
+    let required = verify_release_source_review(SourceReviewVerificationRequest {
+        manifest: fixture.manifest.clone(),
         attachment_bytes: None,
         policy_bytes: None,
         valence_bytes: None,
         trusted_policy_bytes: None,
         require_review: true,
-    });
+    })
+    .verification;
     assert_eq!(required.status, SourceReviewStatus::Missing);
     assert!(!required.valid);
 }
@@ -284,6 +288,10 @@ fn duplicate_full_key_aliases_never_become_two_reviewers() {
     let result = fixture.verify();
     assert!(!result.valid);
     assert_eq!(result.diagnostics, ["source-review-duplicate-full-key"]);
+    assert!(matches!(
+        verify_review_rows(&fixture.attachment.reviews, &fixture.policy),
+        Err(SourceReviewError::DuplicateFullKey)
+    ));
 }
 
 #[test]
@@ -332,14 +340,15 @@ fn explicit_policy_and_exact_valence_artifact_linkage_cannot_be_substituted() {
     let fixture = Fixture::new();
     let attachment = serde_json::to_vec(&fixture.attachment).unwrap();
     let policy = serde_json::to_vec(&fixture.policy).unwrap();
-    let result = verify_release_source_review(&SourceReviewVerificationRequest {
-        manifest: &fixture.manifest,
-        attachment_bytes: Some(&attachment),
-        policy_bytes: Some(&policy),
-        valence_bytes: Some(&fixture.receipt),
-        trusted_policy_bytes: Some(b"other policy"),
+    let result = verify_release_source_review(SourceReviewVerificationRequest {
+        manifest: fixture.manifest.clone(),
+        attachment_bytes: Some(attachment),
+        policy_bytes: Some(policy),
+        valence_bytes: Some(fixture.receipt.clone()),
+        trusted_policy_bytes: Some(b"other policy".to_vec()),
         require_review: true,
-    });
+    })
+    .verification;
     assert_eq!(result.status, SourceReviewStatus::Stale);
     let mut fixture = Fixture::new();
     let mut receipt: Value = serde_json::from_slice(&fixture.receipt).unwrap();

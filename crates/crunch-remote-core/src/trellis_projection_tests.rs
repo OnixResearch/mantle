@@ -219,12 +219,16 @@ fn assert_parity(
 #[test]
 fn complete_finite_matrix_matches_actual_trellis_admit() {
     let mut cases: u32 = 0;
-    for history_count in [1, MAX_REMOTE_ATTEMPT_EVENTS - 1, MAX_REMOTE_ATTEMPT_EVENTS] {
+    for history_count in [0, 1, MAX_REMOTE_ATTEMPT_EVENTS - 1, MAX_REMOTE_ATTEMPT_EVENTS] {
         let baseline = state_with_history(history_count);
         for phase in PHASES {
             for kind in KINDS {
                 for identity_class in 0..5 {
                     for event_class in 0..3 {
+                        if history_count == 0 && event_class != 0 {
+                            // An empty retained history has no duplicate/conflict class.
+                            continue;
+                        }
                         for authorization_class in 0..4 {
                             for result_class in 0..3 {
                                 let mut current = baseline.clone();
@@ -425,4 +429,53 @@ fn exhausted_identity_domain_never_aliases_or_forgets_existing_values() {
     assert_eq!(domain.intern("one-too-many"), Err(ProjectionError::IdentityCapacity));
     assert_eq!(domain.intern("identity-0"), Ok(1));
     assert_eq!(domain.intern("identity-4095"), Ok(4096));
+}
+
+#[test]
+fn first_and_final_fences_keep_report_admission_separate_from_reassignment() {
+    let authorization = RemoteAttemptAuthorizationFacts {
+        worker_authorized: true,
+        output_admission_authorized: true,
+    };
+    for fence in [1, u64::MAX] {
+        let mut current = state_with_history(0);
+        current.fence_generation = RemoteFenceGeneration::new(fence).unwrap();
+        let mut projection = FiniteProjection::new();
+        for (index, kind) in [
+            RemoteAttemptReportKind::Start,
+            RemoteAttemptReportKind::ResultReady,
+            RemoteAttemptReportKind::Completion,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut report = report(&current, kind);
+            report.identity.event_id = RemoteEventId::new(format!("boundary-{index}")).unwrap();
+            let plan = assert_parity(&mut projection, &current, &report, authorization);
+            assert_eq!(plan.disposition, RemoteAttemptApplyDisposition::Applied);
+            assert_eq!(plan.next_state.fence_generation.get(), fence);
+            current = plan.next_state;
+        }
+        assert_eq!(current.phase, RemoteAttemptPhase::Completed);
+        let mut wrong_fence = report(&current, RemoteAttemptReportKind::Completion);
+        wrong_fence.identity.fence_generation =
+            RemoteFenceGeneration::new(if fence == 1 { 2 } else { fence - 1 }).unwrap();
+        let rejected = assert_parity(&mut projection, &current, &wrong_fence, authorization);
+        assert_eq!(rejected.disposition, RemoteAttemptApplyDisposition::Rejected);
+        assert_eq!(
+            rejected.reason_code,
+            if fence == 1 {
+                RemoteAttemptReasonCode::UnknownFenceRejected
+            } else {
+                RemoteAttemptReasonCode::StaleReportRejected
+            }
+        );
+    }
+    // The producer's representable_fence_advances theorem is arithmetic, not
+    // an admission transition. The consumer must refuse overflow independently.
+    assert_eq!(RemoteFenceGeneration::new(u64::MAX - 1).unwrap().advance().unwrap().get(), u64::MAX);
+    assert_eq!(
+        RemoteFenceGeneration::new(u64::MAX).unwrap().advance(),
+        Err(RemoteAttemptReasonCode::FenceExhausted)
+    );
 }

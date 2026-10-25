@@ -413,6 +413,7 @@ fn check_git_facts(request: &SourceObservationRequest, diagnostics: &mut Vec<Sou
 }
 
 fn check_profile_and_projection(request: &SourceObservationRequest, diagnostics: &mut Vec<SourceDiagnostic>) {
+    let diagnostic_count_before = diagnostics.len();
     if !request.snapshot_profile.is_admissible() {
         diagnostics.push(diagnostic((
             "source-profile-inadmissible",
@@ -420,13 +421,21 @@ fn check_profile_and_projection(request: &SourceObservationRequest, diagnostics:
             "snapshot profile name and version must be non-empty, bounded, and at least version one",
         )));
     }
-    if request.projection.components().is_empty() {
+    let components = request.projection.components();
+    let is_normalized = !components.is_empty()
+        && components.len() <= MAX_PROJECTION_COMPONENTS
+        && components
+            .iter()
+            .all(|part| !part.is_empty() && part != "." && part != ".." && !part.contains(['/', '\\']));
+    if !is_normalized {
         diagnostics.push(diagnostic((
-            "source-projection-empty",
+            "source-projection-unsafe",
             "projection",
-            "projection must contain at least one component",
+            "projection components must be bounded, normalized relative components",
         )));
     }
+    debug_assert!(diagnostics.len() >= diagnostic_count_before);
+    debug_assert!(diagnostics.len().saturating_sub(diagnostic_count_before) <= 2);
 }
 
 fn ordered(mut diagnostics: Vec<SourceDiagnostic>) -> Vec<SourceDiagnostic> {

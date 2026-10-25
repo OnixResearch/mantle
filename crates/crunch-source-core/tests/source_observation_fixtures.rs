@@ -162,3 +162,14 @@ fn malformed_payload_digest_rejects_at_construction() {
     assert!(Blake3Digest::parse("A".repeat(64)).is_err());
     assert!(Blake3Digest::parse("a".repeat(64)).is_ok());
 }
+
+#[test]
+fn decoded_projection_components_cannot_bypass_admission() {
+    for components in [vec![".."], vec!["source/../other"], vec![""], vec!["source"; 65]] {
+        let mut request = git_request();
+        request.projection = serde_json::from_value(serde_json::json!({"components": components})).unwrap();
+        let result = admit_source_observation(&request, &policy());
+        assert!(result.observation.is_none());
+        assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.code == "source-projection-unsafe"));
+    }
+}

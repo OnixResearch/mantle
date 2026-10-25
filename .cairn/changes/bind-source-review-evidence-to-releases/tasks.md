@@ -1,13 +1,24 @@
-<!-- BLOCKED 2026-09-11: external contract gate unsatisfied (no Cairn
-source-review producer contract, no Valence identity binding). See
-evidence/external-contract-gate-2026-09-11.md. All tasks stay open. -->
+<!-- The 2026-09-11 missing-producer gate and the 2026-10-18 inventory are
+historical. Current Cairn/Valence version-1 source-review contracts and Mantle's
+consumer are documented in docs/cairn-release-evidence-handoff.md. Current
+verification, policy selection and genuine reviewer approval remain separate;
+no task is accepted merely because the producer contract now exists. -->
+
+2026-10-23 scoped checkpoint: I2's existing typed authoring policy and closed
+runtime DTOs are present; pinned Nickel 1.17.0 admitted all three valid policy
+fixtures and denied all seven invalid fixtures by contract, on unchanged inputs.
+I11's authoring and real external-signing workflow is documented. Evidence:
+`evidence/authoring-policy-runtime-2026-10-23.json`. These two source/document
+criteria do not accept real reviewer authority, external compatibility, final
+repository gates, or the change as a whole.
+
 # Tasks: Bind source-review evidence to releases
 
 ## Phase 1: External contracts and baseline
 
 - [ ] [serial] V0 Run current Cairn semantic-review validation, Mantle release-evidence tests, release-attestation tests, and focused `release_cli` verification tests before core changes. Record exact output in `cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline.md`. r[verification_evidence.release_source_review_evidence]
 - [ ] [serial] I1 Record exact stable Cairn producer, Valence identity, Artifact Auth signature, role, source-subject, policy, compatibility, and non-claim contracts. Do not continue from placeholder or draft-only contracts. r[verification_evidence.release_source_review_evidence]
-- [ ] [serial] I2 Define typed Nickel policy and machine contracts for optional and required source-review modes, named reviewer bounds, key roles, author exclusion, revocations, and currentness. r[verification_evidence.release_source_review_evidence]
+- [x] [serial] I2 Define typed Nickel policy and machine contracts for optional and required source-review modes, named reviewer bounds, key roles, author exclusion, revocations, and currentness. r[verification_evidence.release_source_review_evidence]
 
 ## Phase 2: Pure source-review adapter
 
@@ -32,6 +43,6 @@ evidence/external-contract-gate-2026-09-11.md. All tasks stay open. -->
 
 ## Phase 5: Documentation and lifecycle
 
-- [ ] [serial] I11 Document producer/consumer workflow, exact commands, key and revocation inputs, StageX-inspired preset, optional default, role separation, evidence retention, and non-claims. r[verification_evidence.release_source_review_evidence]
+- [x] [serial] I11 Document producer/consumer workflow, exact commands, key and revocation inputs, StageX-inspired preset, optional default, role separation, evidence retention, and non-claims. r[verification_evidence.release_source_review_evidence]
 - [ ] [serial] V5 Run focused source-review core tests, `nix develop -c cargo test -p crunch-release-core`, `nix develop -c cargo test -p mantle --test release_cli`, and independent external-profile compatibility checks. Record exact output in the change evidence. r[verification_evidence.release_source_review_evidence]
 - [ ] [serial] V6 Run machine-contract generation and negative fixtures, `nix develop -c cargo fmt --check -p mantle -v`, focused first-party Clippy, `git diff --check`, Cairn validation, traceability coverage, all three change gates, and the relevant Nix checks. r[verification_evidence.release_source_review_evidence]

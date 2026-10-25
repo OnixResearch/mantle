@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// recorded in .cairn/archive/1970-01-01-complete-store-capability-migration/evidence/
 // tigerstyle-remaining-2026-09-09.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(

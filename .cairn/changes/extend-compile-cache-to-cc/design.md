@@ -2,25 +2,22 @@
 
 ## Goal and scope
 
-The existing Rust unit cache seam gains a C/C++ compiler-driver mode for the
-bootstrap toolchain family. The cache stays a machine-local performance
-device; proofs stay cache-off. This proposal defines the contract; it does not
-implement it.
-
-Planning success means a native change package with requirements, ownership,
-positive and negative tasks, and a recorded baseline. Gate success proves
-package structure only.
+The existing Rust unit cache seam has an opt-in C/C++ compiler-driver mode.
+The cache stays a machine-local performance device; proofs stay cache-off.
+The core, driver, daemon/store path and executable fixtures are implemented;
+representative bootstrap and protected-exec acceptance remain open in tasks.
+Source delivery and proposal gates are not runtime or producer acceptance.
 
 ## Current behavior
 
-`crunch-rust-cache` stores unit results in castore-backed form with local
-policy, receipts, and dispositions; `crunch-rustc-wrapper` plus
-`mantle-rust-cache-daemon` serve Rust builds through `rust_plan` with
-`local_rust_cache`/`shared_rust_cache` CLI modes. Nothing caches C/C++
-compiles. StageX and GCC chain sessions recompile every object on recipe
-change; proof runs measure hours. The accepted `rustc-cache-adapter` spec
-already demands strict evidence lanes exclude ambient wrapper caching; the
-present change extends the same discipline.
+`crunch-rust-cache` stores Rust unit results and bounded C object/manifest
+records in the existing local store. `crunch-rustc-wrapper::cc` admits only
+classified compile-mode operations with complete bounded identities, forwards
+unknown operations unchanged, and uses the existing daemon for optional reuse.
+`crunch-build::compile_driver` maps only an explicitly selected runtime socket
+after derivation conversion; it neither installs a compiler nor admits a
+protected executable inventory. StageX/GCC-chain integration, byte parity,
+timing and uncached fixed-point proof still require captured execution.
 
 The external reference implements the C-side shape: a driver that is `cc` on
 PATH, content-masked keys, depfile-learned manifests, cached failures and
@@ -77,3 +74,21 @@ is testable with positive and negative fixtures.
   invocations forward unchanged and are logged, never guessed.
 - Probe-cache keys over toolchain identity need the identity set the protected
   inventory already records.
+
+## Environment identity and degradation admission
+
+Compiler search environment variables use tagged alias-relative path entries,
+not substring rewriting of arbitrary strings. Recognized colon-separated
+search variables admit only absolute paths under declared path-independent
+roots. Empty or relative search entries, undeclared component-prefix siblings,
+parent traversal and path-bearing values with unclassified semantics bypass
+cache reuse. This keeps ambient cwd and unmeasured negative searches out of
+cache admission, while relocated identical declared roots remain eligible.
+
+Cache connections reuse the slot client's nonblocking Unix connect boundary.
+One five-second deadline covers connect and framed request/response I/O, so
+an absent daemon or saturated accept backlog cannot block plain compilation
+indefinitely. Read/publication/receipt failures remain advisory. The source
+fixtures in `scripts/prove-cc-cache-slots.py` must be executed separately;
+their presence does not establish bootstrap parity or strict proof acceptance.
+

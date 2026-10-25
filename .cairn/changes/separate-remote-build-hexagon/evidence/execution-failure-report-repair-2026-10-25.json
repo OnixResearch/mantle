@@ -1,0 +1,173 @@
+{
+  "schema": "mantle-remote-failure-report-repair-evidence-v1",
+  "date": "2026-10-25",
+  "change": "separate-remote-build-hexagon",
+  "requirements": [
+    "remote_builds.remote_effect_plans",
+    "remote_builds.hexagonal_compatibility"
+  ],
+  "maintenance_owner": "Remote build core, application and stdio adapter maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "defect": "A failed executor effect closed the remote effect session, which then refused the transport send for the worker's BuildExecution error frame; every failed production remote build reached its client as a transport EOF. Present in HEAD since 41d0bdfc2; found by the first full ordinary gate run.",
+  "defect_trace": {
+    "path": "/home/brittonr/.cargo-target/oversized-strace/trace.log",
+    "blake3": "45d9fc950b91d527e9b50414734713060e199d63477a511a339d6a4aef115e4d",
+    "observation": "Worker wrote auth-ok, missing-inputs, build-queued and build-started, then exited 3 with remote-effect-SessionFailed and no error frame."
+  },
+  "repair": {
+    "decision_record": {
+      "path": "adr/0131-report-remote-execution-failures-through-one-terminal-effect.md",
+      "blake3": "044d32ce69cb88b38472ffa2e4bf689242aaf6fb18dfe68522ae7e5b62b08a77"
+    },
+    "source": [
+      "crates/crunch-remote-core/src/effect.rs",
+      "crates/crunch-remote-app/src/lib.rs",
+      "src/remote_build.rs",
+      "src/remote_build/usage_child.rs",
+      "src/remote_build/gateway.rs",
+      "src/remote_failure_debug.rs",
+      "src/main.rs"
+    ],
+    "behavior": "A failed session admits exactly one terminal failure report. The executor child relays only a validated failure-debug reference; worker and client revalidate it. Unauthenticated failed usage stays unrecorded without replacing the execution failure.",
+    "tests": [
+      "tests/remote_transfer_production.rs"
+    ]
+  },
+  "focused_checks": {
+    "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/remote-failure-relay-checks",
+    "checks": {
+      "observability": {
+        "exit": 0,
+        "stdout_blake3": "cfbebc6365a7272e5b01d48c1b6ea974c27c77d626cfaf700de68497c16892f8",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2850 filtered out; finished in 0.00s"
+        ]
+      },
+      "remote-build-unit": {
+        "exit": 0,
+        "stdout_blake3": "9cabd5153a4b15faab529b7a8d10b3c3e1b0d63d9bfa9039bb8d70b966beac2c",
+        "results": [
+          "test result: ok. 226 passed; 0 failed; 0 ignored; 0 measured; 2625 filtered out; finished in 6.96s"
+        ]
+      },
+      "remote-crates": {
+        "exit": 0,
+        "stdout_blake3": "1f105b16299f61b131168b1fc624fcaad747639539804c4a7eb9ab7381712140",
+        "results": [
+          "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 107 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 53.02s"
+        ]
+      },
+      "remote-transfer": {
+        "exit": 0,
+        "stdout_blake3": "a783d763cd6106c4a0475e60b29d0d62b583756cc9433e0918053b9056fa02ca",
+        "results": [
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.92s"
+        ]
+      },
+      "worker-reference": {
+        "exit": 0,
+        "stdout_blake3": "5057912b791b47a5b4d8dd2e579c2533a30ef76dc8f9aa658989b3da8bad72aa",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2850 filtered out; finished in 0.00s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2850 filtered out; finished in 0.00s",
+          "test result: oktest remote_failure_debug::tests::multiprocess_bundle_publication_is_atomic_and_no_clobber ... . 1 passed; 0 failed; 0 ignored; 0 measured; 2850 filtered outok",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2850 filtered out; finished in 0.00s",
+          "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 2841 filtered out; finished in 0.02s"
+        ]
+      }
+    },
+    "scope": "Ran before formatting-only edits and one binding inlined for Tiger Style; the final gate qualification covers the final tree."
+  },
+  "pre_gate_checks": {
+    "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pre-gate-checks-v2",
+    "checks": {
+      "clippy": {
+        "exit": 0,
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "results": []
+      },
+      "format": {
+        "exit": 1,
+        "stdout_blake3": "c94def02053d9b3e48f5cdcfc3c09dd5fe25b589cfb36a44a284c7f260bb1297",
+        "results": []
+      },
+      "remote-app-tests": {
+        "exit": 0,
+        "stdout_blake3": "22b54f8db5c582c3a8b40aae6f442bde7d0e5091f544c852cd2bbaf57e86cd68",
+        "results": [
+          "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "tigerstyle": {
+        "exit": 0,
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "results": []
+      }
+    },
+    "scope": "Its format step reported one rustfmt diff, applied before the final gate; the gate's format steps qualify the final tree."
+  },
+  "named_regressions_observed_passing": {
+    "effect::tests::failed_session_admits_exactly_one_terminal_failure_report": true,
+    "effect::tests::healthy_session_has_no_failure_to_report": true,
+    "tests::failed_session_delivers_one_terminal_report_and_nothing_else": true,
+    "remote_failure_debug::tests::worker_failure_debug_reference_admits_only_validated_fields": true,
+    "oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure": true,
+    "failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth": true
+  },
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "classification": "host-nix-remote-build-hook",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+      }
+    ],
+    "bound_step_reruns": [
+      {
+        "step": "tigerstyle",
+        "original_exit": 1,
+        "original_classification": "host-nix-remote-build-hook",
+        "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+        "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+        "rerun_exit": 0,
+        "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+        "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+        "tree_identical_to_gate_start": true
+      }
+    ],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949"
+    },
+    "statement": "Every declared gate step exited 0 except tigerstyle, flake. flake failed in host Nix configuration before building any check and did not pass. tigerstyle failed in the same host Nix build hook while building its runner, before linting; rerun alone over the byte-identical tree, it exited 0. v6 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "non_claims": [
+    "Covers the executor-failure report path only; other failure paths were not audited by this repair.",
+    "No Trellis-verified model changed; EffectSession is outside the projection.",
+    "No Cairn task checkbox changed and no acceptance of separate-remote-build-hexagon follows."
+  ]
+}

@@ -4,14 +4,14 @@
 
 - [x] [serial] V1 Record current source-bundle v1 bytes, manifest BLAKE3 values, imported-state behavior, `SourceAcquisition` bytes, release identities, and focused test output before changes. r[source_transports.source_observations.compatibility] r[mantle.release_provenance.source_observation_binding]
   - Evidence: baseline recorded in `evidence/verification-2026-09-11.md` (pre-change import skip semantics, untyped adapter facts, absent observation core, absent release binding and machine surface).
-- [x] [serial] I1 Review and accept ADR 0059 for typed source observations, locator non-authority, monotonic ingest, v1 compatibility, and reuse of existing signature roles. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_signature_boundary]
-  - Evidence: ADR 0059 accepted (`adr/0059-bind-source-observations-and-monotonic-ingest.md`) covering typed observations, locator non-authority, monotonic ingest, v1 compatibility, and reuse of existing signature roles.
+- [ ] [serial] I1 Review and accept ADR 0059 for typed source observations, locator non-authority, monotonic ingest, v1 compatibility, and reuse of existing signature roles. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_signature_boundary]
+  - Current gate (2026-10-23): the indexed canonical decision is `adr/0059-bind-source-observations-without-new-signature-authority.md`, still Proposed. The duplicate numbered 0059 was consolidated into that record, preserving its current compatibility and release-preparation guidance. The duplicate's Accepted label and earlier checked task supplied no independent review or acceptance receipt; historical implementation transcripts remain historical, not approval authority.
 - [x] [depends:extend-nominal-types-to-trust-boundaries] I2 Reuse checked URL, Git revision, projection-path, profile, and BLAKE3 values instead of defining competing primitive wrappers. r[source_transports.source_observations.contract]
   - Evidence: dependency `extend-nominal-types-to-trust-boundaries` is archived; the core defines only domain-specific types (`LocatorClass`, `ProjectionPath`, `SnapshotProfile`, `GitObjectFormat`, `Blake3Digest`) and no competing URL/revision primitives.
 - [ ] [depends:bind-source-review-evidence-to-releases] I3 Align source observation and reviewed-source attachment on one exact release-source subject and keep reviewer authority external. r[mantle.release_provenance.source_observation_binding]
-  - BLOCKED 2026-09-11: dependency `bind-source-review-evidence-to-releases` is itself blocked by its External Contract Gate (no Cairn source-review producer contract, no Valence identity binding). Unblock that change first.
+  - Current gate (2026-10-23): the retained Cairn producer now defines `cairn.source-review-subject.v1`, attachment, claim, and verification-policy contracts over exact `mantle-release-source`/version 1/`source` subjects. The old “no producer contract” statement is no longer current. Real trusted reviewer policy, currentness, detached signatures, Valence identity binding, and the dependency's current end-to-end acceptance remain independent; no approval authority is inferred from source observations.
 - [ ] [depends:prove-source-built-mantle-fixed-point] I4 Record the stabilized source-bundle and hydration compatibility boundary before changing source records. r[source_transports.source_observations.compatibility]
-  - BLOCKED 2026-09-11: dependency `prove-source-built-mantle-fixed-point` is blocked on the Leviathan V2 proof run. Record the stabilized boundary after that change completes.
+  - Current gate (2026-10-23): Leviathan SSH access is available. The source-built fixed-point dependency still requires a fresh final-source cold proof and accepted v2 evidence; retained source manifests and historical provider receipts do not close it. The v1 adapter changes below preserve canonical record bytes and never backfill absent provenance.
 
 ## Phase 2: Pure source core
 
@@ -56,3 +56,27 @@
   - Evidence: focused suites all green — source core 16, source-bundle 87, project 13, release-core 242, release CLI 149; exact summaries in `evidence/verification-2026-09-11.md`.
 - [x] [serial] V8 Run wasm checks for the source core, focused formatting and Clippy, first-party quality rails, machine-contract checks, Cairn validation, Tracey coverage, all three change gates, and relevant Nix checks. r[source_transports.source_observations.claim_boundary] r[mantle.release_provenance.source_observation_signature_boundary]
   - Evidence: wasm32 check clean, fmt exit 0, Tiger Style exit 0, Cairn validate true with all three gates PASS, Tracey coverage 155/155. Two rails stay blocked on pre-existing repo debt reproduced on a clean `af85ab857` checkout (first-party Clippy: store_gc_cli/remote_nominal; machine-contract: 44 unclassified root-JSON sources); the new surface itself reports zero machine-contract issues.
+
+## Current source-only corrections (2026-10-23)
+
+No tests/builds/formatters/proofs were run by this slice, and historical counts
+above are not current acceptance. `src/source_observation.rs` now requires
+explicit projection, snapshot profile name/version, and tagged immutable Git
+format/revision. Missing legacy facts yield unavailable provenance, not
+invented `source`/profile defaults or a format inferred from revision length.
+Explicit contradictory Git facts reject, including Git fields on another
+source kind. `src/source_bundle.rs` applies this admission during export,
+verification, and import without changing the v1 canonical encoding.
+`crates/crunch-source-core/src/ingest.rs` re-admits stored observations before
+identical reuse, rejecting a structurally invalid canonical value or a stale
+observation digest. Legacy projection requires explicit profile and projection.
+
+Regression fixtures cover malformed payload digests at construction, stored
+observation identity forgery, incomplete and ambiguous legacy metadata,
+explicit SHA-256 revision binding, unsafe adapter projection, and rejection
+with unchanged durable record bytes. The integration owner must exercise `cargo test -p
+crunch-source-core`, the Mantle source observation/source bundle suites, and
+the release-core/release CLI suites against the final source. These corrections
+do not add SHA-256 repository transport support to the pinned Git backend or
+manufacture reviewer authority. See ADR 0059 for the exact compatibility rule.
+

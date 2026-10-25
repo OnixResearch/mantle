@@ -1,0 +1,617 @@
+{
+  "schema": "mantle-source-review-pure-contributor-public-test-only-v1",
+  "test_only": true,
+  "actual_release_create_success": false,
+  "actual_release_verify_success": false,
+  "pure_contributor_exercised": true,
+  "ordinary_manifest_admissible": false,
+  "execution_boundary": "Throwaway one-file executable linked to already built release-core rlib; zero Cargo/build-target writes; not Mantle public CLI acceptance",
+  "subject": {
+    "schema": "cairn.source-review-subject.v1",
+    "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+    "source_revision": null,
+    "source_tree_blake3": null,
+    "snapshot_profile": "mantle-release-source",
+    "snapshot_profile_version": 1,
+    "projection": "source"
+  },
+  "archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+  "independent_receipt_blake3": "242ab41f0785e37df6f4eee11d8e50d6973104fc0fb8009072a75ee5bb903fd5",
+  "independent_receipt_file_blake3": "4289985ca2d3d2117739a80aa38ba7cc451c5be5b877af37f376fe59e064031d",
+  "approved_distinct_public_test_review_keys": 2,
+  "release_signer_count": 0,
+  "build_witness_count": 0,
+  "cases": [
+    "selected-required-policy: SourceReviewVerification { status: Satisfied, valid: true",
+    "unselected-recorded-only: SourceReviewVerification { status: Recorded, valid: true",
+    "optional-absence: SourceReviewVerification { status: NotRequired, valid: true",
+    "required-missing-policy: SourceReviewVerification { status: Missing, valid: false",
+    "selected-policy-byte-mismatch: SourceReviewVerification { status: Stale, valid: false",
+    "tampered-signature: SourceReviewVerification { status: Invalid, valid: false"
+  ],
+  "commands": [
+    {
+      "label": "reviewer-a-request",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-a-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.7379575,
+      "finished_unix": 1792797251.745498,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-request.stdout",
+        "blake3": "aff0440d5ba309b2d7ee8c3bdb4979360ee833eb8ef085bf4aa4de4081801065",
+        "size_bytes": 4321,
+        "text": "{\n  \"canonical_statement_hex\": \"0000002361727469666163742d617574682e73746174656d656e742d707265696d6167652e76310000001a61727469666163742d617574682e73746174656d656e742e763100000016636169726e2e736f757263652d7265766965772e763100000016736f757263652d7265766965772d617070726f76616c00000016636169726e2e736f757263652d7265766965772e76310000001b72657669657765722d612d5055424c49432d544553542d4f4e4c59000000225055424c49432d544553542d4f4e4c592d4e4f542d5245414c2d415050524f56414c00000015656432353531392d7075626c69632d6b65792e763100000006626c616b653300000040623430626337353730323763386262393836626337383766366461613133663236616136303066316461386132653537393939323765653231323466306566330000001c636169726e2e736f757263652d7265766965772d636c61696d2e763100000006626c616b65330000004065313839396536313763633863306531323131386133323364346564373935313761353534393432353738393164613238313366376631653862616632306664000000020000001d636169726e2e736f757263652d7265766965772d706f6c6963792e763100000006626c616b65330000004039333933353163653537646665353537653164623461373831353164373630613062653763656333303061353930306535393233643563366633643661653133000000186d616e746c652d72656c656173652d736f757263652e763100000006626c616b6533000000403333326661313739623661373864653639393938643464643937653662356237363463663861616536343766343864306630393962653833656133336663663200000018746573742d6f6e6c792d63757272656e746e6573732e763100000006626c616b65330000004035633731633565623139353565663132393437326234316339653662643764363166336535393839383933356134646534383032623637353234393137666634\",\n  \"claim\": {\n    \"claim_root\": {\n      \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n      \"revision\": 1,\n      \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n    },\n    \"disposition\": \"approved\",\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n    \"schema\": \"cairn.source-review-claim.v1\",\n    \"subject\": {\n      \"projection\": \"source\",\n      \"schema\": \"cairn.source-review-subject.v1\",\n      \"snapshot_profile\": \"mantle-release-source\",\n      \"snapshot_profile_version\": 1,\n      \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n      \"source_revision\": null,\n      \"source_tree_blake3\": null\n    }\n  },\n  \"generation\": 1,\n  \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n  \"schema\": \"cairn.source-review-signing-request.v1\",\n  \"statement\": {\n    \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n    \"key_identity\": {\n      \"algorithm\": \"blake3\",\n      \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n      \"profile\": \"ed25519-public-key.v1\"\n    },\n    \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n    \"schema\": \"artifact-auth.statement.v1\",\n    \"scope\": {\n      \"domain\": \"cairn.source-review.v1\",\n      \"parents\": [\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n          \"profile\": \"cairn.source-review-policy.v1\"\n        },\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"profile\": \"mantle-release-source.v1\"\n        }\n      ],\n      \"profile_id\": \"cairn.source-review.v1\",\n      \"purpose\": \"source-review-approval\",\n      \"subject\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\",\n        \"profile\": \"cairn.source-review-claim.v1\"\n      },\n      \"verifier_context\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n        \"profile\": \"test-only-currentness.v1\"\n      }\n    }\n  },\n  \"statement_blake3\": \"d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-request.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-raw",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-a-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d",
+        "--raw"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.7463906,
+      "finished_unix": 1792797251.7540953,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-raw.stdout",
+        "blake3": "d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee",
+        "size_bytes": 756,
+        "text": "\u0000\u0000\u0000#artifact-auth.statement-preimage.v1\u0000\u0000\u0000\u001aartifact-auth.statement.v1\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u0016source-review-approval\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u001breviewer-a-PUBLIC-TEST-ONLY\u0000\u0000\u0000\"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\u0000\u0000\u0000\u0015ed25519-public-key.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\u0000\u0000\u0000\u001ccairn.source-review-claim.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\u0000\u0000\u0000\u0002\u0000\u0000\u0000\u001dcairn.source-review-policy.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\u0000\u0000\u0000\u0018mantle-release-source.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\u0000\u0000\u0000\u0018test-only-currentness.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-raw.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-sign",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkeyutl",
+        "-sign",
+        "-inkey",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a.PUBLIC-TEST-ONLY.der",
+        "-keyform",
+        "DER",
+        "-rawin",
+        "-in",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a-statement.bin",
+        "-out",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a-signature.bin"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.7572942,
+      "finished_unix": 1792797251.7647808,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-sign.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-sign.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-assemble",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "assemble",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--request",
+        "reviewer-a-request.json",
+        "--policy",
+        "policy.json",
+        "--signature-hex",
+        "66962a823adb9e1813a35cb997d6627c4548fdb8cb09800354d7315684bb646a180418cc527b4351d4c9023f79edb74973ca24566b106e350430c782e5987c04"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.765024,
+      "finished_unix": 1792797251.7724965,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-assemble.stdout",
+        "blake3": "fabf1079dc0c6bd6de6897d4495c564142def628cb9789d8940f0c021858f000",
+        "size_bytes": 3536,
+        "text": "{\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"reviews\": [\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": null,\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n      \"signature_hex\": \"66962a823adb9e1813a35cb997d6627c4548fdb8cb09800354d7315684bb646a180418cc527b4351d4c9023f79edb74973ca24566b106e350430c782e5987c04\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    }\n  ],\n  \"schema\": \"cairn.source-review-attachment.v1\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-a-assemble.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-request",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-b-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.772943,
+      "finished_unix": 1792797251.7804842,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-request.stdout",
+        "blake3": "68374e9a6862340e9e58e0461e7b6cbec8c47d50dfd8f2164b2008d4bf33670e",
+        "size_bytes": 4321,
+        "text": "{\n  \"canonical_statement_hex\": \"0000002361727469666163742d617574682e73746174656d656e742d707265696d6167652e76310000001a61727469666163742d617574682e73746174656d656e742e763100000016636169726e2e736f757263652d7265766965772e763100000016736f757263652d7265766965772d617070726f76616c00000016636169726e2e736f757263652d7265766965772e76310000001b72657669657765722d622d5055424c49432d544553542d4f4e4c59000000225055424c49432d544553542d4f4e4c592d4e4f542d5245414c2d415050524f56414c00000015656432353531392d7075626c69632d6b65792e763100000006626c616b653300000040356239343633643433646533663162333661313737653065373765346663303730333135303165326233373431613361623137373962373562663463656135660000001c636169726e2e736f757263652d7265766965772d636c61696d2e763100000006626c616b65330000004065313839396536313763633863306531323131386133323364346564373935313761353534393432353738393164613238313366376631653862616632306664000000020000001d636169726e2e736f757263652d7265766965772d706f6c6963792e763100000006626c616b65330000004039333933353163653537646665353537653164623461373831353164373630613062653763656333303061353930306535393233643563366633643661653133000000186d616e746c652d72656c656173652d736f757263652e763100000006626c616b6533000000403333326661313739623661373864653639393938643464643937653662356237363463663861616536343766343864306630393962653833656133336663663200000018746573742d6f6e6c792d63757272656e746e6573732e763100000006626c616b65330000004035633731633565623139353565663132393437326234316339653662643764363166336535393839383933356134646534383032623637353234393137666634\",\n  \"claim\": {\n    \"claim_root\": {\n      \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n      \"revision\": 1,\n      \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n    },\n    \"disposition\": \"approved\",\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n    \"schema\": \"cairn.source-review-claim.v1\",\n    \"subject\": {\n      \"projection\": \"source\",\n      \"schema\": \"cairn.source-review-subject.v1\",\n      \"snapshot_profile\": \"mantle-release-source\",\n      \"snapshot_profile_version\": 1,\n      \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n      \"source_revision\": null,\n      \"source_tree_blake3\": null\n    }\n  },\n  \"generation\": 1,\n  \"public_key_hex\": \"8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123\",\n  \"schema\": \"cairn.source-review-signing-request.v1\",\n  \"statement\": {\n    \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n    \"key_identity\": {\n      \"algorithm\": \"blake3\",\n      \"digest_hex\": \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n      \"profile\": \"ed25519-public-key.v1\"\n    },\n    \"producer_id\": \"reviewer-b-PUBLIC-TEST-ONLY\",\n    \"schema\": \"artifact-auth.statement.v1\",\n    \"scope\": {\n      \"domain\": \"cairn.source-review.v1\",\n      \"parents\": [\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n          \"profile\": \"cairn.source-review-policy.v1\"\n        },\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"profile\": \"mantle-release-source.v1\"\n        }\n      ],\n      \"profile_id\": \"cairn.source-review.v1\",\n      \"purpose\": \"source-review-approval\",\n      \"subject\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\",\n        \"profile\": \"cairn.source-review-claim.v1\"\n      },\n      \"verifier_context\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n        \"profile\": \"test-only-currentness.v1\"\n      }\n    }\n  },\n  \"statement_blake3\": \"ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-request.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-raw",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-b-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123",
+        "--raw"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.780811,
+      "finished_unix": 1792797251.788329,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-raw.stdout",
+        "blake3": "ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a",
+        "size_bytes": 756,
+        "text": "\u0000\u0000\u0000#artifact-auth.statement-preimage.v1\u0000\u0000\u0000\u001aartifact-auth.statement.v1\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u0016source-review-approval\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u001breviewer-b-PUBLIC-TEST-ONLY\u0000\u0000\u0000\"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\u0000\u0000\u0000\u0015ed25519-public-key.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\u0000\u0000\u0000\u001ccairn.source-review-claim.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\u0000\u0000\u0000\u0002\u0000\u0000\u0000\u001dcairn.source-review-policy.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\u0000\u0000\u0000\u0018mantle-release-source.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\u0000\u0000\u0000\u0018test-only-currentness.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-raw.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-sign",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkeyutl",
+        "-sign",
+        "-inkey",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b.PUBLIC-TEST-ONLY.der",
+        "-keyform",
+        "DER",
+        "-rawin",
+        "-in",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b-statement.bin",
+        "-out",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b-signature.bin"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.7914166,
+      "finished_unix": 1792797251.7988782,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-sign.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-sign.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-assemble",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "assemble",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--request",
+        "reviewer-b-request.json",
+        "--policy",
+        "policy.json",
+        "--signature-hex",
+        "df93642763b599046f3de3a8b363d2c0cfec6a24d63acf04870549de92e323b1f28a64f9b330b4b49ba982089b9791f31dbef477b9f78ea08d3145adcbd1b802",
+        "--include",
+        "row-a.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.799134,
+      "finished_unix": 1792797251.8065774,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-assemble.stdout",
+        "blake3": "b7ddd20d1e2e13da1bc408263d14a0bf788c6e210a15da1acd7861e1e594fa79",
+        "size_bytes": 6600,
+        "text": "{\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"reviews\": [\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": null,\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123\",\n      \"signature_hex\": \"df93642763b599046f3de3a8b363d2c0cfec6a24d63acf04870549de92e323b1f28a64f9b330b4b49ba982089b9791f31dbef477b9f78ea08d3145adcbd1b802\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-b-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    },\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": null,\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n      \"signature_hex\": \"66962a823adb9e1813a35cb997d6627c4548fdb8cb09800354d7315684bb646a180418cc527b4351d4c9023f79edb74973ca24566b106e350430c782e5987c04\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    }\n  ],\n  \"schema\": \"cairn.source-review-attachment.v1\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/reviewer-b-assemble.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "cairn-verify",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "verify",
+        "--root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--attachment",
+        "attachment.json",
+        "--policy",
+        "policy.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.8068874,
+      "finished_unix": 1792797251.8143384,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/cairn-verify.stdout",
+        "blake3": "7a5fb0b25679334c9c98d370ae6a67ef511b1cff32f6bf5fca7582d3bae0e839",
+        "size_bytes": 1181,
+        "text": "{\n  \"attachment_artifact_blake3\": \"b7ddd20d1e2e13da1bc408263d14a0bf788c6e210a15da1acd7861e1e594fa79\",\n  \"report\": {\n    \"approved_key_blake3\": [\n      \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n      \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"\n    ],\n    \"attachment_identity\": \"f4297f6af703beed340c30cc1ce68a8dad0226af870ce96b09d3f6b98ff94c9d\",\n    \"canonical_statement_blake3\": [\n      \"ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a\",\n      \"d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee\"\n    ],\n    \"needs_revision_key_blake3\": [],\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"outcome\": \"accepted_manual_review\",\n    \"schema\": \"cairn.source-review-verification.v1\",\n    \"verification_role\": \"manual_review\"\n  }\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/cairn-verify.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "valence-verify",
+      "argv": [
+        "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+        "source-review",
+        "verify",
+        "--artifact-root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "--attachment",
+        "attachment.json",
+        "--policy",
+        "policy.json",
+        "--output-root",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/receipts",
+        "--receipt",
+        "acceptance.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.8146102,
+      "finished_unix": 1792797251.822114,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/valence-verify.stdout",
+        "blake3": "aed4853fdaa2b575a586da4ae0f44ed48003f2fd9785a1afedcb5751bf37d97f",
+        "size_bytes": 2418,
+        "text": "{\n  \"schema\": \"valence.source-review-acceptance.v1\",\n  \"outcome\": \"accepted_manual_review\",\n  \"verification_role\": \"manual_review\",\n  \"subject\": {\n    \"schema\": \"cairn.source-review-subject.v1\",\n    \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n    \"source_revision\": null,\n    \"source_tree_blake3\": null,\n    \"snapshot_profile\": \"mantle-release-source\",\n    \"snapshot_profile_version\": 1,\n    \"projection\": \"source\"\n  },\n  \"subject_identity\": \"27c0bfb376325f5f9beb3e2c9d3c0d38964d741a0f7a5b7587604f5cdf715017\",\n  \"claim_root\": {\n    \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n    \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\",\n    \"revision\": 1\n  },\n  \"claim_root_identity\": \"fde2263c44c0da1d8dbfb86d2da4ab3d05b6882dec8e6a4f2611fd779db96e94\",\n  \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n  \"verification_policy_identity\": \"102f7689d7a0164cc0c8469b11dea02a4491d4bd89d57cd91766bd371ab3c415\",\n  \"authentication_policy_identity\": \"b2ed1f850f4b2f4ad18e51abcd9190d4b7401e7c51ba31769b29324f4d835ef1\",\n  \"approved_key_blake3\": [\n    \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n    \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"\n  ],\n  \"signed_statement_blake3\": [\n    \"ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a\",\n    \"d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee\"\n  ],\n  \"claim_identity\": [\n    \"e1899e617cc8c0e12118a323d4ed79517a55494257891da2813f7f1e8baf20fd\"\n  ],\n  \"attachment_identity\": \"f4297f6af703beed340c30cc1ce68a8dad0226af870ce96b09d3f6b98ff94c9d\",\n  \"attachment_artifact_blake3\": \"b7ddd20d1e2e13da1bc408263d14a0bf788c6e210a15da1acd7861e1e594fa79\",\n  \"policy_artifact_blake3\": \"bd3c39cb0411092c79f81e859fe6636480f1cab4919a4e913aa797b250d844d3\",\n  \"receipt_blake3\": \"242ab41f0785e37df6f4eee11d8e50d6973104fc0fb8009072a75ee5bb903fd5\",\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"issues\": []\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/valence-verify.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "compile-throwaway-contributor",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc",
+        "--edition=2024",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/contributor.rs",
+        "--extern",
+        "crunch_release_core=/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps/libcrunch_release_core-f592d3d63163e0f3.rlib",
+        "-L",
+        "dependency=/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps",
+        "-C",
+        "linker=/etc/profiles/per-user/brittonr/bin/cc",
+        "-o",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/PUBLIC-TEST-ONLY-contributor"
+      ],
+      "exit": 1,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+      "started_unix": 1792797251.822668,
+      "finished_unix": 1792797251.9366436,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/compile-throwaway-contributor.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/compile-throwaway-contributor.stderr",
+        "blake3": "13cdc97182be49ff9277d73fc3c959e7e5ae5b7fcf61d175012b03255026d34a",
+        "size_bytes": 899,
+        "text": "error[E0514]: found crate `crunch_release_core` compiled by an incompatible version of rustc\n --> /home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/contributor.rs:3:5\n  |\n3 | use crunch_release_core::{BundledArtifact, BundledArtifactKind, ReleaseEvidenceManifest, ReleaseProofLinkage, ReleaseWorkflowIdentity};\n  |     ^^^^^^^^^^^^^^^^^^^\n  |\n  = note: the following crate versions were found:\n          crate `crunch_release_core` compiled by rustc 1.96.0-nightly (c75612477 2026-04-07): /home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps/libcrunch_release_core-f592d3d63163e0f3.rlib\n  = help: please recompile that crate using this compiler (rustc 1.99.0-nightly (dc3f85158 2026-07-26)) (consider running `cargo clean` first)\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0514`.\n"
+      }
+    },
+    {
+      "label": "matching-rustc-version",
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--version"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665",
+      "started_unix": 1792797316.1787937,
+      "finished_unix": 1792797316.1862864,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/matching-rustc-version.stdout",
+        "blake3": "3d13ebc498f548c572383885d0608a8b14e3bc681473dc7e83e6576c4d491842",
+        "size_bytes": 44,
+        "text": "rustc 1.96.0-nightly (c75612477 2026-04-07)\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/matching-rustc-version.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "compile-throwaway-contributor",
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--edition=2024",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/contributor.rs",
+        "--extern",
+        "crunch_release_core=/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps/libcrunch_release_core-f592d3d63163e0f3.rlib",
+        "-L",
+        "dependency=/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps",
+        "-C",
+        "linker=/etc/profiles/per-user/brittonr/bin/cc",
+        "-o",
+        "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/PUBLIC-TEST-ONLY-contributor"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665",
+      "started_unix": 1792797316.1865544,
+      "finished_unix": 1792797316.401113,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/compile-throwaway-contributor.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/compile-throwaway-contributor.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "exercise-pure-contributor",
+      "argv": [
+        "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/PUBLIC-TEST-ONLY-contributor",
+        "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW",
+        "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+        "20480"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "cwd": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665",
+      "started_unix": 1792797316.4060125,
+      "finished_unix": 1792797316.409596,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/exercise-pure-contributor.stdout",
+        "blake3": "b614485813bd28bb781cc311206c62d16447c54ccfa658f8ee6e31dc6d3d2e0f",
+        "size_bytes": 5043,
+        "text": "selected-required-policy: SourceReviewVerification { status: Satisfied, valid: true, required: true, approved_key_blake3: [\"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\", \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"], signed_statement_blake3: [\"ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a\", \"d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee\"], attachment_identity: Some(\"f4297f6af703beed340c30cc1ce68a8dad0226af870ce96b09d3f6b98ff94c9d\"), policy_identity: Some(\"102f7689d7a0164cc0c8469b11dea02a4491d4bd89d57cd91766bd371ab3c415\"), valence_receipt_identity: Some(\"242ab41f0785e37df6f4eee11d8e50d6973104fc0fb8009072a75ee5bb903fd5\"), diagnostics: [], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\nunselected-recorded-only: SourceReviewVerification { status: Recorded, valid: true, required: false, approved_key_blake3: [\"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\", \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"], signed_statement_blake3: [\"ce3c31349df26c5e07b3ebda58136e8bb496f0b189cc37bf19c2e0ced5fe494a\", \"d54450411c977adfaa990a00a76024c41f99a0cda4f44e618fd96317c009d9ee\"], attachment_identity: Some(\"f4297f6af703beed340c30cc1ce68a8dad0226af870ce96b09d3f6b98ff94c9d\"), policy_identity: Some(\"102f7689d7a0164cc0c8469b11dea02a4491d4bd89d57cd91766bd371ab3c415\"), valence_receipt_identity: Some(\"242ab41f0785e37df6f4eee11d8e50d6973104fc0fb8009072a75ee5bb903fd5\"), diagnostics: [], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\noptional-absence: SourceReviewVerification { status: NotRequired, valid: true, required: false, approved_key_blake3: [], signed_statement_blake3: [], attachment_identity: None, policy_identity: None, valence_receipt_identity: None, diagnostics: [], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\nrequired-missing-policy: SourceReviewVerification { status: Missing, valid: false, required: true, approved_key_blake3: [], signed_statement_blake3: [], attachment_identity: None, policy_identity: None, valence_receipt_identity: None, diagnostics: [\"source-review-trusted-policy-missing\"], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\nselected-policy-byte-mismatch: SourceReviewVerification { status: Stale, valid: false, required: true, approved_key_blake3: [], signed_statement_blake3: [], attachment_identity: None, policy_identity: None, valence_receipt_identity: None, diagnostics: [\"source-review-selected-policy-mismatch\"], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\ntampered-signature: SourceReviewVerification { status: Invalid, valid: false, required: true, approved_key_blake3: [], signed_statement_blake3: [], attachment_identity: None, policy_identity: None, valence_receipt_identity: None, diagnostics: [\"source-review-authentication-rejected:auth.cryptographic_failure_present,auth.distinct_key_threshold_unsatisfied,auth.signature_unverified\"], non_claims: [\"source-review-does-not-prove-build-correctness\", \"source-review-does-not-prove-deployment-safety\", \"source-review-does-not-prove-release-eligibility\", \"source-review-does-not-prove-reproducibility\", \"source-review-does-not-prove-review-quality\", \"source-review-does-not-prove-source-correctness\", \"source-review-does-not-prove-witness-independence\"] }\nPUBLIC TEST ONLY: six pure contributor cases observed; zero successful release creations, release signers or build witnesses; no genuine human review or release eligibility\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/exercise-pure-contributor.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    }
+  ],
+  "executable_pins_before": {
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+    },
+    "wrapper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+      "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+    },
+    "producer": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+      "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+    },
+    "helper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+      "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+    },
+    "replay": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+      "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+    },
+    "cairn": {
+      "path": "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+      "blake3": "8ba55fe02cdf478210a472fdc8232791b33773609b8a82803e0609b5eb4ca743"
+    },
+    "valence": {
+      "path": "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+      "blake3": "b5d95a18fabfb5a109543503829aa63c73e1e85f16e5cb556fc238628285917b"
+    },
+    "openssl": {
+      "path": "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+      "blake3": "ddb4505852b3d7a71ff6e12afda57419e969ea56a24d9824d9feefa5d4267fd1"
+    },
+    "prebuilt-core-rlib": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps/libcrunch_release_core-f592d3d63163e0f3.rlib",
+      "blake3": "cb155dffa96f7af4344957093e588b8e1cc0bae7ef63a6c222e39b60d8e1cbca"
+    },
+    "throwaway-compiler": {
+      "path": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "blake3": "e3399e7e9c9a96d092cbbd284236b0b1b536f929c40182fd3d4cb136272b5271"
+    }
+  },
+  "executable_pins_after": {
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+    },
+    "wrapper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+      "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+    },
+    "producer": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+      "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+    },
+    "helper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+      "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+    },
+    "replay": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+      "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+    },
+    "cairn": {
+      "path": "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+      "blake3": "8ba55fe02cdf478210a472fdc8232791b33773609b8a82803e0609b5eb4ca743"
+    },
+    "valence": {
+      "path": "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+      "blake3": "b5d95a18fabfb5a109543503829aa63c73e1e85f16e5cb556fc238628285917b"
+    },
+    "openssl": {
+      "path": "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+      "blake3": "ddb4505852b3d7a71ff6e12afda57419e969ea56a24d9824d9feefa5d4267fd1"
+    },
+    "prebuilt-core-rlib": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-native-release-20261023/release/deps/libcrunch_release_core-f592d3d63163e0f3.rlib",
+      "blake3": "cb155dffa96f7af4344957093e588b8e1cc0bae7ef63a6c222e39b60d8e1cbca"
+    },
+    "throwaway-compiler": {
+      "path": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "blake3": "e3399e7e9c9a96d092cbbd284236b0b1b536f929c40182fd3d4cb136272b5271"
+    }
+  },
+  "non_claims": [
+    "source-review-does-not-prove-build-correctness",
+    "source-review-does-not-prove-deployment-safety",
+    "source-review-does-not-prove-release-eligibility",
+    "source-review-does-not-prove-reproducibility",
+    "source-review-does-not-prove-review-quality",
+    "source-review-does-not-prove-source-correctness",
+    "source-review-does-not-prove-witness-independence"
+  ],
+  "non_claims_additional": [
+    "No genuine human review, reviewer authority, actual release eligibility or full V5.",
+    "Ordinary release manifest is deliberately inadmissible and asserted rejected by canonical_release_evidence_manifest before contributor observation.",
+    "Pure contributor results do not bypass or satisfy missing genuine self-hosting CLI prerequisite."
+  ],
+  "prior_failed_attempt": {
+    "root": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+    "diagnostic": "E0514: existing core rlib compiled by rustc 1.96.0-nightly c75612477; initial driver used rustc 1.99.0-nightly dc3f85158",
+    "resolution": "Changed compiler to exact qualified development-shell compiler in fresh one-shot output root; no rebuilding dependencies or immutable executables."
+  },
+  "scratch_roots": [
+    "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954",
+    "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665"
+  ]
+}

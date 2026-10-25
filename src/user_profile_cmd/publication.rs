@@ -154,7 +154,7 @@ pub(super) fn read_generation(profile: &Path, number: u64) -> Result<Generation,
     if generation.schema != GENERATION_SCHEMA || generation.number != number || number == 0 {
         return Err("profile generation identity/schema mismatch".into());
     }
-    generation.manifest.validate()?;
+    generation.manifest.validate().map_err(|error| error.to_string())?;
     if generation.links.len() > crunch_composition_core::user_profile::ENTRIES_MAX {
         return Err("profile generation link inventory exceeds bound".into());
     }
@@ -362,7 +362,7 @@ pub(super) fn tombstone(profile: &Path, number: u64) -> Result<Generation, Strin
         if generation.number != number || generation.schema != GENERATION_SCHEMA {
             return Err("invalid pending generation".into());
         }
-        generation.manifest.validate()?;
+        generation.manifest.validate().map_err(|error| error.to_string())?;
         let temporary = tempfile::Builder::new()
             .prefix(".removing-")
             .tempdir_in(profile)
@@ -377,7 +377,7 @@ pub(super) fn tombstone(profile: &Path, number: u64) -> Result<Generation, Strin
     if generation.number != number || generation.schema != GENERATION_SCHEMA {
         return Err("invalid generation tombstone".into());
     }
-    generation.manifest.validate()?;
+    generation.manifest.validate().map_err(|error| error.to_string())?;
     assert_eq!(generation.number, number);
     assert!(number > 0);
     Ok(generation)

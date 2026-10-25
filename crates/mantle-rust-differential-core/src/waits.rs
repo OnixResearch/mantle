@@ -30,6 +30,37 @@ pub enum RunOutcome {
     Infrastructure,
     Unrun,
 }
+
+/// Execution-only binding supplied by an adapter that already admitted the attempt.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeContext {
+    pub invocation: Digest,
+    pub clock: Digest,
+    pub attempt: Digest,
+    pub origin_ns: u64,
+}
+
+/// A helper can report only process facts, never readiness or scheduler authority.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum NativeEvent {
+    Started,
+    ErrorObserved,
+    Exited { outcome: RunOutcome },
+    Reaped,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFrame {
+    pub invocation: Digest,
+    pub clock: Digest,
+    pub attempt: Digest,
+    pub sequence: u64,
+    pub source_offset_ns: u64,
+    pub event: NativeEvent,
+}
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcessRole {

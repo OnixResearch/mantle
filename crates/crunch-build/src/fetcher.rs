@@ -2474,6 +2474,19 @@ mod tests {
     }
 
     #[test]
+    fn decompress_zstd_rejects_block_larger_than_declared_window() {
+        // RFC 8878: a 1 KiB window, followed by a final RLE block claiming
+        // 1,025 decoded bytes. RUSTSEC-2026-0344 requires rejection before
+        // this malformed first block can emit any bytes.
+        let malformed = [0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x00, 0x0b, 0x20, 0x00, b'x'];
+        let mut decoded = Vec::new();
+        let result = decompress_reader("file.tar.zst", io::Cursor::new(malformed))
+            .and_then(|mut reader| reader.read_to_end(&mut decoded).map_err(FetchError::from));
+        assert!(result.is_err(), "a block must not exceed its declared window");
+        assert!(decoded.is_empty(), "the rejected first block must not emit payload");
+    }
+
+    #[test]
     fn decompress_unknown_with_gzip_magic() {
         use std::io::Write;
 

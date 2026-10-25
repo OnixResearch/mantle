@@ -646,6 +646,23 @@ impl BuildStore {
             .ok_or_else(|| Error::Store(format!("persisted output is not present: {path}")))
     }
 
+    /// Export one persisted output whose goal was requested as a root after it completed.
+    ///
+    /// A streamed root request can follow its dependency build. The signed
+    /// PathInfo and castore content are unchanged; this adds the root's
+    /// physical export and its configured retained root.
+    pub async fn export_late_root_output(
+        &mut self,
+        path: &StorePath<String>,
+        root_source: Option<GcRootSource>,
+    ) -> Result<PathInfo, Error> {
+        let path_info = self.materialize_persisted_output(path).await?;
+        if let Some(source) = root_source {
+            self.handle.register_retained_root(path, source).await?;
+        }
+        Ok(path_info)
+    }
+
     pub async fn admit_action_result_outputs(
         &mut self,
         outputs: &BTreeMap<String, PathInfo>,
@@ -1198,6 +1215,12 @@ impl StoreAdmin<'_> {
     }
 }
 
+/// Local execution-only mounts. These never enter a serialized build request.
+pub struct LocalRuntimeSockets {
+    pub compile_cache: Option<PathBuf>,
+    pub rust_waits: Option<PathBuf>,
+}
+
 impl BuildServiceStore {
     pub async fn has_complete_content(&self, path_info: &PathInfo) -> Result<bool, Error> {
         crate::recursive_castore_completeness(
@@ -1238,6 +1261,25 @@ impl BuildServiceStore {
             self.directory_service.clone(),
         )
         .with_compile_socket(host_socket)
+    }
+
+    pub fn bubblewrap_build_service_with_runtime_sockets(
+        &self,
+        work_directory: PathBuf,
+        sockets: LocalRuntimeSockets,
+    ) -> std::io::Result<impl snix_build::buildservice::BuildService + use<>> {
+        let mut service = snix_build::buildservice::BubblewrapBuildService::new(
+            work_directory,
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        );
+        if let Some(socket) = sockets.compile_cache {
+            service = service.with_compile_socket(socket)?;
+        }
+        if let Some(socket) = sockets.rust_waits {
+            service = service.with_rust_wait_socket(socket)?;
+        }
+        Ok(service)
     }
 
     pub async fn ingest_host_path(&self, path: &Path) -> Result<Node, Error> {

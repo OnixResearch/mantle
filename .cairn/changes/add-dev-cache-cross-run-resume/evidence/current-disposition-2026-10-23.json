@@ -1,0 +1,83 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "add-dev-cache-cross-run-resume",
+  "maintenance_owner": "Source-built development-cache maintainers; Main owns runtime cycle",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Bounded planner and content-addressed transition-stage restore have historical fixture support; full cold/cached/adopt cycle and independent promoted cold proof remain unaccepted.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "V1"
+      ],
+      "level": "source-and-historical-evidence",
+      "support": "Historical reference records publish/read/restore, replay identity marker repair and mismatch/tamper rejection. Only the StageX transition stage publishes bundles; later stages execute. This is not all-stage resume completion."
+    },
+    {
+      "task_ids": [
+        "V4"
+      ],
+      "level": "historical-not-current",
+      "support": "Historical rails retained; current source changes require new final checks."
+    },
+    {
+      "task_ids": [
+        "V2",
+        "V3"
+      ],
+      "level": "unaccepted",
+      "support": "No actual final-cohort cold-to-cached-to-adopt report or independent fresh cold v2 proof is established by planner/bundle fixtures."
+    }
+  ],
+  "local_remaining_actions": [
+    "Run final focused resume/dev-cache checks.",
+    "After current source/provider cohort admission, execute actual dev cold/cached/adopt cycle from distinct staging directories, recording source/plan/policy/provider/store identities, transition restored/executed split, aliases and stale/tampered rejection.",
+    "Run a separate fresh promoted cold proof with empty store/authority and no dev flags or inherited compiler-cache/scheduling policy. Keep diagnostic dev outputs out of release and promoted aliases."
+  ],
+  "external_missing_authority_or_capability": [
+    "Depends on exact reviewed current source/provider cohort and source-built fixed-point acceptance; no separate host-access blocker."
+  ],
+  "evidence_references": [
+    ".cairn/changes/add-dev-cache-cross-run-resume/tasks.md:1-38",
+    ".cairn/changes/add-dev-cache-cross-run-resume/evidence/stage-bundle-resume-2026-09-11.md:8-90",
+    ".cairn/changes/add-dev-cache-cross-run-resume/evidence/resume-planner-2026-09-11.md:6-46",
+    "src/source_built_fixed_point_shell.rs:1048-1052,1129-1215",
+    "docs/operator-proof-guide.md:325-340"
+  ],
+  "repeatability_recipe": [
+    "nix develop -c cargo test -p mantle --lib source_built_fixed_point_resume",
+    "nix develop -c cargo test -p mantle --lib source_built_fixed_point_dev_cache",
+    "Use the reviewed source-built profile/pins and explicit --dev-provider-cache/--dev-resume only in the diagnostic lane; retain actual argv and every attempt report.",
+    "Then run the independent no-dev cold preparation/proof recipe in docs/operator-proof-guide.md:291-323."
+  ],
+  "observed_commands": [
+    {
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "source_built_fixed_point_resume"
+      ],
+      "exit_code": null,
+      "result": "Historical transcript: 16 passed; 0 failed; exit not recorded in cited transcript.",
+      "evidence": ".cairn/changes/add-dev-cache-cross-run-resume/evidence/stage-bundle-resume-2026-09-11.md:50-55"
+    }
+  ],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

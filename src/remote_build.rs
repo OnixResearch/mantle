@@ -5790,7 +5790,10 @@ fn production_coordinator_request(
         locality_scope: concrete.locality_scope.clone(),
         trusted_output_keys: trusted_output_keys.to_vec(),
         live_output_claims,
-        wait_for_worker: false,
+        // Preserve an unmet requirement long enough for the owning shell to
+        // publish it. Production still returns the blocker immediately; this
+        // flag does not introduce a pending queue or retry loop.
+        wait_for_worker: true,
     };
     debug_assert_eq!(request.required_system, system);
     debug_assert!(request.live_output_claims.len() <= concrete.expected_outputs.len());
@@ -8785,6 +8788,18 @@ fn write_remote_production_control_frame(
         .map_err(remote_application_error)
 }
 
+/// The executor's failed observation closes the session to dependent effects;
+/// its declared failure transition still reports the outcome to the client.
+fn write_remote_production_failure_report(
+    writer: &mut impl Write,
+    error: RemoteProtocolErrorFrame,
+    session: &mut crunch_remote_core::effect::EffectSession<'_>,
+) -> Result<(), String> {
+    let encoded = encode_remote_frame_zeroizing(&RemoteFrame::Error { error })?;
+    crunch_remote_app::send_failure_report(session, &mut ProductionControlTransport(writer), &encoded)
+        .map_err(remote_application_error)
+}
+
 fn read_expected_remote_frame(reader: &mut impl Read, expected: RemoteFrameKind) -> Result<RemoteFrame, String> {
     let frame = read_remote_frame(&mut *reader)?;
     if frame.kind() != expected {
@@ -9485,16 +9500,25 @@ fn receive_remote_production_output(
     record_production_fact(&mut progress.telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionStarted);
     let finished_frame = read_remote_frame(&mut io.stdout)?;
     if let RemoteFrame::Error { error } = &finished_frame {
-        if let Some(report) = &error.usage {
-            gateway::record_failed_usage(
+        // Unauthenticated usage is never recorded, and it cannot turn the
+        // worker's execution failure into a different failure.
+        let usage_recorded = match &error.usage {
+            Some(report) => gateway::record_failed_usage(
                 &context.production.state_dir,
                 context.attempt,
                 &context.request.request_id,
                 report,
                 &context.production.trusted_output_keys,
-            )?;
-        }
-        return Err("remote-worker-execution-failed".into());
+            ),
+            None => Ok(()),
+        };
+        // Only the worker's validated debug reference is relayed from the frame.
+        let worker_debug = crate::remote_failure_debug::parse_remote_worker_failure_debug_report(&error.message)
+            .map_or_else(String::new, |reference| reference.render_fields());
+        return Err(match usage_recorded {
+            Ok(()) => format!("remote-worker-execution-failed{worker_debug}"),
+            Err(reason) => format!("remote-worker-execution-failed{worker_debug}; failed-usage-unrecorded={reason}"),
+        });
     }
     let result = match &finished_frame {
         RemoteFrame::BuildFinished { result } => result.clone(),
@@ -13834,15 +13858,22 @@ fn send_remote_production_result(
                         .and_then(|usage| usage.sign(&context.executor.keypair))
                 })
                 .transpose()?;
-            write_remote_production_control_frame(
+            let worker_debug = match &error {
+                crunch_remote_app::ApplicationError::Port(port) => {
+                    crate::remote_failure_debug::parse_remote_worker_failure_debug_report(&port.reason)
+                }
+                crunch_remote_app::ApplicationError::Decision(_) => None,
+            };
+            write_remote_production_failure_report(
                 writer,
-                &RemoteFrame::Error {
-                    error: RemoteProtocolErrorFrame {
-                        phase: RemoteFailurePhase::BuildExecution,
-                        retry_class: RemoteRetryClass::BuildOutcome,
-                        message: "remote-executor-failed".to_string(),
-                        usage: report,
-                    },
+                RemoteProtocolErrorFrame {
+                    phase: RemoteFailurePhase::BuildExecution,
+                    retry_class: RemoteRetryClass::BuildOutcome,
+                    message: format!(
+                        "remote-executor-failed{}",
+                        worker_debug.map_or_else(String::new, |reference| reference.render_fields())
+                    ),
+                    usage: report,
                 },
                 session,
             )?;
@@ -18125,6 +18156,31 @@ mod tests {
         let accepted = apply_fixture_attempt_report(&mut state, &report);
         assert_eq!(accepted.disposition, RemoteAttemptApplyDisposition::Applied);
         assert_eq!(state.jobs[&job_id].phase, RemoteCoordinatorJobPhase::Running);
+    }
+
+    #[test]
+    fn production_missing_inventory_keeps_exact_blocker_and_only_observes_demand() {
+        let mut state = RemoteCoordinatorState::default();
+        let request = fixture_quantified_coordinator_request("production-demand", "production-demand-claim").request;
+        let keys = fixture_worker_registration().output_signing_key_ids;
+        for _ in 0..2 {
+            let error = admit_remote_production_dispatch(&mut state, &request, "builder-1", 1, 64, None, &keys, 100)
+                .unwrap_err();
+            assert_eq!(error, "remote-worker-resource-inventory-missing");
+            let demand = state.worker_demands.facts().next().unwrap();
+            assert_eq!(demand.job_id, request.request_id);
+            assert_eq!(demand.blocker_reason, error);
+            assert_eq!(state.worker_demands.facts().count(), 1);
+            assert!(state.jobs.is_empty());
+            assert!(state.resource_leases.is_empty());
+            assert!(state.live_output_claims.is_empty());
+        }
+        demand::retract_worker_demand(
+            &mut state,
+            &request.request_id,
+            crunch_remote_core::demand::Retraction::OwnerStopped,
+        );
+        assert_eq!(state.worker_demands.facts().count(), 0);
     }
 
     #[test]

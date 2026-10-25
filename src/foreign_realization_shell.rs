@@ -300,6 +300,7 @@ pub(crate) async fn realize_foreign_plan(
         source_fetch_overrides,
         remote_enabled: false,
         compile_driver_runtime: None,
+        rust_wait_runtime: None,
         interchange_dir: None,
     };
     let build_result =

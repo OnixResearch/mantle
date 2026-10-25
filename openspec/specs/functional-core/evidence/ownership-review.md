@@ -1146,3 +1146,267 @@ extracted first-wave algorithms.
 - `tests/wasm_component_cli.rs` → `unrelated`
 
 Supplement reviewer: OwnershipReviewCutover (source inspection and path metadata only).
+
+## History-derived and prospective source ownership supplement (2026-10-25)
+
+This supplement extends the path ledger to the paths committed or prospectively
+touched since the 2026-10-18 supplement. It preserves the first-wave scope, the
+review verdict and that supplement's meanings of `adapter-only` and `unrelated`.
+It does not change the checker, its history derivation, the canonical inventory
+or any policy.
+
+### Derivation and source-review basis (2026-10-25)
+
+The derivation called `touched_std_workspace_source_files`,
+`required_std_adapter_files` and `ownership_review_has_classification` from
+`scripts/no_std_core_checks.py` read-only. The history roots and diff base are
+unchanged: first history revision `6e47f8725126943b26335abd6d1a6df4606fa3e8`,
+parent `00190e4d1096905bf244d6aadf1664c7fd822625`. At reviewed HEAD
+`0acfdf2545eba138304de99f6d5c92e8c2d79477` the predicate derives 869 historical
+paths, which include all 20 required adapter paths. The existing exact-syntax
+ledger covered 751 of them, leaving 118 historical paths without a
+classification. The ownership step of `scripts/check-no-std-core.sh` reported
+exactly these 118 paths in the 2026-10-25 final-gate run, the first run of that
+cycle to pass the API-shape step.
+
+Prospective coverage applies the same predicate and legacy exclusions to tracked
+worktree changes and untracked, non-ignored Rust sources present during this
+review: 123 eligible paths, 7 of them outside the historical union and
+unclassified. The 125 rows below cover the 118 historical and those 7
+prospective paths, all `unrelated`. With the 755 earlier exact rows the ledger
+has 880 rows. This is a metadata snapshot, not a waiver for future source paths.
+
+Family decisions use the 2026-10-18 basis: the adopted inventory, crate-root and
+module ownership, module documentation and targeted inspection. Two read-only
+scans bound the review. None of the 125 files names a crate listed in
+`validation/adopted-core-inventory.toml`, and none defines a function, type or
+trait named after any adopted core's required export. No first-wave moved
+algorithm was identified as reimplemented in std. No gate, build, test, lint,
+smoke, real-tool or remote workflow was run for this supplement.
+
+### Root remote orchestration and operator state families (2026-10-25)
+
+These `src/remote_build` modules decode registered UCAN filter caveats, fence
+short coordinator saves, load operator-local build and store-source endpoint
+names, resolve endpoint names on the coordination socket, keep gateway
+identities in the coordinator snapshot, bridge remote application observations,
+and account exact-child worker usage through a private executor child. Their
+admission, authority, fencing and accounting obligations belong to the remote
+and application contracts, independent of the first-wave extraction. No live
+remote execution, transfer or recovery acceptance was performed for this review.
+
+- `src/remote_build/authority_caveats.rs` → `unrelated`
+- `src/remote_build/coordinator_merge.rs` → `unrelated`
+- `src/remote_build/endpoint_config.rs` → `unrelated`
+- `src/remote_build/endpoint_service.rs` → `unrelated`
+- `src/remote_build/gateway.rs` → `unrelated`
+- `src/remote_build/operation.rs` → `unrelated`
+- `src/remote_build/usage.rs` → `unrelated`
+- `src/remote_build/usage_child.rs` → `unrelated`
+
+### Nix remote service gateway host families (2026-10-25)
+
+These modules adapt Mantle's coordinator and ordinary remote execution/import
+path to a private API journal, load owner-private production authority, drive
+the local quota-filesystem fault fixture, project facts into Valence's
+build-service evidence profile, serve operation-bound Nix import and attenuated
+store-read endpoints, and host operator-configured resource selection and
+durable quotas. Basalt admission, signed-store verification, journal
+reconciliation and quota policy remain the gateway's own obligations. No hosted
+service, VM, remote client or Valence acceptance was exercised for this review.
+
+- `src/nix_gateway/api_host.rs` → `unrelated`
+- `src/nix_gateway/authority.rs` → `unrelated`
+- `src/nix_gateway/campaign.rs` → `unrelated`
+- `src/nix_gateway/evidence.rs` → `unrelated`
+- `src/nix_gateway/native.rs` → `unrelated`
+- `src/nix_gateway/resource_host.rs` → `unrelated`
+
+### Root bootstrap, provider, fixed-point and source workflow families (2026-10-25)
+
+These modules run bootstrap capabilities with independent output verification
+and compose bootstrap operations; drive the source-built fixed point's
+controller, authoring, planning and verifier self-test; author the source-only
+Mantle, original native GNU, StageX and selected Rust provider program routes;
+and declare and run source recipe controllers through the common admitted step
+runner. The Cargo lockfile and manifest reading in
+`src/source_built_rust_resolve.rs` selects Rust provider packages from
+authenticated release archives; it is not the Mantle project manifest and lock
+handling that the first wave moved to `crunch-project-core`. Classification
+makes no bootstrap, fixed-point, self-hosting, Cargo-free or release claim.
+
+- `src/bootstrap_effect_port.rs` → `unrelated`
+- `src/bootstrap_operation.rs` → `unrelated`
+- `src/source_built_fixed_point_action_controller.rs` → `unrelated`
+- `src/source_built_fixed_point_authoring.rs` → `unrelated`
+- `src/source_built_fixed_point_planning.rs` → `unrelated`
+- `src/source_built_fixed_point_verifier_self_test.rs` → `unrelated`
+- `src/source_built_mantle_programs.rs` → `unrelated`
+- `src/source_built_mantle_programs_aws.rs` → `unrelated`
+- `src/source_built_mantle_programs_aws_helper.rs` → `unrelated`
+- `src/source_built_mantle_programs_compression.rs` → `unrelated`
+- `src/source_built_mantle_programs_graph.rs` → `unrelated`
+- `src/source_built_mantle_programs_metadata.rs` → `unrelated`
+- `src/source_built_mantle_programs_metadata_helper.rs` → `unrelated`
+- `src/source_built_mantle_programs_native.rs` → `unrelated`
+- `src/source_built_mantle_programs_native_helper.rs` → `unrelated`
+- `src/source_built_mantle_programs_native_request.rs` → `unrelated`
+- `src/source_built_mantle_programs_native_schedules.rs` → `unrelated`
+- `src/source_built_mantle_programs_rust_probes.rs` → `unrelated`
+- `src/source_built_mantle_programs_rust_probes_selected.rs` → `unrelated`
+- `src/source_built_native_programs.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu_generator_base.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu_link_seams.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu_originals.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu_perl_child.rs` → `unrelated`
+- `src/source_built_native_programs_early_gnu_tcc.rs` → `unrelated`
+- `src/source_built_native_programs_final_gnu.rs` → `unrelated`
+- `src/source_built_native_programs_final_gnu_generators.rs` → `unrelated`
+- `src/source_built_native_programs_final_gnu_nodes.rs` → `unrelated`
+- `src/source_built_native_programs_host.rs` → `unrelated`
+- `src/source_built_native_programs_host_bootstrap.rs` → `unrelated`
+- `src/source_built_native_programs_host_controller.rs` → `unrelated`
+- `src/source_built_native_programs_host_original.rs` → `unrelated`
+- `src/source_built_native_programs_host_packages.rs` → `unrelated`
+- `src/source_built_native_programs_host_root.rs` → `unrelated`
+- `src/source_built_native_programs_phases.rs` → `unrelated`
+- `src/source_built_program_authoring.rs` → `unrelated`
+- `src/source_built_recipe_command_state.rs` → `unrelated`
+- `src/source_built_recipe_controller.rs` → `unrelated`
+- `src/source_built_recipe_exec_controller.rs` → `unrelated`
+- `src/source_built_recipe_exec_descriptor_transport.rs` → `unrelated`
+- `src/source_built_recipe_exec_scopes.rs` → `unrelated`
+- `src/source_built_rust_programs.rs` → `unrelated`
+- `src/source_built_rust_programs_llvm.rs` → `unrelated`
+- `src/source_built_rust_programs_macros.rs` → `unrelated`
+- `src/source_built_rust_programs_minicargo.rs` → `unrelated`
+- `src/source_built_rust_programs_minicargo_resolve.rs` → `unrelated`
+- `src/source_built_rust_programs_mrustc.rs` → `unrelated`
+- `src/source_built_rust_programs_patches.rs` → `unrelated`
+- `src/source_built_rust_programs_phase.rs` → `unrelated`
+- `src/source_built_rust_programs_runtime.rs` → `unrelated`
+- `src/source_built_rust_programs_successors.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_cc.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_graph.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_helper.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_invocation.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_macro.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_native.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_native_helper.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_process.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_profile.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_std_process.rs` → `unrelated`
+- `src/source_built_rust_programs_successors_wrappers.rs` → `unrelated`
+- `src/source_built_rust_programs_translation.rs` → `unrelated`
+- `src/source_built_rust_resolve.rs` → `unrelated`
+- `src/source_built_stagex_programs.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils_dispatch.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils_ldscripts.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils_runtime.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils_shellvm.rs` → `unrelated`
+- `src/source_built_stagex_programs_binutils_writer.rs` → `unrelated`
+- `src/source_built_stagex_programs_controller.rs` → `unrelated`
+- `src/source_built_stagex_programs_early.rs` → `unrelated`
+- `src/source_built_stagex_programs_generators.rs` → `unrelated`
+- `src/source_built_stagex_programs_late.rs` → `unrelated`
+- `src/source_built_stagex_programs_middle.rs` → `unrelated`
+- `src/source_built_stagex_programs_publication.rs` → `unrelated`
+
+### Remaining root composition, build, evaluation and project-build families (2026-10-25)
+
+`src/build_application.rs` prepares project-backed realization through ports,
+`src/build_observation.rs` classifies build capability observations
+independently of presentation, `src/evaluation_cmd.rs` runs the evaluation
+application and verifies its output and report evidence before rendering, and
+`src/project_build/authority.rs` receives signed, owner-bound project
+declarations against an operator-configured canonical root through the gateway
+verifier. None of them references `crunch-project-core` or redefines its
+exports; project manifest and lock handling stays with the reviewed project
+adapters.
+
+- `src/build_application.rs` → `unrelated`
+- `src/build_observation.rs` → `unrelated`
+- `src/evaluation_cmd.rs` → `unrelated`
+- `src/project_build/authority.rs` → `unrelated`
+
+### Application contracts and effect-sequencing families (2026-10-25)
+
+These `mantle-application-contract` modules declare the bootstrap capability
+boundaries and their shared effect envelope, the gateway CLI operation
+boundaries, and the Rust toolchain, bundle, test and explicit-profile operation
+boundaries. They are application contracts consumed by root shells, not adopted
+functional cores.
+
+- `crates/mantle-application-contract/src/bootstrap_effects.rs` → `unrelated`
+- `crates/mantle-application-contract/src/gateway_operations.rs` → `unrelated`
+- `crates/mantle-application-contract/src/rust_operations.rs` → `unrelated`
+
+### Other decision and contract families outside the adopted inventory (2026-10-25)
+
+`crates/crunch-remote-core/src/trellis_projection.rs` is a finite,
+equality-preserving projection onto the Trellis fenced-attempt kernel: a
+consumer mapping, not a second admission model. `crunch-remote-core` is outside
+the adopted inventory, and no Trellis proof or Valence acceptance is claimed.
+
+- `crates/crunch-remote-core/src/trellis_projection.rs` → `unrelated`
+
+### Build, evaluator, conversion, pipeline and store runtime families (2026-10-25)
+
+`crates/crunch-build/src/rust_waits.rs` attaches local Cargo wait observation
+after identity-bearing request construction,
+`crates/crunch-store/src/fault_scope.rs` gives tests thread-scoped ownership of
+the pinned fault-injection counter, and
+`crates/crunch-store/src/source_admission.rs` admits declared read sources
+against operator-owned endpoint bindings. They are build and store runtime
+adapters with their own authority and bounding obligations.
+
+- `crates/crunch-build/src/rust_waits.rs` → `unrelated`
+- `crates/crunch-store/src/fault_scope.rs` → `unrelated`
+- `crates/crunch-store/src/source_admission.rs` → `unrelated`
+
+### Rust compiler/cache, vendor producer and differential shells (2026-10-25)
+
+The `crunch-rustc-wrapper` wait wrapper binary, observed-process supervision
+(including descendant exec observation) and wait-diagnostic collection, and the
+`mantle-rust-differential` entry point, negative campaign and serial
+direct-rustc baseline observe and compare compiler executions. Their decisions
+live in `mantle-rust-differential-core` and the wrapper's own contracts, outside
+the adopted inventory. No differential qualification, speedup or
+compiler-correctness claim follows from this classification.
+
+- `crates/crunch-rustc-wrapper/src/bin/mantle-rust-wait-wrapper.rs` → `unrelated`
+- `crates/crunch-rustc-wrapper/src/observed_process.rs` → `unrelated`
+- `crates/crunch-rustc-wrapper/src/observed_process/exec.rs` → `unrelated`
+- `crates/crunch-rustc-wrapper/src/waits.rs` → `unrelated`
+- `crates/mantle-rust-differential/src/main.rs` → `unrelated`
+- `crates/mantle-rust-differential/src/negative.rs` → `unrelated`
+- `crates/mantle-rust-differential/src/serial.rs` → `unrelated`
+
+### Tests, source fixtures, examples and benchmark-only consumers (2026-10-25)
+
+These are unit and integration tests, test-support modules, a resource-benchmark
+fixture workload and the resource-policy replay example for the families above.
+The GPU artifact test drives the enrolled `crunch-gpu` std adapter's public
+inspection over a synthetic object, as the CMake artifact test does for its
+adapter. Classification does not say they ran or passed, or that test-only
+logic is a std production owner of an extracted algorithm.
+
+- `crates/crunch-gpu/tests/artifact.rs` → `unrelated`
+- `crates/crunch-remote-core/src/trellis_projection_tests.rs` → `unrelated`
+- `crates/mantle-cargo-unit-plan/tests/support/mod.rs` → `unrelated`
+- `examples/resource_policy_replay.rs` → `unrelated`
+- `src/nix_gateway/api_host_tests.rs` → `unrelated`
+- `src/nix_gateway/authority/tests.rs` → `unrelated`
+- `src/nix_gateway/evidence/tests.rs` → `unrelated`
+- `src/nix_gateway/resource_host_tests.rs` → `unrelated`
+- `src/remote_build/tests/coordinator_merge_tests.rs` → `unrelated`
+- `src/remote_build/tests/endpoint_binding_tests.rs` → `unrelated`
+- `src/remote_build/tests/source_binding_tests.rs` → `unrelated`
+- `src/source_built_fixed_point_action_controller_tests.rs` → `unrelated`
+- `src/source_built_recipe_exec_tests.rs` → `unrelated`
+- `tests/fixtures/resource-benchmark/workload.rs` → `unrelated`
+- `tests/support/remote_endpoint_binding.rs` → `unrelated`
+
+Supplement reviewer: omp session 2026-10-25 (source inspection and path metadata only).

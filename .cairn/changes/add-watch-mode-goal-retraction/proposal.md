@@ -2,10 +2,10 @@
 
 ## Why
 
-Mantle evaluates a Nickel source per command. After an edit, the operator runs
-the command again and the process selects its roots from scratch. There is no
-mode that keeps a live goal set, diffs it after a change, and cancels work that
-no longer exists.
+The original one-shot workflow evaluates a Nickel source per command. The
+implemented opt-in `mantle build --watch` keeps a live goal set, diffs edits,
+and cancels work that no longer exists. This change remains open for fresh
+integrated behavior receipts and lifecycle acceptance, not a missing CLI mode.
 
 The Synit configuration watcher reloads a changed script and discards all state
 derived from the previous version of that file
@@ -35,15 +35,17 @@ coordination output that the daemon may serve.
   goal set running and report the error. A failed re-evaluation MUST NOT
   retract valid goals.
   r[build_scheduling.watch_error_retention]
-- Report watch transitions as bounded events: added, retracted, cancelled,
-  retained, and rejected, with a stable run identity.
+- Report watch transitions as bounded added, retracted, retained, and rejected
+  events, with a stable run identity; report pending cancellation separately.
+  A retraction is admitted only after observed teardown, never fabricated as
+  a separate successful output.
 
 ## Impact
 
 - **Immediate consumer**: the developer loop for `mantle build <source>` and
   the examples workflow.
 - **Immediate outcome**: an edit rebuilds only the affected goals, and a
-  deleted root stops building immediately.
+  deleted root receives owned cancellation and waits for observed teardown.
 - **Durable capability**: a live plan-diff boundary that the later
   coordination surface can publish.
 - **Maintenance owner**: Mantle scheduling owner, covering evaluation reuse and

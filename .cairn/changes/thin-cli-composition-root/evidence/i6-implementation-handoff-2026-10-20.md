@@ -351,8 +351,8 @@ selection-only branches remain explicit StoreLeaf choices.
 | V1 invalid DTO / missing authority | Source-program preparation rejects missing source-built authority and each dev-cache/resume/fast-fail conflict; existing admission suites retain invalid selector/DTO/domain-blocker coverage |
 | V1 adapter fault | Refactor root that is a regular file returns exit 3 without a success plan or mutation; absent child executable preserves spawn error; generated-file read failures remain errors; real owner-peer gateway error envelope cannot become a successful call |
 | V1 wrong observation / false success | Contract regressions reject wrong authority/unit/identity/budget or missing/duplicate effects; Rust regressions reject missing output artifacts, unequal fixed point, no consumed daemon requests, replay without execution, forbidden Cargo invocation and impossible profile transitions; store regressions reject incomplete accounting/readback |
-| V1 rendering failure | Actual operator descriptor stdout to /dev/full returns exit 3, not panic, with no state creation; CLI test owns this observable rather than pinning source strings |
-| V2 architecture positive and negative | Existing scripts/check-cli-architecture.rs rail and --self-test; host-authority matcher includes qualified paths/grouped imports and rejects filesystem/process/environment/clock/random/network/async/provider/store/render authority in protected layers while allowing legitimate pure fixtures |
+| V1 rendering failure | All five operator contract modes first reach successful reporting with a normal output device, then return exit 3 rather than panic on /dev/full without state creation; the CLI test owns this transition rather than diagnostic wording |
+| V2 architecture positive and negative | Existing scripts/check-cli-architecture.rs rail and --self-test; host-authority matcher includes qualified paths, grouped imports and file-local import/extern aliases, with accepted pure-alias fixtures and rejected authority-alias fixtures; commented/string-only no_std markers cannot satisfy the declaration check |
 
 Permanent tests target consumer-visible boundaries/transitions/errors. No new
 wording/source-text/wiring/mock-echo suite establishes operation completion.
@@ -361,6 +361,52 @@ framework. Removed refactor naming/session wording tests do not substitute for
 its real apply/fault behavior. Existing Rust-plan blocked/stale CLI cases now
 require non-success exit while retaining receipt/blocker assertions: printing a
 blocked receipt is allowed; silently treating it as execution success is not.
+
+### 2026-10-23 reachable corrections and review boundary
+
+These are source changes, not fresh acceptance receipts. `bootstrap-pin` was
+absent from the application family's actual match table despite the real CLI
+root; both taxonomy directions and its existing contract fixture now include it
+under Bootstrap. The lexical architecture rail expands file-local import/extern
+aliases before matching authority. ADR 0129 adds a separate compiler gate through
+the same Rust entry point and existing no_std Python runner: macro-expanded HIR,
+typed HIR and actual package-selected normal runtime dependency edges enforce
+cross-module/re-export/macro authority and renamed/transitive dependency cases.
+The Rust guard supplies the one authority inventory; there is no second source
+parser. Pure crypto/RNG traits remain permitted; ambient entropy is not a trait.
+
+The 44-versus-41 profile discrepancy is **not** evidence for deleting three core
+profiles or changing `ROOT_COMMAND_COUNT`. Before final regeneration, the core
+and Nickel inventory each declare 44 profiles, while the checked JSON declares
+41 and omits exactly `profile`, `test` and `cargo-build-bundle`. The private
+`nix-gateway` profile is deliberate server admission, not a public Clap root.
+Regenerate the JSON from the reviewed Nickel inventory together with final raw
+descriptors/catalog/reference/workflow outputs; generation must not replace
+reviewed platform policy with guessed defaults.
+
+Reference, workflow and generated-file-check reports previously used infallible
+root print macros. They now use the presentation writer, preserve exact rendered
+bytes/newline framing and propagate flush/write errors. The output-fault CLI
+regression covers these plus catalog/raw descriptors; its normal-device baseline
+prevents an unrelated inventory/admission failure from satisfying the fault case.
+The obsolete descriptor-count floor and two PASS-wording/self-test wrapper tests
+were removed; generator/contract checks remain explicit commands below.
+
+I6 and V1–V5 stay open until execution. The lexical scan is not substituted for
+the compiler gate: both positive/negative fixtures and actual first-party-owner
+compiler/dependency checks below must pass on the final source. The compiler gate
+uses the current admitted cargo/rustc, records their versions, excludes build/dev
+and proc-macro host execution from runtime edges, and compiles no vendored owner
+as a new protected layer. Overflow (256 MiB stdout/8 MiB stderr), deadline expiry
+(600 seconds per command/3600 per campaign), unsupported/empty compiler records
+or ambiguous Cargo package identities are nonpassing. Failure scratch retains
+bounded compiler views with source spans and resolved package/alias evidence;
+successful scratch is removed. This enforces declared authority on the admitted
+configuration, not universal semantic/domain correctness or every feature/target
+combination. Root policy ownership remains a source-review responsibility, not
+an authority assigned by the compiler. The genuine runtime/parity/service/cold
+proof acceptance obligations below are unchanged.
+
 
 ### Exact verification commands for the integrator
 
@@ -377,6 +423,10 @@ nix develop --offline --no-write-lock-file -c cargo test --locked --offline -p m
 nix develop --offline --no-write-lock-file -c cargo test --locked --offline -p mantle --test evaluator_budget_cli --test causal_build_trace --test integration --test example_projects
 nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-cli-architecture.rs --self-test
 nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-cli-architecture.rs
+nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-cli-architecture.rs --semantic --self-test
+nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-cli-architecture.rs --semantic
+nix develop --offline --no-write-lock-file -c cargo run --locked --offline -q -p mantle --bin generate-operator-command-contract -- --self-test
+nix develop --offline --no-write-lock-file -c bash scripts/check-operator-command-contract.sh
 nix develop --offline --no-write-lock-file -c cargo check --locked --offline -p mantle-application-contract --target wasm32-unknown-unknown
 nix develop --offline --no-write-lock-file -c cargo fmt --check -p mantle -v
 nix develop --offline --no-write-lock-file -c cargo clippy --locked --offline -p mantle-application-contract -p mantle --all-targets --no-deps -- -D warnings
@@ -456,11 +506,15 @@ with tempfile.TemporaryDirectory(prefix="mantle-i6-smoke-") as scratch:
     print("adapter-fault", result.returncode, result.stdout.decode(), result.stderr.decode())
     assert result.returncode == 3 and result.stdout == b""
     assert invalid.read_text() == "original"
-    with open("/dev/full", "wb") as full:
-        result = subprocess.run([binary, "--state-dir", str(root / "state"),
-            "__operator-contract", "--mode", "raw-descriptors"], stdout=full, stderr=subprocess.PIPE)
-    print("render-fault", result.returncode, result.stderr.decode())
-    assert result.returncode == 3 and b"panicked" not in result.stderr
+    for mode in ("raw-descriptors", "catalog", "reference", "workflow", "check"):
+        args = [binary, "--state-dir", str(root / "state"), "__operator-contract", "--mode", mode]
+        baseline = subprocess.run(args, capture_output=True)
+        print("report-baseline", mode, baseline.returncode, baseline.stderr.decode())
+        assert baseline.returncode == 0
+        with open("/dev/full", "wb") as full:
+            result = subprocess.run(args, stdout=full, stderr=subprocess.PIPE)
+        print("render-fault", mode, result.returncode, result.stderr.decode())
+        assert result.returncode == 3 and b"panicked" not in result.stderr
     path = "/nix/store/00000000000000000000000000000000-fixture"
     bindings = []
     for generation, operation in ((1, "is-valid-path"), (2, "is-valid-path"), (1, "query-path-info")):

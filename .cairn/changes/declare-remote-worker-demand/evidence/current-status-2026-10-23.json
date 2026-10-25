@@ -1,0 +1,699 @@
+{
+  "schema": "mantle-cairn-current-criterion-status-v1",
+  "observed_date": "2026-10-23",
+  "change": "declare-remote-worker-demand",
+  "maintenance_owner": "Mantle scheduling/coordinator live-state maintainers; Main owns subscriber and admission observations",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-existing-source-and-observations",
+  "latest_runtime_addendum": "evidence/runtime-observations-2026-10-23.json",
+  "addendum_boundary": "The linked additive record retains completed wait-request-repaired cohort observations and exact missing controls; this older snapshot and its failed receipts remain historical, not current acceptance.",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject_boundary": "Live shared worktree, not an atomic final source snapshot. Referenced receipts retain their own source subjects and limitations. Selected hashes identify inspected bytes only; they are not a commit/release acceptance identity. Parent is still repairing and executing checks.",
+  "evidence_refs": [
+    ".cairn/changes/declare-remote-worker-demand/tasks.md:22-34",
+    "crates/crunch-remote-core/src/demand.rs:86-100",
+    "src/remote_build/demand.rs:16-79",
+    "src/remote_build/live_state/daemon.rs",
+    "src/remote_build/live_state/producer.rs",
+    "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log:2366-2367,7816,8001-8002"
+  ],
+  "supported_task_criteria": [
+    "T1.1",
+    "T1.2",
+    "T1.3",
+    "T2.1",
+    "T2.2",
+    "T3.1",
+    "T3.2",
+    "T4.1",
+    "T4.2",
+    "T4.3",
+    "T4.4",
+    "T4.5"
+  ],
+  "criteria": [
+    {
+      "task_id": "T1.1",
+      "task_file_line": 8,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "baseline-receipt-owed",
+        "finding": "Current-origin isolated quantified blocker/unmet observation is not supplied by current source notes.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:8",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T1.2",
+      "task_file_line": 9,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "source-complete-as-recorded",
+        "finding": "Task file checks pure fact/schema/identity/bounds/lifetime decisions and implementation; current source derives only from Pending with explicit canonical resource requirements. ADR remains Proposed, not operator approval.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:9",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T1.3",
+      "task_file_line": 10,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "source-complete-as-recorded",
+        "finding": "Task file checks pure fact/schema/identity/bounds/lifetime decisions and implementation; current source derives only from Pending with explicit canonical resource requirements. ADR remains Proposed, not operator approval.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:10",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    },
+    {
+      "task_id": "T2.1",
+      "task_file_line": 14,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "source-complete-as-recorded",
+        "finding": "Task file checks pure fact/schema/identity/bounds/lifetime decisions and implementation; current source derives only from Pending with explicit canonical resource requirements. ADR remains Proposed, not operator approval.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:14",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T2.2",
+      "task_file_line": 15,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "observed-subset-not-full-inference-proof",
+        "finding": "Partial workspace log reports forged/noncanonical/count-bound, no-capacity/repeated-round and owner-scope fixtures ok. Final complete no-inference/no-lease/no-order-change proof and command exit still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:15",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    },
+    {
+      "task_id": "T3.1",
+      "task_file_line": 19,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-delivery-and-report-evidence-owed",
+        "finding": "Production shell source preserves the same fail-fast blocker and queues demand/retraction; source warns detached best-effort publishing cannot prove delivery. Partial daemon relay test ok is a useful subset, not the full live adapter/report criterion.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:19",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T3.2",
+      "task_file_line": 20,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-delivery-and-report-evidence-owed",
+        "finding": "Production shell source preserves the same fail-fast blocker and queues demand/retraction; source warns detached best-effort publishing cannot prove delivery. Partial daemon relay test ok is a useful subset, not the full live adapter/report criterion.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:20",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    },
+    {
+      "task_id": "T4.1",
+      "task_file_line": 39,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "observed-subset-runtime-owed",
+        "finding": "Core dedupe/lifetime and coordinator registration/retraction fixtures have ok lines; actual live long-lived consumer plus production absent-daemon control remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:39",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T4.2",
+      "task_file_line": 40,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "observed-subset-not-full-inference-proof",
+        "finding": "Partial workspace log reports forged/noncanonical/count-bound, no-capacity/repeated-round and owner-scope fixtures ok. Final complete no-inference/no-lease/no-order-change proof and command exit still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:40",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    },
+    {
+      "task_id": "T4.3",
+      "task_file_line": 41,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "verification-incomplete",
+        "finding": "Capture source-bound before/after demand/retraction/no-inference plus final quality/Tracey/Nix; partial workspace and structural lifecycle passes are not complete acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:41",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    },
+    {
+      "task_id": "T4.4",
+      "task_file_line": 42,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "verification-incomplete",
+        "finding": "Capture source-bound before/after demand/retraction/no-inference plus final quality/Tracey/Nix; partial workspace and structural lifecycle passes are not complete acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:42",
+      "requirement_ids": [
+        "build_scheduling.declared_worker_demand"
+      ]
+    },
+    {
+      "task_id": "T4.5",
+      "task_file_line": 43,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "cutover-not-authorized",
+        "finding": "No sync/archive; Main alone closes evidence/dependencies and checkboxes.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/declare-remote-worker-demand/tasks.md:43",
+      "requirement_ids": [
+        "build_scheduling.demand_without_capacity_inference"
+      ]
+    }
+  ],
+  "observed_documentary_lifecycle": {
+    "manifest": "target/cairn-finish-20261023/lifecycle-observations/result.json",
+    "commands": [
+      {
+        "label": "validate-before",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stderr.log"
+      },
+      {
+        "label": "declare-remote-worker-demand-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-proposal.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-proposal.stderr.log"
+      },
+      {
+        "label": "declare-remote-worker-demand-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-design.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-design.stderr.log"
+      },
+      {
+        "label": "declare-remote-worker-demand-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-tasks.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/declare-remote-worker-demand-tasks.stderr.log"
+      },
+      {
+        "label": "validate-after",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stderr.log"
+      }
+    ],
+    "non_claim": "Exact zero exits are lifecycle/structure evidence only, not executed acceptance of every task; the old missing nominal_identity_policy scaffold blocker is not the current observation."
+  },
+  "observed_parent_gate_snapshots": [
+    {
+      "label": "ordinary-first-party",
+      "command_text": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/ordinary-first-party",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture-semantic",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs --semantic",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "trellis-import",
+      "command_text": "python3 scripts/import-trellis-fenced-attempt.py --check",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "no-std-core",
+      "command_text": "bash scripts/check-no-std-core.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/no-std-core",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "changed-no-std-wasm",
+      "command_text": "cargo check --locked --offline -p crunch-source-core -p mantle-rust-plan-core -p mantle-rust-differential-core -p mantle-application-contract -p crunch-rust-cache-core -p crunch-remote-core --target wasm32-unknown-unknown",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/changed-no-std-wasm",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "default-shell-store",
+      "command_text": "cargo check --locked --offline -p crunch-store --lib",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/default-shell-store",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "tigerstyle",
+      "command_text": "bash scripts/check-first-party-tigerstyle.sh",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "flake",
+      "command_text": "nix flake check --offline --no-write-lock-file -L",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/flake",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "first-party-clippy",
+      "command_text": "bash scripts/check-first-party-clippy.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    },
+    {
+      "label": "workspace-tests",
+      "command_text": "cargo_test_workspace_lib_tests",
+      "exit_code": null,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    }
+  ],
+  "observed_workspace_fixture_subset": {
+    "stdout": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log",
+    "command": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.command",
+    "exit_receipt_observed": null,
+    "selected_test_lines": [
+      {
+        "line": 2366,
+        "text": "test demand::tests::forged_identity_noncanonical_resources_and_count_bound_do_not_mutate_book ... ok"
+      },
+      {
+        "line": 2367,
+        "text": "test demand::tests::repeated_rounds_dedupe_changed_requirements_replace_and_every_lifetime_end_retracts ... ok"
+      },
+      {
+        "line": 7816,
+        "text": "test remote_build::live_state::daemon::tests::worker_demand_socket_relay_retracts_on_owner_loss_and_rejects_forged_identity ... ok"
+      },
+      {
+        "line": 8001,
+        "text": "test remote_build::tests::worker_demand_changes_retract_and_scoped_projection_cannot_claim_another_owner ... ok"
+      },
+      {
+        "line": 8002,
+        "text": "test remote_build::tests::worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts ... ok"
+      }
+    ],
+    "non_claim": "Individual observed ok/FAILED lines only; no final aggregate success or absence of skips is inferred. An empty selection is not proof of absent tests."
+  },
+  "remaining_local_actions": [
+    {
+      "id": "focused",
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "worker_demand",
+        "--",
+        "--nocapture"
+      ],
+      "owed": "Capture core demand and real daemon socket publication/retraction/owner loss; production preparation caller with live long-lived publisher/subscriber must drain queued demand then OwnerStopped and terminal diff. Also record absent-daemon same-blocker negative control.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "quality",
+      "argv": [
+        "bash",
+        "scripts/check-first-party-quality.sh"
+      ],
+      "owed": "Main to capture final-source first-party fmt, strict Clippy and workspace lib/tests; then finish no-std, architecture semantic, relevant Nix and Tracey rails. Historical/partial successes do not close this action."
+    }
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [],
+  "local_dependency_acceptance_owed": [
+    {
+      "blocker": "publish-live-build-state-subscriptions acceptance is a named dependency, not replaced by source presence. No operator capacity or supervisor-registered-worker authority is granted by this record.",
+      "evidence": ".cairn/changes/declare-remote-worker-demand/tasks.md:22-34"
+    }
+  ],
+  "integration_gate_blockers": [
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/no-std-core.stderr.log:370-394",
+        "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy.stderr.log:35-53"
+      ]
+    },
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic.stderr.log:1-2"
+      ]
+    },
+    {
+      "kind": "host-nix-builder-configuration",
+      "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/flake.stderr.log:147-152",
+        "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle.stderr.log:1-9"
+      ]
+    }
+  ],
+  "non_claims": [
+    "Demand restates admitted unmet quantities; it creates no capacity, placement, lease or reservation. Detached best-effort publication from a terminating CLI is not delivered-event evidence.",
+    "This worker ran no build, test, lint, formatter, VM, proof, lifecycle gate or production command; only read and reconciled existing evidence. No checkbox changed.",
+    "No human, operator, policy-owner or upstream approval is inferred from AI investigation, implementation or lifecycle structure gates."
+  ],
+  "selected_inspected_input_identities": [
+    {
+      "path": ".cairn/changes/declare-remote-worker-demand/tasks.md",
+      "sha256": "dbc42cd8d4ce8334901516308db3bb9486acba1486aae8b349d93914e5a2f405"
+    },
+    {
+      "path": "crates/crunch-remote-core/src/demand.rs",
+      "sha256": "2d9c649154bf7f3d24c5b14a5382d73567c77c1e6cc776c9adbe9047ec89ca61"
+    },
+    {
+      "path": "src/remote_build/demand.rs",
+      "sha256": "2c09621e3a7f4913ce56d8604b6e2ab5203fae9ec43a28cabbffac9c4c21445f"
+    },
+    {
+      "path": "src/remote_build/live_state/daemon.rs",
+      "sha256": "dda43ddadaea9c69db7b6c9899c1af02d8d0013e42d4f65e9e98f55522c83b73"
+    },
+    {
+      "path": "src/remote_build/live_state/producer.rs",
+      "sha256": "125483c993b72272b20fd6077682d1648806c20a7b0dea54911462e43e108339"
+    }
+  ],
+  "tasks_sha256_at_inspection": "dbc42cd8d4ce8334901516308db3bb9486acba1486aae8b349d93914e5a2f405",
+  "support_definition": "Every listed task criterion has a bounded current assessment; supported_task_criteria does not mean those tasks are complete or accepted.",
+  "observed_integration_gate_update": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": [
+        {
+          "step": "tigerstyle",
+          "original_exit": 1,
+          "original_classification": "host-nix-remote-build-hook",
+          "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+          "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+          "rerun_exit": 0,
+          "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+          "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+          "tree_identical_to_gate_start": true
+        }
+      ]
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "pin_binding_blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949",
+      "statement": "The gates ran over the hashed tree from which the v6 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 1,
+          "flake": 1
+        },
+        "status": "host-prerequisite-still-blocks",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": "host-nix-remote-build-hook",
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+          }
+        ],
+        "bound_step_reruns": [
+          {
+            "step": "tigerstyle",
+            "original_exit": 1,
+            "original_classification": "host-nix-remote-build-hook",
+            "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+            "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+            "rerun_exit": 0,
+            "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+            "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+            "tree_identical_to_gate_start": true
+          }
+        ]
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  }
+}

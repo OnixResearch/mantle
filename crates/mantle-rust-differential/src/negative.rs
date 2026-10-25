@@ -85,7 +85,7 @@ pub fn execute(mut options: Options) -> Result<NegativeReport> {
     if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } != 0 {
         return Err("subreaper-unavailable".into());
     }
-    process::private_dir(&options.root)?;
+    crunch_rustc_wrapper::observed_process::private_dir(&options.root)?;
     let total = Instant::now();
     runner::pin(&mut options)?;
     let fixtures = ["chain", "wide", "proc-macro", "generated"]
@@ -121,17 +121,42 @@ pub fn execute(mut options: Options) -> Result<NegativeReport> {
     runner::save(&options.root.join("negative-inputs.json"), &ordered)?;
     runner::save(&options.root.join("planned-cases.json"), &CASE_IDS)?;
     let (state, _) = runner::prepare_state(&options, &options.root.join("successful-clean"), &cold.snapshot, total)?;
-    let success = runner::attempt(&options, &state, cell, cold, "compile", total, None, process::STREAM_BYTES)?;
+    let success = runner::attempt(
+        &options,
+        &state,
+        cell,
+        cold,
+        "compile",
+        total,
+        None,
+        crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+    )?;
     core::validate_oracle(&success.observation, &cold.expected).map_err(err)?;
     let (rejection_state, _) =
         runner::prepare_state(&options, &options.root.join("rejected-clean"), &broken.snapshot, total)?;
-    let rejection =
-        runner::attempt(&options, &rejection_state, cell, broken, "compile", total, None, process::STREAM_BYTES)?;
+    let rejection = runner::attempt(
+        &options,
+        &rejection_state,
+        cell,
+        broken,
+        "compile",
+        total,
+        None,
+        crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+    )?;
     core::validate_oracle(&rejection.observation, &broken.expected).map_err(err)?;
     let (ordered_state, _) =
         runner::prepare_state(&options, &options.root.join("ordered-clean"), &ordered.snapshot, total)?;
-    let ordered_attempt =
-        runner::attempt(&options, &ordered_state, cell, &ordered, "compile", total, None, process::STREAM_BYTES)?;
+    let ordered_attempt = runner::attempt(
+        &options,
+        &ordered_state,
+        cell,
+        &ordered,
+        "compile",
+        total,
+        None,
+        crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+    )?;
     core::validate_oracle(&ordered_attempt.observation, &ordered.expected).map_err(err)?;
     let mut cases = vec![];
     comparison(
@@ -193,18 +218,28 @@ pub fn execute(mut options: Options) -> Result<NegativeReport> {
     // Real child executions exercise a zero capture ceiling and an expired deadline.
     // These are infrastructure failures, never compiler-rejection or ordinary coverage.
     for (id, deadline, bound) in [
-        ("stream-bound", process::PROBE_MS, 0),
-        ("deadline", 0, process::STREAM_BYTES),
+        ("stream-bound", crunch_rustc_wrapper::observed_process::PROBE_MS, 0),
+        ("deadline", 0, crunch_rustc_wrapper::observed_process::STREAM_BYTES),
     ] {
         let root = options.root.join(id);
-        process::private_dir(&root)?;
+        crunch_rustc_wrapper::observed_process::private_dir(&root)?;
         let mut command = Command::new(&options.rustc);
         command
             .arg("--version")
             .current_dir(&rejection_state.source)
             .env_clear()
             .envs(runner::environment(&options, &rejection_state));
-        let capture = process::supervise(command, &root, &options.root, deadline, total, None, bound)?;
+        let capture = crunch_rustc_wrapper::observed_process::supervise(
+            command,
+            crunch_rustc_wrapper::observed_process::Supervision {
+                root: &root,
+                scratch: &options.root,
+                timeout_ms: deadline,
+                total_start: total,
+                injection: None,
+                stream_bound: bound,
+            },
+        )?;
         let mut infrastructure = rejection.observation.clone();
         infrastructure.status = if id == "deadline" {
             Status::Timeout

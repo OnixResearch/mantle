@@ -1,0 +1,123 @@
+{
+  "schema": "mantle-configured-dependency-audit-observation-v1",
+  "argv": [
+    "cargo",
+    "deny",
+    "check",
+    "--config",
+    "deny.toml"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "exit_code": 1,
+  "observed_summary": "advisories FAILED, bans ok, licenses ok, sources ok\n",
+  "raw_stderr_gzip": "configured-audit-2026-10-23.stderr.log.gz",
+  "raw_stderr_blake3": "18c58a5cdfc01ea9c27efc5329dc5c2bc4c978c6bdc8fcd183cca29ffab79e88",
+  "compressed_stderr_blake3": "7e17722639bb930a447943cb8de5cf00bf08fd7fa79de63ab6dea41ced874958",
+  "raw_stderr_bytes": 6732192,
+  "compressed_stderr_bytes": 451042,
+  "fatal_advisories": [
+    {
+      "category": "unmaintained",
+      "message": "bitmaps is unmaintained",
+      "advisory": "RUSTSEC-2026-0247",
+      "package": "bitmaps 3.2.1",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Double free / use-after-free in `Chunk` and `InlineArray` removal methods when an element's `Drop` panics",
+      "advisory": "RUSTSEC-2026-0292",
+      "package": "imbl-sized-chunks 0.1.3",
+      "solution": "Upgrade to >=0.2.0 (try `cargo update -p imbl-sized-chunks`)"
+    },
+    {
+      "category": "unmaintained",
+      "message": "proc-macro-error is unmaintained",
+      "advisory": "RUSTSEC-2024-0370",
+      "package": "proc-macro-error 0.4.12",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Marvin Attack: potential key recovery through timing sidechannels",
+      "advisory": "RUSTSEC-2023-0071",
+      "package": "rsa 0.9.10",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "`Debug` impls for client session values expose TLS secrets",
+      "advisory": "RUSTSEC-2026-0346",
+      "package": "rustls 0.23.45",
+      "solution": "Upgrade to >=0.23.46 (try `cargo update -p rustls`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Buffered application data sent to outer server after ECH rejection",
+      "advisory": "RUSTSEC-2026-0347",
+      "package": "rustls 0.23.45",
+      "solution": "Upgrade to >=0.23.46 (try `cargo update -p rustls`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Brotli certificate decompression can allocate up to 1 GiB before authentication",
+      "advisory": "RUSTSEC-2026-0348",
+      "package": "rustls 0.23.45",
+      "solution": "Upgrade to >=0.23.46 (try `cargo update -p rustls`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Unauthenticated ServerHello can downgrade later connections to classical key exchange",
+      "advisory": "RUSTSEC-2026-0349",
+      "package": "rustls 0.23.45",
+      "solution": "Upgrade to >=0.23.46 (try `cargo update -p rustls`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Certificate verification may accept distrusted intermediates",
+      "advisory": "RUSTSEC-2026-0382",
+      "package": "rustls-webpki 0.103.15",
+      "solution": "Upgrade to >=0.103.16, <0.104.0-alpha.1 OR >=0.104.0-alpha.8 (try `cargo update -p rustls-webpki`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Decompression bomb in `ruzstd`: a tiny input can exhaust memory (OOM)",
+      "advisory": "RUSTSEC-2026-0344",
+      "package": "ruzstd 0.8.2",
+      "solution": "Upgrade to >=0.9.1 (try `cargo update -p ruzstd`)"
+    },
+    {
+      "category": "unmaintained",
+      "message": "unsafe-libyaml is unmaintained",
+      "advisory": "RUSTSEC-2024-0449",
+      "package": "unsafe-libyaml 0.2.11",
+      "solution": "No safe upgrade is available!"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Bundled root certificates allow trust in distrusted emSign intermediates",
+      "advisory": "RUSTSEC-2026-0383",
+      "package": "webpki-root-certs 1.0.6",
+      "solution": "Upgrade to >=1.0.10 (try `cargo update -p webpki-root-certs`)"
+    },
+    {
+      "category": "vulnerability",
+      "message": "Bundled root certificates allow trust in distrusted emSign intermediates",
+      "advisory": "RUSTSEC-2026-0381",
+      "package": "webpki-roots 1.0.6",
+      "solution": "Upgrade to >=1.0.10 (try `cargo update -p webpki-roots`)"
+    }
+  ],
+  "selected_input_identities_recorded_after_execution": {
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "9ad3c2c7e0687f10ec43ab6f36f580d4c152b26cd05fc77bbc8644b1dd1d7635",
+    "deny.toml": "13d0a8617b9fa1f0a191425183fdd4ee767e79d71c3a7534643e348d03116745",
+    "flake.lock": "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc"
+  },
+  "limitations": [
+    "Not an atomic before/after full-source snapshot.",
+    "Cargo registry index unavailable for yanked-status checks; all such warnings remain in the complete retained stderr.",
+    "No clean-audit, source correctness, legal suitability or release-eligibility claim.",
+    "No new advisory waivers, forks or source-policy bypasses."
+  ]
+}

@@ -435,17 +435,43 @@ pub fn send<'a, P: TransportPort>(
     port: &mut P,
     payload: &[u8],
 ) -> Result<(), ApplicationError> {
+    let effect = session
+        .plan(EffectKind::TransportSend, transport_send_limits(payload)?)
+        .map_err(ApplicationError::Decision)?;
+    deliver(session, port, effect, payload)
+}
+
+/// Delivers the one terminal failure report a failed session still admits.
+/// Every other effect stays refused after the failed observation.
+// r[impl remote_builds.remote_effect_plans]
+pub fn send_failure_report<'a, P: TransportPort>(
+    session: &mut EffectSession<'a>,
+    port: &mut P,
+    payload: &[u8],
+) -> Result<(), ApplicationError> {
+    let effect = session.plan_failure_report(transport_send_limits(payload)?).map_err(ApplicationError::Decision)?;
+    deliver(session, port, effect, payload)
+}
+
+fn transport_send_limits(payload: &[u8]) -> Result<EffectLimits, ApplicationError> {
     let bytes_max =
         u64::try_from(payload.len()).map_err(|_| ApplicationError::Decision(EffectBlocker::EffectLimitExceeded))?;
-    let effect = session
-        .plan(EffectKind::TransportSend, EffectLimits {
-            bytes_max,
-            items_max: 1,
-            time_secs_max: 0,
-        })
-        .map_err(ApplicationError::Decision)?;
+    Ok(EffectLimits {
+        bytes_max,
+        items_max: 1,
+        time_secs_max: 0,
+    })
+}
+
+fn deliver<'a, P: TransportPort>(
+    session: &mut EffectSession<'a>,
+    port: &mut P,
+    effect: crunch_remote_core::effect::Effect<'a>,
+    payload: &[u8],
+) -> Result<(), ApplicationError> {
+    let bytes_max = effect.limits.bytes_max;
     debug_assert_eq!(effect.authority, Authority::Transport);
-    debug_assert_eq!(effect.limits.bytes_max, bytes_max);
+    debug_assert_eq!(u64::try_from(payload.len()).ok(), Some(bytes_max));
     let observed = port.send(payload).and_then(|bytes| {
         if bytes != bytes_max {
             return Err(PortError {
@@ -924,6 +950,47 @@ mod tests {
             }),
             Err(EffectBlocker::SessionFailed),
         );
+    }
+
+    struct RecordingTransport {
+        sent: alloc::vec::Vec<u8>,
+    }
+
+    impl TransportPort for RecordingTransport {
+        fn send(&mut self, payload: &[u8]) -> Result<u64, PortError> {
+            self.sent.extend_from_slice(payload);
+            Ok(u64::try_from(payload.len()).unwrap())
+        }
+    }
+
+    #[test]
+    fn failed_session_delivers_one_terminal_report_and_nothing_else() {
+        let mut session = EffectSession::new("request-report").unwrap();
+        let mut transport = RecordingTransport {
+            sent: alloc::vec::Vec::new(),
+        };
+        assert_eq!(
+            send_failure_report(&mut session, &mut transport, b"premature"),
+            Err(ApplicationError::Decision(EffectBlocker::NoFailureToReport)),
+        );
+        let disconnected = send(
+            &mut session,
+            &mut FailingTransport {
+                capability: Capability::Transport,
+            },
+            b"frame",
+        );
+        assert!(matches!(disconnected, Err(ApplicationError::Port(_))));
+        assert_eq!(
+            send(&mut session, &mut transport, b"ordinary"),
+            Err(ApplicationError::Decision(EffectBlocker::SessionFailed)),
+        );
+        assert_eq!(send_failure_report(&mut session, &mut transport, b"failure"), Ok(()));
+        assert_eq!(
+            send_failure_report(&mut session, &mut transport, b"again"),
+            Err(ApplicationError::Decision(EffectBlocker::SessionFailed)),
+        );
+        assert_eq!(transport.sent, b"failure");
     }
 
     #[test]

@@ -521,6 +521,8 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
     validate_expected_digest("source profile", options.expected_source_profile_blake3)?;
     validate_expected_digest("StageX lineage", options.expected_stagex_lineage_blake3)?;
     validate_expected_digest("native provider", options.expected_native_provider_blake3)?;
+    crate::source_built_fixed_point::validate_resource_bounds(&requested_resource_bounds(options))
+        .map_err(|error| proof_error(error.to_string()))?;
     if options.output_dir.exists() {
         return Err(proof_error(format!(
             "proof output must be absent before execution: {}",
@@ -539,9 +541,17 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
     if !(MAX_JOBS_MIN..=MAX_JOBS_MAX).contains(&options.jobs) {
         return Err(proof_error(format!("jobs must be within {MAX_JOBS_MIN}..={MAX_JOBS_MAX}, got {}", options.jobs)));
     }
-    assert!(options.elapsed_seconds_max > 0);
-    assert!(options.disk_bytes_max > 0);
     validate_disk_preflight(options.output_dir, options.disk_bytes_max)
+}
+
+fn requested_resource_bounds(options: &SourceBuiltFixedPointOptions<'_>) -> SourceBuiltFixedPointResourceBounds {
+    SourceBuiltFixedPointResourceBounds {
+        elapsed_seconds_max: options.elapsed_seconds_max,
+        disk_bytes_max: options.disk_bytes_max,
+        open_file_descriptors_max: SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX,
+        protected_exec_events_max: options.protected_exec_events_max,
+        source_records_max: options.source_records_max,
+    }
 }
 
 fn validate_disk_preflight(output_dir: &Path, disk_bytes_max: u64) -> Result<(), RunError> {
@@ -977,13 +987,7 @@ fn prepare_plan(
             fallback_allowed: false,
             provider_cache_completion_allowed: false,
         },
-        resource_bounds: SourceBuiltFixedPointResourceBounds {
-            elapsed_seconds_max: options.elapsed_seconds_max,
-            disk_bytes_max: options.disk_bytes_max,
-            open_file_descriptors_max: SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX,
-            protected_exec_events_max: options.protected_exec_events_max,
-            source_records_max: options.source_records_max,
-        },
+        resource_bounds: requested_resource_bounds(options),
     };
     let plan = plan_source_built_fixed_point(plan_input)
         .map_err(|error| proof_error(format!("preparing source-built fixed-point plan: {error}")))?;
@@ -2998,6 +3002,16 @@ mod tests {
 
         assert!(existing.to_string().contains("must be absent"));
         assert!(digest.to_string().contains("expected native provider BLAKE3"));
+        let mut invalid_limits = options.clone();
+        invalid_limits.elapsed_seconds_max = 0;
+        let zero = validate_options(&invalid_limits).unwrap_err();
+        assert!(zero.to_string().contains("resource bounds are zero or exceed"));
+        invalid_limits.elapsed_seconds_max = 86_401;
+        let excessive = validate_options(&invalid_limits).unwrap_err();
+        assert!(excessive.to_string().contains("resource bounds are zero or exceed"));
+        invalid_limits.elapsed_seconds_max = 1;
+        invalid_limits.disk_bytes_max = 0;
+        assert!(validate_options(&invalid_limits).unwrap_err().to_string().contains("resource bounds"));
     }
 
     #[test]

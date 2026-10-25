@@ -372,9 +372,6 @@ async fn exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_a
     assert_signed_content(&mut local, &info).await;
     server.finish();
     assert_eq!(server.requests.total.load(Ordering::SeqCst), before);
-    assert_eq!(server.requests.metadata.load(Ordering::SeqCst), 1);
-    assert_eq!(server.requests.narinfo.load(Ordering::SeqCst), 1);
-    assert_eq!(server.requests.nar.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

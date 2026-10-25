@@ -1,0 +1,936 @@
+{
+  "schema": "mantle-release-source-review-public-test-only-consumer-v1",
+  "test_only": true,
+  "real_human_approval": false,
+  "actual_release_created": false,
+  "mantle_source_review_contributor_reached": false,
+  "scratch_roots": [
+    "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+    "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201"
+  ],
+  "archive": {
+    "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/PUBLIC-TEST-ONLY-actual-source.tar",
+    "blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+    "size_bytes": 20480,
+    "construction": "GNU tar of actual tiny indexed local source and checksum-checked local vendor fixture; not the unavailable Mantle release archive"
+  },
+  "source_subject": {
+    "schema": "cairn.source-review-subject.v1",
+    "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+    "source_revision": "PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION",
+    "source_tree_blake3": null,
+    "snapshot_profile": "mantle-release-source",
+    "snapshot_profile_version": 1,
+    "projection": "source"
+  },
+  "independent_receipt": {
+    "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/receipts/acceptance.json",
+    "file_blake3": "7ea7f6ad9f28562bd40517dbacd69b4ca90a634663928800387beb60ecea689e",
+    "receipt_blake3": "b596739087901b7a888f5de491e2c9b7eef254b4ceda0efcdf0d3d7cb0ac8efb",
+    "outcome": "accepted_manual_review",
+    "approved_distinct_review_keys": 2
+  },
+  "negative_independent_receipt": {
+    "schema": "valence.source-review-acceptance.v1",
+    "outcome": "invalid",
+    "verification_role": "manual_review",
+    "subject": {
+      "schema": "cairn.source-review-subject.v1",
+      "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+      "source_revision": "PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION",
+      "source_tree_blake3": null,
+      "snapshot_profile": "mantle-release-source",
+      "snapshot_profile_version": 1,
+      "projection": "source"
+    },
+    "subject_identity": "c02aada22e82033154050fe0f331202fb4daa9d6a787c9874a385258bd41926f",
+    "claim_root": {
+      "claim_identity": "c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092",
+      "subject_root": "a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9",
+      "revision": 1
+    },
+    "claim_root_identity": "fde2263c44c0da1d8dbfb86d2da4ab3d05b6882dec8e6a4f2611fd779db96e94",
+    "review_policy_blake3": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+    "verification_policy_identity": "f91a7fbec07f9886eab99cb7b7ec43d0a5c66446626fa8187a93139f47121921",
+    "authentication_policy_identity": "b2ed1f850f4b2f4ad18e51abcd9190d4b7401e7c51ba31769b29324f4d835ef1",
+    "approved_key_blake3": [],
+    "signed_statement_blake3": [],
+    "claim_identity": [],
+    "attachment_identity": "16a1c4e50eb8730c1d97a1db8a1a887246e04b86e8f918da03a53eaf45e0cdac",
+    "attachment_artifact_blake3": "a422b9831a0aea073ebe5e452328e44f2203fa5f32ebae76da1d97ee575a416b",
+    "policy_artifact_blake3": "afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd",
+    "receipt_blake3": "7977799f797249e42326ef3f19c349e34b829e3a46ad0f8ecf208218f7752222",
+    "non_claims": [
+      "source-review-does-not-prove-build-correctness",
+      "source-review-does-not-prove-deployment-safety",
+      "source-review-does-not-prove-release-eligibility",
+      "source-review-does-not-prove-reproducibility",
+      "source-review-does-not-prove-review-quality",
+      "source-review-does-not-prove-source-correctness",
+      "source-review-does-not-prove-witness-independence"
+    ],
+    "issues": [
+      "auth.cryptographic_failure_present",
+      "auth.distinct_key_threshold_unsatisfied",
+      "auth.signature_unverified",
+      "review_authentication_failed"
+    ]
+  },
+  "release_signer_count": 0,
+  "build_witness_count": 0,
+  "executable_pins_before": {
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+    },
+    "wrapper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+      "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+    },
+    "producer": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+      "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+    },
+    "helper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+      "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+    },
+    "replay": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+      "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+    },
+    "cairn": {
+      "path": "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+      "blake3": "8ba55fe02cdf478210a472fdc8232791b33773609b8a82803e0609b5eb4ca743"
+    },
+    "valence": {
+      "path": "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+      "blake3": "b5d95a18fabfb5a109543503829aa63c73e1e85f16e5cb556fc238628285917b"
+    },
+    "openssl": {
+      "path": "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+      "blake3": "ddb4505852b3d7a71ff6e12afda57419e969ea56a24d9824d9feefa5d4267fd1"
+    }
+  },
+  "executable_pins_after": {
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+    },
+    "wrapper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+      "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+    },
+    "producer": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+      "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+    },
+    "helper": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+      "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+    },
+    "replay": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+      "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+    },
+    "cairn": {
+      "path": "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+      "blake3": "8ba55fe02cdf478210a472fdc8232791b33773609b8a82803e0609b5eb4ca743"
+    },
+    "valence": {
+      "path": "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+      "blake3": "b5d95a18fabfb5a109543503829aa63c73e1e85f16e5cb556fc238628285917b"
+    },
+    "openssl": {
+      "path": "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+      "blake3": "ddb4505852b3d7a71ff6e12afda57419e969ea56a24d9824d9feefa5d4267fd1"
+    }
+  },
+  "commands": [
+    {
+      "label": "release-create-help",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "release",
+        "create",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5389125,
+      "finished_unix": 1792797022.5469868,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-create-help.stdout",
+        "blake3": "2379884d95a17dd84f4978d68464a2ad929192b6cdd130f0bd7f061901962891",
+        "size_bytes": 5170,
+        "text": "Create a release evidence bundle from local artifacts\n\nUsage: mantle release create [OPTIONS] --release-id <RELEASE_ID> --binary <BINARY> --proof-bundle <PROOF_BUNDLE>\n\nOptions:\n      --release-id <RELEASE_ID>\n          Release identifier recorded in the bundle manifest\n  -v, --verbose\n          Enable verbose logging\n      --bundle-dir <BUNDLE_DIR>\n          Output directory for the bundle (default: target/release-evidence/<release-id>)\n      --log-level <LOG_LEVEL>\n          Log level (trace, debug, info, warn, error)\n      --binary <BINARY>\n          Release binary artifact to bundle (repeat for multiple binaries)\n      --json\n          Emit errors as JSON objects for tooling integration\n      --proof-bundle <PROOF_BUNDLE>\n          Full self-hosting proof bundle directory from ./scripts/prove-self-hosting.sh\n      --store <STORE>\n          Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]\n      --provider-fixed-point-proof <PROVIDER_FIXED_POINT_PROOF>\n          Provider-backed Cargo-free fixed-point proof bundle to package as bounded release-adjacent evidence\n      --store-prefix <STORE_PREFIX>\n          Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]\n      --nix-compat\n          Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations\n      --reproducibility-report <REPRODUCIBILITY_REPORT>\n          Optional canonical reproducibility report to package in the bundle\n      --source-acquisition-url <SOURCE_ACQUISITION_URL>\n          External source archive URL witnesses can fetch before rebuilding\n      --state-dir <STATE_DIR>\n          State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path\n      --remote-binding-config <REMOTE_BINDING_CONFIG>\n          Operator-owned endpoint binding configuration for production remote operations\n      --source-observation <SOURCE_OBSERVATION>\n          Optional path to a versioned source-observation binding (JSON) recorded with the release source\n      --git-source-url <GIT_SOURCE_URL>\n          Git remote URL witnesses can fetch to derive the release source archive\n      --store-backend <STORE_BACKEND>\n          Durable store backend (snix or casita) [default: snix]\n      --base-store <BASE_STORES>\n          Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)\n      --git-source-commit <GIT_SOURCE_COMMIT>\n          Pinned Git commit for --git-source-url\n      --git-source-ref <GIT_SOURCE_REF>\n          Optional Git ref that must resolve to --git-source-commit during witness replay\n      --git-source-tag <GIT_SOURCE_TAG>\n          Optional Git tag that must resolve to --git-source-commit during witness replay\n      --workflow-command <WORKFLOW_COMMAND>\n          Workflow command identity recorded in the manifest [default: ./scripts/prove-self-hosting.sh]\n      --cairn-handoff <CAIRN_HANDOFF>\n          Cairn handoff descriptor whose referenced artifact and policy bytes are measured, bundled, and bound to this exact release\n      --external-evidence <EXTERNAL_EVIDENCE>\n          External evidence sidecar file to bundle opaquely (repeat with matching role/schema/scope)\n      --external-evidence-role <EXTERNAL_EVIDENCE_ROLE>\n          Role for each --external-evidence entry, e.g. stack-provenance-trace\n      --external-evidence-schema <EXTERNAL_EVIDENCE_SCHEMA>\n          Schema identifier for each --external-evidence entry\n      --external-evidence-claim-scope <EXTERNAL_EVIDENCE_CLAIM_SCOPE>\n          Claim scope for each --external-evidence entry\n      --external-evidence-non-claim <EXTERNAL_EVIDENCE_NON_CLAIM>\n          Non-claim text applied to bundled external evidence entries\n      --kani-toolchain-evidence <KANI_TOOLCHAIN_EVIDENCE>\n          Kani toolchain identity metadata JSON linked to a bundled Kani receipt\n      --stack-provenance-sidecar <STACK_PROVENANCE_SIDECAR>\n          Valence stack-provenance sidecar to package as bounded external evidence\n      --stack-provenance-valence-receipt <STACK_PROVENANCE_VALENCE_RECEIPT>\n          Valence stack-provenance graph report/receipt for the sidecar\n      --stack-provenance-binary <STACK_PROVENANCE_BINARY>\n          Release binary input this stack-provenance sidecar names; required when multiple binaries are bundled\n      --requirement-evidence-root <REQUIREMENT_EVIDENCE_ROOT>\n          Capability root for content-bound requirement input and evidence files\n      --requirement-evidence-input <REQUIREMENT_EVIDENCE_INPUT>\n          Capability-relative content-bound requirement creation input\n      --workflow-version <WORKFLOW_VERSION>\n          Workflow version recorded in the manifest [default: mantle-self-hosting-proof-v2]\n  -h, --help\n          Print help\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-create-help.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "release-verify-help",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "release",
+        "verify",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5471067,
+      "finished_unix": 1792797022.5503633,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-verify-help.stdout",
+        "blake3": "50d0c55f2bdadc003e0ace4f8be86f9103ad2dd0736d2e396a8c8989f4b58e67",
+        "size_bytes": 3578,
+        "text": "Verify a release evidence bundle using bundle-local contents only\n\nUsage: mantle release verify [OPTIONS] <BUNDLE_DIR>\n\nArguments:\n  <BUNDLE_DIR>  Bundle directory to verify\n\nOptions:\n      --require-reproducible\n          Fail unless a verified reproducibility report is present and matched\n  -v, --verbose\n          Enable verbose logging\n      --log-level <LOG_LEVEL>\n          Log level (trace, debug, info, warn, error)\n      --require-stagex-no-quorum\n          Require StageX-class lineage proof with no-quorum profile\n      --deterministic-proof <DETERMINISTIC_PROOF>\n          Canonical deterministic build proof artifact from `release reproduce`\n      --json\n          Emit errors as JSON objects for tooling integration\n      --deterministic-sandbox-isolation-evidence <DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE>\n          Canonical deterministic sandbox isolation evidence artifact from `release reproduce`\n      --store <STORE>\n          Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]\n      --require-deterministic-release\n          Fail unless deterministic proof artifacts prove release-artifact determinism\n      --store-prefix <STORE_PREFIX>\n          Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]\n      --nix-compat\n          Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations\n      --provider-fixed-point-proof <PROVIDER_FIXED_POINT_PROOF>\n          Cargo-free provider fixed-point proof bundle to validate as bounded release-adjacent evidence\n      --require-external-evidence-role <REQUIRE_EXTERNAL_EVIDENCE_ROLE>\n          Fail unless a bundled external evidence entry with this role is present (repeatable)\n      --state-dir <STATE_DIR>\n          State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path\n      --remote-binding-config <REMOTE_BINDING_CONFIG>\n          Operator-owned endpoint binding configuration for production remote operations\n      --require-provider-fixed-point-proof\n          Fail unless a valid provider fixed-point proof bundle is supplied\n      --release-profile <RELEASE_PROFILE>\n          Release verification profile; onix-stack requires Valence stack-provenance evidence [default: generic]\n      --store-backend <STORE_BACKEND>\n          Durable store backend (snix or casita) [default: snix]\n      --base-store <BASE_STORES>\n          Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)\n      --stack-provenance <STACK_PROVENANCE>\n          Stack-provenance policy for generic releases; release-profile can require a stricter mode [default: optional] [possible values: optional, required]\n      --requirement-coverage <REQUIREMENT_COVERAGE>\n          Content-bound requirement coverage policy for this verification [default: optional] [possible values: optional, required]\n      --source-review-policy <SOURCE_REVIEW_POLICY>\n          Trusted source-review verification policy; supplying it requires accepted source review\n      --require-source-review\n          Require accepted source review under an explicitly supplied trusted policy\n  -h, --help\n          Print help\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-verify-help.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "tiny-git-init",
+      "argv": [
+        "git",
+        "init",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-source"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5508285,
+      "finished_unix": 1792797022.5581543,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-git-init.stdout",
+        "blake3": "b05010339b519aa6d39447bc30827709afe3186bacc0aa90d05788b54fd96c43",
+        "size_bytes": 137,
+        "text": "Initialized empty Git repository in /home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-source/.git/\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-git-init.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "tiny-git-stage",
+      "argv": [
+        "git",
+        "add",
+        "."
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-source",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.558294,
+      "finished_unix": 1792797022.5595338,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-git-stage.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-git-stage.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "archive-actual-source",
+      "argv": [
+        "tar",
+        "--format=gnu",
+        "--sort=name",
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+        "--exclude=.git",
+        "-cf",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/PUBLIC-TEST-ONLY-actual-source.tar",
+        "."
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-source",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5596697,
+      "finished_unix": 1792797022.5639608,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/archive-actual-source.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/archive-actual-source.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "archive-list",
+      "argv": [
+        "tar",
+        "-tvf",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/PUBLIC-TEST-ONLY-actual-source.tar"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5640993,
+      "finished_unix": 1792797022.5653327,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/archive-list.stdout",
+        "blake3": "6f842ba528e8da83857a81712d71637a3c705c4843a10dcc8df73a4a89687a25",
+        "size_bytes": 852,
+        "text": "drwx------ 0/0               0 1969-12-31 19:00 ./\ndrwxr-xr-x 0/0               0 1969-12-31 19:00 ./.cargo/\n-rw-r--r-- 0/0              26 1969-12-31 19:00 ./.cargo/vendor-config.toml\n-rw-r--r-- 0/0              13 1969-12-31 19:00 ./.gitignore\n-rw-r--r-- 0/0             107 1969-12-31 19:00 ./Cargo.lock\n-rw-r--r-- 0/0              70 1969-12-31 19:00 ./Cargo.toml\ndrwxr-xr-x 0/0               0 1969-12-31 19:00 ./src/\n-rw-r--r-- 0/0              80 1969-12-31 19:00 ./src/main.rs\ndrwxr-xr-x 0/0               0 1969-12-31 19:00 ./vendor-deps/\ndrwxr-xr-x 0/0               0 1969-12-31 19:00 ./vendor-deps/dep/\n-rw-r--r-- 0/0             189 1969-12-31 19:00 ./vendor-deps/dep/.cargo-checksum.json\n-rw-r--r-- 0/0              37 1969-12-31 19:00 ./vendor-deps/dep/Cargo.toml\n-rw-r--r-- 0/0              33 1969-12-31 19:00 ./vendor-deps/dep/lib.rs\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/archive-list.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-derive-public",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkey",
+        "-inform",
+        "DER",
+        "-in",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a.PUBLIC-TEST-ONLY.der",
+        "-pubout",
+        "-outform",
+        "DER"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5655456,
+      "finished_unix": 1792797022.5687912,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-derive-public.stdout",
+        "blake3": "05aefa510e630c880de780dbf2b9cc3116a4cb520cba90518a99fe610e44a724",
+        "size_bytes": 44,
+        "text": "0*0\u0005\u0006\u0003+ep\u0003!\u0000,e\ufffd\ufffd\u0510%\ufffdL\ufffd\ufffd:\ufffd\ufffd\ufffd~\ufffdDDi\ufffdT\ufffd\ufffd\u0018>\ufffd\u0257\ufffd,m"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-derive-public.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-derive-public",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkey",
+        "-inform",
+        "DER",
+        "-in",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b.PUBLIC-TEST-ONLY.der",
+        "-pubout",
+        "-outform",
+        "DER"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5725667,
+      "finished_unix": 1792797022.5758548,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-derive-public.stdout",
+        "blake3": "23b62e59090a2fa1849087c18cf583ca4437df548aa0aa9c9152d8c46473138e",
+        "size_bytes": 44,
+        "text": "0*0\u0005\u0006\u0003+ep\u0003!\u0000\ufffd}\ufffdA\ufffd%#\ufffd\ufffd\u0313\u0011XPX8\ufffd\ufffd\u001e-8urd\ufffd\ufffdi\ufffd\u0015\ufffd#"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-derive-public.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-signing-request",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-a-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5856133,
+      "finished_unix": 1792797022.592927,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-signing-request.stdout",
+        "blake3": "1902a6ef85a5cd8baee27d5e50004faf97fdc44757fcbc9a5bb416793f1c562a",
+        "size_bytes": 4370,
+        "text": "{\n  \"canonical_statement_hex\": \"0000002361727469666163742d617574682e73746174656d656e742d707265696d6167652e76310000001a61727469666163742d617574682e73746174656d656e742e763100000016636169726e2e736f757263652d7265766965772e763100000016736f757263652d7265766965772d617070726f76616c00000016636169726e2e736f757263652d7265766965772e76310000001b72657669657765722d612d5055424c49432d544553542d4f4e4c59000000225055424c49432d544553542d4f4e4c592d4e4f542d5245414c2d415050524f56414c00000015656432353531392d7075626c69632d6b65792e763100000006626c616b653300000040623430626337353730323763386262393836626337383766366461613133663236616136303066316461386132653537393939323765653231323466306566330000001c636169726e2e736f757263652d7265766965772d636c61696d2e763100000006626c616b65330000004061303631643338343362383665623039613333343638383264323233656261653966363364333864343132386336353663323665653039343935366136366235000000020000001d636169726e2e736f757263652d7265766965772d706f6c6963792e763100000006626c616b65330000004039333933353163653537646665353537653164623461373831353164373630613062653763656333303061353930306535393233643563366633643661653133000000186d616e746c652d72656c656173652d736f757263652e763100000006626c616b6533000000403333326661313739623661373864653639393938643464643937653662356237363463663861616536343766343864306630393962653833656133336663663200000018746573742d6f6e6c792d63757272656e746e6573732e763100000006626c616b65330000004035633731633565623139353565663132393437326234316339653662643764363166336535393839383933356134646534383032623637353234393137666634\",\n  \"claim\": {\n    \"claim_root\": {\n      \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n      \"revision\": 1,\n      \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n    },\n    \"disposition\": \"approved\",\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n    \"schema\": \"cairn.source-review-claim.v1\",\n    \"subject\": {\n      \"projection\": \"source\",\n      \"schema\": \"cairn.source-review-subject.v1\",\n      \"snapshot_profile\": \"mantle-release-source\",\n      \"snapshot_profile_version\": 1,\n      \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n      \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n      \"source_tree_blake3\": null\n    }\n  },\n  \"generation\": 1,\n  \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n  \"schema\": \"cairn.source-review-signing-request.v1\",\n  \"statement\": {\n    \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n    \"key_identity\": {\n      \"algorithm\": \"blake3\",\n      \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n      \"profile\": \"ed25519-public-key.v1\"\n    },\n    \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n    \"schema\": \"artifact-auth.statement.v1\",\n    \"scope\": {\n      \"domain\": \"cairn.source-review.v1\",\n      \"parents\": [\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n          \"profile\": \"cairn.source-review-policy.v1\"\n        },\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"profile\": \"mantle-release-source.v1\"\n        }\n      ],\n      \"profile_id\": \"cairn.source-review.v1\",\n      \"purpose\": \"source-review-approval\",\n      \"subject\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\",\n        \"profile\": \"cairn.source-review-claim.v1\"\n      },\n      \"verifier_context\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n        \"profile\": \"test-only-currentness.v1\"\n      }\n    }\n  },\n  \"statement_blake3\": \"e24f1744612089ecace5bc1cc033b0c5ce17f684a0c62d9e4e402caebbf373d9\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-signing-request.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-raw",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-a-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d",
+        "--raw"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5930996,
+      "finished_unix": 1792797022.596353,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-raw.stdout",
+        "blake3": "e24f1744612089ecace5bc1cc033b0c5ce17f684a0c62d9e4e402caebbf373d9",
+        "size_bytes": 756,
+        "text": "\u0000\u0000\u0000#artifact-auth.statement-preimage.v1\u0000\u0000\u0000\u001aartifact-auth.statement.v1\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u0016source-review-approval\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u001breviewer-a-PUBLIC-TEST-ONLY\u0000\u0000\u0000\"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\u0000\u0000\u0000\u0015ed25519-public-key.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\u0000\u0000\u0000\u001ccairn.source-review-claim.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\u0000\u0000\u0000\u0002\u0000\u0000\u0000\u001dcairn.source-review-policy.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\u0000\u0000\u0000\u0018mantle-release-source.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\u0000\u0000\u0000\u0018test-only-currentness.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-raw.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-external-sign",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkeyutl",
+        "-sign",
+        "-inkey",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a.PUBLIC-TEST-ONLY.der",
+        "-keyform",
+        "DER",
+        "-rawin",
+        "-in",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a-statement.bin",
+        "-out",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-a-signature.bin"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.5978885,
+      "finished_unix": 1792797022.6011114,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-external-sign.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-external-sign.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-a-assemble",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "assemble",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--request",
+        "reviewer-a-request.json",
+        "--policy",
+        "policy.json",
+        "--signature-hex",
+        "fef36cd26aef57cdc290214c4d454a6d24c680a99f3575c62a95ac035712aacdb87657f9efaae5999088a434466d33d78ecb024b3812e476fe534611eed1df08"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6012845,
+      "finished_unix": 1792797022.6045895,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-assemble.stdout",
+        "blake3": "404e58151a2332e737d94a4b16f61441ce255c6d99147d8de3d1156f71eafeb3",
+        "size_bytes": 3585,
+        "text": "{\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"reviews\": [\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n      \"signature_hex\": \"fef36cd26aef57cdc290214c4d454a6d24c680a99f3575c62a95ac035712aacdb87657f9efaae5999088a434466d33d78ecb024b3812e476fe534611eed1df08\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    }\n  ],\n  \"schema\": \"cairn.source-review-attachment.v1\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-a-assemble.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-signing-request",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-b-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6048717,
+      "finished_unix": 1792797022.6215534,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-signing-request.stdout",
+        "blake3": "40606efcc21d3a35b2c1ff5ade20c77cd1e8ec963202f4b1f13404a37398f3ea",
+        "size_bytes": 4370,
+        "text": "{\n  \"canonical_statement_hex\": \"0000002361727469666163742d617574682e73746174656d656e742d707265696d6167652e76310000001a61727469666163742d617574682e73746174656d656e742e763100000016636169726e2e736f757263652d7265766965772e763100000016736f757263652d7265766965772d617070726f76616c00000016636169726e2e736f757263652d7265766965772e76310000001b72657669657765722d622d5055424c49432d544553542d4f4e4c59000000225055424c49432d544553542d4f4e4c592d4e4f542d5245414c2d415050524f56414c00000015656432353531392d7075626c69632d6b65792e763100000006626c616b653300000040356239343633643433646533663162333661313737653065373765346663303730333135303165326233373431613361623137373962373562663463656135660000001c636169726e2e736f757263652d7265766965772d636c61696d2e763100000006626c616b65330000004061303631643338343362383665623039613333343638383264323233656261653966363364333864343132386336353663323665653039343935366136366235000000020000001d636169726e2e736f757263652d7265766965772d706f6c6963792e763100000006626c616b65330000004039333933353163653537646665353537653164623461373831353164373630613062653763656333303061353930306535393233643563366633643661653133000000186d616e746c652d72656c656173652d736f757263652e763100000006626c616b6533000000403333326661313739623661373864653639393938643464643937653662356237363463663861616536343766343864306630393962653833656133336663663200000018746573742d6f6e6c792d63757272656e746e6573732e763100000006626c616b65330000004035633731633565623139353565663132393437326234316339653662643764363166336535393839383933356134646534383032623637353234393137666634\",\n  \"claim\": {\n    \"claim_root\": {\n      \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n      \"revision\": 1,\n      \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n    },\n    \"disposition\": \"approved\",\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n    \"schema\": \"cairn.source-review-claim.v1\",\n    \"subject\": {\n      \"projection\": \"source\",\n      \"schema\": \"cairn.source-review-subject.v1\",\n      \"snapshot_profile\": \"mantle-release-source\",\n      \"snapshot_profile_version\": 1,\n      \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n      \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n      \"source_tree_blake3\": null\n    }\n  },\n  \"generation\": 1,\n  \"public_key_hex\": \"8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123\",\n  \"schema\": \"cairn.source-review-signing-request.v1\",\n  \"statement\": {\n    \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n    \"key_identity\": {\n      \"algorithm\": \"blake3\",\n      \"digest_hex\": \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n      \"profile\": \"ed25519-public-key.v1\"\n    },\n    \"producer_id\": \"reviewer-b-PUBLIC-TEST-ONLY\",\n    \"schema\": \"artifact-auth.statement.v1\",\n    \"scope\": {\n      \"domain\": \"cairn.source-review.v1\",\n      \"parents\": [\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n          \"profile\": \"cairn.source-review-policy.v1\"\n        },\n        {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"profile\": \"mantle-release-source.v1\"\n        }\n      ],\n      \"profile_id\": \"cairn.source-review.v1\",\n      \"purpose\": \"source-review-approval\",\n      \"subject\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\",\n        \"profile\": \"cairn.source-review-claim.v1\"\n      },\n      \"verifier_context\": {\n        \"algorithm\": \"blake3\",\n        \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n        \"profile\": \"test-only-currentness.v1\"\n      }\n    }\n  },\n  \"statement_blake3\": \"4d09cda300674a6dc68c67b4b265a2d85a6f6739f9355b2e3447389731d76905\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-signing-request.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-raw",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "signing-request",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--claim",
+        "claim.json",
+        "--policy",
+        "policy.json",
+        "--producer",
+        "reviewer-b-PUBLIC-TEST-ONLY",
+        "--key-id",
+        "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "--generation",
+        "1",
+        "--public-key-hex",
+        "8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123",
+        "--raw"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6221373,
+      "finished_unix": 1792797022.6296825,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-raw.stdout",
+        "blake3": "4d09cda300674a6dc68c67b4b265a2d85a6f6739f9355b2e3447389731d76905",
+        "size_bytes": 756,
+        "text": "\u0000\u0000\u0000#artifact-auth.statement-preimage.v1\u0000\u0000\u0000\u001aartifact-auth.statement.v1\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u0016source-review-approval\u0000\u0000\u0000\u0016cairn.source-review.v1\u0000\u0000\u0000\u001breviewer-b-PUBLIC-TEST-ONLY\u0000\u0000\u0000\"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\u0000\u0000\u0000\u0015ed25519-public-key.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\u0000\u0000\u0000\u001ccairn.source-review-claim.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\u0000\u0000\u0000\u0002\u0000\u0000\u0000\u001dcairn.source-review-policy.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\u0000\u0000\u0000\u0018mantle-release-source.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\u0000\u0000\u0000\u0018test-only-currentness.v1\u0000\u0000\u0000\u0006blake3\u0000\u0000\u0000@5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-raw.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-external-sign",
+      "argv": [
+        "/nix/store/gvglnxscmvx4mh9my0cy0xgi0l1z6l9s-openssl-3.5.9-bin/bin/openssl",
+        "pkeyutl",
+        "-sign",
+        "-inkey",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b.PUBLIC-TEST-ONLY.der",
+        "-keyform",
+        "DER",
+        "-rawin",
+        "-in",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b-statement.bin",
+        "-out",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/reviewer-b-signature.bin"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.63217,
+      "finished_unix": 1792797022.6354225,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-external-sign.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-external-sign.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "reviewer-b-assemble",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "assemble",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--request",
+        "reviewer-b-request.json",
+        "--policy",
+        "policy.json",
+        "--signature-hex",
+        "1810dbacc5e70dcd660bda5a153e3a92df391b2937763c01fe55ad78f1c2bafa8884ced243472d45d3085bbd1e0796615ae5979bd60b56122f7a126344619d04",
+        "--include",
+        "row-a.json"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6356645,
+      "finished_unix": 1792797022.6389112,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-assemble.stdout",
+        "blake3": "01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29",
+        "size_bytes": 6698,
+        "text": "{\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"reviews\": [\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123\",\n      \"signature_hex\": \"1810dbacc5e70dcd660bda5a153e3a92df391b2937763c01fe55ad78f1c2bafa8884ced243472d45d3085bbd1e0796615ae5979bd60b56122f7a126344619d04\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-b-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    },\n    {\n      \"claim\": {\n        \"claim_root\": {\n          \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n          \"revision\": 1,\n          \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\"\n        },\n        \"disposition\": \"approved\",\n        \"non_claims\": [\n          \"source-review-does-not-prove-build-correctness\",\n          \"source-review-does-not-prove-deployment-safety\",\n          \"source-review-does-not-prove-release-eligibility\",\n          \"source-review-does-not-prove-reproducibility\",\n          \"source-review-does-not-prove-review-quality\",\n          \"source-review-does-not-prove-source-correctness\",\n          \"source-review-does-not-prove-witness-independence\"\n        ],\n        \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n        \"schema\": \"cairn.source-review-claim.v1\",\n        \"subject\": {\n          \"projection\": \"source\",\n          \"schema\": \"cairn.source-review-subject.v1\",\n          \"snapshot_profile\": \"mantle-release-source\",\n          \"snapshot_profile_version\": 1,\n          \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n          \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n          \"source_tree_blake3\": null\n        }\n      },\n      \"generation\": 1,\n      \"public_key_hex\": \"2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d\",\n      \"signature_hex\": \"fef36cd26aef57cdc290214c4d454a6d24c680a99f3575c62a95ac035712aacdb87657f9efaae5999088a434466d33d78ecb024b3812e476fe534611eed1df08\",\n      \"statement\": {\n        \"key_id\": \"PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL\",\n        \"key_identity\": {\n          \"algorithm\": \"blake3\",\n          \"digest_hex\": \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\",\n          \"profile\": \"ed25519-public-key.v1\"\n        },\n        \"producer_id\": \"reviewer-a-PUBLIC-TEST-ONLY\",\n        \"schema\": \"artifact-auth.statement.v1\",\n        \"scope\": {\n          \"domain\": \"cairn.source-review.v1\",\n          \"parents\": [\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n              \"profile\": \"cairn.source-review-policy.v1\"\n            },\n            {\n              \"algorithm\": \"blake3\",\n              \"digest_hex\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n              \"profile\": \"mantle-release-source.v1\"\n            }\n          ],\n          \"profile_id\": \"cairn.source-review.v1\",\n          \"purpose\": \"source-review-approval\",\n          \"subject\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\",\n            \"profile\": \"cairn.source-review-claim.v1\"\n          },\n          \"verifier_context\": {\n            \"algorithm\": \"blake3\",\n            \"digest_hex\": \"5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4\",\n            \"profile\": \"test-only-currentness.v1\"\n          }\n        }\n      }\n    }\n  ],\n  \"schema\": \"cairn.source-review-attachment.v1\"\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/reviewer-b-assemble.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "cairn-verify",
+      "argv": [
+        "/nix/store/3pcb3kqllcyy38ffwid4s7mw19hh7bcb-cairn-0.1.0/bin/cairn",
+        "source-review",
+        "verify",
+        "--root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--attachment",
+        "attachment.json",
+        "--policy",
+        "policy.json"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6391542,
+      "finished_unix": 1792797022.642429,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/cairn-verify.stdout",
+        "blake3": "260f2ffd6bb4b614ed749523f21563c5a7a5cd63b24756103d82720c019a7789",
+        "size_bytes": 1181,
+        "text": "{\n  \"attachment_artifact_blake3\": \"01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29\",\n  \"report\": {\n    \"approved_key_blake3\": [\n      \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n      \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"\n    ],\n    \"attachment_identity\": \"8af6deee396df3890825aef51bfd5e77bfb5ac928596cf2b0c111a064273f0b5\",\n    \"canonical_statement_blake3\": [\n      \"4d09cda300674a6dc68c67b4b265a2d85a6f6739f9355b2e3447389731d76905\",\n      \"e24f1744612089ecace5bc1cc033b0c5ce17f684a0c62d9e4e402caebbf373d9\"\n    ],\n    \"needs_revision_key_blake3\": [],\n    \"non_claims\": [\n      \"source-review-does-not-prove-build-correctness\",\n      \"source-review-does-not-prove-deployment-safety\",\n      \"source-review-does-not-prove-release-eligibility\",\n      \"source-review-does-not-prove-reproducibility\",\n      \"source-review-does-not-prove-review-quality\",\n      \"source-review-does-not-prove-source-correctness\",\n      \"source-review-does-not-prove-witness-independence\"\n    ],\n    \"outcome\": \"accepted_manual_review\",\n    \"schema\": \"cairn.source-review-verification.v1\",\n    \"verification_role\": \"manual_review\"\n  }\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/cairn-verify.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "valence-verify",
+      "argv": [
+        "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+        "source-review",
+        "verify",
+        "--artifact-root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW",
+        "--attachment",
+        "attachment.json",
+        "--policy",
+        "policy.json",
+        "--output-root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/receipts",
+        "--receipt",
+        "acceptance.json"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6426268,
+      "finished_unix": 1792797022.6499476,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/valence-verify.stdout",
+        "blake3": "b1bfd4d0c62f6d7614eb720827572ec1823c67df4b67cb279c55052b95294503",
+        "size_bytes": 2467,
+        "text": "{\n  \"schema\": \"valence.source-review-acceptance.v1\",\n  \"outcome\": \"accepted_manual_review\",\n  \"verification_role\": \"manual_review\",\n  \"subject\": {\n    \"schema\": \"cairn.source-review-subject.v1\",\n    \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n    \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n    \"source_tree_blake3\": null,\n    \"snapshot_profile\": \"mantle-release-source\",\n    \"snapshot_profile_version\": 1,\n    \"projection\": \"source\"\n  },\n  \"subject_identity\": \"c02aada22e82033154050fe0f331202fb4daa9d6a787c9874a385258bd41926f\",\n  \"claim_root\": {\n    \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n    \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\",\n    \"revision\": 1\n  },\n  \"claim_root_identity\": \"fde2263c44c0da1d8dbfb86d2da4ab3d05b6882dec8e6a4f2611fd779db96e94\",\n  \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n  \"verification_policy_identity\": \"f91a7fbec07f9886eab99cb7b7ec43d0a5c66446626fa8187a93139f47121921\",\n  \"authentication_policy_identity\": \"b2ed1f850f4b2f4ad18e51abcd9190d4b7401e7c51ba31769b29324f4d835ef1\",\n  \"approved_key_blake3\": [\n    \"5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f\",\n    \"b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3\"\n  ],\n  \"signed_statement_blake3\": [\n    \"4d09cda300674a6dc68c67b4b265a2d85a6f6739f9355b2e3447389731d76905\",\n    \"e24f1744612089ecace5bc1cc033b0c5ce17f684a0c62d9e4e402caebbf373d9\"\n  ],\n  \"claim_identity\": [\n    \"a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5\"\n  ],\n  \"attachment_identity\": \"8af6deee396df3890825aef51bfd5e77bfb5ac928596cf2b0c111a064273f0b5\",\n  \"attachment_artifact_blake3\": \"01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29\",\n  \"policy_artifact_blake3\": \"afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd\",\n  \"receipt_blake3\": \"b596739087901b7a888f5de491e2c9b7eef254b4ceda0efcdf0d3d7cb0ac8efb\",\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"issues\": []\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/valence-verify.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "tiny-output-run",
+      "argv": [
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/PUBLIC-TEST-ONLY-output.sh"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+      "exit": 0,
+      "expected_exit": 0,
+      "started_unix": 1792797022.6526613,
+      "finished_unix": 1792797022.6563444,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-output-run.stdout",
+        "blake3": "319e750f01bb90c9801bdbe80978618980475cc768b7193936a6e2152a4fbf1f",
+        "size_bytes": 64,
+        "text": "PUBLIC TEST ONLY actual tiny output; no build correctness claim\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-output-run.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    },
+    {
+      "label": "release-create-missing-genuine-proof",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "--json",
+        "release",
+        "create",
+        "--release-id",
+        "PUBLIC-TEST-ONLY-source-review-consumer",
+        "--bundle-dir",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/bundle-with-review",
+        "--binary",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/PUBLIC-TEST-ONLY-output.sh",
+        "--proof-bundle",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/UNAVAILABLE-GENUINE-SELF-HOSTING-PROOF",
+        "--external-evidence",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/attachment.json",
+        "--external-evidence-role",
+        "cairn-source-review-attachment",
+        "--external-evidence-schema",
+        "cairn.source-review-attachment.v1",
+        "--external-evidence-claim-scope",
+        "source-review-identity-linkage-only",
+        "--external-evidence",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/policy.json",
+        "--external-evidence-role",
+        "cairn-source-review-policy",
+        "--external-evidence-schema",
+        "cairn.source-review-verification-policy.v1",
+        "--external-evidence-claim-scope",
+        "source-review-identity-linkage-only",
+        "--external-evidence",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/receipts/acceptance.json",
+        "--external-evidence-role",
+        "valence-source-review-acceptance",
+        "--external-evidence-schema",
+        "valence.source-review-acceptance.v1",
+        "--external-evidence-claim-scope",
+        "source-review-identity-linkage-only",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-build-correctness",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-deployment-safety",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-release-eligibility",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-reproducibility",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-review-quality",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-source-correctness",
+        "--external-evidence-non-claim",
+        "source-review-does-not-prove-witness-independence"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/tiny-source",
+      "exit": 3,
+      "expected_exit": 1,
+      "started_unix": 1792797022.6565874,
+      "finished_unix": 1792797022.663916,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-create-missing-genuine-proof.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/release-create-missing-genuine-proof.stderr",
+        "blake3": "cb3a574519675081f789f4708273b3ee1d357d74376268ff595693b8e31cd6e5",
+        "size_bytes": 200,
+        "text": "{\"error\":\"proof bundle directory does not exist: /home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/UNAVAILABLE-GENUINE-SELF-HOSTING-PROOF\",\"code\":3,\"kind\":\"internal\"}\n"
+      }
+    },
+    {
+      "label": "release-verify-incomplete-required-policy",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "--json",
+        "release",
+        "verify",
+        "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/PUBLIC-TEST-ONLY-INCOMPLETE-NOT-A-RELEASE",
+        "--source-review-policy",
+        "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/TEST-ONLY-NOT-REAL-REVIEW/policy.json",
+        "--require-source-review"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201",
+      "exit": 3,
+      "expected_exit": 3,
+      "started_unix": 1792797125.8569455,
+      "finished_unix": 1792797125.864485,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/release-verify-incomplete-required-policy.stdout",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/release-verify-incomplete-required-policy.stderr",
+        "blake3": "7928bef9f3a84c71359dd64d4e4ed7e50ded1317d68dd09a8943b2cb0e13197c",
+        "size_bytes": 248,
+        "text": "{\"error\":\"parsing /home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/PUBLIC-TEST-ONLY-INCOMPLETE-NOT-A-RELEASE/manifest.json: missing field `claim_scope` at line 60 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+      }
+    },
+    {
+      "label": "valence-tampered-signature",
+      "argv": [
+        "/nix/store/ql5djfqm579pi0vzhxpj9yamqypnkg0k-valence-0.1.0/bin/valence",
+        "source-review",
+        "verify",
+        "--artifact-root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/TEST-ONLY-tampered-review",
+        "--attachment",
+        "attachment.json",
+        "--policy",
+        "policy.json",
+        "--output-root",
+        "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/negative-receipts",
+        "--receipt",
+        "tampered-signature.json"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201",
+      "exit": 1,
+      "expected_exit": 1,
+      "started_unix": 1792797125.8649995,
+      "finished_unix": 1792797125.8727643,
+      "stdout": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/valence-tampered-signature.stdout",
+        "blake3": "b7c41786a16b2e142552de7e6c8ce3ec93592959de01d7b5796b82a7f06bd731",
+        "size_bytes": 2246,
+        "text": "{\n  \"schema\": \"valence.source-review-acceptance.v1\",\n  \"outcome\": \"invalid\",\n  \"verification_role\": \"manual_review\",\n  \"subject\": {\n    \"schema\": \"cairn.source-review-subject.v1\",\n    \"source_archive_blake3\": \"332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2\",\n    \"source_revision\": \"PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION\",\n    \"source_tree_blake3\": null,\n    \"snapshot_profile\": \"mantle-release-source\",\n    \"snapshot_profile_version\": 1,\n    \"projection\": \"source\"\n  },\n  \"subject_identity\": \"c02aada22e82033154050fe0f331202fb4daa9d6a787c9874a385258bd41926f\",\n  \"claim_root\": {\n    \"claim_identity\": \"c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092\",\n    \"subject_root\": \"a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9\",\n    \"revision\": 1\n  },\n  \"claim_root_identity\": \"fde2263c44c0da1d8dbfb86d2da4ab3d05b6882dec8e6a4f2611fd779db96e94\",\n  \"review_policy_blake3\": \"939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13\",\n  \"verification_policy_identity\": \"f91a7fbec07f9886eab99cb7b7ec43d0a5c66446626fa8187a93139f47121921\",\n  \"authentication_policy_identity\": \"b2ed1f850f4b2f4ad18e51abcd9190d4b7401e7c51ba31769b29324f4d835ef1\",\n  \"approved_key_blake3\": [],\n  \"signed_statement_blake3\": [],\n  \"claim_identity\": [],\n  \"attachment_identity\": \"16a1c4e50eb8730c1d97a1db8a1a887246e04b86e8f918da03a53eaf45e0cdac\",\n  \"attachment_artifact_blake3\": \"a422b9831a0aea073ebe5e452328e44f2203fa5f32ebae76da1d97ee575a416b\",\n  \"policy_artifact_blake3\": \"afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd\",\n  \"receipt_blake3\": \"7977799f797249e42326ef3f19c349e34b829e3a46ad0f8ecf208218f7752222\",\n  \"non_claims\": [\n    \"source-review-does-not-prove-build-correctness\",\n    \"source-review-does-not-prove-deployment-safety\",\n    \"source-review-does-not-prove-release-eligibility\",\n    \"source-review-does-not-prove-reproducibility\",\n    \"source-review-does-not-prove-review-quality\",\n    \"source-review-does-not-prove-source-correctness\",\n    \"source-review-does-not-prove-witness-independence\"\n  ],\n  \"issues\": [\n    \"auth.cryptographic_failure_present\",\n    \"auth.distinct_key_threshold_unsatisfied\",\n    \"auth.signature_unverified\",\n    \"review_authentication_failed\"\n  ]\n}\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/valence-tampered-signature.stderr",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "size_bytes": 0,
+        "text": ""
+      }
+    }
+  ],
+  "non_claims": [
+    "source-review-does-not-prove-build-correctness",
+    "source-review-does-not-prove-deployment-safety",
+    "source-review-does-not-prove-release-eligibility",
+    "source-review-does-not-prove-reproducibility",
+    "source-review-does-not-prove-review-quality",
+    "source-review-does-not-prove-source-correctness",
+    "source-review-does-not-prove-witness-independence"
+  ],
+  "non_claims_additional": [
+    "No successful Mantle release create or verify.",
+    "No actual Mantle source-review contributor acceptance: ordinary manifest/proof validation precedes that contributor.",
+    "No full V5, source-built cold-v2 proof, reviewer authority, genuine human approval, or actual release eligibility.",
+    "Two PUBLIC TEST-ONLY review keys are separate from zero release signers and zero build witnesses."
+  ],
+  "blocked_acceptance_cases": [
+    "selected required-policy success",
+    "unselected recorded-only behavior",
+    "optional absence",
+    "Mantle required missing/invalid policy or tampered-byte contributor rejection"
+  ],
+  "prerequisite": {
+    "missing": "Genuine retained mantle-self-hosting-proof-v2 full proof bundle and matching stage2 binary",
+    "observed_release_create_exit": 3,
+    "observed_diagnostic": "{\"error\":\"proof bundle directory does not exist: /home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125/UNAVAILABLE-GENUINE-SELF-HOSTING-PROOF\",\"code\":3,\"kind\":\"internal\"}",
+    "retained_locations_checked": [
+      "docs/operator-proof-guide.md:75-169",
+      "target/self-hosting-proof (absent)",
+      "target root directory; no self-hosting proof root",
+      "named self/proof scratch roots and /tmp roots; no full Mantle proof found"
+    ],
+    "code_barrier": [
+      "src/release_cmd.rs:1269 verifies ordinary bundle before source-review evaluation at :1272",
+      "src/release_evidence.rs:1075-1076 measures artifacts and verifies proof linkage first",
+      "crates/crunch-release-core/src/manifest.rs:2716-2727 requires all three fixed-point booleans true"
+    ],
+    "incomplete_verify_diagnostic": "{\"error\":\"parsing /home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201/PUBLIC-TEST-ONLY-INCOMPLETE-NOT-A-RELEASE/manifest.json: missing field `claim_scope` at line 60 column 1\",\"code\":3,\"kind\":\"internal\"}"
+  },
+  "harness_observation": {
+    "preserved_failed_attempt": "/home/brittonr/scratch/mantle-release-review-consumer-20261023-1792796950003385125",
+    "error": "Expected exit 1 for missing proof but actual public CLI correctly emitted exit 3; no product bug and no unchanged-failure retry.",
+    "fresh_continuation": "/home/brittonr/scratch/mantle-release-review-consumer-continuation-20261023-1792797069470280201"
+  }
+}

@@ -1,10 +1,26 @@
 # approved no-std core runtime dependency closure
+# Source-review's pure verifier is authorized by
+# .cairn/changes/bind-source-review-evidence-to-releases/design.md (independent
+# cryptography; functional core) and docs/artifact-auth-adoption.md (exact
+# onix-artifact 5f3962d7471d1547e044f57daeda72f56621fd52 two-package consumer set).
+# crunch-release-core disables both authentication packages' default features;
+# only artifact-auth-core/serde is enabled. artifact-auth-ed25519 disables
+# ed25519-dalek defaults, retaining curve25519-dalek/digest, ed25519/signature,
+# sha2 -> digest/core-api -> block-buffer + crypto-common -> generic-array +
+# typenum, and subtle. SHA-512 here is intrinsic to Ed25519, not Mantle identity.
+# This is the exact wasm32 normal/no-proc-macro closure, not host/build/dev
+# dependencies: std, rand_core/getrandom, key generation and host authority are
+# not admitted. Feature/std checks and stale/unexpected-entry failures still apply.
 arrayref
 arrayvec
+artifact-auth-core
+artifact-auth-ed25519
 blake3
+block-buffer
 bounded-tree-core
 cfg-if
 constant_time_eq
+crypto-common
 crunch-attestation-core
 crunch-cmake-core
 crunch-delta-core
@@ -24,10 +40,19 @@ crunch-spacewasm-core
 crunch-test-core
 crunch-verification-bridge-core
 crunch-zephyr-core
+curve25519-dalek
 data-encoding
+digest
+ed25519
+ed25519-dalek
+generic-array
 itoa
 memchr
 serde
 serde_core
 serde_json
+sha2
+signature
+subtle
+typenum
 zmij

@@ -1,0 +1,1390 @@
+{
+  "schema": "mantle-cairn-bounded-runtime-reconciliation-v1",
+  "observed_date": "2026-10-23",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-completed-bounded-local-runtime",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject": {
+    "cohort": "wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "boundary": "Immutable wait-request-repaired cohort used for the existing service and remote runtime observations. This is NOT the not-yet-pinned exact-exec cohort, current evolving worktree, final gate subject, or release identity.",
+    "ready_executable_pins": {
+      "schema": "mantle-runtime-executable-pins-v1",
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+      "roles": {
+        "mantle": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+        },
+        "wrapper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+          "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+        },
+        "producer": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+          "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+        },
+        "helper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+          "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+        },
+        "replay": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+          "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+        }
+      },
+      "policy": "Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution."
+    },
+    "service_additional_executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "rust_readiness_helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30",
+    "source_identity_limit": "Executable BLAKE3 and selected input bytes are retained; a complete atomic source/build provenance is not asserted."
+  },
+  "scope_of_this_record": "Only already completed result files and their raw captures were inspected. No service, runtime, test, build, formatter, linter or gate was launched by this evidence worker. Running Pueue tasks 87/88 and their outputs were not inspected. No claim about their result is made.",
+  "historical_receipts": "Earlier failed receipts and current-status snapshots are immutable observations. This additive record supplements them, does not reinterpret a failed aggregate as success, and does not authorize task completion.",
+  "non_claims": [
+    "No full acceptance, review signature, provider authority, bootstrap/release readiness, spec sync or archive claim.",
+    "Local bearer-authenticated stdio and signed outputs are NOT signed UCAN requests, authenticated caveat-chain receiver proof, Nix/API interoperability or entire surface parity.",
+    "Manual restart is not a supervising restart loop. Coordination state is not build evidence.",
+    "Executable local actions not yet run remain local work, not external blockers."
+  ],
+  "change": "unify-long-lived-service-readiness",
+  "maintenance_owner": "Mantle service-readiness/coordinator/Rust-cache maintainers; Main owns further local controls and integration",
+  "after_runtime": {
+    "schema": "mantle-service-readiness-runtime-v1",
+    "status": "passed",
+    "classification": "bounded-local-runtime-observation",
+    "commands": [
+      {
+        "label": "coord-first",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/state",
+          "remote",
+          "live",
+          "serve",
+          "--socket",
+          "/tmp/mantle-readiness-20261023-v8/live.sock"
+        ],
+        "pid": 207323,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/coord-first.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/coord-first.stderr",
+        "started_unix": 1792796351.0528708,
+        "exit_code": 0,
+        "finished_unix": 1792796354.102124
+      },
+      {
+        "label": "doctor-baseline",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/state",
+          "--json",
+          "doctor"
+        ],
+        "started_unix": 1792796351.3766017,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/doctor-baseline.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/doctor-baseline.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796351.385643
+      },
+      {
+        "label": "doctor-live",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/state",
+          "--json",
+          "doctor",
+          "--readiness-socket",
+          "/tmp/mantle-readiness-20261023-v8/live.sock"
+        ],
+        "started_unix": 1792796351.385888,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/doctor-live.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/doctor-live.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796351.480302
+      },
+      {
+        "label": "cache-service",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/cache-store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/cache-state",
+          "rust-cache",
+          "serve",
+          "--policy",
+          "/tmp/mantle-readiness-20261023-v8/daemon-policy.json",
+          "--receipt-dir",
+          "/tmp/mantle-readiness-20261023-v8/daemon-receipts"
+        ],
+        "pid": 207459,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/cache-service.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/cache-service.stderr",
+        "started_unix": 1792796351.4828067,
+        "exit_code": 0,
+        "finished_unix": 1792796353.9160213
+      },
+      {
+        "label": "real-cache-compile",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver",
+          "--policy",
+          "/tmp/mantle-readiness-20261023-v8/driver-policy.json",
+          "--",
+          "-x",
+          "c",
+          "-c",
+          "/tmp/mantle-readiness-20261023-v8/source/a.c",
+          "-o",
+          "/tmp/mantle-readiness-20261023-v8/objects/a.o",
+          "-O2",
+          "-g0",
+          "-nostdinc"
+        ],
+        "started_unix": 1792796351.677794,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/real-cache-compile.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/real-cache-compile.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796351.96893
+      },
+      {
+        "label": "shell-rustc-identity",
+        "argv": [
+          "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+          "-vV"
+        ],
+        "started_unix": 1792796351.9784214,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/shell-rustc-identity.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/shell-rustc-identity.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.0011992
+      },
+      {
+        "label": "shell-rustc-closure",
+        "argv": [
+          "nix-store",
+          "--query",
+          "--requisites",
+          "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08"
+        ],
+        "started_unix": 1792796352.001499,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/shell-rustc-closure.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/shell-rustc-closure.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.1631923
+      },
+      {
+        "label": "rustc-identity",
+        "argv": [
+          "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+          "-vV"
+        ],
+        "started_unix": 1792796352.1650567,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/rustc-identity.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/rustc-identity.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.1816561
+      },
+      {
+        "label": "rustc-program-headers",
+        "argv": [
+          "readelf",
+          "--program-headers",
+          "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+        ],
+        "started_unix": 1792796352.1820066,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/rustc-program-headers.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/rustc-program-headers.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.186016
+      },
+      {
+        "label": "rustc-elf-runtime",
+        "argv": [
+          "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2",
+          "--list",
+          "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+        ],
+        "started_unix": 1792796352.1866105,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/rustc-elf-runtime.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/rustc-elf-runtime.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.189423
+      },
+      {
+        "label": "runtime-hash-000",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "hash",
+          "directory",
+          "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2"
+        ],
+        "started_unix": 1792796352.2196734,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/runtime-hash-000.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/runtime-hash-000.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.2301424
+      },
+      {
+        "label": "runtime-hash-001",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "hash",
+          "directory",
+          "/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu"
+        ],
+        "started_unix": 1792796352.2306964,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/runtime-hash-001.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/runtime-hash-001.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.3799057
+      },
+      {
+        "label": "runtime-hash-002",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "hash",
+          "directory",
+          "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu"
+        ],
+        "started_unix": 1792796352.3802285,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/runtime-hash-002.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/runtime-hash-002.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.678022
+      },
+      {
+        "label": "runtime-hash-003",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "hash",
+          "directory",
+          "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc"
+        ],
+        "started_unix": 1792796352.6783404,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/runtime-hash-003.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/runtime-hash-003.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.681241
+      },
+      {
+        "label": "runtime-hash-004",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "hash",
+          "directory",
+          "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51"
+        ],
+        "started_unix": 1792796352.6814995,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/runtime-hash-004.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/runtime-hash-004.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.732883
+      },
+      {
+        "label": "seal-rust-request",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "prepare",
+          "/tmp/mantle-readiness-20261023-v8/rust-preparation.json"
+        ],
+        "started_unix": 1792796352.751359,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/seal-rust-request.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/seal-rust-request.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796352.7572532
+      },
+      {
+        "label": "rust-cache-cold",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "request",
+          "/tmp/mantle-readiness-20261023-v8/cache.sock",
+          "/tmp/mantle-readiness-20261023-v8/rust-request.json"
+        ],
+        "started_unix": 1792796352.7577727,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/rust-cache-cold.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/rust-cache-cold.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796353.4211202
+      },
+      {
+        "label": "rust-cache-warm",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client",
+          "request",
+          "/tmp/mantle-readiness-20261023-v8/cache.sock",
+          "/tmp/mantle-readiness-20261023-v8/rust-request.json"
+        ],
+        "started_unix": 1792796353.429693,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/rust-cache-warm.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/rust-cache-warm.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792796353.7480981
+      },
+      {
+        "label": "doctor-daemon-absent",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/state",
+          "--json",
+          "doctor",
+          "--readiness-socket",
+          "/tmp/mantle-readiness-20261023-v8/live.sock"
+        ],
+        "started_unix": 1792796354.1027997,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/doctor-daemon-absent.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/doctor-daemon-absent.stderr",
+        "exit_code": 3,
+        "finished_unix": 1792796354.113488
+      },
+      {
+        "label": "coord-second",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-20261023-v8/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-20261023-v8/state",
+          "remote",
+          "live",
+          "serve",
+          "--socket",
+          "/tmp/mantle-readiness-20261023-v8/live.sock"
+        ],
+        "pid": 208198,
+        "stdout": "/tmp/mantle-readiness-20261023-v8/coord-second.stdout",
+        "stderr": "/tmp/mantle-readiness-20261023-v8/coord-second.stderr",
+        "started_unix": 1792796354.1149063,
+        "exit_code": 0,
+        "finished_unix": 1792796354.5398462
+      }
+    ],
+    "acceptance_claimed": false,
+    "non_claims": [
+      "Readiness is coordination state, never signed build or release evidence.",
+      "Manual service restarts are not a supervising restart loop.",
+      "No remote serve-binding or source-built proof-stage execution is claimed."
+    ],
+    "executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "subscription_snapshot": [
+      {
+        "op": "snapshot-start",
+        "schema": "mantle-live-build-protocol-v1"
+      },
+      {
+        "op": "snapshot-end",
+        "schema": "mantle-live-build-protocol-v1"
+      }
+    ],
+    "doctor_stdout_and_status_unchanged": true,
+    "doctor_baseline_exit_code": 0,
+    "doctor_readiness_stderr": {
+      "schema": "mantle-service-readiness-v1",
+      "classification": "coordination-state",
+      "evidence_eligible": false,
+      "components": [
+        {
+          "id": "live-daemon-207323",
+          "generation": 1,
+          "states": [
+            "started",
+            "ready"
+          ],
+          "restart_policy": "never",
+          "restart_action": null,
+          "ready": true,
+          "blocked_by": []
+        }
+      ]
+    },
+    "cc_response_not_rust_readiness": true,
+    "toolchain_selection": {
+      "compiler": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+      "sysroot": "/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+      "source": "Exact concrete components of the admitted shell; shell symlink join is not directory-admissible.",
+      "compiler_identity_equal_to_shell": true,
+      "runtime_scope": "Exact stock ELF loader dependencies plus host std; metadata-only Rust request invokes no native linker."
+    },
+    "rust_requests": {
+      "cold": {
+        "artifact_commit_complete": true,
+        "bypass_class": null,
+        "compiler_status": 0,
+        "disposition": "compiled",
+        "reason_codes": [
+          "compiled"
+        ],
+        "receipt_ref": "mantle-rustc-receipt://blake3/063b69d55e8e78ee214cc2fc70dc74ee5a96a67276c3f4906bfab6f8e667ddc0",
+        "request_ref": "mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4",
+        "schema": "mantle-rustc-wrapper-response-v1",
+        "stderr": [],
+        "stdout": []
+      },
+      "warm": {
+        "artifact_commit_complete": true,
+        "bypass_class": null,
+        "compiler_status": 0,
+        "disposition": "local-hit",
+        "reason_codes": [
+          "local-cache-hit"
+        ],
+        "receipt_ref": "mantle-rustc-receipt://blake3/ecdca38df902b8929a82de5472f30eec8c54937cb6fe416460003a989b6fb701",
+        "request_ref": "mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4",
+        "schema": "mantle-rustc-wrapper-response-v1",
+        "stderr": [],
+        "stdout": []
+      },
+      "metadata_blake3": "7fb66394bd229728029d3db72d053e72a7e8f4fc72b2ea147ccc2de2d3f6e633",
+      "declared_inputs": [
+        {
+          "role": "compiler",
+          "path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+          "kind": "file",
+          "digest_blake3": "c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8"
+        },
+        {
+          "role": "source",
+          "path": "/tmp/mantle-readiness-20261023-v8/source/ready.rs",
+          "kind": "file",
+          "digest_blake3": "a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd"
+        },
+        {
+          "role": "closure-000",
+          "path": "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2",
+          "kind": "directory",
+          "digest_blake3": "988a1e79f587829fc0b0ecdcf630964c17d124d20c6931c2b0e4b4b3119916e2"
+        },
+        {
+          "role": "sysroot",
+          "path": "/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+          "kind": "directory",
+          "digest_blake3": "f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785"
+        },
+        {
+          "role": "closure-002",
+          "path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+          "kind": "directory",
+          "digest_blake3": "cac0570c725b87a33ca12412d72f8bd33eea259c5cf13c76ec4c5c86c3eaa749"
+        },
+        {
+          "role": "closure-003",
+          "path": "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc",
+          "kind": "directory",
+          "digest_blake3": "c52f87841eb34efb0ec227b2dcbfa24963562d779da0c40903eded4a79af83b9"
+        },
+        {
+          "role": "closure-004",
+          "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51",
+          "kind": "directory",
+          "digest_blake3": "3bce9e71b1a744c381799223a2aca4d5794f11a46f4ee60991dda692a64be3d1"
+        }
+      ],
+      "sealed_request_blake3": "58d862f9132114114622919016e961bfc461b8d1618fec44753259773d41537e",
+      "helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30"
+    },
+    "cache_started_without_ready": {
+      "blocked_by": [],
+      "generation": 1,
+      "id": "rust-cache-207459-1792796351",
+      "ready": false,
+      "restart_action": null,
+      "restart_policy": "never",
+      "states": [
+        "started"
+      ]
+    },
+    "cache_after_real_request": {
+      "blocked_by": [],
+      "generation": 1,
+      "id": "rust-cache-207459-1792796351",
+      "ready": true,
+      "restart_action": null,
+      "restart_policy": "never",
+      "states": [
+        "started",
+        "ready"
+      ]
+    },
+    "real_object_blake3": "13dc01bf9c36c361672257110c9194dfdeded2e83dca43d773942a4ce8c69239",
+    "real_cache_receipt": {
+      "cache": {
+        "bypass": null,
+        "disposition": "compiled",
+        "key": null,
+        "probe": true,
+        "schema": "mantle-cc-cache-receipt-v1"
+      },
+      "cache_disposition": "cache-miss",
+      "claim_class": "machine-local-performance-only",
+      "compiler_status": 0,
+      "key": null,
+      "proof_evidence": false,
+      "schema": "mantle-cc-driver-receipt-v1",
+      "slot_disposition": "disabled"
+    },
+    "fresh_manual_restart": {
+      "classification": "coordination-state",
+      "components": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-208198",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ],
+      "evidence_eligible": false,
+      "schema": "mantle-service-readiness-v1"
+    },
+    "executable_invariance": true
+  },
+  "human_after_runtime": {
+    "schema": "mantle-human-readiness-smoke-v1",
+    "acceptance_claimed": false,
+    "non_claims": [
+      "Readiness is coordination state, not build or release evidence."
+    ],
+    "commands": [
+      {
+        "label": "human-baseline",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-human-20261023-v2/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-human-20261023-v2/state",
+          "doctor"
+        ],
+        "exit_code": 0,
+        "stdout": "/tmp/mantle-readiness-human-20261023-v2/human-baseline.stdout",
+        "stderr": "/tmp/mantle-readiness-human-20261023-v2/human-baseline.stderr"
+      },
+      {
+        "label": "human-with-readiness",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--store",
+          "/tmp/mantle-readiness-human-20261023-v2/store",
+          "--state-dir",
+          "/tmp/mantle-readiness-human-20261023-v2/state",
+          "doctor",
+          "--readiness-socket",
+          "/tmp/mantle-readiness-human-20261023-v2/live.sock"
+        ],
+        "exit_code": 0,
+        "stdout": "/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stdout",
+        "stderr": "/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stderr"
+      }
+    ],
+    "readiness": {
+      "schema": "mantle-service-readiness-v1",
+      "classification": "coordination-state",
+      "evidence_eligible": false,
+      "components": [
+        {
+          "id": "live-daemon-208768",
+          "generation": 1,
+          "states": [
+            "started",
+            "ready"
+          ],
+          "restart_policy": "never",
+          "restart_action": null,
+          "ready": true,
+          "blocked_by": []
+        }
+      ]
+    },
+    "human_stdout_and_exit_unchanged": true,
+    "coordinator": {
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "--store",
+        "/tmp/mantle-readiness-human-20261023-v2/store",
+        "--state-dir",
+        "/tmp/mantle-readiness-human-20261023-v2/state",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mantle-readiness-human-20261023-v2/live.sock"
+      ],
+      "pid": 208768,
+      "exit_code": 0
+    },
+    "executable_invariance": true,
+    "mantle_blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+    "status": "passed"
+  },
+  "retained_raw_streams": [
+    {
+      "scenario": "readiness",
+      "command": "coord-first",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-first.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "coord-first",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-first.stderr",
+      "byte_count": 75,
+      "blake3": "1cfca90bc1f0f90e7fe9a4a4295dcecbe49e522b973224a057100c7ec654d906",
+      "text": "live build daemon listening on /tmp/mantle-readiness-20261023-v8/live.sock\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-baseline",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-baseline.stdout",
+      "byte_count": 920,
+      "blake3": "bda5340c3129ec57d50ec15088e04172fbf1bcf3be55e5bd87800f16eaa11e1c",
+      "text": "{\n  \"schema\": \"crunch-doctor-report-v1\",\n  \"command\": \"doctor\",\n  \"profile\": \"build\",\n  \"ok\": true,\n  \"checks\": [\n    {\n      \"id\": \"bwrap\",\n      \"status\": \"ok\",\n      \"summary\": \"found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\"\n    },\n    {\n      \"id\": \"sandbox-shell\",\n      \"status\": \"ok\",\n      \"summary\": \"using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\"\n    },\n    {\n      \"id\": \"fusermount3\",\n      \"status\": \"ok\",\n      \"summary\": \"found /run/wrappers/bin/fusermount3\"\n    },\n    {\n      \"id\": \"state-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"state directory is writable via /tmp/mantle-readiness-20261023-v8\"\n    },\n    {\n      \"id\": \"store-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"store directory is writable via /tmp/mantle-readiness-20261023-v8/store\"\n    }\n  ]\n}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-baseline",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-baseline.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-live",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-live.stdout",
+      "byte_count": 920,
+      "blake3": "bda5340c3129ec57d50ec15088e04172fbf1bcf3be55e5bd87800f16eaa11e1c",
+      "text": "{\n  \"schema\": \"crunch-doctor-report-v1\",\n  \"command\": \"doctor\",\n  \"profile\": \"build\",\n  \"ok\": true,\n  \"checks\": [\n    {\n      \"id\": \"bwrap\",\n      \"status\": \"ok\",\n      \"summary\": \"found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\"\n    },\n    {\n      \"id\": \"sandbox-shell\",\n      \"status\": \"ok\",\n      \"summary\": \"using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\"\n    },\n    {\n      \"id\": \"fusermount3\",\n      \"status\": \"ok\",\n      \"summary\": \"found /run/wrappers/bin/fusermount3\"\n    },\n    {\n      \"id\": \"state-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"state directory is writable via /tmp/mantle-readiness-20261023-v8\"\n    },\n    {\n      \"id\": \"store-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"store directory is writable via /tmp/mantle-readiness-20261023-v8/store\"\n    }\n  ]\n}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-live",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-live.stderr",
+      "byte_count": 268,
+      "blake3": "fdf57a4d06032a4099405bc5c854a01702eeb9b52e579797449c3800b15c6f55",
+      "text": "{\"schema\":\"mantle-service-readiness-v1\",\"classification\":\"coordination-state\",\"evidence_eligible\":false,\"components\":[{\"id\":\"live-daemon-207323\",\"generation\":1,\"states\":[\"started\",\"ready\"],\"restart_policy\":\"never\",\"restart_action\":null,\"ready\":true,\"blocked_by\":[]}]}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "cache-service",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cache-service.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "cache-service",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cache-service.stderr",
+      "byte_count": 488,
+      "blake3": "3f323cb3180b17324c878b0fea885f27bb75debfdc506fa3a3f2968ea7401f14",
+      "text": "2026-10-23T22:59:11.494077Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 9, path: \\\"/tmp/mantle-readiness-20261023-v8/cache-state/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n2026-10-23T22:59:11.494754Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/tmp/mantle-readiness-20261023-v8/cache-state/pathinfo.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "real-cache-compile",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/real-cache-compile.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "real-cache-compile",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/real-cache-compile.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "shell-rustc-identity",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/shell-rustc-identity.stdout",
+      "byte_count": 212,
+      "blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+      "text": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "shell-rustc-identity",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/shell-rustc-identity.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "shell-rustc-closure",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/shell-rustc-closure.stdout",
+      "byte_count": 3244,
+      "blake3": "2f6482f829c21483d771831e9bf28584407172b3046efe49c24f10bf9816e448",
+      "text": "/nix/store/p7jg95rzvfalb95k3mskk0jqxc9d724n-libunistring-1.4.1\n/nix/store/1ga782ml07vy0h503ac4cin0h8d7q6yh-libidn2-2.3.8\n/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc\n/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/83av41qa0d9dmvvmww70n9swfhzkzd3j-rust-std-1.96.0-nightly-2026-04-08-aarch64-apple-darwin\n/nix/store/8wcihj7188p5fjbcwdlzsxq0dxd68qmy-rust-std-1.96.0-nightly-2026-04-08-wasm32-wasip2\n/nix/store/b72g81xim3r1ikmxs5wfn8nc0a8nplcp-rust-std-1.96.0-nightly-2026-04-08-wasm32-unknown-unknown\n/nix/store/blbq8ip2kdj67fyjzbbhdg6q3ghp8ac9-rust-docs-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/brai493169i3dadrb2ymr6x8wibjbdfm-rust-std-1.96.0-nightly-2026-04-08-x86_64-apple-darwin\n/nix/store/vpxblivamvic1p5r5zny934jvg33m50r-xgcc-15.2.0-libgcc\n/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51\n/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2\n/nix/store/68kslg4wrhdxz24saw62fzyqi1kjgcfs-expand-response-params\n/nix/store/p2yk6q3bhcz1d0wlmk907ysj4l95ak7y-attr-2.5.2\n/nix/store/4sabfgpxkbv6w3mvk0wil50vdi37m9r8-acl-2.3.2\n/nix/store/ab3753m6i7isgvzphlar0a8xb84gl96i-gcc-15.2.0-lib\n/nix/store/dlr3cc27i1mjkqcm9jlp5bjmb0n57q01-gmp-with-cxx-6.3.0\n/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10\n/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9\n/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin\n/nix/store/pg99pd2gbwqs9y6z0q2hmx46m3hw9bns-linux-headers-6.18.7\n/nix/store/h0ip0h6qp7kc2wm7mwjaglkxxbzmjri4-glibc-2.42-51-dev\n/nix/store/ygdgqjzw03k8d05zq3pigzf67b62j7vs-pcre2-10.46\n/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12\n/nix/store/cynwj0s5x0c84hyi879isn8pdpf1iihm-gmp-6.3.0\n/nix/store/scabrfc47i7h73kfp4yn7vkw3qkxv8gk-isl-0.20\n/nix/store/sjlfsbd2lk4a1iva4vjjgvp4r1hga1xg-mpfr-4.2.2\n/nix/store/zfv59aslcf318vjkjs8zw855cdjcjdvq-libmpc-1.3.1\n/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0\n/nix/store/jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib\n/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44\n/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44\n/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0\n/nix/store/jmkhifs8rwv7iwp29zrjprvrfw8a6973-rust-src-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/k34nnmlf0hnvdyvmf6aqh5j4m9zzh0nc-rustfmt-preview-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/30nc3ay283h843z5b3icirqj7brfcr4j-libselinux-3.10\n/nix/store/8zgy79sw0zjwfcfp78p883hkkdw0pdzs-libffi-3.5.2\n/nix/store/safgshpdshpq8v8ww406szddpfws3vml-util-linux-minimal-2.41.3-lib\n/nix/store/d864rlg855kf2hnnnfdzcx54grp8n10x-glib-2.86.3\n/nix/store/f7jrpi16pis7lwagiamfmz1f88r3s455-libgpg-error-1.58\n/nix/store/vwyj2mn39zx3kpq15g5vj11jqrsicw64-libgcrypt-1.11.2-lib\n/nix/store/rv8pqqhcgrbfbn8bbma5axj7k2x7kfqf-libsecret-0.21.7\n/nix/store/xvlxga16lg6kyc0yfav8kz488mnnj5vp-clippy-preview-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\n/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "shell-rustc-closure",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/shell-rustc-closure.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-identity",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-identity.stdout",
+      "byte_count": 212,
+      "blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+      "text": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-identity",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-identity.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-program-headers",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-program-headers.stdout",
+      "byte_count": 2999,
+      "blake3": "dbec841091d11ee5fb2ba74580411e2d97ee09e35de2d847a26727c34008a1bb",
+      "text": "\nElf file type is DYN (Position-Independent Executable file)\nEntry point 0x71d6d\nThere are 14 program headers, starting at offset 64\n\nProgram Headers:\n  Type           Offset             VirtAddr           PhysAddr\n                 FileSiz            MemSiz              Flags  Align\n  PHDR           0x0000000000000040 0x0000000000000040 0x0000000000000040\n                 0x0000000000000310 0x0000000000000310  R      0x8\n  LOAD           0x0000000000000000 0x0000000000000000 0x0000000000000000\n                 0x0000000000011bbc 0x0000000000011bbc  R      0x1000\n  GNU_STACK      0x0000000000000000 0x0000000000000000 0x0000000000000000\n                 0x0000000000000000 0x0000000000000000  RW     0x0\n  GNU_EH_FRAME   0x0000000000009b84 0x0000000000009b84 0x0000000000009b84\n                 0x00000000000010dc 0x00000000000010dc  R      0x4\n  LOAD           0x0000000000011bc0 0x0000000000012bc0 0x0000000000012bc0\n                 0x00000000000772f0 0x00000000000772f0  R E    0x1000\n  LOAD           0x0000000000088eb0 0x000000000008aeb0 0x000000000008aeb0\n                 0x00000000000058f0 0x0000000000006150  RW     0x1000\n  TLS            0x0000000000088eb0 0x000000000008aeb0 0x000000000008aeb0\n                 0x0000000000000a48 0x0000000000000a48  R      0x8\n  GNU_RELRO      0x0000000000088eb0 0x000000000008aeb0 0x000000000008aeb0\n                 0x0000000000006150 0x0000000000006150  R      0x1\n  DYNAMIC        0x000000000008e388 0x0000000000090388 0x0000000000090388\n                 0x0000000000000200 0x0000000000000200  RW     0x8\n  LOAD           0x000000000008e7a0 0x00000000000917a0 0x00000000000917a0\n                 0x0000000000000210 0x0000000000209fdd  RW     0x1000\n  LOAD           0x000000000009e000 0x000000000029c000 0x000000000029c000\n                 0x00000000000007b0 0x00000000000007b0  RW     0x1000\n  INTERP         0x000000000009e738 0x000000000029c738 0x000000000029c738\n                 0x0000000000000053 0x0000000000000053  R      0x1\n      [Requesting program interpreter: /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2]\n  NOTE           0x000000000009e790 0x000000000029c790 0x000000000029c790\n                 0x0000000000000020 0x0000000000000020  R      0x4\n  LOAD           0x000000000009f000 0x000000000029d000 0x000000000029d000\n                 0x0000000000000548 0x0000000000000548  RW     0x1000\n\n Section to Segment mapping:\n  Segment Sections...\n   00     \n   01     .gnu.version .gnu.version_r .gnu.hash .rela.dyn .rela.plt .rodata .eh_frame_hdr .eh_frame \n   02     \n   03     .eh_frame_hdr \n   04     .text .init .fini .plt \n   05     .tdata .fini_array .init_array .data.rel.ro .dynamic .got .got.plt .relro_padding \n   06     .tdata \n   07     .tdata .fini_array .init_array .data.rel.ro .dynamic .got .got.plt .relro_padding \n   08     .dynamic \n   09     .tm_clone_table .data .bss \n   10     .dynsym .interp .note.ABI-tag \n   11     .interp \n   12     .note.ABI-tag \n   13     .dynstr \n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-program-headers",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-program-headers.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-elf-runtime",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-elf-runtime.stdout",
+      "byte_count": 1321,
+      "blake3": "46265ca51dbc5c2ff6528c3c79e046790666207630aa92ab85c964b8de49c5bf",
+      "text": "\tlinux-vdso.so.1 (0x00007ffff7fc2000)\n\tlibrustc_driver-b18915596020e2d8.so => /nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/librustc_driver-b18915596020e2d8.so (0x00007fffefe00000)\n\tlibdl.so.2 => /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libdl.so.2 (0x00007ffff7d17000)\n\tlibrt.so.1 => /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/librt.so.1 (0x00007ffff7d12000)\n\tlibpthread.so.0 => /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libpthread.so.0 (0x00007ffff7d0d000)\n\tlibc.so.6 => /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libc.so.6 (0x00007fffefbf5000)\n\tlibLLVM.so.22.1-rust-1.96.0-nightly => /nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.96.0-nightly (0x00007fffe5000000)\n\tlibgcc_s.so.1 => /nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc/lib/libgcc_s.so.1 (0x00007ffff7cde000)\n\t/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2 (0x00007ffff7fc4000)\n\tlibm.so.6 => /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libm.so.6 (0x00007fffefafd000)\n\tlibz.so.1 => /nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2/lib/libz.so.1 (0x00007ffff7cbf000)\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "rustc-elf-runtime",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rustc-elf-runtime.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-000",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-000.stdout",
+      "byte_count": 65,
+      "blake3": "f7c86b1828fed618e23496ea7b81c886c9fc9b0460693d1cec497f8cc6d0a131",
+      "text": "988a1e79f587829fc0b0ecdcf630964c17d124d20c6931c2b0e4b4b3119916e2\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-000",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-000.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-001",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-001.stdout",
+      "byte_count": 65,
+      "blake3": "adebf30ae530c000479b4c5e06369c25057c6a33a3161ad7272a1f3ec1cf13bb",
+      "text": "f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-001",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-001.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-002",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-002.stdout",
+      "byte_count": 65,
+      "blake3": "84dd72b9fd196efbcd13412b017a23cf4b713e46af150d82d6d679efeaf07de5",
+      "text": "cac0570c725b87a33ca12412d72f8bd33eea259c5cf13c76ec4c5c86c3eaa749\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-002",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-002.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-003",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-003.stdout",
+      "byte_count": 65,
+      "blake3": "a9077b31fa8295ce1b0ec5ad8309e4b4f9fcde2243cd8d390bf6684177e114aa",
+      "text": "c52f87841eb34efb0ec227b2dcbfa24963562d779da0c40903eded4a79af83b9\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-003",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-003.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-004",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-004.stdout",
+      "byte_count": 65,
+      "blake3": "ed0cdf5d083cf68a4d438edc1383bdea863ef88b4e436736377cc0fcb2cfe196",
+      "text": "3bce9e71b1a744c381799223a2aca4d5794f11a46f4ee60991dda692a64be3d1\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "runtime-hash-004",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/runtime-hash-004.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "seal-rust-request",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/seal-rust-request.stdout",
+      "byte_count": 1090,
+      "blake3": "58d862f9132114114622919016e961bfc461b8d1618fec44753259773d41537e",
+      "text": "{\"schema\":\"mantle-rustc-wrapper-request-v1\",\"request_ref\":\"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\"manifest_path\":\"/tmp/mantle-readiness-20261023-v8/rust-manifest.json\",\"expected_manifest_ref\":\"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\"real_compiler_path\":\"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\",\"arguments\":[\"--crate-name\",\"readiness\",\"--crate-type\",\"lib\",\"--edition\",\"2024\",\"--emit=metadata\",\"--sysroot\",\"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\",\"/tmp/mantle-readiness-20261023-v8/source/ready.rs\",\"-o\",\"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\"],\"admitted_environment\":{},\"working_directory\":\"/tmp/mantle-readiness-20261023-v8/source\",\"output_contracts\":[{\"staged_relative_path\":\"ready.rmeta\",\"destination_path\":\"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\",\"kind\":\"file\",\"max_bytes\":1048576,\"executable\":false}]}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "seal-rust-request",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/seal-rust-request.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "rust-cache-cold",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-cache-cold.stdout",
+      "byte_count": 417,
+      "blake3": "9576fd3c79f6238f7d609390746091d800b1095b25e1ad858e7a8885a860d391",
+      "text": "{\"artifact_commit_complete\":true,\"bypass_class\":null,\"compiler_status\":0,\"disposition\":\"compiled\",\"reason_codes\":[\"compiled\"],\"receipt_ref\":\"mantle-rustc-receipt://blake3/063b69d55e8e78ee214cc2fc70dc74ee5a96a67276c3f4906bfab6f8e667ddc0\",\"request_ref\":\"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\"schema\":\"mantle-rustc-wrapper-response-v1\",\"stderr\":[],\"stdout\":[]}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "rust-cache-cold",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-cache-cold.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "rust-cache-warm",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-cache-warm.stdout",
+      "byte_count": 425,
+      "blake3": "9e5470fc7d12621eb764a0c28e77f0cab026dd122f6fbb962730b4e1a8e78637",
+      "text": "{\"artifact_commit_complete\":true,\"bypass_class\":null,\"compiler_status\":0,\"disposition\":\"local-hit\",\"reason_codes\":[\"local-cache-hit\"],\"receipt_ref\":\"mantle-rustc-receipt://blake3/ecdca38df902b8929a82de5472f30eec8c54937cb6fe416460003a989b6fb701\",\"request_ref\":\"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\"schema\":\"mantle-rustc-wrapper-response-v1\",\"stderr\":[],\"stdout\":[]}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "rust-cache-warm",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-cache-warm.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-daemon-absent",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-daemon-absent.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "doctor-daemon-absent",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/doctor-daemon-absent.stderr",
+      "byte_count": 105,
+      "blake3": "9a4b27dfaeb1421a481d0cf441c63e1cd17d0449155befa83c7bef54b8a4ed28",
+      "text": "{\"error\":\"querying remote readiness: No such file or directory (os error 2)\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "scenario": "readiness",
+      "command": "coord-second",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-second.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "readiness",
+      "command": "coord-second",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-second.stderr",
+      "byte_count": 75,
+      "blake3": "1cfca90bc1f0f90e7fe9a4a4295dcecbe49e522b973224a057100c7ec654d906",
+      "text": "live build daemon listening on /tmp/mantle-readiness-20261023-v8/live.sock\n"
+    },
+    {
+      "scenario": "human",
+      "command": "human-baseline",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/human-baseline.stdout",
+      "byte_count": 542,
+      "blake3": "c8834a7f442624c9efefe5eed29caa30718b719af5837c4ba224d125d8ca6926",
+      "text": "doctor profile: build\nstatus: ok\n- [ok] bwrap: found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\n- [ok] sandbox-shell: using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\n- [ok] fusermount3: found /run/wrappers/bin/fusermount3\n- [ok] state-dir: state directory is writable via /tmp/mantle-readiness-human-20261023-v2\n- [ok] store-dir: store directory is writable via /tmp/mantle-readiness-human-20261023-v2/store\n\n"
+    },
+    {
+      "scenario": "human",
+      "command": "human-baseline",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/human-baseline.stderr",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "human",
+      "command": "human-with-readiness",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stdout",
+      "byte_count": 542,
+      "blake3": "c8834a7f442624c9efefe5eed29caa30718b719af5837c4ba224d125d8ca6926",
+      "text": "doctor profile: build\nstatus: ok\n- [ok] bwrap: found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\n- [ok] sandbox-shell: using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\n- [ok] fusermount3: found /run/wrappers/bin/fusermount3\n- [ok] state-dir: state directory is writable via /tmp/mantle-readiness-human-20261023-v2\n- [ok] store-dir: store directory is writable via /tmp/mantle-readiness-human-20261023-v2/store\n\n"
+    },
+    {
+      "scenario": "human",
+      "command": "human-with-readiness",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stderr",
+      "byte_count": 268,
+      "blake3": "2075a45f2a3a5aff82310ab1a2e4e499496135ec163899aea11745896bfb3fbc",
+      "text": "{\"schema\":\"mantle-service-readiness-v1\",\"classification\":\"coordination-state\",\"evidence_eligible\":false,\"components\":[{\"id\":\"live-daemon-208768\",\"generation\":1,\"states\":[\"started\",\"ready\"],\"restart_policy\":\"never\",\"restart_action\":null,\"ready\":true,\"blocked_by\":[]}]}\n"
+    },
+    {
+      "scenario": "human",
+      "command": "coordinator",
+      "stream": "stdout",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/coordinator.stdout",
+      "byte_count": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "scenario": "human",
+      "command": "coordinator",
+      "stream": "stderr",
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/coordinator.stderr",
+      "byte_count": 81,
+      "blake3": "ef62813bd1e9f3451e9e0d06304497a3d6d00f6f215990ae58a7039b1e7ffa96",
+      "text": "live build daemon listening on /tmp/mantle-readiness-human-20261023-v2/live.sock\n"
+    }
+  ],
+  "retained_inputs_and_observation_files": [
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/readiness-repaired-runtime.py",
+      "byte_count": 2607,
+      "blake3": "44b294b52a5f64eae731b01284cbc3ab46b98693a7b0ced9ee116e14502b47f4",
+      "text": "#!/usr/bin/env python3\n\"\"\"Bind the existing unchanged readiness scenarios to the repaired CLI cohort.\"\"\"\nimport json\nfrom pathlib import Path\nimport subprocess\n\nrepo = Path('/home/brittonr/git/OnixResearch/mantle')\nrun = repo / 'target/cairn-finish-20261023'\ncohort = run / 'wait-request-repaired-immutable-release-cohort'\npins = json.loads((cohort / 'ready-executable-pins.json').read_text())\n\ndef digest(path):\n    return subprocess.check_output(['b3sum', '--no-names', str(path)], text=True).strip()\n\nmantle = cohort / 'mantle'\nif pins['roles']['mantle'] != {'path': str(mantle), 'blake3': digest(mantle)}:\n    raise RuntimeError('declared repaired Mantle role differs')\nfor source_name, old_work, new_work, old_cohort in (\n    ('service-readiness-runtime-v7.py', '/tmp/mantle-readiness-20261023-v7', '/tmp/mantle-readiness-20261023-v8', \"root / 'target/cairn-finish-20261023/final-immutable-release-cohort'\"),\n    ('service-readiness-human.py', '/tmp/mantle-readiness-human-20261023', '/tmp/mantle-readiness-human-20261023-v2', \"repo / 'target/cairn-finish-20261023/final-immutable-release-cohort/mantle'\"),\n):\n    source = run / source_name\n    text = source.read_text()\n    if text.count(old_work) != 1 or text.count(old_cohort) != 1:\n        raise RuntimeError('retained readiness source contract changed: ' + source_name)\n    replacement = \"root / 'target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort'\" if source_name.endswith('v7.py') else \"repo / 'target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle'\"\n    text = text.replace(old_work, new_work).replace(old_cohort, replacement)\n    derived = run / (source_name.removesuffix('.py') + '-repaired-derived.py')\n    with derived.open('x') as output:\n        output.write(text)\n    exec(compile(text, str(derived), 'exec'), {'__name__': '__main__'})\n    result = json.loads((Path(new_work) / 'result.json').read_text())\n    if result['status'] != 'passed' or not result['executable_invariance']:\n        raise RuntimeError('retained readiness scenario did not pass: ' + source_name)\n    with (Path(new_work) / 'cohort-provenance.json').open('x') as output:\n        json.dump({'source': str(source), 'source_blake3': digest(source), 'derived': str(derived),\n                   'derived_blake3': digest(derived), 'pins': str(cohort / 'ready-executable-pins.json'),\n                   'dependency_task': 73, 'acceptance_claimed': False}, output, indent=2)\n        output.write('\\n')\nif digest(mantle) != pins['roles']['mantle']['blake3']:\n    raise RuntimeError('repaired Mantle executable changed')\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-client.rs",
+      "byte_count": 2677,
+      "blake3": "c28190b26ad84c23cd3cc74afbe0fdeaa6c5801e23779d6939f43aaefbebbce3",
+      "text": "use crunch_rust_cache_core::{canonical_rust_action, RustUnitActionInput};\nuse crunch_rust_cache_core::wrapper::{\n    arguments_identity_blake3, environment_identity_blake3, seal_wrapper_manifest,\n    seal_wrapper_request, DeclaredInputKind, WrapperInvocationManifestInput, WrapperRequestInput,\n};\nuse serde_json::Value;\nuse std::path::Path;\nuse std::io::Write;\n\nfn main() {\n    let args: Vec<String> = std::env::args().collect();\n    if args[1] == \"hash\" {\n        let kind = match args[2].as_str() {\n            \"file\" => DeclaredInputKind::File,\n            \"directory\" => DeclaredInputKind::Directory,\n            _ => panic!(\"invalid declared kind\"),\n        };\n        println!(\"{}\", crunch_rustc_wrapper::declared_input_digest_blake3(\n            Path::new(&args[3]), kind, 8_589_934_592).unwrap());\n        return;\n    }\n    if args[1] == \"request\" {\n        let request: Value = serde_json::from_slice(&std::fs::read(&args[3]).unwrap()).unwrap();\n        let mut stream = std::os::unix::net::UnixStream::connect(&args[2]).unwrap();\n        stream.set_read_timeout(Some(std::time::Duration::from_secs(120))).unwrap();\n        stream.set_write_timeout(Some(std::time::Duration::from_secs(120))).unwrap();\n        crunch_rustc_wrapper::write_frame(&mut stream, &request, 8_388_608).unwrap();\n        stream.flush().unwrap();\n        let response: Value = crunch_rustc_wrapper::read_frame(&mut stream, 8_388_608).unwrap();\n        println!(\"{}\", serde_json::to_string(&response).unwrap());\n        return;\n    }\n    assert_eq!(args[1], \"prepare\");\n    let mut value: Value = serde_json::from_slice(&std::fs::read(&args[2]).unwrap()).unwrap();\n    let action = canonical_rust_action(serde_json::from_value::<RustUnitActionInput>(value[\"action\"].take()).unwrap()).unwrap();\n    let mut request: WrapperRequestInput = serde_json::from_value(value[\"request\"].take()).unwrap();\n    let mut manifest_value = value[\"manifest\"].take();\n    manifest_value[\"action\"] = serde_json::to_value(action).unwrap();\n    manifest_value[\"arguments_blake3\"] = Value::String(arguments_identity_blake3(&request.arguments).unwrap());\n    manifest_value[\"environment_blake3\"] = Value::String(environment_identity_blake3(&request.admitted_environment).unwrap());\n    let manifest = seal_wrapper_manifest(serde_json::from_value::<WrapperInvocationManifestInput>(manifest_value).unwrap()).unwrap();\n    std::fs::write(request.manifest_path.as_ref().unwrap(), serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();\n    request.expected_manifest_ref = Some(manifest.manifest_ref);\n    let sealed = seal_wrapper_request(request).unwrap();\n    println!(\"{}\", serde_json::to_string(&sealed).unwrap());\n}\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-human-repaired-derived.py",
+      "byte_count": 4221,
+      "blake3": "43d5a92bdcef0e703c063f4f57b69c65024b106e937fb989ebd466ffc5fdaf78",
+      "text": "#!/usr/bin/env python3\nimport json\nimport os\nfrom pathlib import Path\nimport socket\nimport subprocess\nimport time\n\nrepo = Path('/home/brittonr/git/OnixResearch/mantle')\nwork = Path('/tmp/mantle-readiness-human-20261023-v2')\nwork.mkdir(mode=0o700, exist_ok=False)\n(work / 'store').mkdir()\nprogram = repo / 'target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle'\nbase = [str(program), '--store', str(work / 'store'), '--state-dir', str(work / 'state')]\ncoord = work / 'live.sock'\nresult = {'schema': 'mantle-human-readiness-smoke-v1', 'acceptance_claimed': False,\n          'non_claims': ['Readiness is coordination state, not build or release evidence.'], 'commands': []}\ndef digest(path):\n    return subprocess.check_output(['b3sum', '--no-names', str(path)], text=True).strip()\ndef run(label, argv):\n    observed = subprocess.run(argv, cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)\n    for stream in ('stdout', 'stderr'):\n        (work / (label + '.' + stream)).write_bytes(getattr(observed, stream))\n    result['commands'].append({'label': label, 'argv': argv, 'exit_code': observed.returncode,\n        'stdout': str(work / (label + '.stdout')), 'stderr': str(work / (label + '.stderr'))})\n    return observed\nbefore = digest(program)\nchild = None\nstreams = []\ntry:\n    baseline = run('human-baseline', base + ['doctor'])\n    streams = [(work / ('coordinator.' + stream)).open('wb') for stream in ('stdout', 'stderr')]\n    argv = base + ['remote', 'live', 'serve', '--socket', str(coord)]\n    child = subprocess.Popen(argv, cwd=repo, stdout=streams[0], stderr=streams[1])\n    deadline = time.monotonic() + 10\n    while True:\n        if child.poll() is not None:\n            raise RuntimeError('coordinator exited before its real listener')\n        try:\n            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:\n                connection.settimeout(1)\n                connection.connect(str(coord))\n                connection.sendall(b'{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"query\",\"components\":[]}\\n')\n                with connection.makefile('rb') as incoming:\n                    ready = json.loads(incoming.readline(2097153))\n            if any(row['id'] == f'live-daemon-{child.pid}' and row['ready'] for row in ready['components']):\n                break\n        except (FileNotFoundError, ConnectionRefusedError):\n            pass\n        if time.monotonic() >= deadline:\n            raise RuntimeError('coordinator readiness deadline')\n        time.sleep(0.025)\n    projected = run('human-with-readiness', base + ['doctor', '--readiness-socket', str(coord)])\n    if baseline.returncode != 0 or projected.returncode != baseline.returncode or projected.stdout != baseline.stdout:\n        raise RuntimeError('human doctor output/status changed')\n    extra = json.loads(projected.stderr)\n    if extra['evidence_eligible'] or extra['classification'] != 'coordination-state' or not any(\n            row['id'] == f'live-daemon-{child.pid}' and row['ready'] for row in extra['components']):\n        raise RuntimeError('human readiness report crossed the boundary or omitted real acknowledgment')\n    result['readiness'] = extra\n    result['human_stdout_and_exit_unchanged'] = True\n    child.terminate()\n    status = child.wait(timeout=10)\n    result['coordinator'] = {'argv': argv, 'pid': child.pid, 'exit_code': status}\n    if status != 0 or coord.exists():\n        raise RuntimeError('coordinator did not drain/remove its socket')\n    result['executable_invariance'] = digest(program) == before\n    if not result['executable_invariance']:\n        raise RuntimeError('immutable executable changed')\n    result['mantle_blake3'] = before\n    result['status'] = 'passed'\nexcept BaseException as error:\n    result['status'] = 'failed'\n    result['error'] = str(error)\n    raise\nfinally:\n    if child is not None and child.poll() is None:\n        child.terminate()\n        try:\n            child.wait(timeout=10)\n        except subprocess.TimeoutExpired:\n            child.kill()\n            child.wait(timeout=5)\n    for stream in streams:\n        stream.close()\n    (work / 'result.json').write_text(json.dumps(result, indent=2) + '\\n')\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-human.py",
+      "byte_count": 4202,
+      "blake3": "e7752f1abef70017d912f6ca34100188fc5255ca3262bb1b6f7112392cb38ee4",
+      "text": "#!/usr/bin/env python3\nimport json\nimport os\nfrom pathlib import Path\nimport socket\nimport subprocess\nimport time\n\nrepo = Path('/home/brittonr/git/OnixResearch/mantle')\nwork = Path('/tmp/mantle-readiness-human-20261023')\nwork.mkdir(mode=0o700, exist_ok=False)\n(work / 'store').mkdir()\nprogram = repo / 'target/cairn-finish-20261023/final-immutable-release-cohort/mantle'\nbase = [str(program), '--store', str(work / 'store'), '--state-dir', str(work / 'state')]\ncoord = work / 'live.sock'\nresult = {'schema': 'mantle-human-readiness-smoke-v1', 'acceptance_claimed': False,\n          'non_claims': ['Readiness is coordination state, not build or release evidence.'], 'commands': []}\ndef digest(path):\n    return subprocess.check_output(['b3sum', '--no-names', str(path)], text=True).strip()\ndef run(label, argv):\n    observed = subprocess.run(argv, cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)\n    for stream in ('stdout', 'stderr'):\n        (work / (label + '.' + stream)).write_bytes(getattr(observed, stream))\n    result['commands'].append({'label': label, 'argv': argv, 'exit_code': observed.returncode,\n        'stdout': str(work / (label + '.stdout')), 'stderr': str(work / (label + '.stderr'))})\n    return observed\nbefore = digest(program)\nchild = None\nstreams = []\ntry:\n    baseline = run('human-baseline', base + ['doctor'])\n    streams = [(work / ('coordinator.' + stream)).open('wb') for stream in ('stdout', 'stderr')]\n    argv = base + ['remote', 'live', 'serve', '--socket', str(coord)]\n    child = subprocess.Popen(argv, cwd=repo, stdout=streams[0], stderr=streams[1])\n    deadline = time.monotonic() + 10\n    while True:\n        if child.poll() is not None:\n            raise RuntimeError('coordinator exited before its real listener')\n        try:\n            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:\n                connection.settimeout(1)\n                connection.connect(str(coord))\n                connection.sendall(b'{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"query\",\"components\":[]}\\n')\n                with connection.makefile('rb') as incoming:\n                    ready = json.loads(incoming.readline(2097153))\n            if any(row['id'] == f'live-daemon-{child.pid}' and row['ready'] for row in ready['components']):\n                break\n        except (FileNotFoundError, ConnectionRefusedError):\n            pass\n        if time.monotonic() >= deadline:\n            raise RuntimeError('coordinator readiness deadline')\n        time.sleep(0.025)\n    projected = run('human-with-readiness', base + ['doctor', '--readiness-socket', str(coord)])\n    if baseline.returncode != 0 or projected.returncode != baseline.returncode or projected.stdout != baseline.stdout:\n        raise RuntimeError('human doctor output/status changed')\n    extra = json.loads(projected.stderr)\n    if extra['evidence_eligible'] or extra['classification'] != 'coordination-state' or not any(\n            row['id'] == f'live-daemon-{child.pid}' and row['ready'] for row in extra['components']):\n        raise RuntimeError('human readiness report crossed the boundary or omitted real acknowledgment')\n    result['readiness'] = extra\n    result['human_stdout_and_exit_unchanged'] = True\n    child.terminate()\n    status = child.wait(timeout=10)\n    result['coordinator'] = {'argv': argv, 'pid': child.pid, 'exit_code': status}\n    if status != 0 or coord.exists():\n        raise RuntimeError('coordinator did not drain/remove its socket')\n    result['executable_invariance'] = digest(program) == before\n    if not result['executable_invariance']:\n        raise RuntimeError('immutable executable changed')\n    result['mantle_blake3'] = before\n    result['status'] = 'passed'\nexcept BaseException as error:\n    result['status'] = 'failed'\n    result['error'] = str(error)\n    raise\nfinally:\n    if child is not None and child.poll() is None:\n        child.terminate()\n        try:\n            child.wait(timeout=10)\n        except subprocess.TimeoutExpired:\n            child.kill()\n            child.wait(timeout=5)\n    for stream in streams:\n        stream.close()\n    (work / 'result.json').write_text(json.dumps(result, indent=2) + '\\n')\n"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-runtime-v7-repaired-derived.py",
+      "byte_count": 19473,
+      "blake3": "db84ff52f5ee99b81860a1739762b87fffaa07a45dcfe98cbac91cddddb8160b",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-runtime-v7.py",
+      "byte_count": 19457,
+      "blake3": "67581dcc8ae7c61c00b0dbff0d8ee7179789dbaa17b19040bcc26f5278cc89bf",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "byte_count": 1658,
+      "blake3": "776ed0998926f9501646c9d28f8ded2a2d49470d41ca2cedb28ebd41556d11d0",
+      "text": "{\n  \"schema\": \"mantle-runtime-executable-pins-v1\",\n  \"cohort\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort\",\n  \"roles\": {\n    \"mantle\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle\",\n      \"blake3\": \"c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85\"\n    },\n    \"wrapper\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper\",\n      \"blake3\": \"ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21\"\n    },\n    \"producer\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer\",\n      \"blake3\": \"380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805\"\n    },\n    \"helper\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper\",\n      \"blake3\": \"2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3\"\n    },\n    \"replay\": {\n      \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay\",\n      \"blake3\": \"e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9\"\n    }\n  },\n  \"policy\": \"Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution.\"\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cache-complete.json",
+      "byte_count": 679,
+      "blake3": "d7374d0a65d60ebeb8c5fce501178ce2498b438eb83e603c16a5203a6ffcbbdf",
+      "text": "[\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      },\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"rust-cache-207459-1792796351\",\n        \"ready\": false,\n        \"restart_action\": \"none\",\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"complete\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  }\n]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cache-ready.json",
+      "byte_count": 694,
+      "blake3": "0e8c22290b2703fc15c4205b833551465f3341cd8565f01509b6640c4b03cc83",
+      "text": "[\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      },\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"rust-cache-207459-1792796351\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  }\n]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cache-started.json",
+      "byte_count": 1094,
+      "blake3": "7455472aa0fcf0fb3cd71b2a89402de69c70abac18a50d0f46045912bd5155b2",
+      "text": "[\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  },\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      },\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"rust-cache-207459-1792796351\",\n        \"ready\": false,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  }\n]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/cohort-provenance.json",
+      "byte_count": 637,
+      "blake3": "f26f8a818930dc3caab8f6cce35e5d54c9e7cd3fa6ed561a87cdbafe64d06321",
+      "text": "{\n  \"source\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-runtime-v7.py\",\n  \"source_blake3\": \"67581dcc8ae7c61c00b0dbff0d8ee7179789dbaa17b19040bcc26f5278cc89bf\",\n  \"derived\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-runtime-v7-repaired-derived.py\",\n  \"derived_blake3\": \"db84ff52f5ee99b81860a1739762b87fffaa07a45dcfe98cbac91cddddb8160b\",\n  \"pins\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json\",\n  \"dependency_task\": 73,\n  \"acceptance_claimed\": false\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-first-ready.json",
+      "byte_count": 821,
+      "blake3": "a6123bb89caf8be6e87e8a9731d55d47fc0e83ef7ee7437ea040bc024b65b626",
+      "text": "[\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": false,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  },\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-207323\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  }\n]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/coord-second-ready.json",
+      "byte_count": 972,
+      "blake3": "c07dfa2f799e3946fddb2975a54d6ae9d2e89b2d5c90a186d51ecc649cd9ad9a",
+      "text": "[\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  },\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-208198\",\n        \"ready\": false,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  },\n  {\n    \"classification\": \"coordination-state\",\n    \"components\": [\n      {\n        \"blocked_by\": [],\n        \"generation\": 1,\n        \"id\": \"live-daemon-208198\",\n        \"ready\": true,\n        \"restart_action\": null,\n        \"restart_policy\": \"never\",\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ]\n      }\n    ],\n    \"evidence_eligible\": false,\n    \"schema\": \"mantle-service-readiness-v1\"\n  }\n]\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/daemon-policy.json",
+      "byte_count": 1352,
+      "blake3": "8845cecbd371c0f5ec31751e8adc9a739bb3e519eff81e73c7f7c691d071ac4b",
+      "text": "{\n  \"allowed_environment\": [],\n  \"allowed_peer_uids\": [\n    1555\n  ],\n  \"cache_mode\": \"local-read-write\",\n  \"effects\": {\n    \"clock\": \"allow\",\n    \"filesystem\": \"declared-roots\",\n    \"network\": \"deny\",\n    \"randomness\": \"allow\"\n  },\n  \"failure_mode\": \"fail-open\",\n  \"limits\": {\n    \"artifact_bytes\": 8589934592,\n    \"elapsed_millis\": 120000,\n    \"stderr_bytes\": 1048576,\n    \"stdout_bytes\": 1048576\n  },\n  \"local_reads_enabled\": true,\n  \"local_writes_enabled\": true,\n  \"max_concurrency\": 8,\n  \"max_request_bytes\": 8388608,\n  \"max_response_bytes\": 8388608,\n  \"policy_id\": \"cc-cache-proof\",\n  \"publication\": {\n    \"enabled\": false,\n    \"signer_name\": null,\n    \"signing_key_path\": null,\n    \"source_id\": null\n  },\n  \"readable_roots\": [\n    \"/nix/store\",\n    \"/tmp/mantle-readiness-20261023-v8\"\n  ],\n  \"redact_environment_values\": true,\n  \"result_sources\": [],\n  \"sandbox_program\": \"/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\",\n  \"sandbox_program_blake3\": \"cd5be4481cfe2e79bbf4183ef9122dd15c3ce379594b67121a4b540ac920864e\",\n  \"schema\": \"mantle-rustc-wrapper-policy-v1\",\n  \"shared_reads_enabled\": false,\n  \"shared_trust_policy\": null,\n  \"shared_writes_enabled\": false,\n  \"socket_path\": \"/tmp/mantle-readiness-20261023-v8/cache.sock\",\n  \"writable_roots\": [\n    \"/tmp/mantle-readiness-20261023-v8/objects\"\n  ]\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/daemon-receipts/063b69d55e8e78ee214cc2fc70dc74ee5a96a67276c3f4906bfab6f8e667ddc0.json",
+      "byte_count": 942,
+      "blake3": "8f6ae13c74fbb46388e50374f3bb5514307b62b2dc970df17f39a10cc9b7749a",
+      "text": "{\n  \"schema\": \"mantle-rustc-wrapper-receipt-v1\",\n  \"receipt_ref\": \"mantle-rustc-receipt://blake3/063b69d55e8e78ee214cc2fc70dc74ee5a96a67276c3f4906bfab6f8e667ddc0\",\n  \"request_ref\": \"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\n  \"manifest_ref\": \"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\n  \"policy_id\": \"cc-cache-proof\",\n  \"disposition\": \"compiled\",\n  \"bypass_class\": null,\n  \"action_ref\": \"mantle-rust-action://blake3/3aeb7c145e3b62ffbc7a9e243d3b2c0ec8c2d8174c42e74c594441314826088f\",\n  \"result_ref\": \"mantle-rust-result://blake3/2c98e4d6b5ef33cc28286a64ce8beb0720acb17109f0f50521627a03afe00daa\",\n  \"artifact_digests_blake3\": [\n    \"7fb66394bd229728029d3db72d053e72a7e8f4fc72b2ea147ccc2de2d3f6e633\"\n  ],\n  \"compiler_status\": 0,\n  \"compiler_executed\": true,\n  \"artifact_commit_complete\": true,\n  \"reason_codes\": [\n    \"compiled\"\n  ]\n}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/daemon-receipts/1706b0102999510e6e9f2a935fdb8d3405ec572af9017f487727552c72c70d3c.json",
+      "byte_count": 862,
+      "blake3": "fc1cc03aab2a6614d53c922eb2e1f47dacc0b030eff75c0382073bff4e9c4648",
+      "text": "{\n  \"schema\": \"mantle-rustc-wrapper-receipt-v1\",\n  \"receipt_ref\": \"mantle-rustc-receipt://blake3/1706b0102999510e6e9f2a935fdb8d3405ec572af9017f487727552c72c70d3c\",\n  \"request_ref\": \"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\n  \"manifest_ref\": \"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\n  \"policy_id\": \"cc-cache-proof\",\n  \"disposition\": \"compiled\",\n  \"bypass_class\": null,\n  \"action_ref\": \"mantle-rust-action://blake3/3aeb7c145e3b62ffbc7a9e243d3b2c0ec8c2d8174c42e74c594441314826088f\",\n  \"result_ref\": null,\n  \"artifact_digests_blake3\": [\n    \"7fb66394bd229728029d3db72d053e72a7e8f4fc72b2ea147ccc2de2d3f6e633\"\n  ],\n  \"compiler_status\": 0,\n  \"compiler_executed\": true,\n  \"artifact_commit_complete\": false,\n  \"reason_codes\": [\n    \"compiler-finished\"\n  ]\n}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/daemon-receipts/ecdca38df902b8929a82de5472f30eec8c54937cb6fe416460003a989b6fb701.json",
+      "byte_count": 951,
+      "blake3": "0145d053c05aaa960660e3d5a3bdfa8d29b21a1baf1acd9fd2a2297bb9b2ea5f",
+      "text": "{\n  \"schema\": \"mantle-rustc-wrapper-receipt-v1\",\n  \"receipt_ref\": \"mantle-rustc-receipt://blake3/ecdca38df902b8929a82de5472f30eec8c54937cb6fe416460003a989b6fb701\",\n  \"request_ref\": \"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\n  \"manifest_ref\": \"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\n  \"policy_id\": \"cc-cache-proof\",\n  \"disposition\": \"local-hit\",\n  \"bypass_class\": null,\n  \"action_ref\": \"mantle-rust-action://blake3/3aeb7c145e3b62ffbc7a9e243d3b2c0ec8c2d8174c42e74c594441314826088f\",\n  \"result_ref\": \"mantle-rust-result://blake3/2c98e4d6b5ef33cc28286a64ce8beb0720acb17109f0f50521627a03afe00daa\",\n  \"artifact_digests_blake3\": [\n    \"7fb66394bd229728029d3db72d053e72a7e8f4fc72b2ea147ccc2de2d3f6e633\"\n  ],\n  \"compiler_status\": 0,\n  \"compiler_executed\": false,\n  \"artifact_commit_complete\": true,\n  \"reason_codes\": [\n    \"local-cache-hit\"\n  ]\n}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/driver-policy.json",
+      "byte_count": 3783,
+      "blake3": "c923ec26f6937721d38ca9b8be46fd9fbf5f8d3460dbc764a0bda287aace01ad",
+      "text": "{\n  \"cache_enabled\": true,\n  \"compiler\": \"/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc\",\n  \"elapsed_ms_max\": 120000,\n  \"environment\": {\n    \"LC_ALL\": \"C\",\n    \"PATH\": \"/tmp/mantle-cc-runtime-20261023-c19/tools\",\n    \"TZ\": \"UTC\"\n  },\n  \"output_path_independent\": true,\n  \"platform\": \"x86_64-linux\",\n  \"probe_script\": \"/tmp/mantle-cc-runtime-20261023-c19/probe.sh\",\n  \"receipt_dir\": \"/tmp/mantle-readiness-20261023-v8/driver-receipts\",\n  \"roots\": [\n    {\n      \"alias\": \"source\",\n      \"path\": \"/tmp/mantle-readiness-20261023-v8/source\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"assembler-path\",\n      \"path\": \"/tmp/mantle-cc-runtime-20261023-c19/tools\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-0\",\n      \"path\": \"/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2/lib/libz.so.1.3.2\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-1\",\n      \"path\": \"/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-2\",\n      \"path\": \"/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-3\",\n      \"path\": \"/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-4\",\n      \"path\": \"/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1plus\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-5\",\n      \"path\": \"/nix/store/88xi58z58l9gs1hvm0inpljv7kcjd7pz-libmpc-1.4.1/lib/libmpc.so.3.4.1\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-6\",\n      \"path\": \"/nix/store/b9ksw15df0bm2rxzjdi1lrdhz54gsmsl-mpfr-4.2.2/lib/libmpfr.so.6.2.2\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-7\",\n      \"path\": \"/nix/store/jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib/lib/libbfd-2.44.so\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-8\",\n      \"path\": \"/nix/store/jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib/lib/libsframe.so.1.0.0\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-9\",\n      \"path\": \"/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-10\",\n      \"path\": \"/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libc.so.6\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-11\",\n      \"path\": \"/nix/store/jrzincyqwpwvl7xvbnfjryyczd3b8a78-gmp-6.3.0/lib/libgmp.so.10.5.0\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-12\",\n      \"path\": \"/nix/store/l3p6y554mkxi4vipnnp8809kxj0g1lyv-zlib-1.3.2/lib/libz.so.1.3.2\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-13\",\n      \"path\": \"/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84/lib/ld-linux-x86-64.so.2\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-14\",\n      \"path\": \"/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84/lib/libc.so.6\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-15\",\n      \"path\": \"/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84/lib/libm.so.6\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-16\",\n      \"path\": \"/nix/store/qq4wws3ilsbn5qv97r2mvsmrkh1pa1q3-isl-0.20/lib/libisl.so.19.1.0\",\n      \"path_independent\": true\n    },\n    {\n      \"alias\": \"tool-17\",\n      \"path\": \"/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin/as\",\n      \"path_independent\": true\n    }\n  ],\n  \"schema\": \"mantle-cc-driver-policy-v1\",\n  \"slot_wait_ms_max\": 30000,\n  \"slots_enabled\": false\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/driver-receipts/cc-OmcfFa.json",
+      "byte_count": 315,
+      "blake3": "f0be8a5a46a3aaec1354f54333c60d870379476989856900fbe3cecde8eed654",
+      "text": "{\"cache\":{\"bypass\":null,\"disposition\":\"compiled\",\"key\":null,\"probe\":true,\"schema\":\"mantle-cc-cache-receipt-v1\"},\"cache_disposition\":\"cache-miss\",\"claim_class\":\"machine-local-performance-only\",\"compiler_status\":0,\"key\":null,\"proof_evidence\":false,\"schema\":\"mantle-cc-driver-receipt-v1\",\"slot_disposition\":\"disabled\"}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/result.json",
+      "byte_count": 19135,
+      "blake3": "490948ace91316c8910a526be99ccaebc1880a2b326e5b5a66398969eb113b08",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-manifest.json",
+      "byte_count": 6082,
+      "blake3": "62a43493133ff6de18326e9a6de2ae16a97a6f7ea303aa7f3a86c8ef216f05a2",
+      "text": "{\n  \"schema\": \"mantle-rustc-wrapper-manifest-v1\",\n  \"manifest_ref\": \"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\n  \"policy_id\": \"cc-cache-proof\",\n  \"action\": {\n    \"schema\": \"mantle-rust-unit-action-v1\",\n    \"action_ref\": \"mantle-rust-action://blake3/3aeb7c145e3b62ffbc7a9e243d3b2c0ec8c2d8174c42e74c594441314826088f\",\n    \"unit_id\": \"readiness-rust-unit\",\n    \"package_id\": \"readiness-rust-0.0.0\",\n    \"crate_name\": \"readiness\",\n    \"target_kind\": \"lib\",\n    \"execution_kind\": \"target\",\n    \"host_triple\": \"x86_64-unknown-linux-gnu\",\n    \"target_triple\": \"x86_64-unknown-linux-gnu\",\n    \"profile\": \"dev\",\n    \"mode\": \"build\",\n    \"features\": [],\n    \"source_digest_blake3\": \"a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd\",\n    \"compiler_digest_blake3\": \"c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8\",\n    \"compiler_version_digest_blake3\": \"dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b\",\n    \"toolchain_closure_digest_blake3\": \"f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785\",\n    \"execution_platform_digest_blake3\": \"215174f0f25a06af73b7b30c877184c9fe7a941231602b883e2fe0f73eec2723\",\n    \"semantic_arguments\": [\n      {\n        \"value\": \"--crate-name\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"readiness\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"--crate-type\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"lib\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"--edition\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"2024\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"--emit=metadata\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"--sysroot\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\",\n        \"contains_absolute_path\": true,\n        \"absolute_paths_classified\": true\n      },\n      {\n        \"value\": \"/tmp/mantle-readiness-20261023-v8/source/ready.rs\",\n        \"contains_absolute_path\": true,\n        \"absolute_paths_classified\": true\n      },\n      {\n        \"value\": \"-o\",\n        \"contains_absolute_path\": false,\n        \"absolute_paths_classified\": false\n      },\n      {\n        \"value\": \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\",\n        \"contains_absolute_path\": true,\n        \"absolute_paths_classified\": true\n      }\n    ],\n    \"admitted_environment\": {},\n    \"dependency_artifacts\": [],\n    \"host_artifacts\": [],\n    \"build_script_facts\": [],\n    \"native_link_facts\": [],\n    \"compiler_policy_digest_blake3\": \"8845cecbd371c0f5ec31751e8adc9a739bb3e519eff81e73c7f7c691d071ac4b\"\n  },\n  \"real_compiler_path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\",\n  \"arguments_blake3\": \"f30588257a25489be6295b48d5229e21b6516506f566c5007c17ed8362e6c1c9\",\n  \"environment_blake3\": \"1f0142ceca727699d33ea9fc3b88f594c9a12b2437d24cc68646f42ea0372c3b\",\n  \"working_directory\": \"/tmp/mantle-readiness-20261023-v8/source\",\n  \"readable_roots\": [\n    \"/nix/store\",\n    \"/tmp/mantle-readiness-20261023-v8\"\n  ],\n  \"writable_roots\": [\n    \"/tmp/mantle-readiness-20261023-v8/objects\"\n  ],\n  \"declared_inputs\": [\n    {\n      \"role\": \"closure-000\",\n      \"path\": \"/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2\",\n      \"kind\": \"directory\",\n      \"digest_blake3\": \"988a1e79f587829fc0b0ecdcf630964c17d124d20c6931c2b0e4b4b3119916e2\"\n    },\n    {\n      \"role\": \"closure-002\",\n      \"path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\",\n      \"kind\": \"directory\",\n      \"digest_blake3\": \"cac0570c725b87a33ca12412d72f8bd33eea259c5cf13c76ec4c5c86c3eaa749\"\n    },\n    {\n      \"role\": \"closure-003\",\n      \"path\": \"/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc\",\n      \"kind\": \"directory\",\n      \"digest_blake3\": \"c52f87841eb34efb0ec227b2dcbfa24963562d779da0c40903eded4a79af83b9\"\n    },\n    {\n      \"role\": \"closure-004\",\n      \"path\": \"/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51\",\n      \"kind\": \"directory\",\n      \"digest_blake3\": \"3bce9e71b1a744c381799223a2aca4d5794f11a46f4ee60991dda692a64be3d1\"\n    },\n    {\n      \"role\": \"compiler\",\n      \"path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\",\n      \"kind\": \"file\",\n      \"digest_blake3\": \"c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8\"\n    },\n    {\n      \"role\": \"source\",\n      \"path\": \"/tmp/mantle-readiness-20261023-v8/source/ready.rs\",\n      \"kind\": \"file\",\n      \"digest_blake3\": \"a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd\"\n    },\n    {\n      \"role\": \"sysroot\",\n      \"path\": \"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\",\n      \"kind\": \"directory\",\n      \"digest_blake3\": \"f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785\"\n    }\n  ],\n  \"output_contracts\": [\n    {\n      \"staged_relative_path\": \"ready.rmeta\",\n      \"destination_path\": \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\",\n      \"kind\": \"file\",\n      \"max_bytes\": 1048576,\n      \"executable\": false\n    }\n  ],\n  \"effects\": {\n    \"filesystem\": \"declared-roots\",\n    \"network\": \"deny\",\n    \"clock\": \"allow\",\n    \"randomness\": \"allow\"\n  },\n  \"limits\": {\n    \"elapsed_millis\": 120000,\n    \"stdout_bytes\": 1048576,\n    \"stderr_bytes\": 1048576,\n    \"artifact_bytes\": 8589934592\n  }\n}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-preparation.json",
+      "byte_count": 5557,
+      "blake3": "e33084a2c5e3b1ebe3482235c35ee110bcb716b84cdda134563559aebb0e9a7f",
+      "text": "{\"action\": {\"unit_id\": \"readiness-rust-unit\", \"package_id\": \"readiness-rust-0.0.0\", \"crate_name\": \"readiness\", \"target_kind\": \"lib\", \"execution_kind\": \"target\", \"host_triple\": \"x86_64-unknown-linux-gnu\", \"target_triple\": \"x86_64-unknown-linux-gnu\", \"profile\": \"dev\", \"mode\": \"build\", \"features\": [], \"source_digest_blake3\": \"a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd\", \"compiler_digest_blake3\": \"c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8\", \"compiler_version_digest_blake3\": \"dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b\", \"toolchain_closure_digest_blake3\": \"f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785\", \"execution_platform_digest_blake3\": \"215174f0f25a06af73b7b30c877184c9fe7a941231602b883e2fe0f73eec2723\", \"semantic_arguments\": [{\"value\": \"--crate-name\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"readiness\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"--crate-type\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"lib\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"--edition\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"2024\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"--emit=metadata\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"--sysroot\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\", \"contains_absolute_path\": true, \"absolute_paths_classified\": true}, {\"value\": \"/tmp/mantle-readiness-20261023-v8/source/ready.rs\", \"contains_absolute_path\": true, \"absolute_paths_classified\": true}, {\"value\": \"-o\", \"contains_absolute_path\": false, \"absolute_paths_classified\": false}, {\"value\": \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\", \"contains_absolute_path\": true, \"absolute_paths_classified\": true}], \"admitted_environment\": {}, \"dependency_artifacts\": [], \"host_artifacts\": [], \"build_script_facts\": [], \"native_link_facts\": [], \"compiler_policy_digest_blake3\": \"8845cecbd371c0f5ec31751e8adc9a739bb3e519eff81e73c7f7c691d071ac4b\"}, \"request\": {\"manifest_path\": \"/tmp/mantle-readiness-20261023-v8/rust-manifest.json\", \"expected_manifest_ref\": null, \"real_compiler_path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\", \"arguments\": [\"--crate-name\", \"readiness\", \"--crate-type\", \"lib\", \"--edition\", \"2024\", \"--emit=metadata\", \"--sysroot\", \"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\", \"/tmp/mantle-readiness-20261023-v8/source/ready.rs\", \"-o\", \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\"], \"admitted_environment\": {}, \"working_directory\": \"/tmp/mantle-readiness-20261023-v8/source\", \"output_contracts\": [{\"staged_relative_path\": \"ready.rmeta\", \"destination_path\": \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\", \"kind\": \"file\", \"max_bytes\": 1048576, \"executable\": false}]}, \"manifest\": {\"policy_id\": \"cc-cache-proof\", \"real_compiler_path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\", \"working_directory\": \"/tmp/mantle-readiness-20261023-v8/source\", \"readable_roots\": [\"/nix/store\", \"/tmp/mantle-readiness-20261023-v8\"], \"writable_roots\": [\"/tmp/mantle-readiness-20261023-v8/objects\"], \"declared_inputs\": [{\"role\": \"compiler\", \"path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\", \"kind\": \"file\", \"digest_blake3\": \"c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8\"}, {\"role\": \"source\", \"path\": \"/tmp/mantle-readiness-20261023-v8/source/ready.rs\", \"kind\": \"file\", \"digest_blake3\": \"a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd\"}, {\"role\": \"closure-000\", \"path\": \"/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2\", \"kind\": \"directory\", \"digest_blake3\": \"988a1e79f587829fc0b0ecdcf630964c17d124d20c6931c2b0e4b4b3119916e2\"}, {\"role\": \"sysroot\", \"path\": \"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\", \"kind\": \"directory\", \"digest_blake3\": \"f64305e4ca6530955f762dbb8aab508cd91810c9689e57441acc222f7b2d1785\"}, {\"role\": \"closure-002\", \"path\": \"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\", \"kind\": \"directory\", \"digest_blake3\": \"cac0570c725b87a33ca12412d72f8bd33eea259c5cf13c76ec4c5c86c3eaa749\"}, {\"role\": \"closure-003\", \"path\": \"/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc\", \"kind\": \"directory\", \"digest_blake3\": \"c52f87841eb34efb0ec227b2dcbfa24963562d779da0c40903eded4a79af83b9\"}, {\"role\": \"closure-004\", \"path\": \"/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51\", \"kind\": \"directory\", \"digest_blake3\": \"3bce9e71b1a744c381799223a2aca4d5794f11a46f4ee60991dda692a64be3d1\"}], \"output_contracts\": [{\"staged_relative_path\": \"ready.rmeta\", \"destination_path\": \"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\", \"kind\": \"file\", \"max_bytes\": 1048576, \"executable\": false}], \"effects\": {\"clock\": \"allow\", \"filesystem\": \"declared-roots\", \"network\": \"deny\", \"randomness\": \"allow\"}, \"limits\": {\"artifact_bytes\": 8589934592, \"elapsed_millis\": 120000, \"stderr_bytes\": 1048576, \"stdout_bytes\": 1048576}}}"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/rust-request.json",
+      "byte_count": 1090,
+      "blake3": "58d862f9132114114622919016e961bfc461b8d1618fec44753259773d41537e",
+      "text": "{\"schema\":\"mantle-rustc-wrapper-request-v1\",\"request_ref\":\"mantle-rustc-request://blake3/2e773472bdd110fafd711f34d7fbdc6e8c4963db5755bc00976086b35c32c6c4\",\"manifest_path\":\"/tmp/mantle-readiness-20261023-v8/rust-manifest.json\",\"expected_manifest_ref\":\"mantle-rustc-manifest://blake3/cb892ad8ce5752b547f0b3d1623bf9b90d69735a412dea172b51015dc97f1fb7\",\"real_compiler_path\":\"/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc\",\"arguments\":[\"--crate-name\",\"readiness\",\"--crate-type\",\"lib\",\"--edition\",\"2024\",\"--emit=metadata\",\"--sysroot\",\"/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu\",\"/tmp/mantle-readiness-20261023-v8/source/ready.rs\",\"-o\",\"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\"],\"admitted_environment\":{},\"working_directory\":\"/tmp/mantle-readiness-20261023-v8/source\",\"output_contracts\":[{\"staged_relative_path\":\"ready.rmeta\",\"destination_path\":\"/tmp/mantle-readiness-20261023-v8/objects/ready.rmeta\",\"kind\":\"file\",\"max_bytes\":1048576,\"executable\":false}]}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/source/a.c",
+      "byte_count": 41,
+      "blake3": "b4ab46e050002825eb8fdef35dc271bffa579115f69b0f06df0e4c3d8dc72aaa",
+      "text": "int readiness_value(void) { return 73; }\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-20261023-v8/source/ready.rs",
+      "byte_count": 50,
+      "blake3": "a2127be8d09b09e7330d739a10934f6f77aa6e99abec82f119205f4279c858bd",
+      "text": "#![no_std]\npub fn readiness_value() -> u32 { 73 }\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/cohort-provenance.json",
+      "byte_count": 627,
+      "blake3": "9dd694c717ded1c02c17b5c73154e16e33de990edcfa0d9c02ce8b8893825cbf",
+      "text": "{\n  \"source\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-human.py\",\n  \"source_blake3\": \"e7752f1abef70017d912f6ca34100188fc5255ca3262bb1b6f7112392cb38ee4\",\n  \"derived\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/service-readiness-human-repaired-derived.py\",\n  \"derived_blake3\": \"43d5a92bdcef0e703c063f4f57b69c65024b106e937fb989ebd466ffc5fdaf78\",\n  \"pins\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json\",\n  \"dependency_task\": 73,\n  \"acceptance_claimed\": false\n}\n"
+    },
+    {
+      "original_path": "/tmp/mantle-readiness-human-20261023-v2/result.json",
+      "byte_count": 2522,
+      "blake3": "f12d2376c28af27134de79fce98dab0c145a3f378c5ee0095b54cfee7f125caa",
+      "text": "{\n  \"schema\": \"mantle-human-readiness-smoke-v1\",\n  \"acceptance_claimed\": false,\n  \"non_claims\": [\n    \"Readiness is coordination state, not build or release evidence.\"\n  ],\n  \"commands\": [\n    {\n      \"label\": \"human-baseline\",\n      \"argv\": [\n        \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle\",\n        \"--store\",\n        \"/tmp/mantle-readiness-human-20261023-v2/store\",\n        \"--state-dir\",\n        \"/tmp/mantle-readiness-human-20261023-v2/state\",\n        \"doctor\"\n      ],\n      \"exit_code\": 0,\n      \"stdout\": \"/tmp/mantle-readiness-human-20261023-v2/human-baseline.stdout\",\n      \"stderr\": \"/tmp/mantle-readiness-human-20261023-v2/human-baseline.stderr\"\n    },\n    {\n      \"label\": \"human-with-readiness\",\n      \"argv\": [\n        \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle\",\n        \"--store\",\n        \"/tmp/mantle-readiness-human-20261023-v2/store\",\n        \"--state-dir\",\n        \"/tmp/mantle-readiness-human-20261023-v2/state\",\n        \"doctor\",\n        \"--readiness-socket\",\n        \"/tmp/mantle-readiness-human-20261023-v2/live.sock\"\n      ],\n      \"exit_code\": 0,\n      \"stdout\": \"/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stdout\",\n      \"stderr\": \"/tmp/mantle-readiness-human-20261023-v2/human-with-readiness.stderr\"\n    }\n  ],\n  \"readiness\": {\n    \"schema\": \"mantle-service-readiness-v1\",\n    \"classification\": \"coordination-state\",\n    \"evidence_eligible\": false,\n    \"components\": [\n      {\n        \"id\": \"live-daemon-208768\",\n        \"generation\": 1,\n        \"states\": [\n          \"started\",\n          \"ready\"\n        ],\n        \"restart_policy\": \"never\",\n        \"restart_action\": null,\n        \"ready\": true,\n        \"blocked_by\": []\n      }\n    ]\n  },\n  \"human_stdout_and_exit_unchanged\": true,\n  \"coordinator\": {\n    \"argv\": [\n      \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle\",\n      \"--store\",\n      \"/tmp/mantle-readiness-human-20261023-v2/store\",\n      \"--state-dir\",\n      \"/tmp/mantle-readiness-human-20261023-v2/state\",\n      \"remote\",\n      \"live\",\n      \"serve\",\n      \"--socket\",\n      \"/tmp/mantle-readiness-human-20261023-v2/live.sock\"\n    ],\n    \"pid\": 208768,\n    \"exit_code\": 0\n  },\n  \"executable_invariance\": true,\n  \"mantle_blake3\": \"c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85\",\n  \"status\": \"passed\"\n}\n"
+    }
+  ],
+  "criteria": [
+    {
+      "task": "T1.1",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:8",
+      "exact_task_text": "- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current readiness behavior of the Rust cache daemon, remote serve, and proof stages, including one blocked-dependency observation (`evidence/baseline-2026-09-30.md`; no new readiness producer acceptance). r[mantle.service_readiness.readiness_vocabulary]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T1.2",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:9",
+      "exact_task_text": "- [x] [serial] T1.2 Define the state vocabulary, dependency declaration shape, and restart policy matrix as a versioned schema (`specs/service-readiness/schema.json`, design contract; producer acceptance remains open). r[mantle.service_readiness.readiness_vocabulary]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T1.3",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:10",
+      "exact_task_text": "- [x] [serial] T1.3 Record the `ready`-additional, declared-dependency, and closed-matrix decisions in Proposed ADR 0091 and its index row (implementation remains open). r[mantle.service_readiness.restart_policy_matrix]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.1",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:14",
+      "exact_task_text": "- [x] [serial] T2.1 Implement pure vocabulary validation, dependency graph evaluation, restart policy normalization, and derived state computation in `crates/crunch-service-readiness-core` (root workspace registration and consumer adapters now exist in source; T3/T4 runtime acceptance remains pending; original scoped proof `evidence/t2-core-2026-10-01.md`). r[mantle.service_readiness.declared_dependencies]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.2",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:15",
+      "exact_task_text": "- [x] [serial] T2.2 Add the bounded non-evidence readiness reporting boundary and direct blocked-dependency result (`evidence/t2-core-2026-10-01.md`; no real daemon acknowledgment claimed). r[mantle.service_readiness.declared_dependencies]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.1",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:19",
+      "exact_task_text": "- [ ] [serial] T3.1 Report `started` and `ready` separately for the coordination daemon, including restart, and name its restart policy. r[mantle.service_readiness.readiness_vocabulary]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Real coordinator subscription returned snapshot-start/snapshot-end; its report named started/ready and restart_policy=never. After clean shutdown, absent-daemon doctor exited 3; a fresh manually launched daemon had only its own ID. Does not demonstrate supervisor policy actions or intermediate coordinator started-only timing.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.2",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:20",
+      "exact_task_text": "- [ ] [serial] T3.2 Report `started` and `ready` separately for the Rust cache daemon, and name its restart policy. r[mantle.service_readiness.restart_policy_matrix]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Rust cache first reported states=[started], ready=false, never. A real C compile did not make Rust readiness true. Matching Rust request then compiled/committed, warm request restored identical metadata via local-hit, and the cache reported started/ready; clean termination reported complete and retracted ready. This is a single metadata-only Rust action, not arbitrary cache/toolchain acceptance.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.3",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:21",
+      "exact_task_text": "- [ ] [serial] T3.3 Report `started` and `ready` separately for the remote serve binding, and name its restart policy. r[mantle.service_readiness.restart_policy_matrix]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.4",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:22",
+      "exact_task_text": "- [ ] [serial] T3.4 Declare dependency relations for the source-built fixed-point proof stages and report each stage's state under the vocabulary. r[mantle.service_readiness.declared_dependencies]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.5",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:23",
+      "exact_task_text": "- [ ] [serial] T3.5 Make `mantle doctor` publish derived readiness state while keeping existing human and JSON output unchanged. r[mantle.service_readiness.doctor_derived_state]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "JSON and human doctor stdout were byte-identical to their respective baselines with unchanged exit 0. Opt-in stderr report is schema mantle-service-readiness-v1, classification coordination-state, evidence_eligible=false. Actual evidence-validator rejection and receipt-builder unchanged-output controls were NOT executed.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.1",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:40",
+      "exact_task_text": "- [ ] [parallel] T4.1 Add positive fixtures: `ready` only after a real request succeeds; a dependent component starts after its dependency is `ready`; each restart policy observed on a controlled exit. r[mantle.service_readiness.readiness_vocabulary]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Positive real coordinator/cache request observations and one fresh manual restart are retained. Dependent-start-after-ready and every policy controlled normal/abnormal exit remain unobserved here; all/on-error/always are not established.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.2",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:41",
+      "exact_task_text": "- [ ] [parallel] T4.2 Add negative fixtures: process exits before readiness reports `failed`, not `ready`; blocked dependency reports the blocker; unknown state rejected; missing policy rejected. r[mantle.service_readiness.declared_dependencies]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.3",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:42",
+      "exact_task_text": "- [ ] [parallel] T4.3 Prove doctor evidence separation: derived state is not accepted by evidence validators and does not change receipts. r[mantle.service_readiness.doctor_derived_state]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Separate stderr channel and non-evidence marker observed for human and JSON doctor. No actual evidence-validator/receipt-builder invocation occurred; that required negative control remains local work.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.4",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:43",
+      "exact_task_text": "- [ ] [serial] T4.4 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.service_readiness.readiness_vocabulary]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.5",
+      "task_source": ".cairn/changes/unify-long-lived-service-readiness/tasks.md:44",
+      "exact_task_text": "- [ ] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.service_readiness.doctor_derived_state]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    }
+  ],
+  "passed_controls": [
+    "Coordinator actual empty subscription snapshot; declared never policy; fresh manually restarted instance does not inherit old assertions.",
+    "Cache started-only before Rust work, C response not Rust ready, real Rust cold compile+commit then warm local-hit with identical metadata; complete retracts ready.",
+    "Human and JSON doctor stdout/exit unchanged, separate non-evidence stderr; absent coordinator preserves query error exit 3, no stale ready result.",
+    "Recorded executables were invariant during the completed scenarios."
+  ],
+  "missing_controls": [
+    "T3.3: actual remote serve readiness report/policy observation; the separate remote build did not query its readiness.",
+    "T3.4: source-built fixed-point proof-stage observations and stage-local action identity; no proof execution inferred.",
+    "T4.1: real dependent-start order and each controlled restart policy (always/on-error/all/never); a manual restart is insufficient.",
+    "T4.2: early process failure, blocked dependency name, unknown state and missing policy negative controls are not in these captures.",
+    "T4.3: actual evidence validator rejection and receipt non-mutation control.",
+    "T4.4/4.5: parent final integrated gates, acceptance, spec sync/archive remain separate and unauthorized here."
+  ],
+  "reproduction": {
+    "owner": "Main / Mantle readiness maintainers",
+    "driver_entry_argv": [
+      "python3",
+      "target/cairn-finish-20261023/readiness-repaired-runtime.py"
+    ],
+    "status": "Reproduction recipe, not a separately captured outer-shell command receipt; observed subprocess argv/exit/status/streams are exact in after_runtime and human_after_runtime.",
+    "constraints": [
+      "Run only by owner after checking retained executable BLAKE3. Entry driver creates derived scripts and /tmp roots exclusively; existing roots/derived files cannot be reused. Copy the retained driver and declare fresh roots/derived output names; record substitutions rather than overwrite any historical run.",
+      "Requires retained cohort, mantle-cc-driver, matching service-readiness-client (helper digest in subject), the admitted Nix compiler/sysroot/ELF closure, b3sum/readelf/nix-store, and private C-cache policies from /tmp/mantle-cc-runtime-20261023-c19 (selected derived policies are retained).",
+      "Actual compiler argv, environment-selected closure identities and admitted request/manifests/receipts are retained. Original helper compilation command is not captured; its exact binary digest and source are retained. Rebuilding or repinning a different helper creates a different observation subject."
+    ]
+  },
+  "remaining_local_actions": [
+    "Main: capture remaining producer/dependency/restart/validator/proof controls identified above on an explicitly selected cohort; preserve raw outputs and exact pins.",
+    "Main: final-source integration gates and task acceptance reconciliation; no result of running Pueue tasks is assumed."
+  ],
+  "actual_external_prerequisites_or_upstream_limits": []
+}

@@ -21,7 +21,9 @@ fn run() -> Result<(), String> {
     }
     let profile = crunch_fpga::read_profile(Path::new(&args[2]))?;
     let value = match args[1].as_str() {
-        "plan" if args.len() == 3 => serde_json::to_value(crunch_fpga_core::identities(profile)?.stages),
+        "plan" if args.len() == 3 => {
+            serde_json::to_value(crunch_fpga_core::identities(profile).map_err(|error| error.to_string())?.stages)
+        }
         "run" if args.len() == 4 => serde_json::to_value(crunch_fpga::execute(profile, Path::new(&args[3]))?),
         _ => return Err("expected plan PROFILE or run PROFILE FRESH_ABSOLUTE_OUTPUT".into()),
     }

@@ -323,21 +323,20 @@ mod witness_handoff;
 mod witness_rebuild;
 
 use std::ffi::OsString;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
 const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
-const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
+const DEFAULT_SUBSTITUTER_COUNT: u32 = 0;
 const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
 const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
 const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
-const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
-const REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS: usize = 64;
 const SOURCE_BUILT_FIXED_POINT_ELAPSED_SECONDS_MAX_DEFAULT: u64 = 86_400;
 const SOURCE_BUILT_FIXED_POINT_DISK_BYTES_MAX_DEFAULT: u64 = 1_099_511_627_776;
 const SOURCE_BUILT_FIXED_POINT_PROTECTED_EXEC_EVENTS_MAX_DEFAULT: u32 = 262_144;
@@ -566,12 +565,20 @@ enum Command {
         #[arg(long, conflicts_with_all = ["plan", "watch", "builder", "strict_hermetic", "offline_source_manifest"])]
         compile_driver_runtime: Option<PathBuf>,
 
+        /// Collect local Rust wait observations outside store/output identity
+        #[arg(long, conflicts_with_all = ["plan", "watch", "builder", "strict_hermetic", "offline_source_manifest", "offline_source_preflight"])]
+        rust_wait_diagnostics: Option<PathBuf>,
+
+        /// Exact declared Cargo wait-wrapper executable (omit for per-unit helpers)
+        #[arg(long, requires = "rust_wait_diagnostics")]
+        rust_wait_wrapper: Option<PathBuf>,
+
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
         jobs: Option<u32>,
 
-        /// Binary cache URLs for substitution (comma-separated)
-        #[arg(long, default_value = "https://cache.nixos.org")]
+        /// Opt-in binary cache URLs for substitution (comma-separated; none by default)
+        #[arg(long, default_value = "")]
         substituters: String,
 
         /// Disable remote binary cache substitution
@@ -1264,6 +1271,10 @@ enum Command {
         /// Output directory for execution artifacts
         #[arg(long)]
         execution_output_root: Option<PathBuf>,
+
+        /// Collect ordinary native compiler observations in a separate new private directory
+        #[arg(long, requires = "execution_output_root")]
+        rust_wait_diagnostics: Option<PathBuf>,
 
         /// Explicit local Rust unit cache policy
         #[arg(long, value_enum, default_value_t = RustLocalCacheMode::Off)]
@@ -3674,6 +3685,7 @@ fn preflight_store_cli_capabilities(
     args: &Args,
     profile: crunch_store::StoreBackendCapabilityProfile,
 ) -> Result<(), RunError> {
+    preflight_rust_wait_cli(args)?;
     let backend = args.store_backend.as_str();
     if matches!(&args.command, Command::Store {
         action: StoreAction::Archive {
@@ -3736,6 +3748,160 @@ fn preflight_store_cli_capabilities(
         return Err(RunError::Build(format!("{backend}-trust-unsigned-unsupported")));
     }
     Ok(())
+}
+
+fn preflight_rust_wait_cli(args: &Args) -> Result<(), RunError> {
+    let (directory, wrapper) = match &args.command {
+        Command::Build {
+            file,
+            rust_wait_diagnostics,
+            rust_wait_wrapper,
+            plan,
+            watch,
+            builder,
+            strict_hermetic,
+            offline_source_manifest,
+            offline_source_preflight,
+            ..
+        } => {
+            if rust_wait_diagnostics.is_some()
+                && (*plan
+                    || *watch
+                    || builder.is_some()
+                    || *strict_hermetic
+                    || offline_source_manifest.is_some()
+                    || *offline_source_preflight)
+            {
+                return Err(RunError::Build("Rust wait diagnostics require ordinary local non-proof execution".into()));
+            }
+            if rust_wait_wrapper.is_some() && rust_wait_diagnostics.is_none() {
+                return Err(RunError::Build("--rust-wait-wrapper requires --rust-wait-diagnostics".into()));
+            }
+            if let Some(directory) = rust_wait_diagnostics {
+                let source_root = match file.as_deref() {
+                    Some(file) => absolute_wait_boundary(file)?.parent().map(Path::to_path_buf),
+                    None => Some(std::env::current_dir().map_err(|error| RunError::Internal(error.to_string()))?),
+                };
+                if source_root.is_some_and(|root| directory.starts_with(root)) {
+                    return Err(RunError::Build(
+                        "Rust wait diagnostics must remain outside the local recipe/source root".into(),
+                    ));
+                }
+            }
+            (rust_wait_diagnostics.as_deref(), rust_wait_wrapper.as_deref())
+        }
+        Command::RustPlan {
+            rust_wait_diagnostics: Some(directory),
+            compiler_policy_mode,
+            root,
+            rustc,
+            execution_output_root,
+            execute_first_supported_unit,
+            execute_first_dependency_chain,
+            execute_target_topology,
+            execute_host_artifact_topology,
+            execute_topology,
+            execute_dev_dependency_test_topology,
+            execute_workspace_dependency_topology,
+            execute_patch_source_topology,
+            ..
+        } => {
+            let executes = *execute_first_supported_unit
+                || *execute_first_dependency_chain
+                || *execute_target_topology
+                || *execute_host_artifact_topology
+                || *execute_topology
+                || *execute_dev_dependency_test_topology
+                || *execute_workspace_dependency_topology
+                || *execute_patch_source_topology;
+            if compiler_policy_mode != "plain" || !executes || execution_output_root.is_none() || !rustc.is_absolute() {
+                return Err(RunError::Build(
+                    "Native wait diagnostics require explicit absolute rustc and plain local execution".into(),
+                ));
+            }
+            let workspace = root
+                .clone()
+                .unwrap_or(std::env::current_dir().map_err(|error| RunError::Internal(error.to_string()))?);
+            for boundary in std::iter::once(workspace.as_path()).chain(execution_output_root.as_deref()) {
+                let absolute = absolute_wait_boundary(boundary)?;
+                if directory.starts_with(absolute) {
+                    return Err(RunError::Build(
+                        "Rust wait diagnostics must remain outside source and execution outputs".into(),
+                    ));
+                }
+            }
+            (Some(directory.as_path()), None)
+        }
+        _ => (None, None),
+    };
+    if let Some(directory) = directory {
+        let runtime = crunch_rustc_wrapper::waits::RuntimeOptions {
+            directory: directory.to_path_buf(),
+            wrapper: wrapper.map(Path::to_path_buf),
+            native_units: None,
+        };
+        crunch_build::rust_waits::validate_runtime(&runtime).map_err(|error| RunError::Build(error.to_string()))?;
+        if directory.starts_with(absolute_wait_boundary(&args.store)?) {
+            return Err(RunError::Build("Rust wait diagnostics must remain outside the store".into()));
+        }
+    }
+    Ok(())
+}
+
+fn absolute_wait_boundary(path: &Path) -> Result<PathBuf, RunError> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|root| root.join(path))
+            .map_err(|error| RunError::Internal(error.to_string()))?
+    };
+    let mut normalized = PathBuf::from("/");
+    for component in absolute.components() {
+        match component {
+            std::path::Component::Normal(part) => normalized.push(part),
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => {}
+        }
+    }
+    for ancestor in normalized.ancestors() {
+        match fs::canonicalize(ancestor) {
+            Ok(base) => {
+                return Ok(base
+                    .join(normalized.strip_prefix(ancestor).map_err(|error| RunError::Internal(error.to_string()))?));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(RunError::Internal(error.to_string())),
+        }
+    }
+    Err(RunError::Internal("absolute wait boundary has no filesystem root".into()))
+}
+
+fn native_wait_runtime(
+    directory: Option<&Path>,
+    rustc: &Path,
+    policy: &rust_plan::RustCompilerPolicySelection,
+) -> Result<Option<std::sync::Arc<std::sync::Mutex<rust_plan::NativeWaitRuntime>>>, RunError> {
+    let Some(directory) = directory else {
+        return Ok(None);
+    };
+    if policy.mode != rust_plan::RustCompilerPolicyMode::Plain {
+        return Err(RunError::Build("Rust wait diagnostics do not support compiler-policy providers".into()));
+    }
+    let options = crunch_rustc_wrapper::waits::RuntimeOptions {
+        directory: directory.to_path_buf(),
+        wrapper: None,
+        native_units: None,
+    };
+    match rust_plan::NativeWaitRuntime::start(&options, rustc) {
+        Ok(runtime) => Ok(Some(std::sync::Arc::new(std::sync::Mutex::new(runtime)))),
+        Err(error) => {
+            tracing::warn!(%error, "native Rust wait observation unavailable; ordinary execution is unchanged");
+            Ok(None)
+        }
+    }
 }
 
 fn run(args: Args) -> Result<(), RunError> {
@@ -4170,15 +4336,14 @@ fn run_operator_contract(mode: OperatorContractMode) -> Result<(), RunError> {
         OperatorContractMode::Catalog => {
             presentation::reports::print_operator_json(&catalog, "operator command catalog")
         }
-        OperatorContractMode::Reference => {
-            print!("{}", operator_contract::render_command_reference(&catalog));
-            Ok(())
-        }
+        OperatorContractMode::Reference => presentation::reports::print_operator_text(
+            operator_contract::render_command_reference(&catalog),
+            "operator command reference",
+        ),
         OperatorContractMode::Workflow => {
             let workflow = operator_contract::render_canonical_workflow(&catalog)
                 .map_err(|error| RunError::Internal(format!("operator workflow: {error}")))?;
-            print!("{workflow}");
-            Ok(())
+            presentation::reports::print_operator_text(&workflow, "operator workflow")
         }
         OperatorContractMode::Check => check_operator_generated_files(&catalog),
     }
@@ -4200,8 +4365,10 @@ fn check_operator_generated_files(catalog: &operator_contract::CommandCatalog) -
         Path::new("docs/generated/canonical-operator-workflow.md"),
         &expected_workflow,
     )?;
-    println!("operator command contract: PASS (commands={})", catalog.entries.len());
-    Ok(())
+    presentation::reports::print_operator_text(
+        format_args!("operator command contract: PASS (commands={})\n", catalog.entries.len()),
+        "operator command contract check",
+    )
 }
 
 fn filegen_command_label(action: &FilegenCommandAction) -> &'static str {
@@ -5318,6 +5485,8 @@ struct BuildCommandInput<'a> {
     offline_source_manifest_blake3: Option<&'a str>,
     causal_trace: bool,
     compile_driver_runtime: Option<&'a Path>,
+    rust_wait_diagnostics: Option<&'a Path>,
+    rust_wait_wrapper: Option<&'a Path>,
     output_mode: BuildOutputMode,
     jobs: Option<u32>,
     substituters: &'a str,
@@ -5354,6 +5523,8 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         causal_trace,
         evaluation_stream,
         compile_driver_runtime,
+        rust_wait_diagnostics,
+        rust_wait_wrapper,
         jobs,
         substituters,
         no_substitute,
@@ -5390,6 +5561,8 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         interchange_dir: interchange_dir.as_deref(),
         causal_trace: *causal_trace,
         compile_driver_runtime: compile_driver_runtime.as_deref(),
+        rust_wait_diagnostics: rust_wait_diagnostics.as_deref(),
+        rust_wait_wrapper: rust_wait_wrapper.as_deref(),
         output_mode: if *evaluation_stream {
             BuildOutputMode::EvaluationStream
         } else {
@@ -5444,6 +5617,7 @@ struct PreparedBuildCommand<'a> {
     interchange_dir: Option<&'a Path>,
     causal_trace: bool,
     compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     output_mode: BuildOutputMode,
     max_jobs: u32,
     substituter_urls: Vec<String>,
@@ -5498,12 +5672,62 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
         &ctx.base_state_dirs,
         ctx.store_source_admission().as_deref(),
     )?;
-    let prepared = prepare_build_command(ctx, input)?;
-    match &prepared.target {
+    let mut prepared = prepare_build_command(ctx, input)?;
+    prepared.rust_wait_runtime = prepared.rust_wait_runtime.take().and_then(|runtime| {
+        match crunch_rustc_wrapper::observed_process::private_dir(&runtime.directory) {
+            Ok(()) => Some(runtime),
+            Err(error) => {
+                tracing::warn!(%error, "Rust wait root unavailable; ordinary build is unchanged and old sidecars are not reused");
+                None
+            }
+        }
+    });
+    let result = match &prepared.target {
         project_build::BuildTarget::File(path) => run_file_build_target(&prepared, path),
         project_build::BuildTarget::ProjectDefault | project_build::BuildTarget::Selector(_) => {
             run_project_build_target(&prepared)
         }
+    };
+    if let Some(runtime) = &prepared.rust_wait_runtime {
+        finish_rust_wait_selection(runtime, &result);
+    }
+    result
+}
+
+fn finish_rust_wait_selection(runtime: &crunch_rustc_wrapper::waits::RuntimeOptions, result: &Result<(), RunError>) {
+    let published = fs::read_dir(&runtime.directory).ok().is_some_and(|entries| {
+        entries.take(crunch_rustc_wrapper::waits::MAX_UNITS + 1).filter_map(Result::ok).any(|entry| {
+            entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && fs::symlink_metadata(entry.path().join("rust-waits.json")).is_ok_and(|metadata| metadata.is_file())
+        })
+    });
+    if published {
+        return;
+    }
+    let observation = (|| -> Result<(), std::io::Error> {
+        use rand::RngCore as _;
+        let root = tempfile::Builder::new().prefix("unavailable-").tempdir_in(&runtime.directory)?;
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+        let invocation = crunch_rustc_wrapper::waits::Digest::from_slice(&nonce);
+        let mut collector =
+            crunch_rustc_wrapper::waits::NativeWaitCollector::start(root.path(), invocation.clone(), invocation)?;
+        collector.observation_lost();
+        let outcome = match result {
+            Ok(()) => crunch_rustc_wrapper::waits::RunOutcome::Success,
+            Err(RunError::Build(_)) => crunch_rustc_wrapper::waits::RunOutcome::Rejected,
+            Err(_) => crunch_rustc_wrapper::waits::RunOutcome::Infrastructure,
+        };
+        let report = collector.finish(outcome);
+        let retained = root.keep();
+        tracing::warn!(directory = %retained.display(), "No current Rust process observation was available; cache reuse and unsupported roots do not mint compiler attempts");
+        if report.publication_error.is_some() {
+            return Err(std::io::Error::other("unavailable Rust wait report publication failed"));
+        }
+        Ok(())
+    })();
+    if let Err(error) = observation {
+        tracing::warn!(%error, "Rust wait diagnostics unavailable; ordinary build outcome is unchanged");
     }
 }
 
@@ -5512,7 +5736,6 @@ fn prepare_build_command<'a>(
     input: BuildCommandInput<'a>,
 ) -> Result<PreparedBuildCommand<'a>, RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
-    debug_assert!(!input.substituters.trim().is_empty() || input.no_substitute);
     if input.compile_driver_runtime.is_some()
         && (input.plan
             || input.watch
@@ -5526,6 +5749,14 @@ fn prepare_build_command<'a>(
     }
     let compile_driver_runtime =
         input.compile_driver_runtime.map(build_application::read_compile_driver_runtime).transpose()?;
+    let rust_wait_runtime = input.rust_wait_diagnostics.map(|directory| crunch_rustc_wrapper::waits::RuntimeOptions {
+        directory: directory.to_path_buf(),
+        wrapper: input.rust_wait_wrapper.map(Path::to_path_buf),
+        native_units: input
+            .rust_wait_wrapper
+            .is_none()
+            .then(|| std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::new()))),
+    });
     if input.offline_source_manifest.is_some() != input.offline_source_manifest_blake3.is_some() {
         return Err(RunError::Internal(
             "offline vendor cache requires both manifest path and out-of-band BLAKE3".to_string(),
@@ -5554,6 +5785,9 @@ fn prepare_build_command<'a>(
     } else {
         cache_substitution::split_substituter_urls(input.substituters)
     };
+    // No substituter is assumed: an empty opt-in list builds without substitution.
+    debug_assert!(!input.no_substitute || substituter_urls.is_empty());
+    debug_assert!(substituter_urls.iter().all(|url| !url.is_empty() && url.trim() == url.as_str()));
     let remote_plan_facts =
         remote_plan_facts_for_cli(input.remote_builder, input.remote_ticket_fd.is_some(), input.trusted_builder_keys)?;
     let remote_selection = if input.plan {
@@ -5592,6 +5826,7 @@ fn prepare_build_command<'a>(
         interchange_dir: input.interchange_dir,
         causal_trace: input.causal_trace,
         compile_driver_runtime,
+        rust_wait_runtime,
         output_mode: input.output_mode,
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
@@ -5750,6 +5985,7 @@ fn run_local_file_build(
             prepared.ctx.base_state_dirs.clone(),
             None,
             prepared.compile_driver_runtime.clone(),
+            prepared.rust_wait_runtime.clone(),
             prepared.ctx.store_source_admission(),
         );
     }
@@ -5773,6 +6009,7 @@ fn run_local_file_build(
         prepared.interchange_dir,
         prepared.causal_trace,
         prepared.compile_driver_runtime.clone(),
+        prepared.rust_wait_runtime.clone(),
         prepared.ctx.store_source_admission(),
     )
 }
@@ -6340,12 +6577,13 @@ async fn run_remote_failure_debug_replay_async(
     )
     .preflight_backend_identity()
     .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))?;
-    let _coordinator_mutation_guard =
-        remote_build::acquire_remote_coordinator_mutation_guard(input.state_dir).map_err(RunError::Internal)?;
+    let state_dir = input.state_dir;
+    let coordinator_guard =
+        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
     let bundle = input.bundle.clone();
     let mut runtime = prepare_remote_failure_replay_runtime(input).await?;
-    let completed = execute_remote_failure_replay(&mut runtime, operation_plan).await?;
-    complete_remote_failure_replay_report(bundle, &mut runtime, completed)
+    drop(coordinator_guard);
+    execute_remote_failure_replay(&mut runtime, operation_plan, bundle, state_dir).await
 }
 
 async fn open_remote_failure_replay_store(
@@ -6391,7 +6629,10 @@ async fn prepare_remote_failure_replay_runtime(
         &dispatch.client.trusted_output_keys,
         input.options.now_unix_s,
     )
-    .map_err(|error| RunError::Internal(format!("remote failure replay assignment: {error}")))?;
+    .map_err(|error| {
+        publish_unplaced_remote_demand(&mut coordinator, &dispatch.client.request.request_id);
+        RunError::Internal(format!("remote failure replay assignment: {error}"))
+    })?;
     if let Err(error) = remote_build::bind_remote_production_dispatch(
         &mut dispatch,
         attempt.clone(),
@@ -6435,7 +6676,9 @@ async fn prepare_remote_failure_replay_runtime(
 async fn execute_remote_failure_replay(
     runtime: &mut RemoteFailureReplayRuntime,
     operation_plan: &remote_build::operation::RemoteOperationPlan,
-) -> Result<CompletedRemoteFailureReplay, RunError> {
+    bundle: crunch_build::distributed::RemoteFailureDebugBundle,
+    state_dir: &Path,
+) -> Result<serde_json::Value, RunError> {
     debug_assert_eq!(runtime.dispatch.client.request.request_id, runtime.replay_request.request_id);
     debug_assert!(!runtime.dispatch.client.trusted_output_keys.is_empty());
     let mut session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
@@ -6448,22 +6691,26 @@ async fn execute_remote_failure_replay(
         crunch_remote_core::effect::EffectActor::Client,
     )
     .map_err(|reason| RunError::Internal(format!("remote replay effect identity: {reason:?}")))?;
-    let transcript = match remote_build::run_stdio_remote_child(
+    // Receiver execution and cancellation use the same durable coordinator.
+    // Release the preparation transaction before transport, then reload under
+    // a fresh transaction before recording either success or failure.
+    let transcript = remote_build::run_stdio_remote_child(
         &runtime.dispatch.command,
         &runtime.replay_request.request_id,
         &mut session,
-    ) {
-        Ok(transcript) => transcript,
-        Err(error) => {
-            return Err(fail_remote_failure_replay(
-                &mut runtime.coordinator,
-                &runtime.attempt,
-                runtime.now_unix_s,
-                format!("remote failure replay child: {error}"),
-            ));
-        }
-    };
-    let admission = match remote_build::admit_fenced_remote_stdio_output(
+    );
+    let _coordinator_guard =
+        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+    runtime.coordinator = remote_build::load_coordinator_state(state_dir)?;
+    let transcript = transcript.map_err(|error| {
+        fail_remote_failure_replay(
+            &mut runtime.coordinator,
+            &runtime.attempt,
+            runtime.now_unix_s,
+            format!("remote failure replay child: {error}"),
+        )
+    })?;
+    let admission = remote_build::admit_fenced_remote_stdio_output(
         &mut runtime.coordinator,
         &runtime.attempt,
         true,
@@ -6471,18 +6718,16 @@ async fn execute_remote_failure_replay(
         &runtime.dispatch.client.trusted_output_keys,
         &transcript,
         runtime.now_unix_s,
-    ) {
-        Ok(admission) => admission,
-        Err(error) => {
-            return Err(fail_remote_failure_replay(
-                &mut runtime.coordinator,
-                &runtime.attempt,
-                runtime.now_unix_s,
-                format!("remote failure replay output admission: {error}"),
-            ));
-        }
-    };
-    let output_admission = match remote_build::import_admitted_remote_stdio_outputs(
+    )
+    .map_err(|error| {
+        fail_remote_failure_replay(
+            &mut runtime.coordinator,
+            &runtime.attempt,
+            runtime.now_unix_s,
+            format!("remote failure replay output admission: {error}"),
+        )
+    })?;
+    let output_admission = remote_build::import_admitted_remote_stdio_outputs(
         &mut session,
         &mut runtime.store,
         &runtime.replay_request,
@@ -6492,24 +6737,21 @@ async fn execute_remote_failure_replay(
         Some(crunch_store::GcRootSource::Build),
     )
     .await
-    {
-        Ok(report) => report,
-        Err(error) => {
-            return Err(fail_remote_failure_replay(
-                &mut runtime.coordinator,
-                &runtime.attempt,
-                runtime.now_unix_s,
-                format!("remote failure replay output import: {error}"),
-            ));
-        }
-    };
+    .map_err(|error| {
+        fail_remote_failure_replay(
+            &mut runtime.coordinator,
+            &runtime.attempt,
+            runtime.now_unix_s,
+            format!("remote failure replay output import: {error}"),
+        )
+    })?;
     remote_build::operation::classify(operation_plan, remote_build::operation::RemoteOperationFacts::Outputs {
         expected: runtime.replay_request.expected_outputs.len(),
         admitted: output_admission.outputs.len(),
         unevidenced: output_admission.outputs.iter().filter(|output| !is_evidenced_remote_output(output)).count(),
     })?;
     complete_remote_failure_replay_attempt(runtime, &admission)?;
-    Ok(CompletedRemoteFailureReplay {
+    complete_remote_failure_replay_report(bundle, runtime, CompletedRemoteFailureReplay {
         admission,
         output_admission,
     })
@@ -6630,13 +6872,6 @@ fn compare_completed_remote_failure_replay(
     .map_err(|reason| RunError::Internal(reason.as_str().to_string()))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RemoteWorkerFailureDebugReport {
-    bundle_ref: String,
-    capture_outcome_code: String,
-    cleanup_status_code: String,
-}
-
 #[allow(dead_code)]
 #[derive(Debug)]
 struct RemoteFailureObservabilityOutcome {
@@ -6644,7 +6879,7 @@ struct RemoteFailureObservabilityOutcome {
     exporters: remote_telemetry_export::RemoteTelemetryExportReport,
     failure_debug: Option<Result<remote_failure_debug::RemoteFailureDebugPublishOutcome, String>>,
     attempt_failure: Option<Result<(), String>>,
-    worker_debug: Option<RemoteWorkerFailureDebugReport>,
+    worker_debug: Option<remote_failure_debug::RemoteWorkerFailureDebugReport>,
 }
 
 struct RemoteFailureDebugEmissionContext<'a> {
@@ -6652,62 +6887,7 @@ struct RemoteFailureDebugEmissionContext<'a> {
     request: &'a remote_build::ConcreteBuildRequest,
     route_class: &'a str,
     created_unix_s: u64,
-    worker_debug: Option<RemoteWorkerFailureDebugReport>,
-}
-
-fn parse_remote_worker_failure_debug_report(reason: &str) -> Option<RemoteWorkerFailureDebugReport> {
-    debug_assert!(!REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX.is_empty());
-    let bundle_ref = remote_failure_debug_report_field(RemoteFailureFieldQuery {
-        reason,
-        prefix: "worker_bundle_ref=",
-    })?;
-    let capture_outcome_code = remote_failure_debug_report_field(RemoteFailureFieldQuery {
-        reason,
-        prefix: "worker_capture_outcome=",
-    })?;
-    let cleanup_status_code = if reason.contains("remote-failure-workspace-cleanup-degraded") {
-        "cleanup-degraded".to_string()
-    } else {
-        remote_failure_debug_report_field(RemoteFailureFieldQuery {
-            reason,
-            prefix: "worker_cleanup_status=",
-        })?
-    };
-    let digest = bundle_ref.strip_prefix(REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX)?;
-    if digest.len() != REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS
-        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
-        return None;
-    }
-    if !valid_remote_failure_status_code(&capture_outcome_code)
-        || !valid_remote_failure_status_code(&cleanup_status_code)
-    {
-        return None;
-    }
-    Some(RemoteWorkerFailureDebugReport {
-        bundle_ref,
-        capture_outcome_code,
-        cleanup_status_code,
-    })
-}
-
-struct RemoteFailureFieldQuery<'a> {
-    reason: &'a str,
-    prefix: &'a str,
-}
-
-fn remote_failure_debug_report_field(query: RemoteFailureFieldQuery<'_>) -> Option<String> {
-    query.reason.split(';').map(str::trim).find_map(|field| {
-        field
-            .strip_prefix(query.prefix)
-            .and_then(|value| value.split(['\r', '\n']).next())
-            .map(str::to_string)
-    })
-}
-
-/// Whether one remote failure status code is an admissible bounded token.
-fn valid_remote_failure_status_code(value: &str) -> bool {
-    mantle_application_contract::is_remote_failure_status_code_admissible(value)
+    worker_debug: Option<remote_failure_debug::RemoteWorkerFailureDebugReport>,
 }
 
 fn remote_protocol_failure_fact(reason: &str) -> remote_build::RemoteProductionTelemetryFact {
@@ -6864,12 +7044,10 @@ fn annotate_remote_failure_error(error: RunError, observability: &RemoteFailureO
     let Some(Ok(debug)) = observability.failure_debug.as_ref() else {
         return error;
     };
-    let worker = observability.worker_debug.as_ref().map_or_else(String::new, |worker| {
-        format!(
-            "; worker_bundle_ref={}; worker_capture_outcome={}; worker_cleanup_status={}",
-            worker.bundle_ref, worker.capture_outcome_code, worker.cleanup_status_code,
-        )
-    });
+    let worker = observability
+        .worker_debug
+        .as_ref()
+        .map_or_else(String::new, remote_failure_debug::RemoteWorkerFailureDebugReport::render_fields);
     RunError::Internal(format!(
         "{error}; bundle_ref={}; capture_outcome={}; cleanup_status={}; immutable_log_available={}; non_claim={}{}",
         debug.bundle_ref,
@@ -7234,6 +7412,35 @@ fn plan_remote_dispatch_priority(
     remote_build::plan_remote_root_priority(&standard_scheduling_policy(), &ready_roots).map_err(RunError::Internal)
 }
 
+/// A fail-fast request has only this synchronous unmet-demand lifetime. Keep
+/// the original admission error authoritative even if observation is absent.
+fn publish_unplaced_remote_demand(coordinator: &mut remote_build::RemoteCoordinatorState, request_id: &str) {
+    let Some(demand) = coordinator.worker_demands.facts().find(|fact| fact.job_id == request_id) else {
+        return;
+    };
+    eprintln!("remote worker demand: {}", serde_json::json!(demand));
+    let mut live = match RemoteLiveBuildObservation::start() {
+        Ok(live) => live,
+        Err(error) => {
+            eprintln!("live build observation degraded: {error}");
+            None
+        }
+    };
+    if let Some(observer) = live.as_mut() {
+        observer.owned_requests.insert(request_id.to_owned());
+        observer.observe(coordinator);
+    }
+    remote_build::demand::retract_worker_demand(
+        coordinator,
+        request_id,
+        crunch_remote_core::demand::Retraction::OwnerStopped,
+    );
+    if let Some(observer) = live.as_mut() {
+        observer.observe(coordinator);
+        observer.report_degraded();
+    }
+}
+
 fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<PreparedRemoteDispatch, RunError> {
     debug_assert!(!input.selection.options.builder.endpoint_id.is_empty());
     debug_assert!(input.selection.worker_concurrency > 0);
@@ -7277,7 +7484,10 @@ fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<
         &plan.client.trusted_output_keys,
         input.selection.options.now_unix_s,
     )
-    .map_err(|err| RunError::Internal(format!("remote coordinator dispatch failed: {err}")))?;
+    .map_err(|err| {
+        publish_unplaced_remote_demand(input.coordinator, &plan.client.request.request_id);
+        RunError::Internal(format!("remote coordinator dispatch failed: {err}"))
+    })?;
     for fact in [
         remote_build::RemoteProductionTelemetryFact::QueueAdmitted,
         remote_build::RemoteProductionTelemetryFact::WorkerAssigned,
@@ -7417,7 +7627,7 @@ fn run_remote_dispatch_child(
                     request: ports.request,
                     route_class: &ports.selection.options.builder.endpoint_id,
                     created_unix_s: ports.selection.options.now_unix_s,
-                    worker_debug: parse_remote_worker_failure_debug_report(&error.to_string()),
+                    worker_debug: remote_failure_debug::parse_remote_worker_failure_debug_report(&error.to_string()),
                 }),
             });
             Err(annotate_remote_failure_error(error, &failure_observability))
@@ -8484,7 +8694,7 @@ fn capture_rust_plan_command(request: RustPlanCaptureRequest<'_>) -> Result<Capt
         |captured| mantle_application_contract::rust_operations::RustEvidence::Plan {
             receipt_hash: &captured.receipt.receipt_hash,
             workspace: &captured.receipt.workspace_root,
-            packages: captured.receipt.packages.len(),
+            packages: captured.receipt.source_closure.sources.len(),
             declared_packages: captured.receipt.package_count,
         },
     )
@@ -8517,6 +8727,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execute_workspace_dependency_topology,
         execute_patch_source_topology,
         execution_output_root,
+        rust_wait_diagnostics,
         local_rust_cache,
         shared_rust_cache,
         shared_rust_cache_sources,
@@ -8577,6 +8788,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             signing_key: shared_rust_cache_signing_key.as_deref(),
             offline: *shared_rust_cache_offline,
         })?;
+    let wait_diagnostics = native_wait_runtime(rust_wait_diagnostics.as_deref(), rustc, &captured.compiler_policy)?;
     rust_plan_execution::execute_rust_plan_receipt(RustPlanExecutionRequest {
         receipt: captured.receipt,
         rustc,
@@ -8584,6 +8796,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         output_root: execution_output_root.as_deref(),
         mode: execution_mode,
         local_cache,
+        wait_diagnostics,
         json: ctx.json,
     })
 }
@@ -8825,6 +9038,7 @@ struct RustPlanExecutionRequest<'a> {
     output_root: Option<&'a Path>,
     mode: RustPlanExecutionMode,
     local_cache: Option<rust_plan::RustUnitLocalCacheSelection>,
+    wait_diagnostics: Option<std::sync::Arc<std::sync::Mutex<rust_plan::NativeWaitRuntime>>>,
     json: bool,
 }
 
@@ -8834,7 +9048,7 @@ fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             name,
             import_paths,
             jobs,
-            no_substitute,
+            no_substitute: _,
             signing_key,
             trust_unsigned,
             command: cmd_argv,
@@ -8846,7 +9060,6 @@ fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             name.as_deref(),
             import_paths,
             *jobs,
-            *no_substitute,
             signing_key.as_deref(),
             *trust_unsigned,
             cmd_argv,
@@ -8871,7 +9084,7 @@ fn run_develop_from_command(ctx: &RunContext, command: &Command) -> Result<(), R
             name,
             import_paths,
             jobs,
-            no_substitute,
+            no_substitute: _,
             signing_key,
             trust_unsigned,
         } => run_develop_command(DevelopCommandRequest {
@@ -8879,7 +9092,6 @@ fn run_develop_from_command(ctx: &RunContext, command: &Command) -> Result<(), R
             name: name.as_deref(),
             import_paths,
             jobs: *jobs,
-            no_substitute: *no_substitute,
             signing_key: signing_key.as_deref(),
             trust_unsigned: *trust_unsigned,
         }),
@@ -8892,7 +9104,6 @@ struct DevelopCommandRequest<'a> {
     name: Option<&'a str>,
     import_paths: &'a [PathBuf],
     jobs: Option<u32>,
-    no_substitute: bool,
     signing_key: Option<&'a Path>,
     trust_unsigned: bool,
 }
@@ -8902,7 +9113,6 @@ fn run_develop_command(request: DevelopCommandRequest<'_>) -> Result<(), RunErro
         request.name,
         request.import_paths,
         request.jobs,
-        request.no_substitute,
         request.signing_key,
         request.trust_unsigned,
         &[],
@@ -8925,7 +9135,7 @@ fn run_run_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunEr
             name,
             import_paths,
             jobs,
-            no_substitute,
+            no_substitute: _,
             signing_key,
             trust_unsigned,
             bin,
@@ -8935,7 +9145,6 @@ fn run_run_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunEr
             name: name.as_deref(),
             import_paths,
             jobs: *jobs,
-            no_substitute: *no_substitute,
             signing_key: signing_key.as_deref(),
             trust_unsigned: *trust_unsigned,
             bin: bin.as_deref(),
@@ -8950,7 +9159,6 @@ struct PackageCommandRequest<'a> {
     name: Option<&'a str>,
     import_paths: &'a [PathBuf],
     jobs: Option<u32>,
-    no_substitute: bool,
     signing_key: Option<&'a Path>,
     trust_unsigned: bool,
     bin: Option<&'a str>,
@@ -8962,7 +9170,6 @@ fn run_package_command(request: PackageCommandRequest<'_>) -> Result<(), RunErro
         name: request.name,
         import_paths: request.import_paths,
         jobs: request.jobs,
-        no_substitute: request.no_substitute,
         signing_key: request.signing_key,
         trust_unsigned: request.trust_unsigned,
         bin: request.bin,
@@ -9257,7 +9464,6 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
         request.ctx.store_backend,
         request.ctx.verbose,
         crunch_pipeline::resolve_max_jobs(request.jobs),
-        request.no_substitute,
         request.no_verify,
         request.signing_key,
         parsed_trusted.as_deref(),
@@ -9385,6 +9591,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         Vec::new(),
         Some(request.root_registration),
         request.prepared.compile_driver_runtime.clone(),
+        request.prepared.rust_wait_runtime.clone(),
         request.prepared.ctx.store_source_admission(),
     )
 }
@@ -9521,7 +9728,6 @@ struct RunBuildSettings<'a> {
     source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     verbose: bool,
     max_jobs: u32,
-    no_substitute: bool,
     signing_key_path: Option<&'a Path>,
     trust_unsigned: bool,
 }
@@ -9538,7 +9744,6 @@ fn build_project_expr_request(
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
-    let substituter_urls = run_substituter_urls(request.settings.no_substitute);
     let mut nickel_search_dirs = build_import_paths(&[])?;
     nickel_search_dirs.extend(request.resolved_import_entries);
     build_from_expr_raw(RawInlineBuildRequest {
@@ -9551,7 +9756,7 @@ fn build_project_expr_request(
         store_prefix: request.settings.store_prefix,
         verbose: request.settings.verbose,
         max_jobs: request.settings.max_jobs,
-        substituter_urls: &substituter_urls,
+        substituter_urls: &[],
         signing_key_path: request.settings.signing_key_path,
         trusted_public_keys: None,
         trust_unsigned: request.settings.trust_unsigned,
@@ -9577,7 +9782,6 @@ fn build_project_expr(
     backend: crunch_store::StoreBackend,
     verbose: bool,
     max_jobs: u32,
-    no_substitute: bool,
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
     root_registration: Option<crunch_store::RootRegistration>,
@@ -9593,7 +9797,6 @@ fn build_project_expr(
         source_admission,
         verbose,
         max_jobs,
-        no_substitute,
         signing_key_path,
         trust_unsigned,
     };
@@ -9614,7 +9817,6 @@ struct FileRawBuildRequest<'a> {
 fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
-    let substituter_urls = run_substituter_urls(request.settings.no_substitute);
     let nickel_search_dirs = build_import_paths(request.import_paths)?;
     let mut config = build_cmd::prepare_local_build_config(
         build_cmd::LocalBuildCommandConfig {
@@ -9626,7 +9828,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
             backend: request.settings.backend,
             verbose: request.settings.verbose,
             max_jobs: request.settings.max_jobs,
-            substituter_urls: &substituter_urls,
+            substituter_urls: &[],
             signing_key_path: request.settings.signing_key_path,
             trusted_public_keys: None,
             trust_unsigned: request.settings.trust_unsigned,
@@ -9643,19 +9845,10 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
     build_cmd::run_build(&config)
 }
 
-fn run_substituter_urls(no_substitute: bool) -> Vec<String> {
-    if no_substitute {
-        Vec::new()
-    } else {
-        vec!["https://cache.nixos.org".to_string()]
-    }
-}
-
 struct RunCommandRequest<'a> {
     name: Option<&'a str>,
     import_paths: &'a [PathBuf],
     jobs: Option<u32>,
-    no_substitute: bool,
     signing_key: Option<&'a Path>,
     trust_unsigned: bool,
     bin: Option<&'a str>,
@@ -9682,7 +9875,6 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
         source_admission: request.source_admission,
         verbose: request.verbose,
         max_jobs: crunch_pipeline::resolve_max_jobs(request.jobs),
-        no_substitute: request.no_substitute,
         signing_key_path: request.signing_key,
         trust_unsigned: request.trust_unsigned,
     };
@@ -9834,33 +10026,6 @@ mod tests {
                 crunch_remote_core::attempt::RemoteAttemptReasonCode::StaleReportRejected.as_str()
             ),
             remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
-        );
-        let worker_report = parse_remote_worker_failure_debug_report(&format!(
-            "build failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture\n\nremediation: mantle.build.nonzero-exit",
-            "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
-        ))
-        .unwrap();
-        assert_eq!(worker_report.capture_outcome_code, "captured");
-        assert_eq!(worker_report.cleanup_status_code, "cleanup-attempted-after-capture");
-        assert!(
-            parse_remote_worker_failure_debug_report(
-                "worker_bundle_ref=remote-failure-debug:bad; worker_capture_outcome=captured; worker_cleanup_status=ok"
-            )
-            .is_none()
-        );
-        assert!(
-            parse_remote_worker_failure_debug_report(&format!(
-                "build failed\nworker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture",
-                "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
-            ))
-            .is_none()
-        );
-        assert!(
-            parse_remote_worker_failure_debug_report(&format!(
-                "build failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=CAPTURED; worker_cleanup_status=cleanup-attempted-after-capture",
-                "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
-            ))
-            .is_none()
         );
     }
 

@@ -34,6 +34,7 @@ pub mod plan_output_binding;
 mod references;
 pub mod registry;
 pub mod rewrite;
+pub mod rust_waits;
 pub mod scheduling;
 pub mod signing;
 #[cfg(test)]

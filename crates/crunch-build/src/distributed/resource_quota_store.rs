@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::ambient_clock)]

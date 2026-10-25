@@ -1,0 +1,79 @@
+{
+  "schema": "mantle-radiance-candidate-acquisition-summary-v1",
+  "recorded_on": "2026-10-23",
+  "change": "add-radiance-bootstrap-reference-fixture",
+  "maintenance_owner": "Mantle external-reference source and bootstrap maintainers",
+  "status": "acquired-unadmitted-candidates",
+  "authority": "Exact proposal.md:12-14 candidates, not the later master revision observed during discovery",
+  "git_version": "git version 2.55.0",
+  "raw_command_capture": "target/cairn-finish-20261023/radiance-candidate-acquisition/result.json",
+  "raw_command_capture_blake3": "e16a9c2687d08f94dff461113119f9940f3e00ed1a59128d75b32e8fe882e1da",
+  "observed_process_exit": 0,
+  "command_recipe": [
+    "git -c core.hooksPath=/dev/null init --bare --object-format=sha256 FRESH_ROLE.git",
+    "git -c core.hooksPath=/dev/null fetch --no-tags --depth=1 HTTPS_URL EXACT_REVISION",
+    "git rev-parse --show-object-format",
+    "git rev-parse --verify 'FETCH_HEAD^{commit}'",
+    "git fsck --full --strict --no-reflogs EXACT_REVISION",
+    "git ls-tree -r --name-only EXACT_REVISION",
+    "git show EXACT_REVISION:LICENSE",
+    "git archive --format=tar --output=FRESH_ROLE.tar EXACT_REVISION",
+    "git rev-parse 'EXACT_REVISION^{tree}'",
+    "b3sum --no-names FRESH_ROLE.tar"
+  ],
+  "observed_controls": {
+    "git_configuration": "System/global configuration and hooks disabled; terminal prompts disabled",
+    "command_seconds_max": 120,
+    "individual_file_bytes_max": 134217728,
+    "exact_sha256_commit_and_format_checks_passed": true,
+    "strict_object_checks_passed": true,
+    "all_license_members": "LICENSE",
+    "all_license_text_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+    "license_notice": "Copyright (c) 2025-2026 Radiant Computer (https://radiant.computer); MIT permission and warranty text retained with each candidate"
+  },
+  "candidates": [
+    {
+      "role": "radiance",
+      "url": "https://code.radiant.computer/radiance",
+      "git_revision": "673ae4f6c906ace05e15a21ff85400cab3f15027891a7a17e03f90e76b025423",
+      "git_object_format": "sha256",
+      "git_tree": "938d9d080521acae15306f49acd3d2361625030c98b9ed95fa7bfd56b142bf12",
+      "git_archive_blake3": "08fa03971bc0b0a83696a951e2e4175f4e2eaf84d268747de4c1ff9ee92ef7a6",
+      "git_archive_bytes": 4065280,
+      "tracked_paths": 878
+    },
+    {
+      "role": "radiance.s0",
+      "url": "https://code.radiant.computer/radiance.s0",
+      "git_revision": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3",
+      "git_object_format": "sha256",
+      "git_tree": "0a20386bcf53bd405edbd942fe544a08eb2de3e25ab95757638a440cfb917e85",
+      "git_archive_blake3": "cd2431568c88fe5f371fee80dc6634d51108638156d4e09c1f1fa1f7b181b8d2",
+      "git_archive_bytes": 532480,
+      "tracked_paths": 40
+    },
+    {
+      "role": "emulator",
+      "url": "https://code.radiant.computer/emulator",
+      "git_revision": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535",
+      "git_object_format": "sha256",
+      "git_tree": "85496fd1bb02231240f2ca252808fbb22d84716e1a88c04b46bb050435bd7f59",
+      "git_archive_blake3": "97a6a9dbbe74b6807c6eb9f1005c76d5543a7306bbd6b3332347af11c6beabd6",
+      "git_archive_bytes": 204800,
+      "tracked_paths": 17
+    }
+  ],
+  "remaining_prerequisites": [
+    "Reviewed source projection, canonical Mantle snapshot profile and source-tree identity; raw Git tar digests are not those identities",
+    "SHA-256-capable production source ingestion and one authenticated Mantle offline bundle",
+    "Independent source/license/cohort and fixed Clang/lld/emulator/CPU-policy admission",
+    "Accepted fixed-point, immediate-predecessor and protected-execution dependency contracts"
+  ],
+  "acceptance_claimed": false,
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "Acquisition and intrinsic Git integrity do not establish source-review or toolchain authority",
+    "No compiler/emulator was built or executed; no convergence, protected lineage, publication or release claim",
+    "No task is closed by these raw archives; no Radiant Forge implementation is copied"
+  ]
+}

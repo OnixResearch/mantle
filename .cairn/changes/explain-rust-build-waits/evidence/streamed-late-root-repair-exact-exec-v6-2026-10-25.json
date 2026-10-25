@@ -1,0 +1,340 @@
+{
+  "schema": "mantle-streamed-late-root-repair-evidence-v1",
+  "date": "2026-10-25",
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "classification": "host-nix-remote-build-hook",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+      }
+    ],
+    "bound_step_reruns": [
+      {
+        "step": "tigerstyle",
+        "original_exit": 1,
+        "original_classification": "host-nix-remote-build-hook",
+        "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+        "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+        "rerun_exit": 0,
+        "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+        "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+        "tree_identical_to_gate_start": true
+      }
+    ],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949"
+    },
+    "statement": "Every declared gate step exited 0 except tigerstyle, flake. flake failed in host Nix configuration before building any check and did not pass. tigerstyle failed in the same host Nix build hook while building its runner, before linting; rerun alone over the byte-identical tree, it exited 0. v6 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "prior_cohort_pass": {
+    "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v5-cohort/result.json",
+    "blake3": "e9ad1b452248f5e6d168ea407937dea75a69d6a088844d0cc784b9e05d187a4b",
+    "cohort": "exact-exec-repaired-v5-immutable-release-cohort",
+    "superseded_by": "v6 was pinned from the final tree after the Tiger Style fixes in crates/mantle-cargo-unit-plan and crates/crunch-pipeline; identity_with_previous records which executables kept their v5 bytes.",
+    "identity_with_previous": {
+      "mantle": false,
+      "mantle-cargo-unit-helper": true,
+      "mantle-cargo-unit-producer": false,
+      "mantle-cc-driver": true,
+      "mantle-rust-cache-daemon": true,
+      "mantle-rust-differential": true,
+      "mantle-rust-wait-wrapper": true,
+      "resource_policy_replay": true
+    }
+  },
+  "change": "explain-rust-build-waits",
+  "maintenance_owner": "Mantle scheduler (crunch-build worker) and store export maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "defect": "A derivation first admitted as a dependency and later requested as a streamed root was reported without a physical export (\"reported build output is missing\"), and a root requested after its dependency finished was not reported as a root result.",
+  "discovered_by": {
+    "scenario": "native dynamic-plan production smoke v5 (lexical producer fixture repaired)",
+    "retained_failure": {
+      "path": "/home/brittonr/.cargo-target/dyr5/commands/cold-off-build.stderr",
+      "blake3": "99e66f18b6e0866a93ba6794f1b69525fe0e02b6e3477b2082cedb8ca2fdb4b9",
+      "size_bytes": 224,
+      "text": "{\"error\":\"reported build output is missing: /home/brittonr/.cargo-target/dyr5/cold-off-store/zdvfkjwyz9m0j4621r69ll0hqnzw129q-dynamic-production-plan-success: No such file or directory (os error 2)\",\"code\":1,\"kind\":\"build\"}\n"
+    },
+    "retained_result": "/home/brittonr/.cargo-target/dyr5/result.json",
+    "retained_result_blake3": "aa228ceb00b0ddd3a30f5ccdb98611bf917242e35261b7e418413e8129a5b888"
+  },
+  "repair": {
+    "source": [
+      "crates/crunch-build/src/worker.rs",
+      "crates/crunch-build/src/orchestrate.rs",
+      "crates/crunch-store/src/capability.rs"
+    ],
+    "behavior": "Root status is read at build completion. A goal requested as a root after it finished is exported from its persisted signed PathInfo and castore content, registered as a retained root when configured, and reported once; a failed goal reports its own failure once.",
+    "documentation": [
+      "docs/release-notes/streamed-late-root-export-2026-10-23.md",
+      "README.md"
+    ]
+  },
+  "regressions": {
+    "command": "bash scripts/check-first-party-quality.sh",
+    "exit": 0,
+    "observed_lines": [
+      "test worker::tests::streaming_dependency_requested_as_root_after_completion_is_exported_and_reported ... ok",
+      "test worker::tests::streaming_dependency_requested_as_root_while_building_is_exported ... ok",
+      "test worker::tests::streaming_failed_dependency_requested_as_root_later_reports_its_own_failure ... ok"
+    ],
+    "summary": {
+      "suites": 215,
+      "step_exit": 0,
+      "failure_markers": 0,
+      "all_ok": true,
+      "interleaving": "Child processes of remote_failure_debug::tests::multiprocess_bundle_publication_is_atomic_and_no_clobber share the captured stdout, so some result lines interleave."
+    },
+    "log_blake3": "8830887f0be77216a08d4ac19787d5a90c2cc0ebba0e2dab34802a1dc1dfceaf"
+  },
+  "cli_before_repair": {
+    "result": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/result.json",
+      "blake3": "a3643bab9ddf111297f111b7c4c384790a21529d3bf8e06076a17649f7c7ce82",
+      "size_bytes": 3433,
+      "text": null
+    },
+    "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+    },
+    "mantle_blake3_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+    "passed": false,
+    "cases": {
+      "running": {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/state",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/store",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/late-root.ncl",
+          "--no-substitute"
+        ],
+        "exit": 1,
+        "elapsed_seconds": 13.838,
+        "dependency_sleep_seconds": 3,
+        "counts": null,
+        "outcome_names": null,
+        "reported_outputs_exported": null,
+        "store_entries": [
+          "r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer"
+        ],
+        "report_error": "JSONDecodeError('Expecting value: line 1 column 1 (char 0)')",
+        "stdout": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/build.stdout",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "size_bytes": 0,
+          "text": ""
+        },
+        "stderr": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/build.stderr",
+          "blake3": "8bb8074edc093bd04d613cede2dbdfe6ad21cad0f02c3bb3645c420d0c588151",
+          "size_bytes": 283,
+          "text": "{\"error\":\"reported build output is missing: /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency: No such file or directory (os error 2)\",\"code\":1,\"kind\":\"build\"}\n"
+        },
+        "recipe": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/running/late-root.ncl",
+          "blake3": "824c106e42af33b1b766c1a2e08cbda86f7a2ba433ae72c9c0ba3b6af11698d2",
+          "size_bytes": 665,
+          "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\nlet dependency = {\n  name = \"late-root-dependency\",\n  builder = \"/bin/sh\",\n  args = [\"-c\", \"set -eu; /bin/busybox sleep 3; /bin/busybox mkdir -p \\\"$out\\\"; /bin/busybox printf 'dependency\\\\n' > \\\"$out/value\\\"\"],\n} | mantle.Derivation in\n{\n  a_consumer = {\n    name = \"late-root-consumer\",\n    builder = \"/bin/sh\",\n    inputs = [dependency],\n    args = [\"-c\", \"set -eu; /bin/busybox printf 'consumer\\\\n' > \\\"$out\\\"\"],\n  } | mantle.Derivation,\n  z_dependency = std.seq (std.array.fold_left (fun total value => total + value) 0 (std.array.generate (fun value => value) 3000000)) dependency,\n}\n"
+        }
+      },
+      "finished": {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/state",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/store",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/late-root.ncl",
+          "--no-substitute"
+        ],
+        "exit": 1,
+        "elapsed_seconds": 10.93,
+        "dependency_sleep_seconds": 0,
+        "counts": null,
+        "outcome_names": null,
+        "reported_outputs_exported": null,
+        "store_entries": [
+          "r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer"
+        ],
+        "report_error": "JSONDecodeError('Expecting value: line 1 column 1 (char 0)')",
+        "stdout": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/build.stdout",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "size_bytes": 0,
+          "text": ""
+        },
+        "stderr": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/build.stderr",
+          "blake3": "c2db2ad3f847fbadcd226142ba68b39372a953d9a2e101a703b4d736b52a676c",
+          "size_bytes": 284,
+          "text": "{\"error\":\"reported build output is missing: /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency: No such file or directory (os error 2)\",\"code\":1,\"kind\":\"build\"}\n"
+        },
+        "recipe": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-before-wait-request-cohort/finished/late-root.ncl",
+          "blake3": "887b01efc948bd7a6d4f22963ebee5f2695632262f204501a8f9858e16ea0639",
+          "size_bytes": 665,
+          "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\nlet dependency = {\n  name = \"late-root-dependency\",\n  builder = \"/bin/sh\",\n  args = [\"-c\", \"set -eu; /bin/busybox sleep 0; /bin/busybox mkdir -p \\\"$out\\\"; /bin/busybox printf 'dependency\\\\n' > \\\"$out/value\\\"\"],\n} | mantle.Derivation in\n{\n  a_consumer = {\n    name = \"late-root-consumer\",\n    builder = \"/bin/sh\",\n    inputs = [dependency],\n    args = [\"-c\", \"set -eu; /bin/busybox printf 'consumer\\\\n' > \\\"$out\\\"\"],\n  } | mantle.Derivation,\n  z_dependency = std.seq (std.array.fold_left (fun total value => total + value) 0 (std.array.generate (fun value => value) 3000000)) dependency,\n}\n"
+        }
+      }
+    }
+  },
+  "cli_after_repair": {
+    "result": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/result.json",
+      "blake3": "b7c8edca86e6fa8acd923709da4aee27b477f8a831b6eaef6a57cc2f9fbbc4c3",
+      "size_bytes": 3915,
+      "text": null
+    },
+    "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort/mantle",
+      "blake3": "aac57d92314de98651c4efd835be03ef16e92514fbadda8b2ca4d3ebfc2490d0"
+    },
+    "mantle_blake3_after": "aac57d92314de98651c4efd835be03ef16e92514fbadda8b2ca4d3ebfc2490d0",
+    "passed": true,
+    "cases": {
+      "running": {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/late-root.ncl",
+          "--no-substitute"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 13.637,
+        "dependency_sleep_seconds": 3,
+        "counts": {
+          "succeeded_total": 2,
+          "built_total": 2,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcome_names": [
+          "consumer.drv",
+          "dependency.drv"
+        ],
+        "reported_outputs_exported": true,
+        "store_entries": [
+          "jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency",
+          "r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer"
+        ],
+        "report_error": null,
+        "stdout": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/build.stdout",
+          "blake3": "58563e53f02d0620058735818171859d67ec13661b927bce944f32d453fbbb44",
+          "size_bytes": 12843,
+          "text": "{\n  \"schema\": \"crunch-build-report-v1\",\n  \"file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/late-root.ncl\",\n  \"output_dir\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store\",\n  \"state_dir\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state\",\n  \"store_dir\": \"/mantle/store\",\n  \"scheduler_policy\": {\n    \"schema\": \"mantle-scheduling-policy-v1\",\n    \"policy_id\": \"mantle-lazy-priority-v1\",\n    \"preference_order\": [\n      \"known-graph\",\n      \"resource-fit\",\n      \"locality-transfer\"\n    ],\n    \"aged_after_epochs\": 4,\n    \"protected_after_epochs\": 8\n  },\n  \"hermeticity_mode\": \"practical\",\n  \"hermeticity_audit_events\": [],\n  \"build_environment_reports\": [\n    {\n      \"action_name\": \"late-root-dependency\",\n      \"digest_algorithm\": \"blake3\",\n      \"digest_blake3\": \"df7050c77501f165f851898d26eb77d46a6a5f7881ee6e170f1d20bf497157d9\",\n      \"variable_count\": 24,\n      \"rejections\": []\n    },\n    {\n      \"action_name\": \"late-root-consumer\",\n      \"digest_algorithm\": \"blake3\",\n      \"digest_blake3\": \"f9a028e4aa629fb95952ce9d7f5a8047ebb1c2a7cd7ee1b4024473f43ccd240d\",\n      \"variable_count\": 24,\n      \"rejections\": []\n    }\n  ],\n  \"network_policy_reports\": [\n    {\n      \"action_name\": \"late-root-dependency\",\n      \"mode\": \"offline\",\n      \"result\": \"denied\",\n      \"capability\": null,\n      \"policy_basis\": \"ordinary derivation network access is denied by default\",\n      \"audit_class\": null,\n      \"fixed_output\": null,\n      \"diagnostic\": null\n    },\n    {\n      \"action_name\": \"late-root-consumer\",\n      \"mode\": \"offline\",\n      \"result\": \"denied\",\n      \"capability\": null,\n      \"policy_basis\": \"ordinary derivation network access is denied by default\",\n      \"audit_class\": null,\n      \"fixed_output\": null,\n      \"diagnostic\": null\n    }\n  ],\n  \"workspace_reports\": [],\n  \"action_result_reports\": [\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"discovery\",\n      \"action_ref\": \"mantle-action://blake3/11960307749fc2c46414807f456f8e239bc2002e35a22d215217a9155bcb40a2\",\n      \"unresolved_derivation\": \"/mantle/store/0nmvabdh66n4bpgaa69gmw5b7ringdaf-late-root-consumer.drv\",\n      \"resolved_derivation\": \"/mantle/store/8ydry0b5fmq6l9jqa89gzgsizlqllvdz-late-root-consumer.drv\",\n      \"resolved_identity\": \"mantle-resolved-derivation://blake3/8ca9b213b3ae463764e7d01a9e3439c0e33d804c36c2558f250312e232f01136\",\n      \"disposition\": \"miss\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"publication\",\n      \"action_ref\": \"mantle-action://blake3/11960307749fc2c46414807f456f8e239bc2002e35a22d215217a9155bcb40a2\",\n      \"unresolved_derivation\": \"/mantle/store/0nmvabdh66n4bpgaa69gmw5b7ringdaf-late-root-consumer.drv\",\n      \"resolved_derivation\": \"/mantle/store/8ydry0b5fmq6l9jqa89gzgsizlqllvdz-late-root-consumer.drv\",\n      \"resolved_identity\": \"mantle-resolved-derivation://blake3/8ca9b213b3ae463764e7d01a9e3439c0e33d804c36c2558f250312e232f01136\",\n      \"disposition\": \"published\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [\n        \"mantle-action-result://blake3/1adea12481879ce9c6ce072f09bedc6b8f64fe9251a4f97ba907309192655136\"\n      ],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"discovery\",\n      \"action_ref\": \"mantle-action://blake3/23f36dcf7b2bb67662189e4f534a6160d4b829904ddd4028ca1b864ddac199f1\",\n      \"disposition\": \"miss\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"publication\",\n      \"action_ref\": \"mantle-action://blake3/23f36dcf7b2bb67662189e4f534a6160d4b829904ddd4028ca1b864ddac199f1\",\n      \"disposition\": \"published\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [\n        \"mantle-action-result://blake3/c41ebcd01e5597773af0bbaf825634ae0e52ec21b2fa3762f5063061d9962efc\"\n      ],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    }\n  ],\n  \"native_dynamic_plans\": [],\n  \"scheduler_priority_decisions\": [\n    {\n      \"schema\": \"mantle-priority-decision-v1\",\n      \"policy_id\": \"mantle-lazy-priority-v1\",\n      \"policy_digest_blake3\": \"93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58\",\n      \"scheduling_epoch\": 1,\n      \"selected_goal_key_blake3\": \"055a4deeb0a79daf28e062a2e7c355152b88fc59af0c2939055b11ef62ad5407\",\n      \"competing_goal_count\": 1,\n      \"candidate_snapshot_digest_blake3\": \"891599b7eaf72e867c6be7f7d894fc752d57441bbe5951a3469fa9fe93bc3d79\",\n      \"runner_up\": null,\n      \"known_graph_basis\": \"known-graph\",\n      \"history_basis\": \"structural-fallback-missing\",\n      \"history_snapshot_digest_blake3\": null,\n      \"operator_policy_class\": \"ordinary\",\n      \"starvation_class\": \"fresh\",\n      \"age_epochs\": 1,\n      \"known_critical_path_nodes\": 2,\n      \"known_critical_path_work_units\": 2,\n      \"blocked_root_count\": 1,\n      \"blocked_root_count_saturated\": false,\n      \"resource_fit_class\": \"unknown\",\n      \"content_locality_class\": \"unknown\",\n      \"transfer_cost_class\": \"unknown\",\n      \"selection_reason\": \"sole-candidate\",\n      \"stable_tie_break_class\": \"stable-goal-key\",\n      \"claim_scope\": \"configured-known-fact-ordering\",\n      \"non_claims\": [\n        \"global-optimality\",\n        \"future-graph-knowledge\",\n        \"execution-success\",\n        \"output-trust\",\n        \"release-reproducibility\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-priority-decision-v1\",\n      \"policy_id\": \"mantle-lazy-priority-v1\",\n      \"policy_digest_blake3\": \"93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58\",\n      \"scheduling_epoch\": 2,\n      \"selected_goal_key_blake3\": \"0e4d780911a904114a34713bdd67f12847de7848ec3680af3a9556373e94a9b5\",\n      \"competing_goal_count\": 1,\n      \"candidate_snapshot_digest_blake3\": \"2e257639bb7f63800e41222a25ab55763851b5c8d8fd3447c8111af76be6e369\",\n      \"runner_up\": null,\n      \"known_graph_basis\": \"known-graph\",\n      \"history_basis\": \"structural-fallback-missing\",\n      \"history_snapshot_digest_blake3\": null,\n      \"operator_policy_class\": \"ordinary\",\n      \"starvation_class\": \"fresh\",\n      \"age_epochs\": 1,\n      \"known_critical_path_nodes\": 1,\n      \"known_critical_path_work_units\": 1,\n      \"blocked_root_count\": 1,\n      \"blocked_root_count_saturated\": false,\n      \"resource_fit_class\": \"unknown\",\n      \"content_locality_class\": \"unknown\",\n      \"transfer_cost_class\": \"unknown\",\n      \"selection_reason\": \"sole-candidate\",\n      \"stable_tie_break_class\": \"stable-goal-key\",\n      \"claim_scope\": \"configured-known-fact-ordering\",\n      \"non_claims\": [\n        \"global-optimality\",\n        \"future-graph-knowledge\",\n        \"execution-success\",\n        \"output-trust\",\n        \"release-reproducibility\"\n      ]\n    }\n  ],\n  \"overlay_base_generations\": [],\n  \"store_layer_selections\": [],\n  \"remote_telemetry_events\": [\n    {\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"category\": \"assignment\",\n      \"phase\": \"assigned\",\n      \"result\": \"accepted\",\n      \"route\": \"not-applicable\",\n      \"retry\": \"none\",\n      \"transfer\": \"none\",\n      \"reason\": \"priority-selected\",\n      \"capability\": \"unknown\",\n      \"measurement\": \"candidate-count\",\n      \"value\": 1,\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\"\n    },\n    {\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"category\": \"assignment\",\n      \"phase\": \"assigned\",\n      \"result\": \"accepted\",\n      \"route\": \"not-applicable\",\n      \"retry\": \"none\",\n      \"transfer\": \"none\",\n      \"reason\": \"priority-selected\",\n      \"capability\": \"unknown\",\n      \"measurement\": \"candidate-count\",\n      \"value\": 1,\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\"\n    }\n  ],\n  \"frontend_artifact_attestations\": [],\n  \"ast_grep_structural_evidence\": [],\n  \"ast_grep_structural_evidence_diagnostics\": [\n    {\n      \"label\": \"a_consumer\",\n      \"output_name\": \"out\",\n      \"evidence_path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer/share/mantle/ast-grep-structural-evidence.json\",\n      \"blocker_class\": \"ast-grep-evidence-read-error\",\n      \"message\": \"opening parent capability for ast-grep structural evidence at /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n      \"next_action\": \"regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities\"\n    }\n  ],\n  \"cargo_build_evidence\": [],\n  \"cargo_build_evidence_diagnostics\": [],\n  \"diagnostic_persistence_failures\": [],\n  \"counts\": {\n    \"succeeded_total\": 2,\n    \"built_total\": 2,\n    \"cached_total\": 0,\n    \"failed_total\": 0\n  },\n  \"outcomes\": [\n    {\n      \"drv_key\": \"/mantle/store/0nmvabdh66n4bpgaa69gmw5b7ringdaf-late-root-consumer.drv\",\n      \"label\": \"a_consumer\",\n      \"cached\": false,\n      \"log_file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state/logs/0nmvabdh66n4bpgaa69gmw5b7ringdaf-late-root-consumer.drv.log\",\n      \"outputs\": [\n        {\n          \"name\": \"out\",\n          \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n          \"artifact_attestation\": {\n            \"logical_path\": \"/mantle/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n            \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state/attestations/artifacts/96f5936d2802bdc38d59da8296ab2ad396229140dd26d3073d885b09406c3bdd.json\"\n          }\n        }\n      ]\n    },\n    {\n      \"drv_key\": \"/mantle/store/iwps8ks1sx9j52nsz0581vjqbpxs4ipa-late-root-dependency.drv\",\n      \"label\": \"z_dependency\",\n      \"cached\": false,\n      \"log_file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state/logs/iwps8ks1sx9j52nsz0581vjqbpxs4ipa-late-root-dependency.drv.log\",\n      \"outputs\": [\n        {\n          \"name\": \"out\",\n          \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency\",\n          \"artifact_attestation\": {\n            \"logical_path\": \"/mantle/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency\",\n            \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/state/attestations/artifacts/0205db54fb3ec06fe81fd01c68513ce0756c4a69f07b00b028de4fe3b99461df.json\"\n          }\n        }\n      ]\n    }\n  ],\n  \"failed\": [],\n  \"fod_mismatches\": []\n}\n"
+        },
+        "stderr": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/build.stderr",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "size_bytes": 0,
+          "text": ""
+        },
+        "recipe": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/running/late-root.ncl",
+          "blake3": "824c106e42af33b1b766c1a2e08cbda86f7a2ba433ae72c9c0ba3b6af11698d2",
+          "size_bytes": 665,
+          "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\nlet dependency = {\n  name = \"late-root-dependency\",\n  builder = \"/bin/sh\",\n  args = [\"-c\", \"set -eu; /bin/busybox sleep 3; /bin/busybox mkdir -p \\\"$out\\\"; /bin/busybox printf 'dependency\\\\n' > \\\"$out/value\\\"\"],\n} | mantle.Derivation in\n{\n  a_consumer = {\n    name = \"late-root-consumer\",\n    builder = \"/bin/sh\",\n    inputs = [dependency],\n    args = [\"-c\", \"set -eu; /bin/busybox printf 'consumer\\\\n' > \\\"$out\\\"\"],\n  } | mantle.Derivation,\n  z_dependency = std.seq (std.array.fold_left (fun total value => total + value) 0 (std.array.generate (fun value => value) 3000000)) dependency,\n}\n"
+        }
+      },
+      "finished": {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort/mantle",
+          "--json",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/late-root.ncl",
+          "--no-substitute"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 10.631,
+        "dependency_sleep_seconds": 0,
+        "counts": {
+          "succeeded_total": 2,
+          "built_total": 2,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcome_names": [
+          "consumer.drv",
+          "dependency.drv"
+        ],
+        "reported_outputs_exported": true,
+        "store_entries": [
+          "jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency",
+          "r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer"
+        ],
+        "report_error": null,
+        "stdout": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/build.stdout",
+          "blake3": "d998983fcd115172d4d20d754078208afd70040088b13afba18f8a1b34601941",
+          "size_bytes": 12854,
+          "text": "{\n  \"schema\": \"crunch-build-report-v1\",\n  \"file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/late-root.ncl\",\n  \"output_dir\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store\",\n  \"state_dir\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state\",\n  \"store_dir\": \"/mantle/store\",\n  \"scheduler_policy\": {\n    \"schema\": \"mantle-scheduling-policy-v1\",\n    \"policy_id\": \"mantle-lazy-priority-v1\",\n    \"preference_order\": [\n      \"known-graph\",\n      \"resource-fit\",\n      \"locality-transfer\"\n    ],\n    \"aged_after_epochs\": 4,\n    \"protected_after_epochs\": 8\n  },\n  \"hermeticity_mode\": \"practical\",\n  \"hermeticity_audit_events\": [],\n  \"build_environment_reports\": [\n    {\n      \"action_name\": \"late-root-dependency\",\n      \"digest_algorithm\": \"blake3\",\n      \"digest_blake3\": \"19638d1d5a9f5d2ab072b140811f8901828f4689b6fe913293175e6aeca79a96\",\n      \"variable_count\": 24,\n      \"rejections\": []\n    },\n    {\n      \"action_name\": \"late-root-consumer\",\n      \"digest_algorithm\": \"blake3\",\n      \"digest_blake3\": \"f9a028e4aa629fb95952ce9d7f5a8047ebb1c2a7cd7ee1b4024473f43ccd240d\",\n      \"variable_count\": 24,\n      \"rejections\": []\n    }\n  ],\n  \"network_policy_reports\": [\n    {\n      \"action_name\": \"late-root-dependency\",\n      \"mode\": \"offline\",\n      \"result\": \"denied\",\n      \"capability\": null,\n      \"policy_basis\": \"ordinary derivation network access is denied by default\",\n      \"audit_class\": null,\n      \"fixed_output\": null,\n      \"diagnostic\": null\n    },\n    {\n      \"action_name\": \"late-root-consumer\",\n      \"mode\": \"offline\",\n      \"result\": \"denied\",\n      \"capability\": null,\n      \"policy_basis\": \"ordinary derivation network access is denied by default\",\n      \"audit_class\": null,\n      \"fixed_output\": null,\n      \"diagnostic\": null\n    }\n  ],\n  \"workspace_reports\": [],\n  \"action_result_reports\": [\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"discovery\",\n      \"action_ref\": \"mantle-action://blake3/11960307749fc2c46414807f456f8e239bc2002e35a22d215217a9155bcb40a2\",\n      \"unresolved_derivation\": \"/mantle/store/p02sly6m1f7jgp61zccrx2gdxjx7phy4-late-root-consumer.drv\",\n      \"resolved_derivation\": \"/mantle/store/8ydry0b5fmq6l9jqa89gzgsizlqllvdz-late-root-consumer.drv\",\n      \"resolved_identity\": \"mantle-resolved-derivation://blake3/8ca9b213b3ae463764e7d01a9e3439c0e33d804c36c2558f250312e232f01136\",\n      \"disposition\": \"miss\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"publication\",\n      \"action_ref\": \"mantle-action://blake3/11960307749fc2c46414807f456f8e239bc2002e35a22d215217a9155bcb40a2\",\n      \"unresolved_derivation\": \"/mantle/store/p02sly6m1f7jgp61zccrx2gdxjx7phy4-late-root-consumer.drv\",\n      \"resolved_derivation\": \"/mantle/store/8ydry0b5fmq6l9jqa89gzgsizlqllvdz-late-root-consumer.drv\",\n      \"resolved_identity\": \"mantle-resolved-derivation://blake3/8ca9b213b3ae463764e7d01a9e3439c0e33d804c36c2558f250312e232f01136\",\n      \"disposition\": \"published\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [\n        \"mantle-action-result://blake3/38ee6a7df7e6ce1dbb24e9f5c03223ab7aae1b16af9ec7644b2bf905ad06afc3\"\n      ],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"discovery\",\n      \"action_ref\": \"mantle-action://blake3/ff47beb1434f2ae82824a1bf9c137488ce012bb8883590a1667b19074a96d867\",\n      \"disposition\": \"miss\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-action-result-runtime-report-v1\",\n      \"phase\": \"publication\",\n      \"action_ref\": \"mantle-action://blake3/ff47beb1434f2ae82824a1bf9c137488ce012bb8883590a1667b19074a96d867\",\n      \"disposition\": \"published\",\n      \"selected_result_ref\": null,\n      \"selected_source_id\": null,\n      \"selected_source_class\": null,\n      \"trust_basis\": [],\n      \"conflict_class\": null,\n      \"candidate_decisions\": [],\n      \"publication_result_refs\": [\n        \"mantle-action-result://blake3/8b296ea1ca52b5fc412720dfafbbe475f5c160a5ce358f1ff71af43819d52c98\"\n      ],\n      \"diagnostics\": [],\n      \"non_claims\": [\n        \"ca-mapping-presence-is-not-output-trust\",\n        \"executor-correctness\",\n        \"index-presence-is-not-output-trust\"\n      ]\n    }\n  ],\n  \"native_dynamic_plans\": [],\n  \"scheduler_priority_decisions\": [\n    {\n      \"schema\": \"mantle-priority-decision-v1\",\n      \"policy_id\": \"mantle-lazy-priority-v1\",\n      \"policy_digest_blake3\": \"93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58\",\n      \"scheduling_epoch\": 1,\n      \"selected_goal_key_blake3\": \"49cde9b35d881c9adc02cfbbcbb034974f67b8f88e10ae0821712668dd71b544\",\n      \"competing_goal_count\": 1,\n      \"candidate_snapshot_digest_blake3\": \"33a6c350f8d0aba8070ad5e7f15bff6b7ed50db15d74c97bb9baced15430351d\",\n      \"runner_up\": null,\n      \"known_graph_basis\": \"known-graph\",\n      \"history_basis\": \"structural-fallback-missing\",\n      \"history_snapshot_digest_blake3\": null,\n      \"operator_policy_class\": \"ordinary\",\n      \"starvation_class\": \"fresh\",\n      \"age_epochs\": 1,\n      \"known_critical_path_nodes\": 1,\n      \"known_critical_path_work_units\": 1,\n      \"blocked_root_count\": 1,\n      \"blocked_root_count_saturated\": false,\n      \"resource_fit_class\": \"unknown\",\n      \"content_locality_class\": \"unknown\",\n      \"transfer_cost_class\": \"unknown\",\n      \"selection_reason\": \"sole-candidate\",\n      \"stable_tie_break_class\": \"stable-goal-key\",\n      \"claim_scope\": \"configured-known-fact-ordering\",\n      \"non_claims\": [\n        \"global-optimality\",\n        \"future-graph-knowledge\",\n        \"execution-success\",\n        \"output-trust\",\n        \"release-reproducibility\"\n      ]\n    },\n    {\n      \"schema\": \"mantle-priority-decision-v1\",\n      \"policy_id\": \"mantle-lazy-priority-v1\",\n      \"policy_digest_blake3\": \"93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58\",\n      \"scheduling_epoch\": 2,\n      \"selected_goal_key_blake3\": \"2ba76b5613984f939e146bab27e146b25d39cbd95579b0181c2f61b894acf643\",\n      \"competing_goal_count\": 1,\n      \"candidate_snapshot_digest_blake3\": \"acc8e75ca74774e6ab50f4585cd5ca078e965acf24eb841a291d3cbf61a9304c\",\n      \"runner_up\": null,\n      \"known_graph_basis\": \"known-graph\",\n      \"history_basis\": \"structural-fallback-missing\",\n      \"history_snapshot_digest_blake3\": null,\n      \"operator_policy_class\": \"ordinary\",\n      \"starvation_class\": \"fresh\",\n      \"age_epochs\": 1,\n      \"known_critical_path_nodes\": 1,\n      \"known_critical_path_work_units\": 1,\n      \"blocked_root_count\": 1,\n      \"blocked_root_count_saturated\": false,\n      \"resource_fit_class\": \"unknown\",\n      \"content_locality_class\": \"unknown\",\n      \"transfer_cost_class\": \"unknown\",\n      \"selection_reason\": \"sole-candidate\",\n      \"stable_tie_break_class\": \"stable-goal-key\",\n      \"claim_scope\": \"configured-known-fact-ordering\",\n      \"non_claims\": [\n        \"global-optimality\",\n        \"future-graph-knowledge\",\n        \"execution-success\",\n        \"output-trust\",\n        \"release-reproducibility\"\n      ]\n    }\n  ],\n  \"overlay_base_generations\": [],\n  \"store_layer_selections\": [],\n  \"remote_telemetry_events\": [\n    {\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"category\": \"assignment\",\n      \"phase\": \"assigned\",\n      \"result\": \"accepted\",\n      \"route\": \"not-applicable\",\n      \"retry\": \"none\",\n      \"transfer\": \"none\",\n      \"reason\": \"priority-selected\",\n      \"capability\": \"unknown\",\n      \"measurement\": \"candidate-count\",\n      \"value\": 1,\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\"\n    },\n    {\n      \"schema\": \"mantle-remote-telemetry-event-v1\",\n      \"category\": \"assignment\",\n      \"phase\": \"assigned\",\n      \"result\": \"accepted\",\n      \"route\": \"not-applicable\",\n      \"retry\": \"none\",\n      \"transfer\": \"none\",\n      \"reason\": \"priority-selected\",\n      \"capability\": \"unknown\",\n      \"measurement\": \"candidate-count\",\n      \"value\": 1,\n      \"non_claim\": \"diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism\"\n    }\n  ],\n  \"frontend_artifact_attestations\": [],\n  \"ast_grep_structural_evidence\": [],\n  \"ast_grep_structural_evidence_diagnostics\": [\n    {\n      \"label\": \"a_consumer\",\n      \"output_name\": \"out\",\n      \"evidence_path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer/share/mantle/ast-grep-structural-evidence.json\",\n      \"blocker_class\": \"ast-grep-evidence-read-error\",\n      \"message\": \"opening parent capability for ast-grep structural evidence at /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n      \"next_action\": \"regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities\"\n    }\n  ],\n  \"cargo_build_evidence\": [],\n  \"cargo_build_evidence_diagnostics\": [],\n  \"diagnostic_persistence_failures\": [],\n  \"counts\": {\n    \"succeeded_total\": 2,\n    \"built_total\": 2,\n    \"cached_total\": 0,\n    \"failed_total\": 0\n  },\n  \"outcomes\": [\n    {\n      \"drv_key\": \"/mantle/store/p02sly6m1f7jgp61zccrx2gdxjx7phy4-late-root-consumer.drv\",\n      \"label\": \"a_consumer\",\n      \"cached\": false,\n      \"log_file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state/logs/p02sly6m1f7jgp61zccrx2gdxjx7phy4-late-root-consumer.drv.log\",\n      \"outputs\": [\n        {\n          \"name\": \"out\",\n          \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n          \"artifact_attestation\": {\n            \"logical_path\": \"/mantle/store/r9kr46pp0ajv2g4r4bnhmi5k0wpk33bg-late-root-consumer\",\n            \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state/attestations/artifacts/96f5936d2802bdc38d59da8296ab2ad396229140dd26d3073d885b09406c3bdd.json\"\n          }\n        }\n      ]\n    },\n    {\n      \"drv_key\": \"/mantle/store/k84c4nipcq6wzfn0k8gnrfpz4r3h2z4p-late-root-dependency.drv\",\n      \"label\": \"z_dependency\",\n      \"cached\": false,\n      \"log_file\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state/logs/k84c4nipcq6wzfn0k8gnrfpz4r3h2z4p-late-root-dependency.drv.log\",\n      \"outputs\": [\n        {\n          \"name\": \"out\",\n          \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency\",\n          \"artifact_attestation\": {\n            \"logical_path\": \"/mantle/store/jn6fkv4had3rgcla7xbgachg8zm3ng4y-late-root-dependency\",\n            \"path\": \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/state/attestations/artifacts/0205db54fb3ec06fe81fd01c68513ce0756c4a69f07b00b028de4fe3b99461df.json\"\n          }\n        }\n      ]\n    }\n  ],\n  \"failed\": [],\n  \"fod_mismatches\": []\n}\n"
+        },
+        "stderr": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/build.stderr",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "size_bytes": 0,
+          "text": ""
+        },
+        "recipe": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/late-root-after-exact-exec-v6-cohort/finished/late-root.ncl",
+          "blake3": "887b01efc948bd7a6d4f22963ebee5f2695632262f204501a8f9858e16ea0639",
+          "size_bytes": 665,
+          "text": "let mantle = import \"/home/brittonr/git/OnixResearch/mantle/lib/lib.ncl\" in\nlet dependency = {\n  name = \"late-root-dependency\",\n  builder = \"/bin/sh\",\n  args = [\"-c\", \"set -eu; /bin/busybox sleep 0; /bin/busybox mkdir -p \\\"$out\\\"; /bin/busybox printf 'dependency\\\\n' > \\\"$out/value\\\"\"],\n} | mantle.Derivation in\n{\n  a_consumer = {\n    name = \"late-root-consumer\",\n    builder = \"/bin/sh\",\n    inputs = [dependency],\n    args = [\"-c\", \"set -eu; /bin/busybox printf 'consumer\\\\n' > \\\"$out\\\"\"],\n  } | mantle.Derivation,\n  z_dependency = std.seq (std.array.fold_left (fun total value => total + value) 0 (std.array.generate (fun value => value) 3000000)) dependency,\n}\n"
+        }
+      }
+    }
+  },
+  "repeatability": [
+    "python3 target/cairn-finish-20261023/late-root-cli-smoke.py <immutable cohort dir> <fresh absolute output root>",
+    "cargo test --locked --offline --release -p crunch-build --lib worker::tests::streaming_ -- --test-threads=4"
+  ],
+  "non_claims": [
+    "One local two-root CLI fixture and three deterministic worker regressions; not general scheduler correctness.",
+    "The CLI does not observe root-admission order; the worker regressions control it.",
+    "No change to signed PathInfo, output paths, cache identity, trust or cache authority.",
+    "No dynamic-plan, wait-diagnostic, Cairn, release or bootstrap acceptance follows from this repair."
+  ]
+}

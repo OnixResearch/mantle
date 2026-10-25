@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 //! External Rust guest: real production policy and filesystem accounting shell.
 mod crash;
 mod decisions;
@@ -7,6 +9,7 @@ mod decisions;
 #[allow(dead_code)]
 mod quota_store;
 
+use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -177,7 +180,7 @@ fn crash_scenario(root: &Path, boundary: u32, control: &str) -> Result<(), Strin
     Ok(())
 }
 fn unavailable_scenario(root: &Path, control: &str) -> Result<(), String> {
-    std::fs::create_dir(root).map_err(error)?;
+    std::fs::DirBuilder::new().mode(0o700).create(root).map_err(error)?;
     safety!(ResourceQuotaStore::open(root).is_err(), "resource missing ledger cannot admit usage", details(0));
     let store = ResourceQuotaStore::provision(root).map_err(error)?;
     let r = reservation("unavailable");
@@ -237,7 +240,14 @@ fn run(control: &str) -> Result<(), String> {
     Ok(())
 }
 fn main() {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    // Linux forwards unrecognized kernel arguments to PID 1. They are boot
+    // inputs, not the local negative-control CLI; parse CLI args only outside
+    // the init role so a real boot cannot exit before SDK initialization.
+    let args: Vec<_> = if std::process::id() == 1 {
+        Vec::new()
+    } else {
+        std::env::args().skip(1).collect()
+    };
     let control = match args.as_slice() {
         [] => "none",
         [flag, value]

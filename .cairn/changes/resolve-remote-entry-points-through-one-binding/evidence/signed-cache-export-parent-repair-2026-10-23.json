@@ -1,0 +1,72 @@
+{
+  "schema": "mantle-signed-cache-export-parent-repair-v1",
+  "recorded_on": "2026-10-23",
+  "maintenance_owner": "Mantle store admission and remote source-binding maintainers",
+  "classification": "executed-regression-subset",
+  "acceptance_claimed": false,
+  "problem": "An admitted HTTP cache pull could not create materialization staging when the configured physical export parent did not exist.",
+  "repair": "Create the configured physical export parent before adjacent staging. Preserve signature/content admission and fatal export-error handling.",
+  "source_bindings": [
+    {
+      "path": "crates/crunch-store/src/pull.rs",
+      "blake3": "236a5d071776a128a4e18682279091c6aaaab55e403ca3968967a27ad0a1c264"
+    },
+    {
+      "path": "src/remote_build/tests/source_binding_tests.rs",
+      "blake3": "b6d4145a10be252dfcdda402cd3c0dabaeff30188266d35a38faec6b664af638"
+    }
+  ],
+  "execution": {
+    "pueue_task": 59,
+    "runner": "target/cairn-finish-20261023/check-cache-parent-repair.sh",
+    "working_directory": "/home/brittonr/git/OnixResearch/mantle",
+    "development_shell": "target/cairn-finish-20261023/patched-dev-shell",
+    "selected_inputs_unchanged_during_run": true,
+    "current_selected_source_bindings_rechecked": true,
+    "checks": [
+      {
+        "command": "cargo test --locked --offline --release -p mantle --bin mantle remote_build::tests::source_binding_tests:: -- --test-threads=1",
+        "exit_code": 0,
+        "stdout": "target/cairn-finish-20261023/cache-parent-repair/cache-binding.stdout.log",
+        "stdout_blake3": "a9e2d1b73e19de7bd4113953a5603dcb0fdfb95a6b1849cf2c88c1c32b441518",
+        "test_result": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2846 filtered out; finished in 0.08s",
+        "coverage": [
+          "Missing, forged, stale, revoked and expired configured cache bindings denied before requests",
+          "Exact binding pulls signed bytes and revocation preserves local admission",
+          "Untrusted signatures and corrupt NAR content remain rejected",
+          "Shared cache/base leases preserve content generation and revocation fences"
+        ]
+      },
+      {
+        "command": "cargo test --locked --offline --release -p crunch-store --lib pull::tests:: -- --test-threads=1",
+        "exit_code": 0,
+        "stdout": "target/cairn-finish-20261023/cache-parent-repair/pull-restoration.stdout.log",
+        "stdout_blake3": "509d728d71039d1aa36fa835b7422a06d37d643cab9255c55087092ec54ea9ae",
+        "test_result": "test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 397 filtered out; finished in 3.45s",
+        "coverage": [
+          "Signed pulls, closure admission and interrupted-export restoration",
+          "Signature, prefix, reference, content, decompression and byte-bound refusals",
+          "Persistence and post-persistence export failures remain fatal"
+        ]
+      },
+      {
+        "command": "cargo fmt --check -p crunch-store",
+        "exit_code": 0
+      },
+      {
+        "command": "cargo clippy --locked --offline --release -p crunch-store --all-targets --no-deps -- -D warnings",
+        "exit_code": 0
+      }
+    ]
+  },
+  "remaining_verification": [
+    "Rebuilt immutable executable cohort and actual signed-backend/production remote CLI scenarios",
+    "Final integrated repository gates and current Cairn acceptance"
+  ],
+  "non_claims": [
+    "The task59 aggregate failed during a later binary build; passing selected regressions are not aggregate success.",
+    "No whole-backend, remote deployment, strict proof, bootstrap, performance, release or lifecycle acceptance.",
+    "No archive, spec sync, policy approval or publication is authorized by this record.",
+    "Raw captures remain at the named local paths; this record retains selected observations and identities, not a portable complete proof bundle."
+  ]
+}

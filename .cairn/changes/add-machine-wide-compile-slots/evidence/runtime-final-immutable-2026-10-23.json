@@ -1,0 +1,534 @@
+{
+  "pueue_task_id": 38,
+  "inspected_failure": {"daemon_stderr": "mantle-rust-cache-daemon:rustc-wrapper-policy-readable-roots-invalid", "harness_owner": "scripts/prove-cc-cache-slots.py:163", "validator_owner": "crates/crunch-rust-cache-core/src/wrapper.rs:989-991", "cause": "Generated readable_roots starts /tmp then /nix and is not sorted unique", "runtime_cases_exercised": 0, "not_exercised": ["C/C++ objects", "cache hit/miss", "forward/probes", "volatile headers", "receipt loss", "PID namespace credentials", "FIFO contention/fairness", "saturated backlog", "authority death"]},
+  "build_receipt": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/build.command": {
+      "blake3": "87540910521bd9e3f6a633a1e5950b1fcf2e2c4ece1a71e313f4ec3ff7047135",
+      "text": "cargo build --locked --offline --release -p mantle -p crunch-rustc-wrapper -p mantle-cargo-unit-plan -p mantle-rust-differential --bin mantle --bin mantle-rust-wait-wrapper --bin mantle-cc-driver --bin mantle-rust-cache-daemon --bin mantle-cargo-unit-producer --bin mantle-cargo-unit-helper --bin mantle-rust-differential --example resource_policy_replay\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/build.exit": {
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+      "text": "0\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-after.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "text": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na0bc9f4dfca3bacd1e6ecfa706d82b0de07d392eeba1d566144c6a406ba11b88  crates/crunch-build/Cargo.toml\n7694ae7e48d8a2c666a11b7ed8f3c4b849ad6d0e1f6ef50956b244e619a0fa42  crates/crunch-build/src/fetcher.rs\n490eb427726385362481238517d34add94d0a37351714e487c08639405af8e74  src/rust_plan.rs\ne394c28026106d7033c9ce4c434d550a81df92b375bf3c46b6abe5c74be7c04c  lib/durable-file-publication-adoption-receipt.ncl\n088223412653f804971d9ae34fc4271b62bc95049ae21dd7901f12bdbfefb387  crates/crunch-rustc-wrapper/src/observed_process.rs\nb2f0f5ec64815261ab7548a6214d3d6db997cc6d43ce10be04f2e329332d43d0  crates/mantle-rust-differential/src/runner.rs\n"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-before.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "text": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na0bc9f4dfca3bacd1e6ecfa706d82b0de07d392eeba1d566144c6a406ba11b88  crates/crunch-build/Cargo.toml\n7694ae7e48d8a2c666a11b7ed8f3c4b849ad6d0e1f6ef50956b244e619a0fa42  crates/crunch-build/src/fetcher.rs\n490eb427726385362481238517d34add94d0a37351714e487c08639405af8e74  src/rust_plan.rs\ne394c28026106d7033c9ce4c434d550a81df92b375bf3c46b6abe5c74be7c04c  lib/durable-file-publication-adoption-receipt.ncl\n088223412653f804971d9ae34fc4271b62bc95049ae21dd7901f12bdbfefb387  crates/crunch-rustc-wrapper/src/observed_process.rs\nb2f0f5ec64815261ab7548a6214d3d6db997cc6d43ce10be04f2e329332d43d0  crates/mantle-rust-differential/src/runner.rs\n"
+    }
+  },
+  "change": "add-machine-wide-compile-slots",
+  "commands": [
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "--version"
+      ],
+      "elapsed_ns": 3440753,
+      "exit_status": 0,
+      "label": "native-c-version",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-version.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-version.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-prog-name=as"
+      ],
+      "elapsed_ns": 1454392,
+      "exit_status": 0,
+      "label": "native-c-as",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-as.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-as.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-prog-name=cc1"
+      ],
+      "elapsed_ns": 1379712,
+      "exit_status": 0,
+      "label": "native-c-frontend",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-frontend.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-frontend.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "-print-search-dirs"
+      ],
+      "elapsed_ns": 1600957,
+      "exit_status": 0,
+      "label": "native-c-search-dirs",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-search-dirs.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-c-search-dirs.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "--version"
+      ],
+      "elapsed_ns": 1415459,
+      "exit_status": 0,
+      "label": "native-cxx-version",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-version.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-version.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-prog-name=as"
+      ],
+      "elapsed_ns": 1394760,
+      "exit_status": 0,
+      "label": "native-cxx-as",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-as.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-as.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-prog-name=cc1plus"
+      ],
+      "elapsed_ns": 1350496,
+      "exit_status": 0,
+      "label": "native-cxx-frontend",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-frontend.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-frontend.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "-print-search-dirs"
+      ],
+      "elapsed_ns": 1306303,
+      "exit_status": 0,
+      "label": "native-cxx-search-dirs",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-search-dirs.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/native-cxx-search-dirs.stdout"
+    },
+    {
+      "argv": [
+        "/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin/python3",
+        "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py",
+        "--driver",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver",
+        "--daemon",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon",
+        "--compiler",
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+        "--cxx",
+        "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+        "--work-dir",
+        "/tmp/mantle-cc-runtime-20261023-c17"
+      ],
+      "elapsed_ns": 164022870,
+      "exit_status": 1,
+      "label": "real-cc-cache-slots",
+      "stderr": "/tmp/mantle-cc-runtime-20261023-c17-control/real-cc-cache-slots.stderr",
+      "stdout": "/tmp/mantle-cc-runtime-20261023-c17-control/real-cc-cache-slots.stdout"
+    }
+  ],
+  "control": "/tmp/mantle-cc-runtime-20261023-c17-control",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "dependency_task": {
+    "command": "nix develop /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell -c bash target/cairn-finish-20261023/build-supervisor-final-cohort.sh",
+    "dependencies": [
+      30
+    ],
+    "group": "mantle-cairn-final-checks-20261023",
+    "id": 33,
+    "status": {
+      "Done": {
+        "end": "2026-10-23T16:28:22.204693310-04:00",
+        "enqueued_at": "2026-10-23T16:18:07.860170239-04:00",
+        "result": "Success",
+        "start": "2026-10-23T16:28:05.595569141-04:00"
+      }
+    }
+  },
+  "environment": {
+    "CC": "x86_64-unknown-linux-musl-gcc",
+    "CXX": "x86_64-unknown-linux-musl-g++",
+    "LD_LIBRARY_PATH": "/etc/sane-libs",
+    "NIX_CC": "/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0",
+    "NIX_CFLAGS_COMPILE": " -frandom-seed=c97vbm9alk -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/v64aggksnpk4lwng8ivglwcj6qpzvriz-lld-21.1.8-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/832yrsfhq3z41zn9rqsvv0cv22mblv4c-bash-interactive-5.3p9-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/q4v09bffjy5i0f2kdwnbbwmhqv6i3pjs-zstd-1.5.7-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/cr5lim02i1zl0ggx5bxic3r02k09mrkg-compiler-rt-libc-21.1.8-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include -isystem /nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/include",
+    "NIX_LDFLAGS": "-rpath /home/brittonr/git/OnixResearch/mantle/outputs/out/lib  -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/rwc6qkv8qbmcam7sj3lmyi1hapz57wvz-lld-21.1.8-lib/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib -L/nix/store/bga5xf95jaypy385hvxm4h3yxl3m1566-openssl-3.6.1/lib",
+    "PATH": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin:/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin:/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin:/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin:/nix/store/02xrxrk0avdi9jajfdrkxf1nh7sy3lq3-cargo-nextest-0.9.132/bin:/nix/store/7d6w7xkimii0c00i5lhc1ycgk1gjyxby-cargo-watch-8.5.3/bin:/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin:/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/bin:/nix/store/wwkx074y67qzpkk9q6k947jwjwwdybh2-rust-analyzer-2026-03-30/bin:/nix/store/fy2153zl9mwc6l6rqz5mdj80w38gwb3l-mantle-ast-grep-toolchain-0.42.1/bin:/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin:/nix/store/8x8vp6gv39aqa81n9cvjhf8296cl2k2n-check-nickel-configs/bin:/nix/store/7a3i4y77jgv5yik590ss2aqx9knsssl0-check-store-retention-policy/bin:/nix/store/z34vng470sdfs503958gl0f9pzn4ika9-check-store-overlay-policy/bin:/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin:/nix/store/bj6ym3l2a1xdx4f252649q8n6xv1jls9-cargo-tigerstyle-0.1.0/bin:/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2/bin:/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin:/nix/store/zb8py6p8qq01nygnnf8jrnkps9nna189-clang-21.1.8/bin:/nix/store/gknk1jw10h0pswl53ps5xj06cmwza52p-binutils-wrapper-2.44/bin:/nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4/bin:/nix/store/9s5468sc5hciq047wzn7vcg05j05bfa6-mold-unwrapped-2.40.4/bin:/nix/store/2c5r0kpn5yb8qsvfw77j8h63pklij8rq-lld-21.1.8/bin:/nix/store/7yvcckar1lzhqnr0xx2n19nsdjd4qa4d-git-2.53.0/bin:/nix/store/q800b7nrqa8csf2gcds2i83w1icsda5w-cmake-4.1.2/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin:/nix/store/m47d8x8m4zdk5l9sb26rxmfc2gkvb6h4-fuse-3.17.4-bin/bin:/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin:/nix/store/cibbjc8bn3440qq3m6cj846f83iyj5yg-x86_64-unknown-linux-musl-gcc-15.2.0/bin:/nix/store/9d9il9kxwzzy2hpwk3czvjlk7fv15b0j-musl-x86_64-unknown-linux-musl-1.2.5-bin/bin:/nix/store/9f2r3vz2lpmhiwgnz08i85zw2m0di9b2-x86_64-unknown-linux-musl-binutils-wrapper-2.44/bin:/nix/store/ghh9ph8sxhxmd908na3njl3sbmpnffn3-x86_64-unknown-linux-musl-binutils-2.44/bin:/nix/store/rqxr17iaips1kfs65q2z6wczh2m4kwlm-rsync-3.4.1/bin:/nix/store/8cc8cdqa54bahfi5n5glkm8d252zkkjn-zstd-1.5.7-bin/bin:/nix/store/29mmnqpc1p3iv8wj0lpvicajy3jsbx87-zstd-1.5.7/bin:/nix/store/h8x05b58m7vp5ym85h28w0skhvg25rha-openssh-10.2p1/bin:/nix/store/sj3f6y3j8m1831l0gqm1bsk1f46jzkfd-patchelf-0.15.2/bin:/nix/store/jlw598mkd1b4d50rwqv6m499h2lrlssj-compiler-rt-libc-21.1.8/bin:/nix/store/8q9wrmngl1mhvqgg0l018339zz86m184-openssl-3.6.1-bin/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin:/nix/store/c89zz4vh8v9dbs8169wk8ahwxvrdxgm5-findutils-4.10.0/bin:/nix/store/355mp4ns4042sb5p51rx3ys4mlliiwc5-diffutils-3.12/bin:/nix/store/jpsqy47rdl0j0dvyyzb4kw8gqajw8nx0-gnused-4.9/bin:/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12/bin:/nix/store/gg169kyil5vhsg5aqcpagyhs8fwl0r5r-gawk-5.3.2/bin:/nix/store/kvmqv1jqv4792rsihf7yjc5kwk3d8z6x-gnutar-1.35/bin:/nix/store/pnxiz967z73a45f4x7c1icldjaaqmlcp-gzip-1.14/bin:/nix/store/by6npbc13ly5a1zgsqghv7wv5bklyiny-bzip2-1.0.8-bin/bin:/nix/store/1fvcxyhg3i5fvw0j4l8wmyml10dnvm7q-gnumake-4.4.1/bin:/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9/bin:/nix/store/ca84rbhb0bhwdcci7q51dad20nkbn9xc-patch-2.8/bin:/nix/store/g6mlwdvpg92rchq352ll7jbi0pz7h43r-xz-5.8.2-bin/bin:/nix/store/kjg8z2k0zvsczaij78803g7imlfm1vfb-file-5.45/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin"
+  },
+  "environment_tools": {
+    "as": {
+      "blake3": "898ca1293d4b3ee882fd4dc9df8a33eae3aa38e53f98bd5a09f0945932ca962a",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/as",
+      "resolved_path": "/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin/as"
+    },
+    "b3sum": {
+      "blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "path": "/run/current-system/sw/bin/b3sum",
+      "resolved_path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+    },
+    "bwrap": {
+      "blake3": "cd5be4481cfe2e79bbf4183ef9122dd15c3ce379594b67121a4b540ac920864e",
+      "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap",
+      "resolved_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap"
+    },
+    "cc": {
+      "blake3": "2629a2bca9cac14f7bcf24c736e31efe929beba9c498deab3ab064799ad9eb58",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/cc",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"
+    },
+    "clang": {
+      "blake3": "fc25a97da93786ead702958ff07535fc187fbb5ae0b92854f21cf3b7ba24ff3a",
+      "path": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "resolved_path": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang"
+    },
+    "g++": {
+      "blake3": "b15835ee28db67b427d9f35df586c7f90ef0098bc2a585701f9855c739a8e2b7",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/g++",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/g++"
+    },
+    "gcc": {
+      "blake3": "2629a2bca9cac14f7bcf24c736e31efe929beba9c498deab3ab064799ad9eb58",
+      "path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc",
+      "resolved_path": "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"
+    },
+    "ldd": {
+      "blake3": "700aa0e31451589ca0da759dd58303873f4b7f07fe417f2948e13978689c7091",
+      "path": "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+      "resolved_path": "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd"
+    }
+  },
+  "executables_after": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver": {
+      "blake3": "42ada46d09f51a5f9344075d7162708a87a522e97dc503412090e0ce1e4c613f",
+      "bytes": 1571792,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon": {
+      "blake3": "7616cd7c2b8388492008f28ddc2cf783f95f1c5ceb16939f271d48413b915ba6",
+      "bytes": 63048264,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon"
+    }
+  },
+  "executables_before": {
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver": {
+      "blake3": "42ada46d09f51a5f9344075d7162708a87a522e97dc503412090e0ce1e4c613f",
+      "bytes": 1571792,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-cc-driver"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon": {
+      "blake3": "7616cd7c2b8388492008f28ddc2cf783f95f1c5ceb16939f271d48413b915ba6",
+      "bytes": 63048264,
+      "mode": "0o555",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon"
+    }
+  },
+  "executables_unchanged": true,
+  "finished_at_unix_ns": 1792787370686810971,
+  "native_compiler_selection": {
+    "compiler": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+    "cxx": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+    "identities": {
+      "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++": {
+        "blake3": "24b10a22f2128621a0b14c387a2d9ac291d475c37e0a08f446c622c5fc404ffa",
+        "bytes": 2436096,
+        "mode": "0o555",
+        "resolved_path": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++"
+      },
+      "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc": {
+        "blake3": "3d0434c64bfbf12be7d793460894aa73b03f17c648ddbbbcc1cadfe6c4962b06",
+        "bytes": 2431920,
+        "mode": "0o555",
+        "resolved_path": "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc"
+      }
+    },
+    "reason": "Exact native matched pair explicitly named by both task instructions; environment GCC wrapper is observed, not substituted."
+  },
+  "non_claims": [
+    "Bounded machine-local compiler smoke only; not representative concurrent bootstrap contention.",
+    "Not representative-chain cache-on/off or slot-on/off derivation/output parity.",
+    "Not a cache-off fixed-point proof, compiler-correctness proof, protected compiler inventory audit or performance benchmark.",
+    "Cache and scheduling receipts are advisory observations, not strict-lane rebuild evidence.",
+    "Absent, unreachable, rejected or failed-handshake authority compiles plainly; degraded compiles have no machine-wide concurrency bound.",
+    "Concurrency ownership requires cooperative compiler descendants retaining the fresh process group; no escaped-descendant containment or daemon-restart reclamation claim.",
+    "No task checkbox, spec, product source or archive was changed by this runtime runner."
+  ],
+  "pinned_shell": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell",
+    "resolved_path": "/nix/store/c97vbm9alkcbqvcsdl8k0jshygy130wh-nix-shell-env"
+  },
+  "pueue_dependency": 33,
+  "rail_evidence": {
+    "cache_receipts_are_proof": false,
+    "cases": [],
+    "claim_class": "bounded-machine-local-observation",
+    "commands": [
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-print-prog-name=cc1"
+        ],
+        "elapsed_ns": 2130271,
+        "exit_status": 0,
+        "label": "query-cc1"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc",
+          "-print-prog-name=as"
+        ],
+        "elapsed_ns": 723279,
+        "exit_status": 0,
+        "label": "query-as-0"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+          "-print-prog-name=cc1plus"
+        ],
+        "elapsed_ns": 683113,
+        "exit_status": 0,
+        "label": "query-cc1plus"
+      },
+      {
+        "argv": [
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++",
+          "-print-prog-name=as"
+        ],
+        "elapsed_ns": 596430,
+        "exit_status": 0,
+        "label": "query-as-1"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/g++"
+        ],
+        "elapsed_ns": 5891165,
+        "exit_status": 0,
+        "label": "runtime-0"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/bin/gcc"
+        ],
+        "elapsed_ns": 6292298,
+        "exit_status": 0,
+        "label": "runtime-1"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1"
+        ],
+        "elapsed_ns": 11078298,
+        "exit_status": 0,
+        "label": "runtime-2"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/4yxdxw3kppr2pbic95p4mri520rkdag2-gcc-15.3.0/libexec/gcc/x86_64-unknown-linux-gnu/15.3.0/cc1plus"
+        ],
+        "elapsed_ns": 6995298,
+        "exit_status": 0,
+        "label": "runtime-3"
+      },
+      {
+        "argv": [
+          "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin/bin/ldd",
+          "/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44/bin/as"
+        ],
+        "elapsed_ns": 6034274,
+        "exit_status": 0,
+        "label": "runtime-4"
+      },
+      {
+        "argv": [
+          "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+          "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap"
+        ],
+        "elapsed_ns": 2776315,
+        "exit_status": 0,
+        "label": "digest-bwrap"
+      },
+      {
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-cache-daemon",
+          "--policy",
+          "/tmp/mantle-cc-runtime-20261023-c17/daemon-policy.json",
+          "--state-dir",
+          "/tmp/mantle-cc-runtime-20261023-c17/state",
+          "--store-backend",
+          "snix",
+          "--store-output-dir",
+          "/tmp/mantle-cc-runtime-20261023-c17/store",
+          "--receipt-dir",
+          "/tmp/mantle-cc-runtime-20261023-c17/daemon-receipts"
+        ],
+        "label": "daemon",
+        "pid": 243394
+      }
+    ],
+    "error": "daemon exited before readiness; see daemon.stderr",
+    "schema": "mantle-cc-cache-slots-proof-v1",
+    "status": "failed"
+  },
+  "rail_evidence_path": "/tmp/mantle-cc-runtime-20261023-c17/evidence.json",
+  "rail_exit_status": 1,
+  "schema": "mantle-final-cc-slots-runtime-observation-v1",
+  "scratch": "/tmp/mantle-cc-runtime-20261023-c17",
+  "source_identities_after": {
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.lock": {
+      "blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "bytes": 271564,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.lock"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.toml": {
+      "blake3": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "bytes": 12646,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.toml"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl": {
+      "blake3": "63526fe284328a00f7fa9d4dae0b78b70996eb4fd782413c6b84c1afce956e90",
+      "bytes": 1883,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl": {
+      "blake3": "f6b3c195f00812635068b118fadcdd6a73ae3266581bf432319841c2fa27d0f8",
+      "bytes": 941,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs": {
+      "blake3": "e30221031230ed0989ef80b21afb0e5ea56159565544005b5e71c5689a095c53",
+      "bytes": 39542,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs": {
+      "blake3": "695176b14c24a8b93fc2369057c188482b6587b2cffb9cf85db85f17828af88a",
+      "bytes": 17761,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs": {
+      "blake3": "94ce7185feb732baeff0c60b3101d7850d2f936dfc837780ce1d9bbb163672df",
+      "bytes": 9889,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs": {
+      "blake3": "f46a068db3166e23af090c1d0eda1fc29bc8f7e6758da21e74b7b9565495b0e9",
+      "bytes": 54906,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs": {
+      "blake3": "9faafadc583f187e2b9784ffb29f52afd0d16ff4b57e6eeaed8a396fdecd08f4",
+      "bytes": 47402,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py": {
+      "blake3": "f73d720d66d03d35eb26d39f357478308f674d54f37d8a8159e43d28aaa8f189",
+      "bytes": 35424,
+      "mode": "0o755",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py"
+    },
+    "/tmp/mantle-cc-runtime-20261023-c17-control/run.py": {
+      "blake3": "ed9144dce4bc6334083d5c96b37919beb11cda3909bcaa75ed0a8b25ce64ddff",
+      "bytes": 7412,
+      "mode": "0o755",
+      "resolved_path": "/tmp/mantle-cc-runtime-20261023-c17-control/run.py"
+    }
+  },
+  "source_identities_before": {
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.lock": {
+      "blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "bytes": 271564,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.lock"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/Cargo.toml": {
+      "blake3": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "bytes": 12646,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/Cargo.toml"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl": {
+      "blake3": "63526fe284328a00f7fa9d4dae0b78b70996eb4fd782413c6b84c1afce956e90",
+      "bytes": 1883,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-cache/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl": {
+      "blake3": "f6b3c195f00812635068b118fadcdd6a73ae3266581bf432319841c2fa27d0f8",
+      "bytes": 941,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/config/compile-slots/default.ncl"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs": {
+      "blake3": "e30221031230ed0989ef80b21afb0e5ea56159565544005b5e71c5689a095c53",
+      "bytes": 39542,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs": {
+      "blake3": "695176b14c24a8b93fc2369057c188482b6587b2cffb9cf85db85f17828af88a",
+      "bytes": 17761,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs": {
+      "blake3": "94ce7185feb732baeff0c60b3101d7850d2f936dfc837780ce1d9bbb163672df",
+      "bytes": 9889,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs": {
+      "blake3": "f46a068db3166e23af090c1d0eda1fc29bc8f7e6758da21e74b7b9565495b0e9",
+      "bytes": 54906,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/cc.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs": {
+      "blake3": "9faafadc583f187e2b9784ffb29f52afd0d16ff4b57e6eeaed8a396fdecd08f4",
+      "bytes": 47402,
+      "mode": "0o644",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper/src/slots.rs"
+    },
+    "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py": {
+      "blake3": "f73d720d66d03d35eb26d39f357478308f674d54f37d8a8159e43d28aaa8f189",
+      "bytes": 35424,
+      "mode": "0o755",
+      "resolved_path": "/home/brittonr/git/OnixResearch/mantle/scripts/prove-cc-cache-slots.py"
+    },
+    "/tmp/mantle-cc-runtime-20261023-c17-control/run.py": {
+      "blake3": "ed9144dce4bc6334083d5c96b37919beb11cda3909bcaa75ed0a8b25ce64ddff",
+      "bytes": 7412,
+      "mode": "0o755",
+      "resolved_path": "/tmp/mantle-cc-runtime-20261023-c17-control/run.py"
+    }
+  },
+  "sources_unchanged": true,
+  "started_at_unix_ns": 1792787370320258507,
+  "status": "failed",
+  "wrapper_native_paths": {
+    "g++": [
+      "/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin/g++"
+    ],
+    "gcc": [
+      "/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0/bin/gcc"
+    ]
+  }
+}

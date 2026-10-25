@@ -94,6 +94,9 @@ let RustOfflineCargoPackage = {
   vendor_src | Input | optional,
   vendor_name | CargoSourceName | optional,
   native_inputs | optional,
+  # Complete declared observer inventory is identical with collection off/on.
+  # The wrapper root and exact compiler/Cargo paths must be declared explicitly.
+  wait_tools | optional,
 } in
 
 let profile_dir = fun profile =>
@@ -111,6 +114,18 @@ let cargo_command_profile_json_arg = fun profile =>
     ""
 in
 let has_vendor = fun package => std.record.has_field "vendor_src" package in
+let has_wait_tools = fun package => std.record.has_field "wait_tools" package in
+let wait_tools = fun package =>
+  let tools = package.wait_tools in
+  {
+    wrapper = (tools.wrapper | StorePath) ++ "/bin/mantle-rust-wait-wrapper",
+    cargo = tools.cargo | String,
+    rustc = tools.rustc | String,
+    host = tools.host | String,
+    target = package.target,
+    runtime_inputs = std.array.map (fun root => root | StorePath) (field_or "runtime_inputs" [] tools),
+  }
+in
 let input_closure = fun package =>
   if has_vendor package then
     [package.seed_toolchain, package.musl, package.rust, package.src, package.vendor_src]
@@ -151,10 +166,11 @@ let evidence_vendor_json = fun package =>
 in
 {
   offlineCargoPackage
-    | doc "Lower a declared Rust package to a sandboxed Cargo --offline --locked derivation."
+    | doc "Lower offline Cargo; declare wait_tools {wrapper store root, cargo/rustc executable paths, host triple, optional runtime_inputs store roots} identically for diagnostics off/on."
     = fun raw_package =>
       let package = raw_package | RustOfflineCargoPackage in
       let native = normalize_native (field_or "native_inputs" {} package) in
+      let declared_wait_tools = if has_wait_tools package then wait_tools package else {} in
       let native_path = std.string.join ":" native.path in
       let profile_text = profile_dir package.profile in
       let cargo_profile_arg = profile_arg package.profile in
@@ -203,6 +219,11 @@ in
             TOOLCHAIN=%{input_path package.seed_toolchain package.seed_toolchain_name "bin"}
             MUSL=%{input_path package.musl package.musl_name "lib/libc.so"}
             RUST=%{input_path package.rust package.rust_name "bin/cargo"}
+%{if has_wait_tools package then m%"
+            test "$RUST/bin/cargo" = %{shell_quote declared_wait_tools.cargo}
+            test "$RUST/bin/rustc" = %{shell_quote declared_wait_tools.rustc}
+"% else ""}
+            export RUSTC="$RUST/bin/rustc"
             SRC=%{input_path package.src package.source_name "Cargo.toml"}
             LOCKFILE="$SRC/Cargo.lock"
 
@@ -227,7 +248,7 @@ linker = "x86_64-linux-musl-gcc"
 offline = true
 CARGOEOF
 %{vendor_setup_script package}
-            cargo build --locked --offline %{cargo_profile_arg} --bin %{package.binary} --target %{package.target}
+            "$RUST/bin/cargo" build --locked --offline --message-format=json-render-diagnostics %{cargo_profile_arg} --bin %{package.binary} --target %{package.target}
 
             mkdir -p "$out/bin" "$out/share/mantle"
             cp "$CARGO_TARGET_DIR/%{package.target}/%{profile_text}/%{package.binary}" "$out/bin/%{package.binary}"
@@ -259,6 +280,7 @@ CARGOEOF
     "build",
     "--locked",
     "--offline"%{cargo_command_profile_json_arg package.profile},
+    "--message-format=json-render-diagnostics",
     "--bin",
     "%{package.binary}",
     "--target",
@@ -295,8 +317,10 @@ EOF
             env = native.env,
             path = native.path,
           },
-        } & native.env,
-        inputs = input_closure package @ native.inputs,
+        } & native.env & (if has_wait_tools package then {
+          MANTLE_OFFLINE_CARGO_WAIT_TOOLS = std.serialize 'Json declared_wait_tools,
+        } else {}),
+        inputs = input_closure package @ native.inputs @ (if has_wait_tools package then [package.wait_tools.wrapper] @ declared_wait_tools.runtime_inputs else []),
         addressing_mode = 'input-addressed,
       } | Derivation,
 

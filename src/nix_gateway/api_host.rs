@@ -423,8 +423,9 @@ impl GatewayHost {
             };
             return self.0.resources.existing_entry(&producer_binding).map_err(host_error);
         }
+        let observed_unix_s = now()?;
         let entry = if let Some(usage) = self.authenticated_usage(record)? {
-            self.0.resources.reconcile(&binding, &usage).map_err(host_error)?
+            self.0.resources.reconcile(&binding, &usage, observed_unix_s).map_err(host_error)?
         } else {
             let pending = if record.local_teardown_confirmed {
                 PendingUsage::Cancelled
@@ -433,7 +434,7 @@ impl GatewayHost {
             } else {
                 PendingUsage::Partial
             };
-            self.0.resources.mark_pending(&binding, pending).map_err(host_error)?
+            self.0.resources.mark_pending(&binding, pending, observed_unix_s).map_err(host_error)?
         };
         self.publish_evidence(record, &entry, None, false, None)?;
         Ok(entry)

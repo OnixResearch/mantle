@@ -1,7 +1,15 @@
 # Tasks: Watch mode re-evaluates a plan and retracts removed goals
 
-Pure-core progress is not producer acceptance: shell cancellation, actual CLI
-edit/delete proof, shared integration, and final gates remain open.
+The source-only finishing pass of 2026-10-23 added fail-closed scheduler
+rejection recovery, accurate pending-task reporting, explicit rate rejection,
+stable human run identity, behavioral regressions, and a real CLI smoke rail.
+The subsequent local rail passed in Pueue task 37 on the retained immutable
+executable: edits, added/retained roots, invalid-import retention, coalescing,
+delete-during-build cancellation, no late output, and graceful shutdown were
+observed. Evidence: `evidence/final-immutable-watch-runtime-20261023.json`.
+T2.2/T3.1/T3.2 are accepted only for that scoped implementation/runtime subset.
+Pending-cancellation deadlines, remaining boundary fixtures, final repository
+gates, before/after obligations, and lifecycle closure remain separate.
 
 ## Phase 1: Baseline and contract
 
@@ -12,14 +20,14 @@ edit/delete proof, shared integration, and final gates remain open.
 ## Phase 2: Core and shell
 
 - [x] [serial] T2.1 Implement pure goal-set diffing: added, retained, retracted, with deterministic ordering and bounded event counts. r[build_scheduling.watch_plan_assertion]
-- [ ] [serial] T2.2 Add the opt-in watch shell: source watching, bounded re-evaluation, plan conversion, and diff application to the scheduler. r[build_scheduling.watch_plan_assertion]
+- [x] [serial] T2.2 Add the opt-in watch shell: source watching, bounded re-evaluation, plan conversion, and diff application to the scheduler. r[build_scheduling.watch_plan_assertion]
 - [ ] [serial] T2.3 Cancel in-flight work for retracted goals, release reservations, and record pending cancellation when a build does not stop. r[build_scheduling.watch_retraction_cancellation]
 - [ ] [serial] T2.4 Preserve the admitted goal set on evaluation, conversion, or policy failure and report the error. r[build_scheduling.watch_error_retention]
 
 ## Phase 3: Fixtures
 
-- [ ] [parallel] T3.1 Add positive fixtures: one-root edit rebuilds one root; added root dispatches only the new root; retained root keeps its completed output. r[build_scheduling.watch_plan_assertion]
-- [ ] [parallel] T3.2 Add negative fixtures: delete a root during its build, cancel and record no output; invalid source retains the previous set; rapid edits coalesce without duplicate dispatch. r[build_scheduling.watch_retraction_cancellation]
+- [x] [parallel] T3.1 Add positive fixtures: one-root edit rebuilds one root; added root dispatches only the new root; retained root keeps its completed output. r[build_scheduling.watch_plan_assertion]
+- [x] [parallel] T3.2 Add negative fixtures: delete a root during its build, cancel and record no output; invalid source retains the previous set; rapid edits coalesce without duplicate dispatch. r[build_scheduling.watch_retraction_cancellation]
 - [ ] [parallel] T3.3 Add bounds fixtures: event count, live goal count, and re-evaluation rate limits fail closed. r[build_scheduling.watch_error_retention]
 
 ## Phase 4: Verification

@@ -1,0 +1,212 @@
+{
+  "schema": "mantle-ordinary-gate-observation-v1",
+  "date": "2026-10-25",
+  "change": "reconcile-main-api-lineages-2026-10-17",
+  "requirement": "mantle.semantic_reconciliation.evidence_scope",
+  "maintenance_owner": "Mantle integration and quality-gate maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "v8_aborted_run": {
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "head_end": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "files_start": 19184,
+      "files_end": 19184,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 101,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "a933d65d7dd195e52ac8c6bfacaf08b295f341bb92ce431e0ddff6b2719416e2",
+    "ordinary_first_party_stdout_blake3": "060169f3b08e8aa779c82c0ca6ed09501cd9cf4f97cfc8721f00474cac61d36c",
+    "failing_tests": [
+      "build_missing_store_exits_3",
+      "build_tests::build_persists_signed_pathinfo",
+      "fetchurl_wrong_hash_shows_correct_hash",
+      "fix_flag_rewrites_hash",
+      "store_pull_http_closure_round_trip_imports_root",
+      "store_pull_http_round_trip_imports_path"
+    ],
+    "harness_defect": "The gate script sourced quality-gate-common.sh, which enables errexit, so the first failing step ended the run before recording any step exit; later steps never ran."
+  },
+  "debug_rerun_of_unreached_suites": {
+    "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/focused-debug-integration-v1-before-remote-repair",
+    "exit": 101,
+    "stdout_blake3": "7cdf0b9dbd27fdf3a209f97b565fa20bb6fd8f87c0fdd1f395b51cacaecb0168",
+    "failing_tests": [
+      "oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure",
+      "rust_plan_cli_does_not_select_disabled_default_feature_dependency_in_unified_topology"
+    ]
+  },
+  "causes_and_repairs": [
+    {
+      "tests": [
+        "integration::build_missing_store_exits_3",
+        "integration::build_tests::build_persists_signed_pathinfo",
+        "integration::fetchurl_wrong_hash_shows_correct_hash",
+        "integration::fix_flag_rewrites_hash"
+      ],
+      "cause": "A debug assertion in prepare_build_command required a non-empty substituter list; this tree made substitution opt-in with an empty default, so default debug builds panicked. Release-mode checks compile debug assertions out.",
+      "repair": "Replaced with invariants that hold for every input (src/main.rs).",
+      "origin": "uncommitted opt-in substitution default"
+    },
+    {
+      "tests": [
+        "integration::store_pull_http_round_trip_imports_path",
+        "integration::store_pull_http_closure_round_trip_imports_root"
+      ],
+      "cause": "HTTP sources require an operator endpoint binding since 41d0bdfc2; these tests were not migrated.",
+      "repair": "Migrated to the shared binding fixture; added an unbound-pull refusal test.",
+      "origin": "HEAD since 41d0bdfc2"
+    },
+    {
+      "tests": [
+        "rust_plan_cli::rust_plan_cli_does_not_select_disabled_default_feature_dependency_in_unified_topology"
+      ],
+      "cause": "The planner now passes --locked; the fixture lockfile did not match Cargo resolution.",
+      "repair": "An off-by-default app feature makes the existing lockfile exactly what Cargo resolves.",
+      "origin": "uncommitted --locked planning"
+    },
+    {
+      "tests": [
+        "remote_transfer_production::oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure"
+      ],
+      "cause": "A failed effect session refused the worker's terminal failure report.",
+      "repair": "ADR 0131; recorded under separate-remote-build-hexagon.",
+      "origin": "HEAD since 41d0bdfc2"
+    },
+    {
+      "steps": [
+        "tigerstyle"
+      ],
+      "cause": "Two lib-target findings in uncommitted Rust wait-diagnostics code: wait_provenance in crates/mantle-cargo-unit-plan grew its chunk map in a loop without a local bound, and build_with_stream_sender in crates/crunch-pipeline reached 73 lines (limit 70). The lint stops at the first failing package, so v10 showed only the first.",
+      "repair": "Named chunk constants, an explicit chunk bound and two assertions in wait_provenance; the owned-cancellation check moved into validate_stream_build_config. A --lib --keep-going probe over the declared scope then exited 0.",
+      "scope_probe": {
+        "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/tigerstyle-scope-probe-v2",
+        "exit": 0,
+        "stderr_blake3": "cc1d46d08c96f94e7e4c98d7f392d19da413126797e70e89b03749715dc6fdd8"
+      },
+      "origin": "uncommitted Rust wait diagnostics"
+    },
+    {
+      "steps": [
+        "no-std-core"
+      ],
+      "cause": "The ownership step requires a classification for every std source path touched since the functional-core history began; 118 paths committed since the 2026-10-18 ledger had none. Every earlier run stopped at the API-shape step, so v10 was the first to reach it.",
+      "repair": "Ownership-review supplement (2026-10-25) classifying the 118 historical and 7 prospective paths after source-family inspection.",
+      "origin": "HEAD"
+    }
+  ],
+  "voided_v9_run": {
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "head_end": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "files_start": 19187,
+      "files_end": 19187,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 1,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "f70521f267d2823d8687c181824341dc8e27df4a6e334b0c1df286e8b1812cdb",
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-v9-tmp-quota-exhausted",
+    "step_exits": {
+      "ordinary-first-party": 101,
+      "remaining-package-format": 0,
+      "architecture-self": 101,
+      "architecture": 101,
+      "architecture-semantic-self": 101,
+      "architecture-semantic": 101,
+      "no-std-core": 101,
+      "tigerstyle": 1,
+      "changed-no-std-wasm": 0,
+      "operator-contract": 1,
+      "flake": 1
+    },
+    "cause": "/tmp (datapool/tmp) reached its ZFS quota during the run; temporary-file creation failed with EDQUOT in the crunch tests, the linker and later steps. The gate TMPDIR then moved to the cargo-target pool."
+  },
+  "v10_run": {
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "head_end": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "files_start": 19187,
+      "files_end": 19187,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 1,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "f70521f267d2823d8687c181824341dc8e27df4a6e334b0c1df286e8b1812cdb",
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-v10-tigerstyle-and-ownership",
+    "step_exits": {
+      "ordinary-first-party": 0,
+      "remaining-package-format": 0,
+      "architecture-self": 0,
+      "architecture": 0,
+      "architecture-semantic-self": 0,
+      "architecture-semantic": 0,
+      "no-std-core": 1,
+      "tigerstyle": 1,
+      "changed-no-std-wasm": 0,
+      "operator-contract": 0,
+      "flake": 1
+    }
+  },
+  "final_tree_bound_run": {
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "head_end": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "files_start": 11926,
+      "files_end": 11926,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 1,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+    "step_exits": {
+      "ordinary-first-party": 0,
+      "remaining-package-format": 0,
+      "architecture-self": 0,
+      "architecture": 0,
+      "architecture-semantic-self": 0,
+      "architecture-semantic": 0,
+      "no-std-core": 0,
+      "tigerstyle": 1,
+      "changed-no-std-wasm": 0,
+      "operator-contract": 0,
+      "flake": 1
+    },
+    "host_classified_failures": {
+      "tigerstyle": "host-nix-remote-build-hook",
+      "flake": "host-nix-remote-build-hook"
+    },
+    "bound_step_reruns": [
+      {
+        "step": "tigerstyle",
+        "original_exit": 1,
+        "original_classification": "host-nix-remote-build-hook",
+        "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+        "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+        "rerun_exit": 0,
+        "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+        "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+        "tree_identical_to_gate_start": true
+      }
+    ]
+  },
+  "non_claims": [
+    "Observes the ordinary repository gate on the current tree; it is not G1 admission or acceptance under this change's resource-epoch rules, and it reuses no prior admission.",
+    "A host-classified failure is not a pass; the full current-system flake check remains unexecuted unless its step exit is 0.",
+    "No publication, archive or semantic parent review is performed."
+  ]
+}

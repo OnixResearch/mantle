@@ -101,7 +101,7 @@ fn stage_merkle_boundaries_track_only_affected_inputs() {
     assert_ne!(original.place_route, constraints.place_route);
     changed = baseline.clone();
     changed.nextpnr.executable.blake3 = "c".repeat(64);
-    assert_eq!(validate(changed.clone()).unwrap_err(), "wrong-embedded-device-database");
+    assert!(matches!(validate(changed.clone()), Err(AdmissionError::EmbeddedDatabase)));
     changed.database.nextpnr_binary_blake3 = changed.nextpnr.executable.blake3.clone();
     let db = identities(changed).unwrap().stages;
     assert_eq!(original.synthesis, db.synthesis);
@@ -124,14 +124,13 @@ fn timing_checks_actual_facts_not_process_success() {
     })
     .unwrap();
     facts.fmax.get_mut("clk_global").unwrap().achieved = 9.999;
-    assert!(
+    assert!(matches!(
         accept_report(ReportRequest {
             profile: profile.clone(),
             report: facts.clone()
-        })
-        .unwrap_err()
-        .starts_with("declared-timing-violation")
-    );
+        }),
+        Err(AdmissionError::TimingViolation { .. })
+    ));
     facts.fmax.get_mut("clk_global").unwrap().achieved = f64::NAN;
     assert!(
         accept_report(ReportRequest {
@@ -142,14 +141,13 @@ fn timing_checks_actual_facts_not_process_success() {
     );
     facts = report();
     facts.fmax.get_mut("clk_global").unwrap().constraint = 9.0;
-    assert!(
+    assert!(matches!(
         accept_report(ReportRequest {
             profile: profile.clone(),
             report: facts.clone()
-        })
-        .unwrap_err()
-        .starts_with("wrong-or-missing-clock-constraint")
-    );
+        }),
+        Err(AdmissionError::ClockConstraint(_))
+    ));
     facts = report();
     facts.fmax.clear();
     assert!(
@@ -172,23 +170,21 @@ fn utilization_limits_and_device_capacity_are_both_enforced() {
     let profile = profile();
     let mut facts = report();
     facts.utilization.get_mut("ICESTORM_LC").unwrap().used = 101;
-    assert!(
+    assert!(matches!(
         accept_report(ReportRequest {
             profile: profile.clone(),
             report: facts.clone()
-        })
-        .unwrap_err()
-        .starts_with("declared-utilization-violation")
-    );
+        }),
+        Err(AdmissionError::UtilizationViolation(_))
+    ));
     facts.utilization.get_mut("ICESTORM_LC").unwrap().used = 1281;
-    assert!(
+    assert!(matches!(
         accept_report(ReportRequest {
             profile: profile.clone(),
             report: facts.clone()
-        })
-        .unwrap_err()
-        .starts_with("device-capacity-exceeded")
-    );
+        }),
+        Err(AdmissionError::DeviceCapacity(_))
+    ));
     facts.utilization.clear();
     assert!(accept_report(ReportRequest { profile, report: facts }).is_err());
 }
@@ -207,14 +203,13 @@ fn netlist_ports_must_exactly_match_required_pins() {
     .unwrap()
     .profile;
     profile.pins.remove("q");
-    assert_eq!(
+    assert!(matches!(
         accept_netlist(NetlistRequest {
             profile: profile.clone(),
             netlist: netlist.clone()
-        })
-        .unwrap_err(),
-        "unconstrained-or-unknown-required-pin"
-    );
+        }),
+        Err(AdmissionError::UnconstrainedPin)
+    ));
     profile.pins.insert("unknown".into(), "99".into());
     assert!(accept_netlist(NetlistRequest { profile, netlist }).is_err());
 }

@@ -1,5 +1,7 @@
 //! Build-script execution units, shared target facts, and `flags` propagation.
 
+mod support;
+
 use std::collections::BTreeMap;
 
 use mantle_cargo_unit_plan::BuildScriptRunBinding;
@@ -13,6 +15,7 @@ use mantle_rust_plan_core::ExistingUnitFacts;
 use mantle_rust_plan_core::plan_existing_unit_effects;
 use serde_json::Value;
 use serde_json::json;
+use support::refresh_wait_units;
 
 const PATH_HASH: &str = "01234567890123456789012345678901";
 const SOURCE_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -185,7 +188,7 @@ fn bindings() -> PlanBindings {
             },
         })
         .collect();
-    PlanBindings {
+    let mut plan = PlanBindings {
         store_prefix: "/mantle/store".into(),
         system: "x86_64-linux".into(),
         target_triple: TRIPLE.into(),
@@ -196,10 +199,13 @@ fn bindings() -> PlanBindings {
         linker: format!("{}/bin/cc", store("linker")),
         target_linker: None,
         runtime_inputs: Vec::new(),
+        wait_units: BTreeMap::new(),
         sources,
         units,
         roots: vec!["app".into()],
-    }
+    };
+    refresh_wait_units(&mut plan, &effects());
+    plan
 }
 
 fn binding_mut<'a>(plan: &'a mut PlanBindings, id: &str) -> &'a mut UnitBinding {
@@ -258,6 +264,7 @@ fn toolchain_change_gives_the_target_description_unit_a_new_identity() {
     let mut changed = bindings();
     changed.toolchain = format!("/mantle/store/{}-rust-toolchain-next", "1".repeat(32));
     changed.rustc = format!("{}/bin/rustc", changed.toolchain);
+    refresh_wait_units(&mut changed, &effects());
     let after = lowered(&changed);
     let (old, new) = (target_fact_units(&before)[0], target_fact_units(&after)[0]);
     assert_ne!(old["id"], new["id"]);
@@ -336,6 +343,7 @@ fn declared_native_roots_reach_the_script_and_every_compilation_that_links_its_f
     run.native_inputs = vec![bzip2.clone(), store("pkg-config")];
     run.native_env = BTreeMap::from([("PKG_CONFIG_PATH".into(), format!("{bzip2}/lib/pkgconfig"))]);
     run.native_path = vec![format!("{}/bin", store("pkg-config"))];
+    refresh_wait_units(&mut plan, &effects());
     let lowered = lowered(&plan);
     let leaf_run = unit(&lowered, "leaf-run");
     let root = json!({"kind": "store_path", "path": bzip2});

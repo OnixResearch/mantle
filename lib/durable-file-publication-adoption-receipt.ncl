@@ -17,7 +17,7 @@ let _expected = {
   package = "durable-file-publication",
   package_version = "0.1.0",
   cargo_manifest_blake3 = "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
-  cargo_lock_blake3 = "76c8935edc9af74c2866c8532ff034d07434668d782ff32830fb41ee12116e4e",
+  cargo_lock_blake3 = "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
   flake_blake3 = "506d6a26af501959daa7d0a326b17ad39ba2ed58d9180ea123b0c82aff9cc03b",
   flake_lock_blake3 = "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc",
   nar_hash = "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",

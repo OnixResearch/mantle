@@ -1,0 +1,60 @@
+{
+  "schema": "mantle-release-evidence-v1",
+  "release_id": "PUBLIC-TEST-ONLY-INCOMPLETE-NOT-A-RELEASE",
+  "source_archive": {
+    "kind": "file",
+    "relative_path": "PUBLIC-TEST-ONLY-actual-source.tar",
+    "size_bytes": 20480,
+    "digest_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2"
+  },
+  "external_evidence": [
+    {
+      "role": "cairn-source-review-attachment",
+      "schema": "cairn.source-review-attachment.v1",
+      "relative_path": "attachment.json",
+      "digest_blake3": "01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29",
+      "claim_scope": "source-review-identity-linkage-only",
+      "non_claims": [
+        "source-review-does-not-prove-build-correctness",
+        "source-review-does-not-prove-deployment-safety",
+        "source-review-does-not-prove-release-eligibility",
+        "source-review-does-not-prove-reproducibility",
+        "source-review-does-not-prove-review-quality",
+        "source-review-does-not-prove-source-correctness",
+        "source-review-does-not-prove-witness-independence"
+      ]
+    },
+    {
+      "role": "cairn-source-review-policy",
+      "schema": "cairn.source-review-verification-policy.v1",
+      "relative_path": "policy.json",
+      "digest_blake3": "afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd",
+      "claim_scope": "source-review-identity-linkage-only",
+      "non_claims": [
+        "source-review-does-not-prove-build-correctness",
+        "source-review-does-not-prove-deployment-safety",
+        "source-review-does-not-prove-release-eligibility",
+        "source-review-does-not-prove-reproducibility",
+        "source-review-does-not-prove-review-quality",
+        "source-review-does-not-prove-source-correctness",
+        "source-review-does-not-prove-witness-independence"
+      ]
+    },
+    {
+      "role": "valence-source-review-acceptance",
+      "schema": "valence.source-review-acceptance.v1",
+      "relative_path": "acceptance.json",
+      "digest_blake3": "7ea7f6ad9f28562bd40517dbacd69b4ca90a634663928800387beb60ecea689e",
+      "claim_scope": "source-review-identity-linkage-only",
+      "non_claims": [
+        "source-review-does-not-prove-build-correctness",
+        "source-review-does-not-prove-deployment-safety",
+        "source-review-does-not-prove-release-eligibility",
+        "source-review-does-not-prove-reproducibility",
+        "source-review-does-not-prove-review-quality",
+        "source-review-does-not-prove-source-correctness",
+        "source-review-does-not-prove-witness-independence"
+      ]
+    }
+  ]
+}

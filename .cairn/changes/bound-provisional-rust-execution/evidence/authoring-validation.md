@@ -346,3 +346,14 @@ exit_code=0
 ```text
 (empty)
 ```
+
+## Current admission inspection (2026-10-23)
+
+Fresh compiler/provider and containment inspection, with exact executable
+identities, flag-consuming probes, pinned source links and the existing
+success/cache/publication hook map, is retained in
+[the interface-readiness record](../../pipeline-rust-interface-readiness/evidence/authoring-validation.md#current-implementation-admission-inspection-2026-10-23).
+No build/test/session workload was run. The selected compiler and current
+containment do not qualify the proposed bounded provisional session; all
+runtime/acceptance tasks remain unchecked. Proposed ADR 0126 records the
+boundary without enabling a mode or claiming an implementation.

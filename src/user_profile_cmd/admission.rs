@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::too_many_parameters)]
@@ -55,7 +55,7 @@ pub fn package_from_derivation(
 }
 
 pub(super) async fn admit(manifest: &Manifest, authority: &Admission<'_>) -> Result<BTreeMap<String, String>, String> {
-    manifest.validate()?;
+    manifest.validate().map_err(|error| error.to_string())?;
     if authority.trusted_keys.is_empty() {
         return Err("profile admission requires explicit trusted public keys".into());
     }
@@ -79,7 +79,7 @@ pub(super) async fn admit(manifest: &Manifest, authority: &Admission<'_>) -> Res
     }
     assert!(verified.len() <= CLOSURE_MEMBERS_MAX);
     assert!(entries.len() <= core::ENTRIES_MAX);
-    core::compose(entries)
+    core::compose(entries).map_err(|error| error.to_string())
 }
 
 fn verify_package(

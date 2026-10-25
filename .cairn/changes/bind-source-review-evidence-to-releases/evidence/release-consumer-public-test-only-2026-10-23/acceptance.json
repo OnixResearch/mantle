@@ -1,0 +1,49 @@
+{
+  "schema": "valence.source-review-acceptance.v1",
+  "outcome": "accepted_manual_review",
+  "verification_role": "manual_review",
+  "subject": {
+    "schema": "cairn.source-review-subject.v1",
+    "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+    "source_revision": "PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION",
+    "source_tree_blake3": null,
+    "snapshot_profile": "mantle-release-source",
+    "snapshot_profile_version": 1,
+    "projection": "source"
+  },
+  "subject_identity": "c02aada22e82033154050fe0f331202fb4daa9d6a787c9874a385258bd41926f",
+  "claim_root": {
+    "claim_identity": "c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092",
+    "subject_root": "a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9",
+    "revision": 1
+  },
+  "claim_root_identity": "fde2263c44c0da1d8dbfb86d2da4ab3d05b6882dec8e6a4f2611fd779db96e94",
+  "review_policy_blake3": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+  "verification_policy_identity": "f91a7fbec07f9886eab99cb7b7ec43d0a5c66446626fa8187a93139f47121921",
+  "authentication_policy_identity": "b2ed1f850f4b2f4ad18e51abcd9190d4b7401e7c51ba31769b29324f4d835ef1",
+  "approved_key_blake3": [
+    "5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f",
+    "b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3"
+  ],
+  "signed_statement_blake3": [
+    "4d09cda300674a6dc68c67b4b265a2d85a6f6739f9355b2e3447389731d76905",
+    "e24f1744612089ecace5bc1cc033b0c5ce17f684a0c62d9e4e402caebbf373d9"
+  ],
+  "claim_identity": [
+    "a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5"
+  ],
+  "attachment_identity": "8af6deee396df3890825aef51bfd5e77bfb5ac928596cf2b0c111a064273f0b5",
+  "attachment_artifact_blake3": "01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29",
+  "policy_artifact_blake3": "afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd",
+  "receipt_blake3": "b596739087901b7a888f5de491e2c9b7eef254b4ceda0efcdf0d3d7cb0ac8efb",
+  "non_claims": [
+    "source-review-does-not-prove-build-correctness",
+    "source-review-does-not-prove-deployment-safety",
+    "source-review-does-not-prove-release-eligibility",
+    "source-review-does-not-prove-reproducibility",
+    "source-review-does-not-prove-review-quality",
+    "source-review-does-not-prove-source-correctness",
+    "source-review-does-not-prove-witness-independence"
+  ],
+  "issues": []
+}

@@ -284,9 +284,14 @@ impl GatewayVerifier {
             &loaded.keys,
             &loaded.proofs,
             &revocations,
-            ucan::VerificationLimits::default(),
+            ucan::VerificationLimits::strict(),
         )
         .map_err(|_| Error)?;
+        // The service uses a half-open lifetime, even if a token verifier's
+        // boundary convention would still admit the exact expiration second.
+        if now >= verified.effective_delegation().time_bounds().expires_at_seconds() {
+            return Err(Error);
+        }
         let enforcement = loaded.verifier().enforcement(&request)?;
         let selected = selected_capability(verified.effective_delegation().capabilities(), &enforcement)?;
         let exact = caveat_value(&request)?;
@@ -316,6 +321,9 @@ impl GatewayVerifier {
     }
 
     pub fn revalidate<'a>(&self, session: &'a GatewaySession, now: u64) -> Result<Authority<'a>, Error> {
+        if now >= session.inner.expires_unix_s() {
+            return Err(Error);
+        }
         let loaded = self.load(now)?;
         let request = session.inner.request();
         let revocations = loaded.revocations(now)?;
@@ -449,7 +457,7 @@ impl Loaded {
             revocations,
             caveat_policies: policies,
             replay,
-            verification_limits: ucan::VerificationLimits::default(),
+            verification_limits: ucan::VerificationLimits::strict(),
             holder_limits: ucan::HolderInvocationLimits::default(),
         }
     }

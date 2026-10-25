@@ -1,0 +1,68 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "prove-source-built-mantle-fixed-point",
+  "maintenance_owner": "Source-built proof/provider and protected-execution maintainers; Main executes on Leviathan",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Source plan/hydration, cold route, v2 verifier and source-program preparation are present; no final-source six-stage cold v2 proof accepted. Leviathan access exists; host inaccessibility is not the blocker.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "I1",
+        "I2"
+      ],
+      "level": "source-and-historical-evidence",
+      "support": "Historical plan/hydration tests support bounded source-only composition, not current output construction."
+    },
+    {
+      "task_ids": [
+        "I3",
+        "I4",
+        "I5"
+      ],
+      "level": "source-only-unaccepted",
+      "support": "Current verifier independently loads plan/action evidence/stages, verifies actual cold provider/closure/output/bundle and rejects development authority. Source handoff describes resource validation and prepared-profile identity handoff; actual native/Rust construction, stage1-owned stage2 execution and alias publication still need current observation."
+    },
+    {
+      "task_ids": [
+        "V1",
+        "V2",
+        "V3"
+      ],
+      "level": "unaccepted",
+      "support": "Final negative/positive checks, sole-host transfer/launch/runtime proof, independent receipt and release/parity checks remain obligations."
+    }
+  ],
+  "local_remaining_actions": [
+    "Freeze Mantle/lock/vendor after Main source repairs; bind all seven source roles and every declared native/Rust/StageX source, keeping vendor and Mantle disjoint.",
+    "Transfer exact current source/profile to Leviathan and retain parity; build verified current executable without mutating the shared binary mid-proof.",
+    "Run bounded source-only preparation and independently review its inert program selector, preparation report and output profile identity.",
+    "After exact pins are reviewed, run fresh absent-root cold proof through outer pueue with CRUNCH_NO_FUSE=1, explicit bwrap/static shell, no dev/cache/scheduling inheritance; retain every failed attempt.",
+    "Verify v2 receipt, full planned-versus-observed action reconciliation, stage equality, cold provider/closure and release links; no expected digest repinning to observed same-run output."
+  ],
+  "external_missing_authority_or_capability": [
+    "Independent review/admission of exact final source/profile/program cohort and expected provider pin. Historical expected native output f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f is not observation of current source."
+  ],
+  "evidence_references": [
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md:18-46",
+    "docs/operator-proof-guide.md:263-341",
+    "src/source_built_fixed_point_trust_report.rs:795-858",
+    "bootstrap/evidence/full-source-provider-admission.json:1-68",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/leviathan-proof-host-preflight-2026-08-10/summary.md:8-32"
+  ],
+  "repeatability_recipe": [
+    "Run final source-core/source-bundle/source-observation/source-built focused checks before launch.",
+    "Use exact two-command preparation/proof recipe in docs/operator-proof-guide.md:291-319; input SOURCE_PROFILE_BLAKE3 is validated manifest identity; use reviewed output_profile_blake3 as PREPARED_PROFILE_BLAKE3 at proof launch.",
+    "Confirm output free space for declared 536870912000-byte budget and finite limits; all six stages local on leviathan.cymric-daggertooth.ts.net. SSH/rsync/pueue only outer transport/control; no --builder or remote dispatch.",
+    "mantle --json bootstrap trust-report --proof-root FRESH_PROOF_ROOT",
+    "nix develop -c cargo -Zscript scripts/check-source-built-fixed-point-receipt.rs --proof-root FRESH_PROOF_ROOT --json"
+  ],
+  "observed_commands": [],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

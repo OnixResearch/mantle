@@ -1,0 +1,962 @@
+{
+  "schema": "mantle-cairn-current-criterion-status-v1",
+  "observed_date": "2026-10-23",
+  "change": "verify-remote-admission-with-trellis",
+  "maintenance_owner": "Mantle projection/evidence maintainers; Trellis owns model/proof, Kamacite export, Valence property acceptance; Main owns Mantle gates",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-existing-source-and-observations",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject_boundary": "Live shared worktree, not an atomic final source snapshot. Referenced receipts retain their own source subjects and limitations. Selected hashes identify inspected bytes only; they are not a commit/release acceptance identity. Parent is still repairing and executing checks.",
+  "evidence_refs": [
+    ".cairn/changes/verify-remote-admission-with-trellis/design.md:72-133",
+    ".cairn/changes/verify-remote-admission-with-trellis/evidence/resume20-oracle-07/results.json:78-111",
+    "crates/crunch-remote-core/src/trellis_projection.rs:1-104",
+    "crates/crunch-remote-core/src/trellis_projection_tests.rs",
+    "target/cairn-finish-20261023/supervisor-final-gates/trellis-import.command",
+    "target/cairn-finish-20261023/supervisor-final-gates/trellis-import.exit",
+    "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log:2415-2428"
+  ],
+  "supported_task_criteria": [
+    "V1",
+    "I1",
+    "I2",
+    "I3",
+    "I4",
+    "I5",
+    "V2",
+    "I6",
+    "I7",
+    "I8",
+    "I9",
+    "I10",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "I11",
+    "V7",
+    "V8"
+  ],
+  "criteria": [
+    {
+      "task_id": "V1",
+      "task_file_line": 5,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-and-subset-baseline",
+        "finding": "Current core projection/state surfaces and historical actual-kernel command are retained; exact final focused baseline and source binding still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:5",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection"
+      ]
+    },
+    {
+      "task_id": "I1",
+      "task_file_line": 6,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "acceptance-not-inferred",
+        "finding": "ADR 0060 ownership decision is named in tasks; human/cross-repository acceptance must not be inferred from AI status records or a Cairn gate.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:6",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_model",
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "I2",
+      "task_file_line": 7,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "producer-source-available-proof-acceptance-owed",
+        "finding": "Exact imported producer kernel/tests and pinned digests are available; design records six proof functions and local producer passed metadata. This is not a fresh pinned-source Verus check with complete assumptions/toolchain identity.",
+        "remaining_local_action_ids": [
+          "import",
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:7",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_model",
+        "remote_builds.trellis_admission_safety"
+      ]
+    },
+    {
+      "task_id": "I3",
+      "task_file_line": 8,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-fail-closed-projection",
+        "finding": "Current finite projection interns full identities through one trace and rejects malformed/unmodeled payload/history rather than pretending proof coverage; current partial log shows identity/payload cases ok.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:8",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection"
+      ]
+    },
+    {
+      "task_id": "I4",
+      "task_file_line": 9,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "cross-owner-contract-freeze-owed",
+        "finding": "Gateway/resource/credentials/nominal-type dependency acceptance still controls proof-profile freeze; this record cannot freeze another owner.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:9",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_model"
+      ]
+    },
+    {
+      "task_id": "I5",
+      "task_file_line": 13,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "producer-source-available-proof-acceptance-owed",
+        "finding": "Exact imported producer kernel/tests and pinned digests are available; design records six proof functions and local producer passed metadata. This is not a fresh pinned-source Verus check with complete assumptions/toolchain identity.",
+        "remaining_local_action_ids": [
+          "import",
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:13",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_safety"
+      ]
+    },
+    {
+      "task_id": "V2",
+      "task_file_line": 14,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "producer-verification-owed",
+        "finding": "Trellis Verus/Tracey/paired lifecycle validation with fresh exact source identity is external to this worker; old producer/scaffold successes are not current proof counts.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:14",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_safety"
+      ]
+    },
+    {
+      "task_id": "I6",
+      "task_file_line": 15,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "external-envelope-and-property-receipt-missing",
+        "finding": "Actual source/proof identity chain must be exported through Kamacite and accepted by Valence; current design explicitly reports no matching real envelope/receipt. Synthetic sidecar tests do not satisfy this criterion.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:15",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "I7",
+      "task_file_line": 19,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-fail-closed-projection",
+        "finding": "Current finite projection interns full identities through one trace and rejects malformed/unmodeled payload/history rather than pretending proof coverage; current partial log shows identity/payload cases ok.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:19",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection"
+      ]
+    },
+    {
+      "task_id": "I8",
+      "task_file_line": 20,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "historical-exercised-current-subset",
+        "finding": "Retained actual-kernel parity argv exited 0; partial current stdout reports complete finite matrix and named positive/negative/fence/result/history tests ok. Retain current complete run exit, exact classes/counts and final consumer identity before acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "import"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:20",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection"
+      ]
+    },
+    {
+      "task_id": "I9",
+      "task_file_line": 21,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "external-envelope-and-property-receipt-missing",
+        "finding": "Actual source/proof identity chain must be exported through Kamacite and accepted by Valence; current design explicitly reports no matching real envelope/receipt. Synthetic sidecar tests do not satisfy this criterion.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:21",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "I10",
+      "task_file_line": 22,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-boundary-supported",
+        "finding": "Projection module explicitly has no Valence receipt/output authority. Runtime remains Mantle Rust core; external proof processing stays an evidence boundary, not an admission oracle.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:22",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "V3",
+      "task_file_line": 26,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "historical-exercised-current-subset",
+        "finding": "Retained actual-kernel parity argv exited 0; partial current stdout reports complete finite matrix and named positive/negative/fence/result/history tests ok. Retain current complete run exit, exact classes/counts and final consumer identity before acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "import"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:26",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_safety"
+      ]
+    },
+    {
+      "task_id": "V4",
+      "task_file_line": 27,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "historical-exercised-current-subset",
+        "finding": "Retained actual-kernel parity argv exited 0; partial current stdout reports complete finite matrix and named positive/negative/fence/result/history tests ok. Retain current complete run exit, exact classes/counts and final consumer identity before acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "import"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:27",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_safety",
+        "remote_builds.trellis_admission_projection"
+      ]
+    },
+    {
+      "task_id": "V5",
+      "task_file_line": 28,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "full-negative-and-claim-guard-evidence-owed",
+        "finding": "Partial current release manifest fixture lines include fail-closed proof/role cases, but full required transition/mapping/proof/assumption/Valence-role mutation and explicit overclaim guard criteria require Main review and exact exercised evidence; not assumed from source.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:28",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection",
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "V6",
+      "task_file_line": 29,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "full-negative-and-claim-guard-evidence-owed",
+        "finding": "Partial current release manifest fixture lines include fail-closed proof/role cases, but full required transition/mapping/proof/assumption/Valence-role mutation and explicit overclaim guard criteria require Main review and exact exercised evidence; not assumed from source.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:29",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_claim_boundary"
+      ]
+    },
+    {
+      "task_id": "I11",
+      "task_file_line": 33,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "documented-contract-not-accepted-proof",
+        "finding": "Current design explains modeled fields/parity classes/current pin/handoff/non-claims/update procedure; no actual proof or external role acceptance inferred.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:33",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_claim_boundary"
+      ]
+    },
+    {
+      "task_id": "V7",
+      "task_file_line": 34,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "partial-gates-incomplete",
+        "finding": "Importer check and structural Mantle lifecycle gates pass their recorded inputs; current parity has ok lines but final remote/sidecar/quality/Nix and paired Trellis gates remain owed.",
+        "remaining_local_action_ids": [
+          "focused",
+          "import",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:34",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_projection",
+        "remote_builds.trellis_admission_evidence_boundary"
+      ]
+    },
+    {
+      "task_id": "V8",
+      "task_file_line": 35,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "partial-gates-incomplete",
+        "finding": "Importer check and structural Mantle lifecycle gates pass their recorded inputs; current parity has ok lines but final remote/sidecar/quality/Nix and paired Trellis gates remain owed.",
+        "remaining_local_action_ids": [
+          "focused",
+          "import",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "criterion_reference": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:35",
+      "requirement_ids": [
+        "remote_builds.trellis_admission_claim_boundary"
+      ]
+    }
+  ],
+  "observed_documentary_lifecycle": {
+    "manifest": "target/cairn-finish-20261023/lifecycle-observations/result.json",
+    "commands": [
+      {
+        "label": "validate-before",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stderr.log"
+      },
+      {
+        "label": "verify-remote-admission-with-trellis-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "verify-remote-admission-with-trellis",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-proposal.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-proposal.stderr.log"
+      },
+      {
+        "label": "verify-remote-admission-with-trellis-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "verify-remote-admission-with-trellis",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-design.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-design.stderr.log"
+      },
+      {
+        "label": "verify-remote-admission-with-trellis-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "verify-remote-admission-with-trellis",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-tasks.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/verify-remote-admission-with-trellis-tasks.stderr.log"
+      },
+      {
+        "label": "validate-after",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stderr.log"
+      }
+    ],
+    "non_claim": "Exact zero exits are lifecycle/structure evidence only, not executed acceptance of every task; the old missing nominal_identity_policy scaffold blocker is not the current observation."
+  },
+  "observed_parent_gate_snapshots": [
+    {
+      "label": "ordinary-first-party",
+      "command_text": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/ordinary-first-party",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture-semantic",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs --semantic",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "trellis-import",
+      "command_text": "python3 scripts/import-trellis-fenced-attempt.py --check",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "no-std-core",
+      "command_text": "bash scripts/check-no-std-core.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/no-std-core",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "changed-no-std-wasm",
+      "command_text": "cargo check --locked --offline -p crunch-source-core -p mantle-rust-plan-core -p mantle-rust-differential-core -p mantle-application-contract -p crunch-rust-cache-core -p crunch-remote-core --target wasm32-unknown-unknown",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/changed-no-std-wasm",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "default-shell-store",
+      "command_text": "cargo check --locked --offline -p crunch-store --lib",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/default-shell-store",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "tigerstyle",
+      "command_text": "bash scripts/check-first-party-tigerstyle.sh",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "flake",
+      "command_text": "nix flake check --offline --no-write-lock-file -L",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/flake",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "first-party-clippy",
+      "command_text": "bash scripts/check-first-party-clippy.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    },
+    {
+      "label": "workspace-tests",
+      "command_text": "cargo_test_workspace_lib_tests",
+      "exit_code": null,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    }
+  ],
+  "observed_workspace_fixture_subset": {
+    "stdout": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log",
+    "command": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.command",
+    "exit_receipt_observed": null,
+    "selected_test_lines": [
+      {
+        "line": 2415,
+        "text": "test trellis_projection::tests::authority_precedes_replay_and_replay_precedes_capacity_and_terminal ... ok"
+      },
+      {
+        "line": 2416,
+        "text": "test trellis_projection::tests::complete_finite_matrix_matches_actual_trellis_admit ... ok"
+      },
+      {
+        "line": 2417,
+        "text": "test trellis_projection::tests::complete_retained_history_classifies_the_last_entry ... ok"
+      },
+      {
+        "line": 2418,
+        "text": "test trellis_projection::tests::exhausted_identity_domain_never_aliases_or_forgets_existing_values ... ok"
+      },
+      {
+        "line": 2419,
+        "text": "test trellis_projection::tests::first_and_final_fences_keep_report_admission_separate_from_reassignment ... ok"
+      },
+      {
+        "line": 2420,
+        "text": "test trellis_projection::tests::full_identity_equality_is_stable_across_a_trace ... ok"
+      },
+      {
+        "line": 2421,
+        "text": "test trellis_projection::tests::out_of_model_progress_and_malformed_payloads_do_not_receive_coverage ... ok"
+      },
+      {
+        "line": 2422,
+        "text": "test trellis_projection::tests::trellis::verified_negative::duplicate_and_conflicting_events_preserve_terminal_state ... ok"
+      },
+      {
+        "line": 2423,
+        "text": "test trellis_projection::tests::trellis::verified_negative::early_or_unlinked_completion_never_exposes_a_result ... ok"
+      },
+      {
+        "line": 2424,
+        "text": "test trellis_projection::tests::trellis::verified_negative::fences_authority_events_history_and_linkage_reject_without_output_authority ... ok"
+      },
+      {
+        "line": 2425,
+        "text": "test trellis_projection::tests::trellis::verified_negative::invalid_status_tags_reject_before_any_transition ... ok"
+      },
+      {
+        "line": 2426,
+        "text": "test trellis_projection::tests::trellis::verified_positive::accepted_transitions_retain_exact_result_linkage ... ok"
+      },
+      {
+        "line": 2427,
+        "text": "test trellis_projection::tests::trellis::verified_positive::every_phase_kind_pair_has_the_named_transition ... ok"
+      },
+      {
+        "line": 2428,
+        "text": "test trellis_projection::tests::trellis::verified_positive::queued_and_ready_failure_close_without_output_authority ... ok"
+      }
+    ],
+    "non_claim": "Individual observed ok/FAILED lines only; no final aggregate success or absence of skips is inferred. An empty selection is not proof of absent tests."
+  },
+  "remaining_local_actions": [
+    {
+      "id": "focused",
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "crunch-remote-core",
+        "trellis_projection::tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "owed": "Capture final-source actual imported-kernel parity and positive/negative matrix, release sidecar binding/mutation/claim rails and source/policy/toolchain identities.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "import",
+      "argv": [
+        "python3",
+        "scripts/import-trellis-fenced-attempt.py",
+        "--check"
+      ],
+      "owed": "Already exit 0 in supervisor receipt; bind unchanged oracle to final consumer snapshot instead of silently moving producer pin.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "quality",
+      "argv": [
+        "bash",
+        "scripts/check-first-party-quality.sh"
+      ],
+      "owed": "Main to capture final-source first-party fmt, strict Clippy and workspace lib/tests; then finish no-std, architecture semantic, relevant Nix and Tracey rails. Historical/partial successes do not close this action."
+    }
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [
+    {
+      "blocker": "Pinned model source is available (revision d91188e495d65bca87551b7a06330efb2c909edf), not missing. Current pinned-source verifier observation, exact toolchain/assumptions and paired Trellis acceptance remain producer-owned; old archived counts cannot stand in.",
+      "evidence": ".cairn/changes/verify-remote-admission-with-trellis/design.md:72-133"
+    },
+    {
+      "blocker": "Real canonical Kamacite v2 envelope for exact proof/source handoff and Valence accepted property-role receipt are absent according to current design handoff; source/mapping or synthetic accepted fixtures cannot authorize the role.",
+      "evidence": ".cairn/changes/verify-remote-admission-with-trellis/design.md:72-133"
+    }
+  ],
+  "local_cross_change_contract_freeze_owed": [
+    {
+      "blocker": "Freeze current fact set only after credential/gateway/resource/nominal-type/fenced-attempt owners stabilize and explicitly accept their contracts.",
+      "evidence": ".cairn/changes/verify-remote-admission-with-trellis/tasks.md:5-15"
+    }
+  ],
+  "integration_gate_blockers": [
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/no-std-core.stderr.log:370-394",
+        "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy.stderr.log:35-53"
+      ]
+    },
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic.stderr.log:1-2"
+      ]
+    },
+    {
+      "kind": "host-nix-builder-configuration",
+      "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/flake.stderr.log:147-152",
+        "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle.stderr.log:1-9"
+      ]
+    }
+  ],
+  "non_claims": [
+    "Parity is finite executable consumer evidence, not a current Verus invocation or external accepted proof receipt. No persistence/transport/crypto/worker/liveness/whole-build/release correctness or runtime authority follows.",
+    "This worker ran no build, test, lint, formatter, VM, proof, lifecycle gate or production command; only read and reconciled existing evidence. No checkbox changed.",
+    "No human, operator, policy-owner or upstream approval is inferred from AI investigation, implementation or lifecycle structure gates."
+  ],
+  "selected_inspected_input_identities": [
+    {
+      "path": ".cairn/changes/verify-remote-admission-with-trellis/design.md",
+      "sha256": "429eb2d1c06ed8b6cbf59f2f3885ef4a18398cfcab55f414c56e6c6be5e8e413"
+    },
+    {
+      "path": ".cairn/changes/verify-remote-admission-with-trellis/evidence/resume20-oracle-07/results.json",
+      "sha256": "438e2b764cfe396d1c8c4c27449e5044ebf671422ce864342f3a6ff0a1292e78"
+    },
+    {
+      "path": "crates/crunch-remote-core/src/trellis_projection.rs",
+      "sha256": "59e423f4cf61530110fb9af8574e416ac22e6cb3ad76ba26f7f60ff480ee6ba2"
+    },
+    {
+      "path": "crates/crunch-remote-core/src/trellis_projection_tests.rs",
+      "sha256": "679417914f297f21c8f2af21c0a8d2b2ceb20f85c47cd7636b59bc14e741a171"
+    },
+    {
+      "path": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import.command",
+      "sha256": "2dc194107639dcff610d9bdc23b6496ebc1f93e63187c5a09064378a4ba059aa"
+    },
+    {
+      "path": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  ],
+  "tasks_sha256_at_inspection": "43f87bac51ffd1e8ea074f0979b3e1d4d3af665bd496229efeb8463c512a581f",
+  "support_definition": "Every listed task criterion has a bounded current assessment; supported_task_criteria does not mean those tasks are complete or accepted.",
+  "observed_integration_gate_update": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": [
+        {
+          "step": "tigerstyle",
+          "original_exit": 1,
+          "original_classification": "host-nix-remote-build-hook",
+          "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+          "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+          "rerun_exit": 0,
+          "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+          "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+          "tree_identical_to_gate_start": true
+        }
+      ]
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "pin_binding_blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949",
+      "statement": "The gates ran over the hashed tree from which the v6 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 1,
+          "flake": 1
+        },
+        "status": "host-prerequisite-still-blocks",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": "host-nix-remote-build-hook",
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+          }
+        ],
+        "bound_step_reruns": [
+          {
+            "step": "tigerstyle",
+            "original_exit": 1,
+            "original_classification": "host-nix-remote-build-hook",
+            "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+            "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+            "rerun_exit": 0,
+            "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+            "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+            "tree_identical_to_gate_start": true
+          }
+        ]
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  }
+}

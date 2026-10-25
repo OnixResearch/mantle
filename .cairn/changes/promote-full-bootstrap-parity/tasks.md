@@ -13,3 +13,23 @@
 - [ ] [serial] V1 Add a positive complete-bundle test with no witness sidecars. Add negative fixtures for every missing row, cross-row receipt substitution, scaffold StageX receipt, v1 fixed-point receipt, missing or tampered action-trust plan, incomplete action adapter, path-only generated authority, producerless executable, unknown or missing event, digest or producer drift, event-count overflow, remote or cache-only execution, wrong provider/closure/source identity, digest tamper, fallback event, unapproved effect/read, stale commit, target authority, malformed schema, absolute-path dependence, and any attempt to derive bootstrap status from witness policy. r[bootstrap_inventory.full_bootstrap_parity_promotion]
 - [ ] [serial] V2 Run `nix develop -c cargo test -p mantle --bin mantle bootstrap_parity`, focused action-trust core tests, `nix develop -c cargo test -p mantle --test bootstrap_parity_cli`, trust-report CLI tests, the standalone checker self-test, release-evidence verification, `mantle --json bootstrap trust-report --proof-root <proof-root>`, and `mantle --json bootstrap parity-report --require live-bootstrap --require guix --require stagex`; preserve exact JSON and checker transcripts. r[bootstrap_inventory.full_bootstrap_parity_promotion]
 - [ ] [serial] V3 Run machine-contract generation/checks, `nix develop -c cargo fmt --check -p mantle -v`, focused first-party Clippy, `git diff --check`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .`, all three Cairn gates, and `nix flake check -L`; archive only after post-promotion evidence remains valid from committed source. r[bootstrap_inventory.full_bootstrap_parity_promotion]
+
+## Current source handoff (2026-10-23)
+
+No parity/proof/build/test command was run by this slice. No row, task, or
+promotion is accepted from historical receipts. The cold source cohort must
+first be authored and independently reviewed, then executed to a verified v2
+fixed-point receipt with complete root-scoped action reconciliation. See
+`docs/operator-proof-guide.md` for the current preparation/proof identity
+handoff and resource limits. Leviathan access and retained source closures
+are available prerequisites, not native-row, StageX, Guix, or fixed-point
+completion evidence.
+
+After the integration owner has the final same-source proof, run
+`mantle --json bootstrap trust-report --proof-root <fresh-proof-root>` and
+`mantle --json bootstrap parity-report --require live-bootstrap --require guix --require stagex`,
+the standalone checker, and V2/V3 checks. Each independent row must validate
+its own source, predecessor, observed output, receipt, freshness, and negative
+evidence; provider metadata and a copied successful status cannot fill gaps.
+No witness policy or source-review authority can replace these bootstrap
+checks. All tasks remain open pending their current observable evidence.

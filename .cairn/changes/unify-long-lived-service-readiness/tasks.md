@@ -11,7 +11,7 @@ consumer readiness, passing gates, or archive eligibility.
 
 ## Phase 2: Core
 
-- [x] [serial] T2.1 Implement pure vocabulary validation, dependency graph evaluation, restart policy normalization, and derived state computation in `crates/crunch-service-readiness-core` (source-only production crate; root manifest registration and T3 consumer acceptance pending; scoped proof `evidence/t2-core-2026-10-01.md`). r[mantle.service_readiness.declared_dependencies]
+- [x] [serial] T2.1 Implement pure vocabulary validation, dependency graph evaluation, restart policy normalization, and derived state computation in `crates/crunch-service-readiness-core` (root workspace registration and consumer adapters now exist in source; T3/T4 runtime acceptance remains pending; original scoped proof `evidence/t2-core-2026-10-01.md`). r[mantle.service_readiness.declared_dependencies]
 - [x] [serial] T2.2 Add the bounded non-evidence readiness reporting boundary and direct blocked-dependency result (`evidence/t2-core-2026-10-01.md`; no real daemon acknowledgment claimed). r[mantle.service_readiness.declared_dependencies]
 
 ## Phase 3: Consumers
@@ -21,6 +21,19 @@ consumer readiness, passing gates, or archive eligibility.
 - [ ] [serial] T3.3 Report `started` and `ready` separately for the remote serve binding, and name its restart policy. r[mantle.service_readiness.restart_policy_matrix]
 - [ ] [serial] T3.4 Declare dependency relations for the source-built fixed-point proof stages and report each stage's state under the vocabulary. r[mantle.service_readiness.declared_dependencies]
 - [ ] [serial] T3.5 Make `mantle doctor` publish derived readiness state while keeping existing human and JSON output unchanged. r[mantle.service_readiness.doctor_derived_state]
+
+Source integration status (not runtime acceptance): `src/remote_build/live_state/daemon.rs`
+reports the coordination daemon after its own real subscription snapshot and
+admits transitions through the core. `src/main.rs` uses real listener/response
+observers for the Rust cache, queries the separate doctor stderr channel, and
+keeps the doctor report shape separate. `src/remote_build.rs` reports only an
+accepted, flushed stdio session; metadata is not ready. All three current
+services declare `never`, not an unimplemented supervisor. The proof shell
+declares the stage graph but lacks accepted stage-local action observations;
+no new proof-stage completion is claimed. Terminal proof transition,
+disconnected-ID reuse, and early-normal-exit fixtures were extended in source;
+they have not been run in this integration pass.
+
 
 ## Phase 4: Fixtures and verification
 

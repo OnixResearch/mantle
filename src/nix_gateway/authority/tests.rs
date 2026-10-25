@@ -63,7 +63,7 @@ fn private_signed_session_checks_live_revocation_generation_and_operation_withou
         &CapabilitySet::new(vec![CapabilityDocument::new(exact.resource().into(), exact.ability().into()).unwrap()])
             .unwrap(),
         &ProofReferences::empty(),
-        TokenTimeBounds::new(1000, 1900).unwrap(),
+        TokenTimeBounds::new(1100, 1900).unwrap(),
     )
     .unwrap();
     let nonce = HolderInvocationNonce::from_bytes([19; 32]);
@@ -82,6 +82,23 @@ fn private_signed_session_checks_live_revocation_generation_and_operation_withou
         HolderInvocationLimits::default(),
     )
     .unwrap();
+    // A rejected lifetime must not consume the exact holder invocation. Use
+    // explicit clocks and this fixture's private ledger, never process time.
+    for now in [999, 1099, 1900, 1901] {
+        assert!(
+            verifier
+                .verify(
+                    request.clone(),
+                    Invocation {
+                        compact_token: token.as_str(),
+                        nonce,
+                        holder_signature: &signature,
+                    },
+                    now,
+                )
+                .is_err()
+        );
+    }
     let session = verifier
         .verify(
             request.clone(),
@@ -93,6 +110,19 @@ fn private_signed_session_checks_live_revocation_generation_and_operation_withou
             1500,
         )
         .unwrap();
+    assert!(
+        verifier
+            .verify(
+                request.clone(),
+                Invocation {
+                    compact_token: token.as_str(),
+                    nonce,
+                    holder_signature: &signature,
+                },
+                1500,
+            )
+            .is_err()
+    );
     let authority = verifier.revalidate(&session, 1501).unwrap();
     assert!(authority.permits(crunch_nix_gateway_core::Permission::Build));
     assert!(!authority.permits(crunch_nix_gateway_core::Permission::Admin));
@@ -100,6 +130,8 @@ fn private_signed_session_checks_live_revocation_generation_and_operation_withou
     assert!(session.require(Operation::Admin, &request.target, request.request_digest).is_err());
     assert!(session.require(Operation::BuildSubmit, "/jobs/private", request.request_digest).is_err());
     assert!(session.require(Operation::BuildSubmit, &request.target, [42; 32]).is_err());
+    assert!(verifier.revalidate(&session, 1899).is_ok());
+    assert!(verifier.revalidate(&session, 1900).is_err());
     assert!(verifier.revalidate(&session, 1901).is_err());
     assert!(!format!("{session:?}").contains(token.as_str()));
     document["revision"] = serde_json::json!(2);

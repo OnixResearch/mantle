@@ -1,3 +1,13 @@
+Implementation admission rechecked 2026-10-23: blocked, not accepted. The exact
+rustd pin retains a database but exposes only unbounded `sync`/`patch` line
+requests and mtime updates, not the required revision-qualified update/ack/drain
+bridge. Its separate toolchain does not satisfy same-binary pipelining. The
+current user also lacks a delegated finite session containment boundary. No
+provider was imported or simulated, no restart-per-edit substitute was added,
+and no retained-session workload was run. All tasks remain open. See the
+[fresh source/probe record](../pipeline-rust-interface-readiness/evidence/authoring-validation.md#current-implementation-admission-inspection-2026-10-23)
+and [proposed ADR 0126](../../../adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md).
+
 ## Phase 1: Provider, Identity and Authority Admission
 
 - [ ] [serial] Record a future proposed ADR for the narrow resident-provider bridge, configuration/revision identity split, quiescent updates, enforced host controls, separate reference projection and final-result authority; review with Rust execution/cache owners without importing a compiler fork or changing defaults. r[rust_package_planning.warm_workspace.admission] r[rust_package_planning.warm_workspace.identity] r[rust_package_planning.warm_workspace.publication]

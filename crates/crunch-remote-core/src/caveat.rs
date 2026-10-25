@@ -409,6 +409,8 @@ pub const MAX_REMOTE_OUTPUT_CLASSES: usize = 32;
 /// Check `/job/<request-id>/output/<validated-class>` against every retained
 /// parent restriction, the original value and each rewritten prefix output.
 /// A bool is a non-consuming decision, never a holder signature or ticket spend.
+/// This boolean gate admits the ORIGINAL effect, so a rewrite to a different
+/// allowed job or output class is not a grant to execute that original effect.
 // r[impl mantle.authority_attenuation.attenuated_remote_grant]
 pub fn admit_remote_job(
     chain: &FilterChain<'_>,
@@ -445,7 +447,7 @@ pub fn admit_remote_job(
                 && literal_segment_is_valid(class)
                 && parents.iter().all(|parent| parent.jobs.contains(&job) && parent.output_classes.contains(&class))
         })
-        .is_some()
+        .is_some_and(|output| output == original)
 }
 
 /// Exact logical-path gate inputs: the receiver's admitted store prefix, the
@@ -616,6 +618,15 @@ mod tests {
             FilterChain::empty().attenuate(rewrite("/job/job-a/output/out", "/job/job-b/output/out")).unwrap();
         assert!(!admit_remote_job(&widened_output, "/job/job-a/output/out", &[parent, child], 49));
         assert!(!admit_remote_job(&FilterChain::empty(), "/job/job-a/output/out", &[], 49));
+        // Both targets are in the parent scope, but this boolean API cannot
+        // forward a rewritten effect. Never execute the unfiltered original.
+        let retargeted =
+            FilterChain::empty().attenuate(rewrite("/job/job-a/output/out", "/job/job-b/output/dev")).unwrap();
+        assert!(!admit_remote_job(&retargeted, "/job/job-a/output/out", &[parent], 49));
+        let identity = FilterChain::empty()
+            .attenuate(rewrite("/job/:job/output/:class", "/job/:job/output/:class"))
+            .unwrap();
+        assert!(admit_remote_job(&identity, "/job/job-a/output/out", &[parent, child], 49));
     }
 
     #[test]

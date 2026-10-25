@@ -62,8 +62,8 @@ fn controls(
             "cache" => runner::digest(cache),
             "resources" => runner::digest(&(
                 2,
-                process::BUILD_MS,
-                process::SCRATCH_BYTES,
+                crunch_rustc_wrapper::observed_process::BUILD_MS,
+                crunch_rustc_wrapper::observed_process::SCRATCH_BYTES,
                 "ambient-affinity-and-page-cache-uncontrolled",
             )),
             "configuration" => runner::digest(&(&options.host, &options.path)),
@@ -85,14 +85,14 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
     if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } != 0 {
         return Err("subreaper-unavailable".into());
     }
-    process::private_dir(&options.root)?;
+    crunch_rustc_wrapper::observed_process::private_dir(&options.root)?;
     runner::pin(&mut options)?;
     let total = Instant::now();
     let mut cohorts = vec![];
     runner::probe_tools(&options, &fixtures::generate("chain")?, total)?;
     let instrumentation = runner::digest(&(
         process::hash_closure(options.wrapper.as_ref().ok_or("wait-wrapper-required")?)?,
-        include_str!("waits.rs"),
+        include_str!("../../crunch-rustc-wrapper/src/waits.rs"),
     ));
     for fixture_id in ["chain", "wide"] {
         for cache in [CacheState::Clean, CacheState::Warm, CacheState::Incremental] {
@@ -113,7 +113,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                 CacheState::Incremental => "incremental",
             });
             let cohort_root = options.root.join(&cohort_name);
-            process::private_dir(&cohort_root)?;
+            crunch_rustc_wrapper::observed_process::private_dir(&cohort_root)?;
             let measured_step = if cache == CacheState::Incremental {
                 &fixture.steps[3]
             } else {
@@ -206,7 +206,9 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                     Err(e) => {
                         let capture = process::read_bounded(&slot_root.join("metadata/capture.json"), 64 * 1024 * 1024)
                             .ok()
-                            .and_then(|bytes| serde_json::from_slice::<process::Capture>(&bytes).ok());
+                            .and_then(|bytes| {
+                                serde_json::from_slice::<crunch_rustc_wrapper::observed_process::Capture>(&bytes).ok()
+                            });
                         let outcome = if capture.as_ref().is_some_and(|c| c.failure.as_deref() == Some("deadline")) {
                             RunOutcome::Timeout
                         } else {
@@ -216,7 +218,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                             plan: setup.id.clone(),
                             invocation: Some(runner::digest(&(&slot_root, "setup"))),
                             outcome,
-                            elapsed_ns: Some(process::ns(start)),
+                            elapsed_ns: Some(crunch_rustc_wrapper::observed_process::ns(start)),
                             equality_qualified: false,
                             work_qualified: false,
                             exclusion: Some(Unavailable::MissingEndpoint),
@@ -229,7 +231,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                     plan: setup.id.clone(),
                     invocation: Some(runner::digest(&(&slot_root, "setup"))),
                     outcome: RunOutcome::Success,
-                    elapsed_ns: Some(process::ns(start)),
+                    elapsed_ns: Some(crunch_rustc_wrapper::observed_process::ns(start)),
                     equality_qualified: true,
                     work_qualified: metadata.code == Some(0),
                     exclusion: None,
@@ -244,7 +246,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                             "warmup",
                             total,
                             None,
-                            process::STREAM_BYTES,
+                            crunch_rustc_wrapper::observed_process::STREAM_BYTES,
                         )?;
                         let plan = plans
                             .iter()
@@ -276,7 +278,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                         "measured",
                         total,
                         None,
-                        process::STREAM_BYTES,
+                        crunch_rustc_wrapper::observed_process::STREAM_BYTES,
                     )?;
                     samples.push(RunSample {
                         plan: id.clone(),
@@ -300,7 +302,7 @@ pub fn execute(mut options: Options) -> Result<Cohorts> {
                         "compile",
                         total,
                         None,
-                        process::STREAM_BYTES,
+                        crunch_rustc_wrapper::observed_process::STREAM_BYTES,
                     )?;
                     let observed = &attempts[observed_index];
                     let valid = core::compare(&observed.observation, &clean.observation, &measured_step.expected)

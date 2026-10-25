@@ -1266,11 +1266,14 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         request.deterministic_sandbox_isolation_evidence.clone(),
         is_deterministic_required,
     );
-    let mut manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     debug_assert!(!manifest.release_id.is_empty());
     debug_assert!(resolved_bundle_dir.components().next().is_some());
-    let source_review_result = crate::release_evidence::verify_source_review_evidence(
-        &manifest,
+    let crunch_release_core::ReleaseEvidenceEvaluation {
+        mut manifest,
+        verification: source_review_result,
+    } = crate::release_evidence::verify_source_review_evidence(
+        manifest,
         &resolved_bundle_dir,
         request.source_review_policy.as_deref(),
         request.require_source_review,
@@ -3410,9 +3413,12 @@ mod tests {
         );
         manifest.cairn_handoff_validation = cairn_assessment.receipt;
         let cairn_handoff_result = cairn_assessment.verification;
-        let source_review_result = crunch_release_core::source_review::verify_release_source_review(
-            &crunch_release_core::source_review::SourceReviewVerificationRequest {
-                manifest: &manifest,
+        let crunch_release_core::ReleaseEvidenceEvaluation {
+            manifest,
+            verification: source_review_result,
+        } = crunch_release_core::source_review::verify_release_source_review(
+            crunch_release_core::source_review::SourceReviewVerificationRequest {
+                manifest,
                 attachment_bytes: None,
                 policy_bytes: None,
                 valence_bytes: None,
@@ -3545,9 +3551,12 @@ mod tests {
             crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
         );
         let cairn_result = satisfied_cairn_handoff_result();
-        let source_review_result = crunch_release_core::source_review::verify_release_source_review(
-            &crunch_release_core::source_review::SourceReviewVerificationRequest {
-                manifest: &manifest,
+        let crunch_release_core::ReleaseEvidenceEvaluation {
+            manifest,
+            verification: source_review_result,
+        } = crunch_release_core::source_review::verify_release_source_review(
+            crunch_release_core::source_review::SourceReviewVerificationRequest {
+                manifest,
                 attachment_bytes: None,
                 policy_bytes: None,
                 valence_bytes: None,

@@ -1,0 +1,1836 @@
+{
+  "schema": "mantle-cairn-current-criterion-status-v1",
+  "observed_date": "2026-10-23",
+  "change": "adopt-casita-store-backend",
+  "maintenance_owner": "Mantle store/backend maintainers; Main owns runtime acceptance and dependency-policy decisions",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-existing-source-and-observations",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject_boundary": "Live shared worktree, not an atomic final source snapshot. Referenced receipts retain their own source subjects and limitations. Selected hashes identify inspected bytes only; they are not a commit/release acceptance identity. Parent is still repairing and executing checks.",
+  "evidence_refs": [
+    ".cairn/changes/adopt-casita-store-backend/tasks.md",
+    ".cairn/changes/adopt-casita-store-backend/evidence/test-runs-2026-09-30.md",
+    ".cairn/changes/adopt-casita-store-backend/evidence/configured-audit-after-remediation-2026-10-23.json",
+    ".cairn/changes/adopt-casita-store-backend/evidence/archive-decoder-runtime-2026-10-23.json",
+    "target/cairn-finish-20261023/patched-vendor-refresh/result.json",
+    "patches/casita-blake3-finalize.patch:1-24",
+    "flake.nix:371-413",
+    "scripts/vendor-deps.py:123-148"
+  ],
+  "supported_task_criteria": [
+    "T1.1",
+    "T1.2",
+    "T1.3",
+    "T1.4",
+    "T2.1",
+    "T2.2",
+    "T2.3",
+    "T2.4",
+    "T2.5",
+    "T2.6",
+    "T2.7",
+    "T2.8",
+    "T2.9",
+    "T2.10",
+    "T2.11",
+    "T2.12",
+    "T2.13",
+    "T2.14",
+    "T2.15",
+    "T2.16",
+    "T3.1",
+    "T3.2",
+    "T3.3",
+    "T3.4",
+    "T3.5",
+    "T3.6",
+    "T3.7",
+    "T4.1",
+    "T4.2",
+    "T4.3",
+    "T4.4",
+    "T4.5",
+    "T4.6",
+    "T4.7",
+    "T4.8",
+    "T4.9"
+  ],
+  "criteria": [
+    {
+      "task_id": "T1.1",
+      "task_file_line": 36,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:36",
+      "requirement_ids": [
+        "mantle.casita_store_backend.pinned_dependency"
+      ]
+    },
+    {
+      "task_id": "T1.2",
+      "task_file_line": 37,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-and-partial-execution",
+        "finding": "Pin/features/Rust-version and patch assertions exist; refreshed generator/check/dev-shell-check each exited 0. These do not establish clean-checkout Crane closure, every source-bundle profile or final Nix compile.",
+        "remaining_local_action_ids": [
+          "vendor"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:37",
+      "requirement_ids": [
+        "mantle.casita_store_backend.pinned_dependency"
+      ]
+    },
+    {
+      "task_id": "T1.3",
+      "task_file_line": 38,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "partial-audit-failed",
+        "finding": "Configured audit admits sources/licenses/bans but exits 1 on advisories; source-policy admission is not a clean advisory result.",
+        "remaining_local_action_ids": [
+          "audit"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:38",
+      "requirement_ids": [
+        "mantle.casita_store_backend.pinned_dependency"
+      ]
+    },
+    {
+      "task_id": "T1.4",
+      "task_file_line": 39,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:39",
+      "requirement_ids": [
+        "mantle.casita_store_backend.output_admission",
+        "mantle.casita_store_backend.plan_bound_gc",
+        "mantle.casita_store_backend.trust_policy"
+      ]
+    },
+    {
+      "task_id": "T2.1",
+      "task_file_line": 43,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-fixtures-unaccepted",
+        "finding": "Current tasks describe fresh-child public capability/action-result/cache restore after export deletion and guarded GC. Final dual-backend conformance and dependency add-store-backend-selection acceptance still owed.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:43",
+      "requirement_ids": [
+        "mantle.casita_store_backend.capability_boundary",
+        "mantle.casita_store_backend.castore_parity_gate"
+      ]
+    },
+    {
+      "task_id": "T2.2",
+      "task_file_line": 45,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:45",
+      "requirement_ids": [
+        "mantle.casita_store_backend.session_intermediates"
+      ]
+    },
+    {
+      "task_id": "T2.3",
+      "task_file_line": 46,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 completed the explicitly trusted signed hello cold path and fresh verification; revocation denies cache publication and leaves policy bytes unchanged, restoration reuses cache. Full same-handle/bootstrap trust matrix and final conformance remain open; see observed_bounded_runtime_update.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:46",
+      "requirement_ids": [
+        "mantle.casita_store_backend.trust_policy"
+      ]
+    },
+    {
+      "task_id": "T2.4",
+      "task_file_line": 47,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 publishes one signed hello on each backend, verifies it and retains equal bytes after reopen/GC. This is not root-race/atomic publication matrix acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:47",
+      "requirement_ids": [
+        "mantle.casita_store_backend.output_admission",
+        "mantle.casita_store_backend.trust_policy"
+      ]
+    },
+    {
+      "task_id": "T2.5",
+      "task_file_line": 48,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:48",
+      "requirement_ids": [
+        "mantle.casita_store_backend.envelope_replacement"
+      ]
+    },
+    {
+      "task_id": "T2.6",
+      "task_file_line": 49,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:49",
+      "requirement_ids": [
+        "mantle.casita_store_backend.atomic_batch_import"
+      ]
+    },
+    {
+      "task_id": "T2.7",
+      "task_file_line": 50,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:50",
+      "requirement_ids": [
+        "mantle.casita_store_backend.castore_payload_roots"
+      ]
+    },
+    {
+      "task_id": "T2.8",
+      "task_file_line": 51,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 verifies selected output cold/warm/post-GC with 1/1 trusted signatures and zero mismatches, while wrong key fails with one mismatch. Independent redb warnings preserved. Full read/export audit matrix remains separate.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:51",
+      "requirement_ids": [
+        "mantle.casita_store_backend.durable_pathinfo",
+        "mantle.casita_store_backend.fresh_process_reuse"
+      ]
+    },
+    {
+      "task_id": "T2.9",
+      "task_file_line": 52,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:52",
+      "requirement_ids": [
+        "mantle.casita_store_backend.output_admission"
+      ]
+    },
+    {
+      "task_id": "T2.10",
+      "task_file_line": 53,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:53",
+      "requirement_ids": [
+        "mantle.casita_store_backend.envelope_replacement",
+        "mantle.casita_store_backend.capability_boundary"
+      ]
+    },
+    {
+      "task_id": "T2.11",
+      "task_file_line": 54,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:54",
+      "requirement_ids": [
+        "mantle.casita_store_backend.atomic_batch_import"
+      ]
+    },
+    {
+      "task_id": "T2.12",
+      "task_file_line": 55,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:55",
+      "requirement_ids": [
+        "mantle.casita_store_backend.castore_payload_roots"
+      ]
+    },
+    {
+      "task_id": "T2.13",
+      "task_file_line": 56,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:56",
+      "requirement_ids": [
+        "mantle.casita_store_backend.durable_pathinfo",
+        "mantle.casita_store_backend.session_intermediates"
+      ]
+    },
+    {
+      "task_id": "T2.14",
+      "task_file_line": 57,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 rejects wrong key and revoked Casita destination trust, no export publication, unchanged operator policy, then cached reuse after restored trust. No new bootstrap or full trust matrix acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:57",
+      "requirement_ids": [
+        "mantle.casita_store_backend.trust_policy"
+      ]
+    },
+    {
+      "task_id": "T2.15",
+      "task_file_line": 58,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:58",
+      "requirement_ids": [
+        "mantle.casita_store_backend.capability_boundary"
+      ]
+    },
+    {
+      "task_id": "T2.16",
+      "task_file_line": 59,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 fresh CLI processes restore identical signed hello after physical export deletion with built=0 cached=1. This is bounded output reuse, not full PathInfo/core/cache capability conformance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:59",
+      "requirement_ids": [
+        "mantle.casita_store_backend.castore_payload_roots",
+        "mantle.casita_store_backend.fresh_process_reuse"
+      ]
+    },
+    {
+      "task_id": "T3.1",
+      "task_file_line": 63,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 completes accepted plan-ID GC retaining explicitly pinned hello and restores identical signed bytes afterward. No unretained deletion/payload/interruption recovery claim.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:63",
+      "requirement_ids": [
+        "mantle.casita_store_backend.plan_bound_gc"
+      ]
+    },
+    {
+      "task_id": "T3.2",
+      "task_file_line": 64,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 Casita CLI plan-ID GC completes and retained output reuses after export deletion. It does not exercise cache-state/payload-missing or interrupted fence recovery matrix.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:64",
+      "requirement_ids": [
+        "mantle.casita_store_backend.plan_bound_gc"
+      ]
+    },
+    {
+      "task_id": "T3.3",
+      "task_file_line": 65,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:65",
+      "requirement_ids": [
+        "mantle.casita_store_backend.plan_bound_gc",
+        "mantle.casita_store_backend.retention_authority"
+      ]
+    },
+    {
+      "task_id": "T3.4",
+      "task_file_line": 66,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:66",
+      "requirement_ids": [
+        "mantle.casita_store_backend.retention_authority"
+      ]
+    },
+    {
+      "task_id": "T3.5",
+      "task_file_line": 67,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:67",
+      "requirement_ids": [
+        "mantle.casita_store_backend.verified_migration",
+        "mantle.casita_store_backend.trust_policy"
+      ]
+    },
+    {
+      "task_id": "T3.6",
+      "task_file_line": 68,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:68",
+      "requirement_ids": [
+        "mantle.casita_store_backend.castore_parity_gate",
+        "mantle.casita_store_backend.plan_bound_gc"
+      ]
+    },
+    {
+      "task_id": "T3.7",
+      "task_file_line": 69,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:69",
+      "requirement_ids": [
+        "mantle.casita_store_backend.plan_bound_gc"
+      ]
+    },
+    {
+      "task_id": "T4.1",
+      "task_file_line": 73,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:73",
+      "requirement_ids": [
+        "mantle.casita_store_backend.capability_boundary"
+      ]
+    },
+    {
+      "task_id": "T4.2",
+      "task_file_line": 74,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "Pueue86 produced byte-identical signed hello closure archives on Snix/Casita with common signer: ab9210e3178032eb72bf05bec394f50ff8729582a3856efa6101b9f2fa2aae3e. Equal offline source preflight remains only historical evidence.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:74",
+      "requirement_ids": [
+        "mantle.casita_store_backend.offline_boundary"
+      ]
+    },
+    {
+      "task_id": "T4.3",
+      "task_file_line": 75,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-fixtures-unaccepted",
+        "finding": "Pueue86 now proves bounded signed hello cold/fresh-process restore/revocation/pinned-GC/identical closure controls, not complete signed core/cache conformance. T4.3 remains open on integration subject; dependency acceptance not inferred.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:75",
+      "requirement_ids": [
+        "mantle.casita_store_backend.fresh_process_reuse"
+      ]
+    },
+    {
+      "task_id": "T4.4",
+      "task_file_line": 77,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:77",
+      "requirement_ids": [
+        "mantle.casita_store_backend.claim_boundary"
+      ]
+    },
+    {
+      "task_id": "T4.5",
+      "task_file_line": 78,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "partial-gates-not-accepted",
+        "finding": "Documentary lifecycle gates passed for their recorded subject; strict quality/Nix/semantic/no-std checks contain failures and are Main-owned. No aggregate gate pass.",
+        "remaining_local_action_ids": [
+          "quality",
+          "vendor"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:78",
+      "requirement_ids": [
+        "mantle.casita_store_backend.claim_boundary"
+      ]
+    },
+    {
+      "task_id": "T4.6",
+      "task_file_line": 79,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "implemented-partially-exercised",
+        "finding": "Tracked exact-pin finalize patch and strict content/hash/application guards exist. Generator/check/dev-shell-check exited 0 and default-shell crunch-store cargo check exited 0; all requested compile modes and patch-negative controls remain unqualified.",
+        "remaining_local_action_ids": [
+          "vendor"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:79",
+      "requirement_ids": [
+        "mantle.casita_store_backend.pinned_patch"
+      ]
+    },
+    {
+      "task_id": "T4.7",
+      "task_file_line": 80,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "observed-failure",
+        "finding": "Configured cargo deny check exits 1 with five fatal advisory packages after compatible updates remove eight prior rows. Real valid tar.zst build/selected-output verification and malformed-window rejection are bounded decoder evidence, not advisory acceptance.",
+        "remaining_local_action_ids": [
+          "audit"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:80",
+      "requirement_ids": [
+        "mantle.casita_store_backend.pinned_dependency"
+      ]
+    },
+    {
+      "task_id": "T4.8",
+      "task_file_line": 83,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-requalification-owed",
+        "finding": "The task has retained checked-task provenance in tasks.md and the two historical run lineages. Preserve that evidence; neither equal run numbers nor merging source accepts the changed current source.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:83",
+      "requirement_ids": [
+        "mantle.casita_store_backend.castore_parity_gate"
+      ]
+    },
+    {
+      "task_id": "T4.9",
+      "task_file_line": 84,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "lifecycle-cutover-not-authorized",
+        "finding": "No sync/archive/publication in this assignment. Main must first close all dependency/conformance/audit/quality criteria; no AI work grants acceptance.",
+        "remaining_local_action_ids": [
+          "quality",
+          "focused",
+          "audit",
+          "vendor"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "criterion_reference": ".cairn/changes/adopt-casita-store-backend/tasks.md:84",
+      "requirement_ids": [
+        "mantle.casita_store_backend.claim_boundary"
+      ]
+    }
+  ],
+  "observed_documentary_lifecycle": {
+    "manifest": "target/cairn-finish-20261023/lifecycle-observations/result.json",
+    "commands": [
+      {
+        "label": "validate-before",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stderr.log"
+      },
+      {
+        "label": "adopt-casita-store-backend-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "adopt-casita-store-backend",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-proposal.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-proposal.stderr.log"
+      },
+      {
+        "label": "adopt-casita-store-backend-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "adopt-casita-store-backend",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-design.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-design.stderr.log"
+      },
+      {
+        "label": "adopt-casita-store-backend-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "adopt-casita-store-backend",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-tasks.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/adopt-casita-store-backend-tasks.stderr.log"
+      },
+      {
+        "label": "validate-after",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stderr.log"
+      }
+    ],
+    "non_claim": "Exact zero exits are lifecycle/structure evidence only, not executed acceptance of every task; the old missing nominal_identity_policy scaffold blocker is not the current observation."
+  },
+  "observed_parent_gate_snapshots": [
+    {
+      "label": "ordinary-first-party",
+      "command_text": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/ordinary-first-party",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture-semantic",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs --semantic",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "trellis-import",
+      "command_text": "python3 scripts/import-trellis-fenced-attempt.py --check",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "no-std-core",
+      "command_text": "bash scripts/check-no-std-core.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/no-std-core",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "changed-no-std-wasm",
+      "command_text": "cargo check --locked --offline -p crunch-source-core -p mantle-rust-plan-core -p mantle-rust-differential-core -p mantle-application-contract -p crunch-rust-cache-core -p crunch-remote-core --target wasm32-unknown-unknown",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/changed-no-std-wasm",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "default-shell-store",
+      "command_text": "cargo check --locked --offline -p crunch-store --lib",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/default-shell-store",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "tigerstyle",
+      "command_text": "bash scripts/check-first-party-tigerstyle.sh",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "flake",
+      "command_text": "nix flake check --offline --no-write-lock-file -L",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/flake",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "first-party-clippy",
+      "command_text": "bash scripts/check-first-party-clippy.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    },
+    {
+      "label": "workspace-tests",
+      "command_text": "cargo_test_workspace_lib_tests",
+      "exit_code": null,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    }
+  ],
+  "observed_workspace_fixture_subset": {
+    "stdout": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log",
+    "command": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.command",
+    "exit_receipt_observed": null,
+    "selected_test_lines": [
+      {
+        "line": 2453,
+        "text": "test shared::tests::casita_shared_origin_is_retained_and_reused_by_fresh_process ... ok"
+      },
+      {
+        "line": 2470,
+        "text": "test tests::casita_payload_restores_in_fresh_process_without_recompiling ... ok"
+      },
+      {
+        "line": 2479,
+        "text": "test tests::removed_casita_payload_blocks_cache_restore_and_retention_gc ... ok"
+      },
+      {
+        "line": 2820,
+        "text": "test archive::tests::casita_archive_export_rechecks_revoked_closure_signer_before_writing ... ok"
+      },
+      {
+        "line": 2821,
+        "text": "test archive::tests::casita_archive_rejects_unsigned_override_before_reading_or_admitting ... ok"
+      },
+      {
+        "line": 2822,
+        "text": "test archive::tests::casita_archive_rejects_unsigned_record_under_signed_import ... ok"
+      },
+      {
+        "line": 2828,
+        "text": "test archive::tests::signed_snix_archive_requires_casita_destination_trust_and_round_trips_unchanged ... ok"
+      },
+      {
+        "line": 2849,
+        "text": "test casita::tests::cached_node_rechecks_revoked_policy_in_same_session ... ok"
+      },
+      {
+        "line": 2850,
+        "text": "test casita::tests::gc_inventory_reads_more_roots_than_one_atomic_mutation ... ok"
+      },
+      {
+        "line": 2851,
+        "text": "test casita::tests::invalid_trust_policy_cannot_open_casita_repository ... ok"
+      },
+      {
+        "line": 2852,
+        "text": "test casita::tests::local_signer_without_policy_survives_fresh_process ... ok"
+      },
+      {
+        "line": 2853,
+        "text": "test casita::tests::pathinfo_batch_rejects_second_client_root_published_after_staging ... ok"
+      },
+      {
+        "line": 2854,
+        "text": "test casita::tests::policy_file_changed_after_open_is_rechecked_on_lookup ... ok"
+      },
+      {
+        "line": 2855,
+        "text": "test casita::tests::removed_policy_key_blocks_fresh_process_reopen_without_changing_root ... ok"
+      },
+      {
+        "line": 2856,
+        "text": "test casita::tests::repointed_castore_payload_rejects_swapped_content_and_postcard_before_gc ... ok"
+      },
+      {
+        "line": 2857,
+        "text": "test casita::tests::second_client_cannot_resurrect_a_removed_castore_root ... ok"
+      },
+      {
+        "line": 2858,
+        "text": "test casita::tests::second_client_cannot_resurrect_a_root_removed_after_its_read ... ok"
+      },
+      {
+        "line": 2859,
+        "text": "test casita::tests::second_client_update_conflict_keeps_winners_root_and_revision ... ok"
+      },
+      {
+        "line": 2860,
+        "text": "test casita::tests::signed_roots_survive_export_removal_and_reopen_with_conflicts_and_guard ... ok"
+      },
+      {
+        "line": 2861,
+        "text": "test casita::tests::snix_miss_does_not_read_a_leftover_casita_output_root ... ok"
+      },
+      {
+        "line": 2862,
+        "text": "test casita::tests::staged_output_batch_rejects_competing_root_and_reclaims_abandoned_envelopes ... ok"
+      },
+      {
+        "line": 2863,
+        "text": "test casita::tests::staged_output_loses_to_second_client_without_replacing_winner ... ok"
+      },
+      {
+        "line": 2864,
+        "text": "test casita::tests::stopped_staging_is_unrooted_collected_and_retry_succeeds ... ok"
+      },
+      {
+        "line": 2865,
+        "text": "test casita::tests::stopped_staging_process_leaves_no_root_and_collection_allows_retry ... ok"
+      },
+      {
+        "line": 2866,
+        "text": "test casita::tests::store_sign_rejects_second_client_repoint_between_read_and_update ... ok"
+      },
+      {
+        "line": 2911,
+        "text": "test gc::tests::casita_castore_fence_never_deletes_a_retained_output_export ... ok"
+      },
+      {
+        "line": 2912,
+        "text": "test gc::tests::casita_castore_gc_keeps_retained_nodes_and_rejects_missing_roots ... ok"
+      },
+      {
+        "line": 2913,
+        "text": "test gc::tests::casita_fence_recovers_partial_progress_without_marking_other_roots_removed ... ok"
+      },
+      {
+        "line": 2914,
+        "text": "test gc::tests::casita_fence_rejects_symlink_and_oversized_outcome_journal ... ok"
+      },
+      {
+        "line": 2915,
+        "text": "test gc::tests::casita_gc_busy_collector_keeps_reclaim_incomplete_until_recovery ... ok"
+      },
+      {
+        "line": 2916,
+        "text": "test gc::tests::casita_gc_executes_signed_output_plan_and_preserves_retained_nar_facts ... ok"
+      },
+      {
+        "line": 2917,
+        "text": "test gc::tests::casita_gc_fence_pending_rejects_dangling_orphan_journal ... ok"
+      },
+      {
+        "line": 2918,
+        "text": "test gc::tests::casita_gc_matches_snix_candidates_for_identical_published_outputs_and_retention ... ok"
+      },
+      {
+        "line": 2919,
+        "text": "test gc::tests::casita_gc_rejects_newly_retained_root_then_collects_only_unretained ... ok"
+      },
+      {
+        "line": 2920,
+        "text": "test gc::tests::casita_gc_rejects_repointed_retained_payload_and_missing_root ... ok"
+      },
+      {
+        "line": 2921,
+        "text": "test gc::tests::casita_gc_repointed_verified_output_rejects_old_plan_before_fencing ... ok"
+      },
+      {
+        "line": 2922,
+        "text": "test gc::tests::casita_output_fence_recovery_preserves_unremoved_and_cleans_only_removed_metadata ... ok"
+      },
+      {
+        "line": 2923,
+        "text": "test gc::tests::casita_plan_identity_binds_exact_root_targets ... ok"
+      },
+      {
+        "line": 2924,
+        "text": "test gc::tests::casita_recovery_before_first_root_removal_preserves_candidate ... ok"
+      },
+      {
+        "line": 2925,
+        "text": "test gc::tests::casita_recovery_cleans_only_absent_roots_and_keeps_retained_exports ... ok"
+      },
+      {
+        "line": 2926,
+        "text": "test gc::tests::casita_recovery_conflicting_later_root_preserves_earlier_export_and_indexes ... ok"
+      },
+      {
+        "line": 2927,
+        "text": "test gc::tests::casita_recovery_rejects_changed_targets_and_preserves_published_roots ... ok"
+      },
+      {
+        "line": 2928,
+        "text": "test gc::tests::casita_recovery_rejects_republished_fenced_root_without_erasing_it ... ok"
+      },
+      {
+        "line": 2929,
+        "text": "test gc::tests::casita_recovery_replays_real_partial_root_removal_without_new_deletions ... ok"
+      },
+      {
+        "line": 2930,
+        "text": "test gc::tests::casita_unguarded_gc_rejects_before_touching_signed_roots_or_metadata ... ok"
+      },
+      {
+        "line": 2956,
+        "text": "test handle::tests::casita_lookup_does_not_fall_back_to_leftover_snix_pathinfo ... ok"
+      },
+      {
+        "line": 3019,
+        "text": "test handle::tests::snix_lookup_ignores_readable_casita_repository_left_in_recorded_state ... ok"
+      },
+      {
+        "line": 3021,
+        "text": "test handle::tests::synthetic_services_reject_casita_before_opening_state ... ok"
+      },
+      {
+        "line": 3022,
+        "text": "test handle::tests::synthetic_snix_services_reject_recorded_casita_before_loading_foreign_state ... ok"
+      },
+      {
+        "line": 3063,
+        "text": "test nario::tests::nario_casita_accepts_configured_1024_root_boundary ... ok"
+      },
+      {
+        "line": 3064,
+        "text": "test nario::tests::nario_casita_batch_publishes_both_verified_paths ... ok"
+      },
+      {
+        "line": 3065,
+        "text": "test nario::tests::nario_casita_batch_rejects_conflicting_root_without_publishing_other_path ... ok"
+      },
+      {
+        "line": 3066,
+        "text": "test nario::tests::nario_casita_late_envelope_failure_reclaims_first_staged_path ... ok"
+      },
+      {
+        "line": 3067,
+        "text": "test nario::tests::nario_casita_later_bad_nar_leaves_earlier_path_unpublished ... ok"
+      },
+      {
+        "line": 3068,
+        "text": "test nario::tests::nario_casita_later_envelope_staging_failure_leaves_earlier_object_collectable ... ok"
+      },
+      {
+        "line": 3069,
+        "text": "test nario::tests::nario_casita_rechecks_import_policy_before_reading_archive ... ok"
+      },
+      {
+        "line": 3070,
+        "text": "test nario::tests::nario_casita_rejects_1025_new_roots_before_any_publication ... ok"
+      },
+      {
+        "line": 3071,
+        "text": "test nario::tests::nario_casita_rejects_out_of_policy_key_before_archive_or_mutation ... ok"
+      },
+      {
+        "line": 3072,
+        "text": "test nario::tests::nario_casita_rejects_unsigned_override_before_reading_archive ... ok"
+      },
+      {
+        "line": 3073,
+        "text": "test nario::tests::nario_casita_rejects_unsigned_record_under_signed_import ... ok"
+      },
+      {
+        "line": 3085,
+        "text": "test overlay::tests::identityless_casita_marker_blocks_any_backend_without_mutation ... ok"
+      },
+      {
+        "line": 3086,
+        "text": "test overlay::tests::identityless_unknown_content_blocks_casita_without_mutation ... ok"
+      },
+      {
+        "line": 3204,
+        "text": "test repair::tests::casita_repair_library_entrypoints_reject_without_publishing ... ok"
+      },
+      {
+        "line": 3219,
+        "text": "test roots::tests::casita_fenced_root_mutations_preserve_registry_bytes ... ok"
+      },
+      {
+        "line": 3235,
+        "text": "test roots::tests::snix_pin_and_unpin_ignore_foreign_casita_gc_fence ... ok"
+      }
+    ],
+    "non_claim": "Individual observed ok/FAILED lines only; no final aggregate success or absence of skips is inferred. An empty selection is not proof of absent tests."
+  },
+  "remaining_local_actions": [
+    {
+      "id": "focused",
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "-p",
+        "mantle",
+        "--test",
+        "store_archive_cli",
+        "admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "owed": "Run signed core/fresh-child output/cache/guarded-GC conformance on both backends; require non-skipped output.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "vendor",
+      "argv": [
+        "nix",
+        "build",
+        ".#checks.x86_64-linux.casita-vendor-closure",
+        "--no-write-lock-file",
+        "-L"
+      ],
+      "owed": "Capture clean-source exact vendor closure, Nix crunch-store check, explicit vendor config check and all four patch negatives; preserve source-bundle toolchain/Rust 1.94.1 proof.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "audit",
+      "argv": [
+        "cargo",
+        "deny",
+        "check",
+        "--config",
+        "deny.toml"
+      ],
+      "owed": "Resolve remaining advisory policy without new waiver/bypass, then retain real configured result.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "quality",
+      "argv": [
+        "bash",
+        "scripts/check-first-party-quality.sh"
+      ],
+      "owed": "Main to capture final-source first-party fmt, strict Clippy and workspace lib/tests; then finish no-std, architecture semantic, relevant Nix and Tracey rails. Historical/partial successes do not close this action."
+    }
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [
+    {
+      "blocker": "Pinned upstream graph still brings proc-macro-error 0.4.12; no safe upgrade reported. Additional unmaintained Bitmaps/Unsafe Libyaml and RSA advisory have no safe upgrade in observed audit; compatible Nickel-vector dry run selects zero packages. Incompatible upstream migration/maintainer-approved policy is not inferred. Imbl Sized Chunks fix requires separate parent dependency integration.",
+      "evidence": ".cairn/changes/adopt-casita-store-backend/evidence/configured-audit-after-remediation-2026-10-23.json"
+    }
+  ],
+  "integration_gate_blockers": [
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/no-std-core.stderr.log:370-394",
+        "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy.stderr.log:35-53"
+      ]
+    },
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic.stderr.log:1-2"
+      ]
+    },
+    {
+      "kind": "host-nix-builder-configuration",
+      "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/flake.stderr.log:147-152",
+        "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle.stderr.log:1-9"
+      ]
+    }
+  ],
+  "non_claims": [
+    "No clean advisory result, final merged backend qualification, final Rust provider qualification, clean-source Nix success, arbitrary-archive safety or archive permission.",
+    "This worker ran no build, test, lint, formatter, VM, proof, lifecycle gate or production command; only read and reconciled existing evidence. No checkbox changed.",
+    "No human, operator, policy-owner or upstream approval is inferred from AI investigation, implementation or lifecycle structure gates."
+  ],
+  "selected_inspected_input_identities": [
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/tasks.md",
+      "sha256": "cab8f43f28dd7b88e82f50f04187baa7a4dc9ee203cb06d73751f47e59410349"
+    },
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/test-runs-2026-09-30.md",
+      "sha256": "a951367d78626c5f70f932c3812038a58bcac29ab21d14cb037b6dd2a6522b5a"
+    },
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/configured-audit-after-remediation-2026-10-23.json",
+      "sha256": "2c00e53652a31ac0e1b1c48d9b91c88d50fec289fec47473f603f1854278d172"
+    },
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/archive-decoder-runtime-2026-10-23.json",
+      "sha256": "e169b2b81cd77bf91100e3ba832cd377b252c01a0db34131378a1a78520fd2f2"
+    },
+    {
+      "path": "target/cairn-finish-20261023/patched-vendor-refresh/result.json",
+      "sha256": "7f61e0e7dc113c108f10f7160bd7cdcca7a66a6e7365758acdd21f0578dbe418"
+    },
+    {
+      "path": "patches/casita-blake3-finalize.patch",
+      "sha256": "c0def0527dcc56beafa8d3f89c418a071b1d93df418245ebcd6a69aeb580840a"
+    },
+    {
+      "path": "flake.nix",
+      "sha256": "3ab4532d40d948e6aea15306e9258f1230c7b441c7182145b0a616ebed906c7b"
+    },
+    {
+      "path": "scripts/vendor-deps.py",
+      "sha256": "eb57cbf713954038190dab2d7dfac07d28eb64252061f17bfd8b7ec5599cc213"
+    }
+  ],
+  "tasks_sha256_at_inspection": "cab8f43f28dd7b88e82f50f04187baa7a4dc9ee203cb06d73751f47e59410349",
+  "observed_change_specific_receipts": [
+    {
+      "path": "target/cairn-finish-20261023/patched-vendor-refresh/result.json",
+      "classification": "exact recorded generator/check/dev-shell metadata results",
+      "commands": [
+        {
+          "argv": [
+            "python3",
+            "scripts/vendor-deps.py",
+            "generate"
+          ],
+          "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/generate.stdout.log",
+          "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/generate.stderr.log",
+          "exit_code": 0
+        },
+        {
+          "argv": [
+            "python3",
+            "scripts/vendor-deps.py",
+            "check"
+          ],
+          "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/check.stdout.log",
+          "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/check.stderr.log",
+          "exit_code": 0
+        },
+        {
+          "argv": [
+            "python3",
+            "scripts/vendor-deps.py",
+            "dev-shell-check"
+          ],
+          "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/dev-shell-check.stdout.log",
+          "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-vendor-refresh/dev-shell-check.stderr.log",
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/configured-audit-after-remediation-2026-10-23.json",
+      "classification": "configured audit failed after compatible remediation",
+      "argv": [
+        "cargo",
+        "deny",
+        "check",
+        "--config",
+        "deny.toml"
+      ],
+      "exit_code": 1,
+      "observed_summary": "advisories FAILED, bans ok, licenses ok, sources ok",
+      "remaining_fatal_packages": [
+        "bitmaps 3.2.1",
+        "imbl-sized-chunks 0.1.3",
+        "proc-macro-error 0.4.12",
+        "rsa 0.9.10",
+        "unsafe-libyaml 0.2.11"
+      ]
+    },
+    {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/archive-decoder-runtime-2026-10-23.json",
+      "classification": "bounded before/after real archive runtime",
+      "finding": "Old ruzstd 0.8.2 malformed-window reproducer exits 101; current valid tar.zst builds and individually selected NAR/signature verifies; malformed 1025-byte block under 1024-byte window rejects with no publication. Original zero-match full-path filter is not verification evidence. Exact per-command argv/exits and retained streams live in referenced receipt."
+    }
+  ],
+  "observed_bounded_runtime_update": {
+    "evidence": {
+      "path": ".cairn/changes/adopt-casita-store-backend/evidence/signed-dual-backend-runtime-repaired-2026-10-23.json",
+      "blake3": "52bbc7319c47fcf32a903d4f38e3b29981967c1f0b54a1abbb97725d92c0693f",
+      "size_bytes": 268517
+    },
+    "maintenance_owner": "Mantle store/backend maintainers; Main owns runtime acceptance and dependency-policy decisions",
+    "subject_boundary": "Immutable wait-request-repaired existing runtime cohort, not newly pinned exact-exec/final integrated subject. All five executable roles invariant; original Pueue78 and85 failures retained. Scenario repairs changed only driver expectations, not product.",
+    "pueue_task_id": 86,
+    "result": "Success; retained result equals completed target result.json; all 52 retained raw streams matched source bytes, sizes and BLAKE3 during this evidence inspection.",
+    "criteria_mapping": [
+      {
+        "task_criteria": [
+          "T2.3",
+          "T2.4",
+          "T2.8",
+          "T2.14"
+        ],
+        "commands": [
+          "013-casita-cold",
+          "014-casita-verify-cold",
+          "015-casita-verify-wrong-key",
+          "019-casita-revoked-cache",
+          "020-casita-warm"
+        ],
+        "observed": "Signed hello admitted with explicitly provisioned trust; selected verification 1/1 trusted, 1 checked, 0 mismatches. Wrong key gives 0/1 trusted, 1 mismatch, exit 1. Revoked destination policy gives casita-signer-untrusted, exactly one failed root/no outcomes/no physical export; policy unchanged; restored policy reuses cached output.",
+        "limit": "Selected fixtures only, not complete trust/race/import/atomic-batch conformance."
+      },
+      {
+        "task_criteria": [
+          "T2.16",
+          "T4.3"
+        ],
+        "commands": [
+          "006-snix-warm",
+          "017-casita-warm"
+        ],
+        "observed": "After physical output unlink, each fresh CLI process restores same logical output/body with built=0 cached=1.",
+        "limit": "No full public core/cache rail, Rust unit cache payload, dependent add-store-backend-selection acceptance or final exact-exec cohort."
+      },
+      {
+        "task_criteria": [
+          "T3.1",
+          "T3.2",
+          "T3.6"
+        ],
+        "commands": [
+          "008-snix-gc-plan",
+          "009-snix-gc-execute",
+          "021-casita-gc-plan",
+          "022-casita-gc-execute",
+          "010-snix-warm",
+          "023-casita-warm"
+        ],
+        "observed": "Each accepted plan-ID GC execution completes without failed operations and retained signed hello restores after another export unlink with built=0 cached=1.",
+        "limit": "Explicit pin retained; no unretained deletion, Rust payload retention, interrupted GC recovery or race matrix."
+      },
+      {
+        "task_criteria": [
+          "T4.2"
+        ],
+        "commands": [
+          "012-snix-archive-export",
+          "025-casita-archive-export"
+        ],
+        "observed": "Same provisioned signer gives byte-identical selected signed closure archives, BLAKE3 ab9210e3178032eb72bf05bec394f50ff8729582a3856efa6101b9f2fa2aae3e; output body BLAKE3 c8e5bacd714e99df02694645f34a76885445ec581061d7161d0997686cdad3f1 on both.",
+        "limit": "Single hello closure; no new equal offline source preflight claim."
+      },
+      {
+        "task_criteria": [
+          "T4.7"
+        ],
+        "commands": [],
+        "observed": "Configured audit failure remains as retained; runtime success is not advisory resolution.",
+        "limit": "Five fatal advisory packages remain; no waiver/bypass/acceptance inferred."
+      }
+    ],
+    "repeatability": "Exact supported-shell launcher in evidence.pueue.86.task.original_command; exact child argv in evidence.result.commands; base64 driver/pins/streams and BLAKE3 retained once. Use new isolated output root for another observation, preserving historical files and recording revised driver identity.",
+    "remaining_local_actions": [
+      "Run complete signed core/cache/fresh-process/GC conformance on both backends on integration subject; T4.3 remains open.",
+      "Finish clean-source vendor/patch controls and final-source quality/Nix/lifecycle integration; resolve configured audit without invented waiver, T4.7 stays open."
+    ],
+    "acceptance_claimed": false
+  },
+  "support_definition": "Every listed task criterion has a bounded current assessment; supported_task_criteria does not mean those tasks are complete or accepted.",
+  "observed_integration_gate_update": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": [
+        {
+          "step": "tigerstyle",
+          "original_exit": 1,
+          "original_classification": "host-nix-remote-build-hook",
+          "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+          "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+          "rerun_exit": 0,
+          "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+          "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+          "tree_identical_to_gate_start": true
+        }
+      ]
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "pin_binding_blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949",
+      "statement": "The gates ran over the hashed tree from which the v6 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 1,
+          "flake": 1
+        },
+        "status": "host-prerequisite-still-blocks",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": "host-nix-remote-build-hook",
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+          }
+        ],
+        "bound_step_reruns": [
+          {
+            "step": "tigerstyle",
+            "original_exit": 1,
+            "original_classification": "host-nix-remote-build-hook",
+            "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+            "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+            "rerun_exit": 0,
+            "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+            "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+            "tree_identical_to_gate_start": true
+          }
+        ]
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  }
+}

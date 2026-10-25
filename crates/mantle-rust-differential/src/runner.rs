@@ -6,6 +6,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 
+use crunch_rustc_wrapper::observed_process::Capture;
+use crunch_rustc_wrapper::observed_process::Fault;
+use crunch_rustc_wrapper::observed_process::Injection;
+use crunch_rustc_wrapper::waits::DiagnosticOutcome;
+use crunch_rustc_wrapper::waits::RunOutcome;
+use crunch_rustc_wrapper::waits::WaitCollector;
+use crunch_rustc_wrapper::waits::WaitContext;
 use mantle_rust_differential_core::Cell;
 use mantle_rust_differential_core::Coverage;
 use mantle_rust_differential_core::CoverageSummary;
@@ -31,16 +38,9 @@ use crate::err;
 use crate::fixtures::Fixture;
 use crate::fixtures::Step;
 use crate::fixtures::{self};
-use crate::process::Capture;
-use crate::process::Fault;
-use crate::process::Injection;
 use crate::process::{self};
-use crate::waits::DiagnosticOutcome;
-use crate::waits::RunOutcome;
-use crate::waits::WaitCollector;
-use crate::waits::WaitContext;
 
-pub const OUTPUT_POLICY: &str = "cargo-current-operation-semantic-output-v1";
+pub const OUTPUT_POLICY: &str = "cargo-current-operation-semantic-output-v2";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -56,6 +56,9 @@ pub struct Options {
     pub host: String,
     #[serde(default)]
     pub toolchain: Option<Digest>,
+    /// Native serial observation only; ordinary Cargo uses the explicit wrapper.
+    #[serde(default)]
+    pub diagnostics: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Artifact {
@@ -201,7 +204,17 @@ fn member(pop: &mut Vec<Member>, key: String, role: &str, required: bool, eligib
     });
 }
 pub(crate) fn freeze(options: &Options, fixtures: &[Fixture], probes: &[Capture]) -> Result<Manifest> {
-    let cells = cells();
+    freeze_cells(options, fixtures, probes, cells(), "ordinary-Cargo-full-metadata-baseline-replay", true)
+}
+
+pub(crate) fn freeze_cells(
+    options: &Options,
+    fixtures: &[Fixture],
+    probes: &[Capture],
+    cells: Vec<Cell>,
+    execution_policy: &str,
+    faults: bool,
+) -> Result<Manifest> {
     let mut population = vec![];
     for cell in &cells {
         member(&mut population, cell.id.clone(), "cell", cell.required, cell.required);
@@ -218,14 +231,14 @@ pub(crate) fn freeze(options: &Options, fixtures: &[Fixture], probes: &[Capture]
                         &mut population,
                         format!("unit/{}/{}/{}/{package}", cell.id, side, step.id),
                         "unit",
-                        false,
+                        step.expected.status == Status::Success,
                         true,
                     );
                 }
             }
         }
     }
-    for name in ["crash", "cancel"] {
+    for name in if faults { &["crash", "cancel"][..] } else { &[] } {
         member(&mut population, format!("fault/{name}"), "fault", true, true);
         member(&mut population, format!("recovery/{name}"), "recovery", true, true);
     }
@@ -274,16 +287,19 @@ pub(crate) fn freeze(options: &Options, fixtures: &[Fixture], probes: &[Capture]
         identity(
             "argv",
             &(
-                "offline-locked-jobs2-cargo-build-check-v1",
+                execution_policy,
                 &cells,
                 probes.iter().skip(1).map(|p| (&p.stdout, &p.stderr, p.code)).collect::<Vec<_>>(),
             ),
         ),
-        identity("environment", &(&options.path, &options.host, "env-clear-private-roots-locale-C-UTC-v1")),
+        identity(
+            "environment",
+            &(&options.path, &options.host, "env-clear-private-roots-no-implicit-wrappers-C-UTC-v2"),
+        ),
         identity("profile", &cells.iter().map(|c| (&c.profile, &c.lto)).collect::<Vec<_>>()),
         identity("features", &Vec::<String>::new()),
         identity("cache", &"side-private-Cargo-incremental-no-result-cache-v1"),
-        identity("mode", &"ordinary-Cargo-full-metadata-baseline-replay"),
+        identity("mode", &execution_policy),
         identity("comparison", &(core::POLICY, OUTPUT_POLICY)),
         identity("edits", fixtures),
         identity(
@@ -293,10 +309,12 @@ pub(crate) fn freeze(options: &Options, fixtures: &[Fixture], probes: &[Capture]
                 include_str!("runner.rs"),
                 include_str!("fixtures.rs"),
                 include_str!("process.rs"),
-                include_str!("waits.rs"),
+                include_str!("../../crunch-rustc-wrapper/src/waits.rs"),
+                include_str!("../../crunch-rustc-wrapper/src/observed_process.rs"),
                 include_str!("cohorts.rs"),
                 include_str!("negative.rs"),
                 include_str!("main.rs"),
+                include_str!("serial.rs"),
             ),
         ),
     ];
@@ -310,9 +328,9 @@ pub(crate) fn freeze(options: &Options, fixtures: &[Fixture], probes: &[Capture]
         source_files: 128,
         source_bytes: process::SOURCE_BYTES,
         processes: 64,
-        program_ms: process::PROGRAM_MS,
-        total_ms: process::TOTAL_MS,
-        scratch_bytes: process::SCRATCH_BYTES,
+        program_ms: crunch_rustc_wrapper::observed_process::PROGRAM_MS,
+        total_ms: crunch_rustc_wrapper::observed_process::TOTAL_MS,
+        scratch_bytes: crunch_rustc_wrapper::observed_process::SCRATCH_BYTES,
         ..core::Bounds::default()
     };
     let manifest = Manifest {
@@ -343,6 +361,9 @@ pub(crate) fn environment(options: &Options, state: &State) -> BTreeMap<String, 
         ("TMPDIR", state.root.join("tmp").display().to_string()),
         ("CARGO_TARGET_DIR", state.target.display().to_string()),
         ("RUSTC", options.rustc.display().to_string()),
+        // Cargo also reads ancestor .cargo/config.toml despite the private CARGO_HOME.
+        ("RUSTC_WRAPPER", String::new()),
+        ("RUSTC_WORKSPACE_WRAPPER", String::new()),
         ("CARGO_INCREMENTAL", "1".into()),
         ("LC_ALL", "C".into()),
         ("LANG", "C".into()),
@@ -359,7 +380,7 @@ pub(crate) fn prepare_state(
     snapshot: &fixtures::Snapshot,
     total: Instant,
 ) -> Result<(State, Capture)> {
-    process::private_dir(root)?;
+    crunch_rustc_wrapper::observed_process::private_dir(root)?;
     for directory in [
         "home",
         "cargo-home",
@@ -371,7 +392,7 @@ pub(crate) fn prepare_state(
         "protocol",
         "locks",
     ] {
-        process::private_dir(&root.join(directory))?;
+        crunch_rustc_wrapper::observed_process::private_dir(&root.join(directory))?;
     }
     let mut state = State {
         root: root.into(),
@@ -381,7 +402,7 @@ pub(crate) fn prepare_state(
     };
     process::materialize(&state.source, snapshot)?;
     let probe = root.join("metadata");
-    process::private_dir(&probe)?;
+    crunch_rustc_wrapper::observed_process::private_dir(&probe)?;
     let mut cmd = Command::new(&options.cargo);
     cmd.current_dir(&state.source).env_clear().envs(environment(options, &state)).args([
         "metadata",
@@ -392,7 +413,14 @@ pub(crate) fn prepare_state(
         "--locked",
     ]);
     let capture =
-        process::supervise(cmd, &probe, &options.root, process::PROBE_MS, total, None, process::STREAM_BYTES)?;
+        crunch_rustc_wrapper::observed_process::supervise(cmd, crunch_rustc_wrapper::observed_process::Supervision {
+            root: &probe,
+            scratch: &options.root,
+            timeout_ms: crunch_rustc_wrapper::observed_process::PROBE_MS,
+            total_start: total,
+            injection: None,
+            stream_bound: crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+        })?;
     save(&probe.join("capture.json"), &capture)?;
     if capture.code != Some(0) || !capture.complete || !capture.teardown_complete {
         return Err("cargo-metadata-prerequisite".into());
@@ -400,7 +428,7 @@ pub(crate) fn prepare_state(
     state.packages = serde_json::from_slice(&capture.stdout).map_err(err)?;
     Ok((state, capture))
 }
-fn normalize(value: &mut Value, state: &State, options: &Options) {
+pub(crate) fn normalize(value: &mut Value, state: &State, options: &Options) {
     match value {
         Value::String(text) => {
             *text = text
@@ -473,7 +501,7 @@ pub(crate) fn attempt(
 ) -> Result<Attempt> {
     process::verify(&state.source, &step.snapshot)?;
     let root = state.root.join(id);
-    process::private_dir(&root)?;
+    crunch_rustc_wrapper::observed_process::private_dir(&root)?;
     let mut cmd = Command::new(&options.cargo);
     cmd.current_dir(&state.source).env_clear().envs(environment(options, state));
     let mut args = vec![
@@ -541,7 +569,15 @@ pub(crate) fn attempt(
         rustc: options.rustc.clone(),
         manifest: state.source.join("lib0"),
     });
-    let capture = process::supervise(cmd, &root, &options.root, process::BUILD_MS, total, injection, stream_bound)?;
+    let capture =
+        crunch_rustc_wrapper::observed_process::supervise(cmd, crunch_rustc_wrapper::observed_process::Supervision {
+            root: &root,
+            scratch: &options.root,
+            timeout_ms: crunch_rustc_wrapper::observed_process::BUILD_MS,
+            total_start: total,
+            injection,
+            stream_bound,
+        })?;
     let mut status = if capture.failure.as_deref() == Some("deadline") {
         Status::Timeout
     } else if !capture.complete || !capture.teardown_complete {
@@ -560,8 +596,10 @@ pub(crate) fn attempt(
         Status::Crash
     } else if capture.code == Some(0) {
         Status::Success
-    } else {
+    } else if capture.code == Some(101) {
         Status::Rejected
+    } else {
+        Status::Infrastructure
     };
     let mut errors = vec![];
     let mut records = BTreeMap::<String, Vec<Value>>::new();
@@ -679,11 +717,20 @@ pub(crate) fn attempt(
     if status == Status::Success && errors.is_empty() && cell.operation == Operation::Build {
         if let Some(executable) = executable {
             let program_root = root.join("program");
-            process::private_dir(&program_root)?;
+            crunch_rustc_wrapper::observed_process::private_dir(&program_root)?;
             let mut command = Command::new(executable);
             command.current_dir(&state.source).env_clear().envs(environment(options, state));
-            let output =
-                process::supervise(command, &program_root, &options.root, process::PROGRAM_MS, total, None, 1_048_576)?;
+            let output = crunch_rustc_wrapper::observed_process::supervise(
+                command,
+                crunch_rustc_wrapper::observed_process::Supervision {
+                    root: &program_root,
+                    scratch: &options.root,
+                    timeout_ms: crunch_rustc_wrapper::observed_process::PROGRAM_MS,
+                    total_start: total,
+                    injection: None,
+                    stream_bound: 1_048_576,
+                },
+            )?;
             if output.code != Some(0) || !output.complete || !output.teardown_complete {
                 errors.push("current-program-failed".into());
             }
@@ -715,6 +762,9 @@ pub(crate) fn attempt(
         observation.accepted_outputs.push(identity(
             OUTPUT_POLICY,
             &(
+                &step.digest,
+                &options.toolchain,
+                cell.operation,
                 status,
                 &observation.units,
                 &observation.program_stdout,
@@ -754,14 +804,14 @@ pub(crate) fn attempt(
     save(&root.join("attempt.json"), &result)?;
     Ok(result)
 }
-fn expected(cell: &Cell, step: &Step) -> Expected {
+pub(crate) fn expected(cell: &Cell, step: &Step) -> Expected {
     let mut expected = step.expected.clone();
     if cell.operation == Operation::Check {
         expected.program_stdout = None;
     }
     expected
 }
-fn initial_coverage(manifest: &Manifest) -> Vec<Coverage> {
+pub(crate) fn initial_coverage(manifest: &Manifest) -> Vec<Coverage> {
     manifest
         .population
         .iter()
@@ -777,7 +827,7 @@ fn initial_coverage(manifest: &Manifest) -> Vec<Coverage> {
         })
         .collect()
 }
-fn cover(coverage: &mut [Coverage], key: &str, attempted: bool, executed: bool, reused: bool, failed: bool) {
+pub(crate) fn cover(coverage: &mut [Coverage], key: &str, attempted: bool, executed: bool, reused: bool, failed: bool) {
     if let Some(c) = coverage.iter_mut().find(|c| c.key == key) {
         c.attempted = attempted;
         c.executed = executed;
@@ -790,7 +840,7 @@ fn run_campaigns(options: &Options, report: &mut Report, total: Instant) -> Resu
     for cell in report.manifest.cells.clone().into_iter().filter(|c| c.required) {
         let fixture = report.fixtures.iter().find(|f| f.id == cell.fixture).ok_or("fixture-missing")?.clone();
         let cell_root = options.root.join(&cell.id);
-        process::private_dir(&cell_root)?;
+        crunch_rustc_wrapper::observed_process::private_dir(&cell_root)?;
         let mut cell_failed = false;
         for side in ["a", "b"] {
             let side_root = cell_root.join(side);
@@ -798,7 +848,7 @@ fn run_campaigns(options: &Options, report: &mut Report, total: Instant) -> Resu
             report.probes.push(metadata);
             let mut previous = &fixture.steps[0].snapshot;
             for (index, step) in fixture.steps.iter().enumerate() {
-                if total.elapsed().as_millis() >= u128::from(process::TOTAL_MS) {
+                if total.elapsed().as_millis() >= u128::from(crunch_rustc_wrapper::observed_process::TOTAL_MS) {
                     return Err("total-deadline".into());
                 }
                 if index != 0 {
@@ -813,12 +863,21 @@ fn run_campaigns(options: &Options, report: &mut Report, total: Instant) -> Resu
                     &format!("step-{index:02}-{}", step.id),
                     total,
                     None,
-                    process::STREAM_BYTES,
+                    crunch_rustc_wrapper::observed_process::STREAM_BYTES,
                 )?;
                 let clean_root = side_root.join(format!("clean-{index:02}"));
                 let (clean_state, metadata) = prepare_state(options, &clean_root, &step.snapshot, total)?;
                 report.probes.push(metadata);
-                let clean = attempt(options, &clean_state, &cell, step, "compile", total, None, process::STREAM_BYTES)?;
+                let clean = attempt(
+                    options,
+                    &clean_state,
+                    &cell,
+                    step,
+                    "compile",
+                    total,
+                    None,
+                    crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+                )?;
                 let expectation = expected(&cell, step);
                 let verdict = core::compare(&campaign.observation, &clean.observation, &expectation);
                 let failed = verdict != Verdict::Equivalent;
@@ -874,12 +933,30 @@ fn run_faults(options: &Options, report: &mut Report, total: Instant) -> Result<
         let root = options.root.join(format!("fault-{name}"));
         let (state, metadata) = prepare_state(options, &root, &fixture.steps[0].snapshot, total)?;
         report.probes.push(metadata);
-        let seed = attempt(options, &state, &cell, &fixture.steps[0], "seed", total, None, process::STREAM_BYTES)?;
+        let seed = attempt(
+            options,
+            &state,
+            &cell,
+            &fixture.steps[0],
+            "seed",
+            total,
+            None,
+            crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+        )?;
         core::validate_oracle(&seed.observation, &fixture.steps[0].expected).map_err(err)?;
         let prior = seed.artifacts.iter().find(|a| a.executable).ok_or("fault-prior-artifact")?.digest.clone();
         let body = &fixture.steps[3];
         process::apply(&state.source, &fixture.steps[0].snapshot, body)?;
-        let current = attempt(options, &state, &cell, body, "injected", total, Some(kind), process::STREAM_BYTES)?;
+        let current = attempt(
+            options,
+            &state,
+            &cell,
+            body,
+            "injected",
+            total,
+            Some(kind),
+            crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+        )?;
         let expected = if kind == Fault::Crash {
             Status::Crash
         } else {
@@ -904,10 +981,28 @@ fn run_faults(options: &Options, report: &mut Report, total: Instant) -> Result<
         let (successor_state, metadata) =
             prepare_state(options, &root.join("recovery-successor"), &body.snapshot, total)?;
         report.probes.push(metadata);
-        let successor = attempt(options, &successor_state, &cell, body, "compile", total, None, process::STREAM_BYTES)?;
+        let successor = attempt(
+            options,
+            &successor_state,
+            &cell,
+            body,
+            "compile",
+            total,
+            None,
+            crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+        )?;
         let (clean_state, metadata) = prepare_state(options, &root.join("recovery-clean"), &body.snapshot, total)?;
         report.probes.push(metadata);
-        let clean = attempt(options, &clean_state, &cell, body, "compile", total, None, process::STREAM_BYTES)?;
+        let clean = attempt(
+            options,
+            &clean_state,
+            &cell,
+            body,
+            "compile",
+            total,
+            None,
+            crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+        )?;
         let verdict = core::compare(&successor.observation, &clean.observation, &body.expected);
         let lineage = core::Recovery {
             predecessor: digest(&current.root),
@@ -962,7 +1057,7 @@ pub fn execute(mut options: Options) -> Result<Report> {
     if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } != 0 {
         return Err("subreaper-unavailable".into());
     }
-    process::private_dir(&options.root)?;
+    crunch_rustc_wrapper::observed_process::private_dir(&options.root)?;
     let total = Instant::now();
     pin(&mut options)?;
     let fixtures = ["chain", "wide", "proc-macro", "generated"]
@@ -1058,11 +1153,20 @@ pub(crate) fn probe_tools(options: &Options, fixture: &Fixture, total: Instant) 
     .enumerate()
     {
         let root = options.root.join(format!("tool-probe-{index}"));
-        process::private_dir(&root)?;
+        crunch_rustc_wrapper::observed_process::private_dir(&root)?;
         let mut cmd = Command::new(tool);
         cmd.current_dir(&probe_state.source).env_clear().envs(environment(options, &probe_state)).args(args);
-        let capture =
-            process::supervise(cmd, &root, &options.root, process::PROBE_MS, total, None, process::STREAM_BYTES)?;
+        let capture = crunch_rustc_wrapper::observed_process::supervise(
+            cmd,
+            crunch_rustc_wrapper::observed_process::Supervision {
+                root: &root,
+                scratch: &options.root,
+                timeout_ms: crunch_rustc_wrapper::observed_process::PROBE_MS,
+                total_start: total,
+                injection: None,
+                stream_bound: crunch_rustc_wrapper::observed_process::STREAM_BYTES,
+            },
+        )?;
         save(&root.join("capture.json"), &capture)?;
         if capture.code != Some(0) || !capture.complete || !capture.teardown_complete {
             save(
@@ -1084,4 +1188,89 @@ pub(crate) fn probe_tools(options: &Options, fixture: &Fixture, total: Instant) 
         return Err("declared-host-mismatch".into());
     }
     Ok(probes)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[test]
+    fn ancestor_cargo_wrappers_cannot_replace_the_selected_compiler() {
+        let root = std::env::temp_dir().join(format!(
+            "mantle-differential-wrappers-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        crunch_rustc_wrapper::observed_process::private_dir(&root).unwrap();
+        fs::create_dir(root.join(".cargo")).unwrap();
+        let wrapper = root.join("forbidden-wrapper");
+        fs::write(&wrapper, b"#!/bin/sh\nexit 97\n").unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(
+            root.join(".cargo/config.toml"),
+            format!(
+                "[build]\nrustc-wrapper = {:?}\nrustc-workspace-wrapper = {:?}\n",
+                wrapper.to_str().unwrap(),
+                wrapper.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let source = root.join("source");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(source.join("src")).unwrap();
+        fs::write(
+            source.join("Cargo.toml"),
+            "[package]\nname = \"wrapper-isolation\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\n",
+        )
+        .unwrap();
+        fs::write(
+            source.join("Cargo.lock"),
+            "version = 4\n[[package]]\nname = \"wrapper-isolation\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(source.join("src/main.rs"), "fn main() { println!(\"42\"); }\n").unwrap();
+        let probe = Command::new("rustc").args(["--print", "sysroot"]).output().unwrap();
+        assert!(probe.status.success());
+        let sysroot = PathBuf::from(String::from_utf8(probe.stdout).unwrap().trim());
+        let rustc = fs::canonicalize(sysroot.join("bin/rustc")).unwrap();
+        let options = Options {
+            root: root.clone(),
+            cargo: env!("CARGO").into(),
+            rustc,
+            sysroot,
+            linker: PathBuf::new(),
+            path: std::env::var("PATH").unwrap(),
+            closures: Vec::new(),
+            wrapper: None,
+            baseline: None,
+            host: String::new(),
+            toolchain: None,
+            diagnostics: false,
+        };
+        let state = State {
+            root: root.clone(),
+            source,
+            target: root.join("target"),
+            packages: Value::Null,
+        };
+        let compiled = Command::new(&options.cargo)
+            .args(["build", "--locked", "--offline"])
+            .current_dir(&state.source)
+            .env_clear()
+            .envs(environment(&options, &state))
+            .env("CARGO_ENCODED_RUSTFLAGS", "")
+            .output()
+            .unwrap();
+        let executed = compiled
+            .status
+            .success()
+            .then(|| Command::new(state.target.join("debug/wrapper-isolation")).output().unwrap());
+        fs::remove_dir_all(&root).unwrap();
+        assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+        let executed = executed.unwrap();
+        assert!(executed.status.success());
+        assert_eq!(executed.stdout, b"42\n");
+    }
 }

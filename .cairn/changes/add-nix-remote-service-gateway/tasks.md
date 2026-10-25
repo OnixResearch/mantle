@@ -51,3 +51,22 @@
 - [ ] [serial] 7.4 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.gateway_functional_core]
 - [ ] [serial] 7.5 Run the relevant Nix interoperability and flake checks. r[remote_builds.nix_compatibility_gateway]
 - [ ] [serial] 7.6 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.gateway_non_claims]
+
+## Source repair handoff (2026-10-23; not gate acceptance)
+
+The recorded baseline is the expired-session assertion at
+`head-crunch-bin-16-isolated.log:27-30` under the archived
+`2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22`
+directory. The gateway verifier now uses strict UCAN lifetime bounds at initial
+admission and revalidation and denies the exact effective expiry second before
+consuming replay. The existing session fixture now covers future/expired initial
+invocations without nonce consumption, duplicate invocation rejection, live
+non-consuming revalidation, exact expiry, operation/target/digest mismatch,
+revocation and generation rollback with private replay storage and explicit times.
+
+The design's focused verification handoff lists the real Nix-client/API commands
+and prerequisites. No builds, tests, interoperability commands or lifecycle gates
+were run for these edits. Validation tasks remain unchecked; no public endpoint,
+OnixOS deployment, external Valence consumer or full workspace acceptance follows
+from this source repair. Archive/sync must wait for the required captured evidence.
+

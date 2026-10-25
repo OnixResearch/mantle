@@ -1,0 +1,740 @@
+{
+  "schema": "mantle-cairn-current-criterion-status-v1",
+  "observed_date": "2026-10-23",
+  "change": "relocate-dynamic-output-references",
+  "maintenance_owner": "Mantle ELF fixup/bootstrap maintainers; loader/store-authority owners must resolve production design; Main owns local runtime rails",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-existing-source-and-observations",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject_boundary": "Live shared worktree, not an atomic final source snapshot. Referenced receipts retain their own source subjects and limitations. Selected hashes identify inspected bytes only; they are not a commit/release acceptance identity. Parent is still repairing and executing checks.",
+  "evidence_refs": [
+    ".cairn/changes/relocate-dynamic-output-references/tasks.md:32-79",
+    ".cairn/changes/relocate-dynamic-output-references/evidence/native-elf-2026-10-01.md:7-60",
+    "src/elf_dynamic_fixup_core.rs:41-58,372-400",
+    "src/elf_dynamic_fixup_shell.rs:70-170",
+    "tests/elf_dynamic_relocation.rs:118-221",
+    "tests/elf_dynamic_reference_scanner.rs"
+  ],
+  "supported_task_criteria": [
+    "T1.1",
+    "T1.2",
+    "T1.3",
+    "T2.1",
+    "T2.2",
+    "T2.3",
+    "T3.1",
+    "T3.2",
+    "T3.3",
+    "T3.4",
+    "T4.1",
+    "T4.2",
+    "T4.3"
+  ],
+  "criteria": [
+    {
+      "task_id": "T1.1",
+      "task_file_line": 9,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "historical-baseline-partial",
+        "finding": "Native ELF/GCC reference observations exist in historical receipt; exact current origin recipe/scanner inventory and baseline remain open.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:9",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.bounded_fixup_admission"
+      ]
+    },
+    {
+      "task_id": "T1.2",
+      "task_file_line": 10,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "contract-decision-not-accepted",
+        "finding": "Hash-bearing origin-relative NEEDED and bounded fixup are normative; do not silently substitute basename RUNPATH or scratch loader. Explicit accepted loader/root authority decision required.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:10",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.origin_relative_needed",
+        "mantle.relocatable_outputs.bounded_fixup_admission"
+      ]
+    },
+    {
+      "task_id": "T1.3",
+      "task_file_line": 11,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "contract-decision-not-accepted",
+        "finding": "Hash-bearing origin-relative NEEDED and bounded fixup are normative; do not silently substitute basename RUNPATH or scratch loader. Explicit accepted loader/root authority decision required.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:11",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.origin_relative_needed"
+      ]
+    },
+    {
+      "task_id": "T2.1",
+      "task_file_line": 15,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-hardening-owed",
+        "finding": "Checked bounded planner and positive/negative fixture delivery retain historical native success; current source adds member token/separator/component and bidirectional string-sharing protection. Final new tests not accepted by historical five/one fixture results.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:15",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.bounded_fixup_admission"
+      ]
+    },
+    {
+      "task_id": "T2.2",
+      "task_file_line": 16,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-hardening-owed",
+        "finding": "Checked bounded planner and positive/negative fixture delivery retain historical native success; current source adds member token/separator/component and bidirectional string-sharing protection. Final new tests not accepted by historical five/one fixture results.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:16",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.origin_relative_needed"
+      ]
+    },
+    {
+      "task_id": "T2.3",
+      "task_file_line": 17,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported-current-hardening-owed",
+        "finding": "Checked bounded planner and positive/negative fixture delivery retain historical native success; current source adds member token/separator/component and bidirectional string-sharing protection. Final new tests not accepted by historical five/one fixture results.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:17",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.bounded_fixup_admission"
+      ]
+    },
+    {
+      "task_id": "T3.1",
+      "task_file_line": 21,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "production-cutover-unimplemented-or-unaccepted",
+        "finding": "No retained production link-owned GCC reservation/fixup build or complete bounded launcher-record wrapper migration. Existing atomic CLI planner is not that adoption.",
+        "remaining_local_action_ids": [
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:21",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.origin_relative_needed"
+      ]
+    },
+    {
+      "task_id": "T3.2",
+      "task_file_line": 22,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "production-cutover-unimplemented-or-unaccepted",
+        "finding": "No retained production link-owned GCC reservation/fixup build or complete bounded launcher-record wrapper migration. Existing atomic CLI planner is not that adoption.",
+        "remaining_local_action_ids": [
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:22",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.record_launchers"
+      ]
+    },
+    {
+      "task_id": "T3.3",
+      "task_file_line": 23,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "mechanism-parity-only",
+        "finding": "Historical exact scanner sets match isolated native fixture; real adopted-output PathInfo closure parity still absent.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:23",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.reference_scanning_parity"
+      ]
+    },
+    {
+      "task_id": "T3.4",
+      "task_file_line": 24,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "production-loader-blocked",
+        "finding": "Historical copied host interpreter executes, actual unpatched musl refuses slash-bearing $ORIGIN NEEDED. Production two-logical-prefix family run, wrong hash/residue controls and trusted root authority remain open.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:24",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.prefix_independence"
+      ]
+    },
+    {
+      "task_id": "T4.1",
+      "task_file_line": 28,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "production-loader-blocked",
+        "finding": "Historical copied host interpreter executes, actual unpatched musl refuses slash-bearing $ORIGIN NEEDED. Production two-logical-prefix family run, wrong hash/residue controls and trusted root authority remain open.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:28",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.prefix_independence",
+        "mantle.relocatable_outputs.reference_scanning_parity"
+      ]
+    },
+    {
+      "task_id": "T4.2",
+      "task_file_line": 29,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "final-rails-owed",
+        "finding": "Current hardening needs native/scanner suites, CLI smoke, strict Clippy and relevant Nix final-source capture; historical mechanism pass is not current acceptance.",
+        "remaining_local_action_ids": [
+          "focused",
+          "smoke",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:29",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.bounded_fixup_admission"
+      ]
+    },
+    {
+      "task_id": "T4.3",
+      "task_file_line": 30,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "cutover-not-authorized",
+        "finding": "No specs sync/archive/publication authorized; blocked production design/adoption cannot be closed by host fixtures.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/relocate-dynamic-output-references/tasks.md:30",
+      "requirement_ids": [
+        "mantle.relocatable_outputs.reference_scanning_parity"
+      ]
+    }
+  ],
+  "observed_documentary_lifecycle": {
+    "manifest": "target/cairn-finish-20261023/lifecycle-observations/result.json",
+    "commands": [
+      {
+        "label": "validate-before",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stderr.log"
+      },
+      {
+        "label": "relocate-dynamic-output-references-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "relocate-dynamic-output-references",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-proposal.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-proposal.stderr.log"
+      },
+      {
+        "label": "relocate-dynamic-output-references-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "relocate-dynamic-output-references",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-design.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-design.stderr.log"
+      },
+      {
+        "label": "relocate-dynamic-output-references-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "relocate-dynamic-output-references",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-tasks.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/relocate-dynamic-output-references-tasks.stderr.log"
+      },
+      {
+        "label": "validate-after",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stderr.log"
+      }
+    ],
+    "non_claim": "Exact zero exits are lifecycle/structure evidence only, not executed acceptance of every task; the old missing nominal_identity_policy scaffold blocker is not the current observation."
+  },
+  "observed_parent_gate_snapshots": [
+    {
+      "label": "ordinary-first-party",
+      "command_text": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/ordinary-first-party",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture-semantic",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs --semantic",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "trellis-import",
+      "command_text": "python3 scripts/import-trellis-fenced-attempt.py --check",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "no-std-core",
+      "command_text": "bash scripts/check-no-std-core.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/no-std-core",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "changed-no-std-wasm",
+      "command_text": "cargo check --locked --offline -p crunch-source-core -p mantle-rust-plan-core -p mantle-rust-differential-core -p mantle-application-contract -p crunch-rust-cache-core -p crunch-remote-core --target wasm32-unknown-unknown",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/changed-no-std-wasm",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "default-shell-store",
+      "command_text": "cargo check --locked --offline -p crunch-store --lib",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/default-shell-store",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "tigerstyle",
+      "command_text": "bash scripts/check-first-party-tigerstyle.sh",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "flake",
+      "command_text": "nix flake check --offline --no-write-lock-file -L",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/flake",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "first-party-clippy",
+      "command_text": "bash scripts/check-first-party-clippy.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    },
+    {
+      "label": "workspace-tests",
+      "command_text": "cargo_test_workspace_lib_tests",
+      "exit_code": null,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    }
+  ],
+  "observed_workspace_fixture_subset": {
+    "stdout": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log",
+    "command": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.command",
+    "exit_receipt_observed": null,
+    "selected_test_lines": [],
+    "non_claim": "Individual observed ok/FAILED lines only; no final aggregate success or absence of skips is inferred. An empty selection is not proof of absent tests."
+  },
+  "remaining_local_actions": [
+    {
+      "id": "focused",
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "-p",
+        "mantle",
+        "--test",
+        "elf_dynamic_relocation",
+        "--test",
+        "elf_dynamic_reference_scanner",
+        "--",
+        "--nocapture"
+      ],
+      "owed": "Exercise current native padded fixtures, overlap/search-token refusal with unchanged unpublished bytes, exact scanner reference sets and second copied host-interpreter prefix.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "smoke",
+      "argv": [
+        "target/debug/mantle",
+        "bootstrap",
+        "elf-relocate",
+        "<elf-file>",
+        "--depth",
+        "1",
+        "--needed",
+        "<exact-needed>",
+        "<hash-name>",
+        "lib/libnative.so",
+        "--runpath",
+        "<exact-runpath>",
+        "<hash-name>",
+        "lib"
+      ],
+      "owed": "Template: use actual fixture-authored padded ELF; retain before/after bytes and readelf -d, require two rewrites, identical byte length/hash literal and both executions; wrong hash/unsafe member deny without publication. Host loader evidence only.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "quality",
+      "argv": [
+        "bash",
+        "scripts/check-first-party-quality.sh"
+      ],
+      "owed": "Main to capture final-source first-party fmt, strict Clippy and workspace lib/tests; then finish no-std, architecture semantic, relevant Nix and Tracey rails. Historical/partial successes do not close this action."
+    }
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [
+    {
+      "blocker": "Actual musl 1.2.5 literal slash-bearing $ORIGIN DT_NEEDED exited 127; basename alternative is normative mismatch and hostile LD_LIBRARY_PATH bypass. Scratch loader is not production-authorized; immutable authenticated flat-store/closure root and writable replacement-race policy unresolved.",
+      "evidence": ".cairn/changes/relocate-dynamic-output-references/evidence/native-elf-2026-10-01.md:7-60"
+    }
+  ],
+  "local_bootstrap_adoption_work": [
+    {
+      "blocker": "Historical GCC rehearsal failed at missing native StageX transition input; check current actual provider chain through bootstrap owner, not stale host/toolchain failure. Production GCC link-owned capacity, wrapper launcher migration and real PathInfo closure parity remain local adoption work after prerequisites.",
+      "evidence": ".cairn/changes/relocate-dynamic-output-references/tasks.md:32-79"
+    }
+  ],
+  "integration_gate_blockers": [
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/no-std-core.stderr.log:370-394",
+        "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy.stderr.log:35-53"
+      ]
+    },
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic.stderr.log:1-2"
+      ]
+    },
+    {
+      "kind": "host-nix-builder-configuration",
+      "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/flake.stderr.log:147-152",
+        "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle.stderr.log:1-9"
+      ]
+    }
+  ],
+  "non_claims": [
+    "Host glibc/scanner/CLI mechanism successes are not production musl/GCC adoption, PT_INTERP relocation, authenticated root binding, real PathInfo closure parity or accepted second logical-prefix runtime evidence.",
+    "This worker ran no build, test, lint, formatter, VM, proof, lifecycle gate or production command; only read and reconciled existing evidence. No checkbox changed.",
+    "No human, operator, policy-owner or upstream approval is inferred from AI investigation, implementation or lifecycle structure gates."
+  ],
+  "selected_inspected_input_identities": [
+    {
+      "path": ".cairn/changes/relocate-dynamic-output-references/tasks.md",
+      "sha256": "3708b2ff8fdea0e19ab1879a667076b429a72ec56c3fb6404d4a960349abd50f"
+    },
+    {
+      "path": ".cairn/changes/relocate-dynamic-output-references/evidence/native-elf-2026-10-01.md",
+      "sha256": "9539a92c21ffac303ca5b47401bffb98d7ff276676aceb8ec62584358072c269"
+    },
+    {
+      "path": "src/elf_dynamic_fixup_core.rs",
+      "sha256": "84e0bc36bdc2b61dbfd223e1bf6e3a5e9454d843045df9067029065c09ece675"
+    },
+    {
+      "path": "src/elf_dynamic_fixup_shell.rs",
+      "sha256": "2e5e58e5a17f68cac607f9a0731d9e06ce8dd2cf4f1f81bc1d2764deb82f5cd8"
+    },
+    {
+      "path": "tests/elf_dynamic_relocation.rs",
+      "sha256": "8dfe4f188ebf826b2bc3cf9826fe493a22220736792619a4bc90e80f3533e71f"
+    },
+    {
+      "path": "tests/elf_dynamic_reference_scanner.rs",
+      "sha256": "fd69b61db4ef110df9ca933c671f2e033ecc58b8270beb1f2ef233b814f75454"
+    }
+  ],
+  "tasks_sha256_at_inspection": "3708b2ff8fdea0e19ab1879a667076b429a72ec56c3fb6404d4a960349abd50f",
+  "support_definition": "Every listed task criterion has a bounded current assessment; supported_task_criteria does not mean those tasks are complete or accepted.",
+  "observed_integration_gate_update": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": [
+        {
+          "step": "tigerstyle",
+          "original_exit": 1,
+          "original_classification": "host-nix-remote-build-hook",
+          "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+          "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+          "rerun_exit": 0,
+          "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+          "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+          "tree_identical_to_gate_start": true
+        }
+      ]
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "pin_binding_blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949",
+      "statement": "The gates ran over the hashed tree from which the v6 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 1,
+          "flake": 1
+        },
+        "status": "host-prerequisite-still-blocks",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": "host-nix-remote-build-hook",
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+          }
+        ],
+        "bound_step_reruns": [
+          {
+            "step": "tigerstyle",
+            "original_exit": 1,
+            "original_classification": "host-nix-remote-build-hook",
+            "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+            "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+            "rerun_exit": 0,
+            "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+            "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+            "tree_identical_to_gate_start": true
+          }
+        ]
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  }
+}

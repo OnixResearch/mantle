@@ -122,3 +122,10 @@ compatibility surface, crate name, or historical decision.
 | [0122](0122-use-native-blake3-streaming-at-snix-boundary.md) | Use native BLAKE3 streaming at the Snix boundary | Proposed |
 | [0123](0123-retain-unwired-source-program-authors-behind-item-scoped-dead-code-allows.md) | Retain unwired source-program authors behind item-scoped dead-code allows | Accepted |
 | [0124](0124-express-nickel-plan-shapes-as-record-types.md) | Express Nickel plan shapes as record types with whole-shape checks | Accepted |
+| [0125](0125-keep-rust-differential-and-wait-evidence-outside-authority.md) | Keep Rust differential and wait evidence outside execution authority | Proposed |
+| [0126](0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md) | Require qualified providers before admitting bounded Rust sessions | Proposed |
+| [0127](0127-keep-worker-demand-lifetime-bound-and-without-authority.md) | Keep declared worker demand lifetime-bound and without authority | Proposed |
+| [0128](0128-fence-remote-entry-point-bindings-and-retract-future-sessions.md) | Fence remote entry-point bindings and retract future sessions | Proposed |
+| [0129](0129-enforce-application-authority-with-resolved-compiler-views.md) | Enforce application authority with resolved compiler views and runtime dependency edges | Proposed |
+| [0130](0130-observe-owned-descendant-execs-at-kernel-transition.md) | Observe owned descendant execs at the kernel transition | Proposed |
+| [0131](0131-report-remote-execution-failures-through-one-terminal-effect.md) | Report remote execution failures through one terminal effect | Proposed |

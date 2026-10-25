@@ -4,6 +4,14 @@ Proposed and externally gated. Authoring and structural gates do not satisfy any
 implementation or upstream-fix task. The one-sandbox trial and native executor
 are separate required stages, not interchangeable completion claims.
 
+Implementation admission rechecked 2026-10-23: the exact selected rustc/Cargo
+reject the actual early-metadata/headstart options. The pinned upstream source
+still documents its unfixed incremental SVH defect and unsafe reservation
+recycling. No trial/native early-interface route is enabled, no task is newly
+completed, and serial/full-metadata evidence cannot qualify this lane. See
+the [fresh probes and integration hook map](evidence/authoring-validation.md#current-implementation-admission-inspection-2026-10-23)
+and [proposed ADR 0126](../../../adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md).
+
 ## Phase 1: Prerequisites and compiler admission
 
 - [ ] [serial] T1.1 Retain the three prerequisite changes' accepted observation, differential, and bounded-session contracts; select admitted small chain/wide workloads without expanding the per-unit source-slice limit. r[rust_package_planning.phase_readiness.acceptance]

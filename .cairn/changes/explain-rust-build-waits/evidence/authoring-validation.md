@@ -315,3 +315,41 @@ exit_code=0
 ```text
 (empty)
 ```
+
+## Current source implementation handoff (2026-10-23)
+
+Historical PASS outputs above are authoring evidence, not acceptance of these
+runtime requirements. No build, test, formatter, linter, real compiler workload
+or cohort was run by this worker. Parent-owned execution must precede any new
+implementation receipt or checked verification task.
+
+The real dedicated `serial OPTIONS.json` fixture lane now consumes the existing
+`NativeWaitCollector` at actual process spawn/exit/proven tree-reap callbacks in
+the bounded process adapter. `diagnostics: true` explicitly enables it; ordinary
+serial execution defaults to no collector. Unit identities retain exact package,
+source, host/target role, compiler/configuration/argument/input digests and
+declared dependency edges. There is no fabricated metadata, queue, pause/resume,
+live-error or resident-query event. Native capture is completion-oriented;
+live first-error and internal waits stay unavailable. Per-compiler sampled
+resources retain their own origins and are not added into a session peak.
+
+Both Cargo and native collectors now mark missing start/exit/reap lifecycles
+incomplete. The native collector reserves 512 terminal event slots and 1 MiB of
+its 2 MiB event-byte ceiling against optional overflow. Diagnostic overflow,
+registration and sink failures remain separate from ordinary compiler outcome,
+semantic equivalence, cache identity and artifact authority. Consumer-visible
+regressions for missing reap/terminal retention and missing accepted output
+identity were added but not run. ADR 0125 and the existing native Rust validation
+document record these source contracts and limits.
+
+This is admitted direct fixture execution, not proof of default
+`offlineCargoPackage` sandbox or per-unit helper diagnostic wiring. Production
+`rust-plan`/sandbox opt-in integration and real on/off/overflow/sink-failure,
+failure/drain and repeated cohort observations remain unaccepted until executed
+through those actual boundaries. The `cohorts` command retains ordinary Cargo
+repeatability only; native/Cargo are distinct lanes, not an early-interface
+treatment or an isolated performance A/B. No resident session, paused-memory,
+query-reuse, idle-footprint, whole-build speedup or provider-equivalence claim is
+made. Current unsupported compiler/provider prerequisites are source-grounded
+in the readiness change's dated capability-inspection evidence, not inferred
+from the old authoring receipts above.

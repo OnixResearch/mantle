@@ -68,3 +68,84 @@ payload work happens before session admission.
 
 - A resolved handle proves admission at resolve time.
 - It does not prove later content identity, output trust, or execution success.
+
+## Current receiver contract and verification handoff
+
+`crunch-remote-core::endpoint` validates complete descriptors against the current
+table, exact scope/trust/prefix, half-open expiry and nonzero generation.
+`remote_build::endpoint` persists tombstones, reloads under independent binding
+locks, and retains a shared lease through receiver authentication and effects;
+revocation cannot race an already-admitted operation or resurrect a stale table.
+The builder session retains the same binding through its transfer; there is no
+separate production `Transfer`-kind receiver. Configured substituter/base-layer
+admission retains its independent signature and content checks, and build
+admission retains independent ticket and output checks. The coordination socket
+accepts mutation only from the same observed operating-system owner. ADR 0128
+records the generation, retraction and fail-closed-early decisions.
+The client rejects a resolved descriptor that differs from its resolve request,
+a create reply with any generation other than the exact successor, or a reply
+with the wrong operation. A resolved descriptor is never bearer authority.
+
+The following real-program smoke is a handoff command, **not an executed
+acceptance receipt**. Set `MANTLE_BIN` to the freshly built binary. It exercises
+all four binding kinds, repeated resolution, silent mismatched-name denial,
+exact revocation, independent-binding preservation and generation recreation.
+
+```sh
+MANTLE_BIN=/absolute/path/to/mantle python3 - <<'PY'
+import copy, json, os, pathlib, socket, subprocess, tempfile, time
+schema = "mantle-endpoint-binding-v1"
+with tempfile.TemporaryDirectory(prefix="mantle-binding-smoke-") as temporary:
+    root = pathlib.Path(temporary)
+    path = str(root / "live.sock")
+    daemon = subprocess.Popen([os.environ["MANTLE_BIN"], "--state-dir", str(root / "state"),
+                               "remote", "live", "serve", "--socket", path])
+    try:
+        deadline = time.monotonic() + 10
+        while not pathlib.Path(path).exists():
+            assert daemon.poll() is None, "coordination daemon exited"
+            assert time.monotonic() < deadline, "coordination socket unavailable"
+            time.sleep(0.02)
+        def exchange(op, **fields):
+            with socket.socket(socket.AF_UNIX) as stream:
+                stream.settimeout(5)
+                stream.connect(path)
+                stream.sendall((json.dumps(dict(op=op, schema=schema, **fields)) + "\n").encode())
+                raw = stream.makefile("rb").readline(16385)
+                assert len(raw) <= 16384, "unbounded endpoint frame"
+                return json.loads(raw) if raw else None
+        bindings = []
+        for kind in ["builder-ticket", "transfer", "substituter", "base-layer"]:
+            spec = dict(kind=kind, name="smoke", scope="operator-smoke",
+                        trust_requirement="existing-source-specific-policy",
+                        store_prefix="/mantle/store", expires_unix_s=int(time.time()) + 300)
+            reply = exchange("create", spec=spec, expected_previous_generation=None)
+            assert reply["op"] == "resolved" and reply["schema"] == schema
+            binding = reply["binding"]
+            assert binding == dict(spec=spec, generation=1)
+            for _ in range(2):
+                assert exchange("resolve", binding=binding)["binding"] == binding
+            bindings.append(binding)
+        old = bindings[0]
+        forged = copy.deepcopy(old)
+        forged["spec"]["trust_requirement"] = "different-policy"
+        assert exchange("resolve", binding=forged) is None
+        assert exchange("revoke", binding=old) == dict(op="revoked", schema=schema)
+        assert exchange("resolve", binding=old) is None
+        for unaffected in bindings[1:]:
+            assert exchange("resolve", binding=unaffected)["binding"] == unaffected
+        new = exchange("create", spec=old["spec"], expected_previous_generation=1)["binding"]
+        assert new == dict(spec=old["spec"], generation=2)
+        assert exchange("resolve", binding=old) is None
+        assert exchange("resolve", binding=new)["binding"] == new
+        print("four endpoint kinds resolved; exact revocation isolated; generation 1 fenced by 2")
+    finally:
+        daemon.terminate()
+        daemon.wait(timeout=10)
+PY
+```
+
+Run the existing `endpoint_binding_tests` production wire fixtures and
+`remote_stdio_cli` integration target separately to prove rejection occurs before
+manifest reads, ticket spending, output frames and actual remote execution.
+The smoke above does not authenticate work or verify admitted content.

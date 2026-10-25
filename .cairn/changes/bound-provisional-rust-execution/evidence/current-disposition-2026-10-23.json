@@ -1,0 +1,86 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "bound-provisional-rust-execution",
+  "maintenance_owner": "Rust application/cache/session enforcement maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Real provisional-session execution admission remains blocked; existing serial execution and ordinary harness are independently actionable.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "T1.1",
+        "T1.3"
+      ],
+      "level": "partial-source-and-admission-inspection",
+      "support": "Current success/publication hook map is retained and proposed ADR 0126 identifies gating before finalizer/finish_unit; this is not captured serial baseline, validated Nickel limits or policy acceptance."
+    },
+    {
+      "task_ids": [
+        "T1.2",
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T3.4",
+        "T4.1",
+        "T4.2",
+        "T4.3"
+      ],
+      "level": "unaccepted",
+      "support": "No actual provisional confirmation/private visibility/live control/reservations/teardown matrix accepted. Delaying only returned application success would leave premature local/shared cache publication."
+    }
+  ],
+  "local_remaining_actions": [
+    "Execute/inspect supported ordinary differential baseline for T1.1 independently of experimental provider availability.",
+    "Review exact success/cache/receipt/topology-finish hooks and finite Nickel policy proposal without enabling unsupported execution.",
+    "Select an enforceable finite aggregate session boundary; no per-process RSS sampling/address-space cap substitution.",
+    "When actual provider qualified, gate finalizer and topology finish on exact-attempt closure, then prove no wrong-attempt/stale/failure cache or receipt visibility and observed contained-tree termination."
+  ],
+  "external_missing_authority_or_capability": [
+    "Qualified actual compiler live-control contract and ordinary incremental identity/swap correctness; selected compiler rejects early-metadata.",
+    "Delegated finite aggregate resident memory/task/teardown boundary and independent implementation/policy acceptance."
+  ],
+  "evidence_references": [
+    ".cairn/changes/bound-provisional-rust-execution/tasks.md:6-39",
+    ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500",
+    "adr/0126-require-qualified-providers-before-admitting-bounded-rust-sessions.md:58-86,96-125"
+  ],
+  "repeatability_recipe": [
+    "Run ordinary baseline/serial via docs/native-rust-plan-validation.md:210-240 with retained final options and fresh roots.",
+    "No provisional-session CLI/runtime recipe is claimed before real provider/enforcement admission.",
+    "After actual admission, run original T3 multiple-producer, failure/crash/cancel/wrong-attempt, one-slot/saturated and every count/byte/memory/deadline boundary; only then T4 runtime and lifecycle acceptance."
+  ],
+  "observed_commands": [
+    {
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "-Zearly-metadata",
+        "--print",
+        "cfg"
+      ],
+      "exit_code": 1,
+      "result": "unknown unstable option: early-metadata",
+      "evidence": ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500"
+    },
+    {
+      "argv": [
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "-Zheadstart",
+        "locate-project"
+      ],
+      "exit_code": 101,
+      "result": "unknown -Z flag: headstart",
+      "evidence": ".cairn/changes/pipeline-rust-interface-readiness/evidence/authoring-validation.md:352-500"
+    }
+  ],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

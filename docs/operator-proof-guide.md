@@ -238,11 +238,11 @@ blocker, and bounded non-claims. A practical-mode or blocked report with
 `status = "blocked"` is still useful frontier evidence, but it is diagnostic
 only and is not a Nix-free or release proof success claim.
 
-### Current refreshed evidence (2026-07-03)
+### Historical diagnostic evidence (2026-07-03)
 
-The current inspected Cargo-free fixed-point evidence succeeds for the bounded
-Cargo-free proof mode. Use this as the current status until a newer same-tree
-bundle supersedes it:
+The following retained evidence succeeded for its exact historical source and
+bounded Cargo-free mode. It is not evidence for the current checkout; rerun and
+verify a same-source bundle before claiming current success:
 
 - Command shape: `mantle --json self-build --cargo-free --fixed-point --out "$PROOF_OUTPUT_DIR" --rustc "$(command -v rustc)" --target x86_64-unknown-linux-gnu`
 - Output bundle: `/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z`
@@ -259,6 +259,86 @@ This evidence predates strict proof-mode admission metadata and is a bounded Car
 This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
 success, and does not prove general Nix replacement completeness.
+
+## Source-built cold fixed-point proof
+
+This is a different evidence class from the historical Cargo-free diagnostic
+above. Its source-only preparation and execution commands are documented in
+[source-program preparation](operator-workflows.md#source-only-source-program-preparation).
+Only a freshly verified `mantle-deterministic-proof-receipt-v2` with complete
+root action-trust reconciliation can authorize the bounded full-source claim.
+Neither SSH access, a prepared profile, a provider admission, a development
+cache hit, nor an older successful binary is a current proof.
+
+Before launch, freeze the final Mantle source and matching lock/vendor cohort;
+export and verify the complete native, Rust host-tool, and StageX source
+closures from that source. The source-built profile must contain all seven
+authority roles, including the audited seed and lineage, not a built provider
+substituted for source. Keep Mantle and vendor trees disjoint. A retained
+profile that lacks `bootstrap/source-built-cold-route.json` requires explicit
+source-program preparation; it is not a ready cold-proof input. Refreshing only
+the Mantle record does not author that selector or the programs it names.
+
+Run on Leviathan only, in a fresh absent output directory, with a verified
+current Mantle executable and explicit bubblewrap/static-shell paths. Keep
+SSH, rsync, and pueue outside the protected execution boundary; do not use
+`--builder` or remote action dispatch. These commands assume the operator has
+already reviewed and frozen `SOURCE_PROFILE_BLAKE3`, `STAGEX_LINEAGE_BLAKE3`,
+and `NATIVE_PROVIDER_BLAKE3`; a file name or an old receipt is not an independent
+pin. `SOURCE_PROFILE_BLAKE3` is the validated manifest identity, not a raw JSON
+file checksum; the lineage argument is the BLAKE3 of its exact JSON bytes.
+
+```bash
+CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
+  --source-built-fixed-point --prepare-source-programs \
+  --source-profile "$SOURCE_PROFILE" \
+  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap "$BWRAP" --proof-sandbox-shell "$STATIC_BUSYBOX" \
+  --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 536870912000 \
+  --proof-exec-events-max 262144 --proof-source-records-max 65536 \
+  --out "$PREPARED_COHORT"
+```
+
+Preparation does not execute a provider or prove a fixed point. Review and
+freeze its `source-program-preparation.json` and `source-profile.json`. The
+report's `output_profile_blake3` binds the new cohort. Use that reviewed value
+as `PREPARED_PROFILE_BLAKE3`, never the original profile identity:
+
+```bash
+CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
+  --source-built-fixed-point \
+  --source-profile "$PREPARED_COHORT/source-profile.json" \
+  --expected-source-profile-blake3 "$PREPARED_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap "$BWRAP" --proof-sandbox-shell "$STATIC_BUSYBOX" \
+  --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 536870912000 \
+  --proof-exec-events-max 262144 --proof-source-records-max 65536 \
+  --out "$FRESH_PROOF_ROOT"
+"$MANTLE" --json bootstrap trust-report --proof-root "$FRESH_PROOF_ROOT"
+"$MANTLE" --json bootstrap parity-report \
+  --require live-bootstrap --require guix --require stagex
+```
+
+The example declares a 500 GiB disk budget; confirm at least that much free
+space on the output filesystem before launch. Hard maxima are 86,400 seconds,
+1 TiB disk, 262,144 protected exec events, 65,536 source records, and 4,096 open
+file descriptors. Jobs must be within 1–16. Invalid bounds reject before
+source hydration. The launch environment must contain no inherited
+`MANTLE_CC_CACHE_*` or `MANTLE_COMPILE_*` authority; remove these at the outer
+runner, not by weakening proof admission. Do not pass any `--dev-*` option to
+the promoted proof. Development resume always remains diagnostic and must be
+followed by an independent cold proof from empty authority/store state.
+
+Keep every failure's private staging directory and `attempt-status.json`.
+Only inspect success aliases after independently validating the newly
+published bundle, matching stage binaries, provider/closure links, bounded
+audits, and complete planned-versus-observed action coverage. Parity adds its
+own independent native/StageX/Guix gates: a proof attempt or a partial trust
+report does not promote those rows. No same-source cold proof or full parity
+run was performed while preparing this guide update.
 
 ## Nix-free demo bundle validation
 

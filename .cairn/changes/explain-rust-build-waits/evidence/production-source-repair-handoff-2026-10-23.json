@@ -1,0 +1,76 @@
+{
+  "schema": "mantle-rust-production-source-repair-handoff-v1",
+  "date": "2026-10-23",
+  "acceptance_claimed": false,
+  "source_repair_runtime_verified": false,
+  "verification_owner": "Main: one post-handoff rebuild, focused regressions, and fresh real production scenarios",
+  "observed_runtime_evidence": "native-gnu-production-runtime-2026-10-23.json",
+  "observed_runtime_evidence_blake3": "a1f3ece51a9db5cfd4f76b926c4a7521919c3dbacb740f47dd43cbf510d0fac2",
+  "source_artifacts": [
+    {
+      "path": "crates/mantle-cargo-unit-plan/src/lib.rs",
+      "blake3": "79da6ccf055749ea0d79dcb99ed91d9bf51259f184bf6f958ed42b8020538dd2",
+      "change": "Validate Nix store basenames with the existing Nix-compatible 211-byte bound and alphabet, independently of unchanged 64-byte generic unit labels. No dependency added."
+    },
+    {
+      "path": "crates/mantle-cargo-unit-plan/tests/lowering.rs",
+      "blake3": "8ac2de48b3132d861f2e0129066d7a163083fa5e92a8db46d8096e3ef9c9de85",
+      "change": "Regression covers the admitted real rustfmt name, valid 211-byte names including ?=, rejection of 212-byte/invalid names, and preservation as exact runtime unit inputs."
+    },
+    {
+      "path": "src/build_report.rs",
+      "blake3": "316c1a8b4b0d43b3a6116267e5eb5ad99d1e5693bf9c61cda1d55bf475eb0e42",
+      "change": "Pass configured logical/physical store coordinates to digest-bound Cargo evidence enrichment. Hash the selected physical source/vendor/Cargo.lock without rewriting logical report identities or falling back to an ambient logical store. Existing digest-bound regression now covers relocated inputs, ambient decoy lockfile precedence, and missing physical lockfile rejection."
+    }
+  ],
+  "distinct_harness_only_defect": {
+    "failed_attempt_preserved": "/tmp/mantle-cargo-production-patched-20261023/cohort/result.json",
+    "pueue_task": 32,
+    "cause": "ROOT/diagnostics did not exist before selecting child roots. Existing private_dir validates existing ancestors and performs one exclusive mkdir; optional diagnostics were therefore not installed. The private_root KeyError was a reducer symptom, not a production fix target.",
+    "new_harness_repair": "Create only the declared owner-private diagnostics parent with mode0700 before selecting its still-absent child collectors. Production private_dir semantics remain unchanged."
+  },
+  "focused_commands_not_run": [
+    "nix develop target/cairn-finish-20261023/patched-dev-shell -c cargo test --locked --offline -p mantle-cargo-unit-plan --test lowering runtime_store_names_use_nix_name_bounds_not_unit_label_bounds",
+    "nix develop target/cairn-finish-20261023/patched-dev-shell -c cargo test --locked --offline -p mantle --lib build_json_report_hashes_relocated_inputs_and_preserves_logical_evidence_paths",
+    "nix develop target/cairn-finish-20261023/patched-dev-shell -c cargo test --locked --offline -p mantle --lib build_json_report_diagnoses_stale_digest_bound_offline_cargo_evidence_sidecar"
+  ],
+  "new_scratch_drivers": [
+    {
+      "path": "/tmp/mantle-dynamic-production-source-repair-20261023/run.py",
+      "blake3": "02cf6632f0353f652a11e234ab42bdbb06426defa0e1ddb2e4bb9b0b02803160",
+      "fresh_result": "/tmp/mantle-dynamic-production-source-repair-20261023/result.json",
+      "command": "nix develop target/cairn-finish-20261023/patched-dev-shell -c python3 /tmp/mantle-dynamic-production-source-repair-20261023/run.py --pins \"$READY_PINS\" --dependency-task \"$COHORT_TASK\""
+    },
+    {
+      "path": "/tmp/mantle-cargo-production-source-repair-20261023/run.py",
+      "blake3": "6706ee79f7eb99cec31a147e9d5e717cdbf09fbc22ff87e10b6f1626deee9340",
+      "fresh_result": "/tmp/mantle-cargo-production-source-repair-20261023/cohort/result.json",
+      "command": "nix develop target/cairn-finish-20261023/patched-dev-shell -c python3 /tmp/mantle-cargo-production-source-repair-20261023/run.py --pins \"$READY_PINS\" --dependency-task \"$COHORT_TASK\""
+    }
+  ],
+  "required_parent_command_bindings": {
+    "READY_PINS": "Absolute ready-executable-pins.json path published by the new immutable post-source-repair cohort; task30/33 bytes do not include this repair.",
+    "COHORT_TASK": "Successful Pueue ID for that new cohort. Queue each long smoke as a dependent Pueue task; do not execute product builds in either smoke driver."
+  },
+  "new_driver_cli_smoke_observed": {
+    "commands": [
+      "python3 /tmp/mantle-dynamic-production-source-repair-20261023/run.py --help",
+      "python3 /tmp/mantle-cargo-production-source-repair-20261023/run.py --help"
+    ],
+    "exit_statuses": [0, 0],
+    "observed_required_arguments": ["--pins PINS", "--dependency-task DEPENDENCY_TASK"],
+    "limit": "Parser smoke only; neither new source-repair runtime scenario was launched."
+  },
+  "retained_acceptance_requirements": [
+    "Exact signed source/tool/cache setup is reused, never narrowed or recreated unnecessarily; copied physical bodies are not admission.",
+    "Real dynamic producer discovery, compiled consumer success, E0308/compiler-rejected path, accepted-output identity checks, complete/no-drop collectors, 0700 privacy, and warm cache path remain mandatory.",
+    "Ordinary diagnostics-off/on identity/output/NAR/signature/attestation equality and expected produced program stdout remain mandatory.",
+    "New ordinary harness requires actual on/failure-on/warm diagnostic reports and retains all complete/no-drop/ordered-outcome checks; missing reports do not become success.",
+    "All original signed setup, historical failed receipts and already-measured executable cohorts remain unchanged."
+  ],
+  "non_claims": [
+    "No compiler correctness, bootstrap, release, performance or Cairn acceptance.",
+    "No post-repair runtime success inferred from source edits or driver --help.",
+    "Task30/task33 exact role-byte equality reuses only the bounded already-observed failing/intermediate outcomes, not acceptance."
+  ]
+}

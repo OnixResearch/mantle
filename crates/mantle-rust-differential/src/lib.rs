@@ -7,7 +7,7 @@ pub mod fixtures;
 pub mod negative;
 pub mod process;
 pub mod runner;
-pub mod waits;
+pub mod serial;
 
 pub use runner::Options;
 pub use runner::Report;

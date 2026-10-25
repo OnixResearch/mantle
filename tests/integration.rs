@@ -3,6 +3,9 @@
 //! These tests invoke the compiled `crunch` binary via `assert_cmd` and
 //! check stdout, stderr, and exit codes.
 
+#[path = "support/remote_endpoint_binding.rs"]
+mod remote_endpoint_binding;
+
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::io::Write;
@@ -1675,6 +1678,22 @@ fn store_pull_rejects_unsupported_url_scheme() {
         .stderr(predicate::str::contains("unsupported pull source URL scheme"));
 }
 
+/// Binds the fixture cache as an operator-admitted substituter source; HTTP
+/// pulls refuse to read any source without such a binding.
+fn write_pull_source_binding(work: &Path, base_url: &str) -> PathBuf {
+    let binding_config = work.join("remote-endpoint-binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(
+        &work.join("endpoint-state"),
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/mantle/store",
+            builder: None,
+            substituters: &[base_url],
+        },
+    );
+    binding_config
+}
+
 #[test]
 fn store_pull_http_round_trip_imports_path() {
     if !require_loopback_network("store_pull_http_round_trip_imports_path") {
@@ -1689,8 +1708,11 @@ fn store_pull_http_round_trip_imports_path() {
     let state_dir = work.path().join("pull-state");
     std::fs::create_dir_all(&store_dir).unwrap();
     std::fs::create_dir_all(&state_dir).unwrap();
+    let binding_config = write_pull_source_binding(work.path(), &server.base_url);
 
     let output = crunch_cmd()
+        .arg("--remote-binding-config")
+        .arg(&binding_config)
         .arg("--store")
         .arg(&store_dir)
         .arg("--state-dir")
@@ -1733,8 +1755,11 @@ fn store_pull_http_closure_round_trip_imports_root() {
     let state_dir = work.path().join("closure-pull-state");
     std::fs::create_dir_all(&store_dir).unwrap();
     std::fs::create_dir_all(&state_dir).unwrap();
+    let binding_config = write_pull_source_binding(work.path(), &server.base_url);
 
     let output = crunch_cmd()
+        .arg("--remote-binding-config")
+        .arg(&binding_config)
         .arg("--store")
         .arg(&store_dir)
         .arg("--state-dir")
@@ -1764,6 +1789,39 @@ fn store_pull_http_closure_round_trip_imports_root() {
 
     let pulled_name = logical_store_path.rsplit('/').next().unwrap();
     assert!(store_dir.join(pulled_name).exists(), "expected pulled closure root on disk");
+}
+
+#[test]
+fn store_pull_http_without_endpoint_binding_is_refused() {
+    if !require_loopback_network("store_pull_http_without_endpoint_binding_is_refused") {
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (cache_dir, logical_store_path, trusted_public_key) =
+        runtime.block_on(make_http_pull_cache_fixture(work.path()));
+    let server = HttpFixtureServer::serve_cache_dir(&cache_dir);
+    let store_dir = work.path().join("unbound-pull-store");
+    let state_dir = work.path().join("unbound-pull-state");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    std::fs::create_dir_all(&state_dir).unwrap();
+
+    crunch_cmd()
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .args(["store", "pull", "--from"])
+        .arg(&server.base_url)
+        .arg("--trusted-public-keys")
+        .arg(&trusted_public_key)
+        .arg(&logical_store_path)
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("store-source-admission-required"));
+
+    let pulled_name = logical_store_path.rsplit('/').next().unwrap();
+    assert!(!store_dir.join(pulled_name).exists(), "an unbound source must not import any path");
 }
 
 #[test]

@@ -16,6 +16,58 @@ pub const ENTRIES_MAX: usize = 65_536;
 pub const ATERM_BYTES_MAX: usize = 65_536;
 pub const EXPOSED_DIRECTORIES: [&str; 6] = ["bin", "lib", "libexec", "share", "include", "etc"];
 
+/// Manifest transitions and forest conflicts, without pre-rendered diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileError {
+    SchemaOrPackageBound,
+    UnsupportedPlatform,
+    StorePrefix,
+    DuplicateSlot(String),
+    ReplaceRequired(String),
+    AlreadyInstalled,
+    MissingReplacement,
+    SlotNotInstalled(String),
+    PackageName,
+    PackageAterm,
+    PackageStorePrefix,
+    PackageStoreMember,
+    PackageDerivation,
+    PackageNarHash,
+    EntryBound,
+    CompositionPath(String),
+    LeafDirectoryConflict(String),
+    AbsoluteLeafTarget,
+    LeafConflict(String),
+}
+
+impl core::fmt::Display for ProfileError {
+    fn fmt(&self, output: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::SchemaOrPackageBound => output.write_str("unsupported profile schema or too many packages"),
+            Self::UnsupportedPlatform => output.write_str("user profiles support x86_64-linux and aarch64-linux only"),
+            Self::StorePrefix => output.write_str("profile requires a normalized absolute store prefix"),
+            Self::DuplicateSlot(name) => write!(output, "duplicate package slot: {name}"),
+            Self::ReplaceRequired(name) => write!(output, "package slot {name} exists; explicit replace required"),
+            Self::AlreadyInstalled => output.write_str("package is already installed exactly"),
+            Self::MissingReplacement => output.write_str("replace requires an existing package slot"),
+            Self::SlotNotInstalled(name) => write!(output, "package slot not installed: {name}"),
+            Self::PackageName => output.write_str("package slot and output name require 1..64 ASCII identifier bytes"),
+            Self::PackageAterm => output.write_str("package ATerm is empty or exceeds 65536 bytes"),
+            Self::PackageStorePrefix => output.write_str("package path has wrong store prefix"),
+            Self::PackageStoreMember => output.write_str("package path is not a direct store member"),
+            Self::PackageDerivation => output.write_str("package requires an exact derivation and nonzero NAR size"),
+            Self::PackageNarHash => output.write_str("package NAR SHA256 must be 64 lowercase hex bytes"),
+            Self::EntryBound => output.write_str("profile composition exceeds entry bound"),
+            Self::CompositionPath(path) => write!(output, "invalid profile composition path: {path}"),
+            Self::LeafDirectoryConflict(path) => write!(output, "profile leaf/directory conflict: {path}"),
+            Self::AbsoluteLeafTarget => output.write_str("profile leaf target must be absolute"),
+            Self::LeafConflict(path) => write!(output, "profile leaf conflict: {path}"),
+        }
+    }
+}
+
+impl core::error::Error for ProfileError {}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ConflictPolicy {
@@ -70,21 +122,21 @@ impl Manifest {
         }
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), ProfileError> {
         if self.schema != MANIFEST_SCHEMA || self.packages.len() > PACKAGES_MAX {
-            return Err("unsupported profile schema or too many packages".to_string());
+            return Err(ProfileError::SchemaOrPackageBound);
         }
         if !matches!(self.platform.as_str(), "x86_64-linux" | "aarch64-linux") {
-            return Err("user profiles support x86_64-linux and aarch64-linux only".to_string());
+            return Err(ProfileError::UnsupportedPlatform);
         }
         if !self.store_prefix.starts_with('/') || self.store_prefix.ends_with('/') {
-            return Err("profile requires a normalized absolute store prefix".to_string());
+            return Err(ProfileError::StorePrefix);
         }
         let mut names = BTreeSet::new();
         for package in &self.packages {
             validate_package(package, &self.store_prefix)?;
             if !names.insert(&package.name) {
-                return Err(format!("duplicate package slot: {}", package.name));
+                return Err(ProfileError::DuplicateSlot(package.name.clone()));
             }
         }
         assert!(self.packages.len() <= PACKAGES_MAX);
@@ -92,21 +144,21 @@ impl Manifest {
         Ok(())
     }
 
-    pub fn install(&self, package: Package, replace: bool) -> Result<Self, String> {
+    pub fn install(&self, package: Package, replace: bool) -> Result<Self, ProfileError> {
         self.validate()?;
         validate_package(&package, &self.store_prefix)?;
         let mut next = self.clone();
         if let Some(index) = next.packages.iter().position(|old| old.name == package.name) {
             if !replace {
-                return Err(format!("package slot {} exists; explicit replace required", package.name));
+                return Err(ProfileError::ReplaceRequired(package.name));
             }
             if next.packages[index] == package {
-                return Err("package is already installed exactly".to_string());
+                return Err(ProfileError::AlreadyInstalled);
             }
             next.packages[index] = package;
         } else {
             if replace {
-                return Err("replace requires an existing package slot".to_string());
+                return Err(ProfileError::MissingReplacement);
             }
             next.packages.push(package);
         }
@@ -117,11 +169,11 @@ impl Manifest {
         Ok(next)
     }
 
-    pub fn remove(&self, name: &str) -> Result<Self, String> {
+    pub fn remove(&self, name: &str) -> Result<Self, ProfileError> {
         self.validate()?;
         let mut next = self.clone();
         let Some(index) = next.packages.iter().position(|package| package.name == name) else {
-            return Err(format!("package slot not installed: {name}"));
+            return Err(ProfileError::SlotNotInstalled(name.to_string()));
         };
         next.packages.remove(index);
         assert!(next.packages.len() < self.packages.len());
@@ -130,30 +182,30 @@ impl Manifest {
     }
 }
 
-fn validate_package(package: &Package, prefix: &str) -> Result<(), String> {
+fn validate_package(package: &Package, prefix: &str) -> Result<(), ProfileError> {
     if !valid_name(&package.name) || !valid_name(&package.output_name) {
-        return Err("package slot and output name require 1..64 ASCII identifier bytes".to_string());
+        return Err(ProfileError::PackageName);
     }
     if package.derivation_aterm.is_empty() || package.derivation_aterm.len() > ATERM_BYTES_MAX {
-        return Err("package ATerm is empty or exceeds 65536 bytes".to_string());
+        return Err(ProfileError::PackageAterm);
     }
     let under = format!("{prefix}/");
     for path in [&package.derivation_path, &package.output_path] {
         let Some(base) = path.strip_prefix(&under) else {
-            return Err("package path has wrong store prefix".to_string());
+            return Err(ProfileError::PackageStorePrefix);
         };
         let is_reserved = base == "." || base == "..";
         if base.is_empty() || base.contains('/') || is_reserved {
-            return Err("package path is not a direct store member".to_string());
+            return Err(ProfileError::PackageStoreMember);
         }
     }
     if !package.derivation_path.ends_with(".drv") || package.nar_size == 0 {
-        return Err("package requires an exact derivation and nonzero NAR size".to_string());
+        return Err(ProfileError::PackageDerivation);
     }
     if package.nar_sha256.len() != 64
         || !package.nar_sha256.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {
-        return Err("package NAR SHA256 must be 64 lowercase hex bytes".to_string());
+        return Err(ProfileError::PackageNarHash);
     }
     assert!(!package.name.is_empty());
     assert!(!package.output_path.is_empty());
@@ -174,9 +226,9 @@ const PATH_PARTS_MAX: usize = 64;
 const PATH_BYTES_MAX: usize = 4096;
 
 /// Reject leaf/leaf and leaf/directory ambiguity even for identical contents.
-pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String, String>, String> {
+pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String, String>, ProfileError> {
     if entries.len() > ENTRIES_MAX {
-        return Err("profile composition exceeds entry bound".to_string());
+        return Err(ProfileError::EntryBound);
     }
     let mut directories = BTreeSet::new();
     let mut links = BTreeMap::new();
@@ -185,10 +237,10 @@ pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String
         let is_exposed = EXPOSED_DIRECTORIES.contains(&parts[0]);
         let has_invalid_part = parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..");
         if parts.len() > PATH_PARTS_MAX || path.len() > PATH_BYTES_MAX {
-            return Err(format!("invalid profile composition path: {path}"));
+            return Err(ProfileError::CompositionPath(path));
         }
         if !is_exposed || has_invalid_part {
-            return Err(format!("invalid profile composition path: {path}"));
+            return Err(ProfileError::CompositionPath(path));
         }
         let mut ancestor = String::with_capacity(path.len());
         for part in parts.iter().take(parts.len().saturating_sub(1)) {
@@ -197,26 +249,26 @@ pub fn compose(entries: Vec<(String, Option<String>)>) -> Result<BTreeMap<String
             }
             ancestor.push_str(part);
             if links.contains_key(&ancestor) {
-                return Err(format!("profile leaf/directory conflict: {ancestor}"));
+                return Err(ProfileError::LeafDirectoryConflict(ancestor));
             }
             directories.insert(ancestor.clone());
         }
         match target {
             None => {
                 if links.contains_key(&path) {
-                    return Err(format!("profile leaf/directory conflict: {path}"));
+                    return Err(ProfileError::LeafDirectoryConflict(path));
                 }
                 directories.insert(path);
             }
             Some(target) => {
                 if !target.starts_with('/') {
-                    return Err("profile leaf target must be absolute".to_string());
+                    return Err(ProfileError::AbsoluteLeafTarget);
                 }
                 if directories.contains(&path) || links.contains_key(&path) {
-                    return Err(format!("profile leaf conflict: {path}"));
+                    return Err(ProfileError::LeafConflict(path));
                 }
                 if links.len() >= ENTRIES_MAX {
-                    return Err("profile composition exceeds entry bound".to_string());
+                    return Err(ProfileError::EntryBound);
                 }
                 links.insert(path, target);
             }

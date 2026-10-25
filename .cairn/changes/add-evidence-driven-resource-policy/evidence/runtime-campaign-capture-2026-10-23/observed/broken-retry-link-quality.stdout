@@ -1,0 +1,10 @@
+{
+  "blockers": [
+    "1 failing ordinary assertion(s); fix local workload behavior before VM campaign"
+  ],
+  "passed": false,
+  "replay_boundary": "assertion quality is local instrumentation evidence only; accepted replay still requires snapshot-backed verdict artifacts",
+  "replay_evidence": false,
+  "schema": "chaoscontrol.sdk.assertion_quality_gate.v1",
+  "summary": "1 assertion-quality blocker(s)"
+}

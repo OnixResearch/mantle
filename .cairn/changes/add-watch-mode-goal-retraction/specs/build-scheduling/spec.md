@@ -28,6 +28,11 @@ reservation. A retracted goal MUST NOT be recorded as a successful output. A
 build that does not stop within the declared cancellation window MUST be
 reported as pending cancellation rather than silently retained.
 
+The reservation MUST remain held until the shell observes actual child and
+descendant teardown; a cancellation request, deadline, or dropped future MUST
+NOT authorize its release. Pending cancellation MUST name only tasks whose
+teardown remains unobserved, not queued or already completed retractions.
+
 #### Scenario: Deleted root stops building
 
 - GIVEN a watch session with a root whose build is in flight

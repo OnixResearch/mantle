@@ -8,16 +8,16 @@ trust framing: scheduling device, never evidence, outputs unchanged.
 
 ## Current behavior
 
-The Worker bounds dispatch per build; nothing bounds machine-wide compile
-concurrency across builds. Long proof sessions run several derivations in
-parallel, each with internal parallelism, oversubscribing the host. pueue
-bounds shell-level task parallelism but not compiles inside sandboxes.
+The Worker still bounds dispatch per build. An explicitly enabled C/C++ driver
+can now request machine-local grants from the existing cache daemon;
+`crunch-rust-cache-core::slots` supplies pure bounded round-robin/FIFO policy
+and `crunch-rustc-wrapper::slots` owns connection/child lifecycle observations.
+No authority remains a supported advisory mode, not a global-bound claim.
 
-The external reference implements slot grants in the cache daemon: cc and
-rustc take one slot per run, Go through `-toolexec`, GHC through a semaphore
-protocol served from slots (`evidence/repkgs-review.md`). Its design note
-names the motivation: 384 sandboxes each running `make -j384` would
-oversubscribe the machine.
+Pure and process fixtures plus `scripts/prove-cc-cache-slots.py` cover queue
+bounds, real compiler contention, client/authority loss and output controls.
+Representative concurrent bootstrap builds and slot-on/off identity parity
+remain unexecuted acceptance obligations; fixture source is not evidence.
 
 ## Approach review
 
@@ -59,3 +59,19 @@ daemon must not kill proofs, matching the cache degradation contract.
   observable and typed rejections prevent unbounded queues.
 - Fairness policy needs real contention fixtures; synthetic single-build
   tests cannot prove starvation control.
+
+## Grant admission and real contention controls
+
+The client validates build/request identity, schema, reason, policy/resource
+bounds, occupancy and grant wait before attaching compiler ownership to a
+receipt. Invalid receipts degrade to ordinary compilation; they cannot expand
+the supported scheduling limits. The daemon continues to independently own
+kernel-translated child credentials, pidfd and cooperative process group.
+
+The shared real-compiler harness holds compilers on source FIFOs rather than
+using sleeps as evidence of concurrency, tests an already-saturated Unix
+accept backlog, and kills the authority while a granted compiler is live.
+It requires that live compiler and subsequent degraded compiles preserve
+their real outcomes. Those checks are not yet captured execution and do not
+replace the representative bootstrap-build contention/output gates.
+

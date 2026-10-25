@@ -292,7 +292,9 @@ fn append_prevalidated_mount_args<'a>(
         }
         // Socket bind targets must not first be created as directories. Keep
         // the ordinary workspace-directory mount behavior byte-for-byte intact.
-        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock") {
+        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock")
+            || mount.guest_path == Path::new("/run/mantle/rust-waits.sock")
+        {
             use std::os::unix::fs::FileTypeExt as _;
             if !mount.read_only || !fs::symlink_metadata(&mount.host_path)?.file_type().is_socket() {
                 return Err(std::io::Error::other("compile runtime mount requires one read-only Unix socket"));

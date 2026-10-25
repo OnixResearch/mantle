@@ -1,0 +1,751 @@
+{
+  "adoption_tracks": {
+    "external-harness": 39
+  },
+  "assertion_coverage": [
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "ac53c1c9",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a38363a35030100000428007265736f757263652070656e64696e672075736167652063616e6e6f74206d696e742071756f7461050b007372632f6d61696e2e727306040056000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400c9c153ac",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 2891170249,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:86:5",
+            "type": "automatic"
+          },
+          "message": "resource pending usage cannot mint quota",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 86
+        },
+        "fingerprint": "0c6691cbd287a8e2e2dd4e553da6a68526356c41e1b4aff79a37327757cde929"
+      },
+      "message": "resource pending usage cannot mint quota",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "13dc1581",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3230303a35030100000426007265736f75726365206f76657273697a6564206c6564676572206661696c7320636c6f736564050b007372632f6d61696e2e7273060400c8000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04008115dc13",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 333190529,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:200:5",
+            "type": "automatic"
+          },
+          "message": "resource oversized ledger fails closed",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 200
+        },
+        "fingerprint": "12da0e96287b84ddfab0bcd2ba8a684d1594d230842212894a81d07878d91776"
+      },
+      "message": "resource oversized ledger fails closed",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "reachable",
+      "category": "outcome",
+      "failure_count": 0,
+      "id": "10a681cf",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3137343a35030100020434007265736f757263652061637475616c206163636f756e74696e67206368696c64206b696c6c656420616e642072656f70656e6564050b007372632f6d61696e2e7273060400ae000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790907006f7574636f6d650a0400cf81a610",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "outcome",
+          "compatibility_id": 279347663,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "reachable",
+          "logical_key": {
+            "source_site": "src/main.rs:174:5",
+            "type": "automatic"
+          },
+          "message": "resource actual accounting child killed and reopened",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 174
+        },
+        "fingerprint": "26ca469aac4289b069f423133573eda15f6926ebd40202310e3140030351cda1"
+      },
+      "message": "resource actual accounting child killed and reopened",
+      "observed": true,
+      "observed_hits": 3,
+      "success_count": 3
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "sometimes",
+      "category": "progress",
+      "failure_count": 0,
+      "id": "a5ff8f3d",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3237393a35030100010434007265736f75726365206661756c7420776f726b6c6f616420636f6d706c6574657320626f756e646564206f7065726174696f6e73050b007372632f6d61696e2e727306040017010000070400050000000816006d616e746c652d7265736f757263652d706f6c69637909080070726f67726573730a04003d8fffa5",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "progress",
+          "compatibility_id": 2784988989,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "sometimes",
+          "logical_key": {
+            "source_site": "src/main.rs:279:5",
+            "type": "automatic"
+          },
+          "message": "resource fault workload completes bounded operations",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 279
+        },
+        "fingerprint": "2f140d0e24a7527a6acf1ef027f65c5ef97a298594edb6d739f2a142691e805e"
+      },
+      "message": "resource fault workload completes bounded operations",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "bdedee2a",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a35343a35030100000434007265736f75726365207265747279206861732066726573682066656e636520616e64206578616374207072656465636573736f72050b007372632f6d61696e2e727306040036000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04002aeeedbd",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 3186486826,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:54:5",
+            "type": "automatic"
+          },
+          "message": "resource retry has fresh fence and exact predecessor",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 54
+        },
+        "fingerprint": "4f8b96b910ec0b0e8a9d8e4d01e89770b4c151562bd593a07e04ee7f261b4827"
+      },
+      "message": "resource retry has fresh fence and exact predecessor",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "ac89845a",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a36313a3903010000043d007265736f757263652072657472792072656a6563747320616d626967756f7573207374616c6520616e64206578686175737465642065766964656e6365050b007372632f6d61696e2e72730604003d000000070400090000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04005a8489ac",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 2894693466,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:61:9",
+            "type": "automatic"
+          },
+          "message": "resource retry rejects ambiguous stale and exhausted evidence",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 9,
+          "source_file": "src/main.rs",
+          "source_line": 61
+        },
+        "fingerprint": "53ef3221fcd6dc0a97301895fa06e4d3646a0771c2669df9726fef9f050886bf"
+      },
+      "message": "resource retry rejects ambiguous stale and exhausted evidence",
+      "observed": true,
+      "observed_hits": 10,
+      "success_count": 10
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "8f737ca8",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3138343a3503010000042a007265736f75726365206d697373696e67206c65646765722063616e6e6f742061646d6974207573616765050b007372632f6d61696e2e7273060400b8000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400a87c738f",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 2406710440,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:184:5",
+            "type": "automatic"
+          },
+          "message": "resource missing ledger cannot admit usage",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 184
+        },
+        "fingerprint": "573b3dcfc5c50b57c3c03853b16a3bb597890b69c26d34d1b8f8ae8f86cb097f"
+      },
+      "message": "resource missing ledger cannot admit usage",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "5a3dfa53",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3230323a35030100000439007265736f75726365206c6f7374206c65646765722073656e74696e656c2070726576656e74732073696c656e7420726570726f766973696f6e050b007372632f6d61696e2e7273060400ca000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a040053fa3d5a",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 1514011219,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:202:5",
+            "type": "automatic"
+          },
+          "message": "resource lost ledger sentinel prevents silent reprovision",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 202
+        },
+        "fingerprint": "5ae02b145007d78cbfac5964f0cf3357828a1ec852a08c36223565a5c80e23ac"
+      },
+      "message": "resource lost ledger sentinel prevents silent reprovision",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "a9730fec",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3131333a35030100000438007265736f757263652064656c6179656420776f726b6572206c6f73732063616e6e6f74206f766572777269746520736574746c656d656e74050b007372632f6d61696e2e727306040071000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400ec0f73a9",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 2842890220,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:113:5",
+            "type": "automatic"
+          },
+          "message": "resource delayed worker loss cannot overwrite settlement",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 113
+        },
+        "fingerprint": "88bf74598a656f3d3d3f73110b0214b64a9504e3af47009d3770cdc76d8db5cf"
+      },
+      "message": "resource delayed worker loss cannot overwrite settlement",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "sometimes",
+      "category": "progress",
+      "failure_count": 0,
+      "id": "dc1f4475",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3132353a3503010001043e007265736f757263652064656c61796564207472757374656420636f6d706c6574696f6e20736574746c65732070656e64696e67206163636f756e74696e67050b007372632f6d61696e2e72730604007d000000070400050000000816006d616e746c652d7265736f757263652d706f6c69637909080070726f67726573730a040075441fdc",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "progress",
+          "compatibility_id": 3693036661,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "sometimes",
+          "logical_key": {
+            "source_site": "src/main.rs:125:5",
+            "type": "automatic"
+          },
+          "message": "resource delayed trusted completion settles pending accounting",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 125
+        },
+        "fingerprint": "8f042d1315e0e055c3def3b0fbdb4d5deed84403149842132370056e7f5385f7"
+      },
+      "message": "resource delayed trusted completion settles pending accounting",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "2539973a",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3132303a35030100000437007265736f75726365206d616c666f726d6564207363686564756c652072656a6563746564206265666f7265207265736572766174696f6e050b007372632f6d61696e2e727306040078000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04003a973925",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 624531258,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:120:5",
+            "type": "automatic"
+          },
+          "message": "resource malformed schedule rejected before reservation",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 120
+        },
+        "fingerprint": "b36b8cf3a3dc9104a2937c44790317623d36dc348956c0e00d7d28142facd1a0"
+      },
+      "message": "resource malformed schedule rejected before reservation",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "reachable",
+      "category": "outcome",
+      "failure_count": 0,
+      "id": "422766dc",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a36373a35030100020434007265736f7572636520706f73697469766520616e642064656e696564207265747279206f7574636f6d6573206f62736572766564050b007372632f6d61696e2e727306040043000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790907006f7574636f6d650a0400dc662742",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "outcome",
+          "compatibility_id": 1109878492,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "reachable",
+          "logical_key": {
+            "source_site": "src/main.rs:67:5",
+            "type": "automatic"
+          },
+          "message": "resource positive and denied retry outcomes observed",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 67
+        },
+        "fingerprint": "b75c6aad17dc76ee944f407ce77d39bb33e5158968d83349e0130b5ee8dba10e"
+      },
+      "message": "resource positive and denied retry outcomes observed",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "054d9638",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3135333a35030100000441007265736f75726365206b696c6c6564206163636f756e74696e67206c656176657320636f6d706c657465206f6c64206f72206e6577207472616e73616374696f6e050b007372632f6d61696e2e727306040099000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a040038964d05",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 88970808,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:153:5",
+            "type": "automatic"
+          },
+          "message": "resource killed accounting leaves complete old or new transaction",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 153
+        },
+        "fingerprint": "cf08630541a73fe7519fe8b41903567f59d2cf2aa2b50c9e97ef3ce2a1c9fe67"
+      },
+      "message": "resource killed accounting leaves complete old or new transaction",
+      "observed": true,
+      "observed_hits": 3,
+      "success_count": 3
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "3601333f",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a38303a3503010000043c007265736f7572636520776f726b6572206c6f73732072657461696e732070726f6a65637420616e64206163636f756e74207265736572766174696f6e050b007372632f6d61696e2e727306040050000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04003f330136",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 906048319,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:80:5",
+            "type": "automatic"
+          },
+          "message": "resource worker loss retains project and account reservation",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 80
+        },
+        "fingerprint": "cf54780c95b67162b7eed894d5f04b69ee51f1a33ffc8183be0884265b4778ac"
+      },
+      "message": "resource worker loss retains project and account reservation",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "2d0a4e14",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3231303a35030100000440007265736f7572636520617574686f72697a656420617661696c61626c6520726573756c7420706f6c69637920616363657074732073636f706564207265757365050b007372632f6d61696e2e7273060400d2000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400144e0a2d",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 755650068,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:210:5",
+            "type": "automatic"
+          },
+          "message": "resource authorized available result policy accepts scoped reuse",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 210
+        },
+        "fingerprint": "df797db248692f98a38f388757a3cd131ac7d5b5a3f34ad3e66977d44e32611b"
+      },
+      "message": "resource authorized available result policy accepts scoped reuse",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 1,
+      "id": "ca2ec917",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3232303a35030100000427007265736f7572636520616273656e74204341532064656e69657320726573756c74207265757365050b007372632f6d61696e2e7273060400dc000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a040017c92eca",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 3392063767,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:220:5",
+            "type": "automatic"
+          },
+          "message": "resource absent CAS denies result reuse",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 220
+        },
+        "fingerprint": "ea371d1ba39284b7016672887c34efb5b3aabe60829b49c1f26d303231e101bc"
+      },
+      "message": "resource absent CAS denies result reuse",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 0
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "4be39a48",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021100017372632f6d61696e2e72733a38393a35030100000441007265736f757263652064656c61796564207374616c652066656e63652063616e6e6f74207265636f6e63696c652063757272656e74207265736572766174696f6e050b007372632f6d61696e2e727306040059000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400489ae34b",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 1273207368,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:89:5",
+            "type": "automatic"
+          },
+          "message": "resource delayed stale fence cannot reconcile current reservation",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 89
+        },
+        "fingerprint": "f194a4040264808a41072a7495f6270d3047eafd57010e28a5324c34e3250ba9"
+      },
+      "message": "resource delayed stale fence cannot reconcile current reservation",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "3e268479",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3130333a35030100000438007265736f75726365206475706c696361746520636f6d706c6574696f6e2063686172676573206f6e6365206163726f73732072656f70656e050b007372632f6d61696e2e727306040067000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a04007984263e",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 1042711673,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:103:5",
+            "type": "automatic"
+          },
+          "message": "resource duplicate completion charges once across reopen",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 103
+        },
+        "fingerprint": "f501926e3e84161c6c3c3e379ac18078bbc69511dae14653b9f656996017c23d"
+      },
+      "message": "resource duplicate completion charges once across reopen",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "a02748ec",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3136363a3503010000043b007265736f7572636520696e746572727570746564206163636f756e74696e67207265636f766572732065786163746c79206f6e6520636861726765050b007372632f6d61696e2e7273060400a6000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400ec4827a0",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 2686929132,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:166:5",
+            "type": "automatic"
+          },
+          "message": "resource interrupted accounting recovers exactly one charge",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 166
+        },
+        "fingerprint": "f879d75c8e453e4e9903dbe9c1148a589d0c42570059485e3b8aeae2499d29b6"
+      },
+      "message": "resource interrupted accounting recovers exactly one charge",
+      "observed": true,
+      "observed_hits": 3,
+      "success_count": 3
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "b80d0b48",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3232313a3503010000043d007265736f75726365204341532070726573656e636520616c6f6e65206772616e7473206e6f2063726f73732070726f6a65637420617574686f72697479050b007372632f6d61696e2e7273060400dd000000070400050000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400480b0db8",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 3087862600,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:221:5",
+            "type": "automatic"
+          },
+          "message": "resource CAS presence alone grants no cross project authority",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 5,
+          "source_file": "src/main.rs",
+          "source_line": 221
+        },
+        "fingerprint": "fa46939921e348ae167af074d861973ef090bf5eb0e56919b3207a2d319f358e"
+      },
+      "message": "resource CAS presence alone grants no cross project authority",
+      "observed": true,
+      "observed_hits": 1,
+      "success_count": 1
+    },
+    {
+      "adoption_tracks": [
+        "external-harness"
+      ],
+      "assert_type": "always",
+      "category": "resource-invariant",
+      "failure_count": 0,
+      "id": "13f6bae7",
+      "identity": {
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0128006275696c643a6d616e746c652d7265736f757263652d706f6c6963792d6368616f733a302e312e30021200017372632f6d61696e2e72733a3139323a3903010000043b007265736f75726365206d616c666f726d6564206f72206d697373696e67206163636f756e74696e67206669656c6473206661696c20636c6f736564050b007372632f6d61696e2e7273060400c0000000070400090000000816006d616e746c652d7265736f757263652d706f6c6963790912007265736f757263652d696e76617269616e740a0400e7baf613",
+        "catalog_token": "946f90e431287cf77eb92de871ad5d7a508e9e0e167fd0e4c91ec6cb85c0166f",
+        "descriptor": {
+          "category": "resource-invariant",
+          "compatibility_id": 334936807,
+          "guest": "mantle-resource-policy",
+          "identity_version": 1,
+          "kind": "always",
+          "logical_key": {
+            "source_site": "src/main.rs:192:9",
+            "type": "automatic"
+          },
+          "message": "resource malformed or missing accounting fields fail closed",
+          "namespace": "build:mantle-resource-policy-chaos:0.1.0",
+          "source_column": 9,
+          "source_file": "src/main.rs",
+          "source_line": 192
+        },
+        "fingerprint": "fa9129ad478dbba157c9490a6a959ef9d6d79c9265175621a85b312e2fce987e"
+      },
+      "message": "resource malformed or missing accounting fields fail closed",
+      "observed": true,
+      "observed_hits": 2,
+      "success_count": 2
+    }
+  ],
+  "catalog_status": "accepted",
+  "cataloged_assertions": 21,
+  "collision_safe_evidence": true,
+  "evidence_class": "instrumentation-dry-run",
+  "exercised_assertions": 21,
+  "failed_assertions": 1,
+  "gaps": [],
+  "instrumentation_sources": {
+    "external-harness": 39
+  },
+  "lifecycle_events": {
+    "chaoscontrol_assertion_catalog": 23,
+    "scenario_finish": 1,
+    "scenario_start": 1,
+    "setup_complete": 1,
+    "workload_done": 1,
+    "workload_init": 1
+  },
+  "observed_assertions": 21,
+  "random_choice_calls": 1,
+  "reachable_without_hit": [],
+  "registered_assertions": 21,
+  "replay_boundary": "local SDK JSONL proves instrumentation shape only; VM campaign and replay artifacts must be reviewed separately",
+  "replay_evidence": false,
+  "schema": "chaoscontrol.sdk.local_report.v2",
+  "setup_complete": true,
+  "sometimes_without_success": [],
+  "uncategorized_assertions": 0,
+  "unobserved_assertion_count": 0,
+  "unobserved_assertions": []
+}

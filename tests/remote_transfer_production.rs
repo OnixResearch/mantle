@@ -421,8 +421,9 @@ fn gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content() {
 fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth() {
     let _guard = serial_transfer_guard();
     // The capture worker runs a real bubblewrap sandbox build; a Nix build
-    // sandbox forbids the nested namespace setup, so skip there.
-    if std::env::var_os("NIX_BUILD_TOP").is_some() {
+    // sandbox forbids the nested namespace setup, so skip there. `nix develop`
+    // also sets NIX_BUILD_TOP, but only a development shell sets IN_NIX_SHELL.
+    if std::env::var_os("NIX_BUILD_TOP").is_some() && std::env::var_os("IN_NIX_SHELL").is_none() {
         eprintln!("SKIP: nested sandbox builds are unavailable inside a Nix build sandbox");
         return;
     }
@@ -449,7 +450,7 @@ fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_ch
     assert!(!failed.status.success());
     let stderr = String::from_utf8_lossy(&failed.stderr);
     assert!(stderr.contains("remote-failure-debug:"), "missing worker bundle ref: {stderr}");
-    assert!(stderr.contains("remote-local-executor-build"), "missing original execution failure: {stderr}");
+    assert!(stderr.contains("remote-worker-execution-failed"), "missing original execution failure: {stderr}");
     let bundles = recursive_failure_debug_bundle_dirs(&state_dir);
     assert_eq!(bundles.len(), EXPECTED_WORKER_AND_COORDINATOR_BUNDLES);
     let capture_outcomes = bundles
@@ -535,7 +536,7 @@ fn oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_fai
         .expect("run oversized captured remote sandbox failure");
     assert!(!failed.status.success());
     let stderr = String::from_utf8_lossy(&failed.stderr);
-    assert!(stderr.contains("remote-local-executor-build"));
+    assert!(stderr.contains("remote-worker-execution-failed"), "stderr={stderr}");
     assert!(stderr.contains("remote-failure-debug:"), "stderr={stderr}");
     let bundles = recursive_failure_debug_bundle_dirs(&state_dir);
     assert_eq!(bundles.len(), EXPECTED_WORKER_AND_COORDINATOR_BUNDLES);

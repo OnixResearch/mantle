@@ -1,0 +1,67 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "promote-full-bootstrap-parity",
+  "maintenance_owner": "Bootstrap parity, native-row and portable-verifier maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Current source contains independent v2 portable verification and parity bundle linkage. No full-bootstrap promotion or current independent-axis acceptance is established.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "I4",
+        "I5"
+      ],
+      "level": "partial-source-only",
+      "support": "Parity requires FullSource and root-relative proof_bundle_path, invokes full v2 verifier, then matches receipt/descriptor/authority/source/vendor identities. Portable script reruns verification; guard self-test is explicitly not proof. Full bundle relocation/positive acceptance still unobserved."
+    },
+    {
+      "task_ids": [
+        "I1",
+        "I2",
+        "I3",
+        "I6",
+        "I7",
+        "V1",
+        "V2",
+        "V3"
+      ],
+      "level": "unaccepted",
+      "support": "Must inspect complete promotion matrix, independent native/StageX/Guix row freshness and bounds, optional witness export and final positive/negative/runtime/lifecycle evidence. Historical StageX status fields and snapshot checker are not current full promotion authority."
+    }
+  ],
+  "local_remaining_actions": [
+    "Run standalone verifier guard self-test and focused action/parity CLI checks from final source; this is safe locally before full proof.",
+    "Collect each row independently with exact source/predecessor/output/receipt/freshness; never substitute normalized provider metadata or another row.",
+    "After genuine current cold proof, copy/export bundle and validate independently without producer-checkout absolute authority, then run trust/parity requirements and release verification.",
+    "Inspect I7 export while preserving no selected witness quorum; run current V3 rails after all integration."
+  ],
+  "external_missing_authority_or_capability": [
+    "Accepted independent native-row, StageX lineage and Guix evidence for required axes.",
+    "Verified same-final-source cold v2 proof from fixed-point dependency; source-review signatures/build witnesses cannot replace it."
+  ],
+  "evidence_references": [
+    ".cairn/changes/promote-full-bootstrap-parity/tasks.md:3-35",
+    "src/bootstrap_parity.rs:2531-2564",
+    "src/source_built_fixed_point_trust_report.rs:795-858",
+    "scripts/check-source-built-fixed-point-receipt.rs:12-82",
+    "src/source_built_fixed_point_verifier_self_test.rs:39-79",
+    "scripts/check-bootstrap-parity-snapshot-receipt.rs:104-110",
+    "bootstrap/evidence/stagex-lineage-provider-receipt.json:66-70"
+  ],
+  "repeatability_recipe": [
+    "nix develop -c cargo -Zscript scripts/check-source-built-fixed-point-receipt.rs --self-test --json",
+    "nix develop -c cargo test -p mantle --test bootstrap_parity_cli",
+    "nix develop -c cargo -Zscript scripts/check-source-built-fixed-point-receipt.rs --proof-root COPIED_PROOF_ROOT --json",
+    "mantle --json bootstrap trust-report --proof-root FRESH_PROOF_ROOT",
+    "mantle --json bootstrap parity-report --require live-bootstrap --require guix --require stagex",
+    "Run task V2/V3 final checks; retain exact JSON and failures, not only summary booleans."
+  ],
+  "observed_commands": [],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

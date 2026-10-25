@@ -1,0 +1,9 @@
+{
+  "blockers": [],
+  "passed": true,
+  "replay_boundary": "assertion quality is local instrumentation evidence only; accepted replay still requires snapshot-backed verdict artifacts",
+  "replay_evidence": false,
+  "schema": "chaoscontrol.sdk.assertion_quality_gate.v1",
+  "summary": "assertion quality gate passed for local instrumentation; this is not snapshot replay evidence"
+}
+sdk-assertion-quality: ok

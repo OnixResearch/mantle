@@ -1699,9 +1699,11 @@ fn write_feature_gated_no_default_vendored_registry_fixture(dir: &TempDir) -> st
     std::fs::create_dir_all(app_dir.join(".cargo")).unwrap();
     std::fs::create_dir_all(mid_dir.join("src")).unwrap();
     std::fs::create_dir_all(leaf_dir.join("src")).unwrap();
+    // The off-by-default `leaf` feature puts the optional leaf in Cargo's lock
+    // resolution: the lockfile lists it, but the default build must not select it.
     std::fs::write(
         app_dir.join("Cargo.toml"),
-        "[package]\nname = \"registry-no-default-feature-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_feature_mid = { package = \"demo-feature-mid\", version = \"=0.1.0\", default-features = false }\n",
+        "[package]\nname = \"registry-no-default-feature-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_feature_mid = { package = \"demo-feature-mid\", version = \"=0.1.0\", default-features = false }\n\n[features]\nleaf = [\"demo_feature_mid/with-leaf\"]\n",
     )
     .unwrap();
     std::fs::write(app_dir.join("src/lib.rs"), "pub fn value() -> u32 { demo_feature_mid::value() + 1 }\n").unwrap();

@@ -2,6 +2,8 @@
 """Fixed-input real Mantle builds and observe-only production selector replay.
 Requires an explicitly trusted, signed inputs-only cache containing static BusyBox.
 Metrics stay in persisted build logs, never in deterministic store outputs.
+Each independent round creates its private physical store before signed pull.
+Output verification selects the store-path basename and requires trusted results.
 """
 import argparse
 import gzip
@@ -95,6 +97,8 @@ class Driver:
             for index in range(corpus["rounds"]):
                 label = f'{workload["id"]}-{index}'
                 state, store = self.root / (label + "-state"), self.root / (label + "-store")
+                state.mkdir(mode=0o700)
+                store.mkdir(mode=0o700)
                 base = [self.args.mantle, "--nix-compat", "--store", store, "--state-dir", state]
                 self.command(label + "-inputs", base + ["store", "pull", "--from", self.args.input_cache,
                     "--trusted-public-keys", self.args.trusted_public_key, "--all"])
@@ -134,23 +138,29 @@ class Driver:
                     raise RuntimeError("unique bounded persisted builder log missing")
                 matches = re.findall(MARKER + r" elapsed_s=([0-9.]+) user_s=([0-9.]+) system_s=([0-9.]+) rss_kib=([0-9]+) input_blocks=([0-9]+) output_blocks=([0-9]+)", logs[0].read_text())
                 if len(matches) != 1:
-                    raise RuntimeError("actual child-tree measurements missing or ambiguous")
+                    raise RuntimeError("actual process-resource measurements missing or ambiguous")
                 elapsed, user, system, rss, reads, writes = matches[0]
                 ms = lambda value: int(Decimal(value) * 1000)
-                measured = quantities(int(rss) * 1024, sum(p.stat().st_size for p in output.iterdir()))
-                observation = {"schema": "mantle-resource-observation-v1", "attempt_id": label,
+                observation = {"schema": "mantle-resource-observation-v2", "attempt_id": label,
                     "action_family": workload["id"], "features": features, "machine_class": "large",
-                    "declared": declared, "selected": classes[2]["quantities"], "measured": measured,
-                    "queue_ms": 0, "execution_ms": ms(elapsed), "terminal_unix_s": int(time.time()),
+                    "policy_version": 1, "declared": declared, "selected": classes[2]["quantities"],
+                    "measured": {"cpu_units": None, "memory_bytes": None, "scratch_bytes": None},
+                    "scratch_sampled_peak_bytes": None, "queue_ms": None,
+                    "execution_ms": ms(elapsed), "terminal_unix_s": int(time.time()),
                     "cpu_ms": ms(user) + ms(system), "io_bytes": (int(reads) + int(writes)) * 512,
-                    "transfer_bytes": 0, "oom": "None", "outcome": "Success", "predecessor": None,
-                    "collector_version": "busybox-time-local-v1", "trusted_collector": True}
+                    "executor_output_bytes": None, "process_peak_rss_bytes": int(rss) * 1024,
+                    "transfer_bytes": None, "oom": "Unknown", "outcome": "Success", "predecessor": None,
+                    "collector_version": "busybox-time-local-v2", "trusted_collector": False}
                 history.append(observation)
                 warm = json.loads(self.command(label + "-warm", build))
                 if not warm["outcomes"][0]["cached"] or warm["outcomes"][0]["outputs"] != outcome["outputs"]:
                     raise RuntimeError("signed warm output identity/reuse mismatch")
-                self.command(label + "-verify", base + ["store", "verify", output,
+                output_selector = output.name
+                verified = self.command(label + "-verify", base + ["store", "verify", output_selector,
                     "--trusted-public-keys", self.args.trusted_public_key])
+                if not re.fullmatch(r"OK " + re.escape(output_selector)
+                                    + r"  trusted_signatures=[1-9][0-9]*/[1-9][0-9]*\n", verified):
+                    raise RuntimeError("signed output verification did not check the requested store path")
             replay_input = {"declared": declared, "features": features, "action_family": workload["id"],
                 "classes": classes, "history": history, "now_unix_s": int(time.time()),
                 "project_remaining_units": 1000, "account_remaining_units": 1000,
@@ -164,19 +174,23 @@ class Driver:
             if repeated != decision or decision["active"] != decision["static_decision"]:
                 raise RuntimeError("production replay is nondeterministic or observe-only changed dispatch")
             historical = decision["historical_decision"].get("Ok")
-            if historical is None or historical["reason"] != "HistoryUsed" or historical["samples"] != corpus["rounds"]:
-                raise RuntimeError("real measured samples were not admitted by the selector")
+            expected_exclusions = [[index, "HistoryUntrusted"] for index in range(corpus["rounds"])]
+            if (historical is None or historical["reason"] != "HistoryInsufficient"
+                    or historical["samples"] != 0 or historical["exclusions"] != expected_exclusions
+                    or historical["requested"] != declared):
+                raise RuntimeError("process-only local observations gained historical selection authority")
             records.append({"workload": workload, "observations": history, "artifacts": artifacts,
                 "decision": decision, "static_reservation_units": classes[decision["static_decision"]["Ok"]["class_index"]]["reservation_units"],
                 "historical_reservation_units": classes[historical["class_index"]]["reservation_units"],
                 "cost_scope": "reviewed class reservation units only; no billing or measured remote charge"})
-        save(self.root / "evidence.json", {"schema": "mantle-resource-benchmark-v1", "source_identities": identities,
+        save(self.root / "evidence.json", {"schema": "mantle-resource-benchmark-v2", "source_identities": identities,
             "corpus": corpus, "records": records, "commands": self.commands,
-            "scope": "real signed local builds; child-tree metrics; offline observe-only production decisions",
-            "measurement_limits": ["queue_ms is zero: this serial local corpus has no scheduler-queue measurement",
-                "scratch means append-only logical file high-water bytes, not filesystem allocated blocks",
+            "scope": "real signed local builds; process-resource metrics; offline observe-only fail-closed replay",
+            "measurement_limits": ["queue, transfer, executor-output bytes and scratch peaks are unknown, not zero",
+                "process RSS is not an execution-tree or dedicated-cgroup memory peak",
                 "large measurement class uses RLIMIT_AS and per-file RLIMIT_FSIZE, not a delegated worker cgroup",
-                "transfer_bytes is zero for offline execution; signed-input acquisition is outside measurement"],
+                "local timer observations are not authenticated worker reports and are excluded from history",
+                "this corpus does not measure historical placement benefits or remote accounting"],
             "non_claims": corpus["non_claims"]})
         print(self.root / "evidence.json")
 

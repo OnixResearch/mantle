@@ -162,6 +162,7 @@ pub fn cmd_build(
     interchange_dir: Option<&Path>,
     causal_trace: bool,
     compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<(), RunError> {
     cmd_build_with_source_fetch_overrides(
@@ -187,6 +188,7 @@ pub fn cmd_build(
         Vec::new(),
         None,
         compile_driver_runtime,
+        rust_wait_runtime,
         source_admission,
     )
 }
@@ -221,8 +223,18 @@ pub fn cmd_build_with_source_fetch_overrides(
     base_state_dirs: Vec<PathBuf>,
     root_registration: Option<crunch_store::RootRegistration>,
     compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<(), RunError> {
+    if let Some(runtime) = &rust_wait_runtime {
+        if hermeticity_mode == HermeticityMode::Strict {
+            return Err(RunError::Build("Rust wait diagnostics require non-proof local execution".into()));
+        }
+        crunch_build::rust_waits::validate_runtime(runtime).map_err(|error| RunError::Build(error.to_string()))?;
+        if runtime.directory.starts_with(output_dir) {
+            return Err(RunError::Build("Rust wait diagnostics must remain outside build outputs".into()));
+        }
+    }
     if let Some(runtime) = &compile_driver_runtime {
         runtime.validate().map_err(|error| RunError::Build(error.to_string()))?;
         crate::build_application::admit_compile_driver_environment()?;
@@ -254,6 +266,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         root_registration,
     )?;
     config.compile_driver_runtime = compile_driver_runtime;
+    config.rust_wait_runtime = rust_wait_runtime;
     if output_mode.is_evaluation_stream() {
         let completion = run_build_with_evaluation_stream(&config, StreamReporting { fix, logs_dir })?;
         return evaluation_stream_process_result(&completion);
@@ -363,6 +376,7 @@ pub(crate) fn prepare_local_build_config(
             source_fetch_overrides,
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: interchange_dir.map(Path::to_path_buf),
             base_state_dirs,
             source_admission,
@@ -419,7 +433,12 @@ fn print_watch_notice(
             print_evaluation_notice(&mut output, mode, diagnostics)?;
         }
         crunch_pipeline::WatchNotice::Goals { generation, diff } => {
-            writeln!(output, "watch generation {generation}: {} admitted goal event(s)", diff.events.len())?;
+            writeln!(
+                output,
+                "watch run {} generation {generation}: {} admitted goal event(s)",
+                diff.run_identity,
+                diff.events.len()
+            )?;
             for event in diff.events.iter().take(32) {
                 writeln!(output, "  {} {}", event.kind.as_str(), event.goal_identity.as_deref().unwrap_or(""))?;
             }
@@ -433,7 +452,11 @@ fn print_watch_notice(
                 .iter()
                 .find_map(|event| event.diagnostic.as_deref())
                 .unwrap_or("watched source edit rejected");
-            writeln!(output, "watch edit rejected: {diagnostic}; previous goals remain admitted")?;
+            writeln!(
+                output,
+                "watch run {} edit rejected: {diagnostic}; previous goals remain admitted",
+                diff.run_identity
+            )?;
         }
         crunch_pipeline::WatchNotice::PendingCancellation { generation, stale } => {
             writeln!(

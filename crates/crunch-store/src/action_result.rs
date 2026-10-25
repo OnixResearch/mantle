@@ -1146,19 +1146,27 @@ mod tests {
     // unrelated test running in parallel cannot consume the armed counter.
     struct FaultFixture {
         _lock: FixtureMutexGuard<'static, ()>,
+        // Counter ownership is thread-local: never move an armed guard to
+        // another runtime worker, including during cancellation or unwinding.
+        _thread_bound: std::marker::PhantomData<std::rc::Rc<()>>,
     }
 
     impl FaultFixture {
         async fn new(counter: u64) -> Self {
             assert!(counter > 0);
             let lock = FAULT_FIXTURE_LOCK.lock().await;
+            assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), u64::MAX);
+            assert!(!crate::fault_scope::armed());
             assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);
             fault_injection::set_trigger_function(record_fault_site);
             *FIRED_SITE.lock() = None;
             SLEEPINESS.store(0, Ordering::SeqCst);
             FAULT_INJECT_COUNTER.store(counter, Ordering::SeqCst);
             crate::fault_scope::arm();
-            Self { _lock: lock }
+            Self {
+                _lock: lock,
+                _thread_bound: std::marker::PhantomData,
+            }
         }
 
         fn assert_fired_at(&self, file: &str, error: &str) {
@@ -1169,6 +1177,16 @@ mod tests {
             assert!(error.contains(&format!("{crate_name}:{observed_file}:{line} -> injected fault")), "{error}");
             assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), 0);
             assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);
+        }
+
+        async fn assert_restored() {
+            // Keep ownership while observing restoration, otherwise a fixture
+            // on another test thread can arm between Drop and the assertion.
+            let _lock = FAULT_FIXTURE_LOCK.lock().await;
+            assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), u64::MAX);
+            assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);
+            assert!(!crate::fault_scope::armed());
+            assert!(FIRED_SITE.lock().is_none());
         }
     }
 
@@ -1319,8 +1337,19 @@ mod tests {
         drop(destination);
         let mut nar_bytes = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut consumer, &mut nar_bytes).await.unwrap();
-        assert!(nar_bytes.starts_with(b"\x0d\0\0\0\0\0\0\0nix-archive-1"));
-        assert!(nar_bytes.windows(bytes.len()).any(|window| window == bytes));
+        let output = temp.path().join("rendered-output");
+        std::fs::write(&output, &bytes).unwrap();
+        let expected = crunch_nar::observe_path(
+            &output,
+            crunch_nar::FilesystemNarRequest::new(
+                nix_compat::nixhash::HashAlgo::Sha256,
+                crunch_nar::CaseHackPolicy::Disabled,
+                4096,
+            ),
+        )
+        .unwrap();
+        assert_eq!(u64::try_from(nar_bytes.len()).unwrap(), expected.nar_size);
+        assert_eq!(crunch_nar::digest_bytes(&nar_bytes, expected.algorithm), expected.digest);
 
         let cache = LocalActionResultStore::new(temp.path());
         let record = signed_record("io-fault-default");
@@ -1330,7 +1359,7 @@ mod tests {
         assert_eq!(cache.lookup(&record.record.action_ref).await.unwrap().records, vec![record]);
         assert!(FIRED_SITE.lock().is_none());
         drop(fixture);
-        assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), u64::MAX);
+        FaultFixture::assert_restored().await;
     }
 
     #[tokio::test]
@@ -1346,7 +1375,7 @@ mod tests {
         assert!(message.starts_with("reading blob: "));
         fixture.assert_fired_at("build_io.rs", &message);
         drop(fixture);
-        assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), u64::MAX);
+        FaultFixture::assert_restored().await;
     }
 
     #[tokio::test]
@@ -1354,7 +1383,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let handle = fault_store(temp.path());
         let node = stored_file(&handle, b"build archive").await;
-        let (mut destination, _) = tokio::io::duplex(4096);
+        let (mut destination, mut consumer) = tokio::io::duplex(4096);
         let fixture = FaultFixture::new(1).await;
         let error = handle.render_nar(&node, &mut destination).await.unwrap_err();
         let crate::Error::Export(message) = error else {
@@ -1362,32 +1391,113 @@ mod tests {
         };
         assert!(message.starts_with("streaming NAR: "));
         fixture.assert_fired_at("handle.rs", &message);
+        drop(destination);
+        let mut written = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut consumer, &mut written).await.unwrap();
+        assert!(written.is_empty(), "injected stream failure must not write an archive");
     }
 
     #[tokio::test]
-    async fn io_fault_cache_write_does_not_publish_a_cache_record() {
+    async fn io_fault_cache_publication_is_undiscoverable_until_retry_commits() {
+        // The same wrapped write/fsync sites serve the record and index.
+        // Index failure may leave a durable record, never a discoverable hit.
+        for (counter, diagnostic, record_linked) in [
+            (1, "action-result-publication-write-temp:", false),
+            (2, "action-result-publication-sync-temp:", false),
+            (3, "action-result-publication-write-temp:", true),
+            (4, "action-result-publication-sync-temp:", true),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let cache = LocalActionResultStore::new(temp.path());
+            let record = signed_record("io-fault-publication");
+            let fixture = FaultFixture::new(counter).await;
+            let error = cache.publish(&record).await.unwrap_err();
+            assert!(error.starts_with(diagnostic), "{error}");
+            fixture.assert_fired_at("action_result.rs", &error);
+            let record_path = cache.record_path(&record.record.result_ref).unwrap();
+            let marker_path = cache.marker_path(&record.record.action_ref, &record.record.result_ref).unwrap();
+            assert_eq!(record_path.exists(), record_linked);
+            assert!(!marker_path.exists());
+            // No temporary file survives either failure phase.
+            assert_eq!(std::fs::read_dir(record_path.parent().unwrap()).unwrap().count(), usize::from(record_linked));
+            if record_linked {
+                assert_eq!(std::fs::read_dir(marker_path.parent().unwrap()).unwrap().count(), 0);
+            } else {
+                assert!(!marker_path.parent().unwrap().exists());
+            }
+            let lookup = cache.lookup(&record.record.action_ref).await.unwrap();
+            assert!(lookup.records.is_empty());
+            assert!(lookup.index.result_refs.is_empty());
+            drop(fixture);
+
+            let retry_fixture = FaultFixture::new(u64::MAX).await;
+            let retry = cache.publish(&record).await.unwrap();
+            assert_eq!(
+                retry.record_status,
+                if record_linked {
+                    ActionResultPublicationStatus::Duplicate
+                } else {
+                    ActionResultPublicationStatus::Published
+                }
+            );
+            assert_eq!(retry.index_status, ActionResultPublicationStatus::Published);
+            assert_eq!(cache.lookup(&record.record.action_ref).await.unwrap().records, vec![record]);
+            assert!(FIRED_SITE.lock().is_none());
+            drop(retry_fixture);
+        }
+        FaultFixture::assert_restored().await;
+    }
+
+    #[tokio::test]
+    async fn io_fault_counter_is_serialized_and_unrelated_store_reads_cannot_consume_it() {
         let temp = tempfile::tempdir().unwrap();
-        let cache = LocalActionResultStore::new(temp.path());
-        let record = signed_record("io-fault-cache-write");
+        let handle = fault_store(temp.path());
+        let node = stored_file(&handle, b"thread-owned output").await;
         let fixture = FaultFixture::new(1).await;
-        let error = cache.publish(&record).await.unwrap_err();
-        assert!(error.starts_with("action-result-publication-write-temp:"), "{error}");
-        fixture.assert_fired_at("action_result.rs", &error);
-        assert!(!cache.record_path(&record.record.result_ref).unwrap().exists());
-        assert!(cache.lookup(&record.record.action_ref).await.unwrap().records.is_empty());
+        let mut waiting = Box::pin(FaultFixture::new(2));
+        assert!(matches!(futures::poll!(&mut waiting), std::task::Poll::Pending));
+
+        let blobs = handle.blob_service();
+        let other_node = node.clone();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let bytes = runtime.block_on(crate::build_io::read_file_node(blobs.as_ref(), &other_node, 64)).unwrap();
+            assert_eq!(bytes, b"thread-owned output");
+        })
+        .join()
+        .unwrap();
+        assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), 1);
+        assert!(FIRED_SITE.lock().is_none());
+        let error = crate::build_io::read_file_node(handle.blob_service().as_ref(), &node, 64).await.unwrap_err();
+        fixture.assert_fired_at("build_io.rs", &error.to_string());
+        drop(fixture);
+
+        let next = waiting.await;
+        assert_eq!(FAULT_INJECT_COUNTER.load(Ordering::SeqCst), 2);
+        assert!(FIRED_SITE.lock().is_none());
+        drop(next);
+        FaultFixture::assert_restored().await;
     }
 
     #[tokio::test]
-    async fn io_fault_postbuild_record_fsync_does_not_publish_cache_record() {
+    async fn io_fault_guard_restores_ownership_after_unwind() {
+        let panic = futures::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(async {
+            let _fixture = FaultFixture::new(1).await;
+            panic!("fixture body failed");
+        }))
+        .await;
+        assert!(panic.is_err());
+        FaultFixture::assert_restored().await;
+        // A subsequent real publication must succeed, not inherit the fault.
+        let fixture = FaultFixture::new(u64::MAX).await;
         let temp = tempfile::tempdir().unwrap();
         let cache = LocalActionResultStore::new(temp.path());
-        let record = signed_record("io-fault-postbuild-record-fsync");
-        let fixture = FaultFixture::new(2).await;
-        let error = cache.publish(&record).await.unwrap_err();
-        assert!(error.starts_with("action-result-publication-sync-temp:"), "{error}");
-        fixture.assert_fired_at("action_result.rs", &error);
-        assert!(!cache.record_path(&record.record.result_ref).unwrap().exists());
-        assert!(cache.lookup(&record.record.action_ref).await.unwrap().records.is_empty());
+        let record = signed_record("after-unwind");
+        cache.publish(&record).await.unwrap();
+        assert_eq!(cache.lookup(&record.record.action_ref).await.unwrap().records, vec![record]);
+        assert!(FIRED_SITE.lock().is_none());
+        drop(fixture);
+        FaultFixture::assert_restored().await;
     }
 
     #[tokio::test]

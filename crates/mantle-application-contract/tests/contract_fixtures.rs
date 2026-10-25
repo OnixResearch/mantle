@@ -29,6 +29,7 @@ const PUBLIC_ROOTS: &[&str] = &[
     "artifact",
     "attest",
     "bootstrap",
+    "bootstrap-pin",
     "build",
     "cargo-build-bundle",
     "check",

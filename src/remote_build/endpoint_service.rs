@@ -142,10 +142,185 @@ pub fn exchange(socket: &Path, request: &Request) -> io::Result<Reply> {
     }
     let reply: Reply = serde_json::from_slice(&response).map_err(io::Error::other)?;
     let schema = match &reply {
-        Reply::Resolved { schema, .. } | Reply::Revoked { schema } => schema,
+        Reply::Resolved { schema, binding } => {
+            binding.validate().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "endpoint-descriptor"))?;
+            schema
+        }
+        Reply::Revoked { schema } => schema,
     };
     if schema != ENDPOINT_PROTOCOL_SCHEMA {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "endpoint-schema"));
     }
+    let matches_request = match (request, &reply) {
+        (Request::Resolve { binding: expected, .. }, Reply::Resolved { binding, .. }) => binding == expected,
+        (
+            Request::Create {
+                spec,
+                expected_previous_generation,
+                ..
+            },
+            Reply::Resolved { binding, .. },
+        ) => {
+            let expected_generation =
+                expected_previous_generation.map_or(Some(1), |generation| generation.checked_add(1));
+            binding.spec == *spec && Some(binding.generation) == expected_generation
+        }
+        (Request::Revoke { .. }, Reply::Revoked { .. }) => true,
+        _ => false,
+    };
+    if !matches_request {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "endpoint-reply-mismatch"));
+    }
     Ok(reply)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::net::UnixListener;
+
+    use crunch_remote_core::endpoint::EndpointKind;
+
+    use super::*;
+
+    fn binding() -> EndpointBinding {
+        EndpointBinding {
+            spec: EndpointBindingSpec {
+                kind: EndpointKind::BuilderTicket,
+                name: "builder-a".into(),
+                scope: "project-a".into(),
+                trust_requirement: "full-reviewed-key".into(),
+                store_prefix: "/mantle/store".into(),
+                expires_unix_s: u64::MAX,
+            },
+            generation: 1,
+        }
+    }
+
+    fn receive(request: &Request, reply: Reply) -> io::Result<Reply> {
+        let root = tempfile::tempdir().unwrap();
+        let socket = root.path().join("endpoint.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut frame = Vec::new();
+            io::BufReader::new(&mut stream).read_until(b'\n', &mut frame).unwrap();
+            let mut encoded = serde_json::to_vec(&reply).unwrap();
+            encoded.push(b'\n');
+            stream.write_all(&encoded).unwrap();
+        });
+        let result = exchange(&socket, request);
+        server.join().unwrap();
+        result
+    }
+
+    #[test]
+    fn socket_resolution_rejects_substituted_descriptor_and_operation() {
+        let original = binding();
+        let request = Request::Resolve {
+            schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            binding: original.clone(),
+        };
+        for mutation in 0..7 {
+            let mut candidate = original.clone();
+            match mutation {
+                0 => candidate.generation += 1,
+                1 => candidate.spec.name = "builder-b".into(),
+                2 => candidate.spec.scope = "project-b".into(),
+                3 => candidate.spec.trust_requirement = "other-reviewed-key".into(),
+                4 => candidate.spec.store_prefix = "/other/store".into(),
+                5 => candidate.spec.kind = EndpointKind::Transfer,
+                _ => candidate.generation = 0,
+            }
+            assert_eq!(
+                receive(&request, Reply::Resolved {
+                    schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+                    binding: candidate,
+                })
+                .unwrap_err()
+                .kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
+        assert_eq!(
+            receive(&request, Reply::Revoked {
+                schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            })
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidData
+        );
+        let Reply::Resolved { binding: resolved, .. } = receive(&request, Reply::Resolved {
+            schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            binding: original.clone(),
+        })
+        .unwrap() else {
+            panic!("expected exact descriptor")
+        };
+        assert_eq!(resolved, original);
+    }
+
+    #[test]
+    fn socket_creation_requires_exact_successor_and_specification() {
+        let original = binding();
+        let request = Request::Create {
+            schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            spec: original.spec.clone(),
+            expected_previous_generation: Some(original.generation),
+        };
+        for generation in [0, 1, 3, u64::MAX] {
+            let mut candidate = original.clone();
+            candidate.generation = generation;
+            assert_eq!(
+                receive(&request, Reply::Resolved {
+                    schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+                    binding: candidate,
+                })
+                .unwrap_err()
+                .kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
+        let mut successor = original;
+        successor.generation += 1;
+        let mut substituted = successor.clone();
+        substituted.spec.scope = "another-project".into();
+        assert_eq!(
+            receive(&request, Reply::Resolved {
+                schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+                binding: substituted,
+            })
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(
+            receive(&request, Reply::Revoked {
+                schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            })
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidData
+        );
+        let Reply::Resolved { binding: created, .. } = receive(&request, Reply::Resolved {
+            schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            binding: successor.clone(),
+        })
+        .unwrap() else {
+            panic!("expected exact successor")
+        };
+        assert_eq!(created, successor);
+        let revoke = Request::Revoke {
+            schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+            binding: successor.clone(),
+        };
+        assert_eq!(
+            receive(&revoke, Reply::Resolved {
+                schema: ENDPOINT_PROTOCOL_SCHEMA.into(),
+                binding: successor,
+            })
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidData
+        );
+    }
 }

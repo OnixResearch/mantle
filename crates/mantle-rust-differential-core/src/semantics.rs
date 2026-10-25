@@ -102,6 +102,9 @@ pub fn validate_observation(observation: &Observation) -> Result<(), Error> {
         }
     }
     crate::manifest::validate_identities(&observation.accepted_outputs)?;
+    if observation.status == Status::Success && observation.accepted_outputs.is_empty() {
+        return Err(Error::Missing);
+    }
     let mut units = BTreeSet::new();
     let mut diagnostic_count: usize = 0;
     for unit in &observation.units {
@@ -264,7 +267,22 @@ fn validate_diagnostic(value: &Value, depth: u32) -> Result<(), Error> {
     if depth > MAX_DIAGNOSTIC_DEPTH {
         return Err(Error::Bound);
     }
-    let diagnostic = object(value, &["message", "code", "level", "spans", "children", "rendered"])?;
+    let diagnostic = object(value, &[
+        "message",
+        "code",
+        "level",
+        "spans",
+        "children",
+        "rendered",
+        "$message_type",
+    ])?;
+    // Cargo retains rustc's optional transport discriminator; it is not an
+    // extensible semantic field, and unknown record kinds still fail closed.
+    if let Some(message_type) = diagnostic.get("$message_type")
+        && message_type.as_str() != Some("diagnostic")
+    {
+        return Err(Error::Malformed);
+    }
     text(diagnostic.get("message"), false)?;
     text(diagnostic.get("level"), false)?;
     let level = diagnostic.get("level").and_then(Value::as_str).ok_or(Error::Malformed)?;

@@ -172,6 +172,13 @@ An archive path that no import key signed fails with `untrusted-signature`, and 
 
 ## Admission and reads
 
+Signed cache pulls create the configured physical export directory when it is
+absent, then stage each admitted output beside its destination before
+publication. The physical `--store` location does not change the logical
+`--store-prefix` identity or signature checks. A materialization failure is a
+hard export error even when the PathInfo has already been persisted; it is not
+a successful pull or permission to trust a partial physical output.
+
 Casita publication starts only after Mantle's existing admission checks pass.
 Mantle checks the envelope's NAR size and SHA-256 against the signed PathInfo, stages the envelope without a root, and publishes the root in one conditional Casita commit that expects the root to be absent.
 If the root already targets an identical envelope, the admission succeeds without a write.
@@ -269,6 +276,11 @@ The import keeps the original signatures, adds none, and registers no root, so p
 ## Pinned Casita dependency
 
 Mantle depends on `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features off and only `native` and `experimental` enabled.
+The common BLAKE3 pin is now `=1.8.5`, as recorded in
+[ADR 0122](../adr/0122-use-native-blake3-streaming-at-snix-boundary.md);
+the manifest, lock, Nix admission and vendor generator require that version.
+The original Casita admission's `=1.8.2` receipts are historical, not a request
+to downgrade this graph or edit an existing vendor snapshot.
 Casita has no release, and upstream says that its `experimental` API may change between revisions.
 The pinned revision does not compile unmodified in Mantle's dependency graph.
 The tracked one-line `patches/casita-blake3-finalize.patch` is applied to the
@@ -350,6 +362,20 @@ cargo test -p mantle --test rust_plan_cli casita_rust_plan_reuses_compiled_unit_
 cargo test -p mantle --test example_projects casita_local_action_result_reuses_verified_output_after_export_removal
 cargo test -p crunch-rust-cache --lib casita_
 ```
+The current-source conformance extensions (2026-10-23) are implemented but
+**not yet executed**. The signed core rail removes both closure exports and
+rehydrates them in a new test process through public builder/action-result
+capabilities, checking signed PathInfo and measured NAR facts. It checks that
+PathInfo-only reuse creates neither Rust cache state nor Casita castore payload
+roots. Its public Rust cache branch removes producer artifacts and restores in
+a separate child after guarded Casita CLI GC completes, checking the selected
+result identity, exact artifact bytes and `compiler_executed: false`.
+The fixed-output CLI rail removes the source before its first fresh-process
+cache hit, then repeats export deletion and reuse after a pinned plan-bound GC,
+checking zero builds, equal signed NAR facts and restored bytes under both
+backends. Run the two named core/fixed-output rails with
+`-- --exact --nocapture --test-threads=1` to retain their evidence reports;
+existing receipts do not verify these extensions.
 
 Current-source reconciliation smoke (2026-10-17), separate from the historical
 rails below, exercised signed physical output export/cache and real

@@ -54,6 +54,126 @@ The newer [Casita admission run](#casita-admission-run-2026-09-30) reports open 
 | license policy | `winx 0.36.4` | fixed policy gap | admitted only its declared `Apache-2.0 WITH LLVM-exception` SPDX expression; crate license checks and confidence remain enabled |
 | source policy | `nickel-export-core` | fixed policy gap | admitted only `https://github.com/OnixResearch/nickel-export`; Cargo/Nix/spec checks still enforce revision `257fafc1c746f1faf156207043a4c826bfb16d49` |
 
+## Casita source review and audit observations (2026-10-23)
+
+The initial source review below was read-only, not an audit execution. The
+configured before/after observations have separate captured commands, outcomes
+and limitations. Historical admission runs retain their original versions.
+
+- `Cargo.toml` and `Cargo.lock`, `flake.nix::casitaSourceAdmitted` and
+  `scripts/vendor-deps.py::check_pins` now agree on the single BLAKE3
+  `1.8.5` resolution. [ADR 0122](../adr/0122-use-native-blake3-streaming-at-snix-boundary.md)
+  supersedes the original Casita admission's `1.8.2` constraint. Casita stays
+  at `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with only `native` and
+  `experimental`; the nine Turso packages stay at `0.8.0-pre.7` from
+  `dca55133caa690f90dcdd58d3c4329fb0703659c`, and `astral-tokio-tar` stays
+  at `0.6.4`. No stale pin is restored and no vendor file is edited.
+- The available vendored manifests declare Casita `Apache-2.0`, Turso `MIT`,
+  and `cfg_block 0.1.1` a `license-file`. That file contains the Apache-2.0
+  notice and license URL. `deny.toml` admits both SPDX licenses, keeps
+  `exceptions = []`, and lists the Casita/Turso origins separately under
+  `unknown-git = "deny"`. This confirms declared policy/material only;
+  freshness of that ignored vendor closure and a current license-scanner
+  result still require the generation/check and configured audit below.
+- The current lock retains `bao-tree 0.16.1` → `genawaiter 0.99.1` →
+  `genawaiter-proc-macro 0.99.1` → `proc-macro-error 0.4.12`. The available
+  proc-macro manifest requires `proc-macro-error = "0.4"`. The
+  [RustSec advisory RUSTSEC-2024-0370](https://rustsec.org/advisories/RUSTSEC-2024-0370.html),
+  read on 2026-10-23, still classifies it as **Unmaintained**, not a security
+  vulnerability, and lists **no patched versions**. With the exact upstream
+  pins and no new waivers, forks or vendor edits, an upstream reviewed
+  dependency replacement is the remaining prerequisite for that finding;
+  a lock-only safe upgrade is not available from the advisory. This review
+  does not establish the complete current advisory set.
+- The initially reviewed lock included `h2 0.4.16`, `rustls 0.23.45`, `bitmaps 3.2.1`,
+  `imbl-sized-chunks 0.1.3` (also `0.2.0`), and `rsa 0.9.10`. Their presence
+  is source bookkeeping, not a new vulnerability or clean-audit verdict.
+  Likewise current individual Git allow-list entries do not turn the older
+  failed source-policy run into a pass. No old remote-builder, shell-fetch,
+  source-compiler or vendor-drift failure is assumed to persist today.
+
+Run the following from a clean checkout of the final source subject, with
+the pinned Nix toolchain and its required sources available. Retain exact
+commands, tool/advisory-database identities, output and source subject.
+The repository generator requires an absent `vendor-deps/` for `generate`;
+when one exists, run `check` first and preserve it rather than overwriting it.
+
+```sh
+nix build --no-write-lock-file --no-link --print-out-paths .#checks.x86_64-linux.casita-vendor-closure
+nix build --no-write-lock-file --no-link --print-out-paths .#checks.x86_64-linux.casita-crunch-store-check
+nix develop --no-write-lock-file --command python3 scripts/vendor-deps.py generate
+nix develop --no-write-lock-file --command python3 scripts/vendor-deps.py check
+nix develop --no-write-lock-file --command python3 scripts/vendor-deps.py dev-shell-check
+nix develop --no-write-lock-file --command cargo check --locked --offline -p crunch-store --lib
+nix develop --no-write-lock-file --command cargo deny check --config deny.toml
+```
+
+For the separate checkout-local source map, run this **outside** the default
+shell's immutable Cargo source replacement, with a fresh Cargo home/target:
+
+```sh
+mkdir -p target
+CARGO_HOME="$(mktemp -d)" \
+CARGO_TARGET_DIR="$(mktemp -d "$PWD/target/casita-vendor.XXXXXXXX")" \
+  cargo check --locked --offline -p crunch-store --lib --config .cargo/vendor-config.toml
+```
+
+Do not combine both source maps or manually patch generated files. The
+full audit must use `deny.toml`, not an unconfigured/default policy; missing
+registry-index/yanked-status data or an unavailable advisory database must
+remain explicit limitations, never a clean result. A source-built compiler
+and an exact refreshed self-build archive still need their own execution
+receipts; the declared Rust 1.94.1 floor and successful dependency resolution
+alone cannot qualify them. T1.2, T1.3, T4.6 and T4.7 remain open pending the
+corresponding final-subject proofs and upstream-dependency resolution.
+
+### Configured audit observation (2026-10-23, before remediation)
+
+The actual `cargo deny check --config deny.toml` exited 1 with
+`advisories FAILED, bans ok, licenses ok, sources ok`. The
+[machine observation](../.cairn/changes/adopt-casita-store-backend/evidence/configured-audit-2026-10-23.json)
+retains the exact command, selected input identities, all 13 fatal advisory
+rows and the complete losslessly compressed stderr. It is not a clean audit.
+
+The captured lock contains four Rustls `0.23.45` findings (RUSTSEC-2026-0346
+through -0349), Rustls WebPKI `0.103.15` (-0382), both WebPKI root packages
+`1.0.6` (-0381/-0383), and Ruzstd `0.8.2` (-0344), in addition to the
+Bitmaps, Imbl Sized Chunks, Proc Macro Error, RSA and Unsafe Libyaml findings.
+The earlier `rustls 0.23.45` upgrade is therefore no longer sufficient for
+the current advisory database. The audit also reports unavailable registry
+index entries for yanked-status checks; those warnings are preserved, not
+treated as successful checks. No new waiver or source-policy bypass was used.
+
+This observation predates subsequent remediation and is not an atomic
+before/after identity of every workspace input. T4.7 remains open until the
+configured final-lock audit and its outstanding upstream obligations pass.
+
+### Configured audit and decoder observation after compatible remediation
+
+The compatible update selects Ruzstd `0.9.1`, Rustls `0.23.46`, Rustls WebPKI
+`0.103.16`, and both WebPKI root packages at `1.0.10`. The subsequent configured
+audit still exited **1** with `advisories FAILED, bans ok, licenses ok, sources ok`.
+The [after-remediation observation](../.cairn/changes/adopt-casita-store-backend/evidence/configured-audit-after-remediation-2026-10-23.json)
+retains its exact command, selected identities, complete compressed stderr and
+the eight advisories no longer reported. The five remaining fatal findings are
+Bitmaps `3.2.1`, Imbl Sized Chunks `0.1.3`, Proc Macro Error `0.4.12`, RSA
+`0.9.10`, and Unsafe Libyaml `0.2.11`. Missing registry-index/yanked-status data
+remains an explicit limitation. No new waiver, source-policy bypass, upstream
+fork or vendor hand edit was used; the protected Casita, Turso, tar and BLAKE3
+pins are unchanged. A compatible Nickel-vector dry run changed no packages.
+
+The [decoder runtime observation](../.cairn/changes/adopt-casita-store-backend/evidence/archive-decoder-runtime-2026-10-23.json)
+retains the failing Ruzstd `0.8.2` reproducer and actual Mantle fetcher results:
+valid tar.zst bytes produce the expected payload and a separately selected
+output verifies with `trusted_signatures=1/1; 1 checked, 0 mismatches`; a block
+claiming 1,025 bytes with a 1,024-byte window is rejected without publication.
+The original automated full-path verification filter matched zero entries and
+is not verification evidence. The successful command selects the exact output
+basename. The `crunch-build` fetcher owns the positive/negative regression pair;
+this finite runtime observation is not arbitrary-archive safety, a clean audit,
+release eligibility or Cairn acceptance. T4.7 remains unchecked.
+
+
 ## Casita admission run (2026-09-30)
 
 This run belongs to the Cairn change `adopt-casita-store-backend`. Its results come from the vendor rail report; no transcript file is checked in. The run failed, so it is not passing audit evidence.
@@ -63,11 +183,11 @@ Admitted sources and lock updates:
 - `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features disabled and exactly `native` and `experimental`
 - `turso`, `turso_core`, `turso_ext`, `turso_macros`, `turso_parser`, `turso_sdk_kit`, `turso_sdk_kit_macros`, `turso_sync_engine`, and `turso_sync_sdk_kit`, each locked at 0.8.0-pre.7 from `https://github.com/cachix/turso.git` revision `dca55133caa690f90dcdd58d3c4329fb0703659c` via `casita`
 - `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and all nine locked Turso identities plus the `casita`, `astral-tokio-tar`, and `blake3` entries
-- `blake3` stays at `1.8.2`; `astral-tokio-tar` moves from `0.6.3` to `0.6.4`
+- The original admission retained `blake3 1.8.2`; the current `1.8.5` resolution is described above. `astral-tokio-tar` moved from `0.6.3` to `0.6.4`.
 - `patches/casita-blake3-finalize.patch` changes one hunk in `crates/casita/src/nar.rs` for this revision only: method resolution in Mantle's graph selects `sha2::Digest::finalize` there, so the patch calls the BLAKE3 method explicitly; the Nix vendor closure and `scripts/vendor-deps.py` both apply it
 - [ADR 0082](../adr/0082-select-store-backends-explicitly-and-admit-casita.md) lists the experimental Casita API that Mantle uses; a new Casita revision or feature set needs its own reviewed change that updates ADR 0082 and this record and reruns the checks below
 
-The [complete admission lock inventory](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#complete-original-casita-lock-admission-inventory) compares the pre-admission lock to the unchanged current lock: ten git and 89 registry identities added (including `astral-tokio-tar 0.6.4`), `astral-tokio-tar 0.6.3` removed, and dependency lists modified on 50 previously present identities. It records every new locked git identity and every changed lock-record identity; none is a passing clean-source closure or audit claim.
+The [complete admission lock inventory](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#complete-original-casita-lock-admission-inventory) compares the pre-admission lock to the lock observed on 2026-10-04, not today's lock: ten git and 89 registry identities added (including `astral-tokio-tar 0.6.4`), `astral-tokio-tar 0.6.3` removed, and dependency lists modified on 50 previously present identities. It records every new locked git identity and every changed lock-record identity for that admission; none is a passing clean-source closure or audit claim.
 At the pinned revision, `casita` declares `Apache-2.0` and the `turso`
 packages declare `MIT`; both licenses are already admitted in `deny.toml`.
 The transitive `cfg_block 0.1.1` declares a `license-file` rather than an SPDX

@@ -102,7 +102,8 @@ pub(crate) fn reportable_execution(
 }
 
 pub(crate) fn execute_rust_plan_receipt(request: RustPlanExecutionRequest<'_>) -> Result<(), RunError> {
-    match request.mode {
+    let diagnostics = request.wait_diagnostics.clone();
+    let result = match request.mode {
         RustPlanExecutionMode::FirstSupported => execute_first_supported_rust_plan(request),
         RustPlanExecutionMode::FirstDependencyChain => execute_first_dependency_chain_rust_plan(request),
         RustPlanExecutionMode::TargetTopology => execute_target_topology_rust_plan(request),
@@ -112,7 +113,22 @@ pub(crate) fn execute_rust_plan_receipt(request: RustPlanExecutionRequest<'_>) -
         RustPlanExecutionMode::WorkspaceDependencyTopology => execute_workspace_dependency_topology_rust_plan(request),
         RustPlanExecutionMode::PatchSourceTopology => execute_patch_source_topology_rust_plan(request),
         RustPlanExecutionMode::PrintOnly => rust_plan::print_rust_plan_receipt(&request.receipt, request.json),
+    };
+    if let Some(diagnostics) = diagnostics {
+        let outcome = match &result {
+            Ok(()) => crunch_rustc_wrapper::waits::RunOutcome::Success,
+            Err(RunError::Build(_)) => crunch_rustc_wrapper::waits::RunOutcome::Rejected,
+            Err(_) => crunch_rustc_wrapper::waits::RunOutcome::Infrastructure,
+        };
+        let publication_error = match diagnostics.lock() {
+            Ok(mut runtime) => runtime.finish(outcome).and_then(|report| report.publication_error),
+            Err(_) => None,
+        };
+        if let Some(error) = publication_error {
+            tracing::warn!(%error, "native Rust wait publication unavailable");
+        }
     }
+    result
 }
 
 fn rust_plan_execution_options(
@@ -127,6 +143,7 @@ fn rust_plan_execution_options(
         output_root: output_root.to_path_buf(),
         compiler_policy: request.compiler_policy.clone(),
         local_cache: request.local_cache.clone(),
+        wait_diagnostics: request.wait_diagnostics.clone(),
     })
 }
 

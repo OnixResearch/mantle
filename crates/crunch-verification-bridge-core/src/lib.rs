@@ -2,7 +2,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(
@@ -20,6 +20,9 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+
+mod error;
+pub use error::BridgeError;
 
 mod producer;
 pub use producer::BoundProducerHandoff;
@@ -105,9 +108,9 @@ fn digest(bytes: &[u8]) -> String {
     format!("b3:{}", blake3::hash(bytes).to_hex())
 }
 
-pub fn relative_path(path: String) -> Result<String, String> {
+pub fn relative_path(path: String) -> Result<String, BridgeError> {
     if !is_relative_path(&path) {
-        return Err(format!("unsafe artifact path {path}"));
+        return Err(BridgeError::UnsafeArtifactPath(path));
     }
     Ok(path)
 }
@@ -120,26 +123,26 @@ fn is_relative_path(path: &str) -> bool {
         && path.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
-fn document(bytes: &[u8]) -> Result<Value, String> {
+fn document(bytes: &[u8]) -> Result<Value, BridgeError> {
     if bytes.is_empty() || bytes.len() > MAX_DOCUMENT_BYTES {
-        return Err("document exceeds bridge byte bound or is empty".to_string());
+        return Err(BridgeError::DocumentByteBound);
     }
-    serde_json::from_slice(bytes).map_err(|error| format!("external JSON: {error}"))
+    serde_json::from_slice(bytes).map_err(BridgeError::ExternalJson)
 }
 
-fn text<'a>(value: &'a Value, pointer: &str) -> Result<&'a str, String> {
+fn text<'a>(value: &'a Value, pointer: &str) -> Result<&'a str, BridgeError> {
     value
         .pointer(pointer)
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("missing external field {pointer}"))
+        .ok_or_else(|| BridgeError::MissingExternalField(pointer.to_string()))
 }
 
 /// Fails when one observed external field does not carry its expected value.
-fn equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(), String> {
+fn equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(), BridgeError> {
     let Expected(expected) = expected;
     if actual != expected {
-        return Err(format!("{field} mismatch: expected {expected}, observed {actual}"));
+        return Err(BridgeError::FieldMismatch(format!("{field} mismatch: expected {expected}, observed {actual}")));
     }
     Ok(())
 }
@@ -147,7 +150,7 @@ fn equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(), String
 /// Fails when one observed external digest does not carry its expected digest.
 ///
 /// Both sides may carry the `b3:` prefix, which never changes the digest.
-fn digest_equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(), String> {
+fn digest_equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(), BridgeError> {
     let Expected(expected) = expected;
     equal(
         actual.strip_prefix("b3:").unwrap_or(actual),
@@ -156,22 +159,22 @@ fn digest_equal(actual: &str, expected: Expected<'_>, field: &str) -> Result<(),
     )
 }
 
-fn validate_inputs(inputs: &PackagingInputs, materials: &[Material]) -> Result<(), String> {
+fn validate_inputs(inputs: &PackagingInputs, materials: &[Material]) -> Result<(), BridgeError> {
     validate_source_revision(&inputs.source_revision)?;
     validate_packaging_identities(inputs)?;
     validate_materials(materials)
 }
 
 /// The packaging source revision must be an immutable Git object ID.
-fn validate_source_revision(source_revision: &str) -> Result<(), String> {
+fn validate_source_revision(source_revision: &str) -> Result<(), BridgeError> {
     if source_revision.len() != 40 || !source_revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err("source_revision must be an immutable Git object ID".to_string());
+        return Err(BridgeError::InvalidSourceRevision);
     }
     Ok(())
 }
 
 /// Every packaging identity must be a canonical `b3:` digest.
-fn validate_packaging_identities(inputs: &PackagingInputs) -> Result<(), String> {
+fn validate_packaging_identities(inputs: &PackagingInputs) -> Result<(), BridgeError> {
     for packaging_identity in [
         &inputs.source_identity,
         &inputs.profile_identity,
@@ -180,7 +183,7 @@ fn validate_packaging_identities(inputs: &PackagingInputs) -> Result<(), String>
         &inputs.options_identity,
     ] {
         if !is_canonical_digest(packaging_identity) {
-            return Err("packaging identities must be canonical b3 digests".to_string());
+            return Err(BridgeError::InvalidPackagingIdentity);
         }
     }
     Ok(())
@@ -194,9 +197,9 @@ fn is_canonical_digest(packaging_identity: &str) -> bool {
 }
 
 /// Materials must be bounded in count and in aggregate byte size, and unique.
-fn validate_materials(materials: &[Material]) -> Result<(), String> {
+fn validate_materials(materials: &[Material]) -> Result<(), BridgeError> {
     if materials.is_empty() || materials.len() > MAX_MATERIALS {
-        return Err("material count exceeds bridge bound or is empty".to_string());
+        return Err(BridgeError::MaterialCountBound);
     }
     let mut total_bytes = 0usize;
     for (index, material) in materials.iter().enumerate() {
@@ -213,29 +216,29 @@ fn validate_material(
     material: &Material,
     index: usize,
     total_bytes: &mut usize,
-) -> Result<(), String> {
+) -> Result<(), BridgeError> {
     if !is_relative_path(&material.path) || material.bytes.len() > MAX_MATERIAL_BYTES {
-        return Err(format!("invalid or oversized material {}", material.path));
+        return Err(BridgeError::InvalidMaterial(material.path.clone()));
     }
-    *total_bytes = total_bytes.checked_add(material.bytes.len()).ok_or("material size overflow")?;
+    *total_bytes = total_bytes.checked_add(material.bytes.len()).ok_or(BridgeError::MaterialSizeOverflow)?;
     if *total_bytes > MAX_TOTAL_BYTES {
-        return Err("aggregate material byte bound exceeded".to_string());
+        return Err(BridgeError::TotalMaterialByteBound);
     }
     if materials[..index].iter().any(|prior| prior.path == material.path) {
-        return Err(format!("duplicate material {}", material.path));
+        return Err(BridgeError::DuplicateMaterial(material.path.clone()));
     }
     Ok(())
 }
 
 /// Returns the bytes of one material after checking its path and its digest.
-fn material<'a>(materials: &'a [Material], path: &str, digest: Expected<'_>) -> Result<&'a [u8], String> {
+fn material<'a>(materials: &'a [Material], path: &str, digest: Expected<'_>) -> Result<&'a [u8], BridgeError> {
     if !is_relative_path(path) {
-        return Err(format!("unsafe external artifact path {path}"));
+        return Err(BridgeError::UnsafeExternalArtifactPath(path.to_string()));
     }
     let bytes = &materials
         .iter()
         .find(|row| row.path == path)
-        .ok_or_else(|| format!("missing payload {path}"))?
+        .ok_or_else(|| BridgeError::MissingPayload(path.to_string()))?
         .bytes;
     let Expected(digest) = digest;
     digest_equal(&self::digest(bytes), Expected(digest), path)?;
@@ -244,7 +247,7 @@ fn material<'a>(materials: &'a [Material], path: &str, digest: Expected<'_>) -> 
 
 /// Checks only the source/profile/provider and selected generated-stage byte links.
 /// Full Octet envelope validity MUST still be checked by Octet itself.
-pub fn observe_octet(request: ObservationRequest) -> Result<ObservedHandoff, String> {
+pub fn observe_octet(request: ObservationRequest) -> Result<ObservedHandoff, BridgeError> {
     let checked = observe_octet_inner(&request.inputs, &request.profile, &request.receipt, &request.materials)?;
     let observation = finish(request.inputs, &request.receipt, "Octet", checked)?;
     Ok(ObservedHandoff {
@@ -257,7 +260,7 @@ pub fn observe_octet(request: ObservationRequest) -> Result<ObservedHandoff, Str
 
 /// Link Octet's actual artifact-verification report and every report/envelope
 /// payload. This records external acceptance, never reimplements its policy.
-pub fn observe_octet_verified(request: ObservationRequest) -> Result<ObservedHandoff, String> {
+pub fn observe_octet_verified(request: ObservationRequest) -> Result<ObservedHandoff, BridgeError> {
     let mut checked = observe_octet_inner(&request.inputs, &request.profile, &request.receipt, &request.materials)?;
     let verification_bytes = verification_report_bytes(&request.materials)?;
     let verification = document(verification_bytes)?;
@@ -267,7 +270,7 @@ pub fn observe_octet_verified(request: ObservationRequest) -> Result<ObservedHan
     let is_receipt_checked =
         check_verified_artifacts(&request.materials, &verification, &receipt, &receipt_identity, &mut checked)?;
     if !is_receipt_checked {
-        return Err("Octet report does not bind the exact external receipt".to_string());
+        return Err(BridgeError::UnboundExternalReceipt);
     }
     check_envelope_artifacts(&request.materials, &receipt)?;
     let verification_identity = digest(verification_bytes);
@@ -291,28 +294,31 @@ pub fn observe_octet_verified(request: ObservationRequest) -> Result<ObservedHan
 }
 
 /// The bytes of Octet's artifact-verification report.
-fn verification_report_bytes(materials: &[Material]) -> Result<&[u8], String> {
+fn verification_report_bytes(materials: &[Material]) -> Result<&[u8], BridgeError> {
     let bytes = &materials
         .iter()
         .find(|row| row.path == VERIFICATION_REPORT_PATH)
-        .ok_or("missing external artifact-verification report")?
+        .ok_or(BridgeError::MissingVerificationReport)?
         .bytes;
     Ok(bytes)
 }
 
 /// The artifact-verification report must declare a supported schema, a valid
 /// status, and no diagnostics.
-fn validate_verification_report(verification: &Value) -> Result<(), String> {
+fn validate_verification_report(verification: &Value) -> Result<(), BridgeError> {
     if verification.get("schema_version").and_then(Value::as_u64) != Some(1) {
-        return Err("unsupported Octet artifact-verification schema".to_string());
+        return Err(BridgeError::UnsupportedVerificationSchema);
     }
     equal(text(verification, "/status")?, Expected("valid"), "external artifact verification")?;
     if !verification.get("diagnostics").and_then(Value::as_array).is_some_and(Vec::is_empty) {
-        return Err("external artifact verification has diagnostics".to_string());
+        return Err(BridgeError::VerificationDiagnostics);
     }
-    let rows = verification.get("artifacts").and_then(Value::as_array).ok_or("missing verified artifacts")?;
+    let rows = verification
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingVerifiedArtifacts)?;
     if rows.is_empty() || rows.len() > MAX_MATERIALS {
-        return Err("invalid verified artifact count".to_string());
+        return Err(BridgeError::VerifiedArtifactCountBound);
     }
     debug_assert!(rows.len() <= MAX_MATERIALS);
     Ok(())
@@ -327,8 +333,11 @@ fn check_verified_artifacts(
     receipt: &Value,
     receipt_identity: &str,
     checked: &mut Vec<String>,
-) -> Result<bool, String> {
-    let rows = verification.get("artifacts").and_then(Value::as_array).ok_or("missing verified artifacts")?;
+) -> Result<bool, BridgeError> {
+    let rows = verification
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingVerifiedArtifacts)?;
     let mut is_receipt_checked = false;
     for row in rows {
         let path = text(row, "/artifact")?;
@@ -346,7 +355,7 @@ fn check_verified_artifacts(
 }
 
 /// The verified artifact that binds the receipt must name the external checker.
-fn check_verified_receipt_row(row: &Value, receipt: &Value) -> Result<(), String> {
+fn check_verified_receipt_row(row: &Value, receipt: &Value) -> Result<(), BridgeError> {
     equal(text(row, "/checker_id")?, Expected("octet-standards"), "external checker")?;
     equal(text(row, "/evidence_tier")?, Expected("formal_proof"), "external evidence tier")?;
     equal(text(row, "/checked_scope")?, Expected(text(receipt, "/checked_scope")?), "external checked scope")?;
@@ -354,8 +363,11 @@ fn check_verified_receipt_row(row: &Value, receipt: &Value) -> Result<(), String
 }
 
 /// Checks every payload the receipt envelope lists.
-fn check_envelope_artifacts(materials: &[Material], receipt: &Value) -> Result<(), String> {
-    let envelope = receipt.get("artifact_identities").and_then(Value::as_array).ok_or("missing envelope artifacts")?;
+fn check_envelope_artifacts(materials: &[Material], receipt: &Value) -> Result<(), BridgeError> {
+    let envelope = receipt
+        .get("artifact_identities")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingEnvelopeArtifacts)?;
     for artifact in envelope {
         material(materials, text(artifact, "/locator")?, Expected(text(artifact, "/blake3")?))?;
     }
@@ -369,13 +381,13 @@ struct VerifiedAssociation<'a> {
 }
 
 /// The verified association binds the observation to the exact external report.
-fn verified_association_identity(association: VerifiedAssociation<'_>) -> Result<String, String> {
+fn verified_association_identity(association: VerifiedAssociation<'_>) -> Result<String, BridgeError> {
     let bytes = serde_json::to_vec(&(
         "mantle.external-verified-association.v1",
         association.observation_identity,
         association.verification_identity,
     ))
-    .map_err(|error| error.to_string())?;
+    .map_err(BridgeError::Serialization)?;
     Ok(digest(&bytes))
 }
 
@@ -384,13 +396,13 @@ fn observe_octet_inner(
     profile_bytes: &[u8],
     receipt_bytes: &[u8],
     materials: &[Material],
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, BridgeError> {
     validate_inputs(inputs, materials)?;
     let profile = document(profile_bytes)?;
     let receipt = document(receipt_bytes)?;
     check_octet_schemas(&profile, &receipt)?;
     check_octet_profile_bytes(inputs, profile_bytes)?;
-    let consumer = receipt.get("consumer").ok_or("missing Octet consumer binding")?;
+    let consumer = receipt.get("consumer").ok_or(BridgeError::MissingConsumerBinding)?;
     check_octet_consumer_binding(inputs, &profile, consumer)?;
     let source_path = check_octet_source_material(inputs, consumer, materials)?;
     let source = find_octet_profile_source(&profile, source_path)?;
@@ -405,20 +417,24 @@ fn observe_octet_inner(
 }
 
 /// The Octet profile and receipt must carry their published schema versions.
-fn check_octet_schemas(profile: &Value, receipt: &Value) -> Result<(), String> {
+fn check_octet_schemas(profile: &Value, receipt: &Value) -> Result<(), BridgeError> {
     equal(text(profile, "/schema_version")?, Expected("octet-aeneas-consumer-profile/v1"), "profile schema")?;
     equal(text(receipt, "/schema_version")?, Expected("octet-formal-proof-envelope/v1"), "receipt schema")?;
     Ok(())
 }
 
 /// The producer profile bytes must hash to the selected profile identity.
-fn check_octet_profile_bytes(inputs: &PackagingInputs, profile_bytes: &[u8]) -> Result<(), String> {
+fn check_octet_profile_bytes(inputs: &PackagingInputs, profile_bytes: &[u8]) -> Result<(), BridgeError> {
     equal(&digest(profile_bytes), Expected(&inputs.profile_identity), "profile bytes")?;
     Ok(())
 }
 
 /// The Octet consumer binding must name the selected profile, source, and provider.
-fn check_octet_consumer_binding(inputs: &PackagingInputs, profile: &Value, consumer: &Value) -> Result<(), String> {
+fn check_octet_consumer_binding(
+    inputs: &PackagingInputs,
+    profile: &Value,
+    consumer: &Value,
+) -> Result<(), BridgeError> {
     equal(
         text(consumer, "/schema_version")?,
         Expected("octet-aeneas-consumer-receipt-binding/v1"),
@@ -448,34 +464,34 @@ fn check_octet_source_material<'a>(
     inputs: &PackagingInputs,
     consumer: &'a Value,
     materials: &[Material],
-) -> Result<&'a str, String> {
+) -> Result<&'a str, BridgeError> {
     let source_path = text(consumer, "/source_path")?;
     material(materials, source_path, Expected(&inputs.source_identity))?;
     Ok(source_path)
 }
 
 /// The producer profile must list the same source path as the consumer binding.
-fn find_octet_profile_source<'a>(profile: &'a Value, source_path: &str) -> Result<&'a Value, String> {
-    let paths = profile.pointer("/source/paths").and_then(Value::as_array).ok_or("missing source paths")?;
+fn find_octet_profile_source<'a>(profile: &'a Value, source_path: &str) -> Result<&'a Value, BridgeError> {
+    let paths = profile.pointer("/source/paths").and_then(Value::as_array).ok_or(BridgeError::MissingSourcePaths)?;
     let source = paths
         .iter()
         .find(|row| row.get("path").and_then(Value::as_str) == Some(source_path))
-        .ok_or("source absent from producer profile")?;
+        .ok_or(BridgeError::MissingProfileSource)?;
     Ok(source)
 }
 
 /// The provider profile must be a material, and the tool contract must equal the
 /// provider identity.
-fn check_octet_provider_profile(inputs: &PackagingInputs, materials: &[Material]) -> Result<(), String> {
+fn check_octet_provider_profile(inputs: &PackagingInputs, materials: &[Material]) -> Result<(), BridgeError> {
     material(materials, PROVIDER_PROFILE_PATH, Expected(&inputs.provider_identity))?;
     equal(&inputs.tool_contract_identity, Expected(&inputs.provider_identity), "provider tool contract")?;
     Ok(())
 }
 
 /// The selected options identity must be the digest of the resource policy.
-fn check_octet_options_contract(inputs: &PackagingInputs, profile: &Value) -> Result<(), String> {
-    let resource_policy = profile.get("resource_policy").ok_or("missing resource policy")?;
-    let policy_bytes = serde_json::to_vec(resource_policy).map_err(|error| error.to_string())?;
+fn check_octet_options_contract(inputs: &PackagingInputs, profile: &Value) -> Result<(), BridgeError> {
+    let resource_policy = profile.get("resource_policy").ok_or(BridgeError::MissingResourcePolicy)?;
+    let policy_bytes = serde_json::to_vec(resource_policy).map_err(BridgeError::Serialization)?;
     equal(&inputs.options_identity, Expected(&digest(&policy_bytes)), "options contract")?;
     Ok(())
 }
@@ -487,7 +503,7 @@ fn check_octet_outcome_binding(
     source: &Value,
     receipt: &Value,
     consumer: &Value,
-) -> Result<(), String> {
+) -> Result<(), BridgeError> {
     equal(text(source, "/identity")?, Expected(&inputs.source_identity), "profile source")?;
     equal(text(receipt, "/status")?, Expected("passed"), "externally reported status")?;
     equal(text(consumer, "/outcome")?, Expected("supported"), "externally reported outcome")?;
@@ -501,20 +517,25 @@ fn check_octet_stage_artifacts(
     receipt: &Value,
     consumer: &Value,
     checked: &mut Vec<String>,
-) -> Result<(), String> {
-    let stages = consumer.get("stage_artifacts").and_then(Value::as_array).ok_or("missing stage artifacts")?;
+) -> Result<(), BridgeError> {
+    let stages = consumer
+        .get("stage_artifacts")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingStageArtifacts)?;
     if stages.is_empty() || stages.len() > MAX_MATERIALS {
-        return Err("invalid stage artifact count".to_string());
+        return Err(BridgeError::StageArtifactCountBound);
     }
-    let artifacts =
-        receipt.get("artifact_identities").and_then(Value::as_array).ok_or("missing artifact identities")?;
+    let artifacts = receipt
+        .get("artifact_identities")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingArtifactIdentities)?;
     if artifacts.len() > MAX_MATERIALS {
-        return Err("artifact identity count exceeds bound".to_string());
+        return Err(BridgeError::ArtifactIdentityCountBound);
     }
     for stage in stages {
         let stage_digest = text(stage, "/blake3")?;
         let Some(path) = find_stage_artifact(artifacts, stage_digest)? else {
-            return Err(format!("stage {} has no envelope artifact", text(stage, "/role")?));
+            return Err(BridgeError::MissingStageEnvelope(text(stage, "/role")?.to_string()));
         };
         material(materials, path, Expected(stage_digest))?;
         checked.push(path.to_string());
@@ -525,7 +546,7 @@ fn check_octet_stage_artifacts(
 }
 
 /// Finds the envelope artifact whose digest equals one stage digest.
-fn find_stage_artifact<'a>(artifacts: &'a [Value], stage_digest: &str) -> Result<Option<&'a str>, String> {
+fn find_stage_artifact<'a>(artifacts: &'a [Value], stage_digest: &str) -> Result<Option<&'a str>, BridgeError> {
     for artifact in artifacts {
         if digest_equal(text(artifact, "/blake3")?, Expected(stage_digest), "stage").is_ok() {
             return Ok(Some(text(artifact, "/locator")?));
@@ -536,7 +557,7 @@ fn find_stage_artifact<'a>(artifacts: &'a [Value], stage_digest: &str) -> Result
 
 /// Consumes Trellis's existing cross-verifier pilot profile and receipt; never
 /// interprets Verus, Lean, theorem mappings, axioms, or admission policy.
-pub fn observe_trellis(request: ObservationRequest) -> Result<ObservedHandoff, String> {
+pub fn observe_trellis(request: ObservationRequest) -> Result<ObservedHandoff, BridgeError> {
     let checked = observe_trellis_inner(&request.inputs, &request.profile, &request.receipt, &request.materials)?;
     let observation = finish(request.inputs, &request.receipt, "Trellis", checked)?;
     Ok(ObservedHandoff {
@@ -551,7 +572,7 @@ fn observe_trellis_inner(
     profile_bytes: &[u8],
     receipt_bytes: &[u8],
     materials: &[Material],
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, BridgeError> {
     validate_inputs(inputs, materials)?;
     let profile = document(profile_bytes)?;
     let receipt = document(receipt_bytes)?;
@@ -572,7 +593,7 @@ fn check_trellis_binding(
     profile: &Value,
     receipt: &Value,
     profile_bytes: &[u8],
-) -> Result<(), String> {
+) -> Result<(), BridgeError> {
     equal(
         text(profile, "/schema_version")?,
         Expected("trellis-aeneas-cross-verifier-profile/v1"),
@@ -600,7 +621,7 @@ fn check_trellis_source<'a>(
     profile: &'a Value,
     receipt: &'a Value,
     materials: &[Material],
-) -> Result<&'a str, String> {
+) -> Result<&'a str, BridgeError> {
     let source_path = text(receipt, "/source_path")?;
     material(materials, source_path, Expected(&inputs.source_identity))?;
     equal(
@@ -615,12 +636,12 @@ fn check_trellis_source<'a>(
 
 /// The selected tool contract and options identities must be the digests of the
 /// provider tools and the extraction options.
-fn check_trellis_options_contract(inputs: &PackagingInputs, profile: &Value) -> Result<(), String> {
-    let provider_tools = profile.get("provider_tools").ok_or("missing provider tools")?;
-    let provider_tools_bytes = serde_json::to_vec(provider_tools).map_err(|error| error.to_string())?;
+fn check_trellis_options_contract(inputs: &PackagingInputs, profile: &Value) -> Result<(), BridgeError> {
+    let provider_tools = profile.get("provider_tools").ok_or(BridgeError::MissingProviderTools)?;
+    let provider_tools_bytes = serde_json::to_vec(provider_tools).map_err(BridgeError::Serialization)?;
     equal(&digest(&provider_tools_bytes), Expected(&inputs.tool_contract_identity), "provider tool contract")?;
-    let extraction = profile.get("extraction").ok_or("missing extraction options")?;
-    let extraction_bytes = serde_json::to_vec(extraction).map_err(|error| error.to_string())?;
+    let extraction = profile.get("extraction").ok_or(BridgeError::MissingExtractionOptions)?;
+    let extraction_bytes = serde_json::to_vec(extraction).map_err(BridgeError::Serialization)?;
     equal(&digest(&extraction_bytes), Expected(&inputs.options_identity), "options contract")?;
     Ok(())
 }
@@ -632,11 +653,11 @@ fn check_trellis_artifacts(
     profile: &Value,
     receipt: &Value,
     checked: &mut Vec<String>,
-) -> Result<(), String> {
-    let rows = receipt.get("artifacts").and_then(Value::as_array).ok_or("missing Trellis artifacts")?;
-    let expected = profile.get("artifacts").and_then(Value::as_array).ok_or("missing profile artifacts")?;
+) -> Result<(), BridgeError> {
+    let rows = receipt.get("artifacts").and_then(Value::as_array).ok_or(BridgeError::MissingTrellisArtifacts)?;
+    let expected = profile.get("artifacts").and_then(Value::as_array).ok_or(BridgeError::MissingProfileArtifacts)?;
     if rows.is_empty() || rows.len() > MAX_MATERIALS || rows != expected {
-        return Err("receipt artifacts differ from producer profile".to_string());
+        return Err(BridgeError::ProfileArtifactMismatch);
     }
     let verus_path = text(receipt, "/verus_receipt_path")?;
     equal(verus_path, Expected(text(profile, "/verus/receipt_path")?), "verifier receipt path")?;
@@ -646,7 +667,7 @@ fn check_trellis_artifacts(
         let path = text(row, "/path")?;
         let bytes = material(materials, path, Expected(text(row, "/blake3")?))?;
         if row.get("bytes").and_then(Value::as_u64) != Some(bytes.len() as u64) {
-            return Err(format!("artifact byte count mismatch: {path}"));
+            return Err(BridgeError::ArtifactByteCountMismatch(path.to_string()));
         }
         checked.push(path.to_string());
     }
@@ -660,7 +681,7 @@ fn finish(
     receipt: &[u8],
     producer: &str,
     mut checked: Vec<String>,
-) -> Result<Observation, String> {
+) -> Result<Observation, BridgeError> {
     checked.sort();
     checked.dedup();
     let receipt_identity = digest(receipt);
@@ -671,7 +692,7 @@ fn finish(
         producer,
         &checked,
     ))
-    .map_err(|error| error.to_string())?;
+    .map_err(BridgeError::Serialization)?;
     debug_assert!(!producer.is_empty());
     debug_assert!(checked.windows(2).all(|pair| pair.first() != pair.last()));
     Ok(Observation {

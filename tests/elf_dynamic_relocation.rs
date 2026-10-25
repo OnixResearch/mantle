@@ -230,6 +230,68 @@ fn native_binary_refuses_capacity_mismatch_and_wrong_dependency_without_publicat
 }
 
 #[test]
+fn relocation_refuses_loader_tokens_search_separators_and_escaping_members() {
+    let fixture = fixture();
+    let original = fs::read(&fixture.binary).unwrap();
+    for path in [
+        "lib:outside",
+        "lib;outside",
+        "lib/$LIB",
+        "lib/${PLATFORM}",
+        "lib\0/outside",
+        "../outside",
+        "lib/../outside",
+    ] {
+        let mut mapping = rewrites(&fixture, HASH);
+        mapping[1].library_path = path;
+        assert_eq!(
+            plan_dynamic_relocation(&original, 1, &mapping).unwrap_err(),
+            Refusal::InvalidDependency,
+            "{path:?}"
+        );
+        assert!(elf_dynamic_fixup_shell::relocate_dynamic_file(&fixture.binary, 1, &mapping).is_err());
+        assert_eq!(fs::read(&fixture.binary).unwrap(), original);
+    }
+    let mut mapping = rewrites(&fixture, HASH);
+    mapping[0].dependency = &MEMBER[..MEMBER.len() - 1];
+    assert_eq!(plan_dynamic_relocation(&original, 1, &mapping).unwrap_err(), Refusal::DependencyMismatch);
+}
+
+#[test]
+fn relocation_refuses_dynamic_string_aliases_and_symbol_prefix_overlap() {
+    let fixture = fixture();
+    let original = fs::read(&fixture.binary).unwrap();
+    let section_table = le(&original, 40, 8);
+    let section_count = le(&original, 60, 2);
+    let dynamic = (0..section_count)
+        .map(|section| section_table + section * 64)
+        .find(|at| le(&original, at + 4, 4) == 6)
+        .unwrap();
+    let start = le(&original, dynamic + 24, 8);
+    let end = start + le(&original, dynamic + 32, 8);
+    let needed = (start..end).step_by(16).find(|at| le(&original, *at, 8) == 1).unwrap();
+    let debug = (start..end).step_by(16).find(|at| le(&original, *at, 8) == 21).unwrap();
+    let original_offset = le(&original, needed + 8, 8);
+    for trim in [0, 1] {
+        let mut bytes = original.clone();
+        bytes[debug..debug + 8].copy_from_slice(&14u64.to_le_bytes());
+        bytes[debug + 8..debug + 16].copy_from_slice(&u64::try_from(original_offset).unwrap().to_le_bytes());
+        bytes[needed + 8..needed + 16].copy_from_slice(&u64::try_from(original_offset + trim).unwrap().to_le_bytes());
+        let mut mapping = rewrites(&fixture, HASH);
+        mapping[0].current = &fixture.needed[trim..];
+        assert_eq!(plan_dynamic_relocation(&bytes, 1, &mapping).unwrap_err(), Refusal::SharedDynamicString);
+    }
+    // Point a symbol at the original start, then relocate a suffix of that name.
+    let mut bytes = original.clone();
+    let plan = plan_dynamic_relocation(&bytes, 1, &rewrites(&fixture, HASH)).unwrap();
+    symbol_tail_mutation(&mut bytes, plan.patches[0].offset - 2);
+    bytes[needed + 8..needed + 16].copy_from_slice(&u64::try_from(original_offset + 1).unwrap().to_le_bytes());
+    let mut mapping = rewrites(&fixture, HASH);
+    mapping[0].current = &fixture.needed[1..];
+    assert_eq!(plan_dynamic_relocation(&bytes, 1, &mapping).unwrap_err(), Refusal::SymbolTailOverlap);
+}
+
+#[test]
 fn unwritable_output_directory_returns_publication_error_without_partial_bytes() {
     use std::os::unix::fs::PermissionsExt;
     let fixture = fixture();

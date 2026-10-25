@@ -1,0 +1,189 @@
+{
+  "schema": "mantle-linked-bounded-finish-runtime-v1",
+  "date": "2026-10-23",
+  "change": "standardize-derivation-finish-gates",
+  "maintenance_owner": "Mantle build finish-shell/policy maintainers; bootstrap family owners review adoption and ADR; Main owns final execution",
+  "integration_owner": "Main",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "subject_boundary": {
+    "cohort": "wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "boundary": "Immutable wait-request-repaired cohort used for the existing service and remote runtime observations. This is NOT the not-yet-pinned exact-exec cohort, current evolving worktree, final gate subject, or release identity.",
+    "ready_executable_pins": {
+      "schema": "mantle-runtime-executable-pins-v1",
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+      "roles": {
+        "mantle": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+        },
+        "wrapper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+          "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+        },
+        "producer": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+          "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+        },
+        "helper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+          "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+        },
+        "replay": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+          "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+        }
+      },
+      "policy": "Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution."
+    },
+    "service_additional_executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "rust_readiness_helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30",
+    "source_identity_limit": "Executable BLAKE3 and selected input bytes are retained; a complete atomic source/build provenance is not asserted."
+  },
+  "retained_artifacts": {
+    "path": ".cairn/changes/adopt-fault-injection-io-tests/evidence/parallel-fault-and-finish-runtime-2026-10-23.json",
+    "blake3": "d8937386031c4951db901ccdeed9bbbd0d105ab74ff3d72eab9e27b70ecb21e9",
+    "size_bytes": 66073
+  },
+  "artifact_selectors": {
+    "result": "result",
+    "raw_positive": "raw_command_streams.actual-finish-gated-build",
+    "raw_denial": "raw_command_streams.actual-finish-version-denial",
+    "raw_bwrap": "raw_command_streams.actual-bwrap-admission",
+    "driver": "driver",
+    "executable_pins": "executable_pins",
+    "wrong_version_fixture": "fixtures.wrong-version.ncl"
+  },
+  "criteria_mapping": [
+    {
+      "task_criteria": [
+        "T1.2",
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T2.6",
+        "T3.1"
+      ],
+      "commands": [
+        "actual-bwrap-admission",
+        "actual-finish-gated-build"
+      ],
+      "observed": "CLI exit 0; counts succeeded=1 built=1 cached=0 failed=0. Version expected 1.0, reference leak and relocation each passed under mantle-derivation-finish-gate-report-v1.",
+      "limit": "One local fixture, no complete contract/default/policy review or recipe baseline."
+    },
+    {
+      "task_criteria": [
+        "T3.2"
+      ],
+      "commands": [
+        "actual-finish-version-denial"
+      ],
+      "observed": "CLI exit 1; version denied for expected 2.0; counts succeeded=0 built=0 cached=0 failed=1 and no outcomes. Reference/relocation not-run; report diagnostic retains actual demo-1.0 output.",
+      "limit": "Wrong-version negative only, not all negative cases or dynamic loader/audit verification."
+    },
+    {
+      "task_criteria": [
+        "T2.5",
+        "T3.1",
+        "T3.2"
+      ],
+      "commands": [
+        "actual-finish-gated-build",
+        "actual-finish-version-denial"
+      ],
+      "observed": "dlopen explicitly opted-out; optional/missing sonames empty in both reports.",
+      "limit": "No dynamic dlopen acceptance inferred; corrected dynamic fixture is outside this receipt."
+    },
+    {
+      "task_criteria": [
+        "T1.1",
+        "T1.3",
+        "T3.3",
+        "T4.1",
+        "T4.2",
+        "T4.3"
+      ],
+      "commands": [],
+      "observed": "No acceptance claimed. Historical five policy-freshness failures remain immutable.",
+      "limit": "Isolated baseline, complete negative/core/shell execution, family builds/opt-out review, ADR acceptance, strict Clippy/Nix/Cairn integration and lifecycle cutover remain separate."
+    }
+  ],
+  "observed_reports": {
+    "positive": {
+      "schema": "mantle-derivation-finish-gate-report-v1",
+      "derivation": "finish-gates-positive.drv",
+      "version": "passed",
+      "command": [
+        "bin/demo",
+        "--version"
+      ],
+      "expected": "1.0",
+      "reference_leak": "passed",
+      "reference_findings": [],
+      "relocation": "passed",
+      "dlopen": "opted-out",
+      "optional_sonames": [],
+      "missing_sonames": []
+    },
+    "wrong_version": {
+      "schema": "mantle-derivation-finish-gate-report-v1",
+      "derivation": "finish-gates-positive.drv",
+      "version": "denied",
+      "command": [
+        "bin/demo",
+        "--version"
+      ],
+      "expected": "2.0",
+      "reference_leak": "not-run",
+      "reference_findings": [],
+      "relocation": "not-run",
+      "dlopen": "opted-out",
+      "optional_sonames": [],
+      "missing_sonames": []
+    }
+  },
+  "repeatability": {
+    "cwd": "/home/brittonr/git/OnixResearch/mantle",
+    "exact_child_commands": "result.commands[].argv; raw stdout/stderr retained byte-for-byte. Driver retains environment overrides and clears RUST_LOG. Outer launcher/Pueue task ID is not asserted by this receipt.",
+    "run_isolation": "Driver creates output root with exist_ok=False. Preserve history; restore driver at a distinct scratch path and change only output root for another observation, retaining new driver identity/source bindings/commands.",
+    "prerequisites": [
+      "Linux working bwrap user namespaces, /nix/store and static BusyBox",
+      "Equivalent Cargo shell/toolchain and offline locked sources; immutable CLI role matching retained pins",
+      "Writable isolated store/state/config, TMPDIR and release target directory recorded in driver"
+    ],
+    "decision": "Maintenance owner interprets bounded observations; Main integrates source/gate results. No reviewer signature or acceptance inferred."
+  },
+  "remaining_local_actions": [
+    "Complete source-bound core/shell negative matrix including nonzero exit/missing binary/cross leak/native report/failed relocation/undeclared dlopen/malformed and oversize record; do not substitute this one wrong-version control.",
+    "Retain isolated-origin recipe inventory/baseline and unchanged family builds, then prepare bootstrap adoption/opt-outs for responsible review.",
+    "Main integrates final-source strict Clippy, policy freshness, relevant Nix/Cairn receipts; archive/spec sync not authorized."
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [
+    {
+      "blocker": "ADR gate-set acceptance and per-bootstrap-family opt-out/adoption review require the responsible human/policy owner; approval is not inferred from AI work.",
+      "evidence": ".cairn/changes/standardize-derivation-finish-gates/tasks.md:34-81"
+    }
+  ],
+  "non_claims": [
+    "Local sandbox/fixture observations only, not bootstrap-family adoption or strict proof.",
+    "No ADR acceptance, policy approval, spec sync, archive or release acceptance.",
+    "Test-only injection does not prove sandbox hermeticity, store correctness, arbitrary fault coverage or release eligibility.",
+    "No full backend conformance, dynamic dlopen finish acceptance, bootstrap adoption, provider authority or exact-exec cohort qualification.",
+    "Raw kache disk-I/O warnings and caught-unwind panic retained unchanged; no warning suppression/product repair for this evidence update.",
+    "Evidence worker launched no build/test/lint/formatter/gate/runtime; only completed outputs/checksums inspected.",
+    "Positive reference/relocation/version fixture and wrong-version denial are exercised; dlopen opted out. No blanket unexecuted-runtime statement should obscure these observations, and no complete lifecycle/production acceptance follows."
+  ]
+}

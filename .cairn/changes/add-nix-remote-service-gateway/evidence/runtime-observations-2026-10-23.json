@@ -1,0 +1,384 @@
+{
+  "schema": "mantle-cairn-bounded-runtime-reconciliation-v1",
+  "observed_date": "2026-10-23",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-completed-bounded-local-runtime",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject": {
+    "cohort": "wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "boundary": "Immutable wait-request-repaired cohort used for the existing service and remote runtime observations. This is NOT the not-yet-pinned exact-exec cohort, current evolving worktree, final gate subject, or release identity.",
+    "ready_executable_pins": {
+      "schema": "mantle-runtime-executable-pins-v1",
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+      "roles": {
+        "mantle": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+        },
+        "wrapper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+          "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+        },
+        "producer": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+          "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+        },
+        "helper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+          "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+        },
+        "replay": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+          "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+        }
+      },
+      "policy": "Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution."
+    },
+    "service_additional_executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "rust_readiness_helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30",
+    "source_identity_limit": "Executable BLAKE3 and selected input bytes are retained; a complete atomic source/build provenance is not asserted."
+  },
+  "scope_of_this_record": "Only already completed result files and their raw captures were inspected. No service, runtime, test, build, formatter, linter or gate was launched by this evidence worker. Running Pueue tasks 87/88 and their outputs were not inspected. No claim about their result is made.",
+  "historical_receipts": "Earlier failed receipts and current-status snapshots are immutable observations. This additive record supplements them, does not reinterpret a failed aggregate as success, and does not authorize task completion.",
+  "non_claims": [
+    "No full acceptance, review signature, provider authority, bootstrap/release readiness, spec sync or archive claim.",
+    "Local bearer-authenticated stdio and signed outputs are NOT signed UCAN requests, authenticated caveat-chain receiver proof, Nix/API interoperability or entire surface parity.",
+    "Manual restart is not a supervising restart loop. Coordination state is not build evidence.",
+    "Executable local actions not yet run remain local work, not external blockers."
+  ],
+  "change": "add-nix-remote-service-gateway",
+  "maintenance_owner": "Mantle gateway maintainers; Main owns configured local interoperability; OnixOS/Valence own external acceptance",
+  "durable_runtime_evidence_refs": [
+    ".cairn/changes/separate-remote-build-hexagon/evidence/runtime-observations-2026-10-23.json",
+    ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-observations-2026-10-23.json"
+  ],
+  "criteria": [
+    {
+      "task": "1.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:5",
+      "exact_task_text": "- [ ] [serial] 1.1 Run existing remote-build, store, CAS, PathInfo, transfer, and signed-result tests before core changes. r[remote_builds.gateway_store_integrity]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "1.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:6",
+      "exact_task_text": "- [ ] [serial] 1.2 Define the supported Nix protocol versions and operation table. r[remote_builds.nix_compatibility_gateway]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "1.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:7",
+      "exact_task_text": "- [ ] [serial] 1.3 Define named connection, frame, message, concurrency, cursor, log, event, and idle bounds. r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "1.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:8",
+      "exact_task_text": "- [ ] [serial] 1.4 Record explicit non-goals for evaluation, source fetching, arbitrary commands, and administration. r[remote_builds.gateway_non_claims]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "2.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:12",
+      "exact_task_text": "- [ ] [serial] 2.1 Add typed parsed operations, authority facts, service commands, and stable rejection categories. r[remote_builds.gateway_functional_core]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "2.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:13",
+      "exact_task_text": "- [ ] [serial] 2.2 Translate admitted concrete operations without I/O. r[remote_builds.gateway_functional_core]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "2.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:14",
+      "exact_task_text": "- [ ] [serial] 2.3 Add capability checks for build, store, status, log, cancellation, publication, and administration operations. r[remote_builds.granular_service_authority]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "2.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:15",
+      "exact_task_text": "- [ ] [serial] 2.4 Add idempotency and reconnect decision logic. r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "2.5",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:16",
+      "exact_task_text": "- [ ] [serial] 2.5 Add positive tests for each admitted operation and negative tests for every unsupported or unauthorized operation. r[remote_builds.nix_compatibility_gateway] r[remote_builds.granular_service_authority]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "3.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:20",
+      "exact_task_text": "- [ ] [serial] 3.1 Implement bounded protocol negotiation and parsing with the vendored Nix compatibility layer. r[remote_builds.nix_compatibility_gateway] r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "3.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:21",
+      "exact_task_text": "- [ ] [serial] 3.2 Map supported operations to existing Mantle services without bypassing fencing, locality, lease, CAS, or PathInfo checks. r[remote_builds.gateway_store_integrity]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "The underlying existing stdio remote path accepted signed output and refused ticket/quota/binding failures, but no Nix gateway transport or gateway service invocation occurred. This is adjacent store integrity evidence, not gateway mapping acceptance.",
+      "acceptance_established": false
+    },
+    {
+      "task": "3.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:22",
+      "exact_task_text": "- [ ] [serial] 3.3 Preserve durable attempts across disconnect and support authorized reconnect. r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "3.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:23",
+      "exact_task_text": "- [ ] [serial] 3.4 Add positive Nix client fixtures and negative malformed-length, version, partial-transfer, disconnect, replay, and stale-fence fixtures. r[remote_builds.nix_compatibility_gateway] r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "4.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:27",
+      "exact_task_text": "- [ ] [serial] 4.1 Add versioned endpoints for submit, status, bounded log ranges, event pages, cancellation, signed results, and usage summaries. r[remote_builds.versioned_build_api]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "4.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:28",
+      "exact_task_text": "- [ ] [serial] 4.2 Add authenticated opaque cursors and named response bounds. r[remote_builds.versioned_build_api] r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "4.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:29",
+      "exact_task_text": "- [ ] [serial] 4.3 Add signed idempotent completion events with monotonic attempt sequences. r[remote_builds.idempotent_completion_events]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "4.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:30",
+      "exact_task_text": "- [ ] [serial] 4.4 Add recovery tests for duplicate submission, duplicate delivery, missed events, reconnect, and cancellation races. r[remote_builds.idempotent_completion_events] r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "5.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:34",
+      "exact_task_text": "- [ ] [serial] 5.1 Accept hardened compatibility-ticket facts without granting administration authority. r[remote_builds.granular_service_authority]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Local production bearer ticket was accepted once; revoked ticket failed and quota denied without consuming authority. It did NOT enter gateway admission or request administration; the gateway-specific control remains unrun.",
+      "acceptance_established": false
+    },
+    {
+      "task": "5.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:35",
+      "exact_task_text": "- [ ] [serial] 5.2 Accept verified UCAN facts through the existing verifier boundary. r[remote_builds.granular_service_authority]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "No UCAN request was exercised. Bearer FD authentication and signed output PathInfo are not verified UCAN request facts.",
+      "acceptance_established": false
+    },
+    {
+      "task": "5.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:36",
+      "exact_task_text": "- [ ] [serial] 5.3 Map gateway observations to the accepted Valence build-service evidence profile. r[remote_builds.gateway_non_claims]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "5.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:37",
+      "exact_task_text": "- [ ] [serial] 5.4 Prove through tests that logs, events, reports, and errors contain no ticket, UCAN, OIDC, or provider secret material. r[remote_builds.gateway_non_claims]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Selected retained capture set was checked for all four actual scratch bearer values and none occurred. Credential files/ticket secret/ticket tables were deliberately excluded. This bounded check is not a complete gateway logs/events/errors secret scan.",
+      "acceptance_established": false
+    },
+    {
+      "task": "6.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:41",
+      "exact_task_text": "- [ ] [serial] 6.1 Add private-endpoint configuration and operator status output. r[remote_builds.gateway_bounds_and_recovery]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "6.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:42",
+      "exact_task_text": "- [ ] [serial] 6.2 Document supported Nix operations, authentication, limits, reconnect, cancellation, and rollback. r[remote_builds.nix_compatibility_gateway]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "6.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:43",
+      "exact_task_text": "- [ ] [serial] 6.3 Require archived `harden-remote-credential-boundary` evidence before public endpoint enablement. r[remote_builds.granular_service_authority]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "6.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:44",
+      "exact_task_text": "- [ ] [serial] 6.4 Add an OnixOS integration fixture for a declared remote farm endpoint. r[remote_builds.nix_compatibility_gateway]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.1",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:48",
+      "exact_task_text": "- [ ] [serial] 7.1 Run `cargo fmt --all -- --check`. r[remote_builds.gateway_functional_core]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.2",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:49",
+      "exact_task_text": "- [ ] [serial] 7.2 Run focused positive and negative gateway tests. r[remote_builds.nix_compatibility_gateway]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.3",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:50",
+      "exact_task_text": "- [ ] [serial] 7.3 Run `cargo test --workspace`. r[remote_builds.gateway_store_integrity]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.4",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:51",
+      "exact_task_text": "- [ ] [serial] 7.4 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.gateway_functional_core]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.5",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:52",
+      "exact_task_text": "- [ ] [serial] 7.5 Run the relevant Nix interoperability and flake checks. r[remote_builds.nix_compatibility_gateway]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "7.6",
+      "task_source": ".cairn/changes/add-nix-remote-service-gateway/tasks.md:53",
+      "exact_task_text": "- [ ] [serial] 7.6 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.gateway_non_claims]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    }
+  ],
+  "decisive_result": "No configured gateway/API/Nix-client runtime ran in these observed roots. Four local bearer stdio controls passed in the adjacent existing remote path only. No gateway requirement accepted.",
+  "remaining_local_actions": [
+    "Main: real installed Nix 2.36 fixture and private configured nix-once/read/API process calls with signed envelopes; retain exact supported versions, operations, response bytes and pinned subjects.",
+    "Main: submit/status/log/event/usage/cancel/result and cursor bounds, duplicate submission/delivery, reconnect/disconnect/replay/stale fence, partial transfer and cancellation race controls.",
+    "Main: locally select scratch holder signing authority, trusted issuer/full keys, revocation view, registered inventory/quota and private receiver state for authenticated local fixtures; selection and execution are local work, not external blockers.",
+    "Main: operation-specific remote cancel-and-teardown acknowledgement is local protocol work; an SSH disconnect or durable cancellation intent does not prove teardown/releasable reservation.",
+    "Main: final focused/interop/quality/lifecycle rails and prerequisite acceptance remain separate."
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [
+    {
+      "owner": "Credential-boundary acceptance / operator deployment policy",
+      "prerequisite": "Task6.3 public enablement requires archived harden-remote-credential-boundary evidence; this worker cannot manufacture it or supply deployment approval."
+    },
+    {
+      "owner": "OnixOS farm integration owners",
+      "prerequisite": "Task6.4 real declared farm endpoint/deployment fixture and its owner-controlled policy/configuration/authority, if external deployment acceptance is sought."
+    },
+    {
+      "owner": "Valence evidence consumer owners",
+      "prerequisite": "Task5.3 accepted external Valence build-service profile/consumer acknowledgement remains separate; local signed store output does not assert external profile acceptance."
+    }
+  ],
+  "reproduction": {
+    "owner": "Main / gateway maintainers",
+    "documented_commands_ref": ".cairn/changes/add-nix-remote-service-gateway/design.md:193-245",
+    "local_command_recipes": [
+      [
+        "cargo",
+        "test",
+        "-p",
+        "crunch-nix-gateway",
+        "--test",
+        "nix_path_info",
+        "installed_nix_",
+        "--",
+        "--ignored"
+      ],
+      [
+        "mantle",
+        "remote",
+        "gateway",
+        "call",
+        "--socket",
+        "$private_socket",
+        "--envelope",
+        "$submit_envelope"
+      ],
+      [
+        "nix-store",
+        "--realise",
+        "--store",
+        "unix://$nix_socket",
+        "$drv_path"
+      ],
+      [
+        "nix",
+        "path-info",
+        "--store",
+        "unix://$coordinator_state/nix-gateway/nix-worker.sock",
+        "$signed_store_path"
+      ]
+    ],
+    "status": "Unexecuted local recipes with explicit operator fixture paths/authority to be selected. They are not blocked on public-deployment approval."
+  },
+  "historical_status_ref": ".cairn/changes/add-nix-remote-service-gateway/evidence/current-status-2026-10-23.json"
+}

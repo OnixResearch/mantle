@@ -1,0 +1,154 @@
+{
+  "non_claims": [
+    "source-review-does-not-prove-build-correctness",
+    "source-review-does-not-prove-deployment-safety",
+    "source-review-does-not-prove-release-eligibility",
+    "source-review-does-not-prove-reproducibility",
+    "source-review-does-not-prove-review-quality",
+    "source-review-does-not-prove-source-correctness",
+    "source-review-does-not-prove-witness-independence"
+  ],
+  "reviews": [
+    {
+      "claim": {
+        "claim_root": {
+          "claim_identity": "c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092",
+          "revision": 1,
+          "subject_root": "a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9"
+        },
+        "disposition": "approved",
+        "non_claims": [
+          "source-review-does-not-prove-build-correctness",
+          "source-review-does-not-prove-deployment-safety",
+          "source-review-does-not-prove-release-eligibility",
+          "source-review-does-not-prove-reproducibility",
+          "source-review-does-not-prove-review-quality",
+          "source-review-does-not-prove-source-correctness",
+          "source-review-does-not-prove-witness-independence"
+        ],
+        "review_policy_blake3": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+        "schema": "cairn.source-review-claim.v1",
+        "subject": {
+          "projection": "source",
+          "schema": "cairn.source-review-subject.v1",
+          "snapshot_profile": "mantle-release-source",
+          "snapshot_profile_version": 1,
+          "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+          "source_revision": "PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION",
+          "source_tree_blake3": null
+        }
+      },
+      "generation": 1,
+      "public_key_hex": "8a7dea41e72523b1b1cc931158505838e7a0f11e2d38757264eaca69b715f123",
+      "signature_hex": "1810dbacc5e70dcd660bda5a153e3a92df391b2937763c01fe55ad78f1c2bafa8884ced243472d45d3085bbd1e0796615ae5979bd60b56122f7a126344619d04",
+      "statement": {
+        "key_id": "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "key_identity": {
+          "algorithm": "blake3",
+          "digest_hex": "5b9463d43de3f1b36a177e0e77e4fc07031501e2b3741a3ab1779b75bf4cea5f",
+          "profile": "ed25519-public-key.v1"
+        },
+        "producer_id": "reviewer-b-PUBLIC-TEST-ONLY",
+        "schema": "artifact-auth.statement.v1",
+        "scope": {
+          "domain": "cairn.source-review.v1",
+          "parents": [
+            {
+              "algorithm": "blake3",
+              "digest_hex": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+              "profile": "cairn.source-review-policy.v1"
+            },
+            {
+              "algorithm": "blake3",
+              "digest_hex": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+              "profile": "mantle-release-source.v1"
+            }
+          ],
+          "profile_id": "cairn.source-review.v1",
+          "purpose": "source-review-approval",
+          "subject": {
+            "algorithm": "blake3",
+            "digest_hex": "a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5",
+            "profile": "cairn.source-review-claim.v1"
+          },
+          "verifier_context": {
+            "algorithm": "blake3",
+            "digest_hex": "5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4",
+            "profile": "test-only-currentness.v1"
+          }
+        }
+      }
+    },
+    {
+      "claim": {
+        "claim_root": {
+          "claim_identity": "c122d220f47f359af36280f40e81380d9e3391a2eb6557452b20b93f91879092",
+          "revision": 1,
+          "subject_root": "a8e7025f0145af20e2f83713ac860356f3e261ebd5c291fd381e3f1e56ac64a9"
+        },
+        "disposition": "approved",
+        "non_claims": [
+          "source-review-does-not-prove-build-correctness",
+          "source-review-does-not-prove-deployment-safety",
+          "source-review-does-not-prove-release-eligibility",
+          "source-review-does-not-prove-reproducibility",
+          "source-review-does-not-prove-review-quality",
+          "source-review-does-not-prove-source-correctness",
+          "source-review-does-not-prove-witness-independence"
+        ],
+        "review_policy_blake3": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+        "schema": "cairn.source-review-claim.v1",
+        "subject": {
+          "projection": "source",
+          "schema": "cairn.source-review-subject.v1",
+          "snapshot_profile": "mantle-release-source",
+          "snapshot_profile_version": 1,
+          "source_archive_blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+          "source_revision": "PUBLIC-TEST-ONLY-LOCAL-INDEX-NOT-IMMUTABLE-REVISION",
+          "source_tree_blake3": null
+        }
+      },
+      "generation": 1,
+      "public_key_hex": "2c65bd8cd49025fe4c89ab3af4b7aa7edc444469d354e7d0183eb1c997862c6d",
+      "signature_hex": "fef36cd26aef57cdc290214c4d454a6d24c680a99f3575c62a95ac035712aacdb87657f9efaae5999088a434466d33d78ecb024b3812e476fe534611eed1df08",
+      "statement": {
+        "key_id": "PUBLIC-TEST-ONLY-NOT-REAL-APPROVAL",
+        "key_identity": {
+          "algorithm": "blake3",
+          "digest_hex": "b40bc757027c8bb986bc787f6daa13f26aa600f1da8a2e5799927ee2124f0ef3",
+          "profile": "ed25519-public-key.v1"
+        },
+        "producer_id": "reviewer-a-PUBLIC-TEST-ONLY",
+        "schema": "artifact-auth.statement.v1",
+        "scope": {
+          "domain": "cairn.source-review.v1",
+          "parents": [
+            {
+              "algorithm": "blake3",
+              "digest_hex": "939351ce57dfe557e1db4a78151d760a0be7cec300a5900e5923d5c6f3d6ae13",
+              "profile": "cairn.source-review-policy.v1"
+            },
+            {
+              "algorithm": "blake3",
+              "digest_hex": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+              "profile": "mantle-release-source.v1"
+            }
+          ],
+          "profile_id": "cairn.source-review.v1",
+          "purpose": "source-review-approval",
+          "subject": {
+            "algorithm": "blake3",
+            "digest_hex": "a061d3843b86eb09a3346882d223ebae9f63d38d4128c656c26ee094956a66b5",
+            "profile": "cairn.source-review-claim.v1"
+          },
+          "verifier_context": {
+            "algorithm": "blake3",
+            "digest_hex": "5c71c5eb1955ef129472b41c9e6bd7d61f3e59898935a4de4802b67524917ff4",
+            "profile": "test-only-currentness.v1"
+          }
+        }
+      }
+    }
+  ],
+  "schema": "cairn.source-review-attachment.v1"
+}

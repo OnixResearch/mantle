@@ -180,27 +180,19 @@ mod tests {
         assert_eq!(attempts, 2);
     }
 
+    #[cfg(unix)]
     #[test]
-    fn host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity() {
-        let mut executed = 0;
-        let self_executable = std::env::current_exe().unwrap();
-        assert!(command_available(self_executable.to_str().unwrap(), &mut executed));
-        assert_eq!(executed, 1);
-        let plan = plan_effects(CommandFamily::Bootstrap, &[EffectSpec {
-            effect_id: HOST_PROCESS_EFFECT,
-            kind: EffectKind::RunProcess,
-            limit: EffectMeasure::Calls(HOST_PROCESS_MAX),
-            expected_output: ExpectedOutput::None,
-        }])
-        .unwrap();
-        let outcome = classify_observations(&plan, &[Observation {
-            effect_id: EffectId(HOST_PROCESS_EFFECT.to_string()),
-            kind: EffectKind::RunProcess,
-            status: ObservationStatus::Succeeded,
-            output: EffectOutput::None,
-            usage: EffectMeasure::Calls(HOST_PROCESS_MAX + executed),
-            diagnostics_code: None,
-        }]);
-        assert!(matches!(outcome, ApplicationOutcome::Contradicted { effect_count: 1 }));
+    fn command_probe_uses_exit_status_and_counts_attempts() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let mut attempts = 0;
+        for (name, exit_code, available) in [("success", 0, true), ("failure", 7, false)] {
+            let command = root.path().join(name);
+            std::fs::write(&command, format!("#!/bin/sh\nexit {exit_code}\n")).unwrap();
+            std::fs::set_permissions(&command, std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(command_available(command.to_str().unwrap(), &mut attempts), available);
+        }
+        assert_eq!(attempts, 2);
     }
 }

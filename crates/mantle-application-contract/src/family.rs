@@ -71,7 +71,7 @@ impl CommandFamily {
             "remote" | "remote-secret-worker" => Self::RemoteExecution,
             "release" | "export" => Self::Release,
             "init" | "refresh" | "upgrade" | "show" | "list-stale" | "mantlepkgs" | "profile" => Self::Project,
-            "bootstrap" | "self-build" | "stage0-inventory" => Self::Bootstrap,
+            "bootstrap" | "bootstrap-pin" | "self-build" | "stage0-inventory" => Self::Bootstrap,
             "wasm-component" => Self::Component,
             "doctor" | "refactor" => Self::Diagnostics,
             _ => return None,
@@ -113,7 +113,7 @@ impl CommandFamily {
                 "show",
                 "upgrade",
             ],
-            Self::Bootstrap => vec!["bootstrap", "self-build", "stage0-inventory"],
+            Self::Bootstrap => vec!["bootstrap", "bootstrap-pin", "self-build", "stage0-inventory"],
             Self::Component => vec!["wasm-component"],
             Self::Diagnostics => vec!["doctor", "refactor"],
         };

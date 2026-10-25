@@ -80,6 +80,28 @@ fn real_builder_default_requires_matching_executable_version() {
 }
 
 #[test]
+fn real_builder_partial_gate_policy_keeps_version_defaults_and_explicit_override() {
+    if !can_build() {
+        return;
+    }
+    let adopted = BUILDER_RECIPE.replace("  pname =", "  finish_gates.relocation.enabled = true,\n  pname =");
+    let (output, _keep) = build_recipe(&adopted);
+    assert!(output.status.success(), "{}", render(&output));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON build report");
+    assert_eq!(report["finish_gates"][0]["version"], "passed");
+    assert_eq!(report["finish_gates"][0]["relocation"], "passed");
+    let explicit = BUILDER_RECIPE.replace(
+        "  pname =",
+        "  finish_gates.version = { command = [\"bin/demo\", \"--version\"], expected = \"2.0\" },\n  pname =",
+    );
+    let (denied, _keep) = build_recipe(&explicit);
+    assert!(!denied.status.success(), "{}", render(&denied));
+    let report: serde_json::Value = serde_json::from_slice(&denied.stdout).expect("failed JSON build report");
+    assert_eq!(report["finish_gates"][0]["version"], "denied");
+    assert_eq!(report["finish_gates"][0]["expected"], "2.0");
+}
+
+#[test]
 fn real_builder_exit_and_shell_syntax_cannot_skip_required_version() {
     if !can_build() {
         eprintln!("skipping: bwrap user namespace unavailable");

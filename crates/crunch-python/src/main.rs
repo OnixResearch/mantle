@@ -137,12 +137,12 @@ fn validate(mut config: Config) -> Result<ValidatedConfig, String> {
     if config.schema != 1 || !["plan", "environment", "wheel"].contains(&config.mode.as_str()) {
         return Err("python-config-version-or-mode".into());
     }
-    config.target = admit_target(config.target)?;
-    config.artifacts = admit_artifacts(config.artifacts)?;
-    config.extras = admit_selections(config.extras)?;
-    config.groups = admit_selections(config.groups)?;
-    config.members = admit_selections(config.members)?;
-    config.build_packages = admit_selections(config.build_packages)?;
+    config.target = admit_target(config.target).map_err(|error| error.to_string())?;
+    config.artifacts = admit_artifacts(config.artifacts).map_err(|error| error.to_string())?;
+    config.extras = admit_selections(config.extras).map_err(|error| error.to_string())?;
+    config.groups = admit_selections(config.groups).map_err(|error| error.to_string())?;
+    config.members = admit_selections(config.members).map_err(|error| error.to_string())?;
+    config.build_packages = admit_selections(config.build_packages).map_err(|error| error.to_string())?;
     if config.build_requirements.len() > 64
         || config.dynamic_requirements.len() > 64
         || config.runtime_inputs.len() > 1024

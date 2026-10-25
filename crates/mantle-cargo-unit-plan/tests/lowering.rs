@@ -1,3 +1,5 @@
+mod support;
+
 use mantle_cargo_unit_plan::ExternBinding;
 use mantle_cargo_unit_plan::PlanBindings;
 use mantle_cargo_unit_plan::SourceSlice;
@@ -6,6 +8,7 @@ use mantle_cargo_unit_plan::lower;
 use mantle_rust_plan_core::ExistingUnitFacts;
 use mantle_rust_plan_core::plan_existing_unit_effects;
 use serde_json::Value;
+use support::refresh_wait_units;
 
 const PATH_HASH: &str = "01234567890123456789012345678901";
 const SOURCE_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -61,7 +64,7 @@ fn bindings() -> PlanBindings {
             build_script_run: None,
         });
     }
-    PlanBindings {
+    let mut plan = PlanBindings {
         store_prefix: "/mantle/store".into(),
         system: "x86_64-linux".into(),
         target_triple: "x86_64-unknown-linux-gnu".into(),
@@ -72,10 +75,13 @@ fn bindings() -> PlanBindings {
         linker: format!("{}/bin/cc", store("linker")),
         target_linker: None,
         runtime_inputs: Vec::new(),
+        wait_units: std::collections::BTreeMap::new(),
         sources,
         units,
         roots: vec!["app".into()],
-    }
+    };
+    refresh_wait_units(&mut plan, &effects());
+    plan
 }
 fn effects() -> Vec<mantle_rust_plan_core::ExistingUnitEffect> {
     plan_existing_unit_effects(vec![
@@ -140,6 +146,7 @@ fn runtime_tool_roots_are_explicit_unit_inputs_and_change_plan_identity() {
     let (baseline, baseline_digest) = lower(&effects(), &input).unwrap();
     let loader = store("runtime-loader");
     input.runtime_inputs = vec![loader.clone()];
+    refresh_wait_units(&mut input, &effects());
     let (bytes, digest) = lower(&effects(), &input).unwrap();
     assert_ne!((bytes.clone(), digest), (baseline, baseline_digest));
     let plan: Value = serde_json::from_slice(&bytes).unwrap();
@@ -156,6 +163,36 @@ fn runtime_tool_roots_are_explicit_unit_inputs_and_change_plan_identity() {
     }
     for invalid in ["/usr/lib", "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-loader/lib"] {
         input.runtime_inputs = vec![invalid.into()];
+        assert_eq!(lower(&effects(), &input).unwrap_err()[0].code, "unit-plan-host-path");
+    }
+}
+
+#[test]
+fn runtime_store_names_use_nix_name_bounds_not_unit_label_bounds() {
+    let names = [
+        "rustfmt-preview-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu".to_string(),
+        format!("{}?=", "r".repeat(209)),
+    ];
+    for name in names {
+        let mut input = bindings();
+        let runtime = store(&name);
+        input.runtime_inputs = vec![runtime.clone()];
+        refresh_wait_units(&mut input, &effects());
+        let (bytes, _) = lower(&effects(), &input).unwrap();
+        let plan: Value = serde_json::from_slice(&bytes).unwrap();
+        for unit in plan["units"].as_array().unwrap() {
+            assert!(
+                unit["derivation"]["inputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|dependency| { dependency["kind"] == "store_path" && dependency["path"] == runtime })
+            );
+        }
+    }
+    for name in ["r".repeat(212), "runtime:host".to_string()] {
+        let mut input = bindings();
+        input.runtime_inputs = vec![store(&name)];
         assert_eq!(lower(&effects(), &input).unwrap_err()[0].code, "unit-plan-host-path");
     }
 }
@@ -211,7 +248,9 @@ fn proc_macro_host_unit_and_git_source_boundary() {
     let mut planned = effects();
     planned.iter_mut().find(|unit| unit.unit_id.0 == "leaf").unwrap().target_kind = "proc-macro".into();
     planned.iter_mut().find(|unit| unit.unit_id.0 == "leaf").unwrap().execution_kind = "host".into();
-    let (bytes, _) = lower(&planned, &bindings()).unwrap();
+    let mut bindings = bindings();
+    refresh_wait_units(&mut bindings, &planned);
+    let (bytes, _) = lower(&planned, &bindings).unwrap();
     let plan: Value = serde_json::from_slice(&bytes).unwrap();
     let macro_unit = plan["units"]
         .as_array()
@@ -221,7 +260,7 @@ fn proc_macro_host_unit_and_git_source_boundary() {
         .unwrap();
     assert_eq!(macro_unit["derivation"]["addressing_mode"], "input-addressed");
     assert!(macro_unit["derivation"]["args"].as_array().unwrap().iter().any(|arg| arg == "metadata=abcdef1234"));
-    let mut git = bindings();
+    let mut git = bindings;
     git.units[0].source_kind = "git".into();
     assert_eq!(lower(&planned, &git).unwrap_err()[0].code, "unit-plan-source-unsupported");
 }
@@ -234,6 +273,7 @@ fn full_digest_source_id_is_distinct_from_bounded_slice_path() {
     input.sources[0].id = id.clone();
     input.sources[0].subpath = format!("packages/{digest}");
     input.units[0].source_id = id.clone();
+    refresh_wait_units(&mut input, &effects());
     let (bytes, _) = lower(&effects(), &input).unwrap();
     let plan: Value = serde_json::from_slice(&bytes).unwrap();
     assert!(
@@ -266,6 +306,7 @@ fn extend_with_units(
         binding.unit_id = id;
         bindings.units.push(binding);
     }
+    refresh_wait_units(bindings, effects);
 }
 
 #[test]
@@ -310,6 +351,7 @@ fn target_linker_and_sysroot_do_not_contaminate_host_units() {
         ],
         inputs: vec![store("target-sdk")],
     });
+    refresh_wait_units(&mut bindings, &effects);
     let (bytes, _) = lower(&effects, &bindings).unwrap();
     let plan: Value = serde_json::from_slice(&bytes).unwrap();
     let unit = |source: &str| {

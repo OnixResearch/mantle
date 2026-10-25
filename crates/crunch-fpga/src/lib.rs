@@ -77,7 +77,7 @@ pub struct Manifest {
 pub fn read_profile(path: &Path) -> Result<Profile> {
     let bytes = read_bounded(path, crunch_fpga_core::MAX_TEXT_BYTES as u64)?;
     let profile: Profile = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    crunch_fpga_core::validate(profile)
+    crunch_fpga_core::validate(profile).map_err(|error| error.to_string())
 }
 
 /// Streaming binary measurement: nextpnr carries a large embedded chipdb.
@@ -296,7 +296,7 @@ pub fn execute(profile: Profile, root: &Path) -> Result<Manifest> {
         stages,
         synthesis_script,
         constraints,
-    } = crunch_fpga_core::identities(profile)?;
+    } = crunch_fpga_core::identities(profile).map_err(|error| error.to_string())?;
     debug_assert_eq!(stages.synthesis.len(), 64);
     prepare(
         &profile,
@@ -326,7 +326,8 @@ pub fn execute(profile: Profile, root: &Path) -> Result<Manifest> {
     } = crunch_fpga_core::accept_netlist(NetlistRequest {
         profile,
         netlist: netlist_bytes,
-    })?;
+    })
+    .map_err(|error| error.to_string())?;
     let pnr = root.join("place-route");
     write_new(&pnr.join("netlist.json"), &netlist_bytes)?;
     run_stage(&profile, "place-route", &profile.nextpnr, pnr_args(&profile), &pnr)?;
@@ -334,7 +335,7 @@ pub fn execute(profile: Profile, root: &Path) -> Result<Manifest> {
         .map_err(|e| format!("invalid-nextpnr-report:{e}"))?;
     // Packing never starts on successful exit alone: facts must pass policy.
     let ReportRequest { profile, report: facts } =
-        crunch_fpga_core::accept_report(ReportRequest { profile, report: facts })?;
+        crunch_fpga_core::accept_report(ReportRequest { profile, report: facts }).map_err(|error| error.to_string())?;
     let pack = root.join("packing");
     fs::create_dir(&pack).map_err(|e| e.to_string())?;
     copy_artifact(&pnr.join("routed.asc"), &pack.join("routed.asc"), profile.max_output_bytes)?;

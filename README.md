@@ -154,6 +154,17 @@ Use `--nix-compat` when the logical prefix must be `/nix/store` for
 interoperability. The legacy `CRUNCH_STATE_DIR` spelling remains a compatibility
 surface. New operator prose and project-facing names use Mantle.
 
+Every selected root is exported to `--store` and reported once, including a root
+whose derivation an earlier root already dispatched or built as a dependency.
+Intermediate dependencies stay in the selected store backend. See the
+[streamed late-root release note](docs/release-notes/streamed-late-root-export-2026-10-23.md).
+
+Binary-cache substitution is opt-in: `--substituters` names no cache by default.
+Each HTTP substituter and each HTTP `mantle store pull --from` source must resolve
+through an operator endpoint binding passed with `--remote-binding-config`
+(ADR 0128). See the
+[opt-in substitution release note](docs/release-notes/opt-in-substitution-2026-10-25.md).
+
 An empty or relative selected `CRUNCH_STATE_DIR`, `XDG_STATE_HOME`, or `HOME`
 fails before state/store access. An explicit `--state-dir` takes precedence,
 including relative paths such as `.`. If `HOME` is unset, the fallback remains
@@ -414,7 +425,7 @@ an existing Mantle Ed25519 signing key and matching trusted public key, then
 verifies all four signed PathInfos and physical store objects. Its receipt
 claims only these observed local inputs; the four pinned Android HTTPS archives
 are separate source-bundle inputs. See
-`.cairn/changes/add-apk-build-adapter/design.md` for manifest fields and
+`.cairn/archive/2026-10-21-add-apk-build-adapter/design.md` for manifest fields and
 the failure/partial-admission boundary. APK bytes, SDK provenance, compiler
 correctness, and release eligibility require separate evidence.
 
@@ -492,7 +503,7 @@ and v3 true in both states; a one-byte change in the ZIP central directory
 made the same verifier reject each scratch copy with an integrity digest
 mismatch. Byte comparison, DEX, compiled manifest, packaged application-label
 resource, and APK Signing Block checks passed. The [bounded evidence and failed
-guard history](.cairn/changes/prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt)
+guard history](.cairn/archive/1970-01-01-prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt)
 name the inputs and receipts. This is **not** a checked-in repeatable proof
 rail or completion of that Cairn change; it establishes neither device
 install/launch/runtime behavior, third-party source provenance, production

@@ -48,8 +48,34 @@
 
 - [ ] [serial] 7.1 Add observe-only mode and project opt-in controls. r[remote_builds.resource_policy_rollout]
 - [ ] [serial] 7.2 Add independent rollback controls for selection, retry, quota enforcement, and sharing. r[remote_builds.resource_policy_rollout]
-- [ ] [serial] 7.3 Run `cargo fmt --all -- --check`. r[remote_builds.replayable_resource_selection]
+- [ ] [serial] 7.3 Run the canonical first-party format check plus format checks for affected first-party packages outside its declared scope. Vendored snapshots are excluded by repository policy. r[remote_builds.replayable_resource_selection]
 - [ ] [serial] 7.4 Run focused positive, negative, replay, property, benchmark, and fault tests. r[remote_builds.resource_benchmark_evidence]
-- [ ] [serial] 7.5 Run `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`. r[remote_builds.replayable_resource_selection]
+- [ ] [serial] 7.5 Run `scripts/check-first-party-quality.sh`: GCC4.0 bridge, scoped formatting, vendor-excluded strict Clippy, and serialized workspace lib/tests. Preserve failures and capability skips. r[remote_builds.replayable_resource_selection]
 - [ ] [serial] 7.6 Run the relevant Nix flake checks. r[remote_builds.resource_benchmark_evidence]
 - [ ] [serial] 7.7 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.resource_policy_rollout]
+
+## Source repair handoff (2026-10-23; not gate acceptance)
+
+The archived `head-crunch-bin-16-isolated.log:33-46` under
+`2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22`
+records the three resource-host fixtures failing quota-store access. Their
+directories now explicitly satisfy the production 0700 requirement; production
+access policy is not weakened. Host observations accept explicit shell timestamps,
+and fixture clocks no longer consult ambient coordinator time. Added negative
+coverage requires stale-fence/cross-scope mutations to preserve the entire quota
+snapshot. The pure ledger rejects a repeated usage digest with changed observation
+content; an exact repeat remains idempotent and durable across reopening.
+
+The local benchmark driver is migrated from stale observation v1 fields to v2.
+It records actual process-resource measurements without promoting RSS, output
+file bytes, absent queue/transfer facts or a local timer into authenticated worker
+authority. Observe-only replay must reject those records as `HistoryUntrusted`
+and retain static placement. Authentic historical-placement performance still
+requires real authenticated worker dimensions, not a rewritten acceptance claim.
+
+The design's focused verification handoff lists exact test/benchmark commands and
+external prerequisites. No builds, tests, benchmarks, delegated-OOM runs, VM
+campaigns, replay verdicts or lifecycle gates were run for these edits. All runtime
+and evidence tasks remain unchecked; no archive/sync or accepted-spec update is
+authorized by the source handoff alone.
+

@@ -1,0 +1,406 @@
+{
+  "schema": "mantle-rust-differential-rejection-triage-v1",
+  "recorded_on": "2026-10-23",
+  "historical_result": "target/cairn-finish-20261023/wrapper-isolated-runtime/result.json",
+  "historical_report": "/home/brittonr/.cargo-target/mantle-cairn-differential-wrapper-isolated-20261023/baseline/report.json",
+  "historical_report_bytes": 251388535,
+  "historical_receipts_unchanged": true,
+  "inspection_method": "Parsed retained typed JSON report and reduced actual consumer verdicts; no unchanged failed campaign rerun.",
+  "complete": false,
+  "step_verdicts": {
+    "equivalent": 459,
+    "harness-error": 1
+  },
+  "replay_verdicts": {
+    "equivalent": 229,
+    "harness-error": 1
+  },
+  "failed_coverage": [
+    {
+      "key": "generated-check",
+      "attempted": true,
+      "executed": true,
+      "reused": false,
+      "fallback": null,
+      "unsupported": null,
+      "failed": true,
+      "unrun": false
+    },
+    {
+      "key": "generated-check/b/forced-unchanged",
+      "attempted": true,
+      "executed": true,
+      "reused": true,
+      "fallback": null,
+      "unsupported": null,
+      "failed": true,
+      "unrun": false
+    },
+    {
+      "key": "oracle/generated-check/b/forced-unchanged",
+      "attempted": true,
+      "executed": true,
+      "reused": false,
+      "fallback": null,
+      "unsupported": null,
+      "failed": true,
+      "unrun": false
+    }
+  ],
+  "population": {
+    "Ok": {
+      "baseline": "1908b03405bdb59026497726f01d310ace3c9757128515078c8152db98f1ad2a",
+      "manifest": "1908b03405bdb59026497726f01d310ace3c9757128515078c8152db98f1ad2a",
+      "roles": [
+        {
+          "role": "cell",
+          "candidates": 11,
+          "selected": 11,
+          "eligible": 10,
+          "attempted": 10,
+          "executed": 10,
+          "reused": 0,
+          "fallback": 0,
+          "unsupported": 1,
+          "excluded": 1,
+          "failed": 1,
+          "unrun": 1
+        },
+        {
+          "role": "fault",
+          "candidates": 2,
+          "selected": 2,
+          "eligible": 2,
+          "attempted": 2,
+          "executed": 2,
+          "reused": 0,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 0,
+          "failed": 0,
+          "unrun": 0
+        },
+        {
+          "role": "nonroot",
+          "candidates": 1,
+          "selected": 0,
+          "eligible": 0,
+          "attempted": 0,
+          "executed": 0,
+          "reused": 0,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 1,
+          "failed": 0,
+          "unrun": 0
+        },
+        {
+          "role": "recovery",
+          "candidates": 2,
+          "selected": 2,
+          "eligible": 2,
+          "attempted": 2,
+          "executed": 2,
+          "reused": 0,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 0,
+          "failed": 0,
+          "unrun": 0
+        },
+        {
+          "role": "step",
+          "candidates": 460,
+          "selected": 460,
+          "eligible": 460,
+          "attempted": 460,
+          "executed": 460,
+          "reused": 440,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 0,
+          "failed": 1,
+          "unrun": 0
+        },
+        {
+          "role": "test",
+          "candidates": 460,
+          "selected": 460,
+          "eligible": 460,
+          "attempted": 460,
+          "executed": 460,
+          "reused": 0,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 0,
+          "failed": 1,
+          "unrun": 0
+        },
+        {
+          "role": "unit",
+          "candidates": 3128,
+          "selected": 3128,
+          "eligible": 3128,
+          "attempted": 3128,
+          "executed": 1516,
+          "reused": 1668,
+          "fallback": 0,
+          "unsupported": 0,
+          "excluded": 0,
+          "failed": 0,
+          "unrun": 224
+        }
+      ],
+      "complete": false,
+      "deficits": [
+        "generated-check",
+        "generated-check/b/forced-unchanged",
+        "oracle/generated-check/b/forced-unchanged"
+      ]
+    }
+  },
+  "report_errors": [],
+  "failing_step": {
+    "cell": "generated-check",
+    "side": "b",
+    "step": "forced-unchanged",
+    "verdict": "harness-error",
+    "expectation": {
+      "status": "success",
+      "diagnostic_codes": [],
+      "diagnostic_messages": [],
+      "program_stdout": null
+    },
+    "campaign": {
+      "root": "/home/brittonr/.cargo-target/mantle-cairn-differential-wrapper-isolated-20261023/baseline/generated-check/b/step-02-forced-unchanged",
+      "errors": [
+        "forced-compiler-reentry-unobserved"
+      ],
+      "status": "infrastructure",
+      "observation_complete": false,
+      "diagnostic_units": 0,
+      "executed_units": [
+        "fixture-app"
+      ],
+      "reused_units": [
+        "lib0",
+        "fixture-macro",
+        "lib0",
+        "lib1",
+        "lib2",
+        "lib3"
+      ],
+      "cargo": {
+        "argv": [
+          "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--message-format=json",
+          "--jobs=2",
+          "--package=fixture-app",
+          "--bin=fixture-app",
+          "--profile=check",
+          "--",
+          "--cfg=mantle_differential_force_reentry"
+        ],
+        "code": 0,
+        "signal": null,
+        "elapsed_ns": 37378499,
+        "complete": true,
+        "teardown_complete": true,
+        "failure": null,
+        "processes": [
+          {
+            "pid": 354598,
+            "command": "ada37f4abba168468bf003121398c2ce41ed2bb2cab7037e5c724c7ab3021db4",
+            "executable": "/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/cargo"
+          },
+          {
+            "pid": 354598,
+            "command": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "executable": null
+          }
+        ]
+      },
+      "compiler_artifact_freshness": [
+        {
+          "target": "build-script-build",
+          "fresh": true
+        },
+        {
+          "target": "fixture_macro",
+          "fresh": true
+        },
+        {
+          "target": "lib0",
+          "fresh": true
+        },
+        {
+          "target": "lib1",
+          "fresh": true
+        },
+        {
+          "target": "lib2",
+          "fresh": true
+        },
+        {
+          "target": "lib3",
+          "fresh": true
+        },
+        {
+          "target": "fixture-app",
+          "fresh": false
+        }
+      ]
+    },
+    "clean": {
+      "root": "/home/brittonr/.cargo-target/mantle-cairn-differential-wrapper-isolated-20261023/baseline/generated-check/b/clean-02/compile",
+      "errors": [],
+      "status": "success",
+      "observation_complete": true,
+      "diagnostic_units": 0,
+      "executed_units": [
+        "fixture-macro",
+        "lib0",
+        "lib0",
+        "lib1",
+        "lib2",
+        "lib3",
+        "fixture-app"
+      ],
+      "reused_units": [],
+      "cargo": {
+        "argv": [
+          "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--message-format=json",
+          "--jobs=2",
+          "--package=fixture-app",
+          "--bin=fixture-app",
+          "--profile=check",
+          "--",
+          "--cfg=mantle_differential_force_reentry"
+        ],
+        "code": 0,
+        "signal": null,
+        "elapsed_ns": 259158431,
+        "complete": true,
+        "teardown_complete": true,
+        "failure": null,
+        "processes": [
+          {
+            "pid": 354743,
+            "command": "ada37f4abba168468bf003121398c2ce41ed2bb2cab7037e5c724c7ab3021db4",
+            "executable": "/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/cargo"
+          },
+          {
+            "pid": 354743,
+            "command": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "executable": null
+          },
+          {
+            "pid": 354761,
+            "command": "bea21d30738f16f87bc64b7ef36fd9552092805875f47d2c4747cd1d986ecd84",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          },
+          {
+            "pid": 354768,
+            "command": "0cb94b5cca381d07ae1aa23a74f2a35c884c5d402766027dd131eba39dd7527e",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          },
+          {
+            "pid": 354816,
+            "command": "c3d04b31afbcdb38a26ef3073228636db67452ed4e5be47aeeb8316c45100bea",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          },
+          {
+            "pid": 354817,
+            "command": "f35edb0e5d17dcd17975674333b7d8a3d950a99fbc74242786edf01c1fdd2179",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          },
+          {
+            "pid": 354993,
+            "command": "40ab348be6b7de967cbe1da2d58851663265c1bb16ec825a6653f0c7a47ba7c3",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          },
+          {
+            "pid": 355000,
+            "command": "ce141e91f4d45e7740b5783e13ce64e0d55320805b933091e8716626c44d7afb",
+            "executable": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+          }
+        ]
+      },
+      "compiler_artifact_freshness": [
+        {
+          "target": "fixture_macro",
+          "fresh": false
+        },
+        {
+          "target": "build-script-build",
+          "fresh": false
+        },
+        {
+          "target": "lib0",
+          "fresh": false
+        },
+        {
+          "target": "lib1",
+          "fresh": false
+        },
+        {
+          "target": "lib2",
+          "fresh": false
+        },
+        {
+          "target": "lib3",
+          "fresh": false
+        },
+        {
+          "target": "fixture-app",
+          "fresh": false
+        }
+      ]
+    }
+  },
+  "faults": [
+    {
+      "kind": "Crash",
+      "validation": {
+        "Ok": null
+      },
+      "recovery_verdict": "equivalent",
+      "recovery_validation": {
+        "Ok": null
+      }
+    },
+    {
+      "kind": "Cancel",
+      "validation": {
+        "Ok": null
+      },
+      "recovery_verdict": "equivalent",
+      "recovery_validation": {
+        "Ok": null
+      }
+    }
+  ],
+  "observed_rejection": "runner.rs forced-reentry guard requires both fixture-app execution (present) and exact pinned rustc process observation (absent in this campaign capture); it correctly rejects incomplete evidence.",
+  "root_cause": "[INFERENCE] observed_process.rs samples /proc process-group membership and can miss a short-lived descendant rustc entirely between sampling passes. This capture records only Cargo, despite its successful fresh=false app artifact. Cargo total elapsed time was 37,378,499 ns. This is an observation gap, not proof that Cargo skipped rustc.",
+  "diagnostic_units_explanation": "Observation.units projects compiler-message diagnostics, not compiler-artifact successes. Both campaign and clean have no diagnostic units here. This is not the rejecting predicate.",
+  "source_disposition": "No change to owned differential sources is justified: relaxing runner.rs would weaken mandatory independent compiler-process evidence. Exact adapter need sent to Main, who owns observed_process.rs.",
+  "adapter_interface_need": "Record exact executable ProcessFact for descendant execs even when lifetimes fall entirely between /proc polling passes; retain existing bounds, owned group teardown, actual fault delivery and forced compiler-reentry requirement. Do not substitute compiler-artifact freshness for process evidence.",
+  "prepared_driver": "target/cairn-finish-20261023/process-observation-repaired-runtime.py",
+  "unrun_verification_command": "python3 target/cairn-finish-20261023/process-observation-repaired-runtime.py /ABSOLUTE/NEW/IMMUTABLE/COHORT /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/process-observation-repaired-runtime /home/brittonr/.cargo-target/mantle-cairn-differential-process-observation-repaired-20261023",
+  "verification_prerequisite": "Parent-integrated actual process observation repair, final build in detached Pueue task, distinct immutable executable cohort with ready-executable-pins.json; do not rebuild or overwrite the historical cohort.",
+  "verification_status": "Retained real baseline report inspected programmatically. New driver prepared only; no repaired runtime or source test claimed.",
+  "non_claims": [
+    "No compiler correctness, raw artifact reproducibility, native per-unit compatibility, Mantle self-hosting, release qualification, or speedup claim",
+    "Ordinary Cargo full-metadata pipelining only; no early-interface phase evidence",
+    "No performance, speedup, compiler-correctness, release or Cairn lifecycle acceptance.",
+    "No immutable cohort or historical receipt overwritten.",
+    "No inferred actual rustc execution accepted as process evidence."
+  ]
+}

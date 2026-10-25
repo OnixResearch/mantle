@@ -1,0 +1,95 @@
+{
+  "schema": "mantle-source-review-pure-contributor-integrity-v1",
+  "test_only": true,
+  "checks": [
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/policy.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/policy.json",
+      "blake3": "bd3c39cb0411092c79f81e859fe6636480f1cab4919a4e913aa797b250d844d3",
+      "size_bytes": 2905
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/claim.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/claim.json",
+      "blake3": "a4c269a6d16f2fc70a98b8ec382528e2aaf14f3354f16e073682c7fba5f6e559",
+      "size_bytes": 1127
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/attachment.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/attachment.json",
+      "blake3": "b7ddd20d1e2e13da1bc408263d14a0bf788c6e210a15da1acd7861e1e594fa79",
+      "size_bytes": 6600
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/acceptance.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/acceptance.json",
+      "blake3": "4289985ca2d3d2117739a80aa38ba7cc451c5be5b877af37f376fe59e064031d",
+      "size_bytes": 2417
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/tampered-attachment.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/TEST-ONLY-NOT-REAL-REVIEW/tampered-attachment.json",
+      "blake3": "bd1309057969f2c5a1cec9d53ccb351fe73436ce0467bcad6efa47b306087d76",
+      "size_bytes": 6600
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/contributor.rs",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/contributor.rs",
+      "blake3": "1fb675460e4a55f921bf00354fe4e646e5e44580032a17539da2671204a82b29",
+      "size_bytes": 4709
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/producer-exercise.py",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-only-20261023-1792797197194973954/exercise.py",
+      "blake3": "d60f9e4b0b50ad5d25b4c72822be8ef44278721cee2997af06d91ca32c93cda8",
+      "size_bytes": 7102
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/compiler-repaired-exercise.py",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/exercise.py",
+      "blake3": "bab1003cc1aa60f5fa6a5b15aee0778c4f69785fc06865093d5b3a25b150ffc2",
+      "size_bytes": 7121
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/contributor.stdout",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/exercise-pure-contributor.stdout",
+      "blake3": "b614485813bd28bb781cc311206c62d16447c54ccfa658f8ee6e31dc6d3d2e0f",
+      "size_bytes": 5043
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/contributor.stderr",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/exercise-pure-contributor.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "size_bytes": 0
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/PUBLIC-TEST-ONLY-contributor",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/PUBLIC-TEST-ONLY-contributor",
+      "blake3": "851edfbd3a48f376d51c82cc952ffcb26886dac019abe6349ce8b711aa6d995a",
+      "size_bytes": 6257784
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/executable-pins-before.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/executable-pins-before.json",
+      "blake3": "e6777916532fee08728cf6a6b7a5fa731443093b0de2248238846d4f0e0c8bd7",
+      "size_bytes": 2290
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23/executable-pins-after.json",
+      "source": "/home/brittonr/scratch/mantle-review-contributor-compiler-repaired-20261023-1792797278475205665/executable-pins-after.json",
+      "blake3": "e6777916532fee08728cf6a6b7a5fa731443093b0de2248238846d4f0e0c8bd7",
+      "size_bytes": 2290
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23.json",
+      "blake3": "51d8b6b775f98904d8b11c14597b3c4c718eaa83c0b5b1461fd0f58eee8fe9bf",
+      "size_bytes": 60509
+    },
+    {
+      "path": "release-consumer-pure-contributor-public-test-only-2026-10-23-artifacts.json",
+      "blake3": "19206f94a8dad4c65f52db6d58b6b7e226581263c52943b298d13d89442580e7",
+      "size_bytes": 4795
+    }
+  ],
+  "all_executable_pins_unchanged": true
+}

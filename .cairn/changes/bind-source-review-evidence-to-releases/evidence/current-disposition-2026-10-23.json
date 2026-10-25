@@ -1,0 +1,83 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "bind-source-review-evidence-to-releases",
+  "maintenance_owner": "Release, Cairn/Valence contract and reviewer-policy maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "subsequent_observation": {
+    "evidence": "authoring-policy-runtime-2026-10-23.json",
+    "accepted_subset": ["I2", "I11"],
+    "scope": "Pinned Nickel 1.17.0 admitted three valid fixtures and denied seven invalid fixtures on unchanged inputs; typed authoring and documented external-signing workflow only.",
+    "limit": "The criterion assessments below preserve the earlier read-only checkpoint. This later subset does not accept reviewer authority, independent external-profile compatibility, release eligibility, or final gates."
+  },
+  "disposition": "Version-1 producer/consumer contracts and Mantle verifier are present. September/October missing-producer inventories are historical, not the current blocker. No real selected-policy approval or current end-to-end compatibility acceptance inferred.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "I1"
+      ],
+      "level": "partial-current-contract",
+      "support": "Current documented roles, schemas, exact subject profile, Artifact Auth signature boundary and Valence linkage are available; externally reviewed stable compatibility and authority still require evidence."
+    },
+    {
+      "task_ids": [
+        "I3",
+        "I4",
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "I9",
+        "I10",
+        "I11"
+      ],
+      "level": "source-only",
+      "support": "Closed DTOs, typed digest fields, independent Artifact Auth verification integration, optional/recorded/satisfied/missing/insufficient/invalid/stale/unsupported outcomes, explicit operator-selected policy and documented external signing workflow are implemented; no test or real approval accepted by this record."
+    },
+    {
+      "task_ids": [
+        "V0",
+        "I2",
+        "V1",
+        "V2",
+        "V3",
+        "V4",
+        "V5",
+        "V6"
+      ],
+      "level": "unaccepted",
+      "support": "Need final-source baseline/positive/negative/role-separation/optional-required verification, typed policy and machine-contract coverage inspection, and exact lifecycle transcripts. Source DTOs do not establish the full Nickel-policy criterion."
+    }
+  ],
+  "local_remaining_actions": [
+    "Run focused core/release CLI tests against frozen source and current external profiles.",
+    "Measure attachment, policy and Valence receipt and test tamper/currentness/duplicate-key/author/threshold/role failures; separate deterministic test signatures from actual reviewer authorization.",
+    "Inspect I2 Nickel/machine-contract coverage and I9 final evidence digest linkage; complete real missing implementation locally rather than declaring all criteria externally blocked."
+  ],
+  "external_missing_authority_or_capability": [
+    "Actual reviewed archive bytes, current claim root/review-policy digest and operator-selected trusted full keys/currentness/revocations for a real release.",
+    "Genuine external reviewer signatures and independently issued Valence acceptance for that exact cohort; tools cannot create approval authority."
+  ],
+  "evidence_references": [
+    ".cairn/changes/bind-source-review-evidence-to-releases/tasks.md:1-39",
+    "docs/cairn-release-evidence-handoff.md:29-125",
+    "crates/crunch-release-core/src/source_review.rs:26-163",
+    ".cairn/changes/bind-source-review-evidence-to-releases/evidence/external-contract-gate-2026-09-11.md",
+    ".cairn/changes/bind-source-review-evidence-to-releases/evidence/current-producer-contracts-2026-10-18.md"
+  ],
+  "repeatability_recipe": [
+    "nix develop -c cargo test -p crunch-release-core",
+    "nix develop -c cargo test -p mantle --test release_cli",
+    "Use docs/cairn-release-evidence-handoff.md:87-119 signing-request/externally sign/assemble/Cairn verify/Valence verify sequence only with genuine supplied reviewer authority.",
+    "mantle release verify BUNDLE --source-review-policy POLICY.json --require-source-review --json",
+    "Retain optional absence and selected required-policy negative results separately; run V6 final rails."
+  ],
+  "observed_commands": [],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

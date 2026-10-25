@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 //
@@ -22,6 +22,7 @@ use alloc::vec::Vec;
 
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Error;
 
 pub const SCHEMA: &str = "mantle-fpga-profile-v1";
 pub const PART: &str = "ice40-hx1k";
@@ -127,9 +128,92 @@ pub struct StageIdentities {
     pub packing: String,
 }
 
-fn invalid(message: &str) -> Result<(), String> {
-    Err(message.to_string())
+/// Profile, identity and measured-output failures at the pure FPGA boundary.
+#[derive(Debug)]
+pub enum AdmissionError {
+    UnsupportedTool,
+    ToolClosure,
+    ToolExecutable,
+    UnsupportedDevice,
+    EmbeddedDatabase,
+    MissingBwrapVersion,
+    TopSeedOrThreads,
+    StageBounds,
+    OptionCount,
+    Define,
+    ParameterOrIncludeDirectory,
+    SourceCount,
+    SourceInput,
+    PinClockConstraints,
+    PinConstraint,
+    RequiredClock,
+    IdentitySerialization(Error),
+    IdentityByteBound,
+    ClockReport,
+    ClockNotReported(String),
+    ClockConstraint(String),
+    TimingViolation { clock: String, achieved: f64, target: f64 },
+    DeviceCapacity(String),
+    UtilizationNotReported(String),
+    UtilizationViolation(String),
+    NetlistJson(Error),
+    MissingTopPorts,
+    PortCount,
+    InvalidPort,
+    UnsupportedPortShape,
+    PortOffset,
+    PinCount,
+    UnconstrainedPin,
+    MissingClockPort,
+    ClockNotInput,
 }
+
+impl core::fmt::Display for AdmissionError {
+    fn fmt(&self, output: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::UnsupportedTool => output.write_str("unsupported-tool-version-or-executable"),
+            Self::ToolClosure => output.write_str("invalid-explicit-tool-closure"),
+            Self::ToolExecutable => output.write_str("tool-executable-outside-declared-closure"),
+            Self::UnsupportedDevice => output.write_str("unsupported-schema-part-or-package"),
+            Self::EmbeddedDatabase => output.write_str("wrong-embedded-device-database"),
+            Self::MissingBwrapVersion => output.write_str("missing-bwrap-version"),
+            Self::TopSeedOrThreads => output.write_str("invalid-top-seed-or-threads-only-one-supported"),
+            Self::StageBounds => output.write_str("invalid-stage-bounds"),
+            Self::OptionCount => output.write_str("option-count-bound"),
+            Self::Define => output.write_str("unsupported-define-requires-identifier-and-unsigned-decimal"),
+            Self::ParameterOrIncludeDirectory => output.write_str("invalid-parameter-or-include-directory"),
+            Self::SourceCount => output.write_str("source-count-bound"),
+            Self::SourceInput => output.write_str("invalid-or-duplicate-source-input"),
+            Self::PinClockConstraints => output.write_str("missing-or-excess-pin-clock-constraints"),
+            Self::PinConstraint => output.write_str("invalid-or-duplicate-pin-constraint"),
+            Self::RequiredClock => output.write_str("invalid-or-unconstrained-required-clock"),
+            Self::IdentitySerialization(error) | Self::NetlistJson(error) => write!(output, "{error}"),
+            Self::IdentityByteBound => output.write_str("identity-byte-bound"),
+            Self::ClockReport => output.write_str("missing-or-unconstrained-clock-report"),
+            Self::ClockNotReported(clock) => write!(output, "required-clock-not-reported:{clock}"),
+            Self::ClockConstraint(clock) => write!(output, "wrong-or-missing-clock-constraint:{clock}"),
+            Self::TimingViolation {
+                clock,
+                achieved,
+                target,
+            } => write!(output, "declared-timing-violation:{clock}:{achieved}<{target}"),
+            Self::DeviceCapacity(name) => write!(output, "device-capacity-exceeded:{name}"),
+            Self::UtilizationNotReported(name) => write!(output, "required-utilization-not-reported:{name}"),
+            Self::UtilizationViolation(name) => write!(output, "declared-utilization-violation:{name}"),
+            Self::MissingTopPorts => output.write_str("missing-synthesized-top-ports"),
+            Self::PortCount => output.write_str("netlist-port-count-bound"),
+            Self::InvalidPort => output.write_str("invalid-synthesized-port"),
+            Self::UnsupportedPortShape => output.write_str("unsupported-empty-ascending-or-wide-port"),
+            Self::PortOffset => output.write_str("unsupported-port-offset"),
+            Self::PinCount => output.write_str("netlist-pin-count-bound"),
+            Self::UnconstrainedPin => output.write_str("unconstrained-or-unknown-required-pin"),
+            Self::MissingClockPort => output.write_str("missing-required-clock-port"),
+            Self::ClockNotInput => output.write_str("required-clock-is-not-input"),
+        }
+    }
+}
+
+impl core::error::Error for AdmissionError {}
 
 fn is_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
@@ -170,11 +254,11 @@ impl<'a> ToolExpectation<'a> {
 }
 
 /// One declared tool must match its expectation and stay inside its closure.
-fn validate_tool(tool: &Tool, expectation: &ToolExpectation<'_>) -> Result<(), String> {
+fn validate_tool(tool: &Tool, expectation: &ToolExpectation<'_>) -> Result<(), AdmissionError> {
     let is_version = tool.version == expectation.version;
     let is_executable = tool.executable.name == expectation.executable;
     if [is_version, is_executable].iter().any(|fact| !*fact) {
-        return invalid("unsupported-tool-version-or-executable");
+        return Err(AdmissionError::UnsupportedTool);
     }
     let is_closure_present = !tool.closure.is_empty();
     let is_closure_bounded = tool.closure.len() <= MAX_CLOSURE_PATHS;
@@ -189,7 +273,7 @@ fn validate_tool(tool: &Tool, expectation: &ToolExpectation<'_>) -> Result<(), S
     .iter()
     .any(|fact| !*fact)
     {
-        return invalid("invalid-explicit-tool-closure");
+        return Err(AdmissionError::ToolClosure);
     }
     debug_assert!(tool.closure.windows(2).all(|pair| pair[0] < pair[1]));
     let is_executable_digest = is_digest(&tool.executable.blake3);
@@ -198,18 +282,18 @@ fn validate_tool(tool: &Tool, expectation: &ToolExpectation<'_>) -> Result<(), S
         .iter()
         .any(|path| tool.executable.path == format!("{path}/bin/{}", expectation.executable));
     if [is_executable_digest, is_executable_admitted].iter().any(|fact| !*fact) {
-        return invalid("tool-executable-outside-declared-closure");
+        return Err(AdmissionError::ToolExecutable);
     }
     debug_assert!(is_digest(&tool.executable.blake3));
     Ok(())
 }
 
-pub fn validate(profile: Profile) -> Result<Profile, String> {
+pub fn validate(profile: Profile) -> Result<Profile, AdmissionError> {
     validate_profile(&profile)?;
     Ok(profile)
 }
 
-fn validate_profile(profile: &Profile) -> Result<(), String> {
+fn validate_profile(profile: &Profile) -> Result<(), AdmissionError> {
     validate_identity(profile)?;
     validate_tools(profile)?;
     validate_inputs(profile)?;
@@ -218,18 +302,18 @@ fn validate_profile(profile: &Profile) -> Result<(), String> {
 }
 
 /// The profile identity and the embedded device database it must carry.
-fn validate_identity(profile: &Profile) -> Result<(), String> {
+fn validate_identity(profile: &Profile) -> Result<(), AdmissionError> {
     let is_schema = profile.schema == SCHEMA;
     let is_part = profile.part == PART;
     let is_package = profile.package == PACKAGE;
     if [is_schema, is_part, is_package].iter().any(|fact| !*fact) {
-        return invalid("unsupported-schema-part-or-package");
+        return Err(AdmissionError::UnsupportedDevice);
     }
     let is_database_part = profile.database.part == PART;
     let is_database_package = profile.database.package == PACKAGE;
     let is_database_digest = profile.database.nextpnr_binary_blake3 == profile.nextpnr.executable.blake3;
     if [is_database_part, is_database_package, is_database_digest].iter().any(|fact| !*fact) {
-        return invalid("wrong-embedded-device-database");
+        return Err(AdmissionError::EmbeddedDatabase);
     }
     debug_assert_eq!(profile.part, PART);
     debug_assert_eq!(profile.package, PACKAGE);
@@ -237,25 +321,25 @@ fn validate_identity(profile: &Profile) -> Result<(), String> {
 }
 
 /// The declared toolchain must match the admitted cohort exactly.
-fn validate_tools(profile: &Profile) -> Result<(), String> {
+fn validate_tools(profile: &Profile) -> Result<(), AdmissionError> {
     validate_tool(&profile.yosys, &ToolExpectation::new("0.68", "yosys"))?;
     validate_tool(&profile.nextpnr, &ToolExpectation::new("0.10", "nextpnr-ice40"))?;
     validate_tool(&profile.packer, &ToolExpectation::new("0-unstable-2025-06-03", "icepack"))?;
     validate_tool(&profile.shell, &ToolExpectation::new("1.37.0", "sh"))?;
     validate_tool(&profile.bwrap, &ToolExpectation::new(&profile.bwrap.version, "bwrap"))?;
     if profile.bwrap.version.is_empty() {
-        return invalid("missing-bwrap-version");
+        return Err(AdmissionError::MissingBwrapVersion);
     }
     Ok(())
 }
 
 /// The stage bounds, option counts and option values.
-fn validate_bounds(profile: &Profile) -> Result<(), String> {
+fn validate_bounds(profile: &Profile) -> Result<(), AdmissionError> {
     let is_top = identifier(&profile.top);
     let is_threads = profile.threads == 1;
     let is_seed = profile.seed != 0;
     if [is_top, is_threads, is_seed].iter().any(|fact| !*fact) {
-        return invalid("invalid-top-seed-or-threads-only-one-supported");
+        return Err(AdmissionError::TopSeedOrThreads);
     }
     let has_timeout_ms = profile.timeout_ms != 0;
     let is_admitted_timeout_ms = profile.timeout_ms <= 600_000;
@@ -274,7 +358,7 @@ fn validate_bounds(profile: &Profile) -> Result<(), String> {
     .iter()
     .any(|fact| !*fact)
     {
-        return invalid("invalid-stage-bounds");
+        return Err(AdmissionError::StageBounds);
     }
     debug_assert!(profile.timeout_ms != 0);
     debug_assert!(profile.max_output_bytes >= 1024);
@@ -295,30 +379,30 @@ fn validate_bounds(profile: &Profile) -> Result<(), String> {
     .iter()
     .any(|fact| !*fact)
     {
-        return invalid("option-count-bound");
+        return Err(AdmissionError::OptionCount);
     }
     for (name, value) in &profile.defines {
         let is_name = identifier(name);
         let is_value = !value.is_empty();
         let is_decimal = value.bytes().all(|byte| byte.is_ascii_digit());
         if [is_name, is_value, is_decimal].iter().any(|fact| !*fact) {
-            return invalid("unsupported-define-requires-identifier-and-unsigned-decimal");
+            return Err(AdmissionError::Define);
         }
     }
     let is_parameters = profile.parameters.keys().all(|name| identifier(name));
     let is_include_dirs = profile.include_dirs.iter().all(|name| safe_name(name));
     if [is_parameters, is_include_dirs].iter().any(|fact| !*fact) {
-        return invalid("invalid-parameter-or-include-directory");
+        return Err(AdmissionError::ParameterOrIncludeDirectory);
     }
     Ok(())
 }
 
-fn validate_inputs(profile: &Profile) -> Result<(), String> {
+fn validate_inputs(profile: &Profile) -> Result<(), AdmissionError> {
     let source_count = profile.rtl.len().saturating_add(profile.includes.len());
     let is_source_present = !profile.rtl.is_empty();
     let is_source_bounded = source_count.saturating_add(2) <= MAX_INPUTS;
     if [is_source_present, is_source_bounded].iter().any(|fact| !*fact) {
-        return invalid("source-count-bound");
+        return Err(AdmissionError::SourceCount);
     }
     let mut names = BTreeSet::new();
     for file in profile.rtl.iter().chain(&profile.includes).chain([&profile.synthesis_script, &profile.constraints]) {
@@ -328,7 +412,7 @@ fn validate_inputs(profile: &Profile) -> Result<(), String> {
         let is_unique = names.insert(&file.name);
         let is_unreserved = !RESERVED_NAMES.contains(&file.name.as_str());
         if [is_name, is_absolute, is_digest_value, is_unique, is_unreserved].iter().any(|fact| !*fact) {
-            return invalid("invalid-or-duplicate-source-input");
+            return Err(AdmissionError::SourceInput);
         }
     }
     debug_assert!(!names.is_empty());
@@ -336,13 +420,13 @@ fn validate_inputs(profile: &Profile) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_constraints(profile: &Profile) -> Result<(), String> {
+fn validate_constraints(profile: &Profile) -> Result<(), AdmissionError> {
     let is_pins_present = !profile.pins.is_empty();
     let is_pins_bounded = profile.pins.len() <= 96;
     let is_clocks_present = !profile.clocks.is_empty();
     let is_clocks_bounded = profile.clocks.len() <= 8;
     if [is_pins_present, is_pins_bounded, is_clocks_present, is_clocks_bounded].iter().any(|fact| !*fact) {
-        return invalid("missing-or-excess-pin-clock-constraints");
+        return Err(AdmissionError::PinClockConstraints);
     }
     let mut used = BTreeSet::new();
     for (port, pin) in &profile.pins {
@@ -351,7 +435,7 @@ fn validate_constraints(profile: &Profile) -> Result<(), String> {
         let is_present = !pin.is_empty();
         let is_unique = used.insert(pin);
         if [is_name, is_numeric, is_present, is_unique].iter().any(|fact| !*fact) {
-            return invalid("invalid-or-duplicate-pin-constraint");
+            return Err(AdmissionError::PinConstraint);
         }
     }
     debug_assert!(!used.is_empty());
@@ -378,17 +462,17 @@ fn validate_constraints(profile: &Profile) -> Result<(), String> {
         .iter()
         .any(|fact| !*fact)
         {
-            return invalid("invalid-or-unconstrained-required-clock");
+            return Err(AdmissionError::RequiredClock);
         }
     }
     debug_assert_eq!(clocks.len(), profile.clocks.len());
     Ok(())
 }
 
-fn digest<T: Serialize>(domain: &str, value: &T) -> Result<String, String> {
-    let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+fn digest<T: Serialize>(domain: &str, value: &T) -> Result<String, AdmissionError> {
+    let bytes = serde_json::to_vec(value).map_err(AdmissionError::IdentitySerialization)?;
     if bytes.len() > MAX_TEXT_BYTES {
-        return Err("identity-byte-bound".to_string());
+        return Err(AdmissionError::IdentityByteBound);
     }
     let mut hasher = blake3::Hasher::new();
     hasher.update(domain.as_bytes());
@@ -407,7 +491,7 @@ pub struct PlannedProfile {
 }
 
 /// Merkle stages deliberately exclude downstream configuration from synthesis.
-pub fn identities(profile: Profile) -> Result<PlannedProfile, String> {
+pub fn identities(profile: Profile) -> Result<PlannedProfile, AdmissionError> {
     validate_profile(&profile)?;
     let synthesis = digest(
         "mantle.fpga.synthesis.v1",
@@ -553,13 +637,13 @@ pub struct ReportRequest {
     pub report: Report,
 }
 
-pub fn accept_report(request: ReportRequest) -> Result<ReportRequest, String> {
+pub fn accept_report(request: ReportRequest) -> Result<ReportRequest, AdmissionError> {
     validate_profile(&request.profile)?;
     accept_report_facts(&request.profile, &request.report)?;
     Ok(request)
 }
 
-fn accept_report_facts(profile: &Profile, report: &Report) -> Result<(), String> {
+fn accept_report_facts(profile: &Profile, report: &Report) -> Result<(), AdmissionError> {
     let is_clock_count = report.fmax.len() == profile.clocks.len();
     let is_utilization_present = !report.utilization.is_empty();
     let is_utilization_bounded = report.utilization.len() <= 64;
@@ -573,7 +657,7 @@ fn accept_report_facts(profile: &Profile, report: &Report) -> Result<(), String>
     .iter()
     .any(|fact| !*fact)
     {
-        return invalid("missing-or-unconstrained-clock-report");
+        return Err(AdmissionError::ClockReport);
     }
     debug_assert_eq!(report.fmax.len(), profile.clocks.len());
     debug_assert!(!report.utilization.is_empty());
@@ -581,7 +665,7 @@ fn accept_report_facts(profile: &Profile, report: &Report) -> Result<(), String>
         let fact = report
             .fmax
             .get(&clock.report_net)
-            .ok_or_else(|| format!("required-clock-not-reported:{}", clock.report_net))?;
+            .ok_or_else(|| AdmissionError::ClockNotReported(clock.report_net.clone()))?;
         let target = f64::from(clock.frequency_khz) / 1000.0;
         let is_achieved_finite = fact.achieved.is_finite();
         let is_constraint_finite = fact.constraint.is_finite();
@@ -596,21 +680,25 @@ fn accept_report_facts(profile: &Profile, report: &Report) -> Result<(), String>
         .iter()
         .any(|fact| !*fact)
         {
-            return Err(format!("wrong-or-missing-clock-constraint:{}", clock.report_net));
+            return Err(AdmissionError::ClockConstraint(clock.report_net.clone()));
         }
         if fact.achieved < target {
-            return Err(format!("declared-timing-violation:{}:{}<{target}", clock.report_net, fact.achieved));
+            return Err(AdmissionError::TimingViolation {
+                clock: clock.report_net.clone(),
+                achieved: fact.achieved,
+                target,
+            });
         }
     }
     for (name, fact) in &report.utilization {
         if fact.used > fact.available {
-            return Err(format!("device-capacity-exceeded:{name}"));
+            return Err(AdmissionError::DeviceCapacity(name.clone()));
         }
     }
     for (name, limit) in &profile.utilization_limits {
-        let fact = report.utilization.get(name).ok_or_else(|| format!("required-utilization-not-reported:{name}"))?;
+        let fact = report.utilization.get(name).ok_or_else(|| AdmissionError::UtilizationNotReported(name.clone()))?;
         if fact.used > *limit {
-            return Err(format!("declared-utilization-violation:{name}"));
+            return Err(AdmissionError::UtilizationViolation(name.clone()));
         }
     }
     Ok(())
@@ -623,64 +711,61 @@ pub struct NetlistRequest {
 }
 
 /// Ensure every actual top-level bit has a declared pin; no phantom PCF entries.
-pub fn accept_netlist(request: NetlistRequest) -> Result<NetlistRequest, String> {
+pub fn accept_netlist(request: NetlistRequest) -> Result<NetlistRequest, AdmissionError> {
     validate_profile(&request.profile)?;
-    let netlist = serde_json::from_slice(&request.netlist).map_err(|error| error.to_string())?;
+    let netlist = serde_json::from_slice(&request.netlist).map_err(AdmissionError::NetlistJson)?;
     accept_netlist_ports(&request.profile, &netlist)?;
     Ok(request)
 }
 
-fn accept_netlist_ports(profile: &Profile, netlist: &serde_json::Value) -> Result<(), String> {
+fn accept_netlist_ports(profile: &Profile, netlist: &serde_json::Value) -> Result<(), AdmissionError> {
     // The synthesized top level, described by one entry per declared port.
     let top_descriptors = netlist
         .get("modules")
         .and_then(|v| v.get(&profile.top))
         .and_then(|v| v.get("ports"))
         .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| "missing-synthesized-top-ports".to_string())?;
+        .ok_or(AdmissionError::MissingTopPorts)?;
     let is_present = !top_descriptors.is_empty();
     let is_bounded = top_descriptors.len() <= 96;
     if [is_present, is_bounded].iter().any(|fact| !*fact) {
-        return invalid("netlist-port-count-bound");
+        return Err(AdmissionError::PortCount);
     }
     let mut actual = BTreeSet::new();
     for (name, descriptor) in top_descriptors {
-        let bits = descriptor
-            .get("bits")
-            .and_then(serde_json::Value::as_array)
-            .ok_or_else(|| "invalid-synthesized-port".to_string())?;
+        let bits = descriptor.get("bits").and_then(serde_json::Value::as_array).ok_or(AdmissionError::InvalidPort)?;
         let is_bits_present = !bits.is_empty();
         let is_bits_bounded = bits.len() <= 96;
         let is_explicit_bits = descriptor.get("upto").and_then(serde_json::Value::as_u64).unwrap_or(0) == 0;
         if [is_bits_present, is_bits_bounded, is_explicit_bits].iter().any(|fact| !*fact) {
-            return invalid("unsupported-empty-ascending-or-wide-port");
+            return Err(AdmissionError::UnsupportedPortShape);
         }
         let first_bit = descriptor.get("offset").and_then(serde_json::Value::as_u64).unwrap_or(0);
         if first_bit > u64::from(u32::MAX) {
-            return invalid("unsupported-port-offset");
+            return Err(AdmissionError::PortOffset);
         }
         for index in 0..bits.len() {
             let pin = if bits.len() == 1 {
                 name.clone()
             } else {
-                let bit = first_bit.checked_add(index as u64).ok_or_else(|| "unsupported-port-offset".to_string())?;
+                let bit = first_bit.checked_add(index as u64).ok_or(AdmissionError::PortOffset)?;
                 format!("{name}[{bit}]")
             };
             actual.insert(pin);
             if actual.len() > 96 {
-                return invalid("netlist-pin-count-bound");
+                return Err(AdmissionError::PinCount);
             }
         }
     }
     debug_assert!(!actual.is_empty());
     debug_assert!(actual.len() <= 96);
     if actual != profile.pins.keys().cloned().collect() {
-        return invalid("unconstrained-or-unknown-required-pin");
+        return Err(AdmissionError::UnconstrainedPin);
     }
     for clock in &profile.clocks {
-        let descriptor = top_descriptors.get(&clock.port).ok_or_else(|| "missing-required-clock-port".to_string())?;
+        let descriptor = top_descriptors.get(&clock.port).ok_or(AdmissionError::MissingClockPort)?;
         if descriptor.get("direction").and_then(serde_json::Value::as_str) != Some("input") {
-            return invalid("required-clock-is-not-input");
+            return Err(AdmissionError::ClockNotInput);
         }
     }
     Ok(())

@@ -16,6 +16,8 @@ Wrapped sites cover castore blob reads, NAR stream writes, post-build action-res
 - Fixtures sharing the process-global counter run serially.
 - `SLEEPINESS` stays zero in fixtures and CI.
 - The trigger function records the injection site for assertions.
+- The armed guard is thread-bound (`!Send`); current-thread fixtures cannot migrate ownership to another runtime worker. Unarmed threads execute the original I/O without consuming the process counter. The async fixture mutex serializes owners, and restoration assertions hold that same mutex to avoid racing the next fixture.
+- Boundary fixtures exercise an actual store read on an unarmed OS thread, a queued second owner, and unwind restoration followed by successful cache publication. They do not require a serial test harness to prevent unrelated tests stealing the fault.
 
 ## Placement
 
@@ -28,3 +30,11 @@ Positive coverage: the default counter leaves the store/NAR/cache fixture unchan
 Negative coverage: injected store-read and NAR-write failures retain their error classes; post-build cache-record write and pre-link fsync failures retain their publication diagnostics at the adapter boundary. Orchestration preserves the ordinary diagnostic and CA-required fail-closed rules separately.
 
 Boundary coverage: annotation carries the expected crate, file, and line; a fixture lock serializes ownership of the shared counter; no fixture enables `SLEEPINESS`.
+
+The cache matrix reaches both the record and index through counters 1–4. Record write/fsync faults leave no final record; index write/fsync faults may leave an undiscoverable durable record. All four cases assert temporary-file cleanup, absence of an index hit, and successful retry with the default counter (including duplicate-safe reuse of the orphan record).
+
+The positive cycle compares the complete rendered NAR size and SHA-256 against `crunch-nar`'s filesystem observation, not just archive magic or a payload substring. No injection dependency is needed in `crunch-nar`: the named NAR stream boundary remains the store adapter's copy to its caller-provided writer.
+
+The build orchestration fixture uses a real filesystem publication obstruction after executor completion. It distinguishes ordinary IA diagnostic-only completion from floating CA and CA-resolved IA intermediate failure, and asserts the dependent is not executed. This complements (rather than claims to replace) the store adapter's exact injected write/fsync diagnostics. No production publication rules or cache trust policies change.
+
+These are implementation descriptions, not execution receipts. Current-source fixture execution, the actual build/cache smoke, package/workspace/Clippy/Cairn/Nix gates, and lifecycle acceptance remain unclaimed until the integration owner captures their results.

@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 //
@@ -151,9 +151,10 @@ pub(crate) fn serve(
 }
 
 fn request(socket: &Path, operation: Operation) -> Result<Response, Error> {
-    let mut stream = UnixStream::connect(socket).map_err(io)?;
-    stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(io)?;
-    stream.set_write_timeout(Some(Duration::from_secs(5))).map_err(io)?;
+    let budget = Duration::from_secs(5);
+    let deadline = Instant::now() + budget;
+    let mut connection = crate::slots::connect_bounded(socket, budget).map_err(io)?;
+    let mut stream = crate::slots::DeadlineIo::new(&mut connection, deadline);
     write_frame(
         &mut stream,
         &Request {
@@ -729,7 +730,7 @@ fn prepare(policy: &DriverPolicy, invocation: &cc::Invocation) -> Result<cc::Key
     }
     let normalized = environment
         .iter()
-        .map(|(k, v)| Ok((k.clone(), normalize_value(policy, v)?)))
+        .map(|(k, v)| Ok((k.clone(), normalize_value(policy, EnvironmentValue { name: k, value: v })?)))
         .collect::<Result<BTreeMap<_, _>, Error>>()?;
     debug_assert_eq!(normalized.len(), environment.len(), "each environment value is normalized in place");
     let source = Path::new(&invocation.source);
@@ -755,21 +756,78 @@ fn prepare(policy: &DriverPolicy, invocation: &cc::Invocation) -> Result<cc::Key
     })
 }
 
-fn normalize_value(policy: &DriverPolicy, value: &str) -> Result<String, Error> {
-    let mut result = value.to_string();
-    let mut roots = policy.roots.iter().collect::<Vec<_>>();
-    roots.sort_by_key(|r| std::cmp::Reverse(r.path.as_os_str().len()));
-    for root in roots {
-        result = result.replace(
-            root.path.to_str().ok_or_else(|| Error::Policy("cc-root-utf8".into()))?,
-            &format!("@{}", root.alias),
-        );
+/// Colon-separated environment entries are either literal scalars or declared
+/// paths. Tagged fields prevent a literal alias from colliding with a relocated
+/// path; component-aware matching must never mask an undeclared sibling root.
+#[derive(Serialize)]
+enum EnvironmentEntry<'a> {
+    Literal(&'a str),
+    Path { alias: &'a str, relative: &'a str },
+}
+
+struct EnvironmentValue<'a> {
+    name: &'a str,
+    value: &'a str,
+}
+
+fn normalize_value<'a>(
+    policy: &'a DriverPolicy,
+    environment: EnvironmentValue<'a>,
+) -> Result<Vec<EnvironmentEntry<'a>>, Error> {
+    let EnvironmentValue { name, value } = environment;
+    // Only these compiler variables define colon-separated search paths. An
+    // arbitrary variable could instead name a single file containing a colon.
+    if !matches!(
+        name,
+        "PATH"
+            | "CPATH"
+            | "C_INCLUDE_PATH"
+            | "CPLUS_INCLUDE_PATH"
+            | "OBJC_INCLUDE_PATH"
+            | "LIBRARY_PATH"
+            | "COMPILER_PATH"
+    ) {
+        if value.contains('/') {
+            return Err(Error::Policy("cc-environment-path-unclassified".into()));
+        }
+        return Ok(vec![EnvironmentEntry::Literal(value)]);
     }
-    // Values containing any remaining absolute path are not classified semantic inputs.
-    if result.starts_with('/') || result.contains("=/") || result.contains(":/") {
-        return Err(Error::Policy("cc-environment-path-unclassified".into()));
-    }
-    Ok(result)
+    value
+        .split(':')
+        .map(|entry| {
+            let path = Path::new(entry);
+            if !path.is_absolute() {
+                // Empty and relative search entries depend on ambient cwd,
+                // whose negative lookup tree has not been declared here.
+                return Err(Error::Policy("cc-environment-path-unclassified".into()));
+            }
+            if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                return Err(Error::Policy("cc-environment-path-unclassified".into()));
+            }
+            let root = policy
+                .roots
+                .iter()
+                .filter(|root| path.starts_with(&root.path))
+                .max_by_key(|root| root.path.as_os_str().len())
+                .ok_or_else(|| Error::Policy("cc-environment-path-unclassified".into()))?;
+            if !root.path_independent {
+                return Err(Error::Policy("cc-environment-path-dependent".into()));
+            }
+            // These are the admission invariants for relocation: the selected
+            // root is component-matched, and only independent roots lose paths.
+            debug_assert!(path.starts_with(&root.path));
+            debug_assert!(root.path_independent);
+            let root_path = root.path.to_str().ok_or_else(|| Error::Policy("cc-environment-path-utf8".into()))?;
+            let suffix = entry
+                .strip_prefix(root_path)
+                .ok_or_else(|| Error::Policy("cc-environment-path-unclassified".into()))?;
+            let relative = suffix.strip_prefix('/').unwrap_or(suffix);
+            Ok(EnvironmentEntry::Path {
+                alias: &root.alias,
+                relative,
+            })
+        })
+        .collect()
 }
 
 fn locator(policy: &DriverPolicy, path: &Path) -> Result<String, Error> {
@@ -1168,6 +1226,64 @@ mod tests {
             slot_wait_ms_max: 1_000,
             receipt_dir: root.join("receipts"),
         }
+    }
+
+    #[test]
+    fn environment_relocation_preserves_identity_without_masking_other_inputs() {
+        let mut admitted = policy(Path::new("/old/source"));
+        let encoded = |policy: &DriverPolicy, value: &str| {
+            serde_json::to_vec(&normalize_value(policy, EnvironmentValue { name: "PATH", value }).unwrap()).unwrap()
+        };
+        let original = encoded(&admitted, "/old/source/bin:/old/source/include");
+        for ambient in ["", ".", "relative", "@source", "/old/source:"] {
+            assert!(
+                normalize_value(&admitted, EnvironmentValue {
+                    name: "PATH",
+                    value: ambient
+                })
+                .is_err()
+            );
+        }
+        assert!(
+            normalize_value(&admitted, EnvironmentValue {
+                name: "PATH",
+                value: "/old/source-other/bin"
+            })
+            .is_err()
+        );
+        assert!(
+            normalize_value(&admitted, EnvironmentValue {
+                name: "PATH",
+                value: "-I/old/source/include"
+            })
+            .is_err()
+        );
+        assert!(
+            normalize_value(&admitted, EnvironmentValue {
+                name: "PATH",
+                value: "/old/source/../outside"
+            })
+            .is_err()
+        );
+        assert!(
+            normalize_value(&admitted, EnvironmentValue {
+                name: "CUSTOM",
+                value: "/old/source:other-file"
+            })
+            .is_err()
+        );
+        admitted.roots[0].path = "/new/source".into();
+        assert_eq!(original, encoded(&admitted, "/new/source/bin:/new/source/include"));
+        assert_ne!(original, encoded(&admitted, "/new/source/other:/new/source/include"));
+        assert_ne!(original, encoded(&admitted, "/new/source/include:/new/source/bin"));
+        admitted.roots[0].path_independent = false;
+        assert!(
+            normalize_value(&admitted, EnvironmentValue {
+                name: "PATH",
+                value: "/new/source/bin:/new/source/include"
+            },)
+            .is_err()
+        );
     }
 
     #[test]

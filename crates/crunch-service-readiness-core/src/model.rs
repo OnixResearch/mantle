@@ -116,6 +116,8 @@ pub struct ReadinessRow<'a> {
     /// `None` means no exit was observed; `Some(None)` means an exit with no restart.
     pub restart_action: Option<RestartAction>,
     pub ready: bool,
+    /// Local request history survives dependency-derived readiness retraction.
+    pub(crate) request_acknowledged: bool,
     /// Only declared component IDs; source/policy blockers remain proof-shell facts.
     pub blocked_by: Vec<&'a str>,
 }
@@ -167,6 +169,7 @@ pub enum ErrorCode {
     InvalidProofCompletion,
     InvalidProofDigest,
     InvalidPreviousReport,
+    DeclarationChanged,
     StaleGeneration,
     UnobservedStart,
     UnobservedExit,

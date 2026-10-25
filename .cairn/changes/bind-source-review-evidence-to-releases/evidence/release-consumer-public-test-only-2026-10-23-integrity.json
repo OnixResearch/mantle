@@ -1,0 +1,67 @@
+{
+  "schema": "mantle-release-consumer-public-test-only-integrity-v1",
+  "test_only": true,
+  "checks": [
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/PUBLIC-TEST-ONLY-actual-source.tar",
+      "blake3": "332fa179b6a78de69998d4dd97e6b5b764cf8aae647f48d0f099be83ea33fcf2",
+      "size_bytes": 20480
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/acceptance.json",
+      "blake3": "7ea7f6ad9f28562bd40517dbacd69b4ca90a634663928800387beb60ecea689e",
+      "size_bytes": 2466
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/attachment.json",
+      "blake3": "01ee8d59f8ed69fdcc7f1814a3d6260e6f514f21f062c0490f0d916214559e29",
+      "size_bytes": 6698
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/executable-pins-after.json",
+      "blake3": "800a26a3f16c2a8bdd159788e85dbb391689059431be5d433f7ffd6f621546cb",
+      "size_bytes": 1819
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/executable-pins-before.json",
+      "blake3": "800a26a3f16c2a8bdd159788e85dbb391689059431be5d433f7ffd6f621546cb",
+      "size_bytes": 1819
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/finish.py",
+      "blake3": "707dbc8615c16e010701370d9d91adddfd1917130db29a0cc2af4f5a72970c6f",
+      "size_bytes": 9851
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/first-exercise.py",
+      "blake3": "0d08c3426fee5bbd6cdbfc7e7aaf6ad295c9b726eb685727b38ec10068127831",
+      "size_bytes": 10803
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/incomplete-bundle-manifest.json",
+      "blake3": "879e944f322078a0a51dbd72000b8a46ba5ce4bd5b33ae5e59e490384d0ca94c",
+      "size_bytes": 2588
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/policy.json",
+      "blake3": "afd06ff80a86d7b52c0478f49e758f9f0d7afdd4c81412af792e38d1bcfd53cd",
+      "size_bytes": 2954
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23/tampered-signature.json",
+      "blake3": "75660d6190605779b7be964d4e06b158dd3cb98ef5af4801fb128c9ca4609df4",
+      "size_bytes": 2245
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23.json",
+      "blake3": "5dd3a7d31257462b0a2cda295e066fad05143a577ac306ffb7f03d48723cc77e",
+      "size_bytes": 81459
+    },
+    {
+      "path": "release-consumer-public-test-only-2026-10-23-artifacts.json",
+      "blake3": "8338ab958c393e93e73b5891db16004ce496b337b1ce4dd6c2da95a04c2162d1",
+      "size_bytes": 3587
+    }
+  ],
+  "all_executable_pins_unchanged": true
+}

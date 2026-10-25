@@ -313,6 +313,9 @@ pub struct Builder<BServ> {
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     observed_source_paths: BTreeSet<StorePath<String>>,
     root_retention_source: Option<GcRootSource>,
+    pub(crate) rust_wait_units: Option<
+        Arc<std::sync::Mutex<BTreeMap<crunch_rustc_wrapper::waits::Digest, crunch_rustc_wrapper::waits::UnitIdentity>>>,
+    >,
 }
 
 impl<BServ> Builder<BServ>
@@ -434,6 +437,7 @@ where BServ: BuildService + 'static
             source_closure_cache: HashMap::new(),
             observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
+            rust_wait_units: None,
         }
     }
 
@@ -481,6 +485,18 @@ where BServ: BuildService + 'static
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
         self.hermeticity_mode = hermeticity_mode;
+    }
+    pub fn set_rust_wait_units(
+        &mut self,
+        units: Option<
+            Arc<
+                std::sync::Mutex<
+                    BTreeMap<crunch_rustc_wrapper::waits::Digest, crunch_rustc_wrapper::waits::UnitIdentity>,
+                >,
+            >,
+        >,
+    ) {
+        self.rust_wait_units = units;
     }
 
     pub fn set_root_retention_source(&mut self, root_retention_source: Option<GcRootSource>) {
@@ -537,7 +553,7 @@ where BServ: BuildService + 'static
         };
         let raw = std::str::from_utf8(declared.as_ref())
             .map_err(|_| Error::Store("finish-gate declaration must be UTF-8".into()))?;
-        let gates = finish_gates::parse_gate(raw).map_err(Error::Store)?;
+        let gates = finish_gates::parse_gate(raw).map_err(|denial| Error::Store(denial.to_string()))?;
         self.finish_gate_reports
             .push(finish_gates::failed_build_report(&prepared.drv_name, &gates, failure));
         Ok(())
@@ -972,7 +988,7 @@ where BServ: BuildService + 'static
         };
         let declared = std::str::from_utf8(declared.as_ref())
             .map_err(|_| Error::Store("finish-gate declaration must be UTF-8".into()))?;
-        let gates = finish_gates::parse_gate(declared).map_err(Error::Store)?;
+        let gates = finish_gates::parse_gate(declared).map_err(|denial| Error::Store(denial.to_string()))?;
         let is_cross_build =
             prepared.derivation.system != format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
         let candidates = finish_gates::reference_candidates(
@@ -981,7 +997,7 @@ where BServ: BuildService + 'static
             prepared.sandbox_inputs.keys().map(|path| path.to_absolute_path_with_prefix(self.store.store_dir())),
             is_cross_build,
         )
-        .map_err(Error::Store)?;
+        .map_err(|denial| Error::Store(denial.to_string()))?;
         let mut findings = Vec::new();
         for (index, output_name) in prepared.derivation.outputs.keys().enumerate() {
             let output = build_result.outputs.get(index).ok_or_else(|| Error::OutputMissing {
@@ -1005,16 +1021,16 @@ where BServ: BuildService + 'static
                     cross_build: is_cross_build,
                 },
             )
-            .map_err(Error::Store)?;
+            .map_err(|denial| Error::Store(denial.to_string()))?;
             if output_findings.len() > MAX_FINISH_REFERENCE_FINDINGS.saturating_sub(findings.len()) {
-                return Err(Error::Store("finish-gate reference findings exceed 128".into()));
+                return Err(Error::Store(finish_gates::GateDenial::ReferenceFindingLimit.to_string()));
             }
             findings.reserve(output_findings.len());
             findings.extend(output_findings);
         }
         let gate_result =
             finish_gates::result_report(&prepared.drv_name, &gates, findings, build_result.log.as_deref())
-                .map_err(Error::Store)?;
+                .map_err(|denial| Error::Store(denial.to_string()))?;
         let denied = gate_result.reference_findings.iter().find(|finding| finding.denied).cloned();
         let missing_dlopen = gate_result
             .missing_sonames
@@ -1746,6 +1762,29 @@ where BServ: BuildService + 'static
         }
 
         admitted
+    }
+
+    /// Export the outputs of a completed goal that was requested as a root later.
+    ///
+    /// The outputs were persisted while the goal was a dependency. The
+    /// exported PathInfo must still be the one the completed goal reported.
+    pub(crate) async fn export_late_root(&mut self, outcome: &BuildOutcome) -> Result<(), Error> {
+        assert!(!outcome.outputs.is_empty(), "a completed goal reports its outputs");
+        for path_info in outcome.outputs.values() {
+            let root_path_info = self
+                .store
+                .export_late_root_output(&path_info.store_path, self.root_retention_source)
+                .await
+                .map_err(|error| Error::Store(format!("exporting late root {}: {error}", path_info.store_path)))?;
+            assert_eq!(root_path_info.store_path, path_info.store_path, "export returns the requested store path");
+            if (root_path_info.nar_sha256, root_path_info.nar_size) != (path_info.nar_sha256, path_info.nar_size) {
+                return Err(Error::Store(format!(
+                    "late root output changed after completion: {}",
+                    path_info.store_path
+                )));
+            }
+        }
+        Ok(())
     }
 
     async fn check_shared_action_result(
@@ -6024,5 +6063,123 @@ mod tests {
         assert!(lookup.records.is_empty(), "mismatched recursive output must not publish action results");
         assert!(lookup.index.result_refs.is_empty(), "mismatched output must not publish action-result indexes");
         assert!(!builder.take_action_result_reports().iter().any(|report| report.phase == "publication"));
+    }
+
+    struct ObstructActionResultPublication {
+        inner: MockBuildService,
+        publication_root: PathBuf,
+        remaining_builds: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait]
+    impl BuildService for ObstructActionResultPublication {
+        async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
+            let result = self.inner.do_build(request).await?;
+            if self.remaining_builds.fetch_sub(1, AtomicOrdering::SeqCst) == 1 {
+                // Resolve and admit any CA parents first, then obstruct only
+                // the selected completed build's real publication attempt.
+                std::fs::create_dir_all(self.publication_root.parent().unwrap())?;
+                if self.publication_root.exists() {
+                    std::fs::rename(&self.publication_root, self.publication_root.with_extension("preserved"))?;
+                }
+                std::fs::write(&self.publication_root, b"not a publication directory")?;
+            }
+            Ok(result)
+        }
+    }
+
+    // r[verify mantle.io_fault.verification] Exercise the real local publisher
+    // through build completion. Adapter injection tests cover write/fsync;
+    // this filesystem obstruction covers their orchestration policy boundary.
+    #[tokio::test]
+    async fn io_fault_publication_is_diagnostic_only_for_ordinary_builds() {
+        for (ca_required, resolved_intermediate) in [(false, false), (true, false), (true, true)] {
+            let temp = tempfile::tempdir().unwrap();
+            let state_dir = temp.path().join("state");
+            let blobs = MemoryBlobService::default();
+            let (service, calls) = MockBuildService::new(blobs.clone());
+            let local_results = crunch_store::LocalActionResultStore::new(&state_dir);
+            let failure_build = if resolved_intermediate { 2 } else { 1 };
+            let service = ObstructActionResultPublication {
+                inner: service,
+                publication_root: local_results.root().to_path_buf(),
+                remaining_builds: std::sync::atomic::AtomicUsize::new(failure_build),
+            };
+            let mut builder = Builder::with_state_dir(
+                Arc::new(blobs),
+                Arc::new(tmp_ds()),
+                service,
+                Arc::new(test_pis()),
+                temp.path().join("store"),
+                Some(state_dir.clone()),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+
+            let mut registry = DerivationRegistry::default();
+            let (producer, _) = if ca_required {
+                build_and_register_ca("publication-ca", &mut registry)
+            } else {
+                build_and_register("publication-ia", &[], &mut registry)
+            };
+            let root = if ca_required {
+                let intermediate = register_ca_dependent("publication-consumer", &producer, &mut registry);
+                if resolved_intermediate {
+                    build_and_register("publication-grandchild", &[(intermediate, "out")], &mut registry).0
+                } else {
+                    intermediate
+                }
+            } else {
+                producer.clone()
+            };
+            let mut worker = crate::worker::Worker::new(1);
+            worker.want(&root, &registry, true).unwrap();
+            let result = worker.run(&mut builder, &mut registry).await.unwrap();
+            let reports = builder.take_action_result_reports();
+            let build_count = calls.lock().map(|recorded| recorded.len()).expect("build request log");
+            assert_eq!(build_count, failure_build, "no dependent may consume an unpublished CA-required output");
+            if ca_required {
+                assert!(result.outcomes.is_empty());
+                assert!(
+                    result.failed.iter().any(|failure| {
+                        failure.origin_error.contains("ca-realisation-untrusted: action-result-publication-create-dir:")
+                    }),
+                    "{:?}",
+                    result.failed
+                );
+                let published: Vec<_> = reports.iter().filter(|report| report.phase == "publication").collect();
+                if resolved_intermediate {
+                    // The floating parent was already signed and published;
+                    // the IA intermediate must not get a successful report.
+                    assert_eq!(published.len(), 1);
+                    assert_eq!(
+                        published[0].action_ref,
+                        action_ref_for_derivation(
+                            &registry.get_by_drv_path(&producer.to_absolute_path()).unwrap().derivation,
+                            nix_compat::store_path::STORE_DIR,
+                        )
+                    );
+                    assert!(published[0].diagnostics.is_empty());
+                } else {
+                    assert!(published.is_empty());
+                }
+            } else {
+                assert!(result.failed.is_empty(), "{:?}", result.failed);
+                let outcome = result.outcomes.iter().find(|outcome| outcome.drv_path == producer).unwrap();
+                assert!(!outcome.cached);
+                assert!(outcome.outputs.contains_key("out"));
+                let publication = reports.iter().find(|report| report.phase == "publication").unwrap();
+                assert!(
+                    publication
+                        .diagnostics
+                        .iter()
+                        .any(|diagnostic| { diagnostic.starts_with("action-result-publication-create-dir:") })
+                );
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::ambient_clock)]
@@ -11,7 +11,9 @@
 //! crate owns policy loading, peer admission, framing, sandbox execution,
 //! cache orchestration, output publication, and receipt persistence.
 pub mod cc;
+pub mod observed_process;
 pub mod slots;
+pub mod waits;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

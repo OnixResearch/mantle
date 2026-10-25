@@ -279,11 +279,20 @@ pub fn record_failed_usage(
     trusted: &[String],
 ) -> Result<(), String> {
     let digest = super::usage::failure_result_digest(binding, request_id);
-    let usage = trusted
-        .iter()
-        .filter_map(|encoded| nix_compat::narinfo::VerifyingKey::parse(encoded).ok())
-        .find_map(|key| report.verify(binding, request_id, &digest, &key).ok())
-        .ok_or("gateway-failure-usage-signature-invalid")?;
+    // Verification reasons are fixed codes; keep the last one so a rejection
+    // names its cause instead of only the outcome.
+    let mut rejection = String::from("no-trusted-output-key");
+    let mut verified = None;
+    for key in trusted.iter().filter_map(|encoded| nix_compat::narinfo::VerifyingKey::parse(encoded).ok()) {
+        match report.verify(binding, request_id, &digest, &key) {
+            Ok(usage) => {
+                verified = Some(usage);
+                break;
+            }
+            Err(reason) => rejection = reason,
+        }
+    }
+    let usage = verified.ok_or_else(|| format!("gateway-failure-usage-signature-invalid: {rejection}"))?;
     let _guard = super::acquire_remote_coordinator_mutation_guard(state_dir)?;
     let mut state = super::load_coordinator_state(state_dir).map_err(|_| "gateway-coordinator-unavailable")?;
     let job = state.jobs.get(&binding.job_id).ok_or("gateway-failure-job-missing")?;

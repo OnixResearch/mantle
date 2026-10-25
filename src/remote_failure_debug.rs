@@ -1393,6 +1393,92 @@ fn is_blake3_hex(value: &str) -> bool {
     value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
+/// Prefix of a failure-debug bundle reference.
+pub(crate) const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
+pub(crate) const REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS: usize = 64;
+
+/// A worker's failure-debug reference: one content digest and two bounded
+/// status codes. It carries no failure text, so it may cross the executor
+/// child, worker frame and client error boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RemoteWorkerFailureDebugReport {
+    pub(crate) bundle_ref: String,
+    pub(crate) capture_outcome_code: String,
+    pub(crate) cleanup_status_code: String,
+}
+
+impl RemoteWorkerFailureDebugReport {
+    /// The `; worker_…=` fields that `parse_remote_worker_failure_debug_report` reads.
+    pub(crate) fn render_fields(&self) -> String {
+        format!(
+            "; worker_bundle_ref={}; worker_capture_outcome={}; worker_cleanup_status={}",
+            self.bundle_ref, self.capture_outcome_code, self.cleanup_status_code,
+        )
+    }
+
+    /// Admits a report from another process only if it renders and parses back unchanged.
+    pub(crate) fn validated(self) -> Option<Self> {
+        let parsed = parse_remote_worker_failure_debug_report(&self.render_fields())?;
+        (parsed == self).then_some(self)
+    }
+}
+
+pub(crate) fn parse_remote_worker_failure_debug_report(reason: &str) -> Option<RemoteWorkerFailureDebugReport> {
+    debug_assert!(!REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX.is_empty());
+    let bundle_ref = remote_failure_debug_report_field(RemoteFailureFieldQuery {
+        reason,
+        prefix: "worker_bundle_ref=",
+    })?;
+    let capture_outcome_code = remote_failure_debug_report_field(RemoteFailureFieldQuery {
+        reason,
+        prefix: "worker_capture_outcome=",
+    })?;
+    let cleanup_status_code = if reason.contains("remote-failure-workspace-cleanup-degraded") {
+        "cleanup-degraded".to_string()
+    } else {
+        remote_failure_debug_report_field(RemoteFailureFieldQuery {
+            reason,
+            prefix: "worker_cleanup_status=",
+        })?
+    };
+    let digest = bundle_ref.strip_prefix(REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX)?;
+    if digest.len() != REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS
+        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return None;
+    }
+    if !valid_remote_failure_status_code(&capture_outcome_code)
+        || !valid_remote_failure_status_code(&cleanup_status_code)
+    {
+        return None;
+    }
+    Some(RemoteWorkerFailureDebugReport {
+        bundle_ref,
+        capture_outcome_code,
+        cleanup_status_code,
+    })
+}
+
+struct RemoteFailureFieldQuery<'a> {
+    reason: &'a str,
+    prefix: &'a str,
+}
+
+fn remote_failure_debug_report_field(query: RemoteFailureFieldQuery<'_>) -> Option<String> {
+    query.reason.split(';').map(str::trim).find_map(|field| {
+        field
+            .strip_prefix(query.prefix)
+            .and_then(|value| value.split(['\r', '\n']).next())
+            .map(str::to_string)
+    })
+}
+
+/// Whether one remote failure status code is an admissible bounded token.
+fn valid_remote_failure_status_code(value: &str) -> bool {
+    mantle_application_contract::is_remote_failure_status_code_admissible(value)
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::symlink;
@@ -1788,5 +1874,42 @@ mod tests {
         assert!(replay_request.production_attempt.is_none());
         assert!(replay_request.transfer_policy.is_none());
         assert_eq!(outcome.non_claim, REMOTE_FAILURE_DEBUG_NON_CLAIM);
+    }
+
+    #[test]
+    fn worker_failure_debug_reference_admits_only_validated_fields() {
+        let digest = "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS);
+        let report = parse_remote_worker_failure_debug_report(&format!(
+            "build failed; worker_bundle_ref=remote-failure-debug:{digest}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture\n\nremediation: mantle.build.nonzero-exit",
+        ))
+        .unwrap();
+        assert_eq!(report.capture_outcome_code, "captured");
+        assert_eq!(report.cleanup_status_code, "cleanup-attempted-after-capture");
+        let relayed = format!("remote-executor-failed{}", report.render_fields());
+        assert_eq!(parse_remote_worker_failure_debug_report(&relayed), Some(report.clone()));
+        assert_eq!(report.clone().validated(), Some(report.clone()));
+        let smuggled = RemoteWorkerFailureDebugReport {
+            capture_outcome_code: "captured; secret=value".to_string(),
+            ..report
+        };
+        assert_eq!(smuggled.validated(), None);
+        assert!(
+            parse_remote_worker_failure_debug_report(
+                "worker_bundle_ref=remote-failure-debug:bad; worker_capture_outcome=captured; worker_cleanup_status=ok"
+            )
+            .is_none()
+        );
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!(
+                "build failed\nworker_bundle_ref=remote-failure-debug:{digest}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture",
+            ))
+            .is_none()
+        );
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!(
+                "build failed; worker_bundle_ref=remote-failure-debug:{digest}; worker_capture_outcome=CAPTURED; worker_cleanup_status=cleanup-attempted-after-capture",
+            ))
+            .is_none()
+        );
     }
 }

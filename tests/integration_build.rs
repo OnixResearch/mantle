@@ -1087,13 +1087,15 @@ impl Drop for CasitaTrustCache {
 #[test]
 fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
     let root = tempfile::tempdir().unwrap();
-    let fixture = write_cli_fetch_fixture(root.path());
     let payload = CLI_FETCH_PAYLOAD;
 
     let public_key = test_keypair().verifying_key.to_string();
     let policy_bytes = format!("{public_key}\n").into_bytes();
     let mut previous_pathinfo = None;
     for backend in ["casita", "snix"] {
+        let fixture_root = root.path().join(format!("{backend}-fixture"));
+        std::fs::create_dir(&fixture_root).unwrap();
+        let fixture = write_cli_fetch_fixture(&fixture_root);
         let state = root.path().join(format!("{backend}-state"));
         let store = root.path().join(format!("{backend}-store"));
         std::fs::create_dir(&state).unwrap();
@@ -1153,6 +1155,8 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
         let signatures = original_info["signatures"].as_array().unwrap();
         assert_eq!(signatures.len(), 1, "{backend}");
         assert!(signatures[0].as_str().unwrap().starts_with("cache.example.com-1:"), "{backend}");
+        // A cache hit must not quietly fetch the source again after reopening.
+        std::fs::remove_file(fixture_root.join("source.txt")).unwrap();
 
         std::fs::remove_file(&output_path).unwrap();
         assert!(!output_path.exists(), "{backend}");
@@ -1177,6 +1181,39 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
             "{backend}: {}",
             String::from_utf8_lossy(&verification.stdout)
         );
+        let logical_path = format!("/mantle/store/{selector}");
+        run(&["store", "pin", &logical_path]);
+        let plan: serde_json::Value = serde_json::from_slice(&run(&["--json", "store", "gc"]).stdout).unwrap();
+        assert_eq!(plan["candidate_paths"], serde_json::json!([]), "{backend}");
+        let execution: serde_json::Value = serde_json::from_slice(
+            &run(&[
+                "--json",
+                "store",
+                "gc",
+                "--execute",
+                "--plan-id",
+                plan["plan_id"].as_str().unwrap(),
+            ])
+            .stdout,
+        )
+        .unwrap();
+        assert_eq!(execution["execution_complete"], true, "{backend}");
+        assert_eq!(execution["failed_operations"], serde_json::json!([]), "{backend}");
+        std::fs::remove_file(&output_path).unwrap();
+        let after_gc: serde_json::Value = serde_json::from_slice(&run(&build_args).stdout).unwrap();
+        assert_eq!(after_gc["counts"]["built_total"], 0, "{backend}");
+        assert_eq!(after_gc["counts"]["cached_total"], 1, "{backend}");
+        assert_eq!(after_gc["outcomes"][0]["cached"], true, "{backend}");
+        assert_eq!(after_gc["outcomes"][0]["outputs"][0]["path"], output_path.to_str().unwrap(), "{backend}");
+        assert_eq!(std::fs::read(&output_path).unwrap(), original_bytes, "{backend}");
+        let after_gc_info: serde_json::Value =
+            serde_json::from_slice(&run(&["--json", "store", "info", selector]).stdout).unwrap();
+        for field in ["store_path", "nar_sha256", "nar_size", "signatures"] {
+            assert_eq!(after_gc_info["paths"][0][field], original_info[field], "{backend} after GC {field}");
+        }
+        let verification = run(&["store", "verify", "--trusted-public-keys", &public_key, selector]);
+        assert!(String::from_utf8_lossy(&verification.stdout).contains("trusted_signatures=1/1"), "{backend}");
+        assert!(!state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).exists());
         if backend == "casita" {
             assert_eq!(std::fs::read(&policy).unwrap(), policy_bytes);
             for snix_path in ["pathinfo.redb", "directories.redb", "blobs"] {
@@ -1199,6 +1236,9 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
                 "backend": backend,
                 "first_counts": first["counts"],
                 "second_counts": second["counts"],
+                "after_gc_counts": after_gc["counts"],
+                "gc_execution_complete": execution["execution_complete"],
+                "source_unavailable": !fixture_root.join("source.txt").exists(),
                 "pathinfo": pathinfo_identity,
                 "trusted_public_key": public_key,
                 "export_blake3_before": original_blake3.to_hex().to_string(),

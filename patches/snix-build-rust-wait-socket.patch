@@ -1,0 +1,173 @@
+diff --git a/vendor/snix-build/src/buildservice/bwrap.rs b/vendor/snix-build/src/buildservice/bwrap.rs
+--- a/vendor/snix-build/src/buildservice/bwrap.rs
++++ b/vendor/snix-build/src/buildservice/bwrap.rs
+@@ -168,6 +168,18 @@
+     }
+ }
+ 
++fn rust_wait_socket_mount(host_socket: &Path) -> std::io::Result<SandboxMount> {
++    use std::os::unix::fs::FileTypeExt as _;
++    if !std::fs::symlink_metadata(host_socket)?.file_type().is_socket() {
++        return Err(std::io::Error::other("Rust wait endpoint must be a Unix socket, not a file, directory, or symlink"));
++    }
++    Ok(SandboxMount {
++        host_path: host_socket.to_path_buf(),
++        guest_path: PathBuf::from("/run/mantle/rust-waits.sock"),
++        read_only: true,
++    })
++}
++
+ fn should_materialize_inputs_fallback(error: &std::io::Error) -> bool {
+     if error.kind() != ErrorKind::Other {
+         return false;
+@@ -348,6 +360,8 @@
+ 
+     /// Explicit execution-only endpoint; never serialized in BuildRequest.
+     compile_socket: Option<PathBuf>,
++    /// Optional diagnostic transport; never part of derivation or cache identity.
++    rust_wait_socket: Option<PathBuf>,
+ 
+     // semaphore to track number of concurrently running builds.
+     // this is necessary, as otherwise we very quickly run out of open file handles.
+@@ -367,6 +381,7 @@
+             directory_service,
+             failure_workspace_root: None,
+             compile_socket: None,
++            rust_wait_socket: None,
+             concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+             #[cfg(test)]
+             watch_fault: None,
+@@ -385,6 +400,21 @@
+         }
+         compile_socket_mount(&host_socket)?;
+         self.compile_socket = Some(host_socket);
++        Ok(self)
++    }
++
++    /// Opt in to one execution-only diagnostic endpoint, independent of compile caching.
++    /// The endpoint must remain an existing non-symlink Unix socket until launch.
++    pub fn with_rust_wait_socket(mut self, host_socket: PathBuf) -> std::io::Result<Self> {
++        if !host_socket.is_absolute()
++            || host_socket.as_os_str().as_encoded_bytes().len() > 107
++            || host_socket.as_os_str().as_encoded_bytes().contains(&0)
++            || host_socket.components().any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
++        {
++            return Err(std::io::Error::other("Rust wait socket path must be a bounded clean absolute path"));
++        }
++        rust_wait_socket_mount(&host_socket)?;
++        self.rust_wait_socket = Some(host_socket);
+         Ok(self)
+     }
+ 
+@@ -432,6 +462,11 @@
+         let blob_service = self.blob_service.clone();
+         let directory_service = self.directory_service.clone();
+         let mut workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())?;
++        if self.rust_wait_socket.is_some() && workspace_mounts.iter().any(|mount| {
++            mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
++        }) {
++            return Err(std::io::Error::other("workspace overlaps Rust wait runtime socket"));
++        }
+         if let Some(host_socket) = &self.compile_socket {
+             if workspace_mounts.iter().any(|mount| {
+                 mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
+@@ -441,6 +476,9 @@
+             if let Some(mount) = compile_socket_mount(host_socket)? {
+                 workspace_mounts.push(mount);
+             }
++        }
++        if let Some(host_socket) = &self.rust_wait_socket {
++            workspace_mounts.push(rust_wait_socket_mount(host_socket)?);
+         }
+ 
+         let spec = SandboxSpec::builder()
+@@ -661,6 +699,75 @@
+         assert!(compile_socket_mount(&alias).err().unwrap().to_string().contains("Unix socket"));
+     }
+ 
++    #[test]
++    fn rust_wait_endpoint_rejects_invalid_paths_and_replaced_sockets() {
++        use std::os::unix::ffi::OsStringExt as _;
++        use std::os::unix::net::UnixListener;
++        let root = tempfile::tempdir().unwrap();
++        let service = || BubblewrapBuildService::new(root.path().to_path_buf(), (), ());
++        for path in [
++            PathBuf::from("relative.sock"),
++            root.path().join("../wait.sock"),
++            PathBuf::from(format!("/{}", "a".repeat(107))),
++            PathBuf::from(std::ffi::OsString::from_vec(b"/wait\0.sock".to_vec())),
++            root.path().join("missing.sock"),
++            root.path().to_path_buf(),
++        ] {
++            assert!(service().with_rust_wait_socket(path).is_err());
++        }
++        let endpoint = root.path().join("wait.sock");
++        let listener = UnixListener::bind(&endpoint).unwrap();
++        let _service = service().with_rust_wait_socket(endpoint.clone()).unwrap();
++        let alias = root.path().join("alias.sock");
++        std::os::unix::fs::symlink(&endpoint, &alias).unwrap();
++        assert!(service().with_rust_wait_socket(alias).is_err());
++        drop(listener);
++        std::fs::remove_file(&endpoint).unwrap();
++        assert_eq!(rust_wait_socket_mount(&endpoint).unwrap_err().kind(), ErrorKind::NotFound);
++        std::fs::write(&endpoint, b"not a socket").unwrap();
++        assert!(rust_wait_socket_mount(&endpoint).is_err());
++        std::fs::remove_file(&endpoint).unwrap();
++        std::os::unix::fs::symlink(root.path(), &endpoint).unwrap();
++        assert!(rust_wait_socket_mount(&endpoint).is_err());
++    }
++
++    #[tokio::test]
++    async fn real_buildservice_mounts_rust_wait_and_compile_endpoints_independently() {
++        use std::os::unix::net::UnixListener;
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let compile = root.path().join("compile.sock");
++        let waits = root.path().join("wait.sock");
++        let _compile_listener = UnixListener::bind(&compile).unwrap();
++        let _wait_listener = UnixListener::bind(&waits).unwrap();
++        for (compile_enabled, waits_enabled) in [(false, false), (true, false), (false, true), (true, true)] {
++            let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++            if compile_enabled {
++                service = service.with_compile_socket(compile.clone()).unwrap();
++            }
++            if waits_enabled {
++                service = service.with_rust_wait_socket(waits.clone()).unwrap();
++            }
++            let mut request = BuildRequest::default();
++            request.working_dir = PathBuf::from("build");
++            request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
++            request.inputs_dir = PathBuf::from("nix/store");
++            request.outputs = vec![PathBuf::from("nix/store/runtime-result")];
++            request.constraints.insert(BuildConstraints::ProvideBinSh);
++            request.command_args = vec![
++                "/bin/sh".to_string(),
++                "-c".to_string(),
++                format!(
++                    "test {}-S /run/mantle/compile-cache.sock && test {}-S /run/mantle/rust-waits.sock && echo runtime-sockets-visible && echo done > /nix/store/runtime-result",
++                    if compile_enabled { "" } else { "! " },
++                    if waits_enabled { "" } else { "! " },
++                ),
++            ];
++            let result = service.do_build(request).await.unwrap();
++            assert_eq!(result.log.as_deref(), Some("runtime-sockets-visible\n"));
++        }
++    }
++
+     use snix_castore::Directory;
+     use snix_castore::SymlinkTarget;
+     use snix_castore::blobservice::MemoryBlobService;
+diff --git a/vendor/snix-build/src/bwrap/mod.rs b/vendor/snix-build/src/bwrap/mod.rs
+--- a/vendor/snix-build/src/bwrap/mod.rs
++++ b/vendor/snix-build/src/bwrap/mod.rs
+@@ -292,7 +292,9 @@
+         }
+         // Socket bind targets must not first be created as directories. Keep
+         // the ordinary workspace-directory mount behavior byte-for-byte intact.
+-        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock") {
++        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock")
++            || mount.guest_path == Path::new("/run/mantle/rust-waits.sock")
++        {
+             use std::os::unix::fs::FileTypeExt as _;
+             if !mount.read_only || !fs::symlink_metadata(&mount.host_path)?.file_type().is_socket() {
+                 return Err(std::io::Error::other("compile runtime mount requires one read-only Unix socket"));

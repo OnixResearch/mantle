@@ -1,0 +1,81 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "bind-source-observations-and-monotonic-ingest",
+  "maintenance_owner": "Source-ingest and release maintainers; Main integrates",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Implemented source boundary with historical fixtures; final-source verification and independent review/proof dependencies remain unaccepted.",
+  "supported_criteria": [
+    {
+      "task_ids": [
+        "V1",
+        "I2",
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "I9",
+        "I10",
+        "I11",
+        "I12",
+        "I13"
+      ],
+      "level": "source-and-historical-evidence",
+      "support": "Current adapter requires explicit projection/profile/version and tagged immutable Git facts; missing legacy facts are unavailable provenance. Import preflights all records, collisions and pin before mutation. Release review source profile is mantle-release-source/v1/source."
+    },
+    {
+      "task_ids": [
+        "V2",
+        "V3",
+        "V4",
+        "V5",
+        "V6",
+        "V7",
+        "V8"
+      ],
+      "level": "partial-historical-only",
+      "support": "Historical suite summaries exist, but V4 interruption-wide state preservation is not established by pure planner tests; create-new per-file publication is not an all-or-nothing multi-file transaction. V6 historical note explicitly leaves new-version golden wire fixtures open. V8 historical blocked rails are not current gate results."
+    },
+    {
+      "task_ids": [
+        "I1",
+        "I3",
+        "I4"
+      ],
+      "level": "open-dependency",
+      "support": "Canonical ADR 0059 remains Proposed; current reviewer producer contract now exists, but policy/authentication acceptance and stabilized current fixed-point compatibility are separate."
+    }
+  ],
+  "local_remaining_actions": [
+    "Run final source-core, source observation/source bundle, release-core and release_cli checks; inspect mutation/interruption coverage against V4 rather than relying on checked status.",
+    "Retain golden v1 canonical bytes and identify precisely which new-version V6 wire fixtures exist; do not invent a bundle cutover.",
+    "Run current machine-contract and quality rails; do not reuse September dependency failures as current blockers."
+  ],
+  "external_missing_authority_or_capability": [
+    "Independent ADR 0059 review/acceptance.",
+    "Actual reviewer authority for any selected reviewed-source claim; I4 still depends on accepted current cold proof."
+  ],
+  "evidence_references": [
+    ".cairn/changes/bind-source-observations-and-monotonic-ingest/tasks.md:5-81",
+    ".cairn/changes/bind-source-observations-and-monotonic-ingest/evidence/verification-2026-09-11.md:7-51",
+    "src/source_observation.rs:14-129",
+    "src/source_bundle.rs:2177-2242",
+    "docs/cairn-release-evidence-handoff.md:29-71"
+  ],
+  "repeatability_recipe": [
+    "nix develop -c cargo test -p crunch-source-core",
+    "nix develop -c cargo test -p mantle --lib source_observation::tests::",
+    "nix develop -c cargo test -p mantle --lib source_bundle::",
+    "nix develop -c cargo test -p crunch-release-core",
+    "nix develop -c cargo test -p mantle --test release_cli",
+    "After source checks, run the final quality/machine-contract/Cairn rails with retained argv, exits and final input identities."
+  ],
+  "observed_commands": [],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

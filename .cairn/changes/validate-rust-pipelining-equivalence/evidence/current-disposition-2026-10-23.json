@@ -1,0 +1,103 @@
+{
+  "schema": "mantle-cairn-current-disposition-v1",
+  "recorded_on": "2026-10-23",
+  "change": "validate-rust-pipelining-equivalence",
+  "maintenance_owner": "Rust differential harness and Rust-plan maintainers; Main owns actual campaigns",
+  "scope": "Read-only reconciliation plus additive evidence only; Main owns final source freeze, execution, acceptance and checkboxes.",
+  "disposition": "Ordinary Cargo and separately labelled direct-rustc serial implementation exists; real negative campaign exit 0 retained, earlier baseline failed, latest inspected baseline has no terminal exit. Complete baseline/repeat/serial/population/fault acceptance remains open; unavailable experimental providers do not block ordinary work.",
+  "supported_criteria": [
+    {
+      "criteria": [
+        "Phase 1 ordinary matrix/population/bounds",
+        "Phase 2 core/comparator/reconciliation/runner",
+        "Phase 3 frozen edit/error/fault fixtures",
+        "Phase 4 terminal diagnostics and operator recipe"
+      ],
+      "level": "source-only-partial-runtime",
+      "support": "Current docs and source handoff define frozen offline chain/wide build/check/proc-macro/build-script/LTO rows, exact identities/oracles, one concurrent cell and finite bounds. Source implementation is not complete campaign acceptance."
+    },
+    {
+      "criteria": [
+        "Phase 3 adversarial comparator/boundary negatives"
+      ],
+      "level": "bounded-observed-runtime",
+      "support": "supervisor-final negatives argv exited 0, retains real successful/rejected compiles plus explicitly labelled policy injections. Its own ordinary population remains nonpassing/unrun and crash/cancel belongs to baseline."
+    },
+    {
+      "criteria": [
+        "Phase 3 complete ordinary matrix/repeat/recovery/coverage",
+        "Phase 4 future-mode acceptance",
+        "Phase 5 verification/lifecycle acceptance"
+      ],
+      "level": "unaccepted",
+      "support": "Earlier protocol-fixed baseline exit 1 is retained. Latest inspected supervisor-final ledger says running with baseline argv but no exit, so it is not success. No all-cells/repeated-serial/fault teardown or current experimental verdict inferred."
+    }
+  ],
+  "local_remaining_actions": [
+    "Inspect Main-owned active baseline terminal result and report, not launch a competing duplicate campaign. Preserve earlier failed baseline and frozen denominator continuity.",
+    "Finish baseline, fresh same-baseline repeat, serial and serial repeat in distinct private roots, inspect each step/replay/oracle/artifact/population/fault/teardown result.",
+    "Use exact current final binary pins/options after source repair; if harness identity changes retain separate cohort and original failure, never rewrite baseline to green.",
+    "Run final focused tests/format/Clippy/no-std/Nickel/lifecycle gates after integration; ordinary delivery needs no Headstart/rustd provider."
+  ],
+  "external_missing_authority_or_capability": [
+    "No experimental provider prerequisite for ordinary baseline/serial. Future experimental registration separately needs same-binary off/on actual protocol and source-fixed provider admission; this must not delay ordinary work."
+  ],
+  "evidence_references": [
+    ".cairn/changes/validate-rust-pipelining-equivalence/tasks.md:3-36",
+    ".cairn/changes/validate-rust-pipelining-equivalence/evidence/authoring-validation.md:319-356",
+    "docs/native-rust-plan-validation.md:198-358",
+    "target/cairn-finish-20261023/supervisor-final-runtime/result.json",
+    "target/cairn-finish-20261023/protocol-fixed-runtime/result.json",
+    "/home/brittonr/.cargo-target/mantle-cairn-differential-supervisor-final-20261023/negatives/negatives.json:90103",
+    "target/cairn-finish-20261023/production-repaired-cohort-build/build.command",
+    "target/cairn-finish-20261023/production-repaired-cohort-build/build.exit"
+  ],
+  "repeatability_recipe": [
+    "Freeze absolute tool/sysroot/linker/runtime closures and explicit PATH into <=64 KiB options using docs/native-rust-plan-validation.md:219-240; no experimental input needed.",
+    "mantle-rust-differential baseline BASELINE.json",
+    "mantle-rust-differential baseline BASELINE_REPEAT.json (fresh root, original Cargo coverage-baseline.json)",
+    "mantle-rust-differential serial SERIAL.json",
+    "mantle-rust-differential serial SERIAL_REPEAT.json (fresh root, original serial coverage-baseline.json, not Cargo baseline)",
+    "mantle-rust-differential negatives NEGATIVES.json",
+    "Inspect retained report.json/serial.json/negatives.json/raw captures, frozen coverage and independent clean references; exit 0 is only own campaign predicate, not a release/performance/provider claim."
+  ],
+  "observed_commands": [
+    {
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-differential",
+        "negatives",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-runtime/negatives.json"
+      ],
+      "exit_code": 0,
+      "evidence": "target/cairn-finish-20261023/supervisor-final-runtime/result.json:9-19",
+      "scope": "Negative campaign only, not ordinary matrix."
+    },
+    {
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/protocol-fixed-differential",
+        "baseline",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/protocol-fixed-runtime/baseline.json"
+      ],
+      "exit_code": 1,
+      "evidence": "target/cairn-finish-20261023/protocol-fixed-runtime/result.json:20-34",
+      "scope": "Historical failed ordinary campaign retained."
+    },
+    {
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle-rust-differential",
+        "baseline",
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/supervisor-final-runtime/baseline.json"
+      ],
+      "exit_code": null,
+      "evidence": "target/cairn-finish-20261023/supervisor-final-runtime/result.json:21-36",
+      "scope": "No terminal exit in inspected ledger; running is not accepted."
+    }
+  ],
+  "verification_performed_by_this_record": "Repository/scratch source and transcript inspection only. No build, test, proof, formatter, linter, gate, provider import or session execution.",
+  "newly_accepted_task_ids": [],
+  "non_claims": [
+    "No current-source runtime acceptance from source implementation or historical task checks.",
+    "No fabricated provider, review signature, policy approval, release eligibility, bootstrap parity, Cairn gate or performance claim.",
+    "Unrun locally executable work is not classified as an external blocker. Historical evidence and approvals are preserved."
+  ]
+}

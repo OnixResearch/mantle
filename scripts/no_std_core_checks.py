@@ -2,11 +2,19 @@
 from __future__ import annotations
 
 import argparse
+import io
+import os
+import selectors
+import shutil
+import signal
 import json
 import re
 import subprocess
 import sys
+import tempfile
+import time
 import tomllib
+from contextlib import contextmanager
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cache
@@ -1043,10 +1051,486 @@ def command_ownership() -> None:
         ", ".join(required_classified_paths) if required_classified_paths else "no touched std files outside legacy paths",
     )
 
+# Compiler views deliberately share the Rust guard's authority inventory. No
+# second Rust-source parser is used: rustc resolves imports and expands macros.
+ARCHITECTURE_CAPTURE_BYTES_MAX = 256 * 1024 * 1024
+# Pretty-printed HIR includes indentation and expanded derives that are not
+# retained. Bound its drained stream separately from compact DefId evidence.
+ARCHITECTURE_COMPILER_OUTPUT_BYTES_MAX = 4 * 1024 * 1024 * 1024
+ARCHITECTURE_DIAGNOSTIC_BYTES_MAX = 8 * 1024 * 1024
+ARCHITECTURE_FAILURE_COUNT_MAX = 1024
+ARCHITECTURE_COMMAND_SECONDS_MAX = 600
+ARCHITECTURE_CAMPAIGN_SECONDS_MAX = 3600
+RESOLVED_DEF_RE = re.compile(r"DefId\(\d+:\d+\s+~\s+([A-Za-z0-9_]+)\[[^\]]+\](?:::([^\n)]*))?\)")
+# thir-flat prints every indexed THIR node rather than recursively reprinting
+# subtrees with depth-proportional indentation. Both modes iterate all body
+# owners and use the same thir_body query (rustc c756124775121dea0e640652c5ee3c89e3dd0eb4,
+# compiler/rustc_driver_impl/src/pretty.rs and rustc_mir_build/src/thir/print.rs).
+ARCHITECTURE_COMPILER_VIEWS = ("hir-tree", "thir-flat")
+
+
+class ResolvedDefCapture:
+    """Drain every compiler byte; retain every DefId and its original line."""
+
+    def __init__(self, destination, label: str):
+        self.destination = destination
+        self.label = label
+        self.pending = bytearray()
+        self.raw_bytes = 0
+        self.retained_bytes = 0
+        self.line_count = 0
+        self.definition_count = 0
+
+    def retain(self, data: bytes) -> None:
+        self.retained_bytes += len(data)
+        if self.retained_bytes > ARCHITECTURE_CAPTURE_BYTES_MAX:
+            raise CheckFailure(f"{self.label}: compact compiler evidence exceeds capture bound")
+        self.destination.write(data)
+
+    def line(self, data: bytes) -> None:
+        self.line_count += 1
+        text = data.decode("utf-8")
+        matches = list(RESOLVED_DEF_RE.finditer(text))
+        if text.count("DefId(") != len(matches) or text.strip() == "error":
+            raise CheckFailure(f"{self.label}:{self.line_count}: malformed/unsupported compiler DefId output")
+        for match in matches:
+            self.definition_count += 1
+            self.retain(f"{self.line_count}\t{match.group(0)}\n".encode())
+
+    def write(self, data: bytes) -> None:
+        self.raw_bytes += len(data)
+        if self.raw_bytes > ARCHITECTURE_COMPILER_OUTPUT_BYTES_MAX:
+            raise CheckFailure(f"{self.label}: compiler output exceeds capture bound")
+        self.pending.extend(data)
+        start = 0
+        while (end := self.pending.find(b"\n", start)) >= 0:
+            if end - start > ARCHITECTURE_DIAGNOSTIC_BYTES_MAX:
+                raise CheckFailure(f"{self.label}: compiler line exceeds diagnostic byte bound")
+            self.line(bytes(self.pending[start:end]))
+            start = end + 1
+        del self.pending[:start]
+        if len(self.pending) > ARCHITECTURE_DIAGNOSTIC_BYTES_MAX:
+            raise CheckFailure(f"{self.label}: compiler line exceeds diagnostic byte bound")
+
+    def finish(self) -> None:
+        if self.pending:
+            self.line(bytes(self.pending))
+            self.pending.clear()
+        if self.definition_count == 0:
+            raise CheckFailure(f"{self.label}: compiler view has no resolved DefId records; unsupported/empty compiler output")
+        self.retain(f"# complete\t{self.raw_bytes}\t{self.line_count}\t{self.definition_count}\n".encode())
+
+
+
+@contextmanager
+def architecture_scratch(prefix: str):
+    scratch = Path(tempfile.mkdtemp(prefix=prefix))
+    try:
+        yield scratch
+    except BaseException:
+        print(f"architecture compiler evidence retained: {scratch}", file=sys.stderr)
+        raise
+    else:
+        shutil.rmtree(scratch)
+
+
+def architecture_capture(command: list[str], cwd: Path, scratch: Path, label: str,
+                         campaign_deadline: float, environment: dict[str, str] | None = None,
+                         resolved_definitions: bool = False) -> Path:
+    output_path = scratch / f"{label}.stdout"
+    error_path = scratch / f"{label}.stderr"
+    deadline = min(campaign_deadline, time.monotonic() + ARCHITECTURE_COMMAND_SECONDS_MAX)
+    if deadline <= time.monotonic():
+        raise CheckFailure("architecture campaign deadline exceeded")
+    process = subprocess.Popen(command, cwd=cwd, env=environment, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        with output_path.open("wb") as output, error_path.open("wb") as error, selectors.DefaultSelector() as selector:
+            assert process.stdout is not None and process.stderr is not None
+            definitions = ResolvedDefCapture(output, label) if resolved_definitions else None
+            stdout_bound = (ARCHITECTURE_COMPILER_OUTPUT_BYTES_MAX if resolved_definitions
+                            else ARCHITECTURE_CAPTURE_BYTES_MAX)
+            selector.register(process.stdout, selectors.EVENT_READ,
+                              (definitions if definitions is not None else output, stdout_bound))
+            selector.register(process.stderr, selectors.EVENT_READ, (error, ARCHITECTURE_DIAGNOSTIC_BYTES_MAX))
+            counts = {process.stdout: 0, process.stderr: 0}
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CheckFailure(f"architecture compiler deadline exceeded: {' '.join(command)}")
+                for key, _ in selector.select(min(remaining, 1.0)):
+                    data = os.read(key.fileobj.fileno(), 65536)
+                    if not data:
+                        selector.unregister(key.fileobj)
+                        continue
+                    destination, bound = key.data
+                    counts[key.fileobj] += len(data)
+                    if counts[key.fileobj] > bound:
+                        raise CheckFailure(f"architecture compiler capture exceeds {bound} bytes: {' '.join(command)}")
+                    destination.write(data)
+            status = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+        if time.monotonic() > deadline:
+            raise CheckFailure(f"architecture compiler deadline exceeded: {' '.join(command)}")
+        if status != 0:
+            diagnostic = error_path.read_text(errors="replace")
+            raise CheckFailure(f"architecture compiler failed ({status}): {' '.join(command)}\n{diagnostic}")
+        if definitions is not None:
+            with output_path.open("ab") as output:
+                definitions.destination = output
+                definitions.finish()
+        return output_path
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        raise
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stderr is not None:
+            process.stderr.close()
+
+
+def authority_path_matches(path: str, forbidden: str) -> bool:
+    forbidden = forbidden.removesuffix("::")
+    if forbidden.endswith("_"):
+        return path.startswith(forbidden)
+    return path == forbidden or path.startswith(forbidden + "::")
+
+
+def resolved_authority_failures(path: Path, owner: str, authorities: list[str]) -> list[str]:
+    failures: set[str] = set()
+    definition_count = 0
+    previous_line = 0
+    complete = False
+    retained_bytes = 0
+    with path.open("rb") as source:
+        for data in iter(lambda: source.readline(ARCHITECTURE_DIAGNOSTIC_BYTES_MAX + 1), b""):
+            retained_bytes += len(data)
+            if retained_bytes > ARCHITECTURE_CAPTURE_BYTES_MAX or len(data) > ARCHITECTURE_DIAGNOSTIC_BYTES_MAX or complete:
+                raise CheckFailure(f"{owner}: malformed/over-bound compact compiler evidence: {path.name}")
+            line = data.decode("utf-8").rstrip("\n")
+            if line.startswith("# complete\t"):
+                _, raw_bytes, raw_lines, records = line.split("\t")
+                if not (0 < int(raw_bytes) <= ARCHITECTURE_COMPILER_OUTPUT_BYTES_MAX
+                        and previous_line <= int(raw_lines) <= int(raw_bytes)
+                        and int(records) == definition_count and definition_count > 0):
+                    raise CheckFailure(f"{owner}: invalid compiler completion counts: {path.name}")
+                complete = True
+                continue
+            line_number, definition = line.split("\t", 1)
+            original_line = int(line_number)
+            match = RESOLVED_DEF_RE.fullmatch(definition)
+            if match is None or original_line < max(1, previous_line):
+                raise CheckFailure(f"{owner}: malformed compiler definition record: {path.name}")
+            previous_line = original_line
+            definition_count += 1
+            resolved = match.group(1) + ("::" + match.group(2) if match.group(2) else "")
+            for authority in authorities:
+                expected = authority.replace("crate::", owner.replace("-", "_") + "::", 1)
+                if authority_path_matches(resolved, expected):
+                    if len(failures) < ARCHITECTURE_FAILURE_COUNT_MAX:
+                        failures.add(f"{owner}: resolved authority {resolved}; compiler view {path.name}:{original_line}")
+                    else:
+                        failures.add("additional failures not enumerated; full bounded DefId evidence retained")
+    if not complete:
+        raise CheckFailure(f"{owner}: compiler view is missing its complete bounded read/count: {path.name}")
+    return sorted(failures)
+
+
+def runtime_dependency_failures(metadata: dict, roots: list[dict], authorities: list[str],
+                                core_authorities: list[str], runtime_edges: dict[str, set[tuple[str, str]]]) -> list[str]:
+    packages = {package["id"]: package for package in metadata["packages"]}
+    nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
+    failures = []
+    for owner in roots:
+        rules = authorities + (core_authorities if owner["name"].endswith("-core") else [])
+        pending = [(owner["id"], [owner["name"]])]
+        visited = {owner["id"]}
+        while pending:
+            package_id, chain = pending.pop()
+            for dependency in nodes[package_id]["deps"]:
+                if (package_id, dependency["pkg"]) not in runtime_edges[owner["id"]]:
+                    continue
+                # Build scripts and proc-macro execution are host tooling, not
+                # runtime authority supplied to a protected library.
+                if not any(kind["kind"] is None for kind in dependency["dep_kinds"]):
+                    continue
+                target = packages[dependency["pkg"]]
+                if any("proc-macro" in item["kind"] for item in target["targets"]):
+                    continue
+                name = target["name"].replace("-", "_")
+                next_chain = chain + [f"{dependency['name']}={target['name']} ({target['id']})"]
+                if any(authority_path_matches(name, rule) for rule in rules):
+                    failures.append(f"{owner['manifest_path']}: forbidden normal runtime dependency: " + " -> ".join(next_chain))
+                if target["id"] not in visited:
+                    visited.add(target["id"])
+                    pending.append((target["id"], next_chain))
+    return failures
+
+
+def architecture_toolchain(root: Path, scratch: Path, deadline: float) -> str:
+    compiler = os.environ.get("RUSTC", "rustc")
+    for label, command in [("cargo-identity", "cargo"), ("rustc-identity", compiler)]:
+        output = architecture_capture([command, "--version", "--verbose"], root, scratch, label, deadline)
+        print(output.read_text().rstrip())
+    return compiler
+
+
+def architecture_metadata(root: Path, scratch: Path, deadline: float) -> dict:
+    output = architecture_capture(["cargo", "metadata", "--locked", "--offline", "--format-version", "1"],
+                                  root, scratch, "metadata", deadline)
+    return json.loads(output.read_text())
+
+
+def architecture_runtime_edges(metadata: dict, owner: dict, root: Path, scratch: Path,
+                               deadline: float) -> set[tuple[str, str]]:
+    # metadata alone unifies workspace features. Cargo's package-selected tree
+    # supplies the actual normal runtime edges, avoiding unrelated std features.
+    output = architecture_capture(["cargo", "tree", "--locked", "--offline", "-p", owner["name"],
+        "--edges", "normal,no-proc-macro", "--prefix", "depth", "--charset", "ascii", "--no-dedupe",
+        "--format", "{p}"], root, scratch, f"{owner['name']}-runtime-tree", deadline)
+    packages = {package["id"]: package for package in metadata["packages"]}
+    nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
+    stack: list[str] = []
+    edges: set[tuple[str, str]] = set()
+    pattern = re.compile(r"^(\d+)\s*([A-Za-z0-9_.-]+) v([^\s]+)(?:\s|$)")
+    for line in output.read_text().splitlines():
+        if not line.strip():
+            continue
+        match = pattern.match(line)
+        if match is None:
+            raise CheckFailure(f"unsupported Cargo runtime tree record: {line}")
+        depth, name, version = int(match.group(1)), match.group(2), match.group(3)
+        if depth == 0:
+            if stack or name != owner["name"] or version != owner["version"]:
+                raise CheckFailure(f"unexpected Cargo runtime tree root: {line}")
+            stack = [owner["id"]]
+            continue
+        if depth > len(stack):
+            raise CheckFailure(f"invalid Cargo runtime tree depth: {line}")
+        parent = stack[depth - 1]
+        candidates = {dependency["pkg"] for dependency in nodes[parent]["deps"]
+                      if packages[dependency["pkg"]]["name"] == name
+                      and packages[dependency["pkg"]]["version"] == version
+                      and any(kind["kind"] is None for kind in dependency["dep_kinds"])}
+        if len(candidates) > 1:
+            candidates = {candidate for candidate in candidates
+                          if str(Path(packages[candidate]["manifest_path"]).parent) in line
+                          or (packages[candidate].get("source") or "no-source-match").removeprefix("git+") in line}
+        if len(candidates) != 1:
+            raise CheckFailure(f"Cargo runtime tree package identity is not unique in resolved metadata: {line}")
+        target = candidates.pop()
+        edges.add((parent, target))
+        stack[depth:] = [target]
+    if not stack:
+        raise CheckFailure(f"empty Cargo runtime tree for {owner['name']}")
+    return edges
+
+
+def command_architecture(authorities: list[str], core_authorities: list[str]) -> None:
+    if not authorities or not core_authorities:
+        raise CheckFailure("architecture authority inventory must come from scripts/check-cli-architecture.rs")
+    deadline = time.monotonic() + ARCHITECTURE_CAMPAIGN_SECONDS_MAX
+    with architecture_scratch("mantle-architecture-") as directory:
+        scratch = Path(directory)
+        architecture_toolchain(REPO_ROOT, scratch, deadline)
+        metadata = architecture_metadata(REPO_ROOT, scratch, deadline)
+        members = set(metadata["workspace_members"])
+        roots = sorted((package for package in metadata["packages"] if package["id"] in members
+                        and Path(package["manifest_path"]).is_relative_to(REPO_ROOT / "crates")
+                        and (package["name"].endswith("-core") or package["name"] == "mantle-application-contract")),
+                       key=lambda package: package["name"])
+        if not roots or not any(package["name"] == "mantle-application-contract" for package in roots):
+            raise CheckFailure("architecture metadata is missing the protected first-party inventory")
+        runtime_edges = {owner["id"]: architecture_runtime_edges(metadata, owner, REPO_ROOT, scratch, deadline)
+                         for owner in roots}
+        failures = runtime_dependency_failures(metadata, roots, authorities, core_authorities, runtime_edges)
+        if failures:
+            raise CheckFailure("\n".join(failures))
+        environment = os.environ.copy()
+        # A fresh, private target prevents cached unpretty invocations from
+        # producing empty output and never competes for the integrator's target.
+        environment["CARGO_TARGET_DIR"] = str(scratch / "target")
+        for owner in roots:
+            if not any("lib" in target["kind"] for target in owner["targets"]):
+                raise CheckFailure(f"protected owner has no library target: {owner['manifest_path']}")
+            rules = authorities + (core_authorities if owner["name"].endswith("-core") else [])
+            for view in ARCHITECTURE_COMPILER_VIEWS:
+                output = architecture_capture(
+                    ["cargo", "rustc", "--locked", "--offline", "-p", owner["name"], "--lib", "--",
+                     f"-Zunpretty={view}"], REPO_ROOT, scratch, f"{owner['name']}-{view}", deadline, environment,
+                    resolved_definitions=True)
+                failures = resolved_authority_failures(output, owner["name"], rules)
+                if failures:
+                    raise CheckFailure("\n".join(failures))
+            print(f"architecture compiler owner: {owner['manifest_path']}: macro-expanded HIR + typed HIR: PASS")
+        if time.monotonic() > deadline:
+            raise CheckFailure("architecture campaign deadline exceeded")
+        print("cli architecture compiler and resolved runtime dependencies: PASS")
+
+
+def architecture_capture_self_test(scratch: Path) -> None:
+    # These fixtures exercise chunking, original-line evidence, and fail-closed
+    # completion independently of compiler formatting or Cargo fixture results.
+    definition = b"DefId(1:2 ~ std[fixture]::process::Command::new)"
+    raw = b"\n" + b" " * 65530 + definition + b" " + definition + b"\n" + definition
+    output = io.BytesIO()
+    capture = ResolvedDefCapture(output, "capture-thir-flat")
+    capture.write(raw[:65536])
+    capture.write(raw[65536:])
+    capture.finish()
+    path = scratch / "capture-thir-flat.stdout"
+    compact = output.getvalue()
+    path.write_bytes(compact)
+    failures = resolved_authority_failures(path, "fixture-core", ["std::process"])
+    if (capture.raw_bytes != len(raw) or capture.line_count != 3 or capture.definition_count != 3
+            or not any("capture-thir-flat.stdout:2" in failure for failure in failures)
+            or not any("capture-thir-flat.stdout:3" in failure for failure in failures)):
+        raise CheckFailure(f"chunked compiler capture lost records or original lines: {failures}")
+    # A genuine stream larger than the retained-evidence budget must still be
+    # checked completely; padding does not inflate the compact DefId artifact.
+    output = io.BytesIO()
+    capture = ResolvedDefCapture(output, "capture-expanded-hir")
+    padding = b" " * 65535 + b"\n"
+    for _ in range(ARCHITECTURE_CAPTURE_BYTES_MAX // len(padding) + 1):
+        capture.write(padding)
+    capture.write(definition + b"\n")
+    capture.finish()
+    path.write_bytes(output.getvalue())
+    failures = resolved_authority_failures(path, "fixture-core", ["std::process"])
+    if len(failures) != 1 or "std::process::Command::new" not in failures[0]:
+        raise CheckFailure(f"large streamed compiler output lost its resolved authority: {failures}")
+    for label, malformed in [("empty", b""), ("unresolved", b"Thir {}\n"),
+                              ("bad-defid", b"DefId(not-supported)\n"), ("error-body", definition + b"\nerror\n"),
+                              ("oversized-line", definition + b"\n" + b" " * (ARCHITECTURE_DIAGNOSTIC_BYTES_MAX + 1))]:
+        candidate = ResolvedDefCapture(io.BytesIO(), label)
+        try:
+            candidate.write(malformed)
+            candidate.finish()
+        except CheckFailure:
+            continue
+        raise CheckFailure(f"compiler capture accepted {label} output")
+    for label, field, bound in [("raw", "raw_bytes", ARCHITECTURE_COMPILER_OUTPUT_BYTES_MAX),
+                                ("retained", "retained_bytes", ARCHITECTURE_CAPTURE_BYTES_MAX)]:
+        candidate = ResolvedDefCapture(io.BytesIO(), label)
+        setattr(candidate, field, bound)
+        try:
+            candidate.write(definition + b"\n")
+        except CheckFailure:
+            continue
+        raise CheckFailure(f"compiler capture accepted output beyond its {label} byte bound")
+    for malformed in [compact.rsplit(b"# complete", 1)[0], compact + b"trailing\n",
+                      compact.replace(b"# complete\t", b"# incomplete\t"), compact.replace(b"\t3\n", b"\t4\n")]:
+        path.write_bytes(malformed)
+        try:
+            resolved_authority_failures(path, "fixture-core", ["std::process"])
+        except (CheckFailure, ValueError):
+            continue
+        raise CheckFailure("compiler capture accepted incomplete/malformed completion evidence")
+    # Failure enumeration is bounded, but admission must still read to the end.
+    rows = b"".join(str(number).encode() + b"\t" + definition + b"\n"
+                    for number in range(1, ARCHITECTURE_FAILURE_COUNT_MAX + 2))
+    path.write_bytes(rows + b"malformed-tail\n")
+    try:
+        resolved_authority_failures(path, "fixture-core", ["std::process"])
+    except (CheckFailure, ValueError):
+        pass
+    else:
+        raise CheckFailure("compiler capture stopped validating after its failure enumeration bound")
+    print("architecture compiler fixture: bounded chunked DefId capture and complete counts: accepted/rejected")
+
+
+def command_architecture_self_test(authorities: list[str], core_authorities: list[str]) -> None:
+    if not authorities or not core_authorities:
+        raise CheckFailure("architecture fixtures require the production authority inventory")
+    deadline = time.monotonic() + ARCHITECTURE_CAMPAIGN_SECONDS_MAX
+    fixtures = [
+        ("pure", True, '#![no_std]\nextern crate alloc;\nuse alloc::vec::Vec;\nuse core::time::Duration;\npub fn plan(value: Duration) -> Vec<Duration> { alloc::vec![value] }\n'),
+        ("pure-local-mantle", True, '#![no_std]\npub fn sample(mantle: u32) -> u32 { let observed = mantle; observed + mantle }\n'),
+        ("pure-reexport", True, '#![no_std]\nextern crate std;\nmod pure { pub use std::time::Duration; }\npub fn plan(value: pure::Duration) -> pure::Duration { value }\n'),
+        ("cross-module-alias", False, '#![no_std]\nextern crate std;\nmod aliases { pub use std::fs as files; }\npub fn sample() { let _ = aliases::files::read("input"); }\n'),
+        ("macro-process", False, '#![no_std]\nextern crate std;\nmacro_rules! spawn { () => { std::process::Command::new("cc") }; }\npub fn sample() { let _ = spawn!(); }\n'),
+        ("macro-output", False, '#![no_std]\nextern crate std;\nmacro_rules! report { () => { std::println!("output") }; }\npub fn sample() { report!(); }\n'),
+        ("cross-crate-reexport", False, '#![no_std]\nextern crate host_alias as bridge;\npub fn sample() { let _ = bridge::Command::new("cc"); }\n'),
+    ]
+    with architecture_scratch("mantle-architecture-fixtures-") as directory:
+        scratch = Path(directory)
+        compiler = architecture_toolchain(scratch, scratch, deadline)
+        architecture_capture_self_test(scratch)
+        helper = scratch / "host_alias.rs"
+        helper.write_text('#![no_std]\nextern crate std;\npub use std::process::Command;\n')
+        architecture_capture([compiler, "--edition=2024", "--crate-name", "host_alias", "--crate-type=rlib",
+                              str(helper), "--out-dir", str(scratch)], scratch, scratch, "helper", deadline)
+        for label, accepted, source in fixtures:
+            path = scratch / f"{label}.rs"
+            path.write_text(source)
+            view_failures = {}
+            # Keep the former recursive view as a small fixture oracle only:
+            # production remains HIR + exhaustive indexed typed HIR, same bounds.
+            for view in (*ARCHITECTURE_COMPILER_VIEWS, "thir-tree"):
+                output = architecture_capture([compiler, "--edition=2024", "--crate-name", "fixture_core",
+                    "--crate-type=lib", str(path), "--extern", f"host_alias={scratch / 'libhost_alias.rlib'}",
+                    f"-Zunpretty={view}"], scratch, scratch, f"{label}-{view}", deadline,
+                    resolved_definitions=True)
+                failures = resolved_authority_failures(output, "fixture-core", authorities + core_authorities)
+                if accepted == bool(failures):
+                    raise CheckFailure(f"compiler authority fixture {label}/{view}: expected accepted={accepted}, saw {failures}")
+                view_failures[view] = {failure.split("; compiler view ")[0] for failure in failures}
+            if not view_failures["thir-tree"].issubset(view_failures["thir-flat"]):
+                raise CheckFailure(f"indexed typed HIR lost recursive fixture authority: {label}: {view_failures}")
+            print(f"architecture compiler fixture: {label}: {'accepted' if accepted else 'rejected'}")
+        # Cargo itself resolves the renamed/transitive fixture edges. No fake
+        # metadata graph is substituted for that dependency-boundary behavior.
+        root = scratch / "graph"
+        for name in ("fixture-core", "bridge", "tokio", "derive_host"):
+            target = root / name
+            (target / "src").mkdir(parents=True)
+            source = ("extern crate proc_macro;\n#[proc_macro]\npub fn identity(input: proc_macro::TokenStream) -> proc_macro::TokenStream { input }\n"
+                      if name == "derive_host" else "#![no_std]\npub fn value() -> u32 { 7 }\n")
+            (target / "src/lib.rs").write_text(source)
+            dependency = {'fixture-core': 'bridge = { path = "../bridge" }\nderive_host = { path = "../derive_host" }\n',
+                          'bridge': 'renamed = { package = "tokio", path = "../tokio" }\n',
+                          'derive_host': 'tokio = { path = "../tokio" }\n', 'tokio': ''}[name]
+            (target / "Cargo.toml").write_text(f'[package]\nname = "{name}"\nversion = "0.0.0"\nedition = "2024"\n[dependencies]\n{dependency}')
+            if name == "derive_host":
+                with (target / "Cargo.toml").open("a") as manifest:
+                    manifest.write("[lib]\nproc-macro = true\n")
+        (root / "Cargo.toml").write_text('[workspace]\nresolver = "3"\nmembers = ["fixture-core", "bridge", "tokio", "derive_host"]\n')
+        architecture_capture(["cargo", "generate-lockfile", "--offline"], root, scratch, "fixture-lock", deadline)
+        metadata = architecture_metadata(root, scratch, deadline)
+        owners = [package for package in metadata["packages"] if package["name"] == "fixture-core"]
+        runtime_edges = {owner["id"]: architecture_runtime_edges(metadata, owner, root, scratch, deadline)
+                         for owner in owners}
+        failures = runtime_dependency_failures(metadata, owners, authorities, core_authorities, runtime_edges)
+        if not any("renamed=tokio" in failure and "bridge=bridge" in failure for failure in failures):
+            raise CheckFailure(f"renamed transitive dependency fixture did not reject its real resolved graph: {failures}")
+        print("architecture compiler fixture: renamed transitive normal dependency: rejected")
+        (root / "bridge/Cargo.toml").write_text('[package]\nname = "bridge"\nversion = "0.0.0"\nedition = "2024"\n[build-dependencies]\nrenamed = { package = "tokio", path = "../tokio" }\n')
+        architecture_capture(["cargo", "generate-lockfile", "--offline"], root, scratch, "tooling-fixture-lock", deadline)
+        metadata = architecture_metadata(root, scratch, deadline)
+        owners = [package for package in metadata["packages"] if package["name"] == "fixture-core"]
+        runtime_edges = {owner["id"]: architecture_runtime_edges(metadata, owner, root, scratch, deadline)
+                         for owner in owners}
+        failures = runtime_dependency_failures(metadata, owners, authorities, core_authorities, runtime_edges)
+        if failures:
+            raise CheckFailure(f"build/proc-macro dependencies were misclassified as runtime authority: {failures}")
+        print("architecture compiler fixture: build-only and proc-macro host dependencies: accepted")
+    if time.monotonic() > deadline:
+        raise CheckFailure("architecture fixture campaign deadline exceeded")
+    print("cli architecture compiler self-test: PASS")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("deps", "purity", "scope", "api-shape", "ownership"))
+    parser.add_argument("command", choices=("deps", "purity", "scope", "api-shape", "ownership", "architecture", "architecture-self-test"))
+    parser.add_argument("--authority", action="append", default=[])
+    parser.add_argument("--core-authority", action="append", default=[])
     args = parser.parse_args()
     try:
         if args.command == "deps":
@@ -1059,12 +1543,18 @@ def main() -> None:
             command_api_shape()
         elif args.command == "ownership":
             command_ownership()
+        elif args.command == "architecture":
+            command_architecture(args.authority, args.core_authority)
+        elif args.command == "architecture-self-test":
+            command_architecture_self_test(args.authority, args.core_authority)
         else:
             raise AssertionError(f"unexpected command: {args.command}")
     except CheckFailure as error:
         die(str(error))
     except ValidationError as error:
         die(str(error))
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError) as error:
+        die(f"architecture/tool input could not be admitted: {error}")
 
 
 if __name__ == "__main__":

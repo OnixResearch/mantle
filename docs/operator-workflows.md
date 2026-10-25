@@ -316,8 +316,10 @@ Hydration validates the out-of-band manifest identity, requires one vendor
 record plus the legacy provider archive and provider manifest, validates every
 vendored package/file checksum against the fresh clone's `Cargo.lock`, publishes
 `vendor-deps/` with atomic no-replace semantics, and imports and pins the bundle
-under `./offline-state`. It refuses an existing `vendor-deps/` rather than
-merging or replacing it. The JSON report is contracted as
+under `./offline-state`. If the import or pin fails after publication, hydration
+removes the newly published vendor tree; an existing state path is not replaced.
+It refuses an existing `vendor-deps/` rather than merging or replacing it. The JSON
+report is contracted as
 `mantle-self-build-source-hydration-v1` and binds the manifest, vendor, and
 provider archive BLAKE3 identities without embedding checkout or temporary
 paths.
@@ -606,13 +608,13 @@ The output path and its two success aliases must be absent. A failed run keeps
 its private staging directory and `attempt-status.json`. A successful run
 publishes with a no-replace rename and updates both aliases atomically.
 
-With global `--verbose`, the source-built attempt also writes
-`mantle-service-readiness-v1` coordination snapshots to stderr. The six
+With global `--verbose`, the development-only source-built route writes
+`mantle-service-readiness-v1` coordination snapshots to stderr. Its six
 proof-stage dependencies come from the real output-authority edges. StageX
-may report `started` during isolated execution; the current observer never
-asserts `complete` because accepted action-reconciliation observations and
-the required final receipt are not yet available to its shell boundary.
-These non-evidence snapshots never replace the proof report or receipt.
+may report `started` during isolated execution; that development observer never
+asserts `complete` because it does not consume accepted action reconciliation
+and a final receipt. These non-evidence snapshots never replace a cold proof
+report or receipt, and the cold route does not emit this legacy projection.
 
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
@@ -956,6 +958,11 @@ config Cargo uses. Only the copied workspace root (when `.cargo` must be
 created) and copied `.cargo` directory gain owner-write permission; a
 read-only copied config is replaced. The signed input root remains untouched,
 and ambient `CARGO_HOME` cannot substitute for this declared config.
+RustPlan invokes both Cargo metadata and unit-graph oracles with `--locked`,
+so even a semantically valid, noncanonical read-only `Cargo.lock` stays
+byte-identical. A lock requiring dependency changes fails; the producer does
+not make that source input writable or silently regenerate it.
+
 
 Build-script-enabled unit graphs add one target-facts unit per selected
 toolchain/triple, a compiled `custom-build` executable, and a separate

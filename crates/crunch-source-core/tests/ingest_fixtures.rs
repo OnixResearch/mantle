@@ -126,6 +126,20 @@ fn legacy_projection_requires_unambiguous_facts() {
     assert_eq!(observation.kind, SourceKind::Git);
     assert_eq!(observation.git_object_format, Some(GitObjectFormat::Sha256));
 
+    let mut no_projection = base_facts.clone();
+    no_projection.metadata.retain(|(key, _)| key != "projection");
+    assert!(matches!(
+        project_legacy_v1(&no_projection, &LocatorBoundaryPolicy::default()).unwrap(),
+        LegacyProvenanceProjection::ProvenanceUnavailable { reason_code }
+            if reason_code == "legacy-projection-unavailable"
+    ));
+    let mut ambiguous = base_facts.clone();
+    ambiguous.metadata.push((String::from("projection"), String::from("other")));
+    assert!(matches!(
+        project_legacy_v1(&ambiguous, &LocatorBoundaryPolicy::default()).unwrap(),
+        LegacyProvenanceProjection::ProvenanceUnavailable { reason_code }
+            if reason_code == "legacy-metadata-ambiguous"
+    ));
     let mut incomplete = base_facts.clone();
     incomplete.metadata = vec![(String::from("projection"), String::from("source"))];
     let outcome =
@@ -143,4 +157,15 @@ fn legacy_projection_requires_unambiguous_facts() {
     let outcome = project_legacy_v1(&short_revision, &LocatorBoundaryPolicy::default())
         .expect("projection returns a disposition");
     assert!(matches!(outcome, LegacyProvenanceProjection::ProvenanceUnavailable { .. }));
+}
+
+#[test]
+fn stored_observation_cannot_reuse_a_forged_identity() {
+    let mut stored = admitted();
+    stored.git_revision = Some("b".repeat(64));
+    let outcome =
+        plan_ingest(&request(), &LocatorBoundaryPolicy::default(), &ExistingObservation::Present(Box::new(stored)));
+    assert_eq!(outcome.outcome, IngestOutcome::RejectIdentityConflict);
+    assert!(!outcome.authorizes_durable_write);
+    assert!(outcome.preserves_durable_state);
 }

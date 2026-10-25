@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::usize_in_public_api)]
@@ -377,10 +377,14 @@ fn replacement(rewrite: &DependencyRewrite<'_>, depth: usize) -> Result<String, 
     if !member[33..].iter().all(|b| b.is_ascii_alphanumeric() || b"+._-".contains(b)) {
         return Err(Refusal::InvalidDependency);
     }
-    if rewrite.library_path.is_empty()
-        || rewrite.library_path.starts_with('/')
-        || rewrite.library_path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
-    {
+    let library_path = rewrite.library_path;
+    let is_relative_path = !library_path.is_empty() && !library_path.starts_with('/');
+    if !is_relative_path {
+        return Err(Refusal::InvalidDependency);
+    }
+    let has_unsafe_component = library_path.split('/').any(|part| part.is_empty() || part == "." || part == "..");
+    let has_unsafe_character = library_path.bytes().any(|byte| matches!(byte, 0 | b':' | b';' | b'$'));
+    if has_unsafe_component || has_unsafe_character {
         return Err(Refusal::InvalidDependency);
     }
     if depth > 32 {
@@ -404,6 +408,14 @@ fn symbol_tail_check(
     table_index: usize,
     target: Range<usize>,
 ) -> Result<(), Refusal> {
+    let table = sections[table_index];
+    let prefix_end = table.offset.checked_add(target.start).ok_or(Refusal::InvalidString)?;
+    // Only names after the previous terminator can extend into the target.
+    // Scan that prefix once, not the whole string table for every symbol.
+    let containing_start = bytes[table.offset..prefix_end]
+        .iter()
+        .rposition(|byte| *byte == 0)
+        .map_or(0, |offset| offset.saturating_add(1));
     for symtab in sections.iter().filter(|s| s.kind == SHT_DYNSYM && s.link == table_index) {
         if symtab.entsize != SYMBOL_BYTES || symtab.size % SYMBOL_BYTES != 0 {
             return Err(Refusal::InvalidLayout);
@@ -414,7 +426,13 @@ fn symbol_tail_check(
         let end = symtab.offset.checked_add(symtab.size).ok_or(Refusal::Truncated)?;
         for offset_bytes in (symtab.offset..end).step_by(SYMBOL_BYTES) {
             let name = index(num(bytes, offset_bytes, Field::SymbolName)?)?;
-            if name != 0 && target.contains(&name) {
+            if name == 0 {
+                continue;
+            }
+            if name >= table.size {
+                return Err(Refusal::InvalidString);
+            }
+            if name >= containing_start && name < target.end {
                 return Err(Refusal::SymbolTailOverlap);
             }
         }
@@ -443,17 +461,30 @@ fn match_unique_entry(
     Ok(matched.1)
 }
 
-/// Rejects a rewrite whose string, including its terminator, is also the target
-/// of another declared dynamic string.
+/// Rejects any other dynamic string whose bytes or terminator overlap a target.
 fn check_shared_string(
+    bytes: &[u8],
     layout: &DynamicLayout<'_>,
+    wanted_tag: u64,
     string_span: core::ops::RangeInclusive<usize>,
 ) -> Result<(), Refusal> {
     let offset_bytes = *string_span.start();
+    assert!(offset_bytes <= *string_span.end(), "a string span includes its terminator");
+    let prefix_end = layout.table.offset.checked_add(offset_bytes).ok_or(Refusal::InvalidString)?;
+    let containing_start = bytes[layout.table.offset..prefix_end]
+        .iter()
+        .rposition(|byte| *byte == 0)
+        .map_or(0, |offset| offset.saturating_add(1));
+    assert!(containing_start <= offset_bytes, "the containing string starts at or before the target");
     for (tag, other) in &layout.entries {
         let is_shared_tag = matches!(*tag, DT_NEEDED | DT_RPATH | DT_RUNPATH | DT_SONAME);
-        let is_other_entry = *other != offset_bytes;
-        if is_shared_tag && is_other_entry && string_span.contains(other) {
+        if !is_shared_tag || (*tag == wanted_tag && *other == offset_bytes) {
+            continue;
+        }
+        if *other >= layout.table.size {
+            return Err(Refusal::InvalidString);
+        }
+        if *other >= containing_start && *other <= *string_span.end() {
             return Err(Refusal::SharedDynamicString);
         }
     }
@@ -473,7 +504,7 @@ fn admit_rewrite(
     }
     // A declared target must already retain the same scanner-visible hash.
     // Short un-hashed SONAMEs cannot be safely upgraded by this fixup.
-    if !rewrite.current.contains(rewrite.dependency) {
+    if !rewrite.current.split('/').any(|component| component == rewrite.dependency) {
         return Err(Refusal::DependencyMismatch);
     }
     let wanted_tag = match rewrite.kind {
@@ -486,7 +517,7 @@ fn admit_rewrite(
     }
     let (current, start) = string_at(bytes, layout.table, offset_bytes)?;
     let end = offset_bytes.checked_add(current.len()).ok_or(Refusal::InvalidString)?;
-    check_shared_string(layout, offset_bytes..=end)?;
+    check_shared_string(bytes, layout, wanted_tag, offset_bytes..=end)?;
     let tail_end = end.checked_add(1).ok_or(Refusal::InvalidString)?;
     symbol_tail_check(bytes, layout.sections, layout.table_index, offset_bytes..tail_end)?;
     let new = replacement(rewrite, depth)?;

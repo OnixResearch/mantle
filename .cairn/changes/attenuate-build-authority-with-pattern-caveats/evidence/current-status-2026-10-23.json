@@ -1,0 +1,822 @@
+{
+  "schema": "mantle-cairn-current-criterion-status-v1",
+  "observed_date": "2026-10-23",
+  "change": "attenuate-build-authority-with-pattern-caveats",
+  "maintenance_owner": "Mantle remote authority/caveat and project receiver maintainers; Main owns authenticated consumer evidence",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-existing-source-and-observations",
+  "latest_runtime_addendum": "evidence/runtime-observations-2026-10-23.json",
+  "addendum_boundary": "The linked additive record retains completed wait-request-repaired cohort observations and exact missing controls; this older snapshot and its failed receipts remain historical, not current acceptance.",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject_boundary": "Live shared worktree, not an atomic final source snapshot. Referenced receipts retain their own source subjects and limitations. Selected hashes identify inspected bytes only; they are not a commit/release acceptance identity. Parent is still repairing and executing checks.",
+  "evidence_refs": [
+    ".cairn/changes/attenuate-build-authority-with-pattern-caveats/evidence/baseline-and-core-2026-09-30.md:86-113",
+    "crates/crunch-remote-core/src/caveat.rs:203-210,336-350,413-430,485-496,524-540",
+    "src/remote_build/authority_caveats.rs",
+    "src/project_build/authority.rs:100-110",
+    "src/nix_gateway/authority.rs",
+    "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log:2353-2365,7778-7779"
+  ],
+  "supported_task_criteria": [
+    "T1.1",
+    "T1.2",
+    "T1.3",
+    "T2.1",
+    "T2.2",
+    "T2.3",
+    "T3.1",
+    "T3.2",
+    "T3.3",
+    "T3.4",
+    "T4.1",
+    "T4.2",
+    "T4.3",
+    "T4.4",
+    "T4.5"
+  ],
+  "criteria": [
+    {
+      "task_id": "T1.1",
+      "task_file_line": 7,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported",
+        "finding": "Retained isolated baseline/stack/policy receipts support historical checked tasks. Scratch core/UCAN observations name exact commands but are not current production receiver acceptance.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:7",
+      "requirement_ids": [
+        "mantle.authority_attenuation.caveat_filter_semantics"
+      ]
+    },
+    {
+      "task_id": "T1.2",
+      "task_file_line": 8,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported",
+        "finding": "Retained isolated baseline/stack/policy receipts support historical checked tasks. Scratch core/UCAN observations name exact commands but are not current production receiver acceptance.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:8",
+      "requirement_ids": [
+        "mantle.authority_attenuation.stack_authority_reuse"
+      ]
+    },
+    {
+      "task_id": "T1.3",
+      "task_file_line": 9,
+      "checkbox_at_inspection": "x",
+      "assessment": {
+        "status": "historical-supported",
+        "finding": "Retained isolated baseline/stack/policy receipts support historical checked tasks. Scratch core/UCAN observations name exact commands but are not current production receiver acceptance.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:9",
+      "requirement_ids": [
+        "mantle.authority_attenuation.caveat_filter_semantics"
+      ]
+    },
+    {
+      "task_id": "T2.1",
+      "task_file_line": 13,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-and-observed-subset",
+        "finding": "Current core implements bounded matching and right-to-left parent/site-policy intersection. Partial workspace stdout reports all thirteen named caveat tests ok, including finite no-widening and exact-target policy cases. Full run exit/final binding still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:13",
+      "requirement_ids": [
+        "mantle.authority_attenuation.caveat_filter_semantics"
+      ]
+    },
+    {
+      "task_id": "T2.2",
+      "task_file_line": 14,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-and-observed-subset",
+        "finding": "Current core implements bounded matching and right-to-left parent/site-policy intersection. Partial workspace stdout reports all thirteen named caveat tests ok, including finite no-widening and exact-target policy cases. Full run exit/final binding still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:14",
+      "requirement_ids": [
+        "mantle.authority_attenuation.composition_order"
+      ]
+    },
+    {
+      "task_id": "T2.3",
+      "task_file_line": 15,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "source-and-observed-subset",
+        "finding": "Current core implements bounded matching and right-to-left parent/site-policy intersection. Partial workspace stdout reports all thirteen named caveat tests ok, including finite no-widening and exact-target policy cases. Full run exit/final binding still owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:15",
+      "requirement_ids": [
+        "mantle.authority_attenuation.caveat_filter_semantics"
+      ]
+    },
+    {
+      "task_id": "T3.1",
+      "task_file_line": 19,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:19",
+      "requirement_ids": [
+        "mantle.authority_attenuation.attenuated_remote_grant"
+      ]
+    },
+    {
+      "task_id": "T3.2",
+      "task_file_line": 20,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:20",
+      "requirement_ids": [
+        "mantle.authority_attenuation.attenuated_store_view"
+      ]
+    },
+    {
+      "task_id": "T3.3",
+      "task_file_line": 21,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:21",
+      "requirement_ids": [
+        "mantle.authority_attenuation.attenuated_remote_grant"
+      ]
+    },
+    {
+      "task_id": "T3.4",
+      "task_file_line": 22,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:22",
+      "requirement_ids": [
+        "mantle.authority_attenuation.composition_order"
+      ]
+    },
+    {
+      "task_id": "T4.1",
+      "task_file_line": 26,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:26",
+      "requirement_ids": [
+        "mantle.authority_attenuation.attenuated_remote_grant"
+      ]
+    },
+    {
+      "task_id": "T4.2",
+      "task_file_line": 27,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "receiver-source-current-proof-owed",
+        "finding": "Registered adapter and authenticated gateway/project receivers exist. Current partial stdout reports two adapter tests plus signed project real-selector/replay/owner isolation, digest substitution, canonical capability selection and silent unknown/cross-owner/parent-widening fixtures ok. This is actual fixture execution evidence, not source alone; final complete command/source binding and remote-build/store-specific grant effects/effective-chain reporting remain owed.",
+        "remaining_local_action_ids": [
+          "focused"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:27",
+      "requirement_ids": [
+        "mantle.authority_attenuation.attenuated_store_view"
+      ]
+    },
+    {
+      "task_id": "T4.3",
+      "task_file_line": 28,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "verification-incomplete",
+        "finding": "Historical before/scratch observations plus current partial tests do not close final-source before/after receiver/quality/Tracey/Nix rails.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:28",
+      "requirement_ids": [
+        "mantle.authority_attenuation.composition_order"
+      ]
+    },
+    {
+      "task_id": "T4.4",
+      "task_file_line": 29,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "verification-incomplete",
+        "finding": "Historical before/scratch observations plus current partial tests do not close final-source before/after receiver/quality/Tracey/Nix rails.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:29",
+      "requirement_ids": [
+        "mantle.authority_attenuation.caveat_filter_semantics"
+      ]
+    },
+    {
+      "task_id": "T4.5",
+      "task_file_line": 30,
+      "checkbox_at_inspection": " ",
+      "assessment": {
+        "status": "cutover-not-authorized",
+        "finding": "No spec sync/archive/publication authorized; acceptance remains Main-owned.",
+        "remaining_local_action_ids": [
+          "focused",
+          "quality"
+        ],
+        "evidence_refs": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "criterion_reference": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md:30",
+      "requirement_ids": [
+        "mantle.authority_attenuation.stack_authority_reuse"
+      ]
+    }
+  ],
+  "observed_documentary_lifecycle": {
+    "manifest": "target/cairn-finish-20261023/lifecycle-observations/result.json",
+    "commands": [
+      {
+        "label": "validate-before",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-before.stderr.log"
+      },
+      {
+        "label": "attenuate-build-authority-with-pattern-caveats-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "attenuate-build-authority-with-pattern-caveats",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-proposal.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-proposal.stderr.log"
+      },
+      {
+        "label": "attenuate-build-authority-with-pattern-caveats-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "attenuate-build-authority-with-pattern-caveats",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-design.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-design.stderr.log"
+      },
+      {
+        "label": "attenuate-build-authority-with-pattern-caveats-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "attenuate-build-authority-with-pattern-caveats",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-tasks.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/attenuate-build-authority-with-pattern-caveats-tasks.stderr.log"
+      },
+      {
+        "label": "validate-after",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stdout.log",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/lifecycle-observations/validate-after.stderr.log"
+      }
+    ],
+    "non_claim": "Exact zero exits are lifecycle/structure evidence only, not executed acceptance of every task; the old missing nominal_identity_policy scaffold blocker is not the current observation."
+  },
+  "observed_parent_gate_snapshots": [
+    {
+      "label": "ordinary-first-party",
+      "command_text": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/ordinary-first-party",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "architecture-semantic",
+      "command_text": "cargo -Zscript scripts/check-cli-architecture.rs --semantic",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "trellis-import",
+      "command_text": "python3 scripts/import-trellis-fenced-attempt.py --check",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/trellis-import",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "no-std-core",
+      "command_text": "bash scripts/check-no-std-core.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/no-std-core",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "changed-no-std-wasm",
+      "command_text": "cargo check --locked --offline -p crunch-source-core -p mantle-rust-plan-core -p mantle-rust-differential-core -p mantle-application-contract -p crunch-rust-cache-core -p crunch-remote-core --target wasm32-unknown-unknown",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/changed-no-std-wasm",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "default-shell-store",
+      "command_text": "cargo check --locked --offline -p crunch-store --lib",
+      "exit_code": 0,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/default-shell-store",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "tigerstyle",
+      "command_text": "bash scripts/check-first-party-tigerstyle.sh",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "flake",
+      "command_text": "nix flake check --offline --no-write-lock-file -L",
+      "exit_code": 1,
+      "evidence_prefix": "target/cairn-finish-20261023/supervisor-final-gates/flake",
+      "scope": "Recorded earlier parent observation; not automatically valid for subsequent source edits."
+    },
+    {
+      "label": "first-party-clippy",
+      "command_text": "bash scripts/check-first-party-clippy.sh",
+      "exit_code": 101,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    },
+    {
+      "label": "workspace-tests",
+      "command_text": "cargo_test_workspace_lib_tests",
+      "exit_code": null,
+      "evidence_prefix": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests",
+      "scope": "Snapshot of parent receipt; null exit means not a completed command result. Individual fixture ok lines are bounded observations only."
+    }
+  ],
+  "observed_workspace_fixture_subset": {
+    "stdout": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.stdout.log",
+    "command": "target/cairn-finish-20261023/final-source-checks-2/workspace-tests.command",
+    "exit_receipt_observed": null,
+    "selected_test_lines": [
+      {
+        "line": 2353,
+        "text": "test caveat::tests::alternatives_choose_first_match_and_deny_if_none_matches ... ok"
+      },
+      {
+        "line": 2354,
+        "text": "test caveat::tests::bound_rewrite_matches_complete_segments_and_preserves_binding ... ok"
+      },
+      {
+        "line": 2355,
+        "text": "test caveat::tests::exact_store_gate_denies_prefix_lookalikes_traversal_and_rewrites ... ok"
+      },
+      {
+        "line": 2356,
+        "text": "test caveat::tests::expanded_output_over_bound_denies_without_alternative_fallback ... ok"
+      },
+      {
+        "line": 2357,
+        "text": "test caveat::tests::finite_input_space_never_widens_under_appended_rewrites ... ok"
+      },
+      {
+        "line": 2358,
+        "text": "test caveat::tests::known_variants_reject_missing_extra_and_invalid_fields ... ok"
+      },
+      {
+        "line": 2359,
+        "text": "test caveat::tests::newest_runs_first_but_ancestor_rejection_cannot_be_rewritten_away ... ok"
+      },
+      {
+        "line": 2360,
+        "text": "test caveat::tests::original_and_every_ancestor_output_must_pass_site_policy ... ok"
+      },
+      {
+        "line": 2361,
+        "text": "test caveat::tests::pattern_value_segment_chain_and_alternative_bounds_fail_closed ... ok"
+      },
+      {
+        "line": 2362,
+        "text": "test caveat::tests::project_gate_binds_original_owner_every_prefix_and_admitted_goal ... ok"
+      },
+      {
+        "line": 2363,
+        "text": "test caveat::tests::record_ordinals_and_serialized_size_are_not_normalized_away ... ok"
+      },
+      {
+        "line": 2364,
+        "text": "test caveat::tests::reject_is_identity_only_for_nonmatches_and_unknown_always_denies ... ok"
+      },
+      {
+        "line": 2365,
+        "text": "test caveat::tests::remote_site_conjoins_parent_jobs_classes_and_receiver_deadlines_before_rewrite ... ok"
+      },
+      {
+        "line": 7778,
+        "text": "test remote_build::authority_caveats::tests::registered_chain_rejects_parent_widening_unknown_and_ambiguous_payloads ... ok"
+      },
+      {
+        "line": 7779,
+        "text": "test remote_build::authority_caveats::tests::registered_rewrite_returns_only_receiver_admitted_project_goal ... ok"
+      },
+      {
+        "line": 7309,
+        "text": "test nix_gateway::authority::tests::signed_project_digest_substitution_and_build_relabel_fail_before_resolution ... ok"
+      },
+      {
+        "line": 7310,
+        "text": "test nix_gateway::authority::tests::signed_project_rewrite_drives_real_selector_and_isolates_owner_root_and_replay ... ok"
+      },
+      {
+        "line": 7311,
+        "text": "test nix_gateway::authority::tests::signed_project_selects_only_first_canonical_matching_grant_in_mixed_capability_token ... ok"
+      },
+      {
+        "line": 7312,
+        "text": "test nix_gateway::authority::tests::signed_project_unknown_empty_cross_owner_and_parent_widening_are_silent ... ok"
+      }
+    ],
+    "non_claim": "Individual observed ok/FAILED lines only; no final aggregate success or absence of skips is inferred. An empty selection is not proof of absent tests."
+  },
+  "remaining_local_actions": [
+    {
+      "id": "focused",
+      "argv": [
+        "nix",
+        "develop",
+        "-c",
+        "cargo",
+        "test",
+        "-p",
+        "crunch-remote-core",
+        "caveat::",
+        "--",
+        "--nocapture"
+      ],
+      "owed": "Capture pure composition/no-widening/filter bounds, then registered authority_caveats adapter and real signed gateway/project/store receiver effects, including rewritten target identity and silent unknown/cross-owner/parent widening rejection.",
+      "executed_by_this_worker": false
+    },
+    {
+      "id": "quality",
+      "argv": [
+        "bash",
+        "scripts/check-first-party-quality.sh"
+      ],
+      "owed": "Main to capture final-source first-party fmt, strict Clippy and workspace lib/tests; then finish no-std, architecture semantic, relevant Nix and Tracey rails. Historical/partial successes do not close this action."
+    }
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [],
+  "integration_gate_blockers": [
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/no-std-core.stderr.log:370-394",
+        "target/cairn-finish-20261023/final-source-checks-2/first-party-clippy.stderr.log:35-53"
+      ]
+    },
+    {
+      "kind": "locally-actionable-main-owned",
+      "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/architecture-semantic.stderr.log:1-2"
+      ]
+    },
+    {
+      "kind": "host-nix-builder-configuration",
+      "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+      "evidence": [
+        "target/cairn-finish-20261023/supervisor-final-gates/flake.stderr.log:147-152",
+        "target/cairn-finish-20261023/supervisor-final-gates/tigerstyle.stderr.log:1-9"
+      ]
+    }
+  ],
+  "non_claims": [
+    "Bearer tickets are not portable holder-attenuable UCAN grants; pure helper/isolated historical signed fixtures do not authenticate current receiver effects or establish durable revocation.",
+    "This worker ran no build, test, lint, formatter, VM, proof, lifecycle gate or production command; only read and reconciled existing evidence. No checkbox changed.",
+    "No human, operator, policy-owner or upstream approval is inferred from AI investigation, implementation or lifecycle structure gates."
+  ],
+  "selected_inspected_input_identities": [
+    {
+      "path": ".cairn/changes/attenuate-build-authority-with-pattern-caveats/evidence/baseline-and-core-2026-09-30.md",
+      "sha256": "ae36cd6e5e5dcfef402a67312798e0e7ca57635da993b7351882bf3274ec7177"
+    },
+    {
+      "path": "crates/crunch-remote-core/src/caveat.rs",
+      "sha256": "4ed14458b0a75d2673e717454c588d9879647a158ff1b52b42e2bb0f5f7e8b63"
+    },
+    {
+      "path": "src/remote_build/authority_caveats.rs",
+      "sha256": "eec9a2180b1b4bcea07f610ccd135623b6db713e4074a9f1ba68fb1b4de722df"
+    },
+    {
+      "path": "src/project_build/authority.rs",
+      "sha256": "7eaa537a8b63be1316eadcb2fc9a1568e11cccb5791d978b4204aebe0d7b2e89"
+    },
+    {
+      "path": "src/nix_gateway/authority.rs",
+      "sha256": "3c68ba1947e9fc75c50d8c17fbc4a8a500131b5c188f3bb8f7c38e6dd154dca1"
+    }
+  ],
+  "tasks_sha256_at_inspection": "fa462d8f421d240062da31b77f96a8330f109cecc98e5f77c10ff2e80d2c7b51",
+  "support_definition": "Every listed task criterion has a bounded current assessment; supported_task_criteria does not mean those tasks are complete or accepted.",
+  "observed_integration_gate_update": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 1,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": [
+        {
+          "step": "tigerstyle",
+          "original_exit": 1,
+          "original_classification": "host-nix-remote-build-hook",
+          "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+          "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+          "rerun_exit": 0,
+          "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+          "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+          "tree_identical_to_gate_start": true
+        }
+      ]
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v6-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v6-cohort/binding.json",
+      "pin_binding_blake3": "3f8ea94d3783da6f37fcb04061fe9cc906024f5199ef0fd5d4db4cbd908fa949",
+      "statement": "The gates ran over the hashed tree from which the v6 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 1,
+          "flake": 1
+        },
+        "status": "host-prerequisite-still-blocks",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": "host-nix-remote-build-hook",
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "a774b68e64f69dd49427b779a139d41771adcb7f13a10e484de3fcbbbebd1436"
+          }
+        ],
+        "bound_step_reruns": [
+          {
+            "step": "tigerstyle",
+            "original_exit": 1,
+            "original_classification": "host-nix-remote-build-hook",
+            "original_stderr_blake3": "ecc60d80cfce3fe0e57a11fd67e9b76e323b63d814d1ad4b6b5ce1a10a700b32",
+            "rerun": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tigerstyle-rerun",
+            "rerun_exit": 0,
+            "rerun_result_blake3": "bc89248ade4e595b4cacb189062b2a01e59e6911cfb457f7a362b7e59de44f67",
+            "rerun_stderr_blake3": "bf55c39302131a305b386ab6101d67770a7064519bb8b1f52ce360ec22f141f3",
+            "tree_identical_to_gate_start": true
+          }
+        ]
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  }
+}

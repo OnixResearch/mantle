@@ -1,0 +1,239 @@
+{
+  "schema": "mantle-cairn-bounded-runtime-reconciliation-v1",
+  "observed_date": "2026-10-23",
+  "integration_owner": "Main",
+  "classification": "documentary-reconciliation-of-completed-bounded-local-runtime",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "subject": {
+    "cohort": "wait-request-repaired-immutable-release-cohort",
+    "mantle": {
+      "role": "mantle",
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "pin_file": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/ready-executable-pins.json",
+      "observed_before": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "observed_after": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "identity_invariant": true
+    },
+    "boundary": "Immutable wait-request-repaired cohort used for the existing service and remote runtime observations. This is NOT the not-yet-pinned exact-exec cohort, current evolving worktree, final gate subject, or release identity.",
+    "ready_executable_pins": {
+      "schema": "mantle-runtime-executable-pins-v1",
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort",
+      "roles": {
+        "mantle": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+        },
+        "wrapper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-rust-wait-wrapper",
+          "blake3": "ac27566e15906a736deaac949b420ec12e1534fa7b17b185004eb0841b40ad21"
+        },
+        "producer": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-producer",
+          "blake3": "380aa0847e4f2e8ee5a6066f2d12b2535068cf25c1f22c594f48c026cfdd7805"
+        },
+        "helper": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cargo-unit-helper",
+          "blake3": "2d580bf3888f24a29db9ca1391b88d6c615ef69d803c6b07a25b8c6d776309c3"
+        },
+        "replay": {
+          "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/resource_policy_replay",
+          "blake3": "e49ac2ba8d52c7292a44d33f1135bc8395f4b13f74ccf10229c0d39419d31fd9"
+        }
+      },
+      "policy": "Execute only these installed files; no build targets write into this directory. Each consumer must verify its roles before and after execution."
+    },
+    "service_additional_executables": {
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle-cc-driver": "047d66f1dc5183d53838e80ec93429845e1322be827508e53ab14b14f0bdcc5e"
+    },
+    "rust_readiness_helper_blake3": "6cc031372961600327e407e878d0450adfeaf53f060d7ac60203f03571798e30",
+    "source_identity_limit": "Executable BLAKE3 and selected input bytes are retained; a complete atomic source/build provenance is not asserted."
+  },
+  "scope_of_this_record": "Only already completed result files and their raw captures were inspected. No service, runtime, test, build, formatter, linter or gate was launched by this evidence worker. Running Pueue tasks 87/88 and their outputs were not inspected. No claim about their result is made.",
+  "historical_receipts": "Earlier failed receipts and current-status snapshots are immutable observations. This additive record supplements them, does not reinterpret a failed aggregate as success, and does not authorize task completion.",
+  "non_claims": [
+    "No full acceptance, review signature, provider authority, bootstrap/release readiness, spec sync or archive claim.",
+    "Local bearer-authenticated stdio and signed outputs are NOT signed UCAN requests, authenticated caveat-chain receiver proof, Nix/API interoperability or entire surface parity.",
+    "Manual restart is not a supervising restart loop. Coordination state is not build evidence.",
+    "Executable local actions not yet run remain local work, not external blockers."
+  ],
+  "change": "resolve-remote-entry-points-through-one-binding",
+  "maintenance_owner": "Mantle endpoint/store-source admission maintainers; Main owns integration",
+  "durable_runtime_evidence_refs": [
+    ".cairn/changes/separate-remote-build-hexagon/evidence/runtime-observations-2026-10-23.json",
+    ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-observations-2026-10-23.json"
+  ],
+  "criteria": [
+    {
+      "task": "T1.1",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:7",
+      "exact_task_text": "- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record every remote entry point, its name shape, its admission checks, and its current revocation behavior. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T1.2",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:8",
+      "exact_task_text": "- [ ] [serial] T1.2 Define the resolve step, the binding record, the generation fence, and the revocation operation. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T1.3",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:9",
+      "exact_task_text": "- [ ] [serial] T1.3 Record the generation-bound, retraction-not-deletion, and fail-closed-early decisions in an ADR. r[remote_builds.binding_revocation]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.1",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:13",
+      "exact_task_text": "- [ ] [serial] T2.1 Implement pure name validation, binding selection, generation comparison, revocation state, and resolve decision. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.2",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:14",
+      "exact_task_text": "- [ ] [serial] T2.2 Serve one resolve step per entry point and persist bindings with explicit generation. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Configured generation-1 builder endpoint admitted one real local stdio build; this is not every entry point or daemon-served resolve acceptance.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.3",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:15",
+      "exact_task_text": "- [ ] [serial] T2.3 Implement revocation as a retraction of one binding and refuse new sessions under it. r[remote_builds.binding_revocation]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Owner-private binding table tombstone was set revoked (offline fixture mutation), and a fresh build failed remote-endpoint-binding-Revoked before coordinator state/dispatch. This exercises refusal, not a live retraction operation.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T2.4",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:16",
+      "exact_task_text": "- [ ] [serial] T2.4 Keep existing ticket, substituter, and base-layer checks behind the resolve step without weakening them. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Accepted build used a one-use bearer ticket and full-key verified signed result. Revoked ticket/upload quota refused without consuming the use. Cache/substituter/base-layer regressions remain separately recorded in signed-cache-export-parent-repair-2026-10-23.json; no cache pull ran in this production driver.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.1",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:20",
+      "exact_task_text": "- [ ] [parallel] T3.1 Add positive fixtures: resolve once yields a session handle; resolving the same name twice yields the same generation; each existing entry point resolves through the step. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "One configured builder binding accepted; repeated resolve equality and every existing endpoint are not exercised.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.2",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:21",
+      "exact_task_text": "- [ ] [parallel] T3.2 Add negative fixtures: expired name, forged name, stale generation, mismatched prefix, unknown binding, and resolve before payload work. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "Revoked configured binding refused before coordinator state; expired, forged, stale, mismatched-prefix and unknown-binding controls were not in this runtime. Historical regression evidence is not overwritten.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T3.3",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:22",
+      "exact_task_text": "- [ ] [parallel] T3.3 Add revocation fixtures: new session refused after revocation; already-admitted content still verifies; recreating a name yields a new generation. r[remote_builds.binding_revocation]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "New session under independently revoked scratch binding refused. No same-binding admitted-content-then-revoke-then-verify sequence or recreate/new-generation control occurred.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.1",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:26",
+      "exact_task_text": "- [ ] [serial] T4.1 Run the resolve, generation, and revocation rails before and after the change. Preserve exact results. r[remote_builds.binding_revocation]",
+      "new_observation_status": "bounded-partial-support",
+      "assessment": "This is a bounded after-cohort production smoke, not a before/after run of all resolve, generation and revocation rails.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.2",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:27",
+      "exact_task_text": "- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.single_binding_resolution]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    },
+    {
+      "task": "T4.3",
+      "task_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md:28",
+      "exact_task_text": "- [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.binding_revocation]",
+      "new_observation_status": "not-exercised-by-these-runtime-scenarios",
+      "assessment": "No additional evidence for this exact criterion from these completed service/remote scenarios. Preserve the existing documentary/source/test assessment separately; an unchecked task or prior failure is not closed by this record.",
+      "acceptance_established": false
+    }
+  ],
+  "decisive_results": [
+    {
+      "scenario": "accepted",
+      "build_exit_code": 0,
+      "checks": {
+        "bytes_equal": true,
+        "streaming_import": true,
+        "nar_sha256": "5924b56ca803f92ebe954fd0787313c7fe091c8e6ddb5112d1f0a22983299b03",
+        "nar_size": 4208,
+        "full_key_signature_verified": true,
+        "imported_path": "/tmp/mantle-remote-20261023-main-01/accepted/store/1zxc3jmyk4vv5s93m3z8h6m4vgxyqpi2-production-remote-output",
+        "ticket_uses": 0,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "ticket-revoked",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "ticket-revoked",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "quota-rejected",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "upload-byte-limit-exceeded",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_admission_checked": true
+      }
+    },
+    {
+      "scenario": "binding-revoked",
+      "build_exit_code": 3,
+      "checks": {
+        "rejection_reason": "remote-endpoint-binding-Revoked",
+        "no_client_publication": true,
+        "no_worker_output": true,
+        "no_client_pathinfo": true,
+        "ticket_uses": 1,
+        "coordinator_state_absent_before_dispatch": true
+      }
+    }
+  ],
+  "related_historical_evidence": "evidence/signed-cache-export-parent-repair-2026-10-23.json remains unchanged: 4 source-binding and 62 pull regressions passed in task59, whose later aggregate failed. Its missing-parent fix and controls are not re-proven by the current stdio smoke.",
+  "remaining_local_actions": [
+    "Main: every-endpoint resolution and daemon-served resolve observation; repeated generation equality; expired/forged/stale/prefix/unknown binding; same-binding post-admission revocation verification; recreate/new-generation controls.",
+    "Main: retain final source-binding/cache/base regression receipts and integrated gates separately; no new task or acceptance checkmarks here."
+  ],
+  "actual_external_prerequisites_or_upstream_limits": [],
+  "reproduction": {
+    "owner": "Main / endpoint maintainers",
+    "runtime_recipe_ref": ".cairn/changes/separate-remote-build-hexagon/evidence/runtime-observations-2026-10-23.json#/reproduction",
+    "historical_cache_commands_ref": "evidence/signed-cache-export-parent-repair-2026-10-23.json#/execution/checks"
+  },
+  "historical_status_ref": ".cairn/changes/resolve-remote-entry-points-through-one-binding/evidence/current-status-2026-10-23.json"
+}

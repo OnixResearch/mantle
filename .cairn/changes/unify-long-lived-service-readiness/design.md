@@ -136,6 +136,30 @@ or the service declaration is explicitly removed; dropping an observation
 while keeping its declaration is not an observed exit or a policy-authorized
 restart.
 
+The live-daemon adapter preserves declaration ownership across observation
+connection loss: it retracts active readiness but seals that invocation ID
+against a fresh publisher claiming it as an unobserved initial start. Socket
+loss is not proof of a process exit, so it must not synthesize an abnormal exit
+or a restart action. A manual invocation uses a fresh ID; a daemon relaunch
+creates a fresh epoch. Explicit observed exits retain their terminal rows and
+remain subject to the declared restart policy. Bounded eviction of unowned
+records is permitted only when the remaining graph still validates.
+
+Transition admission also rejects changing a component's restart-policy/kind
+shape in place. Proof-stage generations must expose `started` before terminal
+completion, cannot revive or erase a terminal state in the same generation,
+and reject stale generations. A new proof execution uses a new generation and
+still waits for its declared predecessors. These checks do not authenticate
+action events or receipts and cannot close the proof-authority prerequisite.
+
+The core retains local request-acknowledgement history separately from the
+dependency-derived effective `ready` flag. A terminal exit cannot introduce
+its first acknowledgement to turn an early exit into `complete`. Conversely,
+a real acknowledged request is not forgotten when a dependency retracts and
+the dependent loses derived readiness. This history is transition metadata,
+not a new doctor/report wire field or evidence assertion.
+
+
 The current `mantle remote live serve` has **no supervising restart loop**.
 SIGINT/SIGTERM stop it; SIGKILL requires a separate manual relaunch. Its
 declared policy is therefore `never`, not an unimplemented automatic

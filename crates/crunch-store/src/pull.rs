@@ -1,5 +1,5 @@
 // HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// recorded in .cairn/archive/1970-01-01-complete-store-capability-migration/evidence/
 // tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
 // hardening pass. Scoped to the lint categories present at recording time.
 #![allow(
@@ -1088,6 +1088,10 @@ impl PullExportPublication<'_> {
 
     /// Materialize the admitted NAR into a staging directory beside the root.
     fn create_staging(&self) -> Result<tempfile::TempDir, Error> {
+        debug_assert!(self.parent.is_absolute());
+        debug_assert_eq!(self.destination.parent(), Some(self.parent));
+        std::fs::create_dir_all(self.parent)
+            .map_err(|error| self.failure(format!("creating export directory: {error}")))?;
         tempfile::Builder::new()
             .prefix(".mantle-pull-stage-")
             .tempdir_in(self.parent)

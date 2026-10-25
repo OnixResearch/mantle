@@ -2,7 +2,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // HARDENING-BACKLOG 2026-10-22: pre-existing tigerstyle findings in this file are
-// recorded in .cairn/changes/schedule-tigerstyle-hardening-backlog/evidence/
+// recorded in .cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/
 // tigerstyle-backlog-2026-10-22.log and scheduled for the standalone hardening
 // pass. Scoped to the lint categories present at recording time.
 #![allow(tigerstyle::explicit_defaults)]
@@ -35,6 +35,10 @@ pub const MAX_PLAN_UNITS: usize = 4096;
 pub const MAX_INPUTS_PER_UNIT: usize = 256;
 pub const MAX_PLAN_BYTES: usize = 4_194_304;
 pub const MANIFEST_FILE: &str = "share/mantle/unit-dependencies-v1.json";
+/// Wait-unit provenance travels as numbered text chunks of at most this size.
+const WAIT_PROVENANCE_CHUNK_BYTES: usize = 16_384;
+/// A wait-unit table within `MAX_PLAN_BYTES` never needs more chunks than this.
+const MAX_WAIT_PROVENANCE_CHUNKS: usize = MAX_PLAN_BYTES.div_ceil(WAIT_PROVENANCE_CHUNK_BYTES);
 
 /// The producer owns these observations, including the source-slice NAR digest.
 /// A source slice must refer to a separately admitted subtree of the producer output.
@@ -108,6 +112,8 @@ pub struct PlanBindings {
     pub target_linker: Option<TargetLinkerBinding>,
     /// Explicit store roots required by the tools' ELF loaders and libraries.
     pub runtime_inputs: Vec<String>,
+    /// Complete normalized compiler identities, declared identically off/on.
+    pub wait_units: BTreeMap<String, mantle_rust_differential_core::waits::UnitIdentity>,
     pub sources: Vec<SourceSlice>,
     pub units: Vec<UnitBinding>,
     pub roots: Vec<String>,
@@ -210,7 +216,7 @@ fn validated_store_root<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
     }
     let root_checks = [
         root.as_bytes()[..32].iter().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(byte)),
-        safe_name(&root[33..]),
+        safe_store_name(&root[33..]),
         parts.next().is_none_or(safe_relative),
     ];
     if root_checks.contains(&false) {
@@ -220,6 +226,16 @@ fn validated_store_root<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
     debug_assert!(root_end <= path.len());
     debug_assert!(root.len() >= 34);
     Some(&path[..root_end])
+}
+
+// Nix store names have a different wire bound and alphabet from unit labels.
+// Keep this aligned with nix_compat::store_path::validate_name without adding
+// the std store adapter as a dependency of this alloc-only lowering library.
+fn safe_store_name(name: &str) -> bool {
+    const MAX_STORE_NAME_BYTES: usize = 211;
+    !name.is_empty()
+        && name.len() <= MAX_STORE_NAME_BYTES
+        && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._+-?=".contains(&byte))
 }
 
 fn safe_name(name: &str) -> bool {
@@ -499,6 +515,16 @@ fn unit_environment(
     let compile_env = effect.environment.iter().cloned().collect::<BTreeMap<_, _>>();
     let mut env: BTreeMap<String, String> = BTreeMap::new();
     env.insert("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone());
+    let wait_id = plan.wait_units.get(id).and_then(|unit| unit.identity().ok());
+    env.insert(
+        "MANTLE_UNIT_WAIT_TOOLS".into(),
+        serde_json::to_string(&serde_json::json!({
+            "helper": plan.helper,
+            "rustc": plan.rustc,
+            "unit": wait_id,
+        }))
+        .map_err(|_| blocked("unit-plan-limit", id, "wait inventory serialization"))?,
+    );
     let target_linker = plan.target_linker.as_ref().filter(|_| effect.execution_kind == "target");
     env.insert(
         "MANTLE_UNIT_LINKER".to_string(),
@@ -572,7 +598,8 @@ pub fn lower(effects: &[ExistingUnitEffect], plan: &PlanBindings) -> Result<(Vec
     roots.sort();
     assert!(units.len() >= effects.len());
     assert!(!roots.is_empty());
-    let wire = Plan {
+    let provenance = wait_provenance(plan);
+    let mut wire = Plan {
         schema: "mantle-plan-v2",
         producer: Producer {
             logical_name: "cargo-unit-graph",
@@ -581,14 +608,43 @@ pub fn lower(effects: &[ExistingUnitEffect], plan: &PlanBindings) -> Result<(Vec
         sources: &slices,
         units,
         roots: &roots,
-        provenance: BTreeMap::new(),
+        provenance,
     };
-    let bytes = serde_json::to_vec(&wire).map_err(|_| blocked("unit-plan-limit", "plan", "plan serialization"))?;
+    let mut bytes = serde_json::to_vec(&wire).map_err(|_| blocked("unit-plan-limit", "plan", "plan serialization"))?;
+    if bytes.len() > MAX_PLAN_BYTES && !wire.provenance.is_empty() {
+        wire.provenance.clear();
+        bytes = serde_json::to_vec(&wire).map_err(|_| blocked("unit-plan-limit", "plan", "plan serialization"))?;
+    }
     if bytes.len() > MAX_PLAN_BYTES {
         return Err(blocked("unit-plan-limit", "plan", "plan bytes exceed 4 MiB"));
     }
     let digest = blake3::hash(&bytes).to_hex().to_string();
     Ok((bytes, digest))
+}
+
+fn wait_provenance(plan: &PlanBindings) -> BTreeMap<String, String> {
+    if plan.wait_units.len() > MAX_PLAN_UNITS || plan.wait_units.values().any(|unit| unit.identity().is_err()) {
+        return BTreeMap::new();
+    }
+    let Ok(table) = serde_json::to_vec(&plan.wait_units.values().collect::<Vec<_>>()) else {
+        return BTreeMap::new();
+    };
+    if table.len() > MAX_PLAN_BYTES {
+        return BTreeMap::new();
+    }
+    let mut provenance = BTreeMap::new();
+    for (index, chunk) in table.chunks(WAIT_PROVENANCE_CHUNK_BYTES).enumerate() {
+        if provenance.len() >= MAX_WAIT_PROVENANCE_CHUNKS {
+            return BTreeMap::new();
+        }
+        let Ok(text) = core::str::from_utf8(chunk) else {
+            return BTreeMap::new();
+        };
+        provenance.insert(format!("mantle-rust-wait-units-v1.{index:04}"), text.to_string());
+    }
+    debug_assert!(provenance.len() <= MAX_WAIT_PROVENANCE_CHUNKS);
+    debug_assert!(!provenance.values().any(|chunk| chunk.is_empty() || chunk.len() > WAIT_PROVENANCE_CHUNK_BYTES));
+    provenance
 }
 
 /// Lower every core effect plus one target-description unit per build-script

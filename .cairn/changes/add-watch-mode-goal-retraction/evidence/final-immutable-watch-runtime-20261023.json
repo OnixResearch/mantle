@@ -1,0 +1,299 @@
+{
+  "schema": "mantle-watch-goal-retraction-runtime-evidence-v1",
+  "date": "2026-10-23",
+  "status": "passed",
+  "scope": "One local real CLI watch process, isolated local store/state; existing rail executed unchanged after final immutable cohort publication.",
+  "pueue": {
+    "task_id": 37,
+    "dependency_task_id": 33,
+    "group": "watch-runtime-20261023-mKfRGV",
+    "result": "Success",
+    "argv": [
+      "python3",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/run.py"
+    ],
+    "terminal_receipt": "/tmp/mantle-watch-runtime-20261023-mKfRGV/pueue-finished.json"
+  },
+  "commands": {
+    "shell_argv": [
+      "nix",
+      "develop",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell",
+      "-c",
+      "python3",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/run.py",
+      "--inner"
+    ],
+    "rail_argv": [
+      "python3",
+      "/home/brittonr/git/OnixResearch/mantle/scripts/watch-goal-retraction-smoke.py",
+      "--mantle",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+      "--scratch",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario"
+    ],
+    "watch_argv": [
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+      "--store",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/store",
+      "--state-dir",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/state",
+      "build",
+      "--watch",
+      "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/roots.ncl",
+      "--no-substitute",
+      "--jobs",
+      "2"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/mantle",
+    "shell_exit_code": 0,
+    "rail_exit_code": 0,
+    "watch_exit_code": 0,
+    "started_unix": 1792787302.6961565,
+    "finished_unix": 1792787331.4031982
+  },
+  "executable": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+    "mode": "0555",
+    "published_blake3": "cbb0ab3332811c7d5870d3df334e2cce78f77faf5d82f46b294832e3f22e6599",
+    "before_blake3": "cbb0ab3332811c7d5870d3df334e2cce78f77faf5d82f46b294832e3f22e6599",
+    "after_blake3": "cbb0ab3332811c7d5870d3df334e2cce78f77faf5d82f46b294832e3f22e6599",
+    "post_inspection_blake3": "cbb0ab3332811c7d5870d3df334e2cce78f77faf5d82f46b294832e3f22e6599",
+    "invariant": true
+  },
+  "shell": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/patched-dev-shell",
+    "resolved": "/nix/store/c97vbm9alkcbqvcsdl8k0jshygy130wh-nix-shell-env",
+    "environment_record": "/tmp/mantle-watch-runtime-20261023-mKfRGV/runtime-observation.json"
+  },
+  "observations": {
+    "run_identity": "watch-217616-1792787302812911791",
+    "coordinator_pid": 217616,
+    "watch_process_count": 1,
+    "settlements": [
+      {
+        "generation": 1,
+        "successful": 2,
+        "failed": 0
+      },
+      {
+        "generation": 2,
+        "successful": 2,
+        "failed": 0
+      },
+      {
+        "generation": 3,
+        "successful": 3,
+        "failed": 0
+      },
+      {
+        "generation": 4,
+        "successful": 3,
+        "failed": 0
+      },
+      {
+        "generation": 5,
+        "successful": 3,
+        "failed": 0
+      },
+      {
+        "generation": 7,
+        "successful": 3,
+        "failed": 0
+      }
+    ],
+    "edit": "Generation 2: one retracted, one added, one retained; keep unchanged.",
+    "addition": "Generation 3: one added and two retained; three successful roots.",
+    "invalid_import": "One edit rejected notice; generation 4 restores valid source with three retained roots and no retraction.",
+    "coalescing": "Coordinator SIGSTOP acknowledged before 20 atomic edits; generation 5 admits rapid-20 only; no physical or reported rapid-1 through rapid-19 outputs.",
+    "delete_during_build": "Generation 6 adds slow; /bin/busybox sleep 20 child captured; generation 7 retracts slow then settles three successful roots. Rail checks descendants stopped and waits 21 seconds beyond teardown for late-output absence.",
+    "retained_artifact": {
+      "path": "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/store/chzx6b4lqci6czsljxngddkhl95g9sls-watch-scenario-keep",
+      "inode": 3015188,
+      "mtime_ns": 1000000000,
+      "blake3": "f04d62a61fed803fca5cf2c9d90a5895a5925cc26985342a640cbfce56105be8"
+    },
+    "retained_bytes": "keep\n",
+    "retained_inode_mtime_bytes_invariant": true,
+    "physical_outputs": [
+      {
+        "name": "1340kcg528vvwdbwq6wd1h8svdpsybpg-watch-scenario-moving-v2",
+        "bytes": 10,
+        "blake3": "b22f2c840679e1b85da0d992cd213480d356447d09edb706a83b77b55c6bcd15"
+      },
+      {
+        "name": "8vjsympmbxsm1vb394yhhx296bl6wxw6-watch-scenario-rapid-20",
+        "bytes": 9,
+        "blake3": "7acbb2b39486825bf5acf232a0839a1e8efc7b40dc0ac9d13f8719ee4f512abc"
+      },
+      {
+        "name": "chzx6b4lqci6czsljxngddkhl95g9sls-watch-scenario-keep",
+        "bytes": 5,
+        "blake3": "f04d62a61fed803fca5cf2c9d90a5895a5925cc26985342a640cbfce56105be8"
+      },
+      {
+        "name": "nmsll0rk1hfyn3nyhf25wdfymc485hr0-watch-scenario-moving-v1",
+        "bytes": 10,
+        "blake3": "d1a55c389f180cc148a79a2378db0c8a60907b29f84c9f2ec51f60641da5989b"
+      },
+      {
+        "name": "raw2srlfz7jzlff13rvkwph7zx3maq2b-watch-scenario-added",
+        "bytes": 6,
+        "blake3": "7c7b69870900f4e7969fbedccce653004bd86668b9954dca2a709dc03464a151"
+      }
+    ],
+    "exact_physical_output_count": 5,
+    "slow_output_absent": true,
+    "intermediate_rapid_outputs_absent": true,
+    "sandbox_descendants_post_run": {
+      "220513": {
+        "captured_starttime": "1088068",
+        "observation": "absent"
+      },
+      "220514": {
+        "captured_starttime": "1088068",
+        "observation": "absent"
+      },
+      "220517": {
+        "captured_starttime": "1088069",
+        "observation": "absent"
+      },
+      "220518": {
+        "captured_starttime": "1088069",
+        "observation": "absent"
+      }
+    },
+    "coordinator_proc_absent_after_graceful_shutdown": true,
+    "pending_cancellation_notice_observed": false,
+    "stderr_notes": [
+      "Generated signing-key message and two redb repair warnings retained verbatim.",
+      "Sandbox cancellation diagnostic: error=watch sandbox stopped after cancellation.",
+      "SIGTERM shutdown notice retained; CLI exited 0."
+    ]
+  },
+  "runtime_inputs": {
+    "rail_blake3": "e63a9184a5729db8b7532ee972fe70435725b225a092207364ffdec1d5b721ff",
+    "wrapper_blake3": "579bff55e93b3f161450435725ece00cb6e5c0d69bdf7144b2659a08ba6f5296",
+    "selected_inputs_and_library_manifest": "/tmp/mantle-watch-runtime-20261023-mKfRGV/runtime-observation.json",
+    "runtime_input_digests_unchanged": true
+  },
+  "build_provenance_artifacts": {
+    "target/cairn-finish-20261023/final-immutable-release-cohort/ready-executable-pins.json": {
+      "blake3": "8e0bdd2e70085bd4a0526da299225acd912d6c7133204038fab2dd27eeba192c",
+      "bytes": 1562
+    },
+    "target/cairn-finish-20261023/supervisor-final-cohort-build/build.exit": {
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+      "bytes": 2
+    },
+    "target/cairn-finish-20261023/supervisor-final-cohort-build/build.command": {
+      "blake3": "87540910521bd9e3f6a633a1e5950b1fcf2e2c4ece1a71e313f4ec3ff7047135",
+      "bytes": 355
+    },
+    "target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-before.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "bytes": 781
+    },
+    "target/cairn-finish-20261023/supervisor-final-cohort-build/selected-inputs-after.blake3": {
+      "blake3": "e9a19cd19efa1c0cdea647cbf01e6461289c2750c8f1cc6eb1cce5d6a88871ff",
+      "bytes": 781
+    }
+  },
+  "retained_scratch": "/tmp/mantle-watch-runtime-20261023-mKfRGV",
+  "retained_artifacts": {
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/post-run-state.json": {
+      "blake3": "44011d8032cb9236cda2dec57f57a92ce13571feac12b052fd321d268a91943a",
+      "bytes": 2633
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/pueue-37.stderr.log": {
+      "blake3": "eede68f3c6654715c3b6378cdc48e1f9594b5d7148f1ca3d0bafb129af2095dc",
+      "bytes": 608
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/pueue-37.stdout.log": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/pueue-finished.json": {
+      "blake3": "6c4364de7c3cce8b8544222f8e907d99434556ac977698ae66a02c73ae71f8bd",
+      "bytes": 1192
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/pueue-queued.json": {
+      "blake3": "1b6ba9b3b3283128708fecfa3218685d4f9a41ab0506ef2f5005325908e34183",
+      "bytes": 975
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/rail.stderr.log": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/rail.stdout.log": {
+      "blake3": "eb30750698e89740323ad954c1b092b7090c9e4a5c4713a51cd2cb454041354a",
+      "bytes": 10106
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/run.py": {
+      "blake3": "579bff55e93b3f161450435725ece00cb6e5c0d69bdf7144b2659a08ba6f5296",
+      "bytes": 3893
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/runtime-observation.json": {
+      "blake3": "b224ea2c6c186410adcc9b17d5db35f83f55d2ec69ab2fc37dabc2ab64e48f02",
+      "bytes": 29486
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/added.ncl": {
+      "blake3": "d5f8524b8b0410d333d9a22de522e84ab1af9bc2dc2f6986cd4b98032045bca5",
+      "bytes": 203
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/command.json": {
+      "blake3": "a2f8ef2cfdfaa957fa129a94bbb3cb7b70cd0b4ffe5fe19f295ece0eded3343c",
+      "bytes": 398
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/keep.ncl": {
+      "blake3": "c3d90102e27bcdbd29736295b99663ed1da59a5420056ce9a1153d8afa4e8323",
+      "bytes": 201
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/moving.ncl": {
+      "blake3": "d7743852a510cbeab08eb9383f58e9a7e0174381dbdad7a5177db30c5dd41df8",
+      "bytes": 209
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/owned-slow-processes.json": {
+      "blake3": "08af176a9ea455a26d2dd80f4ac591da9a977d81ee7491ec9f087ca3f96943d2",
+      "bytes": 8310
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/result.json": {
+      "blake3": "eb30750698e89740323ad954c1b092b7090c9e4a5c4713a51cd2cb454041354a",
+      "bytes": 10106
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/roots.ncl": {
+      "blake3": "c79d496859ae68651719eff8f4bdc1799fdce852f42b77d06dac797c624849a3",
+      "bytes": 87
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/slow.ncl": {
+      "blake3": "13d50553acb1922cfb1981f67f4466c1bd0c9bd9312be26045265877a4624676",
+      "bytes": 274
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/watch.stderr.log": {
+      "blake3": "21dcc673a9076eaaa250a672b532655ed7c16ff316e19a88ba05475e18f5c1a0",
+      "bytes": 797
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/scenario/watch.stdout.log": {
+      "blake3": "57231969b9671bf8b0eb49e0ce5b8d97c8bacc9e9734b826d3a62a951251618e",
+      "bytes": 4712
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/shell-command.json": {
+      "blake3": "2df530b0b1aa7d0837a5951d74e1b6e5bf2f3f3c32f4129eff5a6d8090f0a2a1",
+      "bytes": 702
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/shell.stderr.log": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0
+    },
+    "/tmp/mantle-watch-runtime-20261023-mKfRGV/shell.stdout.log": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0
+    }
+  },
+  "non_claims": [
+    "This local smoke is not reproducibility, determinism, source-authenticity, representative-bootstrap, fixed-point, or release-eligibility evidence.",
+    "Fast actual sandbox teardown did not exercise a PendingCancellation deadline; no claim is made about that separate gated Worker fixture.",
+    "No Cargo build/test, formatter, linter, product-source edit, specification edit, task-checkbox edit, or archive was performed by this runtime slice.",
+    "Only selected source/runtime input identities are recorded; the final cohort publication and its selected build-input hashes are linked, not a complete source-attestation claim."
+  ]
+}

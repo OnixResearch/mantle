@@ -1,5 +1,12 @@
 use super::*;
 
+fn private_tempdir() -> tempfile::TempDir {
+    use std::os::unix::fs::PermissionsExt as _;
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    directory
+}
+
 fn features() -> policy::Features {
     policy::Features {
         architecture: "x86_64".into(),
@@ -123,7 +130,7 @@ fn select(host: &ResourcePolicyHost, project: &str, memory: u64) -> SelectedReso
 
 #[test]
 fn durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let host = ResourcePolicyHost::open(config(), directory.path()).unwrap();
     let selected = select(&host, "project", 1500);
@@ -181,17 +188,53 @@ fn durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_c
 }
 
 #[test]
+fn stale_fence_and_changed_scope_cannot_mutate_reserved_accounting() {
+    let directory = private_tempdir();
+    let store = ResourceQuotaStore::provision(directory.path()).unwrap();
+    let host = ResourcePolicyHost::open(config(), directory.path()).unwrap();
+    let binding = binding();
+    host.reserve(&select(&host, "project", 1024), &binding, 100).unwrap();
+    let before = store.snapshot().unwrap();
+    for changed in [
+        AttemptBinding {
+            fence: binding.fence.advance().unwrap(),
+            ..binding.clone()
+        },
+        AttemptBinding {
+            project: "other".into(),
+            ..binding.clone()
+        },
+        AttemptBinding {
+            account: "other-account".into(),
+            ..binding.clone()
+        },
+        AttemptBinding {
+            request_digest: "b".repeat(64),
+            ..binding.clone()
+        },
+    ] {
+        assert!(matches!(
+            host.mark_pending(&changed, PendingUsage::Cancelled, 101),
+            Err(ResourceHostError::BindingMismatch)
+        ));
+        assert_eq!(store.snapshot().unwrap(), before);
+    }
+    assert_eq!(host.summary("project", "account").unwrap().totals.project_reserved, 10);
+}
+
+#[test]
 fn lost_worker_keeps_quota_and_records_unknown_not_zero_measurements() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     ResourceQuotaStore::provision(directory.path()).unwrap();
     let host = ResourcePolicyHost::open(config(), directory.path()).unwrap();
     let binding = binding();
     let selected = select(&host, "project", 1024);
     host.reserve(&selected, &binding, 100).unwrap();
-    let pending = host.mark_pending(&binding, PendingUsage::WorkerLost).unwrap();
+    let pending = host.mark_pending(&binding, PendingUsage::WorkerLost, 101).unwrap();
     assert_eq!(pending.reconciliation, quota::Reconciliation::Pending(quota::PendingReason::WorkerLost));
     let observation = host.observation(&binding).unwrap().unwrap();
     assert_eq!(observation.outcome, policy::Outcome::WorkerLost);
+    assert_eq!(observation.terminal_unix_s, 101);
     assert_eq!(observation.execution_ms, None);
     assert_eq!(observation.cpu_ms, None);
     assert_eq!(observation.measured.memory_bytes, None);
@@ -208,7 +251,7 @@ fn lost_worker_keeps_quota_and_records_unknown_not_zero_measurements() {
 #[cfg(target_os = "linux")]
 #[test]
 fn actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     ResourceQuotaStore::provision(directory.path()).unwrap();
     let host = ResourcePolicyHost::open(config(), directory.path()).unwrap();
     let binding = binding();
@@ -232,9 +275,10 @@ fn actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory(
     .unwrap();
     assert!(completed.status().success());
     let usage = completed.bind_result(&"c".repeat(64)).unwrap();
-    let result = host.reconcile(&binding, &usage).unwrap();
+    let result = host.reconcile(&binding, &usage, 102).unwrap();
     assert_eq!(result.reconciliation, quota::Reconciliation::Pending(quota::PendingReason::PartialObservation));
     let observation = host.observation(&binding).unwrap().unwrap();
+    assert_eq!(observation.terminal_unix_s, 102);
     assert_eq!(observation.measured.memory_bytes, None);
     assert_eq!(observation.measured.cpu_units, None);
     assert_eq!(observation.measured.scratch_bytes, None);

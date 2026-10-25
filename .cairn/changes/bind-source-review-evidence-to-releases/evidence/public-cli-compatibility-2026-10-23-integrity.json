@@ -1,0 +1,21 @@
+{
+  "schema": "mantle-source-review-retained-evidence-integrity-v1",
+  "recorded_on": "2026-10-23",
+  "test_only": true,
+  "command": ["python3", "/home/brittonr/scratch/mantle-current-source-review-20261023-1792796109153983950/verify-evidence.py"],
+  "exit": 0,
+  "verified_retained_artifacts": 80,
+  "verified_observed_commands": 22,
+  "verified_receiver_receipts": 5,
+  "report": {
+    "path": "public-cli-compatibility-2026-10-23.json",
+    "bytes": 32720,
+    "blake3": "9256be8746850819702be64031c7123ebdbfada7f9fca13c00e85e43df4080f7"
+  },
+  "retained_bytes": {
+    "path": "public-cli-compatibility-2026-10-23-artifacts.json",
+    "bytes": 238059,
+    "blake3": "29a0b89327b402209c728d39b5ff07222c9359f57d23f0063e0f7835b8b4eff6"
+  },
+  "boundary": "Decoded every retained artifact, compared its exact byte length and BLAKE3 to the manifest, checked observed command exits against expected exits, and checked five independent Valence receipts against recorded outcomes, distinct-key counts and manual-review/non-claim boundary. This integrity smoke did not rerun product commands, grant genuine reviewer authority or accept V5 as a whole."
+}

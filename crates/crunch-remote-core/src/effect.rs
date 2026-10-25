@@ -213,6 +213,7 @@ pub enum EffectBlocker {
     WrongObservationKind,
     ObservedLimitExceeded,
     AttemptBindingMismatch,
+    NoFailureToReport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,6 +235,7 @@ pub struct EffectSession<'a> {
     next_sequence: u16,
     pending: Option<Effect<'a>>,
     failed: bool,
+    failure_reported: bool,
 }
 
 impl<'a> EffectSession<'a> {
@@ -247,6 +249,7 @@ impl<'a> EffectSession<'a> {
             next_sequence: 0,
             pending: None,
             failed: false,
+            failure_reported: false,
             binding: None,
         })
     }
@@ -299,6 +302,28 @@ impl<'a> EffectSession<'a> {
         if self.failed {
             return Err(EffectBlocker::SessionFailed);
         }
+        self.admit_plan(kind, limits)
+    }
+
+    /// A failed session refuses every dependent effect, but its declared
+    /// failure transition still tells the peer the outcome: exactly one
+    /// transport send is admitted after the failed observation.
+    // r[impl remote_builds.remote_effect_plans]
+    pub fn plan_failure_report(&mut self, limits: EffectLimits) -> Result<Effect<'a>, EffectBlocker> {
+        if !self.failed {
+            return Err(EffectBlocker::NoFailureToReport);
+        }
+        if self.failure_reported {
+            return Err(EffectBlocker::SessionFailed);
+        }
+        let effect = self.admit_plan(EffectKind::TransportSend, limits)?;
+        self.failure_reported = true;
+        debug_assert_eq!(effect.authority, Authority::Transport);
+        debug_assert!(self.pending.is_some());
+        Ok(effect)
+    }
+
+    fn admit_plan(&mut self, kind: EffectKind, limits: EffectLimits) -> Result<Effect<'a>, EffectBlocker> {
         if self.pending.is_some() {
             return Err(EffectBlocker::PendingEffect);
         }
@@ -460,6 +485,51 @@ mod tests {
             }),
             Err(EffectBlocker::NoPendingEffect)
         );
+    }
+
+    #[test]
+    fn failed_session_admits_exactly_one_terminal_failure_report() {
+        let mut session = EffectSession::new("request-report").unwrap();
+        let limits = EffectLimits {
+            bytes_max: 64,
+            items_max: 1,
+            time_secs_max: 60,
+        };
+        let executor = session.plan(EffectKind::ExecutorLaunch, limits).unwrap();
+        assert_eq!(
+            session.observe(Observation::Failed {
+                id: executor.id,
+                authority: Authority::Executor,
+            }),
+            Ok(EffectEvent::Failed(executor.id))
+        );
+        assert_eq!(session.plan(EffectKind::TransportSend, limits), Err(EffectBlocker::SessionFailed));
+        let report = session.plan_failure_report(limits).unwrap();
+        assert_eq!(report.kind, EffectKind::TransportSend);
+        assert_eq!(report.id.sequence, executor.id.sequence + 1);
+        assert_eq!(session.plan_failure_report(limits), Err(EffectBlocker::SessionFailed));
+        assert_eq!(
+            session.observe(Observation::Succeeded {
+                id: report.id,
+                effect: ObservedEffect::TransportSent { bytes: 64 },
+            }),
+            Ok(EffectEvent::Completed(report.id))
+        );
+        assert_eq!(session.plan_failure_report(limits), Err(EffectBlocker::SessionFailed));
+        assert_eq!(session.plan(EffectKind::OutputAdmission, limits), Err(EffectBlocker::SessionFailed));
+    }
+
+    #[test]
+    fn healthy_session_has_no_failure_to_report() {
+        let mut session = EffectSession::new("request-healthy").unwrap();
+        let limits = EffectLimits {
+            bytes_max: 64,
+            items_max: 1,
+            time_secs_max: 0,
+        };
+        assert_eq!(session.plan_failure_report(limits), Err(EffectBlocker::NoFailureToReport));
+        let send = session.plan(EffectKind::TransportSend, limits).unwrap();
+        assert_eq!(send.id.sequence, 0);
     }
     #[test]
     fn lease_renewal_and_output_transfer_need_exact_observations() {

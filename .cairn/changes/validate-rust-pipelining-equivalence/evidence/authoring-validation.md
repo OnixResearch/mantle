@@ -315,3 +315,42 @@ exit_code=0
 ```text
 (empty)
 ```
+
+## Current source implementation handoff (2026-10-23)
+
+Historical PASS outputs above validate authoring only and are not current
+implementation receipts. No build, test, linter, formatter, compilation or
+fixture campaign was run by this implementation worker; fresh parent-owned
+execution and lifecycle acceptance remain required.
+
+The dedicated differential core/shell now includes a real `serial OPTIONS.json`
+entry point alongside the existing ordinary Cargo baseline. Its admitted
+chain/wide build/check cells invoke rustc directly, really compile the host
+proc macro and build script, run the build script, and finish each dependency
+before launching its consumer. Cumulative exact edits retain private incremental
+scratch and compare against separately materialized clean sources and frozen
+runtime/error oracles. Current step-owned outputs prevent stale success; raw
+artifacts, statuses, ordered diagnostics, failed and unrun units remain retained.
+Successful-step planned units are required population members. Empty successful
+artifact observations and unexpected ordinary compiler/Cargo exit classes fail
+closed. Source files: `crates/mantle-rust-differential/src/serial.rs`, reused
+`runner.rs`/`process.rs`, and the pure comparator. ADR 0125 records the proposed
+authority/comparison contract, not feature acceptance.
+
+Required parent commands, using separately prepared declared options and fresh
+roots, are `mantle-rust-differential baseline BASELINE.json`, `serial SERIAL.json`,
+`negatives NEGATIVES.json`, and a repeated baseline/serial invocation with that
+lane's retained `coverage-baseline.json`. Inspect `report.json`/`serial.json`,
+`population`, every step/replay verdict, raw captures and actual fault teardown;
+an authored command or exit summary is not a successful matrix receipt. Build,
+check, body/interface/application errors, repair, structural/include/macro/input
+edits and revert/reapply are frozen recipe obligations, not optional samples.
+
+The current external capability inspection is retained in the readiness change's
+`evidence/authoring-validation.md` section dated 2026-10-23: the actual selected
+compiler rejects `-Zearly-metadata --print cfg`, and selected Cargo rejects
+`-Zheadstart locate-project`. The exact pinned upstream SVH defect and rustd's
+missing bounded/versioned update/drain contract are source-grounded there.
+Those unavailable provider features do not block this ordinary lane, but cannot
+inherit its correctness, execution, coverage or timing verdicts. No upstream
+patch or provider mode was introduced.

@@ -201,4 +201,5 @@ pub use plan::classify_rust_plan_compatibility;
 pub use plan::order_existing_unit_topology;
 pub use plan::plan_existing_unit_effects;
 pub use plan::plan_native_runtime_arguments;
+pub use receipt::ReceiptError;
 pub use receipt::hash_legacy_receipt_preimage;

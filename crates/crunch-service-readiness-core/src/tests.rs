@@ -303,7 +303,11 @@ fn a_new_proof_stage_cannot_start_before_an_authoritative_predecessor() {
     let first_failed = [observation("first", &["failed"], false)];
     let failed = advance(&running, &snapshot(&declarations, &first_failed)).unwrap();
     assert_eq!(row(&failed, "second").blocked_by, ["first"]);
-    assert_eq!(advance(&failed, &snapshot(&declarations, &premature)).unwrap_err().code, ErrorCode::BlockedStart);
+    let blocked_input = [first_failed[0], observation("second", &["started"], false)];
+    assert_eq!(
+        advance(&failed, &snapshot(&declarations, &blocked_input)).unwrap_err().code,
+        ErrorCode::BlockedStart
+    );
 
     let first_complete = [Observation {
         proof_completion: Some(ProofCompletion {
@@ -319,6 +323,33 @@ fn a_new_proof_stage_cannot_start_before_an_authoritative_predecessor() {
     let admitted = [first_complete[0], observation("second", &["started"], false)];
     let dependent = advance(&accepted, &snapshot(&declarations, &admitted)).unwrap();
     assert_eq!(row(&dependent, "second").states, ["started"]);
+    assert_eq!(
+        advance(&empty, &snapshot(&declarations, &first_complete)).unwrap_err().code,
+        ErrorCode::UnobservedStart
+    );
+    assert_eq!(
+        advance(&failed, &snapshot(&declarations, &first_complete)).unwrap_err().code,
+        ErrorCode::RevivedTerminal
+    );
+    assert_eq!(
+        advance(&accepted, &snapshot(&declarations, &first_started)).unwrap_err().code,
+        ErrorCode::RevivedTerminal
+    );
+    assert_eq!(advance(&accepted, &snapshot(&declarations, &[])).unwrap_err().code, ErrorCode::RevivedTerminal);
+    let retry_input = [Observation {
+        generation: 2,
+        ..observation("first", &["started"], false)
+    }];
+    let retry = advance(&failed, &snapshot(&declarations, &retry_input)).unwrap();
+    assert_eq!(row(&retry, "second").blocked_by, ["first"]);
+    assert_eq!(
+        advance(&retry, &snapshot(&declarations, &first_started)).unwrap_err().code,
+        ErrorCode::StaleGeneration
+    );
+    assert_eq!(
+        advance(&running, &snapshot(&declarations, &retry_input)).unwrap_err().code,
+        ErrorCode::UnobservedExit
+    );
 }
 
 #[test]
@@ -593,6 +624,44 @@ fn a_terminal_exit_class_cannot_be_rewritten_to_change_restart_decision() {
         advance(&terminal, &snapshot(&declarations, &abnormal)).unwrap_err().code,
         ErrorCode::RevivedTerminal
     );
+}
+
+#[test]
+fn exit_cannot_introduce_a_request_ack_but_dependency_loss_preserves_a_real_one() {
+    let declarations = [
+        service("a", &[], Some(RestartPolicy::Never)),
+        service("b", &["a"], Some(RestartPolicy::Never)),
+    ];
+    let started = [
+        observation("a", &["started", "ready"], true),
+        observation("b", &["started"], false),
+    ];
+    let previous = evaluate(&snapshot(&declarations, &started)).unwrap();
+    let forged_exit = [started[0], Observation {
+        exit: Some(ExitKind::Normal),
+        ..observation("b", &[], true)
+    }];
+    assert_eq!(
+        advance(&previous, &snapshot(&declarations, &forged_exit)).unwrap_err().code,
+        ErrorCode::MissingRequestAcknowledgement
+    );
+    let acknowledged = [started[0], observation("b", &["started", "ready"], true)];
+    let ready = advance(&previous, &snapshot(&declarations, &acknowledged)).unwrap();
+    let blocked = [observation("a", &["started"], true), acknowledged[1]];
+    let blocked_report = advance(&ready, &snapshot(&declarations, &blocked)).unwrap();
+    assert!(!row(&blocked_report, "b").ready);
+    let exited = [blocked[0], forged_exit[1]];
+    let terminal = advance(&blocked_report, &snapshot(&declarations, &exited)).unwrap();
+    assert_eq!(row(&terminal, "b").states, ["complete"]);
+}
+
+#[test]
+fn a_running_service_cannot_change_its_declared_restart_policy() {
+    let declarations = [service("daemon", &[], Some(RestartPolicy::Never))];
+    let started = [observation("daemon", &["started"], false)];
+    let previous = evaluate(&snapshot(&declarations, &started)).unwrap();
+    let changed = [service("daemon", &[], Some(RestartPolicy::Always))];
+    assert_eq!(advance(&previous, &snapshot(&changed, &started)).unwrap_err().code, ErrorCode::DeclarationChanged);
 }
 
 #[test]

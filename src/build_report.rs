@@ -424,7 +424,12 @@ fn build_json_report(
     let outcome_rows = build_outcome_reports(config, result, logs_dir);
     let (ast_grep_structural_evidence, ast_grep_structural_evidence_diagnostics) =
         build_ast_grep_structural_evidence_reports(&outcome_rows);
-    let (cargo_build_evidence, cargo_build_evidence_diagnostics) = build_cargo_build_evidence_reports(&outcome_rows);
+    let cargo_store_paths = OfflineCargoStorePaths {
+        logical_prefix: Path::new(&config.store_dir),
+        physical_root: &config.output_dir,
+    };
+    let (cargo_build_evidence, cargo_build_evidence_diagnostics) =
+        build_cargo_build_evidence_reports(&outcome_rows, cargo_store_paths);
     let failure_rows = build_failure_envelopes(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_rows, &failure_rows);
     let hermeticity_audit_events = result
@@ -799,15 +804,48 @@ fn ast_grep_structural_evidence_for_output(
     }
 }
 
+#[derive(Clone, Copy)]
+struct OfflineCargoStorePaths<'a> {
+    logical_prefix: &'a Path,
+    physical_root: &'a Path,
+}
+
+impl OfflineCargoStorePaths<'_> {
+    fn input_path(self, logical_path: &str) -> Result<std::path::PathBuf, (String, String)> {
+        let path = Path::new(logical_path);
+        let Ok(relative) = path.strip_prefix(self.logical_prefix) else {
+            return Ok(path.to_path_buf());
+        };
+        let mut components = relative.components();
+        let valid_root = matches!(components.next(), Some(std::path::Component::Normal(root))
+            if nix_compat::store_path::StorePathRef::from_bytes(root.as_encoded_bytes()).is_ok());
+        if !valid_root
+            || !components.all(|component| matches!(component, std::path::Component::Normal(_)))
+            || logical_path.split('/').any(|component| component == "." || component == "..")
+        {
+            return Err((
+                "offline-cargo-evidence-digest-error".to_string(),
+                format!("offline Cargo evidence input is not a store path: {logical_path}"),
+            ));
+        }
+        debug_assert!(!relative.as_os_str().is_empty());
+        debug_assert!(path.starts_with(self.logical_prefix));
+        // Resolve bytes in the selected physical store, never an ambient logical
+        // store. The sidecar/report retains the original logical identity.
+        Ok(self.physical_root.join(relative))
+    }
+}
+
 fn build_cargo_build_evidence_reports(
     outcomes: &[BuildJsonOutcome],
+    store_paths: OfflineCargoStorePaths<'_>,
 ) -> (Vec<BuildJsonCargoBuildEvidence>, Vec<BuildJsonCargoBuildEvidenceDiagnostic>) {
     let output_count_max = outcomes.iter().map(|outcome| outcome.outputs.len()).fold(0_usize, usize::saturating_add);
     let mut evidence_rows = Vec::with_capacity(output_count_max);
     let mut diagnostics = Vec::with_capacity(output_count_max);
     for outcome in outcomes {
         for output in &outcome.outputs {
-            match cargo_build_evidence_for_output(outcome, output) {
+            match cargo_build_evidence_for_output(outcome, output, store_paths) {
                 CargoBuildEvidenceOutcome::Absent => {}
                 CargoBuildEvidenceOutcome::Valid(report) => evidence_rows.push(report),
                 CargoBuildEvidenceOutcome::Invalid(diagnostic) => diagnostics.push(diagnostic),
@@ -822,11 +860,15 @@ fn build_cargo_build_evidence_reports(
     (evidence_rows, diagnostics)
 }
 
-fn cargo_build_evidence_for_output(outcome: &BuildJsonOutcome, output: &BuildJsonOutput) -> CargoBuildEvidenceOutcome {
+fn cargo_build_evidence_for_output(
+    outcome: &BuildJsonOutcome,
+    output: &BuildJsonOutput,
+    store_paths: OfflineCargoStorePaths<'_>,
+) -> CargoBuildEvidenceOutcome {
     let evidence_path = Path::new(&output.path).join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
     debug_assert!(!outcome.label.is_empty());
     debug_assert!(!output.name.is_empty());
-    match read_offline_cargo_evidence(&evidence_path) {
+    match read_offline_cargo_evidence(&evidence_path, store_paths) {
         OfflineCargoEvidenceRead::Missing => CargoBuildEvidenceOutcome::Absent,
         OfflineCargoEvidenceRead::Valid(evidence) => CargoBuildEvidenceOutcome::Valid(BuildJsonCargoBuildEvidence {
             label: outcome.label.clone(),
@@ -861,7 +903,7 @@ fn cargo_build_evidence_for_output(outcome: &BuildJsonOutcome, output: &BuildJso
     }
 }
 
-fn read_offline_cargo_evidence(path: &Path) -> OfflineCargoEvidenceRead {
+fn read_offline_cargo_evidence(path: &Path, store_paths: OfflineCargoStorePaths<'_>) -> OfflineCargoEvidenceRead {
     if !path.is_file() {
         return OfflineCargoEvidenceRead::Missing;
     }
@@ -888,7 +930,9 @@ fn read_offline_cargo_evidence(path: &Path) -> OfflineCargoEvidenceRead {
     let schema = value.get("schema").and_then(serde_json::Value::as_str).unwrap_or_default();
     match schema {
         crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V1 => read_legacy_offline_cargo_evidence(value),
-        crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2 => read_digest_bound_offline_cargo_evidence(value),
+        crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2 => {
+            read_digest_bound_offline_cargo_evidence(value, store_paths)
+        }
         _ => OfflineCargoEvidenceRead::Invalid {
             blocker_class: "unsupported-offline-cargo-evidence-schema".to_string(),
             message: format!("unsupported offline Cargo evidence schema {schema}"),
@@ -931,7 +975,10 @@ fn read_legacy_offline_cargo_evidence(value: serde_json::Value) -> OfflineCargoE
     })
 }
 
-fn read_digest_bound_offline_cargo_evidence(value: serde_json::Value) -> OfflineCargoEvidenceRead {
+fn read_digest_bound_offline_cargo_evidence(
+    value: serde_json::Value,
+    store_paths: OfflineCargoStorePaths<'_>,
+) -> OfflineCargoEvidenceRead {
     let mut evidence = match serde_json::from_value::<crate::offline_cargo::OfflineCargoEvidenceV2File>(value) {
         Ok(evidence) => evidence,
         Err(error) => {
@@ -941,7 +988,7 @@ fn read_digest_bound_offline_cargo_evidence(value: serde_json::Value) -> Offline
             };
         }
     };
-    if let Err((blocker_class, message)) = enrich_digest_bound_evidence(&mut evidence) {
+    if let Err((blocker_class, message)) = enrich_digest_bound_evidence(&mut evidence, store_paths) {
         return OfflineCargoEvidenceRead::Invalid { blocker_class, message };
     }
     let blockers = crate::offline_cargo::validate_digest_bound_evidence(&evidence);
@@ -981,19 +1028,23 @@ fn read_digest_bound_offline_cargo_evidence(value: serde_json::Value) -> Offline
 
 fn enrich_digest_bound_evidence(
     evidence: &mut crate::offline_cargo::OfflineCargoEvidenceV2File,
+    store_paths: OfflineCargoStorePaths<'_>,
 ) -> Result<(), (String, String)> {
-    bind_file_digest(&mut evidence.lockfile)?;
+    bind_file_digest(&mut evidence.lockfile, store_paths)?;
     for input in &mut evidence.source_closure {
         if input.identity_class != crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT {
             continue;
         }
-        bind_path_digest(input)?;
+        bind_path_digest(input, store_paths)?;
     }
     Ok(())
 }
 
-fn bind_file_digest(input: &mut crate::offline_cargo::OfflineCargoEvidenceInput) -> Result<(), (String, String)> {
-    let path = std::path::PathBuf::from(&input.path);
+fn bind_file_digest(
+    input: &mut crate::offline_cargo::OfflineCargoEvidenceInput,
+    store_paths: OfflineCargoStorePaths<'_>,
+) -> Result<(), (String, String)> {
+    let path = store_paths.input_path(&input.path)?;
     if !path.is_file() {
         return Err((
             "missing-lockfile-digest".to_string(),
@@ -1003,8 +1054,11 @@ fn bind_file_digest(input: &mut crate::offline_cargo::OfflineCargoEvidenceInput)
     bind_actual_digest(input, &path)
 }
 
-fn bind_path_digest(input: &mut crate::offline_cargo::OfflineCargoEvidenceInput) -> Result<(), (String, String)> {
-    let path = std::path::PathBuf::from(&input.path);
+fn bind_path_digest(
+    input: &mut crate::offline_cargo::OfflineCargoEvidenceInput,
+    store_paths: OfflineCargoStorePaths<'_>,
+) -> Result<(), (String, String)> {
+    let path = store_paths.input_path(&input.path)?;
     if !path.exists() {
         return Err((
             "offline-cargo-evidence-digest-error".to_string(),
@@ -1233,6 +1287,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [9u8; 20]).unwrap();
@@ -1314,6 +1369,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [10u8; 20]).unwrap();
@@ -1380,6 +1436,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
@@ -1762,6 +1819,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [5u8; 20]).unwrap();
@@ -1858,15 +1916,22 @@ mod tests {
     }
 
     #[test]
-    fn build_json_report_surfaces_digest_bound_offline_cargo_evidence_sidecar() {
+    fn build_json_report_hashes_relocated_inputs_and_preserves_logical_evidence_paths() {
         const LOCK_CONTENT: &str = "# lock\nversion = 4\n";
         const SOURCE_CONTENT: &str = "fn main() {}\n";
         const VENDOR_CONTENT: &str = "vendor-checksum\n";
 
         let output_root = tempfile::tempdir().unwrap();
-        let source_dir = output_root.path().join("source");
+        let logical_store = tempfile::tempdir().unwrap();
+        let source_name = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source";
+        let vendor_name = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-vendor";
+        let logical_source = logical_store.path().join(source_name);
+        let logical_vendor = logical_store.path().join(vendor_name);
+        let source_dir = output_root.path().join(source_name);
         let source_src_dir = source_dir.join("src");
-        let vendor_dir = output_root.path().join("vendor");
+        let vendor_dir = output_root.path().join(vendor_name);
+        std::fs::create_dir_all(&logical_source).unwrap();
+        std::fs::write(logical_source.join("Cargo.lock"), "ambient logical-store decoy\n").unwrap();
         std::fs::create_dir_all(&source_src_dir).unwrap();
         std::fs::create_dir_all(&vendor_dir).unwrap();
         std::fs::write(source_dir.join("Cargo.lock"), LOCK_CONTENT).unwrap();
@@ -1886,13 +1951,13 @@ mod tests {
                 "binary": "demo",
                 "lockfile": {
                     "role": crate::offline_cargo::OFFLINE_CARGO_LOCKFILE_ROLE,
-                    "path": source_dir.join("Cargo.lock").display().to_string(),
+                    "path": logical_source.join("Cargo.lock").display().to_string(),
                     "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
                 },
                 "source_closure": [
                     {
                         "role": "package-source",
-                        "path": source_dir.display().to_string(),
+                        "path": logical_source.display().to_string(),
                         "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
                     },
                     {
@@ -1912,7 +1977,7 @@ mod tests {
                     },
                     {
                         "role": "vendored-dependencies",
-                        "path": vendor_dir.display().to_string(),
+                        "path": logical_vendor.display().to_string(),
                         "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
                     }
                 ],
@@ -1951,7 +2016,11 @@ mod tests {
         };
         let outcome = build_json_outcome_with_output(output);
 
-        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+        let store_paths = OfflineCargoStorePaths {
+            logical_prefix: logical_store.path(),
+            physical_root: output_root.path(),
+        };
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome], store_paths);
         let lock_digest = blake3::hash(LOCK_CONTENT.as_bytes()).to_hex().to_string();
         let source_digest = crate::release_evidence::compute_path_blake3_digest(&source_dir).unwrap();
         let vendor_digest = crate::release_evidence::compute_path_blake3_digest(&vendor_dir).unwrap();
@@ -1963,6 +2032,7 @@ mod tests {
         assert_eq!(reports[0].profile.as_deref(), Some("release"));
         assert_eq!(reports[0].binary.as_deref(), Some("demo"));
         assert_eq!(reports[0].lockfile.as_ref().unwrap().digest_blake3.as_deref(), Some(lock_digest.as_str()));
+        assert_eq!(reports[0].lockfile.as_ref().unwrap().path, logical_source.join("Cargo.lock").display().to_string());
         let package_source = reports[0]
             .source_closure
             .iter()
@@ -1975,11 +2045,20 @@ mod tests {
             .expect("vendor source evidence");
         assert_eq!(package_source.digest_blake3.as_deref(), Some(source_digest.as_str()));
         assert_eq!(vendor_source.digest_blake3.as_deref(), Some(vendor_digest.as_str()));
+        assert_eq!(package_source.path, logical_source.display().to_string());
+        assert_eq!(vendor_source.path, logical_vendor.display().to_string());
         assert_eq!(
             reports[0].network_policy.as_ref().unwrap().result,
             crate::offline_cargo::OFFLINE_CARGO_NETWORK_RESULT
         );
         assert!(reports[0].non_claims.contains(&"not-compiler-correctness".to_string()));
+        std::fs::remove_file(source_dir.join("Cargo.lock")).unwrap();
+        match read_offline_cargo_evidence(&evidence_path, store_paths) {
+            OfflineCargoEvidenceRead::Invalid { blocker_class, .. } => {
+                assert_eq!(blocker_class, "missing-lockfile-digest");
+            }
+            _ => panic!("missing physical lockfile must not fall back to the ambient logical store"),
+        }
     }
 
     #[test]
@@ -2053,7 +2132,11 @@ mod tests {
         };
         let outcome = build_json_outcome_with_output(output);
 
-        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+        let store_paths = OfflineCargoStorePaths {
+            logical_prefix: Path::new("/crunch/store"),
+            physical_root: output_root.path(),
+        };
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome], store_paths);
 
         assert!(reports.is_empty());
         assert_eq!(diagnostics.len(), 1);
@@ -2076,7 +2159,11 @@ mod tests {
         };
         let outcome = build_json_outcome_with_output(output);
 
-        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+        let store_paths = OfflineCargoStorePaths {
+            logical_prefix: Path::new("/crunch/store"),
+            physical_root: output_root.path(),
+        };
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome], store_paths);
 
         assert!(reports.is_empty());
         assert!(diagnostics.is_empty());
@@ -2100,7 +2187,11 @@ mod tests {
         };
         let outcome = build_json_outcome_with_output(output);
 
-        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+        let store_paths = OfflineCargoStorePaths {
+            logical_prefix: Path::new("/crunch/store"),
+            physical_root: output_root.path(),
+        };
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome], store_paths);
 
         assert!(reports.is_empty());
         assert_eq!(diagnostics.len(), 1);
@@ -2225,6 +2316,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let result = PipelineResult {
@@ -2336,6 +2428,7 @@ mod tests {
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
             compile_driver_runtime: None,
+            rust_wait_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [3u8; 20]).unwrap();

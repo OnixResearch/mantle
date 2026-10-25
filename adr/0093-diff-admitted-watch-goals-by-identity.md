@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposed (2026-10-01). The pure goal diff is implemented, but watch-mode shell,
-real cancellation, and edit/delete-during-build proofs are not yet complete.
-This decision cannot be Accepted on pure tests alone.
+Proposed; implementation updated 2026-10-23. The pure diff, persistent watch
+shell, owned sandbox cancellation, and behavioral fixtures are present.
+Fresh CLI edit/delete-during-build and integration receipts remain required;
+neither source inspection nor older test receipts accept this decision.
 
 ## Context
 
@@ -95,9 +96,18 @@ an explicit socket-only constructor, fixed guest
 missing-endpoint degradation, workspace overlap denial, and socket (not
 directory) bind-target creation. The full two-patch postimage BLAKE3 is
 `bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645`.
-The importer permits cutover only from the exact pinned source or the exact
-recorded watch-only postimage, preserving rollback to the admitted preimage.
-These are source provenance facts, not socket-mount or watch acceptance.
+The third `patches/snix-build-rust-wait-socket.patch` changes only those
+same two Rust files: an independent execution-only diagnostic socket with
+fixed read-only guest `/run/mantle/rust-waits.sock`, existing non-symlink
+Unix socket validation before opt-in and launch, and workspace overlap
+denial. The full three-patch postimage BLAKE3 is
+`82c4b973eb0e0aca2b60edbf29d96704f8d6c580f3b5c851a05b886f038d4491`.
+Unlike the compile endpoint, an explicitly configured diagnostic endpoint
+does not degrade when missing; the default `None` remains unchanged.
+The importer permits cutover only from the exact pinned source or either
+recorded watch-only/compile-socket postimage, preserving rollback to the
+admitted preimage. These are source provenance facts, not socket-mount or
+watch acceptance.
 
 The execution opt-in is `mantle build --compile-driver-runtime <PATH>`.
 Its bounded `mantle-compile-driver-runtime-v1` JSON names `host_socket`,

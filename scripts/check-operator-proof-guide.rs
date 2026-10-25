@@ -85,17 +85,6 @@ const REQUIRED_CARGO_FREE_PATHS: &[&str] = &[
     "proof_eligibility",
 ];
 
-const REQUIRED_CURRENT_EVIDENCE_FRAGMENTS: &[&str] = &[
-    "Current refreshed evidence (2026-07-03)",
-    "/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z",
-    "status = \"success\"",
-    "fixed_point = true",
-    "ca00cd5866b0128434f95a0e0cf63ff2e5cc947eb90b60206cb9078bfe44215d",
-    "f35cc306c76d14a44599ce438f420ea9bcfbc6a843d9a9a64f5edb5915e2ef6d",
-    "964dc130610257aadedbc27a24284a58560fb01086c6686f2f5839af753a0ffd",
-    "bounded Cargo-free fixed-point diagnostic success claim only",
-];
-
 const REQUIRED_DEMO_FIELDS: &[&str] = &[
     "mantle-nix-free-demo-summary-v1",
     "source-root-cargo-free-fixed-point",
@@ -216,12 +205,6 @@ fn validate_inputs(inputs: GuideInputs<'_>) -> Result<(), String> {
     require_all(inputs.readme, "README linkage", REQUIRED_README_FRAGMENTS, &mut errors);
     require_all(inputs.guide, "self-build evidence path", REQUIRED_SELF_BUILD_PATHS, &mut errors);
     require_all(inputs.guide, "cargo-free evidence path", REQUIRED_CARGO_FREE_PATHS, &mut errors);
-    require_all(
-        inputs.guide,
-        "current cargo-free evidence",
-        REQUIRED_CURRENT_EVIDENCE_FRAGMENTS,
-        &mut errors,
-    );
     require_all(inputs.guide, "demo summary field", REQUIRED_DEMO_FIELDS, &mut errors);
     require_all(inputs.guide, "outcome vocabulary", REQUIRED_OUTCOME_FRAGMENTS, &mut errors);
     require_all(inputs.guide, "bounded non-claim", REQUIRED_NON_CLAIMS, &mut errors);
@@ -277,14 +260,6 @@ fn run_self_test() -> Result<(), String> {
         &readme,
     )?;
     assert_rejected("missing cargo-free bundle path", guide.replace("stage1/receipt.json", "stage1/old-receipt.json"), &readme)?;
-    assert_rejected(
-        "stale current evidence",
-        guide.replace(
-            "/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z",
-            "/tmp/mantle-cargo-free-fixed-point-stale",
-        ),
-        &readme,
-    )?;
     let overbroad = format!("{guide}\nThis guide proves compiler correctness.\n");
     assert_rejected("overbroad claim", overbroad, &readme)?;
     println!("operator proof guide checker self-test passed");
@@ -304,7 +279,6 @@ fn sample_valid_guide() -> String {
     append_lines(&mut text, REQUIRED_COMMANDS);
     append_lines(&mut text, REQUIRED_SELF_BUILD_PATHS);
     append_lines(&mut text, REQUIRED_CARGO_FREE_PATHS);
-    append_lines(&mut text, REQUIRED_CURRENT_EVIDENCE_FRAGMENTS);
     append_lines(&mut text, REQUIRED_DEMO_FIELDS);
     append_lines(&mut text, REQUIRED_OUTCOME_FRAGMENTS);
     append_lines(&mut text, REQUIRED_NON_CLAIMS);

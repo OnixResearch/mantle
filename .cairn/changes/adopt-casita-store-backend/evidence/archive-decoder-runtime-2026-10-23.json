@@ -1,0 +1,231 @@
+{
+  "schema": "mantle-archive-decoder-remediation-observation-v1",
+  "classification": "bounded-local-runtime-observation",
+  "maintenance_owner": "Mantle crunch-build fetcher maintainers",
+  "immediate_outcome": "Valid tar.zst payload built, exported and individually signature/NAR verified; malformed 1025-byte block with 1024-byte window rejected before output publication.",
+  "durable_capability": "Pinned fixed decoder and positive/negative fetcher regression pair protect the production streaming archive path.",
+  "original_before_observation": {
+    "exit_code": 101,
+    "stdout": "ruzstd=0.8.2 window_bytes=1024 result=Ok(1025) emitted_bytes=1025\n",
+    "stderr": "     Locking 2 packages to latest Rust 1.96.0-nightly compatible versions\n   Compiling twox-hash v2.1.2\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling ruzstd v0.8.2\n   Compiling mantle-zstd-window-before v0.0.0 (/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/zstd-before)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.89s\n     Running `/home/brittonr/.cargo-target/mantle-zstd-before-20261023/debug/mantle-zstd-window-before`\n\nthread 'main' (1808964) panicked at src/main.rs:10:5:\nmalformed block must not exceed its declared window\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "source": "use std::io::{Cursor, Read};\n\nfn main() {\n    let malformed = [0x28, 0xb5, 0x2f, 0xfd, 0, 0, 0x0b, 0x20, 0, b'x'];\n    let mut decoded = Vec::new();\n    let result = ruzstd::decoding::StreamingDecoder::new(Cursor::new(malformed))\n        .map_err(std::io::Error::other)\n        .and_then(|mut reader| reader.read_to_end(&mut decoded));\n    println!(\"ruzstd=0.8.2 window_bytes=1024 result={result:?} emitted_bytes={}\", decoded.len());\n    assert!(result.is_err(), \"malformed block must not exceed its declared window\");\n    assert!(decoded.is_empty(), \"rejected first block must not emit payload\");\n}\n"
+  },
+  "after_runtime": {
+    "schema": "mantle-archive-decoder-runtime-v1",
+    "status": "passed",
+    "commands": [
+      {
+        "label": "expected-nar-hash",
+        "argv": [
+          "nix",
+          "hash",
+          "path",
+          "--type",
+          "sha256",
+          "--sri",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/expected-tree"
+        ],
+        "started_unix": 1792787479.5253313,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/expected-nar-hash.stdout",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/expected-nar-hash.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792787479.6626737
+      },
+      {
+        "label": "compress-valid",
+        "argv": [
+          "zstd",
+          "--quiet",
+          "--force",
+          "-o",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid.tar.zst",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid.tar"
+        ],
+        "started_unix": 1792787479.6644866,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/compress-valid.stdout",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/compress-valid.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792787479.6721132
+      },
+      {
+        "label": "valid-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid.ncl",
+          "--no-substitute"
+        ],
+        "started_unix": 1792787479.6837895,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-build.stdout",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-build.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792787480.0712867
+      },
+      {
+        "label": "valid-verify",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state",
+          "store",
+          "verify",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store/zkzr0in8cbj6jf8ar21njjzp31mdj1aj-archive-decoder-valid"
+        ],
+        "started_unix": 1792787480.098017,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-verify.stdout",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-verify.stderr",
+        "exit_code": 0,
+        "finished_unix": 1792787480.1519554
+      },
+      {
+        "label": "malformed-build",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+          "--store",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-store",
+          "--state-dir",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-state",
+          "build",
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed.ncl",
+          "--no-substitute"
+        ],
+        "started_unix": 1792787480.152398,
+        "stdout": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-build.stdout",
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-build.stderr",
+        "exit_code": 1,
+        "finished_unix": 1792787480.4820817
+      }
+    ],
+    "acceptance_claimed": false,
+    "non_claims": [
+      "Not a complete dependency audit or release decision.",
+      "Uses a host Nix hash command only to compute the fixture NAR hash; not Nix-free proof.",
+      "Local finite archive inputs do not establish arbitrary archive safety."
+    ],
+    "mantle": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+      "blake3": "cbb0ab3332811c7d5870d3df334e2cce78f77faf5d82f46b294832e3f22e6599"
+    },
+    "lock_blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "fetcher_source_blake3": "7694ae7e48d8a2c666a11b7ed8f3c4b849ad6d0e1f6ef50956b244e619a0fa42",
+    "expected_nar_hash": "sha256-RnixEBu5Mlqf+bx7On4rLmZqXB1EJXMY50XXFxFsvZA=",
+    "valid_output": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store/zkzr0in8cbj6jf8ar21njjzp31mdj1aj-archive-decoder-valid",
+    "valid_payload_blake3": "1688ecfc94bf29b2e699abc0b5ee78ca4d3c82f795fa27a3708cd7845c89a8da",
+    "malformed_rejected_without_output": true,
+    "malformed_input_blake3": "4fed84e38bce77a792fb6cf40dd22dee72da74782a6bbbd405e8e0a5f1d3b040",
+    "executable_invariance": true
+  },
+  "retained_raw_streams": [
+    {
+      "command": "expected-nar-hash",
+      "stream": "stdout",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/expected-nar-hash.stdout",
+      "blake3": "9c7d22d5e20f36bffb319e96a1d97f04806647d4c9e5797b5b2642a471913f25",
+      "text": "sha256-RnixEBu5Mlqf+bx7On4rLmZqXB1EJXMY50XXFxFsvZA=\n"
+    },
+    {
+      "command": "expected-nar-hash",
+      "stream": "stderr",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/expected-nar-hash.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "compress-valid",
+      "stream": "stdout",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/compress-valid.stdout",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "compress-valid",
+      "stream": "stderr",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/compress-valid.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "valid-build",
+      "stream": "stdout",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-build.stdout",
+      "blake3": "73b042e3bcacac31ce3ecc398fbbefd974181b0999e841a861ac22510aac0a78",
+      "text": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store/zkzr0in8cbj6jf8ar21njjzp31mdj1aj-archive-decoder-valid\n"
+    },
+    {
+      "command": "valid-build",
+      "stream": "stderr",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-build.stderr",
+      "blake3": "8ba7e782c6555fa4bb939a0e240e3a7c1a078feca3cf1d83de7be20e329bf8b9",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state/signing-key)\n2026-10-23T20:31:19.834684Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n2026-10-23T20:31:19.863624Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 11, path: \\\"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state/pathinfo.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\nhermeticity: practical (no degraded facts)\nshared-action-result: phase=discovery disposition=miss action=mantle-action://blake3/2d39755e80c6ebcc67e2412aaa5561e0783c821ac163a742a658e8bdedf608e5 selected=none source=none source_id=none trust=none conflict=none non_claims=ca-mapping-presence-is-not-output-trust,executor-correctness,index-presence-is-not-output-trust\nshared-action-result: phase=publication disposition=published action=mantle-action://blake3/2d39755e80c6ebcc67e2412aaa5561e0783c821ac163a742a658e8bdedf608e5 selected=none source=none source_id=none trust=none conflict=none non_claims=ca-mapping-presence-is-not-output-trust,executor-correctness,index-presence-is-not-output-trust\n"
+    },
+    {
+      "command": "valid-verify",
+      "stream": "stdout",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-verify.stdout",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "valid-verify",
+      "stream": "stderr",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-verify.stderr",
+      "blake3": "3bcc71f42660ef5337b4b85dd04b5c4de8d43bd162602b3ac7fa08f259dd5481",
+      "text": "0 checked, 0 mismatches\n"
+    },
+    {
+      "command": "malformed-build",
+      "stream": "stdout",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-build.stdout",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "text": ""
+    },
+    {
+      "command": "malformed-build",
+      "stream": "stderr",
+      "original_path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-build.stderr",
+      "blake3": "0b326f95597340097dafa613b0ade163ee0f5909df24833451ec4494e5a67f0b",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-state/signing-key)\n2026-10-23T20:31:20.306109Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-state/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n2026-10-23T20:31:20.329468Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 11, path: \\\"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-state/pathinfo.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n2026-10-23T20:31:20.443139Z  WARN crunch_build::worker: sandbox build failed drv=/nix/store/cq9msccygr8jd265kb6xsxxq6raqb3gi-archive-decoder-malformed.drv err=store error: build: I/O error: Failed to parse block header: DecompressedSizeTooLarge { max: 1024, at_least: 1025 }\nhermeticity: practical (no degraded facts)\nshared-action-result: phase=discovery disposition=miss action=mantle-action://blake3/445d73c25b1c1206f0c32a0d4250a38b661780ccbbf773c7924383135b5f0a47 selected=none source=none source_id=none trust=none conflict=none non_claims=ca-mapping-presence-is-not-output-trust,executor-correctness,index-presence-is-not-output-trust\nFAILED root: archive-decoder-malformed\n  phase: build\n  error_class: builder\n  saved_log_path: /home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/malformed-state/logs/cq9msccygr8jd265kb6xsxxq6raqb3gi-archive-decoder-malformed.drv.log\n  message: store error: build: I/O error: Failed to parse block header: DecompressedSizeTooLarge { max: 1024, at_least: 1025 }\n"
+    }
+  ],
+  "selected_output_verification": {
+    "argv": [
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/final-immutable-release-cohort/mantle",
+      "--store",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-store",
+      "--state-dir",
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/archive-decoder-runtime/valid-state",
+      "store",
+      "verify",
+      "zkzr0in8cbj6jf8ar21njjzp31mdj1aj-archive-decoder-valid"
+    ],
+    "exit_code": 0,
+    "observed_tool_output": "OK zkzr0in8cbj6jf8ar21njjzp31mdj1aj-archive-decoder-valid trusted_signatures=1/1\n1 checked, 0 mismatches\n",
+    "capture_source": "Exact successful command output retained in the Main conversation transcript; original automation streams above remain unchanged.",
+    "selection_correction": "The original physical-path filter, and an attempted full logical-path filter, each matched zero entries. Neither supplies verification evidence. The successful exact basename selector matched one output."
+  },
+  "repeatability": {
+    "driver_source_path": "target/cairn-finish-20261023/archive-decoder-runtime.py",
+    "driver_source_blake3": "dcde832bdbe91d6a38cbb1e510a1dce0602e9fe784db914166709648d7fc176e",
+    "driver_source": "#!/usr/bin/env python3\n\"\"\"Exercise the upgraded archive decoder through the actual installed CLI.\"\"\"\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport shutil\nimport subprocess\nimport tarfile\nimport time\n\nroot = Path('/home/brittonr/git/OnixResearch/mantle')\nrun = root / 'target/cairn-finish-20261023'\ncohort = run / 'final-immutable-release-cohort'\nmantle = cohort / 'mantle'\nwork = run / 'archive-decoder-runtime'\nwork.mkdir(mode=0o700, exist_ok=False)\ncommands = []\nresult = {'schema': 'mantle-archive-decoder-runtime-v1', 'status': 'running', 'commands': commands,\n          'acceptance_claimed': False,\n          'non_claims': ['Not a complete dependency audit or release decision.',\n                         'Uses a host Nix hash command only to compute the fixture NAR hash; not Nix-free proof.',\n                         'Local finite archive inputs do not establish arbitrary archive safety.']}\n\ndef save():\n    (work / 'result.json').write_text(json.dumps(result, indent=2) + '\\n')\n\ndef invoke(label, argv, env=None, expected=0):\n    record = {'label': label, 'argv': [str(value) for value in argv], 'started_unix': time.time(),\n              'stdout': str(work / (label + '.stdout')), 'stderr': str(work / (label + '.stderr'))}\n    commands.append(record)\n    save()\n    observed = subprocess.run(record['argv'], cwd=root, env=env, stdout=subprocess.PIPE,\n                              stderr=subprocess.PIPE, timeout=180, check=False)\n    Path(record['stdout']).write_bytes(observed.stdout)\n    Path(record['stderr']).write_bytes(observed.stderr)\n    record.update(exit_code=observed.returncode, finished_unix=time.time())\n    save()\n    if expected is not None and observed.returncode != expected:\n        raise RuntimeError(f'{label}: exit {observed.returncode}; see {record[\"stderr\"]}')\n    return observed\n\ndef digest(path):\n    return subprocess.check_output(['b3sum', '--no-names', str(path)], text=True).strip()\n\ntry:\n    result['mantle'] = {'path': str(mantle), 'blake3': digest(mantle)}\n    result['lock_blake3'] = digest(root / 'Cargo.lock')\n    result['fetcher_source_blake3'] = digest(root / 'crates/crunch-build/src/fetcher.rs')\n    tree = work / 'expected-tree'\n    tree.mkdir()\n    payload = b'Mantle real zstd archive smoke\\n'\n    (tree / 'payload.txt').write_bytes(payload)\n    nar_hash = invoke('expected-nar-hash', ['nix', 'hash', 'path', '--type', 'sha256', '--sri', tree]).stdout.decode().strip()\n    result['expected_nar_hash'] = nar_hash\n    archive = work / 'valid.tar'\n    with tarfile.open(archive, mode='w', format=tarfile.USTAR_FORMAT) as output:\n        member = tarfile.TarInfo('root/payload.txt')\n        member.size = len(payload)\n        member.mode = 0o644\n        member.mtime = 1\n        output.addfile(member, io.BytesIO(payload))\n    packed = work / 'valid.tar.zst'\n    invoke('compress-valid', ['zstd', '--quiet', '--force', '-o', packed, archive])\n    malformed = work / 'malformed.tar.zst'\n    malformed.write_bytes(bytes([0x28, 0xb5, 0x2f, 0xfd, 0, 0, 0x0b, 0x20, 0, ord('x')]))\n    env = {key: value for key, value in os.environ.items()\n           if not key.startswith(('MANTLE_CC_CACHE_', 'MANTLE_COMPILE_'))}\n    env.update(CRUNCH_NO_FUSE='1', CRUNCH_FORCE_EMBEDDED_STDLIB='1')\n    for label, source, expected in [('valid', packed, 0), ('malformed', malformed, None)]:\n        expression = work / (label + '.ncl')\n        expression.write_text('let mantle = import \"lib.ncl\" in\\nmantle.fetchTarball {\\n'\n                              f'  name = \"archive-decoder-{label}\",\\n'\n                              f'  url = {json.dumps(source.as_uri())},\\n'\n                              f'  hash = {json.dumps(nar_hash)},\\n' + '}\\n')\n        store = work / (label + '-store')\n        state = work / (label + '-state')\n        store.mkdir()\n        argv = [mantle, '--store', store, '--state-dir', state, 'build', expression, '--no-substitute']\n        observed = invoke(label + '-build', argv, env=env, expected=expected)\n        outputs = [path for path in store.iterdir() if path.name.endswith('-archive-decoder-' + label)]\n        if label == 'valid':\n            if len(outputs) != 1 or (outputs[0] / 'payload.txt').read_bytes() != payload:\n                raise RuntimeError('valid compressed archive did not reproduce the exact expected tree')\n            result['valid_output'] = str(outputs[0])\n            result['valid_payload_blake3'] = digest(outputs[0] / 'payload.txt')\n            invoke('valid-verify', [mantle, '--store', store, '--state-dir', state, 'store', 'verify', outputs[0]], env=env)\n        else:\n            text = (observed.stdout + observed.stderr).decode(errors='replace').lower()\n            if observed.returncode != 1 or outputs or 'panicked at' in text or not ('window' in text or 'block' in text):\n                raise RuntimeError('malformed block must reject normally, name its decoding cause, and publish no output')\n            result['malformed_rejected_without_output'] = True\n            result['malformed_input_blake3'] = digest(malformed)\n    result['executable_invariance'] = digest(mantle) == result['mantle']['blake3']\n    if not result['executable_invariance']:\n        raise RuntimeError('immutable Mantle executable changed')\n    result['status'] = 'passed'\nexcept BaseException as error:\n    result['status'] = 'failed'\n    result['error'] = f'{type(error).__name__}: {error}'\n    save()\n    raise\nfinally:\n    save()\nprint(work / 'result.json')\n",
+    "driver_limitation": "Historical driver contains the nonmatching physical verify selector; successful selected-output command is recorded separately above.",
+    "permanent_regression_commands": [
+      "cargo test -p crunch-build --lib fetcher::tests::decompress_zstd -- --test-threads=1",
+      "cargo test -p crunch-build --lib fetcher::tests::decompress_zstd_rejects_block_larger_than_declared_window -- --test-threads=1"
+    ],
+    "regression_verification": "Commands identify maintained cases; execution in the final repository gate must be assessed separately, not inferred from this runtime observation."
+  },
+  "acceptance_claimed": false,
+  "limitations": [
+    "Not a green configured dependency audit, release decision, Cairn acceptance or arbitrary-archive safety proof.",
+    "The decoder-before case is a focused dependency reproducer; the after case exercises the real Mantle fetcher. They are distinct harnesses with explicit claims.",
+    "Source identities are the selected lock/fetcher/executable bindings in the runtime result, not an atomic full repository identity.",
+    "A host Nix hash command computed only the fixture NAR hash; this is not Nix-free evidence.",
+    "The unchanged original automation result is not promoted into selected-path verification; the actual one-entry verification is stated independently."
+  ]
+}

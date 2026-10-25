@@ -3,13 +3,13 @@
 //! Boundary operations take owned records. Validation returns the record, while
 //! decisions and plan verification retain their inputs for subsequent publication.
 use alloc::collections::BTreeMap;
-use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Error;
 
 pub const PIN_SCHEMA: &str = "mantle-bootstrap-pin-v1";
 pub const PLAN_SCHEMA: &str = "mantle-bootstrap-pin-plan-v1";
@@ -21,6 +21,73 @@ const MAX_URL_BYTES: usize = 2048;
 const MAX_VERSION_BYTES: usize = 80;
 const MUTATED_PLAN: &str = "mutated or incomplete bootstrap pin plan";
 const RECORD_KEYS: &str = "schema, source, package_url, version, release_date, artifacts, resolve, recipes";
+
+/// Validation categories retain record context without eagerly formatting it.
+#[derive(Debug)]
+pub enum PinError {
+    RecordBound,
+    InvalidRecord(Error),
+    Schema,
+    SourceIdentity(String),
+    VersionOrDate(String),
+    ArtifactBound(String),
+    Artifact { source: String, role: String },
+    Recipes(String),
+    ResolveHook(String),
+    CandidateVersion,
+    RenderedUrl,
+    UpstreamVersionOrDate,
+    CandidateHashes,
+    PlanBound,
+    DuplicatePlanSource,
+    SerializePlan(Error),
+    MutatedPlan,
+    UnsortedPlanSources,
+    UnknownSource(String),
+    ChangedSource(String),
+    UnresolvedObservation(String),
+    InvalidCandidate(String),
+}
+
+impl core::fmt::Display for PinError {
+    fn fmt(&self, output: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::RecordBound => write!(output, "pin record must contain 1..={MAX_PIN_BYTES} bytes"),
+            Self::InvalidRecord(error) => write!(
+                output,
+                "invalid pin record ({error}); known fields: {RECORD_KEYS}; artifact fields: url_template, url, hash_kind, hash; resolve fields: kind, url, version_field, date_field"
+            ),
+            Self::Schema => write!(output, "pin schema must be {PIN_SCHEMA}"),
+            Self::SourceIdentity(source) => write!(output, "{source}: invalid source or package URL identity"),
+            Self::VersionOrDate(source) => write!(output, "{source}: invalid version or release date"),
+            Self::ArtifactBound(source) => write!(output, "{source}: requires 1..={MAX_ARTIFACTS} artifacts"),
+            Self::Artifact { source, role } => {
+                write!(output, "{source}: invalid artifact {role} URL template or sha256 hash")
+            }
+            Self::Recipes(source) => {
+                write!(output, "{source}: requires 1..={MAX_RECIPES} declared bootstrap recipe filenames")
+            }
+            Self::ResolveHook(source) => write!(output, "{source}: invalid JSON resolution hook"),
+            Self::CandidateVersion => output.write_str("invalid candidate version"),
+            Self::RenderedUrl => output.write_str("rendered pin URL is invalid"),
+            Self::UpstreamVersionOrDate => output.write_str("invalid upstream version or date"),
+            Self::CandidateHashes => output.write_str("candidate requires an observed sha256 hash for every artifact"),
+            Self::PlanBound => write!(output, "plan requires 1..={MAX_PINS} sources"),
+            Self::DuplicatePlanSource => output.write_str("duplicate plan source"),
+            Self::SerializePlan(error) => write!(output, "serialize plan: {error}"),
+            Self::MutatedPlan => output.write_str(MUTATED_PLAN),
+            Self::UnsortedPlanSources => output.write_str("duplicate or unsorted plan sources"),
+            Self::UnknownSource(source) => write!(output, "unknown source {source}"),
+            Self::ChangedSource(source) => write!(output, "{source}: source pin changed since check"),
+            Self::UnresolvedObservation(source) => {
+                write!(output, "{source}: unresolved upstream observation; apply requires every source resolved")
+            }
+            Self::InvalidCandidate(source) => write!(output, "{source}: invalid candidate"),
+        }
+    }
+}
+
+impl core::error::Error for PinError {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,53 +162,55 @@ pub struct PinPlan {
 }
 
 // r[impl mantle.bootstrap_source_pins.pin_data_contract]
-pub fn parse_pin(bytes: Vec<u8>) -> Result<BootstrapPin, String> {
+pub fn parse_pin(bytes: Vec<u8>) -> Result<BootstrapPin, PinError> {
     if bytes.is_empty() || bytes.len() > MAX_PIN_BYTES {
-        return Err(format!("pin record must contain 1..={MAX_PIN_BYTES} bytes"));
+        return Err(PinError::RecordBound);
     }
-    let pin: BootstrapPin = serde_json::from_slice(&bytes)
-        .map_err(|e| format!("invalid pin record ({e}); known fields: {RECORD_KEYS}; artifact fields: url_template, url, hash_kind, hash; resolve fields: kind, url, version_field, date_field"))?;
+    let pin: BootstrapPin = serde_json::from_slice(&bytes).map_err(PinError::InvalidRecord)?;
     validate_pin(pin)
 }
 
-pub fn validate_pin(pin: BootstrapPin) -> Result<BootstrapPin, String> {
+pub fn validate_pin(pin: BootstrapPin) -> Result<BootstrapPin, PinError> {
     validate_pin_ref(&pin)?;
     Ok(pin)
 }
 
-fn validate_pin_ref(pin: &BootstrapPin) -> Result<(), String> {
+fn validate_pin_ref(pin: &BootstrapPin) -> Result<(), PinError> {
     if pin.schema != PIN_SCHEMA {
-        return Err(format!("pin schema must be {PIN_SCHEMA}"));
+        return Err(PinError::Schema);
     }
     if !valid_source(&pin.source) || !pin.package_url.starts_with("pkg:") || pin.package_url.len() > 512 {
-        return Err(format!("{}: invalid source or package URL identity", pin.source));
+        return Err(PinError::SourceIdentity(pin.source.clone()));
     }
     if !valid_version(&pin.version) || !valid_date(&pin.release_date) {
-        return Err(format!("{}: invalid version or release date", pin.source));
+        return Err(PinError::VersionOrDate(pin.source.clone()));
     }
     if pin.artifacts.is_empty() || pin.artifacts.len() > MAX_ARTIFACTS {
-        return Err(format!("{}: requires 1..={MAX_ARTIFACTS} artifacts", pin.source));
+        return Err(PinError::ArtifactBound(pin.source.clone()));
     }
     for (role, artifact) in &pin.artifacts {
         if !valid_artifact(role, artifact, &pin.version)? {
-            return Err(format!("{}: invalid artifact {role} URL template or sha256 hash", pin.source));
+            return Err(PinError::Artifact {
+                source: pin.source.clone(),
+                role: role.clone(),
+            });
         }
     }
     if pin.recipes.is_empty()
         || pin.recipes.len() > MAX_RECIPES
         || pin.recipes.iter().any(|name| !valid_source(name) || !name.ends_with(".ncl"))
     {
-        return Err(format!("{}: requires 1..={MAX_RECIPES} declared bootstrap recipe filenames", pin.source));
+        return Err(PinError::Recipes(pin.source.clone()));
     }
     if !valid_resolve_hook(&pin.resolve) {
-        return Err(format!("{}: invalid JSON resolution hook", pin.source));
+        return Err(PinError::ResolveHook(pin.source.clone()));
     }
     assert!(!pin.artifacts.is_empty(), "validated pin must declare an artifact");
     assert!(pin.recipes.len() <= MAX_RECIPES, "validated pin recipe list must stay bounded");
     Ok(())
 }
 
-fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<bool, String> {
+fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<bool, PinError> {
     if !valid_source(role) || !valid_sri_ref(&artifact.hash) {
         return Ok(false);
     }
@@ -184,7 +253,7 @@ struct RenderPinUrlRequest<'a> {
     version: &'a str,
 }
 
-pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedPinUrl, String> {
+pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedPinUrl, PinError> {
     let url = render_pin_url_ref(RenderPinUrlRequest {
         url_template: &url_template,
         version: &version,
@@ -196,13 +265,13 @@ pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedP
     })
 }
 
-fn render_pin_url_ref(request: RenderPinUrlRequest<'_>) -> Result<String, String> {
+fn render_pin_url_ref(request: RenderPinUrlRequest<'_>) -> Result<String, PinError> {
     if !valid_version(request.version) {
-        return Err("invalid candidate version".to_string());
+        return Err(PinError::CandidateVersion);
     }
     let url = request.url_template.replace("{version}", request.version);
     if !url.starts_with("https://") || url.len() > MAX_URL_BYTES {
-        return Err("rendered pin URL is invalid".to_string());
+        return Err(PinError::RenderedUrl);
     }
     Ok(url)
 }
@@ -330,13 +399,15 @@ fn decide_pin_ref(pin: &BootstrapPin, observation: Result<PinCandidate, String>)
     match candidate_is_newer(pin, &candidate) {
         Ok(true) => PinDecision::Candidate { candidate },
         Ok(false) => PinDecision::Current,
-        Err(message) => PinDecision::Error { message },
+        Err(error) => PinDecision::Error {
+            message: error.to_string(),
+        },
     }
 }
 
-fn candidate_is_newer(pin: &BootstrapPin, candidate: &PinCandidate) -> Result<bool, String> {
+fn candidate_is_newer(pin: &BootstrapPin, candidate: &PinCandidate) -> Result<bool, PinError> {
     if !valid_version(&candidate.version) || !valid_date(&candidate.release_date) {
-        return Err("invalid upstream version or date".to_string());
+        return Err(PinError::UpstreamVersionOrDate);
     }
     let ordering = compare_versions_ref(VersionPairRef {
         current: &pin.version,
@@ -348,7 +419,7 @@ fn candidate_is_newer(pin: &BootstrapPin, candidate: &PinCandidate) -> Result<bo
     let is_complete = candidate.hashes.len() == pin.artifacts.len()
         && pin.artifacts.keys().all(|role| candidate.hashes.get(role).is_some_and(|hash| valid_sri_ref(hash)));
     if !is_complete {
-        return Err("candidate requires an observed sha256 hash for every artifact".to_string());
+        return Err(PinError::CandidateHashes);
     }
     assert_eq!(candidate.hashes.len(), pin.artifacts.len(), "candidate covers every artifact");
     Ok(true)
@@ -358,13 +429,13 @@ pub fn pin_preimage(bytes: Vec<u8>) -> String {
     blake3::hash(&bytes).to_hex().to_string()
 }
 
-pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, String> {
+pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, PinError> {
     if entries.is_empty() || entries.len() > MAX_PINS {
-        return Err(format!("plan requires 1..={MAX_PINS} sources"));
+        return Err(PinError::PlanBound);
     }
     entries.sort_by(|a, b| a.source.cmp(&b.source));
     if entries.windows(2).any(|pair| pair[0].source == pair[1].source) {
-        return Err("duplicate plan source".to_string());
+        return Err(PinError::DuplicatePlanSource);
     }
     let digest = plan_digest(&entries)?;
     Ok(PinPlan {
@@ -373,8 +444,8 @@ pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, String> {
         digest,
     })
 }
-fn plan_digest(entries: &[PinPlanEntry]) -> Result<String, String> {
-    let bytes = serde_json::to_vec(&(PLAN_SCHEMA, entries)).map_err(|e| format!("serialize plan: {e}"))?;
+fn plan_digest(entries: &[PinPlanEntry]) -> Result<String, PinError> {
+    let bytes = serde_json::to_vec(&(PLAN_SCHEMA, entries)).map_err(PinError::SerializePlan)?;
     Ok(pin_preimage(bytes))
 }
 
@@ -392,17 +463,17 @@ pub struct VerifiedPinPlan {
 }
 
 // r[impl mantle.bootstrap_source_pins.apply_writes_pins_only]
-pub fn verify_plan(plan: PinPlan, pins: BTreeMap<String, LoadedPin>) -> Result<VerifiedPinPlan, String> {
+pub fn verify_plan(plan: PinPlan, pins: BTreeMap<String, LoadedPin>) -> Result<VerifiedPinPlan, PinError> {
     if plan.schema != PLAN_SCHEMA || plan.entries.is_empty() {
-        return Err(MUTATED_PLAN.to_string());
+        return Err(PinError::MutatedPlan);
     }
     if plan.entries.len() != pins.len() || plan.digest != plan_digest(&plan.entries)? {
-        return Err(MUTATED_PLAN.to_string());
+        return Err(PinError::MutatedPlan);
     }
     assert_eq!(plan.entries.len(), pins.len(), "plan covers every declared pin");
     for pair in plan.entries.windows(2) {
         if pair[0].source >= pair[1].source {
-            return Err("duplicate or unsorted plan sources".to_string());
+            return Err(PinError::UnsortedPlanSources);
         }
     }
     for entry in &plan.entries {
@@ -412,24 +483,22 @@ pub fn verify_plan(plan: PinPlan, pins: BTreeMap<String, LoadedPin>) -> Result<V
     Ok(VerifiedPinPlan { plan, pins })
 }
 
-fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, LoadedPin>) -> Result<(), String> {
+fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, LoadedPin>) -> Result<(), PinError> {
     let LoadedPin { pin, preimage } =
-        pins.get(&entry.source).ok_or_else(|| format!("unknown source {}", entry.source))?;
+        pins.get(&entry.source).ok_or_else(|| PinError::UnknownSource(entry.source.clone()))?;
     assert_eq!(pin.source, entry.source, "pin map is keyed by source");
     assert!(!preimage.is_empty(), "loaded pins carry a preimage digest");
     if &entry.preimage != preimage || entry.current != pin.version {
-        return Err(format!("{}: source pin changed since check", entry.source));
+        return Err(PinError::ChangedSource(entry.source.clone()));
     }
     match &entry.decision {
-        PinDecision::Error { .. } => {
-            Err(format!("{}: unresolved upstream observation; apply requires every source resolved", entry.source))
-        }
+        PinDecision::Error { .. } => Err(PinError::UnresolvedObservation(entry.source.clone())),
         PinDecision::Candidate { candidate } => {
             assert!(!pin.artifacts.is_empty(), "decisions require a validated pin with artifacts");
             if candidate_is_newer(pin, candidate).is_ok_and(|newer| newer) {
                 Ok(())
             } else {
-                Err(format!("{}: invalid candidate", entry.source))
+                Err(PinError::InvalidCandidate(entry.source.clone()))
             }
         }
         PinDecision::Current => Ok(()),
@@ -437,6 +506,7 @@ fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, LoadedPin>) -
 }
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::vec;
 
     use super::*;
@@ -469,7 +539,7 @@ mod tests {
         assert_eq!(parse_pin(bytes).unwrap(), example());
         value["mystery"] = serde_json::json!(1);
         let error = parse_pin(serde_json::to_vec(&value).unwrap()).unwrap_err();
-        assert!(error.contains("mystery") && error.contains("known fields"));
+        assert!(matches!(error, PinError::InvalidRecord(_)));
         value.as_object_mut().unwrap().remove("mystery");
         value["artifacts"]["source"].as_object_mut().unwrap().remove("hash");
         assert!(parse_pin(serde_json::to_vec(&value).unwrap()).is_err());
@@ -545,6 +615,6 @@ mod tests {
         let mut unknown = plan;
         unknown.entries[0].source = "alien".into();
         unknown.digest = plan_digest(&unknown.entries).unwrap();
-        assert!(verify_plan(unknown, pins).unwrap_err().contains("unknown source"));
+        assert!(matches!(verify_plan(unknown, pins), Err(PinError::UnknownSource(source)) if source == "alien"));
     }
 }

@@ -18,6 +18,84 @@ const MAX_AUDIT_EVENTS: usize = 260;
 #[cfg(mantle_native_dlopen)]
 pub const AUDIT_MODULE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mantle-finish-dlopen-audit.so"));
 
+/// Pure admission/evaluation failures. Formatting belongs at build/report
+/// boundaries; these variants do not absorb filesystem or process I/O errors.
+#[derive(Debug, thiserror::Error)]
+pub enum GateDenial {
+    #[error("policy freshness blocker: {0}")]
+    InvalidPolicyDigests(#[source] serde_json::Error),
+    #[error("policy freshness blocker: regenerate finish-gate deterministic export")]
+    StalePolicy,
+    #[error("invalid finish-gate policy export: {0}")]
+    InvalidPolicyExport(#[source] serde_json::Error),
+    #[error("finish-gate policy export has unsupported limits or schema")]
+    UnsupportedPolicy,
+    #[error("finish-gate declaration exceeds 16384 bytes")]
+    DeclarationTooLarge,
+    #[error("invalid finish-gate declaration: {0}")]
+    InvalidDeclaration(#[source] serde_json::Error),
+    #[error("unsupported finish-gate schema")]
+    UnsupportedSchema,
+    #[error("finish-gate version command is required")]
+    VersionCommandRequired,
+    #[error("finish-gate pinned version is required")]
+    PinnedVersionRequired,
+    #[error("invalid finish-gate version command or pinned version")]
+    InvalidVersionCommandOrExpected,
+    #[error("finish-gate version command must name a safe output-relative bin/ path")]
+    UnsafeVersionCommand,
+    #[error("invalid finish-gate allowlisted environment")]
+    InvalidEnvironment,
+    #[error("invalid native reference leak policy")]
+    InvalidReferencePolicy,
+    #[error("invalid build-platform reference paths")]
+    InvalidBuildPlatformPaths,
+    #[error("invalid optional dlopen sonames")]
+    InvalidOptionalSonames,
+    #[error("dlopen audit requires version gate")]
+    DlopenRequiresVersion,
+    #[error("dlopen audit reserves LD_AUDIT")]
+    ReservedAuditEnvironment,
+    #[error("relocation rerun requires version gate")]
+    RelocationRequiresVersion,
+    #[error("finish-gate reference candidates exceed 128 build-only paths")]
+    ReferenceCandidateLimit,
+    #[error("finish-gate reference findings exceed 128")]
+    ReferenceFindingLimit,
+    #[error("version gate did not produce finish evidence")]
+    MissingVersionEvidence,
+    #[error("relocation gate did not produce finish evidence")]
+    MissingRelocationEvidence,
+    #[error("dlopen gate has no build log")]
+    MissingAuditLog,
+    #[error("dlopen audit exceeded event bound")]
+    AuditEventLimit,
+    #[error("dlopen audit exceeded callback or soname bound")]
+    AuditCallbackLimit,
+    #[error("dlopen audit event precedes module initialization")]
+    AuditBeforeInitialization,
+    #[error("malformed dlopen audit event")]
+    MalformedAuditEvent,
+    #[error("malformed dlopen audit soname length")]
+    MalformedAuditNameLength,
+    #[error("invalid dlopen audit hex")]
+    InvalidAuditHex,
+    #[error("non-UTF-8 dlopen audit soname")]
+    NonUtf8AuditName,
+    #[error("invalid dlopen audit soname")]
+    InvalidAuditName,
+    #[error("unknown dlopen audit event")]
+    UnknownAuditEvent,
+    #[error("dlopen audit module did not execute in the version process")]
+    MissingAuditInitialization,
+    #[error("version command missing")]
+    VersionCommandMissing,
+    #[error("expected version missing")]
+    ExpectedVersionMissing,
+    #[error("dlopen audit needs native Linux with the glibc loader")]
+    UnsupportedAuditHost,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SourceDigests {
@@ -78,61 +156,58 @@ pub struct DlopenGate {
     pub optional_sonames: Vec<String>,
 }
 
-fn policy() -> Result<(), String> {
-    let digests: SourceDigests =
-        serde_json::from_str(SOURCE_DIGESTS).map_err(|e| format!("policy freshness blocker: {e}"))?;
+fn policy() -> Result<(), GateDenial> {
+    let digests: SourceDigests = serde_json::from_str(SOURCE_DIGESTS).map_err(GateDenial::InvalidPolicyDigests)?;
     for (source, digest) in [
         (POLICY_SOURCE, digests.default),
         (POLICY_CONTRACT, digests.contracts),
         (GATE_CONTRACT, digests.gate),
     ] {
         if blake3::hash(source.as_bytes()).to_hex().as_str() != digest {
-            return Err("policy freshness blocker: regenerate finish-gate deterministic export".into());
+            return Err(GateDenial::StalePolicy);
         }
     }
-    let policy: FinishPolicy =
-        serde_json::from_str(POLICY_JSON).map_err(|e| format!("invalid finish-gate policy export: {e}"))?;
+    let policy: FinishPolicy = serde_json::from_str(POLICY_JSON).map_err(GateDenial::InvalidPolicyExport)?;
     if policy.schema != "mantle-derivation-finish-policy-v1" {
-        return Err("finish-gate policy export has unsupported limits or schema".into());
+        return Err(GateDenial::UnsupportedPolicy);
     }
     if policy.max_command_args != 16 || policy.max_command_arg_bytes != 4096 {
-        return Err("finish-gate policy export has unsupported limits or schema".into());
+        return Err(GateDenial::UnsupportedPolicy);
     }
     if policy.max_scan_hits != 128 || policy.max_excerpt_bytes != 160 || policy.max_optional_sonames != 32 {
-        return Err("finish-gate policy export has unsupported limits or schema".into());
+        return Err(GateDenial::UnsupportedPolicy);
     }
     debug_assert_eq!(u32::try_from(MAX_COMMAND_ARGS).ok(), Some(policy.max_command_args));
     debug_assert_eq!(u32::try_from(MAX_ARG_BYTES).ok(), Some(policy.max_command_arg_bytes));
     Ok(())
 }
 
-pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
+pub fn parse_gate(raw: &str) -> Result<GateDeclaration, GateDenial> {
     if raw.len() > MAX_DECLARATION_BYTES {
-        return Err("finish-gate declaration exceeds 16384 bytes".into());
+        return Err(GateDenial::DeclarationTooLarge);
     }
-    let gates: GateDeclaration =
-        serde_json::from_str(raw).map_err(|e| format!("invalid finish-gate declaration: {e}"))?;
+    let gates: GateDeclaration = serde_json::from_str(raw).map_err(GateDenial::InvalidDeclaration)?;
     if gates.schema != "mantle-derivation-finish-gates-v1" {
-        return Err("unsupported finish-gate schema".into());
+        return Err(GateDenial::UnsupportedSchema);
     }
     if gates.version.enabled {
-        let command = gates.version.command.as_ref().ok_or("finish-gate version command is required")?;
-        let expected = gates.version.expected.as_ref().ok_or("finish-gate pinned version is required")?;
+        let command = gates.version.command.as_ref().ok_or(GateDenial::VersionCommandRequired)?;
+        let expected = gates.version.expected.as_ref().ok_or(GateDenial::PinnedVersionRequired)?;
         if command.is_empty() || command.len() > MAX_COMMAND_ARGS {
-            return Err("invalid finish-gate version command or pinned version".into());
+            return Err(GateDenial::InvalidVersionCommandOrExpected);
         }
         if command.iter().any(|arg| arg.is_empty() || arg.len() > MAX_ARG_BYTES || arg.contains('\0')) {
-            return Err("invalid finish-gate version command or pinned version".into());
+            return Err(GateDenial::InvalidVersionCommandOrExpected);
         }
         if expected.is_empty() || expected.len() > MAX_EXPECTED_BYTES {
-            return Err("invalid finish-gate version command or pinned version".into());
+            return Err(GateDenial::InvalidVersionCommandOrExpected);
         }
         let path = &command[0];
         if !path.starts_with("bin/")
             || path.split('/').any(|part| part.is_empty() || part == ".." || part == ".")
             || !path.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.' | b'+'))
         {
-            return Err("finish-gate version command must name a safe output-relative bin/ path".into());
+            return Err(GateDenial::UnsafeVersionCommand);
         }
     }
     if gates.version.environment.len() > 16
@@ -145,15 +220,15 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
                 || key.as_bytes()[0].is_ascii_digit()
         })
     {
-        return Err("invalid finish-gate allowlisted environment".into());
+        return Err(GateDenial::InvalidEnvironment);
     }
     if gates.reference_leak.native != "report" && gates.reference_leak.native != "deny" {
-        return Err("invalid native reference leak policy".into());
+        return Err(GateDenial::InvalidReferencePolicy);
     }
     if gates.reference_leak.build_platform_paths.len() > 128
         || gates.reference_leak.build_platform_paths.iter().any(|p| !p.starts_with('/'))
     {
-        return Err("invalid build-platform reference paths".into());
+        return Err(GateDenial::InvalidBuildPlatformPaths);
     }
     if gates.dlopen.optional_sonames.len() > 32
         || gates.dlopen.optional_sonames.iter().any(|s| {
@@ -162,7 +237,7 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
                 || !s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
         })
     {
-        return Err("invalid optional dlopen sonames".into());
+        return Err(GateDenial::InvalidOptionalSonames);
     }
     validate_gate_dependencies(&gates)?;
     debug_assert!(!gates.dlopen.enabled || gates.version.enabled);
@@ -170,15 +245,15 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
     Ok(gates)
 }
 
-fn validate_gate_dependencies(gates: &GateDeclaration) -> Result<(), String> {
+fn validate_gate_dependencies(gates: &GateDeclaration) -> Result<(), GateDenial> {
     if gates.dlopen.enabled && !gates.version.enabled {
-        return Err("dlopen audit requires version gate".into());
+        return Err(GateDenial::DlopenRequiresVersion);
     }
     if gates.dlopen.enabled && gates.version.environment.contains_key("LD_AUDIT") {
-        return Err("dlopen audit reserves LD_AUDIT".into());
+        return Err(GateDenial::ReservedAuditEnvironment);
     }
     if gates.relocation.enabled && !gates.version.enabled {
-        return Err("relocation rerun requires version gate".into());
+        return Err(GateDenial::RelocationRequiresVersion);
     }
     Ok(())
 }
@@ -190,7 +265,7 @@ pub fn reference_candidates(
     logical_store_prefix: &str,
     input_paths: impl Iterator<Item = String>,
     cross_build: bool,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, GateDenial> {
     if !gates.reference_leak.enabled {
         return Ok(Vec::new());
     }
@@ -201,7 +276,7 @@ pub fn reference_candidates(
     }
     extra.remove(&prefix);
     if extra.len() >= 128 {
-        return Err("finish-gate reference candidates exceed 128 build-only paths".into());
+        return Err(GateDenial::ReferenceCandidateLimit);
     }
     let mut candidates = Vec::with_capacity(extra.len().saturating_add(1));
     candidates.push(prefix);
@@ -223,11 +298,35 @@ pub struct ReferenceScanContext<'a> {
     pub cross_build: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReferenceDecision {
+    Report,
+    DenyBuildPlatform,
+    DenyCrossBuild,
+    DenyNativePolicy,
+}
+
+fn reference_decision(
+    gates: &GateDeclaration,
+    is_build_only: bool,
+    context: &ReferenceScanContext<'_>,
+) -> ReferenceDecision {
+    if is_build_only {
+        ReferenceDecision::DenyBuildPlatform
+    } else if context.cross_build {
+        ReferenceDecision::DenyCrossBuild
+    } else if gates.reference_leak.native == "deny" {
+        ReferenceDecision::DenyNativePolicy
+    } else {
+        ReferenceDecision::Report
+    }
+}
+
 pub fn evaluate_references(
     gates: &GateDeclaration,
     observed: impl Iterator<Item = ReferenceObservation>,
     context: ReferenceScanContext<'_>,
-) -> Result<Vec<ReferenceFinding>, String> {
+) -> Result<Vec<ReferenceFinding>, GateDenial> {
     if !gates.reference_leak.enabled {
         return Ok(Vec::new());
     }
@@ -235,16 +334,16 @@ pub fn evaluate_references(
     let prefix = format!("{}/", context.logical_store_prefix);
     for hit in observed {
         if findings.len() >= 128 {
-            return Err("finish-gate reference findings exceed 128".into());
+            return Err(GateDenial::ReferenceFindingLimit);
         }
         let is_build_only = hit.reference != prefix;
-        let is_denied = is_build_only || context.cross_build || gates.reference_leak.native == "deny";
+        let decision = reference_decision(gates, is_build_only, &context);
         findings.push(ReferenceFinding {
             output: context.output.to_string(),
             file: hit.file,
             reference: hit.reference,
             excerpt: hit.excerpt,
-            denied: is_denied,
+            denied: decision != ReferenceDecision::Report,
         });
         debug_assert!(findings.len() <= 128);
     }
@@ -283,15 +382,15 @@ pub fn result_report(
     gates: &GateDeclaration,
     reference_findings: Vec<ReferenceFinding>,
     build_log: Option<&str>,
-) -> Result<FinishGateReport, String> {
+) -> Result<FinishGateReport, GateDenial> {
     if gates.version.enabled && !build_log.is_some_and(|log| log.contains("finish-gate version passed:")) {
-        return Err("version gate did not produce finish evidence".into());
+        return Err(GateDenial::MissingVersionEvidence);
     }
     if gates.relocation.enabled && !build_log.is_some_and(|log| log.contains("finish-gate relocation passed:")) {
-        return Err("relocation gate did not produce finish evidence".into());
+        return Err(GateDenial::MissingRelocationEvidence);
     }
     let (missing_sonames, audit_error) = if gates.dlopen.enabled {
-        match build_log.ok_or_else(|| "dlopen gate has no build log".to_string()).and_then(missing_dlopen_sonames) {
+        match build_log.ok_or(GateDenial::MissingAuditLog).and_then(missing_dlopen_sonames) {
             Ok(names) => (names, None),
             Err(reason) => (Vec::new(), Some(reason)),
         }
@@ -334,7 +433,7 @@ pub fn result_report(
         .to_string(),
         optional_sonames: gates.dlopen.optional_sonames.clone(),
         missing_sonames,
-        audit_error,
+        audit_error: audit_error.map(|denial| denial.to_string()),
     };
     debug_assert_eq!(gate_result.reference_leak == "denied", gates.reference_leak.enabled && is_denied);
     debug_assert_eq!(gate_result.dlopen == "denied", gates.dlopen.enabled && is_denied_dlopen);
@@ -400,57 +499,72 @@ pub fn failed_build_report(derivation: &str, gates: &GateDeclaration, failure: &
 
 /// Parse actual glibc loader callbacks. An absent version row, malformed row,
 /// or bounded-log overflow cannot silently turn an unevaluated gate green.
-fn missing_dlopen_sonames(log: &str) -> Result<Vec<String>, String> {
+fn missing_dlopen_sonames(log: &str) -> Result<Vec<String>, GateDenial> {
     let mut is_audited = false;
     let mut events = 0usize;
     let mut searched = BTreeSet::new();
     let mut opened = BTreeSet::new();
+    let mut missing = BTreeSet::new();
     for line in log.lines().filter_map(|line| line.strip_prefix(AUDIT_PREFIX)) {
         events = events.saturating_add(1);
         if events > MAX_AUDIT_EVENTS {
-            return Err("dlopen audit exceeded event bound".into());
+            return Err(GateDenial::AuditEventLimit);
         }
         if line == "V" {
+            missing.extend(searched.difference(&opened).cloned());
+            searched.clear();
+            opened.clear();
             is_audited = true;
             continue;
         }
         if line == "X" {
-            return Err("dlopen audit exceeded callback or soname bound".into());
+            return Err(GateDenial::AuditCallbackLimit);
         }
-        let (kind, encoded) = line.split_once('\t').ok_or("malformed dlopen audit event")?;
+        if !is_audited {
+            return Err(GateDenial::AuditBeforeInitialization);
+        }
+        let (kind, encoded) = line.split_once('\t').ok_or(GateDenial::MalformedAuditEvent)?;
         if encoded.len() > 512 || encoded.len() % 2 != 0 {
-            return Err("malformed dlopen audit soname length".into());
+            return Err(GateDenial::MalformedAuditNameLength);
         }
-        let bytes = data_encoding::HEXLOWER.decode(encoded.as_bytes()).map_err(|_| "invalid dlopen audit hex")?;
-        let name = String::from_utf8(bytes).map_err(|_| "non-UTF-8 dlopen audit soname")?;
+        let bytes = data_encoding::HEXLOWER.decode(encoded.as_bytes()).map_err(|_| GateDenial::InvalidAuditHex)?;
+        let name = String::from_utf8(bytes).map_err(|_| GateDenial::NonUtf8AuditName)?;
+        if name.is_empty() || name.contains('\0') {
+            return Err(GateDenial::InvalidAuditName);
+        }
         match kind {
             "S" => {
-                searched.insert(name);
+                // The contract audits sonames, not slash-bearing path lookups.
+                // Absolute DT_NEEDED paths are not missing sonames.
+                if !name.contains('/') {
+                    searched.insert(name);
+                }
             }
             "O" => {
                 opened.insert(name.rsplit('/').next().unwrap_or(&name).to_string());
             }
-            _ => return Err("unknown dlopen audit event".into()),
+            _ => return Err(GateDenial::UnknownAuditEvent),
         }
         debug_assert!(searched.len() <= events);
     }
     if !is_audited {
-        return Err("dlopen audit module did not execute in the version process".into());
+        return Err(GateDenial::MissingAuditInitialization);
     }
     debug_assert!(opened.len() <= events);
-    Ok(searched.into_iter().filter(|name| !opened.contains(name)).collect())
+    missing.extend(searched.difference(&opened).cloned());
+    Ok(missing.into_iter().collect())
 }
 
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, String> {
-    let command = gates.version.command.as_ref().ok_or("version command missing")?;
-    let expected = gates.version.expected.as_ref().ok_or("expected version missing")?;
-    let executable = command.first().ok_or("version command missing")?;
+fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, GateDenial> {
+    let command = gates.version.command.as_ref().ok_or(GateDenial::VersionCommandMissing)?;
+    let expected = gates.version.expected.as_ref().ok_or(GateDenial::ExpectedVersionMissing)?;
+    let executable = command.first().ok_or(GateDenial::VersionCommandMissing)?;
     if executable.is_empty() || expected.is_empty() {
-        return Err("invalid finish-gate version command or pinned version".into());
+        return Err(GateDenial::InvalidVersionCommandOrExpected);
     }
     let mut run = String::from("/bin/busybox env -i");
     if gates.dlopen.enabled {
@@ -493,10 +607,10 @@ fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, Str
 
 /// Append to an adopted shell derivation's script, after its install and fixup.
 /// The static BusyBox in the sandbox is used to avoid ambient PATH and libc.
-pub fn render_finish_shell(gates: &GateDeclaration) -> Result<String, String> {
+pub fn render_finish_shell(gates: &GateDeclaration) -> Result<String, GateDenial> {
     policy()?;
     if gates.dlopen.enabled && !cfg!(mantle_native_dlopen) {
-        return Err("dlopen audit needs native Linux with the glibc loader".into());
+        return Err(GateDenial::UnsupportedAuditHost);
     }
     let mut script = String::from("\n# r[impl mantle.derivation_finish_gates.shared_contract]\nset -eu\n");
     if gates.dlopen.enabled {
@@ -538,15 +652,142 @@ mod tests {
 
     #[test]
     fn rejects_unbounded_gate_input() {
-        assert!(parse_gate(&"x".repeat(MAX_DECLARATION_BYTES + 1)).is_err());
-        assert!(parse_gate("{}").is_err());
+        assert!(matches!(parse_gate(&"x".repeat(MAX_DECLARATION_BYTES + 1)), Err(GateDenial::DeclarationTooLarge)));
+        assert!(matches!(parse_gate("{}"), Err(GateDenial::InvalidDeclaration(_))));
     }
+
     #[test]
-    fn embedded_policy_sources_match_recorded_digests() {
-        // Every adopted finish gate renders through this check, so a stale
-        // digest record fails each finish-gated build at dispatch.
-        assert_eq!(policy(), Ok(()));
+    fn declaration_denials_distinguish_unsafe_commands_and_gate_dependencies() {
+        let mut exported: serde_json::Value = serde_json::from_str(POLICY_JSON).unwrap();
+        let mut declaration = exported["gates"].take();
+        declaration["version"]["enabled"] = serde_json::json!(true);
+        declaration["version"]["environment"] = serde_json::json!({});
+        declaration["dlopen"]["enabled"] = serde_json::json!(false);
+        declaration["relocation"]["enabled"] = serde_json::json!(false);
+        declaration["version"]["command"] = serde_json::json!(["bin/probe", "--version"]);
+        declaration["version"]["expected"] = serde_json::json!("1.0");
+        let mut missing = declaration.clone();
+        missing["version"].as_object_mut().unwrap().remove("command");
+        assert!(matches!(parse_gate(&missing.to_string()), Err(GateDenial::VersionCommandRequired)));
+        let mut unsafe_command = declaration.clone();
+        unsafe_command["version"]["command"] = serde_json::json!(["bin/../outside"]);
+        assert!(matches!(parse_gate(&unsafe_command.to_string()), Err(GateDenial::UnsafeVersionCommand)));
+        let mut disabled = declaration.clone();
+        disabled["version"]["enabled"] = serde_json::json!(false);
+        disabled["relocation"]["enabled"] = serde_json::json!(true);
+        assert!(matches!(parse_gate(&disabled.to_string()), Err(GateDenial::RelocationRequiresVersion)));
+        disabled["dlopen"]["enabled"] = serde_json::json!(true);
+        assert!(matches!(parse_gate(&disabled.to_string()), Err(GateDenial::DlopenRequiresVersion)));
+        declaration["dlopen"]["enabled"] = serde_json::json!(true);
+        declaration["version"]["environment"] = serde_json::json!({"LD_AUDIT": "/outside/audit.so"});
+        assert!(matches!(parse_gate(&declaration.to_string()), Err(GateDenial::ReservedAuditEnvironment)));
     }
+
+    #[test]
+    fn reference_bounds_and_required_execution_evidence_fail_closed() {
+        let mut exported: serde_json::Value = serde_json::from_str(POLICY_JSON).unwrap();
+        let mut gates: GateDeclaration = serde_json::from_value(exported["gates"].take()).unwrap();
+        gates.reference_leak.enabled = true;
+        gates.reference_leak.native = "report".into();
+        gates.version.enabled = true;
+        gates.relocation.enabled = false;
+        let inputs = |count| (0..count).map(|index| format!("/build/platform-{index}"));
+        let admitted = reference_candidates(&gates, "/mantle/store", inputs(127), true).unwrap();
+        assert_eq!(admitted.first().map(String::as_str), Some("/mantle/store/"));
+        assert!(admitted.contains(&"/build/platform-126".to_string()));
+        assert!(matches!(
+            reference_candidates(&gates, "/mantle/store", inputs(128), true),
+            Err(GateDenial::ReferenceCandidateLimit)
+        ));
+        let observations = |count| {
+            (0..count).map(|index| ReferenceObservation {
+                file: format!("bin/program-{index}"),
+                reference: "/mantle/store/".into(),
+                excerpt: "/mantle/store/".into(),
+            })
+        };
+        let context = || ReferenceScanContext {
+            logical_store_prefix: "/mantle/store",
+            output: "out",
+            cross_build: false,
+        };
+        let admitted_findings = evaluate_references(&gates, observations(128), context()).unwrap();
+        assert!(admitted_findings.iter().all(|finding| !finding.denied));
+        assert_eq!(admitted_findings.last().map(|finding| finding.file.as_str()), Some("bin/program-127"));
+        assert!(matches!(
+            evaluate_references(&gates, observations(129), context()),
+            Err(GateDenial::ReferenceFindingLimit)
+        ));
+        assert!(matches!(result_report("probe", &gates, Vec::new(), None), Err(GateDenial::MissingVersionEvidence)));
+        gates.relocation.enabled = true;
+        assert!(matches!(
+            result_report("probe", &gates, Vec::new(), Some("finish-gate version passed: probe")),
+            Err(GateDenial::MissingRelocationEvidence)
+        ));
+    }
+
+    #[test]
+    fn reference_policy_reports_native_but_denies_cross_and_build_only_hits() {
+        let mut exported: serde_json::Value = serde_json::from_str(POLICY_JSON).unwrap();
+        let mut gates: GateDeclaration = serde_json::from_value(exported["gates"].take()).unwrap();
+        gates.reference_leak.native = "report".into();
+        let observe = |reference: &str| ReferenceObservation {
+            file: "bin/compiler".into(),
+            reference: reference.into(),
+            excerpt: reference.into(),
+        };
+        for (reference, cross_build, denied) in [
+            ("/mantle/store/", false, false),
+            ("/mantle/store/", true, true),
+            ("/build/platform-input", false, true),
+        ] {
+            let context = ReferenceScanContext {
+                logical_store_prefix: "/mantle/store",
+                output: "out",
+                cross_build,
+            };
+            let findings = evaluate_references(&gates, std::iter::once(observe(reference)), context).unwrap();
+            assert_eq!(findings[0].denied, denied);
+            assert_eq!(findings[0].file, "bin/compiler");
+            assert_eq!(findings[0].reference, reference);
+        }
+        gates.reference_leak.native = "deny".into();
+        let context = ReferenceScanContext {
+            logical_store_prefix: "/mantle/store",
+            output: "out",
+            cross_build: false,
+        };
+        assert!(evaluate_references(&gates, std::iter::once(observe("/mantle/store/")), context).unwrap()[0].denied);
+    }
+
+    #[test]
+    fn audit_missing_soname_cannot_be_satisfied_by_another_run() {
+        let event =
+            |kind, name: &str| format!("{AUDIT_PREFIX}{kind}\t{}\n", data_encoding::HEXLOWER.encode(name.as_bytes()));
+        let first = format!("{AUDIT_PREFIX}V\n{}", event('S', "liboptional.so"));
+        let second = format!(
+            "{AUDIT_PREFIX}V\n{}{}{}{}",
+            event('S', "liboptional.so"),
+            event('O', "/declared/liboptional.so"),
+            event('S', "/declared/libabsolute.so"),
+            event('O', "/declared/libabsolute.so"),
+        );
+        assert_eq!(missing_dlopen_sonames(&second).unwrap(), Vec::<String>::new());
+        assert_eq!(missing_dlopen_sonames(&(first + &second)).unwrap(), ["liboptional.so"]);
+        assert!(matches!(
+            missing_dlopen_sonames(&event('S', "liboptional.so")),
+            Err(GateDenial::AuditBeforeInitialization)
+        ));
+        assert!(matches!(
+            missing_dlopen_sonames(&format!("{AUDIT_PREFIX}V\n{}", event('S', "lib\0evil.so"))),
+            Err(GateDenial::InvalidAuditName)
+        ));
+        assert!(matches!(
+            missing_dlopen_sonames(&format!("{AUDIT_PREFIX}V\n{AUDIT_PREFIX}X\n")),
+            Err(GateDenial::AuditCallbackLimit)
+        ));
+    }
+
     #[cfg(mantle_native_dlopen)]
     #[test]
     fn real_glibc_audit_distinguishes_missing_and_opened_sonames() {

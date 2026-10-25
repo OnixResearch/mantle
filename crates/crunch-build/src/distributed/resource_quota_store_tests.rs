@@ -344,6 +344,11 @@ fn admitted_context_and_observation_survive_reopen_without_cross_attempt_authori
     let reopened = ResourceQuotaStore::open(directory.path()).unwrap();
     reopened.record_observation(&r, record.clone()).unwrap();
     assert_eq!(reopened.snapshot().unwrap().observations.get(r.attempt.as_str()), Some(&record));
+    let before_conflict = reopened.snapshot().unwrap();
+    let mut conflicting_replay = record.clone();
+    conflicting_replay.observation.measured.memory_bytes = Some(199);
+    assert_eq!(reopened.record_observation(&r, conflicting_replay), Err(QuotaError::Conflict));
+    assert_eq!(reopened.snapshot().unwrap(), before_conflict);
     assert_eq!(reopened.snapshot().unwrap().resource_contexts.get(r.attempt.as_str()), Some(&context));
     assert_eq!(reopened.snapshot().unwrap().summary(&r).unwrap().account_reserved, 10);
     let mut wrong = record.clone();

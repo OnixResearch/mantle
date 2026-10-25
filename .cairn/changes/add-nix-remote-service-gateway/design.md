@@ -51,6 +51,13 @@ Policy checks distinguish at least:
 
 No broad bearer token implies all operations. Compatibility tickets are an explicit migration surface and cannot obtain administration authority. UCAN verification occurs before request translation and uses the existing UCAN verification boundary.
 
+Gateway verification uses UCAN's strict zero-clock-skew limits at both initial
+admission and non-consuming revalidation. Lifetimes are half-open: the exact
+effective expiration second is already denied. Initial lifetime rejection occurs
+before the holder nonce is spent; a live session does not spend it again during
+revalidation. Operator-snapshot currentness, generation, revocation, exact
+operation, target, request digest and selected caveat checks remain required.
+
 ## Build API
 
 The versioned API provides bounded operations for:
@@ -182,4 +189,59 @@ protocol; it is not claimed by this host. Likewise, reopening after an uncertain
 execution cannot safely redispatch or release its reservation merely because the
 client disappeared. Real configured-fixture, farm interoperability and deployment
 proofs remain separate observed evidence, not consequences of these code paths.
+
+### Focused verification handoff
+
+The captured baseline at
+`.cairn/archive/2026-10-22-schedule-tigerstyle-hardening-backlog/evidence/v1-gates-2026-10-22/head-crunch-bin-16-isolated.log`
+records an expired session accepted at explicit time 1901 (signed deadline 1900)
+and three resource-host fixtures denied `StoreUnavailable`. The session repair
+uses strict bounds, including exact expiry; resource fixtures now create the
+required private quota directory rather than relaxing production access checks.
+These changes have not been executed in this handoff. No runtime/gate acceptance
+is inferred from the source repair.
+
+After integration, the focused commands are:
+
+```bash
+cargo test -p mantle --bin mantle nix_gateway::
+cargo test -p crunch-nix-gateway-core
+cargo test -p crunch-nix-gateway
+cargo test -p crunch-nix-gateway --test nix_path_info installed_nix_ -- --ignored
+```
+
+The ignored interoperability cases require the installed Nix 2.36 client named
+by their fixture. For an actual configured host, retain producer/client output
+and endpoint configuration identities. In one terminal, run the documented
+`serve` command with the private configuration and existing ticket FD; in another,
+use freshly signed envelopes for each operation:
+
+```bash
+mantle remote gateway call --socket "$private_socket" --envelope "$submit_envelope"
+mantle remote gateway call --socket "$private_socket" --envelope "$status_envelope"
+mantle remote gateway call --socket "$private_socket" --envelope "$events_envelope"
+mantle remote gateway call --socket "$private_socket" --envelope "$usage_envelope"
+mantle remote gateway call --socket "$private_socket" --envelope "$cancel_envelope"
+```
+
+For the separate Nix `nix-once` process documented above, submit the exact admitted
+derivation from its signed build envelope with an installed compatible client:
+
+```bash
+nix-store --realise --store "unix://$nix_socket" "$drv_path"
+```
+
+The read-only service is a separate process (`mantle --state-dir
+"$coordinator_state" remote gateway read`); its actual Nix read command is:
+
+```bash
+nix path-info --store "unix://$coordinator_state/nix-gateway/nix-worker.sock" "$signed_store_path"
+```
+
+These commands do not provision credentials or derive holder signatures. Real
+ticket/UCAN issuance, signed derivation/input/output admission, trusted full keys,
+registered worker inventory, quotas, and private owner-controlled paths must
+already exist. Public deployment, OnixOS farm integration and external Valence
+consumer evidence remain independent unexecuted requirements.
+
 
