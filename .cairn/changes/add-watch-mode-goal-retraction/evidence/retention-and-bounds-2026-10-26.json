@@ -1,0 +1,191 @@
+{
+  "schema": "mantle-watch-retention-and-bounds-observation-v1",
+  "date": "2026-10-26",
+  "immediate_outcome": "The real watch CLI preserves admitted output identity across Nickel-valid conversion rejection and source-byte-policy rejection, recovers without rebuilding it, and exits cleanly.",
+  "durable_capability": "Repeatable conversion/source-policy retention scenario plus executed event, live-goal and evaluation-rate boundary fixtures.",
+  "maintenance_owner": "Mantle watch scheduler and evaluation maintainers",
+  "runtime": {
+    "schema": "mantle-watch-error-retention-observation-v1",
+    "status": "passed",
+    "executable": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+    "before_blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+    "commands": [
+      {
+        "label": "nickel-valid-candidate",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "eval",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/conversion.ncl"
+        ],
+        "exit_code": 0,
+        "started_unix": 1793039784.1803765,
+        "finished_unix": 1793039784.326383,
+        "stdout": "{\n  \"addressing_mode\": \"content-addressed\",\n  \"args\": [\n    \"-c\",\n    \"exit 99\"\n  ],\n  \"builder\": \"/bin/sh\",\n  \"dynamic_plan_outputs\": [],\n  \"env\": {},\n  \"inputs\": [\n    \"/wrong/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source\"\n  ],\n  \"name\": \"watch-conversion-rejected\",\n  \"outputs\": [\n    \"out\"\n  ],\n  \"sandbox\": \"native\",\n  \"system\": \"x86_64-linux\"\n}\n",
+        "stderr": ""
+      },
+      {
+        "label": "conversion-rejected-candidate",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "build",
+          "--plan",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/conversion.ncl"
+        ],
+        "exit_code": 1,
+        "started_unix": 1793039784.3263927,
+        "finished_unix": 1793039784.4689374,
+        "stdout": "",
+        "stderr": "error: build failed\nwatch-conversion-rejected: invalid store path: /wrong/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source\n"
+      }
+    ],
+    "watch_argv": [
+      "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+      "--store",
+      "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store",
+      "--state-dir",
+      "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/state",
+      "build",
+      "--watch",
+      "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl",
+      "--no-substitute",
+      "--jobs",
+      "1"
+    ],
+    "conversion_rejection": "watch run watch-633391-1793039784495804615 edit rejected: watched source scan, evaluation or conversion failed; previous goals remain admitted\n",
+    "conversion_recovery": "watch run watch-633391-1793039784495804615 generation 2: 1 admitted goal event(s)\n  retained /nix/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\nwatch generation 2: settled 1 successful, 0 failed root(s)\n/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained\n",
+    "source_byte_rejection": "watch run watch-633391-1793039784495804615 edit rejected: watched source scan, evaluation or conversion failed; previous goals remain admitted\n",
+    "retained": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained",
+      "inode": 26210499,
+      "mtime_ns": 1000000000,
+      "bytes": "retained",
+      "blake3": "720e60fe88849f187c4b2a5399f58a12f29c23c21878efb6fac58e00dc7c916d"
+    },
+    "source_byte_recovery": "watch run watch-633391-1793039784495804615 generation 3: 1 admitted goal event(s)\n  retained /nix/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\nwatch generation 3: settled 1 successful, 0 failed root(s)\n/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained\n",
+    "assertions": [
+      "Nickel-valid conversion failure",
+      "reported conversion rejection",
+      "no admitted-set mutation",
+      "retained inode/mtime/bytes",
+      "conversion recovery",
+      "source-byte-bound retention",
+      "source-byte recovery"
+    ],
+    "watch_exit_code": 0,
+    "after_blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85"
+  },
+  "runner": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/watch-boundary-runtime-20261026.py",
+    "blake3": "1c3a5d5c96f7eacf204996075df316b6f3a9825ce51d3c6c8119bf019be4d7f2",
+    "text": "#!/usr/bin/env python3\n\"\"\"Bounded real-CLI watch conversion/source-boundary observation; never builds Mantle.\"\"\"\nimport argparse\nimport json\nfrom pathlib import Path\nimport re\nimport signal\nimport subprocess\nimport time\n\n\ndef require(condition, message):\n    if not condition:\n        raise RuntimeError(message)\n\n\ndef digest(path):\n    return subprocess.check_output([\"b3sum\", \"--no-names\", str(path)], text=True).strip()\n\n\ndef atomic_write(path, text):\n    next_path = path.with_suffix(\".next\")\n    next_path.write_text(text)\n    next_path.replace(path)\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"--mantle\", required=True, type=Path)\n    parser.add_argument(\"--scratch\", required=True, type=Path)\n    args = parser.parse_args()\n    binary = args.mantle.resolve(strict=True)\n    scratch = args.scratch.absolute()\n    scratch.mkdir(parents=True, exist_ok=False)\n    store = scratch / \"store\"\n    store.mkdir()\n    library = Path(__file__).resolve().parents[2] / \"lib/lib.ncl\"\n    require(library.is_file(), f\"missing repository library: {library}\")\n    source = scratch / \"root.ncl\"\n    valid = (f\"let mantle = import {json.dumps(str(library))} in\\n\"\n             '{ name = \"watch-conversion-retained\", builder = \"/bin/sh\", '\n             'args = [\"-c\", \"printf retained > \\\\\\\"$out\\\\\\\"\" ] } | mantle.Derivation\\n')\n    invalid_input = \"/wrong/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source\"\n    conversion_failure = (f\"let mantle = import {json.dumps(str(library))} in\\n\"\n                          '{ name = \"watch-conversion-rejected\", builder = \"/bin/sh\", '\n                          'args = [\"-c\", \"exit 99\"], inputs = [' + json.dumps(invalid_input)\n                          + '] } | mantle.Derivation\\n')\n    # The invalid candidate is Nickel-contract-valid but cannot convert under\n    # the selected /mantle/store prefix. Calibrate both sides before watching.\n    candidate = scratch / \"conversion.ncl\"\n    candidate.write_text(conversion_failure)\n    result = {\"schema\": \"mantle-watch-error-retention-observation-v1\", \"status\": \"failed\",\n              \"executable\": str(binary), \"before_blake3\": digest(binary), \"commands\": []}\n\n    def run(label, argv):\n        started = time.time()\n        command = subprocess.run(argv, capture_output=True, text=True, timeout=30)\n        (scratch / f\"{label}.stdout\").write_text(command.stdout)\n        (scratch / f\"{label}.stderr\").write_text(command.stderr)\n        result[\"commands\"].append({\"label\": label, \"argv\": argv, \"exit_code\": command.returncode,\n                                   \"started_unix\": started, \"finished_unix\": time.time(),\n                                   \"stdout\": command.stdout, \"stderr\": command.stderr})\n        return command\n\n    evaluation = run(\"nickel-valid-candidate\", [str(binary), \"eval\", str(candidate)])\n    require(evaluation.returncode == 0, \"conversion candidate failed Nickel evaluation\")\n    planning = run(\"conversion-rejected-candidate\", [str(binary), \"build\", \"--plan\", str(candidate)])\n    require(planning.returncode != 0 and \"invalid store path\" in planning.stderr.lower(),\n            \"candidate did not specifically fail derivation conversion\")\n    atomic_write(source, valid)\n    command = [str(binary), \"--store\", str(store), \"--state-dir\", str(scratch / \"state\"),\n               \"build\", \"--watch\", str(source), \"--no-substitute\", \"--jobs\", \"1\"]\n    result[\"watch_argv\"] = command\n    stdout = scratch / \"watch.stdout\"\n    stderr = scratch / \"watch.stderr\"\n    with stdout.open(\"wb\") as output, stderr.open(\"wb\") as errors:\n        process = subprocess.Popen(command, stdout=output, stderr=errors)\n        try:\n            def wait_for(predicate, message):\n                deadline = time.monotonic() + 30\n                while time.monotonic() < deadline:\n                    require(process.poll() is None, f\"watch exited {process.returncode}: see {stderr}\")\n                    value = predicate()\n                    if value:\n                        return value\n                    time.sleep(0.05)\n                raise RuntimeError(message)\n\n            def log():\n                return stdout.read_text()\n\n            def settled(offset):\n                return re.search(r\"generation \\d+: settled 1 successful, 0 failed root\\(s\\)\", log()[offset:])\n\n            wait_for(lambda: settled(0), \"initial root did not settle\")\n            outputs = list(store.glob(\"*-watch-conversion-retained\"))\n            require(len(outputs) == 1, f\"wrong initial output set: {outputs}\")\n            artifact = outputs[0]\n\n            def retained_identity():\n                metadata = artifact.stat()\n                return {\"path\": str(artifact), \"inode\": metadata.st_ino, \"mtime_ns\": metadata.st_mtime_ns,\n                        \"bytes\": artifact.read_text(), \"blake3\": digest(artifact)}\n\n            baseline = retained_identity()\n            require(baseline[\"bytes\"] == \"retained\", \"initial output bytes differ\")\n            offset = len(log())\n            atomic_write(source, conversion_failure)\n            wait_for(lambda: \"edit rejected:\" in log()[offset:], \"conversion failure was not reported\")\n            rejected = log()[offset:]\n            require(\"  retracted \" not in rejected and \"  added \" not in rejected,\n                    \"conversion failure changed the admitted roots\")\n            require(retained_identity() == baseline, \"conversion failure changed the retained output\")\n            require(not list(store.glob(\"*-watch-conversion-rejected\")), \"rejected candidate produced output\")\n            result[\"conversion_rejection\"] = rejected\n            offset = len(log())\n            atomic_write(source, valid)\n            wait_for(lambda: settled(offset), \"valid roots did not recover after conversion failure\")\n            recovered = log()[offset:]\n            require(\"  retained \" in recovered and \"  added \" not in recovered and \"  retracted \" not in recovered,\n                    \"conversion recovery did not retain the admitted identity\")\n            require(retained_identity() == baseline, \"conversion recovery rebuilt the retained output\")\n            result[\"conversion_recovery\"] = recovered\n            offset = len(log())\n            atomic_write(source, \"#\" + \"x\" * 2_097_152 + \"\\n\" + valid)\n            wait_for(lambda: \"edit rejected:\" in log()[offset:], \"oversized watched source was not rejected\")\n            oversized = log()[offset:]\n            require(\"  retracted \" not in oversized and \"  added \" not in oversized,\n                    \"source-byte rejection changed the admitted roots\")\n            require(retained_identity() == baseline, \"oversized source changed the retained output\")\n            result[\"source_byte_rejection\"] = oversized\n            offset = len(log())\n            atomic_write(source, valid)\n            wait_for(lambda: settled(offset), \"valid roots did not recover after source-byte rejection\")\n            require(retained_identity() == baseline, \"source-byte recovery rebuilt the retained output\")\n            result.update(status=\"passed\", retained=baseline, source_byte_recovery=log()[offset:],\n                          assertions=[\"Nickel-valid conversion failure\", \"reported conversion rejection\",\n                                      \"no admitted-set mutation\", \"retained inode/mtime/bytes\",\n                                      \"conversion recovery\", \"source-byte-bound retention\", \"source-byte recovery\"])\n        except Exception as error:\n            result[\"error\"] = str(error)\n            raise\n        finally:\n            if process.poll() is None:\n                process.send_signal(signal.SIGTERM)\n                try:\n                    process.wait(timeout=30)\n                except subprocess.TimeoutExpired:\n                    result.update(status=\"failed\", pending_teardown_pid=process.pid,\n                                  error=\"watch retains pending teardown after SIGTERM; not force-killed\")\n            result[\"watch_exit_code\"] = process.poll()\n            if process.returncode not in (None, 0):\n                result.update(status=\"failed\", error=f\"watch shutdown exited {process.returncode}\")\n            result[\"after_blake3\"] = digest(binary)\n            require(result[\"before_blake3\"] == result[\"after_blake3\"], \"immutable executable drifted\")\n            (scratch / \"result.json\").write_text(json.dumps(result, indent=2) + \"\\n\")\n    require(result[\"status\"] == \"passed\", result.get(\"error\", \"watch boundary observation failed\"))\n    print(json.dumps(result, indent=2))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+  },
+  "runtime_streams": [
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/watch.stdout",
+      "blake3": "16112aebc9b62b8a594f686e7a0d97707d17935ccd0f241a879066c4757893a6",
+      "text": "watch run watch-633391-1793039784495804615 generation 1: 1 admitted goal event(s)\n  added /nix/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\nwatch generation 1: settled 1 successful, 0 failed root(s)\n/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained\nwatch run watch-633391-1793039784495804615 edit rejected: watched source scan, evaluation or conversion failed; previous goals remain admitted\nwatch run watch-633391-1793039784495804615 generation 2: 1 admitted goal event(s)\n  retained /nix/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\nwatch generation 2: settled 1 successful, 0 failed root(s)\n/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained\nwatch run watch-633391-1793039784495804615 edit rejected: watched source scan, evaluation or conversion failed; previous goals remain admitted\nwatch run watch-633391-1793039784495804615 generation 3: 1 admitted goal event(s)\n  retained /nix/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\nwatch generation 3: settled 1 successful, 0 failed root(s)\n/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/store/c8n1vz8ccv6mz08vmzfzry8pl1f8i9w7-watch-conversion-retained\n"
+    },
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/watch.stderr",
+      "blake3": "4129a04746a136471b9b839d1bc4f78f90550131e64d88f93e5ba3377d7c148c",
+      "text": "Generated signing key: crunch-britton-desktop-1 (/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/state/signing-key)\n2026-10-26T18:36:24.513780Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/state/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\n2026-10-26T18:36:24.532693Z  WARN redb::db: Database \"FileBackend { lock_supported: true, file: File { fd: 11, path: \\\"/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/state/pathinfo.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing\nreceived SIGTERM; waiting for watched builds to stop\n"
+    }
+  ],
+  "ordinary_gate": {
+    "command": "bash scripts/check-first-party-quality.sh",
+    "exit_code": 0,
+    "stdout": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+      "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3"
+    },
+    "stderr": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stderr.log",
+      "blake3": "15200420d0a073bf8672abf3c7c068eb7633f3df1ab131041aa59d9166c0fc6c"
+    },
+    "authority_boundary": "Captured v13 ordinary gate execution only; this record does not replace reconciliation G1 resource or owner admission.",
+    "selected_tests": [
+      {
+        "line": 3392,
+        "text": "test tests::event_budget_fails_closed_even_for_complete_set_replacement ... ok"
+      },
+      {
+        "line": 3397,
+        "text": "test tests::largest_disjoint_sets_emit_exactly_the_declared_budget ... ok"
+      },
+      {
+        "line": 3394,
+        "text": "test tests::goal_count_identity_and_diagnostic_bounds_reject_before_admission ... ok"
+      },
+      {
+        "line": 3399,
+        "text": "test tests::reevaluation_window_limit_rejects_excess_attempts ... ok"
+      },
+      {
+        "line": 3400,
+        "text": "test tests::rejected_generation_has_no_retractions_and_preserves_admitted_set ... ok"
+      },
+      {
+        "line": 3398,
+        "text": "test tests::overflowing_event_budget_cannot_promote_prior_pending_generation ... ok"
+      },
+      {
+        "line": 1790,
+        "text": "test watch::tests::changed_import_denies_candidate_until_committed_roots_are_restored ... ok"
+      },
+      {
+        "line": 1027,
+        "text": "test worker::tests::watch_deletion_waits_for_teardown_and_never_signs_late_success ... ok"
+      },
+      {
+        "line": 1030,
+        "text": "test worker::tests::watch_preflight_policy_failure_preserves_running_root_and_cancellation ... ok"
+      },
+      {
+        "line": 1031,
+        "text": "test worker::tests::watch_preflight_transitive_goal_limit_keeps_the_admitted_root ... ok"
+      },
+      {
+        "line": 1032,
+        "text": "test worker::tests::watch_retraction_keeps_completed_shared_dependency_and_releases_stale_ready_goals ... ok"
+      }
+    ]
+  },
+  "prior_runtime": ".cairn/changes/add-watch-mode-goal-retraction/evidence/final-immutable-watch-runtime-20261023.json",
+  "supported_task_ids": [
+    "T2.3",
+    "T2.4",
+    "T3.3"
+  ],
+  "repeatability": "Reconstruct the retained runner text and invoke python3 <runner> --mantle <the named executable> --scratch <a fresh private directory>. Runtime prerequisites and all selected observations must pass; retain the result and both streams.",
+  "non_claims": [
+    "The bounds results are executed pure-core fixtures, not a newly observed live event/goal/rate saturation campaign.",
+    "No live uncooperative-kernel pending-cancellation scenario, pre-change runtime rerun, lifecycle archive, bootstrap parity or release eligibility is established."
+  ],
+  "source_boundary": [
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs",
+      "blake3": "8b6ceb37cadd7296eb4051e143fb180e61a5dfcaa35843097fa98e4e832ba71c"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline/src/watch.rs",
+      "blake3": "96a0add17cfe0664282fa25571614750648149f7ab42db76936c39e3a2f4ff3b"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-watch-core/src/lib.rs",
+      "blake3": "7c9e5c6d694ec6212dc57ff4f247ecf98e6fc2dc787eaf1e1fe8bc98ab4f36bf"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-watch-core/src/tests.rs",
+      "blake3": "970586c6806081ac728fa538afdfeb3c451e9cfc6d6505629696030a866115b3"
+    }
+  ],
+  "pending_cancellation_scope": "The executed Worker regression holds controlled teardown beyond the five-second reporting deadline, requires PendingCancellation to name only the live root, rejects premature commit/output, then releases teardown and observes settlement without signed late output. The separately retained real-CLI rail covers actual cooperative sandbox deletion/cancellation. This is not a live uninterruptible-kernel teardown campaign.",
+  "completed_full_flake": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+    "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03",
+    "pueue_task_id": 40,
+    "exit_code": 0,
+    "reported_running_checks": 29,
+    "tree_unchanged": true
+  }
+}

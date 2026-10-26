@@ -215,3 +215,20 @@ attribute filesystem exhaustion to the repository build or establish a full
 gate pass. G1/G2, reviewed resource admission, parent review and lifecycle
 acceptance remain open; no archive or spec sync follows from these substeps.
 
+## Completed full flake recovery (2026-10-26)
+
+`evidence/full-flake-recovery-2026-10-26.json` records Pueue 40's terminal
+success and the full `nix flake check --offline --no-write-lock-file -L` exit 0.
+Nix reported `running 29 flake checks...` and `all checks passed!`; its log
+also evaluated 39 check attributes, which is not a claim of 39 fresh executions.
+Sandboxed Nextest reported `6730 tests run: 6730 passed, 198 skipped`.
+The start/end manifests contain the same 11,957 files with no changes, additions,
+removals, or read errors, at HEAD `9c758f089495d991050eea81f1921807f4071a94`.
+This binding precedes the additive evidence and task updates, not their final tree.
+
+The earlier interrupted run and timed-out waiter remain historical failures;
+they are not relabeled as successful execution. This completed ordinary gate
+does not supply G1/G2's separately reviewed resource route, frozen pool/accounting
+epoch, parent semantic review, or lifecycle acceptance. Those checkboxes remain
+open; no spec sync, archive, or release authority follows from this observation.
+

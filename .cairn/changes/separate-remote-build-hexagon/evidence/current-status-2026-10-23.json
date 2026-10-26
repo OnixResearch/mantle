@@ -924,5 +924,20 @@
     "nextest_summary": "Summary [ 247.534s] 6730 tests run: 6730 passed, 198 skipped",
     "full_flake_status": "interrupted-no-completion",
     "remaining_boundary": "Pueue failed with ENOSPC saving state during the later full flake run; there is no completed full-gate result. Historical failures, criterion-specific baselines, external authority, resource-admission and lifecycle boundaries remain unchanged."
+  },
+  "observed_full_flake_recovery_2026_10_26": {
+    "evidence": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+    "evidence_blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03",
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "full_flake_status": "completed-pass",
+    "full_flake_exit": 0,
+    "pueue_task_id": 40,
+    "reported_running_checks": 29,
+    "evaluated_check_attributes": 39,
+    "tree_unchanged": true,
+    "nextest_summary": "mantle-nextest>      Summary [ 321.134s] 6730 tests run: 6730 passed, 198 skipped",
+    "resolved_boundary": "A completed ordinary full-flake/Tiger Style gate is now observed; the earlier interruption and v13 repository failure remain historical.",
+    "remaining_boundary": "Change-specific baselines/adoption, external authority, resource-admission and lifecycle boundaries are unchanged. This gate does not accept criteria, sync specs or authorize archive."
   }
 }

@@ -14,6 +14,14 @@ failed predecessor are retained in
 close T3.2/T4.1's representative bootstrap obligations. Compile-slot maintainers
 own repetition through `scripts/prove-cc-cache-slots.py` with fresh private roots.
 
+The follow-on `evidence/strict-boundary-2026-10-26.json` supports T3.3 only:
+the real CLI rejects explicit runtime selection in strict/plan/remote lanes,
+promoted cold admission rejects inherited scheduling bindings before proof
+state is created, and a retained valid grant is rejected by the compiled
+deterministic-proof receipt type. The type probe names its existing host
+artifact cohort; it is not a new product build or complete release verification.
+Representative bootstrap contention and output/derivation parity remain open.
+
 ## Phase 1: Baseline and contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current per-build scheduling bounds, the daemon surface, and a contention observation from concurrent bootstrap builds. r[mantle.compile_slots.slot_authority]
@@ -31,7 +39,7 @@ own repetition through `scripts/prove-cc-cache-slots.py` with fresh private root
 
 - [x] [serial] T3.1 Integrate slot request and release into the compile driver seam from `extend-compile-cache-to-cc`, with immediate compilation when no authority answers. r[mantle.compile_slots.slot_authority] r[mantle.compile_slots.degrade_without_authority]
 - [ ] [serial] T3.2 Prove output identity with slots on and off on a representative build. r[mantle.compile_slots.no_output_influence]
-- [ ] [serial] T3.3 Keep scheduling receipts outside the derivation graph and rejected as build evidence in strict lanes. r[mantle.compile_slots.no_output_influence]
+- [x] [serial] T3.3 Keep scheduling receipts outside the derivation graph and rejected as build evidence in strict lanes. r[mantle.compile_slots.no_output_influence]
 
 ## Phase 4: Verification
 

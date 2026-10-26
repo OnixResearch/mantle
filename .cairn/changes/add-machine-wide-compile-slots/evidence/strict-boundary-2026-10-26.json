@@ -1,0 +1,350 @@
+{
+  "schema": "mantle-compile-slot-strict-boundary-evidence-v1",
+  "date": "2026-10-26",
+  "immediate_outcome": "The real CLI rejects compile-driver runtime in strict, plan and remote selections; promoted cold admission rejects an inherited slot binding before reading prerequisites or creating proof state. A valid retained grant is not a deterministic build proof receipt.",
+  "durable_capability": "Repeatable strict-lane, cold-environment and production receipt-class boundary checks without a bootstrap or release claim.",
+  "maintenance_owner": "Mantle compile-cache, scheduling and proof-admission maintainers",
+  "cli": {
+    "schema": "mantle-compile-slot-strict-admission-observation-v1",
+    "status": "passed",
+    "executable": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+    "before_blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+    "after_blake3": "c8a6863f982e5f8f8f1aa7b3c8bfac029cce8b127c238affba32cfe22f619c85",
+    "commands": [
+      {
+        "label": "ordinary-evaluation-control",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-evaluation-control/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-evaluation-control/state",
+          "eval",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl"
+        ],
+        "environment_overrides": {},
+        "exit_code": 0,
+        "stdout": "{\n  \"addressing_mode\": \"content-addressed\",\n  \"args\": [\n    \"-c\",\n    \"printf retained > \\\"$out\\\"\"\n  ],\n  \"builder\": \"/bin/sh\",\n  \"dynamic_plan_outputs\": [],\n  \"env\": {},\n  \"inputs\": [],\n  \"name\": \"watch-conversion-retained\",\n  \"outputs\": [\n    \"out\"\n  ],\n  \"sandbox\": \"native\",\n  \"system\": \"x86_64-linux\"\n}\n",
+        "stderr": "",
+        "started_unix": 1793040691.7549484,
+        "finished_unix": 1793040691.829147,
+        "state_directory_created": false,
+        "store_directory_created": false
+      },
+      {
+        "label": "strict-runtime-rejected",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/strict-runtime-rejected/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/strict-runtime-rejected/state",
+          "build",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl",
+          "--compile-driver-runtime",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/unread-runtime.json",
+          "--strict-hermetic"
+        ],
+        "environment_overrides": {},
+        "exit_code": 2,
+        "stdout": "",
+        "stderr": "error: the argument '--compile-driver-runtime <COMPILE_DRIVER_RUNTIME>' cannot be used with '--strict-hermetic'\n\nUsage: mantle build --compile-driver-runtime <COMPILE_DRIVER_RUNTIME> <FILE>\n\nFor more information, try '--help'.\n",
+        "started_unix": 1793040691.8299255,
+        "finished_unix": 1793040691.8357365,
+        "state_directory_created": false,
+        "store_directory_created": false
+      },
+      {
+        "label": "plan-runtime-rejected",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/plan-runtime-rejected/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/plan-runtime-rejected/state",
+          "build",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl",
+          "--compile-driver-runtime",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/unread-runtime.json",
+          "--plan"
+        ],
+        "environment_overrides": {},
+        "exit_code": 2,
+        "stdout": "",
+        "stderr": "error: the argument '--compile-driver-runtime <COMPILE_DRIVER_RUNTIME>' cannot be used with '--plan'\n\nUsage: mantle build --compile-driver-runtime <COMPILE_DRIVER_RUNTIME> <FILE>\n\nFor more information, try '--help'.\n",
+        "started_unix": 1793040722.8764708,
+        "finished_unix": 1793040722.8838606,
+        "state_directory_created": false,
+        "store_directory_created": false
+      },
+      {
+        "label": "remote-runtime-rejected",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/remote-runtime-rejected/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/remote-runtime-rejected/state",
+          "build",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl",
+          "--compile-driver-runtime",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/unread-runtime.json",
+          "--builder",
+          "ssh://example.invalid"
+        ],
+        "environment_overrides": {},
+        "exit_code": 2,
+        "stdout": "",
+        "stderr": "error: the argument '--compile-driver-runtime <COMPILE_DRIVER_RUNTIME>' cannot be used with '--builder <BUILDER>'\n\nUsage: mantle build --compile-driver-runtime <COMPILE_DRIVER_RUNTIME> <FILE>\n\nFor more information, try '--help'.\n",
+        "started_unix": 1793040722.884706,
+        "finished_unix": 1793040722.8932645,
+        "state_directory_created": false,
+        "store_directory_created": false
+      },
+      {
+        "label": "cold-environment-clean-control",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/cold-environment-clean-control/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/cold-environment-clean-control/state",
+          "self-build",
+          "--source-built-fixed-point",
+          "--source-profile",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/unread-profile.json",
+          "--expected-source-profile-blake3",
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "--expected-stagex-lineage-blake3",
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "--expected-native-provider-blake3",
+          "2222222222222222222222222222222222222222222222222222222222222222",
+          "--proof-bwrap",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/bwrap",
+          "--proof-sandbox-shell",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/busybox",
+          "--out",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/never-created-proof",
+          "--jobs",
+          "1"
+        ],
+        "environment_overrides": {},
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "{\"error\":\"source-built fixed-point blocked: reading bwrap /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/bwrap: No such file or directory (os error 2)\",\"code\":1,\"kind\":\"build\"}\n",
+        "started_unix": 1793040722.894133,
+        "finished_unix": 1793040722.9046812,
+        "state_directory_created": false,
+        "store_directory_created": false
+      },
+      {
+        "label": "cold-slot-binding-rejected",
+        "argv": [
+          "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+          "--json",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/cold-slot-binding-rejected/store",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/cold-slot-binding-rejected/state",
+          "self-build",
+          "--source-built-fixed-point",
+          "--source-profile",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/unread-profile.json",
+          "--expected-source-profile-blake3",
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "--expected-stagex-lineage-blake3",
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "--expected-native-provider-blake3",
+          "2222222222222222222222222222222222222222222222222222222222222222",
+          "--proof-bwrap",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/bwrap",
+          "--proof-sandbox-shell",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/busybox",
+          "--out",
+          "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/never-created-proof",
+          "--jobs",
+          "1"
+        ],
+        "environment_overrides": {
+          "MANTLE_COMPILE_SLOT_SOCKET": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/absent-slot.sock"
+        },
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "{\"error\":\"source-built fixed-point blocked: inherited compiler-cache/scheduling variable MANTLE_COMPILE_SLOT_SOCKET cannot authorize a promoted cold proof\",\"code\":1,\"kind\":\"build\"}\n",
+        "started_unix": 1793040722.9054573,
+        "finished_unix": 1793040722.9135776,
+        "state_directory_created": false,
+        "store_directory_created": false
+      }
+    ],
+    "superseded_control": {
+      "label": "ordinary-plan-control",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/wait-request-repaired-immutable-release-cohort/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/state",
+        "build",
+        "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl",
+        "--plan"
+      ],
+      "environment_overrides": {},
+      "exit_code": 1,
+      "stdout": "{\n  \"schema\": \"crunch-build-plan-v1\",\n  \"file\": \"/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/watch-boundary-v1/root.ncl\",\n  \"output_dir\": \"/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/store\",\n  \"state_dir\": \"/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/state\",\n  \"store_dir\": \"/mantle/store\",\n  \"entries\": [\n    {\n      \"drv_key\": \"/mantle/store/jwb9rs3ml41kdikia2pkyw3bgg9v4blf-watch-conversion-retained.drv\",\n      \"label\": \"watch-conversion-retained\",\n      \"action\": \"preflight-error\",\n      \"route_plan\": {\n        \"schema\": \"mantle-realization-route-plan-v1\",\n        \"selected_route\": \"preflight-error\",\n        \"selected_reason_code\": \"local-preflight-failed\",\n        \"selected_detail\": \"output store directory /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/store does not exist\",\n        \"policy\": {\n          \"network\": \"online\",\n          \"requested_claim_strength\": \"practical\"\n        },\n        \"tie_breaker\": \"local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error\",\n        \"rejected_routes\": [\n          {\n            \"route\": \"cached-local\",\n            \"reason_code\": \"local-output-missing\"\n          },\n          {\n            \"route\": \"trusted-substitute\",\n            \"reason_code\": \"trusted-substitute-missing\"\n          },\n          {\n            \"route\": \"archive-import\",\n            \"reason_code\": \"not-configured\"\n          },\n          {\n            \"route\": \"source-bundle\",\n            \"reason_code\": \"source-inputs-present-or-fetchable\"\n          },\n          {\n            \"route\": \"p2p-remote-builder\",\n            \"reason_code\": \"not-configured\"\n          },\n          {\n            \"route\": \"local-build\",\n            \"reason_code\": \"local-preflight-failed\",\n            \"detail\": \"output store directory /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/store does not exist\"\n          }\n        ],\n        \"selected_store_layers\": [],\n        \"non_claim\": \"route planning is advisory and does not prove transport execution or artifact correctness\"\n      },\n      \"detail\": \"output store directory /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/slot-boundary-cli-20261026/ordinary-plan-control/store does not exist\"\n    }\n  ]\n}\n",
+      "stderr": "",
+      "started_unix": 1793040616.9440994,
+      "finished_unix": 1793040617.0647547,
+      "state_directory_created": false,
+      "store_directory_created": false
+    },
+    "harness_correction": "Clap flag conflicts return 2. The observed strict conflict was retained and not repeated after correcting the harness expectation.",
+    "superseded_control_disposition": "The first plan control used an absent physical output store and reported the store preflight failure. It is retained, not counted as successful planning. Ordinary evaluation supplies the successful CLI control.",
+    "proof_output_created": false,
+    "proof_executed": false,
+    "scope": "Real CLI admission only. Cold controls deliberately name absent prerequisites and syntactically valid non-authoritative digest inputs; no profile, provider, bootstrap or release proof is admitted."
+  },
+  "receipt_class": {
+    "schema": "mantle-slot-receipt-class-boundary-observation-v1",
+    "status": "passed",
+    "source": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/slot-boundary-probe-20261026.rs",
+      "blake3": "54c4c13b031a392f104ada59a22136b03f6251f521d80b6b11639a84b61e715f",
+      "text": "use crunch_release_core::DeterministicBuildProofReceipt;\nuse crunch_rust_cache_core::slots::SlotReceipt;\n\nfn main() {\n    let path = std::env::args_os().nth(1).expect(\"receipt path required\");\n    let bytes = std::fs::read(path).expect(\"retained native scheduling receipt must be readable\");\n    let receipt: SlotReceipt = serde_json::from_slice(&bytes).expect(\"retained receipt must parse as SlotReceipt\");\n    assert!(receipt.is_grant_for(&receipt.build_id), \"retained native receipt is not a valid grant\");\n    let rejection = serde_json::from_slice::<DeterministicBuildProofReceipt>(&bytes)\n        .expect_err(\"a scheduling grant must never be accepted as deterministic build proof\");\n    println!(\"{}\", serde_json::json!({\n        \"scheduling_schema\": receipt.schema,\n        \"native_grant_valid\": true,\n        \"deterministic_build_proof_accepted\": false,\n        \"rejection\": rejection.to_string(),\n        \"proof_executed\": false,\n        \"scope\": \"Production core receipt types only; no release, source-built bundle or representative bootstrap claim\"\n    }));\n}\n"
+    },
+    "receipt_input": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/slot-boundary-receipt-20261026.json",
+      "blake3": "e6999e4fd610da611e71bbfe63415a0fb5cd288c7538fc5572361cfb12402616",
+      "text": "{\"active_slots\":1,\"build_id\":\"contention-large\",\"decision\":\"granted\",\"fairness\":\"round_robin\",\"observed_ms\":3385,\"per_build_max\":1,\"per_build_queue\":8,\"queued_requests\":0,\"reason\":null,\"request_id\":17,\"schema\":\"mantle-compile-slot-receipt-v1\",\"total_queue\":16,\"total_slots\":2,\"wait_timeout_ms\":30000,\"waited_ms\":0}\n"
+    },
+    "receipt_origin": {
+      "path": ".cairn/changes/add-machine-wide-compile-slots/evidence/runtime-final-immutable-retry-2026-10-23.json",
+      "pointer": "/rail_evidence/contention/receipts/1"
+    },
+    "executable": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/slot-boundary-probe-20261026",
+      "blake3": "85615509c90791bc8320671da2435547ee2e556910d2ef5fc9fb6ae5fe1ea9b8"
+    },
+    "compiled_crates": [
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_release_core-aa45b1ab8fa99047.rlib",
+        "blake3": "e25627844d1aaca5dc28a3cabf5a4668abb71e69686b50c24695fa6cc3969605"
+      },
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_rust_cache_core-851ab718d447bb27.rlib",
+        "blake3": "8736ae1ecfdeb5016c8355874e8620be31757e5f632760b061882f51bed6cb85"
+      },
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libserde_json-b2b32515c87802f7.rlib",
+        "blake3": "dfa6c719eefdc33c4d8ebe486226528bd8ccce226e87875626554dae74f60186"
+      }
+    ],
+    "command": [
+      "target/cairn-finish-20261023/slot-boundary-probe-20261026",
+      "target/cairn-finish-20261023/slot-boundary-receipt-20261026.json"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"deterministic_build_proof_accepted\":false,\"native_grant_valid\":true,\"proof_executed\":false,\"rejection\":\"missing field `proof_unit` at line 1 column 314\",\"scheduling_schema\":\"mantle-compile-slot-receipt-v1\",\"scope\":\"Production core receipt types only; no release, source-built bundle or representative bootstrap claim\"}\n",
+    "stderr": "",
+    "scope": "The actual retained scheduling grant was parsed with compiled production crate types. This uses the named existing host artifact cohort, not a new product build. It is receipt-class rejection, not complete release verification or an executed proof.",
+    "failed_predecessor": "The initial rustc invocation mixed incompatible serde dependency cohorts and failed E0277 before execution. Matching the existing crate/serde_json fingerprint cohort repaired the throwaway harness; product source was not changed.",
+    "compile_command": [
+      "nix",
+      "develop",
+      "--offline",
+      "target/cairn-finish-20261023/patched-dev-shell",
+      "-c",
+      "rustc",
+      "--edition=2024",
+      "--crate-name",
+      "slot_boundary_probe",
+      "target/cairn-finish-20261023/slot-boundary-probe-20261026.rs",
+      "-L",
+      "dependency=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps",
+      "--extern",
+      "crunch_release_core=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_release_core-aa45b1ab8fa99047.rlib",
+      "--extern",
+      "crunch_rust_cache_core=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_rust_cache_core-851ab718d447bb27.rlib",
+      "--extern",
+      "serde_json=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libserde_json-b2b32515c87802f7.rlib",
+      "-o",
+      "target/cairn-finish-20261023/slot-boundary-probe-20261026"
+    ]
+  },
+  "ordinary_gate": {
+    "command": "bash scripts/check-first-party-quality.sh",
+    "exit_code": 0,
+    "stdout": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+      "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3"
+    },
+    "stderr": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stderr.log",
+      "blake3": "15200420d0a073bf8672abf3c7c068eb7633f3df1ab131041aa59d9166c0fc6c"
+    },
+    "authority_boundary": "Captured v13 ordinary gate execution only; this record does not replace reconciliation G1 resource or owner admission.",
+    "selected_tests": [
+      {
+        "line": 381,
+        "text": "test compile_driver::tests::declared_runtime_cannot_be_overridden_by_derivation_cache_or_slot_keys ... ok"
+      },
+      {
+        "line": 382,
+        "text": "test compile_driver::tests::exact_builder_admission_rejects_similar_path_and_receipt_output_overlap ... ok"
+      },
+      {
+        "line": 8678,
+        "text": "test source_built_fixed_point_shell::tests::promoted_cold_environment_rejects_cache_and_scheduling_keys_without_reading_values ... ok"
+      },
+      {
+        "line": 14436,
+        "text": "test source_built_fixed_point_shell::tests::promoted_cold_environment_rejects_cache_and_scheduling_keys_without_reading_values ... ok"
+      }
+    ]
+  },
+  "source_boundary": [
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/compile_driver.rs",
+      "blake3": "f98459be5b3b308741cd870161b7c690e35c48c115c8ce1f069f4de871731841"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline/src/lib.rs",
+      "blake3": "7aa6dc1d79cd648b7e9234f258498ae4a0e2dbb4f83637712f03a2827d6f0d44"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/src/main.rs",
+      "blake3": "6261fa8bfa4278bd92998fc641c2ab4d94b0cd24f55f7a8d8217aaac7905f41f"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/src/source_built_fixed_point_shell.rs",
+      "blake3": "6f1289ebe1027572ae6c56ed28e7d9a8621be4d33dfab4995fa29ef9e9567d3c"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-release-core/src/determinism.rs",
+      "blake3": "1cb684039cbec4e9dce56b97a3acade5a2145cb0e33ae00df96818cea1ee9c8e"
+    }
+  ],
+  "supported_task_ids": [
+    "T3.3"
+  ],
+  "non_claims": [
+    "Scheduling grants and mapping diagnostics are execution-only observations, not protected compiler inventory, build evidence, output trust or release authority.",
+    "The cold negative uses intentionally absent prerequisites and non-authoritative digest inputs. No source profile or provider was admitted and no proof ran.",
+    "The type probe uses the explicitly identified existing compiled host cohort, not a new product build or complete release verifier run.",
+    "Representative bootstrap contention and slot-on/off derivation/output parity remain separate unexecuted obligations."
+  ],
+  "completed_full_flake": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+    "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03",
+    "pueue_task_id": 40,
+    "exit_code": 0,
+    "reported_running_checks": 29,
+    "tree_unchanged": true
+  }
+}

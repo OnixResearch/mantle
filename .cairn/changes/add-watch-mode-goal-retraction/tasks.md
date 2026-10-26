@@ -8,8 +8,11 @@ executable: edits, added/retained roots, invalid-import retention, coalescing,
 delete-during-build cancellation, no late output, and graceful shutdown were
 observed. Evidence: `evidence/final-immutable-watch-runtime-20261023.json`.
 T2.2/T3.1/T3.2 are accepted only for that scoped implementation/runtime subset.
-Pending-cancellation deadlines, remaining boundary fixtures, final repository
-gates, before/after obligations, and lifecycle closure remain separate.
+The follow-on `evidence/retention-and-bounds-2026-10-26.json` supports T2.3's
+controlled Worker teardown deadline, T2.4's evaluation/conversion/policy
+retention, and T3.3's executed core boundary fixtures. Pre-change runtime
+obligations and lifecycle closure remain separate. T4.2's executed checks are
+recorded in `evidence/verification-2026-10-26.json`.
 
 ## Phase 1: Baseline and contract
 
@@ -21,17 +24,17 @@ gates, before/after obligations, and lifecycle closure remain separate.
 
 - [x] [serial] T2.1 Implement pure goal-set diffing: added, retained, retracted, with deterministic ordering and bounded event counts. r[build_scheduling.watch_plan_assertion]
 - [x] [serial] T2.2 Add the opt-in watch shell: source watching, bounded re-evaluation, plan conversion, and diff application to the scheduler. r[build_scheduling.watch_plan_assertion]
-- [ ] [serial] T2.3 Cancel in-flight work for retracted goals, release reservations, and record pending cancellation when a build does not stop. r[build_scheduling.watch_retraction_cancellation]
-- [ ] [serial] T2.4 Preserve the admitted goal set on evaluation, conversion, or policy failure and report the error. r[build_scheduling.watch_error_retention]
+- [x] [serial] T2.3 Cancel in-flight work for retracted goals, release reservations, and record pending cancellation when a build does not stop. r[build_scheduling.watch_retraction_cancellation]
+- [x] [serial] T2.4 Preserve the admitted goal set on evaluation, conversion, or policy failure and report the error. r[build_scheduling.watch_error_retention]
 
 ## Phase 3: Fixtures
 
 - [x] [parallel] T3.1 Add positive fixtures: one-root edit rebuilds one root; added root dispatches only the new root; retained root keeps its completed output. r[build_scheduling.watch_plan_assertion]
 - [x] [parallel] T3.2 Add negative fixtures: delete a root during its build, cancel and record no output; invalid source retains the previous set; rapid edits coalesce without duplicate dispatch. r[build_scheduling.watch_retraction_cancellation]
-- [ ] [parallel] T3.3 Add bounds fixtures: event count, live goal count, and re-evaluation rate limits fail closed. r[build_scheduling.watch_error_retention]
+- [x] [parallel] T3.3 Add bounds fixtures: event count, live goal count, and re-evaluation rate limits fail closed. r[build_scheduling.watch_error_retention]
 
 ## Phase 4: Verification
 
 - [ ] [serial] T4.1 Run the edit, delete-during-build, invalid-source, and coalescing rails before and after the change. Preserve exact results. r[build_scheduling.watch_retraction_cancellation]
-- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[build_scheduling.watch_plan_assertion]
+- [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[build_scheduling.watch_plan_assertion]
 - [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[build_scheduling.watch_error_retention]

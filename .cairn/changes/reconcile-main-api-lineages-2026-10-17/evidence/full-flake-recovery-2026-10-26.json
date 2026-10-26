@@ -1,0 +1,281 @@
+{
+  "schema": "mantle-full-flake-recovery-observation-v1",
+  "date": "2026-10-26",
+  "maintenance_owner": "Mantle Nix, quality-gate and lifecycle maintainers",
+  "acceptance_claimed": false,
+  "immediate_outcome": "Pueue 40 completed the full x86_64-linux flake check with exit 0. Nix reported running 29 checks and all checks passed, on a before/after unchanged 11957-file source snapshot.",
+  "durable_capability": "A repeatable tree-bound full-gate runner, with recorded scratch placement and supervised terminal status, now closes the prior source-filter/fixture/supervisor execution gap.",
+  "pueue": {
+    "task_id": 40,
+    "command": [
+      "pueue",
+      "wait",
+      "40"
+    ],
+    "exit_code": 0,
+    "stdout": "15:07:27 - Found active Task 40 with status Running\n15:49:42 - Task 40 succeeded with 0\n",
+    "stderr": ""
+  },
+  "earlier_waiter": {
+    "job": "bg_222",
+    "status": "client-wait-timeout",
+    "timeout_seconds": 3600,
+    "boundary": "This timed-out client wait did not stop task 40; the later terminal wait and gate result establish its successful completion."
+  },
+  "command": "nix flake check --offline --no-write-lock-file -L",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "started_at": "2026-10-26T14:20:44-04:00",
+  "finished_at": "2026-10-26T15:49:41-04:00",
+  "exit_code": 0,
+  "tree_binding": {
+    "schema": "mantle-final-gates-tree-binding-v1",
+    "head_start": "9c758f089495d991050eea81f1921807f4071a94",
+    "head_end": "9c758f089495d991050eea81f1921807f4071a94",
+    "files_start": 11957,
+    "files_end": 11957,
+    "changed": [],
+    "added": [],
+    "removed": [],
+    "gates_exit": 0,
+    "snapshot_read_errors": {
+      "start": "",
+      "end": ""
+    },
+    "tree_unchanged": true
+  },
+  "tree_binding_file": {
+    "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/result.json",
+    "blake3": "fd502d48b112354f967728c9af424408515703c2abf1f5e17b5d6d66d09b68c0"
+  },
+  "source_manifests": {
+    "start": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/start.blake3",
+      "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838"
+    },
+    "end": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/end.blake3",
+      "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838"
+    }
+  },
+  "streams": {
+    "stdout": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    "stderr": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stderr.log",
+      "blake3": "85fe148b181cfb570bdf3dde966a8c236f26f586ea8f83b7765b3a6dc162067d"
+    }
+  },
+  "evaluated_check_attributes": [
+    {
+      "attribute": "checks.x86_64-linux.tigerstyle",
+      "derivation": "/nix/store/qhdfk2pgzclllva7i4qixsx0fsjfmy7g-mantle-tigerstyle-check.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.crunch",
+      "derivation": "/nix/store/zwcxqpmr9j1s5bbs7pc82973cpg9mcbb-mantle-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.ast-grep-package-identity",
+      "derivation": "/nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.wasm-component-toolchain-identity",
+      "derivation": "/nix/store/0yazcl359ikcspbdyd5df1kirwwzf8k2-mantle-wasm-component-toolchain-identity.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.wasm-component-toolchain-compatibility",
+      "derivation": "/nix/store/516fyzsmrjfr14yq6lf2d0sw30bb8l36-mantle-wasm-component-toolchain-compatibility.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.mantle-transcript-quality",
+      "derivation": "/nix/store/h28a2588blqv5fia4fqvmzsvhb0v40jh-mantle-transcript-quality-nextest-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.release-nix-witness-quality",
+      "derivation": "/nix/store/lf96d5ds3va3g2kixmmcvxqbbbvnbahx-crunch-release-nix-witness-quality-nextest-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.kernelscript-production",
+      "derivation": "/nix/store/yi4dfzr63xrj5pf4gl994rh0wsacs29c-mantle-kernelscript-production-structural-check.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-bundle",
+      "derivation": "/nix/store/7sp1xxf031b23v3fs6xzqfcs0rmkjfkv-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.casita-crunch-store-check",
+      "derivation": "/nix/store/ijkk4zh7fimcykf02vs63hswlqzvccxl-mantle-casita-crunch-store-check-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.casita-vendor-closure",
+      "derivation": "/nix/store/vkzpjs4diq3hm7qfx5kgm985sjqw18k5-vendor-cargo-deps.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.bounded-tree-source-admission",
+      "derivation": "/nix/store/hcfda67lb8s9jys7j9n78f2s4nc09a11-mantle-bounded-tree-source-admission.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.transactional-reconciliation-source-admission",
+      "derivation": "/nix/store/r58mwjc82pkh100jn5wcfdqx8rjp54n3-mantle-transactional-reconciliation-source-admission.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.bootstrap-blocker-inventory",
+      "derivation": "/nix/store/avjj87q1di8hn4mxzlm168nrdsfm6w79-bootstrap-blocker-inventory.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.nickel-export-core-pin",
+      "derivation": "/nix/store/93fdzr93h9f9iww2p8fyn15f5dviish8-mantle-nickel-export-core-pin.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.content-bound-requirement-source-closure",
+      "derivation": "/nix/store/z5ihp14mm5fgfrclpk73lsiamn57sv2h-mantle-content-bound-requirement-source-closure.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.content-bound-requirement-evidence",
+      "derivation": "/nix/store/kfm5wg077sr8szzsmh3097a4ia7qa9zi-mantle-content-bound-requirement-evidence.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.store-retention-policy",
+      "derivation": "/nix/store/24gy1llyxxns8m25aslxi8x3h7pa90vy-mantle-store-retention-policy.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.store-overlay-policy",
+      "derivation": "/nix/store/cnyj3si3m014l11q0fy8cz9mzziyqs5c-mantle-store-overlay-policy.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.release-determinism-quality",
+      "derivation": "/nix/store/98ys541q3dcbwj0z0wfqij9vggqs7ijr-crunch-release-determinism-quality-nextest-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.artifact-auth-radicle-cutover",
+      "derivation": "/nix/store/0x0lh0v2n8rgf8pzs8nkzi2m4lfi962w-mantle-artifact-auth-radicle-cutover.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.durable-file-publication-adoption",
+      "derivation": "/nix/store/ygsz0ssnml16z2qjbxzskac6x6x8cv5i-mantle-durable-file-publication-adoption.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.mantle-build-contract",
+      "derivation": "/nix/store/qgygh0lhvd1y55bh05m7iwsgsxxps78x-mantle-test-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.mantle-build-contract-wasm",
+      "derivation": "/nix/store/1s83yd1796rfykmcwq7c1lx6qhr01yi1-mantle-build-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.mantle-build-contract-nickel",
+      "derivation": "/nix/store/n3mdz43yj8i83yg67smwxqdbn6yfff0q-mantle-build-contract-nickel.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.nextest",
+      "derivation": "/nix/store/7m4rsa4lpi9xa414x38bksi9yiy1l4mk-mantle-nextest-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.clippy",
+      "derivation": "/nix/store/abnidv93ab5fidypny05f5cmsysha9jc-mantle-clippy-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.fmt",
+      "derivation": "/nix/store/4krqsqzyy5kw59hjbc32r09maplldv2x-mantle-fmt-0.1.0.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-profile",
+      "derivation": "/nix/store/wxwk5bdqmx296a6vmsjfg1bj3iz35qbi-spacewasm-reference-profile-export.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-host-library",
+      "derivation": "/nix/store/65x9j9l1s2hn33rkh3rnvczbg26wzbyi-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-wasm-library",
+      "derivation": "/nix/store/vvc2wsjfml1lnm00cgkywqg9sk90y84f-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-host-runner",
+      "derivation": "/nix/store/mrn244xm4dz68p9a4jdfmgz7zpzr9p41-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-upstream-unit-tests",
+      "derivation": "/nix/store/cmrrqmdpz8b7i51cxyllr2d1a03cmya1-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-spectest-address",
+      "derivation": "/nix/store/5jvnwdy5y3fak7lv95p1q4cj12vngfz9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-fixtures",
+      "derivation": "/nix/store/6f7wx4g4bq4z0m3c9k61v7c98677cdk1-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-capture-failures",
+      "derivation": "/nix/store/wybr2x508g29g28h93bp62b46jnmpsc7-mantle-spacewasm-capture-failure-check.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-negative",
+      "derivation": "/nix/store/jvkbhx62msi1g91bky2igydr8xvbsmwp-mantle-spacewasm-reference-negative-check.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-repeatability",
+      "derivation": "/nix/store/3b8d55iczvn7nqnwygr0nygrrki773qy-mantle-spacewasm-reference-repeatability.drv"
+    },
+    {
+      "attribute": "checks.x86_64-linux.spacewasm-reference-run-archive",
+      "derivation": "/nix/store/rjzn5p40pw4z1h0a66a963mq91f6cjxa-mantle-spacewasm-run-archive-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv"
+    }
+  ],
+  "evaluated_check_attribute_count": 39,
+  "reported_running_checks": 29,
+  "decisive_output": [
+    {
+      "line": 136,
+      "text": "running 29 flake checks..."
+    },
+    {
+      "line": 23006,
+      "text": "mantle-nextest>      Summary [ 321.134s] 6730 tests run: 6730 passed, 198 skipped"
+    },
+    {
+      "line": 89295,
+      "text": "all checks passed!"
+    }
+  ],
+  "nextest": {
+    "run": 6730,
+    "passed": 6730,
+    "skipped": 198,
+    "summary": "mantle-nextest>      Summary [ 321.134s] 6730 tests run: 6730 passed, 198 skipped"
+  },
+  "storage_and_runner": {
+    "storage-before.txt": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/storage-before.txt",
+      "blake3": "74956076987090cc49ade06bdceb6763e7ec31dff95fa2f6128df5b424289d2d",
+      "text": "Filesystem                1B-blocks          Used    Available Use% Mounted on\ndatapool/git           858993459200  839594934272  19398524928  98% /home/brittonr/git\n/dev/nvme0n1p3        1958333984768 1840073932800  18706571264  99% /\ndatapool/tmp           277025390592  276137508864    887881728 100% /tmp\ndatapool/cargo-target 1560456593408  635578875904 924877717504  41% /home/brittonr/.cargo-target\ndatapool/mantle-store 1235553878016  310676160512 924877717504  26% /datapool/mantle-store\n"
+    },
+    "storage-after.txt": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/storage-after.txt",
+      "blake3": "594c70848c431197bc744e0fbdf26e4f61059203d421abb6110513955df02afb",
+      "text": "Filesystem                1B-blocks          Used    Available Use% Mounted on\ndatapool/git           858993459200  839980810240  19012648960  98% /home/brittonr/git\n/dev/nvme0n1p3        1958333984768 1843895615488  14884888576 100% /\ndatapool/tmp           277152006144  277152006144            0 100% /tmp\ndatapool/cargo-target 1543994736640  646083903488 897910833152  42% /home/brittonr/.cargo-target\ndatapool/mantle-store 1208654888960  310744055808 897910833152  26% /datapool/mantle-store\n"
+    },
+    "build-dir.txt": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/build-dir.txt",
+      "blake3": "575c92e107c7ecd01057d91dcfb83c907445d758b30d0d667f6c6f22d341077a",
+      "text": "/datapool/mantle-store/nix-build-dir-20261025\n"
+    }
+  },
+  "runner": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/nix-full-after-supervisor-recovery-20261026.sh",
+    "blake3": "9872b84cb8600c05935ad4ee8f896cc80ce2137795823e43b29cfcf26fb501e1",
+    "text": "#!/usr/bin/env bash\n# Bind the ordinary full flake retry to every tracked/non-ignored source file.\nset -uo pipefail\nreadonly out=\"$HOME/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery\"\nif [[ -e \"$out\" ]]; then exit 1; fi\nmkdir -p \"$out\"\nexport TMPDIR=/home/brittonr/.cargo-target/t\nexport XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache\nexport NIX_CONFIG=$'builders =\\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025'\nsnapshot() {\n  git rev-parse HEAD > \"$out/$1.head\"\n  git ls-files -co --exclude-standard -z | xargs -0 b3sum 2> \"$out/$1.unreadable\" | LC_ALL=C sort -k2 > \"$out/$1.blake3\"\n}\nsnapshot start\ndate --iso-8601=seconds > \"$out/start.time\"\ndf -B1 . \"$HOME\" /tmp \"$TMPDIR\" /datapool/mantle-store/nix-build-dir-20261025 > \"$out/storage-before.txt\"\nnix config show build-dir > \"$out/build-dir.txt\"\nprintf '%s\\n' 'nix flake check --offline --no-write-lock-file -L' > \"$out/flake.command\"\nnix flake check --offline --no-write-lock-file -L > \"$out/flake.stdout.log\" 2> \"$out/flake.stderr.log\"\nstatus=$?\nprintf '%s\\n' \"$status\" > \"$out/flake.exit\"\nprintf 'flake exit=%s\\n' \"$status\"\nsnapshot end\ndate --iso-8601=seconds > \"$out/end.time\"\ndf -B1 . \"$HOME\" /tmp \"$TMPDIR\" /datapool/mantle-store/nix-build-dir-20261025 > \"$out/storage-after.txt\"\npython3 - \"$out\" <<'PY'\nimport json, pathlib, sys\nout = pathlib.Path(sys.argv[1])\ndef table(label):\n    return dict(line.split('  ', 1)[::-1] for line in (out / f'{label}.blake3').read_text().splitlines())\nstart, end = table('start'), table('end')\nresult = {\n    'schema': 'mantle-final-gates-tree-binding-v1',\n    'head_start': (out / 'start.head').read_text().strip(),\n    'head_end': (out / 'end.head').read_text().strip(),\n    'files_start': len(start), 'files_end': len(end),\n    'changed': sorted(path for path in start.keys() & end.keys() if start[path] != end[path]),\n    'added': sorted(end.keys() - start.keys()),\n    'removed': sorted(start.keys() - end.keys()),\n    'gates_exit': int((out / 'flake.exit').read_text()),\n    'snapshot_read_errors': {label: (out / f'{label}.unreadable').read_text() for label in ['start', 'end']},\n}\nresult['tree_unchanged'] = not any(result[key] for key in ['changed', 'added', 'removed']) and result['head_start'] == result['head_end'] and not any(result['snapshot_read_errors'].values())\n(out / 'result.json').write_text(json.dumps(result, indent=2) + '\\n')\nprint(json.dumps({key: result[key] for key in ['gates_exit', 'tree_unchanged', 'changed', 'added', 'removed']}))\nPY\nexit \"$status\"\n"
+  },
+  "prior_interruption": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/nix-orchestrator-repair-2026-10-26.json",
+  "non_claims": [
+    "This is ordinary repository gate execution, not reconciliation G1/G2 resource admission, frozen-pool/accounting-epoch review, parent semantic approval, lifecycle acceptance or archive authorization.",
+    "The 198 skipped Nextest cases were not executed; no ignored self-hosting, representative bootstrap, full-source provider or release proof is inferred.",
+    "The before/after snapshot precedes these additive evidence and task updates. It is not a post-document-edit whole-tree identity.",
+    "The flake explicitly omits incompatible aarch64-darwin, aarch64-linux and x86_64-darwin systems.",
+    "The log evaluates 39 check attributes and reports running 29 checks. Both observations are retained; an evaluated attribute alone is not fresh execution evidence.",
+    "The interrupted prior run remains historical; a timed-out earlier waiter is not retroactively relabeled as a successful wait."
+  ]
+}

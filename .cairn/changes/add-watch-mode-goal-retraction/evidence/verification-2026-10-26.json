@@ -1,0 +1,140 @@
+{
+  "schema": "mantle-watch-repository-verification-v1",
+  "date": "2026-10-26",
+  "maintenance_owner": "Mantle watch, Nix quality-gate and lifecycle maintainers",
+  "acceptance_claimed": false,
+  "supported_task_ids": [
+    "T4.2"
+  ],
+  "immediate_outcome": "Selected watch regressions, repository formatting/strict Clippy, full current-system Nix checks, whitespace validation, Cairn validation and the declared Tracey coverage command have successful captured execution.",
+  "durable_capability": "Repeatable, evidence-linked watch verification across runtime retention/cancellation, source boundaries and repository gates.",
+  "runtime_and_focused_tests": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-watch-mode-goal-retraction/evidence/retention-and-bounds-2026-10-26.json",
+    "blake3": "5cbef3b4ccc2a898767fc9b093b1aeb0abbfc26e59143cfee193349561561002"
+  },
+  "format_clippy_and_relevant_nix_checks": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+    "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03",
+    "pueue_task_id": 40,
+    "exit_code": 0,
+    "reported_running_checks": 29,
+    "tree_unchanged": true
+  },
+  "post_evidence_steps": {
+    "validate": {
+      "argv": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/validate.stdout.json",
+        "blake3": "c5fffdc80936ea67e5503b1b1d95258157b68ab25245579a6a9180efc07ede54"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/validate.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "traceability-coverage": {
+      "argv": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "traceability",
+        "coverage",
+        "--root",
+        ".",
+        "--json"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/traceability-coverage.stdout.json",
+        "blake3": "56fae877fb2a08b395ea86e1cd816f39f0d9894411314dc68432a7567a3896b9"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/traceability-coverage.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "diff-check": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/diff-check.stdout.json",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/diff-check.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  },
+  "validation": {
+    "valid": true,
+    "change_count": 29,
+    "issues": [],
+    "receipt_hash": "0dcd7ba203e5515f4381a7ae9f0548e4fa3ed8625488da45bf39f297cca7dfb5"
+  },
+  "declared_tracey_coverage": {
+    "command": "traceability coverage",
+    "dangling": [],
+    "input_hash": "341d35b42e50e82ef09174984e8ab60fbcb71d6deb1fc4f3ad2ee9db8db7eb15",
+    "missing": [],
+    "policy": "mantle-default",
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "profile": {
+      "anchor_kind": "exact_marker_bytes",
+      "assurance_level": "declared",
+      "evidence_sources": [
+        {
+          "extensions": [
+            "rs"
+          ],
+          "root": "tools/release_provenance_tracey_refs.rs",
+          "source_kind": "rust_source"
+        }
+      ],
+      "id": "mantle-default",
+      "marker_verbs": [
+        "impl",
+        "verify",
+        "depends",
+        "related"
+      ],
+      "requirement_sources": [
+        {
+          "extensions": [
+            "md"
+          ],
+          "root": ".cairn/specs/release-provenance/spec.md",
+          "source_kind": "accepted_specs"
+        }
+      ]
+    },
+    "profile_id": "mantle-default",
+    "receipt_hash": "a175ad5ca5e6c11db0f5ba1c7571da1ba0ad249c86d63e582258070f1199c558",
+    "referenced": 155,
+    "requirements": 155,
+    "root": ".",
+    "source_summary": {
+      "evidence_files": 1,
+      "evidence_manifest_hash": "6ac429588fe294708efea8fabdc202c479356e72b6cda430843d38b61925376d",
+      "requirement_files": 1,
+      "requirement_manifest_hash": "c90d406afe4d8081d15b5b77c39a72e0aa2d0c1ae3c2d6ba2c99ebf99f1bc70a"
+    },
+    "valid": true,
+    "verdict": "pass"
+  },
+  "repeatability": "Run the captured focused/runtime commands, the recorded full flake command on a frozen source snapshot, git diff --check, cairn validate --root ., and cairn traceability coverage --root . --json; retain exact exits, streams and source identities.",
+  "non_claims": [
+    "The declared Tracey profile covers release-provenance markers only. Its 155/155 result is not watch-specific requirement coverage or implementation-correctness proof.",
+    "Verification execution closes T4.2 only; pre-change runtime rails in T4.1, isolated review/spec sync/archive in T4.3 and reconciliation G1/G2 admission remain separate.",
+    "The product gate precedes additive documentary updates. The captured lifecycle checks precede this outcome record and the T4.2 checkbox update; final lifecycle validation is retained separately.",
+    "No release, bootstrap parity, external proof authority, or broader platform claim is established."
+  ]
+}

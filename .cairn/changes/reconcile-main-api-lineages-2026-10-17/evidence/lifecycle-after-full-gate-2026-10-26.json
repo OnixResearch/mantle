@@ -1,0 +1,200 @@
+{
+  "schema": "mantle-cairn-post-full-gate-verification-v1",
+  "date": "2026-10-26",
+  "maintenance_owner": "Mantle lifecycle, scheduling and quality-gate maintainers",
+  "acceptance_claimed": false,
+  "immediate_outcome": "Five task checkboxes are now supported by retained execution, ten change status records include the completed full-flake recovery, and post-update Cairn/whitespace validation passes.",
+  "durable_capability": "Evidence-linked continuation from a completed source-bound full gate through scoped task closure and fresh lifecycle validation, without promoting execution into external acceptance authority.",
+  "full_gate": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+    "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03",
+    "pueue_task_id": 40,
+    "exit_code": 0,
+    "reported_running_checks": 29,
+    "tree_unchanged": true
+  },
+  "cairn": {
+    "path": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+    "blake3": "a4059806e3478977d3ef3ca5bc3fc4f2ef4d3e066fa03ddcbcbdd0fb786f3cd8"
+  },
+  "steps": {
+    "validate-final": {
+      "argv": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/validate-final.stdout.json",
+        "blake3": "81d5e764c90e5da666d3bceb60902ea2e55ba18a0147f5e86656b0bbef469f79"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/validate-final.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "traceability-coverage": {
+      "argv": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "traceability",
+        "coverage",
+        "--root",
+        ".",
+        "--json"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/traceability-coverage.stdout.json",
+        "blake3": "56fae877fb2a08b395ea86e1cd816f39f0d9894411314dc68432a7567a3896b9"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/traceability-coverage.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "diff-check-final": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/diff-check-final.stdout.json",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-after-full-gate-20261026/diff-check-final.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  },
+  "validation": {
+    "valid": true,
+    "changes": 29,
+    "issues": [],
+    "receipt_hash": "fe2b4fcbd7c7468ae265222420224c5164d2ec4e5934cc0dd5320550f975ddd9"
+  },
+  "traceability_coverage": {
+    "command": "traceability coverage",
+    "dangling": [],
+    "input_hash": "341d35b42e50e82ef09174984e8ab60fbcb71d6deb1fc4f3ad2ee9db8db7eb15",
+    "missing": [],
+    "policy": "mantle-default",
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "profile": {
+      "anchor_kind": "exact_marker_bytes",
+      "assurance_level": "declared",
+      "evidence_sources": [
+        {
+          "extensions": [
+            "rs"
+          ],
+          "root": "tools/release_provenance_tracey_refs.rs",
+          "source_kind": "rust_source"
+        }
+      ],
+      "id": "mantle-default",
+      "marker_verbs": [
+        "impl",
+        "verify",
+        "depends",
+        "related"
+      ],
+      "requirement_sources": [
+        {
+          "extensions": [
+            "md"
+          ],
+          "root": ".cairn/specs/release-provenance/spec.md",
+          "source_kind": "accepted_specs"
+        }
+      ]
+    },
+    "profile_id": "mantle-default",
+    "receipt_hash": "a175ad5ca5e6c11db0f5ba1c7571da1ba0ad249c86d63e582258070f1199c558",
+    "referenced": 155,
+    "requirements": 155,
+    "root": ".",
+    "source_summary": {
+      "evidence_files": 1,
+      "evidence_manifest_hash": "6ac429588fe294708efea8fabdc202c479356e72b6cda430843d38b61925376d",
+      "requirement_files": 1,
+      "requirement_manifest_hash": "c90d406afe4d8081d15b5b77c39a72e0aa2d0c1ae3c2d6ba2c99ebf99f1bc70a"
+    },
+    "valid": true,
+    "verdict": "pass"
+  },
+  "closed_tasks": {
+    "add-watch-mode-goal-retraction": [
+      "T2.3",
+      "T2.4",
+      "T3.3",
+      "T4.2"
+    ],
+    "add-machine-wide-compile-slots": [
+      "T3.3"
+    ]
+  },
+  "selected_task_inputs_blake3": {
+    ".cairn/changes/add-watch-mode-goal-retraction/tasks.md": "7573d1f90570681a9c651df9a646243b2fcb81c09578a66dd7e09d16ba6491dc",
+    ".cairn/changes/add-machine-wide-compile-slots/tasks.md": "a0ffd93204920e3837ee031f7a003168d7a637a6b3c28c9e2f61295a22345bf1",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md": "63b25440d5370a36f6897ae0c920a0bf9052fd6784b8bc8ddf0d3748f1fb3b63"
+  },
+  "selected_status_inputs_blake3": {
+    ".cairn/changes/add-nix-remote-service-gateway/evidence/current-status-2026-10-23.json": "149fc069ff84771c8ef9aacfcef43c0642f7cbed382e25dcf4a5eac5ca1ea899",
+    ".cairn/changes/adopt-casita-store-backend/evidence/current-status-2026-10-23.json": "d02e76b990ee992f474d3a2c04487f08369da096840fc55d31d4c87c64ed0867",
+    ".cairn/changes/adopt-fault-injection-io-tests/evidence/current-status-2026-10-23.json": "bdb53003ea12f1d52af696bb15d69c602b409dcd21f703e444f450b7adf02403",
+    ".cairn/changes/attenuate-build-authority-with-pattern-caveats/evidence/current-status-2026-10-23.json": "138e67e487b04026495147063d5c103cb33abd694080de3281ef03366bf68fac",
+    ".cairn/changes/declare-remote-worker-demand/evidence/current-status-2026-10-23.json": "7cc2c8f45f25bac50a6ba5ec4a888423637363efa4740409cec7ed29970a2b0c",
+    ".cairn/changes/relocate-dynamic-output-references/evidence/current-status-2026-10-23.json": "ddb02607bee56d7c50cf69c2d15539613d8a26c03d5b8023ca9002a085f4e3d1",
+    ".cairn/changes/resolve-remote-entry-points-through-one-binding/evidence/current-status-2026-10-23.json": "bed51a6b8637541beb587a21973fd6740b2e3d8a5fd19aa40afda6d9d02b7a69",
+    ".cairn/changes/separate-remote-build-hexagon/evidence/current-status-2026-10-23.json": "9c9a15d7cf0b08af1cae50cd17e1bb85272e3cc4966942b60ac03e666350a045",
+    ".cairn/changes/verify-remote-admission-with-trellis/evidence/current-status-2026-10-23.json": "0912586b55e4583bc627479341e4079c423b5af5feed3cecf748e588e7965b9f",
+    ".cairn/changes/standardize-derivation-finish-gates/evidence/current-status-2026-10-23.json": "6696a95fe7c0a4b21bfafbc994648e396afd48d2d73f9e46530935f5d2c46df0"
+  },
+  "new_execution_evidence": [
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+      "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-watch-mode-goal-retraction/evidence/verification-2026-10-26.json",
+      "blake3": "1a91a5a9b6661a2ef4a50019bac18b76fd241e0d49cc28106a1a600395135559"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-watch-mode-goal-retraction/evidence/retention-and-bounds-2026-10-26.json",
+      "blake3": "5cbef3b4ccc2a898767fc9b093b1aeb0abbfc26e59143cfee193349561561002"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-machine-wide-compile-slots/evidence/strict-boundary-2026-10-26.json",
+      "blake3": "58c1bde6608ce0d0f8ac9a0f7914afe654121eadf640ad08093b57fb042c0a46"
+    }
+  ],
+  "remaining_scoped_obligations": {
+    "add-watch-mode-goal-retraction": [
+      "T4.1 pre-change and post-change rails; only current runtime rails are retained.",
+      "T4.3 isolated review, accepted-spec synchronization and archive."
+    ],
+    "add-machine-wide-compile-slots": [
+      "T1.1 isolated-origin baseline and concurrent bootstrap contention observation.",
+      "T3.2 representative slot-on/off output and derivation parity.",
+      "T4.1 representative concurrent bootstrap contention, concurrency and fairness.",
+      "T4.2 required before/after focused verification remains separate from the completed current gate.",
+      "T4.3 isolated review, accepted-spec synchronization and archive."
+    ],
+    "reconciliation": [
+      "G1/G2 reviewed resource admission, frozen pool baseline/accounting epoch and acceptance.",
+      "P1 parent semantic review and the sole Git-owner lifecycle/publication boundary."
+    ],
+    "other_open_changes": "Previously retained change-specific baseline/adoption and external compiler/provider/proof or policy/owner inputs remain required. The completed ordinary gate resolves only its execution gap."
+  },
+  "non_claims": [
+    "Validation and diff-check ran after all task and ten status updates, before this additive outcome record; no final whole-tree source/binary identity is asserted.",
+    "The declared Tracey profile covers 155 release-provenance requirements, not every open change or watch-specific implementation correctness.",
+    "The full-gate before/after binding is pre-document-update. The 198 skipped Nextest cases are not passing proof execution.",
+    "No parent approval, reconciliation G1/G2 admission, external proof authority, spec sync, archive, release eligibility or publication is established by this record."
+  ]
+}
