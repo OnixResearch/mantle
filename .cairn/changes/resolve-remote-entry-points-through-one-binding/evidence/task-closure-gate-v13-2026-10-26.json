@@ -1,0 +1,188 @@
+{
+  "schema": "mantle-task-closure-evidence-v1",
+  "date": "2026-10-26",
+  "change": "resolve-remote-entry-points-through-one-binding",
+  "acceptance_claimed": false,
+  "closed_tasks": {
+    "T1.2": {
+      "sources": {
+        "crates/crunch-remote-core/src/endpoint.rs": "728e362380571d7d32eb8156fdca96f6bcd6bd970b3a034053c8e85b4f59b050",
+        ".cairn/changes/resolve-remote-entry-points-through-one-binding/design.md": "de683b4b94e71bf6705b946483196b49552b73a9e1be8efa125c73e015ef75ab"
+      },
+      "tests": {
+        "endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact": [
+          "ok"
+        ]
+      }
+    },
+    "T1.3": {
+      "sources": {
+        "adr/0128-fence-remote-entry-point-bindings-and-retract-future-sessions.md": "02e2d6ac6281a79c54ade7466e2876cb5033e57f8ea76223dde6d9efadc9ab47"
+      },
+      "tests": {}
+    },
+    "T2.1": {
+      "sources": {
+        "crates/crunch-remote-core/src/endpoint.rs": "728e362380571d7d32eb8156fdca96f6bcd6bd970b3a034053c8e85b4f59b050"
+      },
+      "tests": {
+        "endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact": [
+          "ok"
+        ],
+        "endpoint::tests::exact_revoke_retains_tombstone_and_recreation_fences_old_presentations": [
+          "ok"
+        ],
+        "endpoint::tests::rejects_noncanonical_names_corrupt_tables_and_generation_overflow": [
+          "ok"
+        ]
+      }
+    },
+    "T2.2": {
+      "sources": {
+        "src/remote_build/endpoint.rs": "4602c13087b827990981cd392f278ff7577131142ee36c7879d1a70071e268ca",
+        "src/remote_build/endpoint_service.rs": "4275acab7a52403e8ddcd776948b890a1fc51149c0ba894afde3cf92a763b568"
+      },
+      "tests": {
+        "remote_build::tests::endpoint_binding_tests::actual_daemon_resolves_retracts_recreates_and_persists": [
+          "ok"
+        ]
+      },
+      "smoke": {
+        "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/endpoint-binding-smoke-v8",
+        "exit": 0,
+        "mantle_blake3": "45b0890d8bf70a4e5763c229ca8a7e740ef1a09461483736d2338bbf39641ec2",
+        "stdout": "four endpoint kinds resolved; exact revocation isolated; generation 1 fenced by 2",
+        "script_blake3": "da3ca425486c5e84ef1af769305a95edb1b4fd37db2a30f29b34d2f089a55817",
+        "script_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/design.md smoke block"
+      }
+    },
+    "T2.3": {
+      "sources": {
+        "crates/crunch-remote-core/src/endpoint.rs": "728e362380571d7d32eb8156fdca96f6bcd6bd970b3a034053c8e85b4f59b050",
+        "src/remote_build/endpoint_service.rs": "4275acab7a52403e8ddcd776948b890a1fc51149c0ba894afde3cf92a763b568"
+      },
+      "tests": {
+        "endpoint::tests::exact_revoke_retains_tombstone_and_recreation_fences_old_presentations": [
+          "ok"
+        ],
+        "remote_build::tests::endpoint_binding_tests::actual_daemon_resolves_retracts_recreates_and_persists": [
+          "ok"
+        ]
+      }
+    },
+    "T2.4": {
+      "sources": {
+        "src/remote_build/endpoint.rs": "4602c13087b827990981cd392f278ff7577131142ee36c7879d1a70071e268ca"
+      },
+      "tests": {
+        "remote_build::tests::endpoint_binding_tests::production_rejects_missing_forged_stale_and_revoked_binding_before_manifest_or_feedback": [
+          "ok"
+        ],
+        "remote_build::tests::endpoint_binding_tests::production_shared_binding_lease_allows_independent_ticket_commit_once": [
+          "ok"
+        ],
+        "remote_build::tests::source_binding_tests::live_cache_binding_still_rejects_untrusted_signatures_and_corrupt_nar_content": [
+          "ok"
+        ],
+        "remote_build::tests::source_binding_tests::shared_cache_and_base_leases_preserve_signed_content_generation_and_revocation_fences": [
+          "ok"
+        ]
+      }
+    },
+    "T3.1": {
+      "sources": {},
+      "tests": {
+        "remote_build::tests::endpoint_binding_tests::actual_daemon_resolves_retracts_recreates_and_persists": [
+          "ok"
+        ],
+        "endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact": [
+          "ok"
+        ]
+      },
+      "smoke": {
+        "directory": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/endpoint-binding-smoke-v8",
+        "exit": 0,
+        "mantle_blake3": "45b0890d8bf70a4e5763c229ca8a7e740ef1a09461483736d2338bbf39641ec2",
+        "stdout": "four endpoint kinds resolved; exact revocation isolated; generation 1 fenced by 2",
+        "script_blake3": "da3ca425486c5e84ef1af769305a95edb1b4fd37db2a30f29b34d2f089a55817",
+        "script_source": ".cairn/changes/resolve-remote-entry-points-through-one-binding/design.md smoke block"
+      }
+    },
+    "T3.2": {
+      "sources": {},
+      "tests": {
+        "endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact": [
+          "ok"
+        ],
+        "remote_build::tests::endpoint_binding_tests::production_rejects_missing_forged_stale_and_revoked_binding_before_manifest_or_feedback": [
+          "ok"
+        ],
+        "remote_build::tests::source_binding_tests::configured_cache_denies_missing_forged_stale_revoked_and_expired_before_any_request": [
+          "ok"
+        ]
+      }
+    },
+    "T3.3": {
+      "sources": {},
+      "tests": {
+        "remote_build::tests::endpoint_binding_tests::actual_daemon_resolves_retracts_recreates_and_persists": [
+          "ok"
+        ],
+        "endpoint::tests::exact_revoke_retains_tombstone_and_recreation_fences_old_presentations": [
+          "ok"
+        ],
+        "remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission": [
+          "ok"
+        ]
+      }
+    }
+  },
+  "gate_log": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+    "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+    "command": "bash scripts/check-first-party-quality.sh"
+  },
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "non_claims": [
+    "Each closed task rests on the named source and the named passing tests of one tree-bound gate run; tasks not listed stay open.",
+    "No spec sync, archive, ADR acceptance or publication is performed or implied.",
+    "The v13 flake repository check failed; individual source/test support is not whole-gate qualification."
+  ]
+}

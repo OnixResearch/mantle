@@ -833,6 +833,16 @@ The Tiger Style CLI (`nix run .#tigerstyle -- check`) and the Nix
 Cargo registry or the upstream Tiger Style consumer check's independent
 `Cargo.lock` vendor set is not an equivalent Mantle check.
 
+The Nix Cargo source closure also includes first-party embedded C/header/`.inc`
+sources, `.rs.in` templates and Python drivers under `src/` and `crates/`, crate
+fixture/testdata trees, and the SpaceWasm report contract. Crane's ordinary Cargo
+filter does not retain these compile-time inputs. These rules cover declared
+source and fixture families rather than copying the unfiltered workspace.
+
+Executable-identity fixtures must resolve their programs from the declared
+shell's `PATH`, not host-specific `/bin` paths. Preserve the selected program
+basename when launching multi-call aliases such as Nix coreutils.
+
 Useful documentation:
 
 - [Operator workflows](docs/operator-workflows.md)

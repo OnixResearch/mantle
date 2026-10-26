@@ -1,0 +1,105 @@
+{
+  "schema": "mantle-focused-tests-from-gate-v1",
+  "date": "2026-10-26",
+  "change": "attenuate-build-authority-with-pattern-caveats",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "owed_action": "focused (current-status-2026-10-23.json remaining_local_actions)",
+  "filters": [
+    "^caveat::"
+  ],
+  "gate_log": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+    "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+    "command": "bash scripts/check-first-party-quality.sh"
+  },
+  "counts": {
+    "matched": 13,
+    "ok": 13,
+    "ignored": []
+  },
+  "tests": {
+    "caveat::tests::alternatives_choose_first_match_and_deny_if_none_matches": [
+      "ok"
+    ],
+    "caveat::tests::bound_rewrite_matches_complete_segments_and_preserves_binding": [
+      "ok"
+    ],
+    "caveat::tests::exact_store_gate_denies_prefix_lookalikes_traversal_and_rewrites": [
+      "ok"
+    ],
+    "caveat::tests::expanded_output_over_bound_denies_without_alternative_fallback": [
+      "ok"
+    ],
+    "caveat::tests::finite_input_space_never_widens_under_appended_rewrites": [
+      "ok"
+    ],
+    "caveat::tests::known_variants_reject_missing_extra_and_invalid_fields": [
+      "ok"
+    ],
+    "caveat::tests::newest_runs_first_but_ancestor_rejection_cannot_be_rewritten_away": [
+      "ok"
+    ],
+    "caveat::tests::original_and_every_ancestor_output_must_pass_site_policy": [
+      "ok"
+    ],
+    "caveat::tests::pattern_value_segment_chain_and_alternative_bounds_fail_closed": [
+      "ok"
+    ],
+    "caveat::tests::project_gate_binds_original_owner_every_prefix_and_admitted_goal": [
+      "ok"
+    ],
+    "caveat::tests::record_ordinals_and_serialized_size_are_not_normalized_away": [
+      "ok"
+    ],
+    "caveat::tests::reject_is_identity_only_for_nonmatches_and_unknown_always_denies": [
+      "ok"
+    ],
+    "caveat::tests::remote_site_conjoins_parent_jobs_classes_and_receiver_deadlines_before_rewrite": [
+      "ok"
+    ]
+  },
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "non_claims": [
+    "Result lines come from the workspace lib/tests step of the tree-bound gate; module-path filters can include same-named tests from another target, so every matched name is listed.",
+    "A passing focused subset is not task acceptance, runtime proof or archive readiness.",
+    "The v13 flake repository check failed; named focused passes do not qualify the whole gate."
+  ]
+}

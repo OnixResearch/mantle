@@ -1144,11 +1144,27 @@ mod tests {
         }
     }
 
+    fn fixture_executable(name: &str) -> PathBuf {
+        assert!(!name.is_empty(), "test executable name must not be empty");
+        let path = std::env::var_os("PATH").expect("orchestrator tests require PATH");
+        for directory in std::env::split_paths(&path) {
+            let candidate = directory.join(name);
+            if candidate.is_file() {
+                // Preserve the basename so a Nix coreutils multi-call alias
+                // still selects the requested program after exec.
+                let executable = std::path::absolute(candidate).unwrap();
+                assert!(executable.is_absolute());
+                return executable;
+            }
+        }
+        panic!("test executable is absent: {name}");
+    }
+
     #[test]
     fn protected_orchestrator_records_actual_exec_before_program_output() {
-        let executable = std::path::Path::new("/bin/echo");
-        let expected = file_digest(executable).unwrap();
-        let mut command = Command::new(executable);
+        let executable = fixture_executable("echo");
+        let expected = file_digest(&executable).unwrap();
+        let mut command = Command::new(&executable);
         command.arg("observed-exec").stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut observed = Vec::new();
         let child = launch_orchestrator(&mut command, &expected, &mut |digest| {
@@ -1164,9 +1180,9 @@ mod tests {
 
     #[test]
     fn protected_orchestrator_preserves_identity_before_rejecting_drift() {
-        let executable = std::path::Path::new("/bin/echo");
-        let actual = file_digest(executable).unwrap();
-        let mut command = Command::new(executable);
+        let executable = fixture_executable("echo");
+        let actual = file_digest(&executable).unwrap();
+        let mut command = Command::new(&executable);
         command.arg("must-not-run").stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut observed = Vec::new();
         let result = launch_orchestrator(&mut command, &"0".repeat(64), &mut |digest| {

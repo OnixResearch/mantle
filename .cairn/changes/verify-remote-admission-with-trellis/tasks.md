@@ -5,7 +5,7 @@
 - [ ] [serial] V1 Record the current Mantle remote-attempt state, report, fence, event, authorization, transition, retry, and application surfaces plus focused test output. r[remote_builds.trellis_admission_projection]
 - [ ] [serial] I1 Review and accept ADR 0060 for a Trellis-owned generic model, Mantle-owned projection, external proof evidence, and bounded claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_evidence_boundary]
 - [ ] [depends:add-fenced-attempt-admission-primitives] I2 Record the accepted Trellis requirement IDs, revision, source digest, verifier/toolchain identity, exported proof artifact contract, and non-claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_safety]
-- [ ] [depends:extend-nominal-types-to-trust-boundaries] I3 Reconcile the projection with admitted remote job, attempt, fence, event, digest, phase, and authorization types. r[remote_builds.trellis_admission_projection]
+- [x] [depends:extend-nominal-types-to-trust-boundaries] I3 Reconcile the projection with admitted remote job, attempt, fence, event, digest, phase, and authorization types. r[remote_builds.trellis_admission_projection]
 - [ ] [depends:harden-remote-credential-boundary] [depends:add-nix-remote-service-gateway] [depends:add-evidence-driven-resource-policy] I4 Freeze the remote fact set used by the first proof profile after active remote contracts stabilize. r[remote_builds.trellis_admission_model]
 
 ## Phase 2: Trellis model and proof evidence
@@ -16,10 +16,10 @@
 
 ## Phase 3: Mantle projection and parity
 
-- [ ] [serial] I7 Add a pure fail-closed projection from admitted Mantle remote-attempt facts to the Trellis model and reject every unmapped variant. r[remote_builds.trellis_admission_projection]
+- [x] [serial] I7 Add a pure fail-closed projection from admitted Mantle remote-attempt facts to the Trellis model and reject every unmapped variant. r[remote_builds.trellis_admission_projection]
 - [ ] [serial] I8 Add the bounded complete parity matrix over phases, report kinds, fence classes, event classes, authorization classes, and result-linkage classes. r[remote_builds.trellis_admission_projection]
 - [ ] [serial] I9 Bind Mantle source, Trellis source, model, fixture, policy, verifier, proof artifact, Kamacite envelope, and Valence receipt identities in reviewable evidence. r[remote_builds.trellis_admission_evidence_boundary]
-- [ ] [serial] I10 Keep ordinary remote admission on Mantle's Rust core and keep Trellis/Kamacite/Valence processing outside runtime decision authority. r[remote_builds.trellis_admission_evidence_boundary]
+- [x] [serial] I10 Keep ordinary remote admission on Mantle's Rust core and keep Trellis/Kamacite/Valence processing outside runtime decision authority. r[remote_builds.trellis_admission_evidence_boundary]
 
 ## Phase 4: Positive and negative verification
 
@@ -33,3 +33,9 @@
 - [ ] [serial] I11 Document the modeled fields, property list, Mantle-to-Trellis mapping, evidence chain, update procedure, and all non-claims. r[remote_builds.trellis_admission_claim_boundary]
 - [ ] [serial] V7 Run focused `crunch-build` remote-attempt tests, projection/parity tests, Trellis-sidecar binding tests, remote negative rails, and first-party quality checks. Record exact positive and negative summaries. r[remote_builds.trellis_admission_projection] r[remote_builds.trellis_admission_evidence_boundary]
 - [ ] [serial] V8 Run Cairn validation, Tracey coverage, all three change gates, and relevant Nix checks in Mantle and the paired Trellis change. r[remote_builds.trellis_admission_claim_boundary]
+
+## Retained individual task support (2026-10-26)
+
+`evidence/task-closure-gate-v13-2026-10-26.json` maps I3 and I7 to the v13-identical projection source and exact identity/parity, malformed/unmodeled payload, exhausted-domain and retained-history tests. I10 records a bounded Rust-source scan: `FiniteProjection` occurs only in its module and its `cfg(test)` test module, not a runtime caller. These local implementation closures do not accept the named upstream dependency or freeze its cross-owner contract.
+
+`evidence/focused-tests-gate-v13-2026-10-26.json` lists 14 matched projection tests, all passing. The v13 flake check exited 1 on omitted compile-time Python inputs, a repository failure, not a host limitation. I1, I2, I4–I6, I8–I9, I11 and every V task remain open: no ADR approval, fresh producer Verus result, complete source/proof identity chain, Kamacite envelope, Valence receipt, external authority or whole-gate acceptance is inferred.

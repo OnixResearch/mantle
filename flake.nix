@@ -428,17 +428,17 @@
           if pkgs.stdenv.isLinux then "${pkgs.pkgsStatic.busybox}/bin/busybox" else "/bin/sh";
 
         # Common source filtering. The Rust workspace embeds Nickel stdlib,
-        # generated runtime policy, archived lifecycle evidence, and CI workflow
-        # fixtures with include_str!/include_bytes!. Bootstrap tests read checked
-        # Nickel definitions, benchmark checks read checked example workloads,
+        # generated runtime policy, embedded C/templates and Python drivers,
+        # lifecycle evidence, and CI workflows with include_str!/include_bytes!. Bootstrap
+        # tests read checked Nickel definitions, benchmarks read example workloads,
         # and executable transcript tests read checked Markdown fixtures. Keep
         # these inputs alongside normal Cargo sources for Nix-built checks. The
         # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled sources
         # as the local script.
         # The lock-vendor stdlib test also reads its two-crate Nickel recipe.
-        # crunch-build compiles its loader-audit C source; the remote hexagon
-        # parity suite embeds origin observations from scoped Cairn evidence.
+        # First-party crate fixtures/testdata and the SpaceWasm report contract
+        # are compile-time test inputs; the remote hexagon embeds scoped evidence.
         # r[impl mantle.durable_publication_validation.source_closure]
         contentBoundRequirementFixtureRoot = toString ./fixtures/content-bound-requirements;
         isContentBoundRequirementFixture =
@@ -456,8 +456,26 @@
           && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
           && (
             (craneLib.filterCargoSources path type)
-            || pathString == toString ./crates/crunch-build/audit
-            || pathString == toString ./crates/crunch-build/audit/finish_dlopen_audit.c
+            || (
+              (
+                pkgs.lib.hasPrefix "${rootPath}/src/" pathString
+                || pkgs.lib.hasPrefix "${rootPath}/crates/" pathString
+              )
+              && builtins.any (suffix: pkgs.lib.hasSuffix suffix pathString) [
+                ".c"
+                ".h"
+                ".inc"
+                ".rs.in"
+                ".py"
+              ]
+            )
+            || (
+              pkgs.lib.hasPrefix "${rootPath}/crates/" pathString
+              && (
+                pkgs.lib.hasInfix "/fixtures/" pathString
+                || pkgs.lib.hasInfix "/testdata/" pathString
+              )
+            )
             || pkgs.lib.hasPrefix "${toString ./vendor/trellis-fenced-attempt}/" pathString
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
@@ -493,6 +511,7 @@
             || isContentBoundRequirementFixture pathString
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
             || pathString == toString ./nix/kernelscript-experiment.nix
+            || pathString == toString ./packages/spacewasm-reference/stable-report-contract.json
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString

@@ -1,13 +1,13 @@
 ## Fixture adoption
 
 - [x] [serial] Add `fault-injection` as a pinned dev-dependency and record transport `crates.io`, plane `validation` in the dependency catalog. r[mantle.io_fault.fixtures]
-- [ ] [serial] Wrap store blob reads, NAR stream writes, post-build action-result record pre-link fsync, and cache writes with `fallible!` in test builds. r[mantle.io_fault.fixtures]
-- [ ] [serial] Add a trigger function that records the injection site for fixture assertions. r[mantle.io_fault.fixtures]
+- [x] [serial] Wrap store blob reads, NAR stream writes, post-build action-result record pre-link fsync, and cache writes with `fallible!` in test builds. r[mantle.io_fault.fixtures]
+- [x] [serial] Add a trigger function that records the injection site for fixture assertions. r[mantle.io_fault.fixtures]
 
 ## Determinism
 
-- [ ] [serial] Add a setup guard storing an explicit counter value and restoring `u64::MAX` after each fixture. r[mantle.io_fault.determinism]
-- [ ] [serial] Keep `SLEEPINESS` at zero in every fixture and in CI configuration. r[mantle.io_fault.determinism]
+- [x] [serial] Add a setup guard storing an explicit counter value and restoring `u64::MAX` after each fixture. r[mantle.io_fault.determinism]
+- [x] [serial] Keep `SLEEPINESS` at zero in every fixture and in CI configuration. r[mantle.io_fault.determinism]
 
 ## Boundary
 
@@ -15,9 +15,9 @@
 
 ## Verification
 
-- [ ] [parallel] Add a default-counter store/NAR/cache fixture and prove an unchanged actual build/cache cycle with the existing smoke scenario. r[mantle.io_fault.verification]
-- [ ] [parallel] Add negative fixtures at each wrapped site asserting the existing store/export error or cache-publication diagnostic, while preserving CA-required fail-closed publication. r[mantle.io_fault.verification]
-- [ ] [parallel] Add boundary fixtures asserting the crate/file/line annotation, default counter restoration, and fixture-serialized counter ownership. r[mantle.io_fault.verification]
+- [x] [parallel] Add a default-counter store/NAR/cache fixture and prove an unchanged actual build/cache cycle with the existing smoke scenario. r[mantle.io_fault.verification]
+- [x] [parallel] Add negative fixtures at each wrapped site asserting the existing store/export error or cache-publication diagnostic, while preserving CA-required fail-closed publication. r[mantle.io_fault.verification]
+- [x] [parallel] Add boundary fixtures asserting the crate/file/line annotation, default counter restoration, and fixture-serialized counter ownership. r[mantle.io_fault.verification]
 - [ ] [serial] Run package, workspace, Clippy, Cairn, and Nix checks; append the komora-io reference under `## References` in `README.md`; document non-claims. r[mantle.io_fault.verification]
 
 ## Current implementation and remaining evidence
@@ -41,3 +41,11 @@ The last scenario requires `/nix/store` and a working bwrap sandbox; its skip me
 Real bwrap admission exited 0; release `smoke_build_cached_on_second_run` completed **1 passed, 0 failed, 0 ignored**, with no skip in either stream. Thus the reachable actual build/cache cycle is exercised, not still wholly unrun. Cargo compiled separate fixture/smoke executables; this driver did not BLAKE3-pin those test executables. Its immutable wait-request-repaired CLI pins bind the separately retained finish CLI observations, not a new exact-exec or final integrated cohort.
 
 The store wrapped-site matrix is now observed for the recorded subject. Completed source-bound `crunch-build` ordinary/floating-CA/CA-resolved intermediate publication evidence, every-CI SLEEPINESS/dev-edge classification and final integration gates remain local actions. This worker launches no checks; Main owns integration, and store/action-result maintainers own interpretation/repeatability. No external blocker is asserted for executable local actions. The tracked receipt maps original criteria precisely; no checkbox, lifecycle acceptance, hermeticity/store-correctness or release claim changes.
+
+## Retained individual task support (2026-10-26)
+
+`evidence/fault-injection-individual-tasks-gate-v13-2026-10-26.json` records all six store fixtures, the ordinary/floating-CA/CA-resolved intermediate publication fixture and `smoke_build_cached_on_second_run` as `ok` in the tree-bound v13 workspace step (exit 0). It maps the seven newly checked tasks to source sites, trigger/guard assertions, current zero-SLEEPINESS fixture/CI settings and those named results. CI source excerpts do not claim that Main's later source-filter repair passed Nix checks.
+
+The actual retained `target/cairn-finish-20261023/gate-env-probe-v13/probe.txt` records bwrap version/namespace exit 0 and Nix store exit 0. Together with the inspected smoke's prerequisite gate and cache assertions, this supports execution rather than treating a potential skip as success. It does not pin a new test executable or establish arbitrary fault coverage.
+
+The full package/workspace/Clippy/Cairn/Nix task stays open. The default all-gates completion recorder still refuses v13 because flake exited 1 on omitted compile-time Python inputs, a repository failure. Only its explicit `--individual-fixtures` evidence mode was executed; it retains `all_gate_steps_passed=false` and does not perform lifecycle acceptance, spec sync or archive.

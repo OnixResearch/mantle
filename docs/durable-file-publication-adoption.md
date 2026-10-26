@@ -169,3 +169,32 @@ recorded in the `.blake3` sidecar. This workspace-hash maintenance changes
 neither the reviewed publication source, the historical adoption date or
 outcome, nor the authority and non-claim boundaries above, and it establishes
 no fresh upstream fetch, no full-gate success, and no release claim.
+
+On 2026-10-26, the sandboxed Clippy check exposed omitted compile-time Python
+drivers in the Nix Cargo source closure. The initial `.py` admission repair
+produced `flake.nix` BLAKE3
+`fc1dc9796253503621b1e3cfd0d7ffdae9853378deae1569ee1efeeb5903748a`
+and generated-receipt BLAKE3
+`925db102bddc70681be2844c0702241614f21c29b6c5c0584e2727df8f9acd9c`.
+Sandboxed Clippy and the adoption-receipt check passed for that repair, but
+the full flake run exposed further omitted bootstrap C/header/`.inc` sources
+and Rust templates. Those results do not establish a successful full gate.
+
+A syntax-aware include audit then identified 249 literal file inputs, two
+manifest-relative archived inputs, and one generated `OUT_DIR` input. The
+complete source-closure repair admits embedded C/header/`.inc` sources,
+`.rs.in` templates and Python drivers under first-party `src/` and `crates/`,
+crate fixture/testdata trees, and the SpaceWasm report contract. A direct Nix
+source smoke admitted all 251 file inputs byte-for-byte and excluded Git
+metadata; the `OUT_DIR` input remains generated during the build.
+
+The repaired `flake.nix` has BLAKE3
+`2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28`.
+The typed receipt and independent validator bind that digest. The Cargo
+manifest, Cargo lock and flake lock bindings are unchanged by this filter
+repair. Pinned Nickel 1.17.0 regenerated the JSON with BLAKE3
+`675e6dbfee2fd7b01274d0428424a3a5d7a53707da75e52b3b9235025cd37ba9`,
+also recorded in the sidecar. This repairs source admission and receipt
+freshness only. Historical gate failures remain failures; this remeasurement
+does not by itself establish a successful replacement full gate, fresh
+upstream fetch, bootstrap result or release eligibility.

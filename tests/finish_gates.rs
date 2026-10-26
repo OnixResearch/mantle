@@ -155,6 +155,32 @@ fn real_finish_gate_passes_version_and_relocation_and_reports_clean_scan() {
 }
 
 #[test]
+fn real_finish_gate_denies_matching_version_with_nonzero_exit_without_publication() {
+    if !can_build() {
+        eprintln!("skipping: bwrap user namespace unavailable");
+        return;
+    }
+    let recipe = RECIPE.replace("then echo demo-1.0; else", "then echo demo-1.0; exit 7; else");
+    let (denied, _keep) = build_recipe(&recipe);
+    assert_eq!(denied.status.code(), Some(1), "{}", render(&denied));
+    let report: serde_json::Value = serde_json::from_slice(&denied.stdout).expect("failed JSON build report");
+    assert_eq!(report["finish_gates"][0]["command"], serde_json::json!(["bin/demo", "--version"]));
+    assert_eq!(report["finish_gates"][0]["expected"], "1.0");
+    assert_eq!(report["finish_gates"][0]["version"], "denied");
+    assert_eq!(report["finish_gates"][0]["reference_leak"], "not-run");
+    assert_eq!(report["finish_gates"][0]["relocation"], "not-run");
+    assert_eq!(report["counts"]["built_total"], 0);
+    assert_eq!(report["counts"]["cached_total"], 0);
+    assert_eq!(report["counts"]["failed_total"], 1);
+    assert!(report["outcomes"].as_array().is_some_and(Vec::is_empty));
+    assert!(
+        report["action_result_reports"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().all(|row| row["phase"] != "publication"))
+    );
+}
+
+#[test]
 fn real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure() {
     if !can_build() {
         eprintln!("skipping: bwrap user namespace unavailable");

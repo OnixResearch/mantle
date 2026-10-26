@@ -1,0 +1,167 @@
+{
+  "schema": "mantle-fault-injection-completion-evidence-v1",
+  "date": "2026-10-26",
+  "change": "adopt-fault-injection-io-tests",
+  "maintenance_owner": "crunch-store action-result and store-export maintainers",
+  "acceptance_claimed": false,
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "scope": "individual-implementation-and-fixture-tasks",
+  "all_gates_task_closed": false,
+  "gate_log": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+    "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+    "command": "bash scripts/check-first-party-quality.sh"
+  },
+  "fixtures": {
+    "action_result::tests::io_fault_default_counter_keeps_store_and_cache_cycle": [
+      "ok"
+    ],
+    "action_result::tests::io_fault_store_read_is_classified_as_store_failure": [
+      "ok"
+    ],
+    "action_result::tests::io_fault_nar_write_is_classified_as_export_failure": [
+      "ok"
+    ],
+    "action_result::tests::io_fault_cache_publication_is_undiscoverable_until_retry_commits": [
+      "ok"
+    ],
+    "action_result::tests::io_fault_counter_is_serialized_and_unrelated_store_reads_cannot_consume_it": [
+      "ok"
+    ],
+    "action_result::tests::io_fault_guard_restores_ownership_after_unwind": [
+      "ok"
+    ],
+    "orchestrate::tests::io_fault_publication_is_diagnostic_only_for_ordinary_builds": [
+      "ok"
+    ],
+    "smoke_build_cached_on_second_run": [
+      "ok"
+    ]
+  },
+  "smoke_not_skipped": {
+    "probe": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/gate-env-probe-v13/probe.txt",
+      "blake3": "0335108aff1b5b917eb2a06e98129acaa1405e61b68a113190f94f37130ad7f3",
+      "text": "bwrap=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\nbubblewrap 0.11.0\nbwrap_namespace_exit=0\nnix_store_exit=0\nSNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\nSNIX_BUILD_BWRAP=unset\nexit=0\n"
+    },
+    "statement": "tests/smoke.rs runs its build only when /nix/store exists and bwrap answers; the gate shell has both and bwrap admits a namespace, so the passing result is a build/cache cycle, not a skip. libtest captures a skip message, so the log alone cannot show this."
+  },
+  "wrapped_sites": [
+    {
+      "path": "crates/crunch-store/src/build_io.rs",
+      "site": "store blob read",
+      "fallible": [
+        "50: let size = crate::fault_scope::fallible!(reader.read_to_end(&mut bytes).await);"
+      ]
+    },
+    {
+      "path": "crates/crunch-store/src/handle.rs",
+      "site": "NAR stream write",
+      "fallible": [
+        "1891: let count = crate::fault_scope::fallible!(tokio::io::copy(&mut reader, dest).await);"
+      ]
+    },
+    {
+      "path": "crates/crunch-store/src/action_result.rs",
+      "site": "action-result record write and pre-link fsync",
+      "fallible": [
+        "942: crate::fault_scope::fallible!(temp.write_all(bytes));",
+        "950: crate::fault_scope::fallible!(temp.sync_all());"
+      ]
+    }
+  ],
+  "trigger_and_guard": [
+    "1140: fn record_fault_site(crate_name: &'static str, file: &'static str, line: u32) {",
+    "1161: fault_injection::set_trigger_function(record_fault_site);",
+    "1164: FAULT_INJECT_COUNTER.store(counter, Ordering::SeqCst);",
+    "1198: FAULT_INJECT_COUNTER.store(u64::MAX, Ordering::SeqCst);"
+  ],
+  "sleepiness": {
+    "crate_default": [
+      "21: pub static SLEEPINESS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);"
+    ],
+    "fixtures": [
+      "1122: use fault_injection::SLEEPINESS;",
+      "1160: assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);",
+      "1163: SLEEPINESS.store(0, Ordering::SeqCst);",
+      "1179: assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);",
+      "1187: assert_eq!(SLEEPINESS.load(Ordering::SeqCst), 0);",
+      "1199: SLEEPINESS.store(0, Ordering::SeqCst);"
+    ],
+    "ci_configuration": [
+      "1019: SLEEPINESS = \"0\";",
+      "1829: SLEEPINESS = \"0\";"
+    ],
+    "workflow_ci_configuration": [
+      "14: SLEEPINESS: '0'"
+    ]
+  },
+  "ci_configuration_boundary": "CI excerpts are current source observations, not a claim that the post-v13 source-filter repair has passed Nix checks.",
+  "readme_reference": [
+    "883: - [komora-io/fault-injection](https://github.com/komora-io/fault-injection) supplies pinned, test-only annotated I/O faults for Mantle's store-shell fixtures. The fixtures cover named failure paths only; they do not establish sandbox hermeticity, store correctness, or release eligibility."
+  ],
+  "gate_steps": {
+    "ordinary-first-party": 0,
+    "remaining-package-format": 0,
+    "architecture-self": 0,
+    "architecture": 0,
+    "architecture-semantic-self": 0,
+    "architecture-semantic": 0,
+    "no-std-core": 0,
+    "tigerstyle": 0,
+    "changed-no-std-wasm": 0,
+    "operator-contract": 0,
+    "flake": 1
+  },
+  "task_map": {
+    "Wrap store blob reads, NAR stream writes, pre-link fsync and cache writes": "wrapped_sites",
+    "Trigger function records the injection site": "trigger_and_guard; fixtures assert_fired_at",
+    "Setup guard stores a counter and restores u64::MAX": "trigger_and_guard; FaultFixture Drop",
+    "SLEEPINESS zero in every fixture and in CI configuration": "sleepiness",
+    "Default-counter fixture and unchanged build/cache cycle": "fixtures; smoke_not_skipped",
+    "Negative fixtures at each wrapped site, CA-required fail-closed": "fixtures",
+    "Boundary fixtures: annotation, restoration, serialized ownership": "fixtures"
+  },
+  "non_claims": [
+    "Injected I/O faults cover the named sites only; no sandbox-hermeticity, store-correctness or release-eligibility claim.",
+    "No archive or spec sync is performed by this record.",
+    "Individual fixture support does not pass the v13 flake check or close the full Cairn/Nix task."
+  ]
+}

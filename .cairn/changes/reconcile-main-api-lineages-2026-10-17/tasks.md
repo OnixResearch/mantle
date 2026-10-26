@@ -180,3 +180,38 @@ planning; gateway attempt and ticket state validation in the remote build unit
 tests; Nix gateway session expiry and resource-host store access; and stale
 expectations in the flake-check workflow, examples catalog and public scan
 bound tests. G1 remains unaccepted until those failures are repaired.
+
+## Retained ordinary gate v13 and interrupted v12 (2026-10-26)
+
+`evidence/ordinary-gate-observation-v13-2026-10-26.json` retains the v13 tree binding, every declared step exit, flake stderr digest, prior v11 host-hook failures and the exact retained v12 stop observation. v13's tree was unchanged and its non-flake steps exited 0. The full flake check exited 1 in repository compilation: the source filter omitted `crates/crunch-model-conversion/src/gguf_reader.py`, `runner.py` and `crates/crunch-esp-idf/src/driver.py` required by `include_str!`. It is not a host-limited pass or evidence that the subsequent source-filter repair has succeeded.
+
+v12 stopped writing at 17:03:29 inside `protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_digest_mismatch_before_execve`; the scheduler reported exit 1 at 17:04:48. No step exit, end snapshot, `gates.exit` or tree result was written. The retained journal/file times/dataset state do not establish the cause: quota pressure is an observation, not an attributed write failure or a pass.
+
+G1/G2 and publication/lifecycle acceptance remain unclaimed. This ordinary run does not supply G2's separately reviewed scratch route, frozen resource caps, pool baseline or accounting epoch. No task checkbox, parent review, archive or external authority changes follow from this addendum.
+
+## Source closure and sandboxed fixture maintenance (2026-10-26)
+
+`evidence/nix-source-closure-2026-10-26.json` records the complete embedded-input
+audit and direct Nix admission smoke: all 251 file inputs were admitted
+byte-for-byte, with Git metadata excluded. Sandboxed Clippy and the refreshed
+durable-file-publication adoption check passed. Pueue 33's full flake run still
+failed: two protected-orchestrator fixtures required host-specific `/bin/echo`,
+producing four failures across the `mantle` and `crunch` aliases. That failure
+is retained as a repository fixture defect, not a host skip or product pass.
+
+The fixtures now resolve `echo` from the declared `PATH` and retain its basename
+for coreutils multi-call dispatch. `evidence/nix-orchestrator-repair-2026-10-26.json`
+records Pueue 36's completed sandboxed Nextest/Clippy substep (exit 0):
+`6730 tests run: 6730 passed, 198 skipped`, including both repaired fixtures under
+both aliases. The source and 10 other selected inputs still matched the start
+snapshot after the later interruption. The earlier host-focused attempt failed
+in the `zstd-sys` build script before executing tests and is not counted as
+runtime proof.
+
+The subsequent full flake run has no completion result: Pueue lost its daemon
+connection; its journal records `ENOSPC` saving state and task 36 restored as
+Killed. No `flake.exit` or scripted after-snapshot was written. This does not
+attribute filesystem exhaustion to the repository build or establish a full
+gate pass. G1/G2, reviewed resource admission, parent review and lifecycle
+acceptance remain open; no archive or spec sync follows from these substeps.
+

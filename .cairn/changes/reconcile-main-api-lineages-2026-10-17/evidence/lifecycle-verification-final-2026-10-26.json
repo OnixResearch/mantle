@@ -1,0 +1,130 @@
+{
+  "schema": "mantle-cairn-lifecycle-verification-v1",
+  "date": "2026-10-26",
+  "maintenance_owner": "Mantle lifecycle and integration maintainers",
+  "acceptance_claimed": false,
+  "cairn": {
+    "path": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+    "blake3": "a4059806e3478977d3ef3ca5bc3fc4f2ef4d3e066fa03ddcbcbdd0fb786f3cd8"
+  },
+  "steps": {
+    "validate": {
+      "exit": 0,
+      "command": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn validate --root .",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-final/validate.stdout.json",
+        "blake3": "c360c353621276d7412b96573148b62f8b681aceebad62e0da0e46ec16ce8d9b"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-final/validate.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "traceability-coverage": {
+      "exit": 0,
+      "command": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn traceability coverage --root . --json",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-final/traceability-coverage.stdout.json",
+        "blake3": "56fae877fb2a08b395ea86e1cd816f39f0d9894411314dc68432a7567a3896b9"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/lifecycle-final/traceability-coverage.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  },
+  "validation": {
+    "valid": true,
+    "changes": 29,
+    "issues": [],
+    "receipt_hash": "8b218021046cc6ee450b0a72a20de48c5473c121e9712e37e4551aead60878b7"
+  },
+  "traceability_coverage": {
+    "command": "traceability coverage",
+    "dangling": [],
+    "input_hash": "341d35b42e50e82ef09174984e8ab60fbcb71d6deb1fc4f3ad2ee9db8db7eb15",
+    "missing": [],
+    "policy": "mantle-default",
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "profile": {
+      "anchor_kind": "exact_marker_bytes",
+      "assurance_level": "declared",
+      "evidence_sources": [
+        {
+          "extensions": [
+            "rs"
+          ],
+          "root": "tools/release_provenance_tracey_refs.rs",
+          "source_kind": "rust_source"
+        }
+      ],
+      "id": "mantle-default",
+      "marker_verbs": [
+        "impl",
+        "verify",
+        "depends",
+        "related"
+      ],
+      "requirement_sources": [
+        {
+          "extensions": [
+            "md"
+          ],
+          "root": ".cairn/specs/release-provenance/spec.md",
+          "source_kind": "accepted_specs"
+        }
+      ]
+    },
+    "profile_id": "mantle-default",
+    "receipt_hash": "a175ad5ca5e6c11db0f5ba1c7571da1ba0ad249c86d63e582258070f1199c558",
+    "referenced": 155,
+    "requirements": 155,
+    "root": ".",
+    "source_summary": {
+      "evidence_files": 1,
+      "evidence_manifest_hash": "6ac429588fe294708efea8fabdc202c479356e72b6cda430843d38b61925376d",
+      "requirement_files": 1,
+      "requirement_manifest_hash": "c90d406afe4d8081d15b5b77c39a72e0aa2d0c1ae3c2d6ba2c99ebf99f1bc70a"
+    },
+    "valid": true,
+    "verdict": "pass"
+  },
+  "selected_task_inputs_blake3": {
+    ".cairn/changes/resolve-remote-entry-points-through-one-binding/tasks.md": "3fc4cab6af9a04957e230d31e1e241bce182f29df0e339fe3dc4acf619b82afd",
+    ".cairn/changes/attenuate-build-authority-with-pattern-caveats/tasks.md": "7f8efe2d2ed3e7d136204e11fc6eb06ef4d4f7c819c25cb54ad9839b1ae24032",
+    ".cairn/changes/verify-remote-admission-with-trellis/tasks.md": "d7b786087b2cabfc6ee69b5b8a833675982ba074c672329d0398b1a0b7092cc6",
+    ".cairn/changes/adopt-fault-injection-io-tests/tasks.md": "7e7195a46b3bf2efc2b48456edbd4e1b5aeb4a4dc47663f50616699f533e949a",
+    ".cairn/changes/explain-rust-build-waits/tasks.md": "97aac657bb66db45af7206e8e7f712d9bc724cedf3a4b5ba535467ff8ebefd28",
+    ".cairn/changes/validate-rust-pipelining-equivalence/tasks.md": "cef413355a13630d01e0c4efca2fc53d607eeda6d913fc6d2442f302915a0c57",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md": "c5d9603e5e5f8d25de9c22abb604a4de18189787f9dd73b28376f5b87bd879eb",
+    ".cairn/changes/standardize-derivation-finish-gates/tasks.md": "175db2519b8f97ea6fa7fff6b608ce326f6a2114b04a32a1ff5aa02de56e3865"
+  },
+  "selected_status_inputs_blake3": {
+    ".cairn/changes/add-nix-remote-service-gateway/evidence/current-status-2026-10-23.json": "b3f98250ec8030aa0659d3e1d5fb8bfb5f00987fb7b2459ff99db364bac5b669",
+    ".cairn/changes/adopt-casita-store-backend/evidence/current-status-2026-10-23.json": "d0847fa59b591107df601423a12cf18bea6a1a4fbd65a50270f0c7b16b2bec77",
+    ".cairn/changes/adopt-fault-injection-io-tests/evidence/current-status-2026-10-23.json": "c756039afa3cfc2f80d5217076f27665641482871fedb9dcb8f1b922b3cbd9eb",
+    ".cairn/changes/attenuate-build-authority-with-pattern-caveats/evidence/current-status-2026-10-23.json": "8258b5f845ca04187c0265640790c4a8a2ee390537e3388bbf738069db62fb99",
+    ".cairn/changes/declare-remote-worker-demand/evidence/current-status-2026-10-23.json": "178f3f0707d2153f4d17b7e8fd7ea231663d69e87738140117b3156866118202",
+    ".cairn/changes/relocate-dynamic-output-references/evidence/current-status-2026-10-23.json": "792bbadbd99fce14302602ef6bb7448510851103c57c4e6a065bbf1b8e95549e",
+    ".cairn/changes/resolve-remote-entry-points-through-one-binding/evidence/current-status-2026-10-23.json": "a5e4b3a66da67a4921a2761fb57d51aed7145f127a5c711048056abd9b12a73b",
+    ".cairn/changes/separate-remote-build-hexagon/evidence/current-status-2026-10-23.json": "f9b4b09ac4e63047b7e709d907b925ef4cc29b24ecc10f6ba20ec8e63c157f5f",
+    ".cairn/changes/standardize-derivation-finish-gates/evidence/current-status-2026-10-23.json": "35e00866d04ee1532b1fca98e323c24f21027cab2ce33573eda1a47e8067cff7",
+    ".cairn/changes/verify-remote-admission-with-trellis/evidence/current-status-2026-10-23.json": "70e9bef5b42cd19fe885d2281fef7141fbbd9d371e5ce4099e2a00cb7bcc6891"
+  },
+  "integration_maintenance_evidence": [
+    {
+      "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/nix-source-closure-2026-10-26.json",
+      "blake3": "c564c4fc9285eb9cd377259f5d61e5a2418118654a964c2cf07362353e0914b2"
+    },
+    {
+      "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/nix-orchestrator-repair-2026-10-26.json",
+      "blake3": "dad940db6ff12f7efdf99c0b7334ee2cab3c359d407623814c5932f4b1d46522"
+    }
+  ],
+  "non_claims": [
+    "Checks ran after the task and ten status addenda, before this additive outcome record; no whole post-record source/binary identity is asserted.",
+    "The default declared Tracey profile covers release-provenance requirement markers, not every open change or arbitrary implementation correctness.",
+    "The complete flake run remains interrupted without a completion result; the successful sandboxed Nextest/Clippy substep is not full-gate acceptance.",
+    "No ADR acceptance, external proof authority, G2 resource admission, spec sync, archive or release eligibility follows from structural validation or declared marker coverage."
+  ]
+}

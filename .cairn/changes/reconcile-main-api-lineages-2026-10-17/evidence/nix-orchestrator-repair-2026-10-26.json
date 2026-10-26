@@ -1,0 +1,143 @@
+{
+  "schema": "mantle-sandboxed-orchestrator-repair-observation-v1",
+  "date": "2026-10-26",
+  "maintenance_owner": "Mantle protected-execution fixture and quality-gate maintainers",
+  "acceptance_claimed": false,
+  "immediate_outcome": "Both protected-orchestrator regressions pass under both binary aliases in sandboxed Nextest. The declared Nextest and Clippy derivations built successfully.",
+  "durable_capability": "Identity-sensitive fixtures resolve a real executable from the declared PATH while preserving multi-call alias selection; no host-specific /bin/echo is required.",
+  "source": {
+    "path": "src/source_built_fixed_point_mantle_actions.rs",
+    "blake3": "d55b45a11b922b6dceb428879b8723fa8c27503f3311b29418841d0bfcfcf1b2",
+    "production_behavior_changed": false
+  },
+  "source_closure_observation": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/nix-source-closure-2026-10-26.json",
+    "blake3": "c564c4fc9285eb9cd377259f5d61e5a2418118654a964c2cf07362353e0914b2"
+  },
+  "pueue": {
+    "task_id": 36,
+    "wait_exit": 1,
+    "wait_stderr": "Error: \n   0: \u001b[91mI/O error while sending request size header:\n      Broken pipe (os error 32)\u001b[0m\n\nLocation:\n   \u001b[35mpueue/src/client/commands/mod.rs\u001b[0m:\u001b[35m103\u001b[0m\n\nBacktrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nRun with RUST_BACKTRACE=full to include source snippets.\n",
+    "task_completion_claimed": false
+  },
+  "selected_inputs_before": {
+    "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair/inputs-before.blake3",
+    "blake3": "112a3bf902041a31fd4eead6692431cd4fe5de04b64f09f80f0392c364d809a5",
+    "text": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28  flake.nix\n862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc  flake.lock\n0467e262d6fe0c256df5bd5f7ef705aa5c9cae7c169f5e0460ce45ca5cd88934  README.md\nd55b45a11b922b6dceb428879b8723fa8c27503f3311b29418841d0bfcfcf1b2  src/source_built_fixed_point_mantle_actions.rs\n2289d2874208d49645be2b2e1dd833c020900955779e1e88a230ad1072b50bc4  lib/durable-file-publication-adoption-receipt.ncl\n9ec55886a11409f5837f925e25548f180009be7adc259d43f3cb09c6e008c4dc  evidence/radicle/durable-file-publication-adoption-v1.ncl\n675e6dbfee2fd7b01274d0428424a3a5d7a53707da75e52b3b9235025cd37ba9  evidence/radicle/durable-file-publication-adoption-v1.json\n5987b849155e10d864dc8f97f7c8348253405a2a7f4d072b1f40b3fc55edbda3  evidence/radicle/durable-file-publication-adoption-v1.blake3\n9179566f77a783aadb008b1c67282359e4a75ba3adedca9202d91e3b70192594  tests/finish_gates.rs\n"
+  },
+  "selected_inputs_observed_after_interruption": {
+    "text": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28  flake.nix\n862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a  Cargo.toml\n6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36  Cargo.lock\na24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc  flake.lock\n0467e262d6fe0c256df5bd5f7ef705aa5c9cae7c169f5e0460ce45ca5cd88934  README.md\nd55b45a11b922b6dceb428879b8723fa8c27503f3311b29418841d0bfcfcf1b2  src/source_built_fixed_point_mantle_actions.rs\n2289d2874208d49645be2b2e1dd833c020900955779e1e88a230ad1072b50bc4  lib/durable-file-publication-adoption-receipt.ncl\n9ec55886a11409f5837f925e25548f180009be7adc259d43f3cb09c6e008c4dc  evidence/radicle/durable-file-publication-adoption-v1.ncl\n675e6dbfee2fd7b01274d0428424a3a5d7a53707da75e52b3b9235025cd37ba9  evidence/radicle/durable-file-publication-adoption-v1.json\n5987b849155e10d864dc8f97f7c8348253405a2a7f4d072b1f40b3fc55edbda3  evidence/radicle/durable-file-publication-adoption-v1.blake3\n9179566f77a783aadb008b1c67282359e4a75ba3adedca9202d91e3b70192594  tests/finish_gates.rs\n",
+    "matches_before": true,
+    "count": 11
+  },
+  "sandboxed_nextest_and_clippy": {
+    "command": "nix build --offline --no-write-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy",
+    "exit": 0,
+    "stdout": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair/sandboxed-nextest-and-clippy.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    "stderr": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair/sandboxed-nextest-and-clippy.stderr.log",
+      "blake3": "5a28858e2a50f924f4b5c4a02504a4e2fc5667efc30f3050f75f8200bc18675c"
+    },
+    "nextest_summary": "mantle-nextest>      Summary [ 247.534s] 6730 tests run: 6730 passed, 198 skipped",
+    "tests_run": 6730,
+    "passed": 6730,
+    "skipped": 198,
+    "protected_orchestrator_results": [
+      "mantle-nextest>         PASS [   0.005s] (3278/6730) mantle::bin/crunch source_built_fixed_point_mantle_actions::tests::protected_orchestrator_preserves_identity_before_rejecting_drift",
+      "mantle-nextest>         PASS [   0.006s] (3279/6730) mantle::bin/crunch source_built_fixed_point_mantle_actions::tests::protected_orchestrator_records_actual_exec_before_program_output",
+      "mantle-nextest>         PASS [   0.005s] (6039/6730) mantle::bin/mantle source_built_fixed_point_mantle_actions::tests::protected_orchestrator_preserves_identity_before_rejecting_drift",
+      "mantle-nextest>         PASS [   0.006s] (6040/6730) mantle::bin/mantle source_built_fixed_point_mantle_actions::tests::protected_orchestrator_records_actual_exec_before_program_output"
+    ]
+  },
+  "host_focused_attempt": {
+    "pueue_task_id": 35,
+    "steps": {
+      "format": {
+        "command": "nix develop --offline --no-write-lock-file -c cargo fmt --check -p mantle",
+        "exit": 0,
+        "stdout": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/format.stdout.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "stderr": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/format.stderr.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        }
+      },
+      "protected-orchestrator": {
+        "command": "nix develop --offline --no-write-lock-file -c cargo test --locked --offline -p mantle --bin mantle --bin crunch source_built_fixed_point_mantle_actions::tests:: -- --nocapture --test-threads=1",
+        "exit": 101,
+        "stdout": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/protected-orchestrator.stdout.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "stderr": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/protected-orchestrator.stderr.log",
+          "blake3": "65c6f10110fbd86070e0f6867e00b7c4f57404fdaffccb15009e73fdd70fb89c"
+        }
+      },
+      "clippy": {
+        "command": "nix develop --offline --no-write-lock-file -c cargo clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings",
+        "exit": 101,
+        "stdout": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/clippy.stdout.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "stderr": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/clippy.stderr.log",
+          "blake3": "3e880af19dfd62fc0f205621570bcbfdab53d3c2e220c15dd57179270214d77e"
+        }
+      },
+      "input-stability": {
+        "command": "cmp /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/inputs-before.blake3 /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/inputs-after.blake3",
+        "exit": 0,
+        "stdout": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/input-stability.stdout.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "stderr": {
+          "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/orchestrator-path/input-stability.stderr.log",
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        }
+      }
+    },
+    "runtime_tests_executed": false,
+    "boundary": "zstd-sys build script failed with PermissionDenied before test execution; this attempt is not runtime evidence and its failures are retained, not relabeled as passes."
+  },
+  "full_flake": {
+    "command": "nix flake check --offline --no-write-lock-file -L",
+    "status": "interrupted-no-completion",
+    "exit": null,
+    "stdout": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair/flake.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    "stderr": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair/flake.stderr.log",
+      "blake3": "e117673699405ad17d340bb666f3d59f0e77b8388108e92b05116e516eeff02d"
+    },
+    "last_observed_output": "linux>   BTF [M] drivers/char/xillybus/xillyusb.ko",
+    "flake_exit_file_present": false,
+    "script_after_snapshot_present": false,
+    "supervisor_failure": "Pueue lost its daemon connection. Its journal records ENOSPC saving state, startup restoring task 36 as Killed, and start-limit-hit; the exact gate client and driver were absent in the subsequent process-recovery query.",
+    "supervisor_journal": "Oct 26 13:50:39 britton-desktop pueued[1408565]: 13:50:39  INFO pueue::daemon::process_handler::finish: Task 38 finished with result: Failed(1)\nOct 26 13:50:39 britton-desktop pueued[3623107]: Failed to show notification: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable\nOct 26 13:50:39 britton-desktop pueued[1408565]: 13:50:39  INFO pueue::daemon::callbacks: Callback finished with exit code Some(ExitStatus(unix_wait_status(256)))\nOct 26 13:50:47 britton-desktop pueued[1408565]: 13:50:47  INFO pueue::aliasing: Didn't find pueue alias file at \"/home/brittonr/.config/pueue/pueue_aliases.yml\".\nOct 26 13:50:47 britton-desktop pueued[1408565]: 13:50:47  INFO pueue::daemon::process_handler::spawn: Started task: python3 target/planted-proof/run-marker-tests.py\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49  INFO pueue::daemon::process_handler::finish: Task 39 finished with result: Failed(1)\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49 ERROR pueue::daemon::process_handler::finish: Initializing graceful shutdown. Encountered error in TaskHandler: Failed to write temp file while saving state.\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49  INFO pueue::daemon::process_handler::kill: Killing all running tasks\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49 ERROR pueue::daemon::process_handler::kill: Initializing graceful shutdown. Encountered error in TaskHandler: Failed to write temp file while saving state.\nOct 26 13:52:49 britton-desktop pueued[3734629]: Failed to show notification: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49  INFO pueue::daemon::callbacks: Callback finished with exit code Some(ExitStatus(unix_wait_status(256)))\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49  INFO pueue::daemon::process_handler::finish: Task 36 finished with result: Killed\nOct 26 13:52:49 britton-desktop pueued[1408565]: 13:52:49 ERROR pueue::daemon::process_handler::finish: Initializing graceful shutdown. Encountered error in TaskHandler: Failed to write temp file while saving state.\nOct 26 13:52:49 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:49 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:49 britton-desktop systemd[1966]: pueued.service: Consumed 12h 50min 14.589s CPU time over 22h 17min 52.091s wall clock time, 42.8G memory peak, 2.5G memory swap peak.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 1.\nOct 26 13:52:50 britton-desktop systemd[1966]: Started Pueue Daemon - CLI process scheduler and manager.\nOct 26 13:52:50 britton-desktop pueued[3736127]: 13:52:50  INFO pueue::daemon::internal_state::state: Restoring state\nOct 26 13:52:50 britton-desktop pueued[3736127]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 36 with previous status Running { enqueued_at: 2026-10-26T11:45:45.808246122-04:00, start: 2026-10-26T11:45:45.861078593-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736127]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 39 with previous status Running { enqueued_at: 2026-10-26T13:50:47.078639467-04:00, start: 2026-10-26T13:50:47.143261658-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736127]: Error:\nOct 26 13:52:50 britton-desktop pueued[3736127]:    0: Failed to save state on startup.\nOct 26 13:52:50 britton-desktop pueued[3736127]:    1: Failed to write temp file while saving state.\nOct 26 13:52:50 britton-desktop pueued[3736127]:    2: No space left on device (os error 28)\nOct 26 13:52:50 britton-desktop pueued[3736127]: Location:\nOct 26 13:52:50 britton-desktop pueued[3736127]:    pueue/src/daemon/internal_state/state.rs:272\nOct 26 13:52:50 britton-desktop pueued[3736127]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nOct 26 13:52:50 britton-desktop pueued[3736127]: Run with RUST_BACKTRACE=full to include source snippets.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 2.\nOct 26 13:52:50 britton-desktop systemd[1966]: Started Pueue Daemon - CLI process scheduler and manager.\nOct 26 13:52:50 britton-desktop pueued[3736555]: 13:52:50  INFO pueue::daemon::pid: Placing pid file at \"/run/user/1555/pueue.pid\"\nOct 26 13:52:50 britton-desktop pueued[3736555]: 13:52:50  INFO pueue::daemon::internal_state::state: Restoring state\nOct 26 13:52:50 britton-desktop pueued[3736555]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 36 with previous status Running { enqueued_at: 2026-10-26T11:45:45.808246122-04:00, start: 2026-10-26T11:45:45.861078593-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736555]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 39 with previous status Running { enqueued_at: 2026-10-26T13:50:47.078639467-04:00, start: 2026-10-26T13:50:47.143261658-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736555]: Error:\nOct 26 13:52:50 britton-desktop pueued[3736555]:    0: Failed to save state on startup.\nOct 26 13:52:50 britton-desktop pueued[3736555]:    1: Failed to write temp file while saving state.\nOct 26 13:52:50 britton-desktop pueued[3736555]:    2: No space left on device (os error 28)\nOct 26 13:52:50 britton-desktop pueued[3736555]: Location:\nOct 26 13:52:50 britton-desktop pueued[3736555]:    pueue/src/daemon/internal_state/state.rs:272\nOct 26 13:52:50 britton-desktop pueued[3736555]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nOct 26 13:52:50 britton-desktop pueued[3736555]: Run with RUST_BACKTRACE=full to include source snippets.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 3.\nOct 26 13:52:50 britton-desktop systemd[1966]: Started Pueue Daemon - CLI process scheduler and manager.\nOct 26 13:52:50 britton-desktop pueued[3736904]: 13:52:50  INFO pueue::daemon::pid: Placing pid file at \"/run/user/1555/pueue.pid\"\nOct 26 13:52:50 britton-desktop pueued[3736904]: 13:52:50  INFO pueue::daemon::internal_state::state: Restoring state\nOct 26 13:52:50 britton-desktop pueued[3736904]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 36 with previous status Running { enqueued_at: 2026-10-26T11:45:45.808246122-04:00, start: 2026-10-26T11:45:45.861078593-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736904]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 39 with previous status Running { enqueued_at: 2026-10-26T13:50:47.078639467-04:00, start: 2026-10-26T13:50:47.143261658-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3736904]: Error:\nOct 26 13:52:50 britton-desktop pueued[3736904]:    0: Failed to save state on startup.\nOct 26 13:52:50 britton-desktop pueued[3736904]:    1: Failed to write temp file while saving state.\nOct 26 13:52:50 britton-desktop pueued[3736904]:    2: No space left on device (os error 28)\nOct 26 13:52:50 britton-desktop pueued[3736904]: Location:\nOct 26 13:52:50 britton-desktop pueued[3736904]:    pueue/src/daemon/internal_state/state.rs:272\nOct 26 13:52:50 britton-desktop pueued[3736904]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nOct 26 13:52:50 britton-desktop pueued[3736904]: Run with RUST_BACKTRACE=full to include source snippets.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 4.\nOct 26 13:52:50 britton-desktop systemd[1966]: Started Pueue Daemon - CLI process scheduler and manager.\nOct 26 13:52:50 britton-desktop pueued[3737070]: 13:52:50  INFO pueue::daemon::pid: Placing pid file at \"/run/user/1555/pueue.pid\"\nOct 26 13:52:50 britton-desktop pueued[3737070]: 13:52:50  INFO pueue::daemon::internal_state::state: Restoring state\nOct 26 13:52:50 britton-desktop pueued[3737070]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 36 with previous status Running { enqueued_at: 2026-10-26T11:45:45.808246122-04:00, start: 2026-10-26T11:45:45.861078593-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3737070]: 13:52:50  INFO pueue::daemon::internal_state::state: Setting task 39 with previous status Running { enqueued_at: 2026-10-26T13:50:47.078639467-04:00, start: 2026-10-26T13:50:47.143261658-04:00 } to new status Killed\nOct 26 13:52:50 britton-desktop pueued[3737070]: Error:\nOct 26 13:52:50 britton-desktop pueued[3737070]:    0: Failed to save state on startup.\nOct 26 13:52:50 britton-desktop pueued[3737070]:    1: Failed to write temp file while saving state.\nOct 26 13:52:50 britton-desktop pueued[3737070]:    2: No space left on device (os error 28)\nOct 26 13:52:50 britton-desktop pueued[3737070]: Location:\nOct 26 13:52:50 britton-desktop pueued[3737070]:    pueue/src/daemon/internal_state/state.rs:272\nOct 26 13:52:50 britton-desktop pueued[3737070]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nOct 26 13:52:50 britton-desktop pueued[3737070]: Run with RUST_BACKTRACE=full to include source snippets.\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:50 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 5.\nOct 26 13:52:51 britton-desktop systemd[1966]: Started Pueue Daemon - CLI process scheduler and manager.\nOct 26 13:52:51 britton-desktop pueued[3737428]: 13:52:51  INFO pueue::daemon::pid: Placing pid file at \"/run/user/1555/pueue.pid\"\nOct 26 13:52:51 britton-desktop pueued[3737428]: 13:52:51  INFO pueue::daemon::internal_state::state: Restoring state\nOct 26 13:52:51 britton-desktop pueued[3737428]: 13:52:51  INFO pueue::daemon::internal_state::state: Setting task 36 with previous status Running { enqueued_at: 2026-10-26T11:45:45.808246122-04:00, start: 2026-10-26T11:45:45.861078593-04:00 } to new status Killed\nOct 26 13:52:51 britton-desktop pueued[3737428]: 13:52:51  INFO pueue::daemon::internal_state::state: Setting task 39 with previous status Running { enqueued_at: 2026-10-26T13:50:47.078639467-04:00, start: 2026-10-26T13:50:47.143261658-04:00 } to new status Killed\nOct 26 13:52:51 britton-desktop pueued[3737428]: Error:\nOct 26 13:52:51 britton-desktop pueued[3737428]:    0: Failed to save state on startup.\nOct 26 13:52:51 britton-desktop pueued[3737428]:    1: Failed to write temp file while saving state.\nOct 26 13:52:51 britton-desktop pueued[3737428]:    2: No space left on device (os error 28)\nOct 26 13:52:51 britton-desktop pueued[3737428]: Location:\nOct 26 13:52:51 britton-desktop pueued[3737428]:    pueue/src/daemon/internal_state/state.rs:272\nOct 26 13:52:51 britton-desktop pueued[3737428]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.\nOct 26 13:52:51 britton-desktop pueued[3737428]: Run with RUST_BACKTRACE=full to include source snippets.\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Main process exited, code=exited, status=1/FAILURE\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Failed with result 'exit-code'.\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Scheduled restart job, restart counter is at 6.\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Start request repeated too quickly.\nOct 26 13:52:51 britton-desktop systemd[1966]: pueued.service: Failed with result 'start-limit-hit'.\nOct 26 13:52:51 britton-desktop systemd[1966]: Failed to start Pueue Daemon - CLI process scheduler and manager.\n",
+    "observed_filesystems": "/dev/nvme0n1p3: mounted /, 1.8T size, 1.7T used, 43M available, 100% used; datapool/tmp: mounted /tmp, 258G size, 258G used, 709M available, 100% used."
+  },
+  "repeatability": {
+    "gate_driver": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/nix-orchestrator-repair-20261026.sh",
+      "blake3": "8636250f7a9409dab33fe2552056ed0b84f2c3b1116212ad442faf5457091d38",
+      "text": "#!/usr/bin/env bash\nset -uo pipefail\nreadonly out=\"$HOME/.cargo-target/mantle-cairn-resume-20261026/nix-orchestrator-repair\"\nif [[ -e \"$out\" ]]; then exit 1; fi\nmkdir -p \"$out\"\nexport TMPDIR=/home/brittonr/.cargo-target/t\nexport XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache\nexport NIX_CONFIG=$'builders =\\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025'\nfailed=0\ncheck() {\n  local label=\"$1\" status\n  shift\n  printf '%s\\n' \"$*\" > \"$out/$label.command\"\n  \"$@\" > \"$out/$label.stdout.log\" 2> \"$out/$label.stderr.log\"\n  status=$?\n  printf '%s\\n' \"$status\" > \"$out/$label.exit\"\n  printf '%s exit=%s\\n' \"$label\" \"$status\"\n  if ((status)); then failed=1; fi\n}\nb3sum flake.nix Cargo.toml Cargo.lock flake.lock README.md src/source_built_fixed_point_mantle_actions.rs lib/durable-file-publication-adoption-receipt.ncl evidence/radicle/durable-file-publication-adoption-v1.ncl evidence/radicle/durable-file-publication-adoption-v1.json evidence/radicle/durable-file-publication-adoption-v1.blake3 tests/finish_gates.rs > \"$out/inputs-before.blake3\"\ncheck sandboxed-nextest-and-clippy nix build --offline --no-write-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy\ncheck flake nix flake check --offline --no-write-lock-file -L\nb3sum flake.nix Cargo.toml Cargo.lock flake.lock README.md src/source_built_fixed_point_mantle_actions.rs lib/durable-file-publication-adoption-receipt.ncl evidence/radicle/durable-file-publication-adoption-v1.ncl evidence/radicle/durable-file-publication-adoption-v1.json evidence/radicle/durable-file-publication-adoption-v1.blake3 tests/finish_gates.rs > \"$out/inputs-after.blake3\"\ncheck input-stability cmp \"$out/inputs-before.blake3\" \"$out/inputs-after.blake3\"\nexit \"$failed\"\n"
+    }
+  },
+  "non_claims": [
+    "The complete flake gate has no completion result; a successful Nextest/Clippy substep is not a full-gate pass.",
+    "The journal establishes the supervisor state-write failure, not that this repository build caused filesystem exhaustion.",
+    "The selected-input comparison is independent of the interrupted driver and covers only the listed files, not a whole post-record tree or binary identity.",
+    "Capability skips are retained as skipped, not executed test or hardware proof.",
+    "Historical v13 and Pueue 33 failures remain failures; no ADR acceptance, G2 resource admission, spec sync, archive, bootstrap result or release eligibility is inferred."
+  ]
+}

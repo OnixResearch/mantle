@@ -1,0 +1,375 @@
+{
+  "schema": "mantle-focused-tests-from-gate-v1",
+  "date": "2026-10-26",
+  "change": "separate-remote-build-hexagon",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "owed_action": "focused (current-status-2026-10-23.json remaining_local_actions)",
+  "filters": [
+    "crate crates/crunch-remote-core lib tests (module and function declared in its src)"
+  ],
+  "gate_log": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+    "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+    "command": "bash scripts/check-first-party-quality.sh"
+  },
+  "counts": {
+    "matched": 103,
+    "ok": 103,
+    "ignored": []
+  },
+  "tests": {
+    "admission::tests::a_matching_manifest_and_declared_sources_are_admitted": [
+      "ok"
+    ],
+    "admission::tests::coordinator_declaration_rejects_duplicate_features_before_live_claims_and_invalid_locality": [
+      "ok"
+    ],
+    "admission::tests::duplicate_empty_and_undeclared_sources_retain_distinct_rejections": [
+      "ok"
+    ],
+    "admission::tests::present_observation_order_does_not_change_missing_inputs": [
+      "ok"
+    ],
+    "admission::tests::worker_registration_checks_version_list_uniqueness_and_resume_fence_before_key": [
+      "ok"
+    ],
+    "admission::tests::wrong_manifest_identity_precedes_ref_bounds_and_mismatch": [
+      "ok"
+    ],
+    "attempt::tests::advancing_a_valid_fence_never_decreases": [
+      "ok"
+    ],
+    "attempt::tests::assignment_nonce_prevents_identity_reuse_after_state_reset": [
+      "ok"
+    ],
+    "attempt::tests::canonical_payload_byte_limit_includes_json_escaping_and_framing": [
+      "ok"
+    ],
+    "attempt::tests::canonical_payload_digests_match_the_existing_v1_serde_wire_bytes": [
+      "ok"
+    ],
+    "attempt::tests::deserialized_malformed_identity_is_rejected_by_the_pure_transition": [
+      "ok"
+    ],
+    "attempt::tests::duplicate_report_is_an_idempotent_no_op_and_conflict_is_rejected": [
+      "ok"
+    ],
+    "attempt::tests::durable_attempt_rejects_replayed_worker_identity_missing_nonce_and_forged_result": [
+      "ok"
+    ],
+    "attempt::tests::durable_coordinator_projection_rejects_stale_transfer_and_false_result_claims": [
+      "ok"
+    ],
+    "attempt::tests::equivalent_facts_produce_equivalent_decisions": [
+      "ok"
+    ],
+    "attempt::tests::event_retention_exhaustion_fails_closed_without_evicting_conflict_history": [
+      "ok"
+    ],
+    "attempt::tests::malformed_assignment_nonce_fails_before_identity_derivation": [
+      "ok"
+    ],
+    "attempt::tests::malformed_identity_and_unknown_future_fence_fail_without_state_change": [
+      "ok"
+    ],
+    "attempt::tests::output_result_requires_separate_output_admission_authorization": [
+      "ok"
+    ],
+    "attempt::tests::repeated_assignment_advances_every_fence_generation": [
+      "ok"
+    ],
+    "attempt::tests::result_ready_and_completion_require_matching_output_digest": [
+      "ok"
+    ],
+    "attempt::tests::retry_decision_uses_only_supplied_budget_and_time_facts": [
+      "ok"
+    ],
+    "attempt::tests::stale_report_is_rejected_before_output_admission": [
+      "ok"
+    ],
+    "attempt::tests::terminal_states_never_transition_to_live_states": [
+      "ok"
+    ],
+    "attempt::tests::transfer_checkpoints_cannot_regress_with_a_fresh_event_id": [
+      "ok"
+    ],
+    "attempt::tests::transition_table_accepts_only_declared_live_edges": [
+      "ok"
+    ],
+    "attempt_log::tests::append_and_manifest_ref_checks_reject_conflicts_without_reordering": [
+      "ok"
+    ],
+    "attempt_log::tests::cursor_and_page_boundaries": [
+      "ok"
+    ],
+    "attempt_log::tests::fence_and_chain_precedence": [
+      "ok"
+    ],
+    "attempt_log::tests::policy_redaction_and_metadata_fail_closed_at_boundaries": [
+      "ok"
+    ],
+    "attempt_log::tests::retention_accounts_for_oldest_segments_and_rejects_impossible_limits": [
+      "ok"
+    ],
+    "attempt_log::tests::segment_contiguity_and_manifest_anchor_invariants": [
+      "ok"
+    ],
+    "caveat::tests::alternatives_choose_first_match_and_deny_if_none_matches": [
+      "ok"
+    ],
+    "caveat::tests::bound_rewrite_matches_complete_segments_and_preserves_binding": [
+      "ok"
+    ],
+    "caveat::tests::exact_store_gate_denies_prefix_lookalikes_traversal_and_rewrites": [
+      "ok"
+    ],
+    "caveat::tests::expanded_output_over_bound_denies_without_alternative_fallback": [
+      "ok"
+    ],
+    "caveat::tests::finite_input_space_never_widens_under_appended_rewrites": [
+      "ok"
+    ],
+    "caveat::tests::known_variants_reject_missing_extra_and_invalid_fields": [
+      "ok"
+    ],
+    "caveat::tests::newest_runs_first_but_ancestor_rejection_cannot_be_rewritten_away": [
+      "ok"
+    ],
+    "caveat::tests::original_and_every_ancestor_output_must_pass_site_policy": [
+      "ok"
+    ],
+    "caveat::tests::pattern_value_segment_chain_and_alternative_bounds_fail_closed": [
+      "ok"
+    ],
+    "caveat::tests::project_gate_binds_original_owner_every_prefix_and_admitted_goal": [
+      "ok"
+    ],
+    "caveat::tests::record_ordinals_and_serialized_size_are_not_normalized_away": [
+      "ok"
+    ],
+    "caveat::tests::reject_is_identity_only_for_nonmatches_and_unknown_always_denies": [
+      "ok"
+    ],
+    "caveat::tests::remote_site_conjoins_parent_jobs_classes_and_receiver_deadlines_before_rewrite": [
+      "ok"
+    ],
+    "demand::tests::forged_identity_noncanonical_resources_and_count_bound_do_not_mutate_book": [
+      "ok"
+    ],
+    "demand::tests::repeated_rounds_dedupe_changed_requirements_replace_and_every_lifetime_end_retracts": [
+      "ok"
+    ],
+    "effect::tests::client_exchange_observation_requires_exact_actor_fence_and_frame_limit": [
+      "ok"
+    ],
+    "effect::tests::dependent_effect_requires_matching_bounded_observation": [
+      "ok"
+    ],
+    "effect::tests::failed_adapter_observation_is_terminal_and_cannot_claim_success": [
+      "ok"
+    ],
+    "effect::tests::failed_session_admits_exactly_one_terminal_failure_report": [
+      "ok"
+    ],
+    "effect::tests::fenced_session_rejects_other_job_attempt_and_generation_before_effect_planning": [
+      "ok"
+    ],
+    "effect::tests::healthy_session_has_no_failure_to_report": [
+      "ok"
+    ],
+    "effect::tests::lease_renewal_and_output_transfer_need_exact_observations": [
+      "ok"
+    ],
+    "effect::tests::partially_durable_store_failure_cannot_complete_or_persist_attempt": [
+      "ok"
+    ],
+    "endpoint::tests::exact_revoke_retains_tombstone_and_recreation_fences_old_presentations": [
+      "ok"
+    ],
+    "endpoint::tests::rejects_noncanonical_names_corrupt_tables_and_generation_overflow": [
+      "ok"
+    ],
+    "endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact": [
+      "ok"
+    ],
+    "external_batch::tests::fenced_response_rejects_stale_identity_before_untrusted_job_and_terminal_reconcile": [
+      "ok"
+    ],
+    "failure::tests::transient_transport_and_terminal_trust_failures_are_distinct": [
+      "ok"
+    ],
+    "identity::tests::external_allocation_retries_are_distinct_but_reproducible": [
+      "ok"
+    ],
+    "identity::tests::normalized_key_distinguishes_source_output_and_resource_requirements": [
+      "ok"
+    ],
+    "identity::tests::output_artifact_id_uses_exact_nul_separated_v1_identity_without_intermediate_allocation": [
+      "ok"
+    ],
+    "lease::tests::overlapping_refs_are_sorted_and_lease_release_is_only_a_plan": [
+      "ok"
+    ],
+    "lease::tests::pre_dedup_count_is_bounded": [
+      "ok"
+    ],
+    "nominal::tests::each_identity_role_admits_only_bounded_control_free_text": [
+      "ok"
+    ],
+    "output::tests::metadata_admission_checks_ordered_receipt_then_identity_and_nar_shape": [
+      "ok"
+    ],
+    "output::tests::nar_summary_rejects_bad_digest_and_unbound_pathinfo": [
+      "ok"
+    ],
+    "output::tests::output_artifact_sequence_requires_payload_identity_and_every_expected_artifact": [
+      "ok"
+    ],
+    "output::tests::policy_key_material_matching_does_not_claim_content_trust": [
+      "ok"
+    ],
+    "output::tests::scope_and_transfer_key_preserve_first_failure_precedence": [
+      "ok"
+    ],
+    "output::tests::transfer_report_distinguishes_fallback_and_actual_streaming": [
+      "ok"
+    ],
+    "output::tests::worker_output_facts_keep_nar_failure_before_later_metadata_errors": [
+      "ok"
+    ],
+    "protocol::tests::admitted_session_and_repeated_output_artifacts": [
+      "ok"
+    ],
+    "protocol::tests::wrong_direction_order_and_unadmitted_data_frames_fail_closed": [
+      "ok"
+    ],
+    "provider::tests::incomplete_build_request_never_reaches_remote_dispatch": [
+      "ok"
+    ],
+    "provider::tests::untrusted_remote_failure_cannot_enable_implicit_fallback": [
+      "ok"
+    ],
+    "receipt::tests::malformed_executor_and_oversized_outputs_never_get_a_digest": [
+      "ok"
+    ],
+    "receipt::tests::ordered_output_receipt_preserves_v1_absence_large_decimal_and_field_order": [
+      "ok"
+    ],
+    "receipt::tests::request_and_expected_path_are_bound_into_receipt_identity": [
+      "ok"
+    ],
+    "recovery::tests::only_terminal_jobs_plan_lease_release": [
+      "ok"
+    ],
+    "recovery::tests::same_session_precedes_exhausted_reconnect_attempts": [
+      "ok"
+    ],
+    "resource::tests::capacity_denies_each_shortfall_without_promoting_remaining_fit": [
+      "ok"
+    ],
+    "resource::tests::generation_fence_and_attempt_bind_existing_lease": [
+      "ok"
+    ],
+    "resource::tests::locality_cannot_invent_unverified_or_overflowing_receiver_presence": [
+      "ok"
+    ],
+    "resource::tests::preference_order_preserves_eligibility_independent_ranking": [
+      "ok"
+    ],
+    "transfer::tests::delta_accounting_and_fallback_preserve_accepted_bytes": [
+      "ok"
+    ],
+    "transfer::tests::negotiated_streaming_never_claims_fixture_runtime_completion": [
+      "ok"
+    ],
+    "transfer::tests::production_input_manifest_requires_current_fence_and_exact_nar_artifact_set": [
+      "ok"
+    ],
+    "transfer::tests::production_manifest_rejects_digest_then_stale_fence_before_output_artifacts": [
+      "ok"
+    ],
+    "transfer::tests::production_output_manifest_artifacts_bind_nar_and_exact_serialized_pathinfo_bytes": [
+      "ok"
+    ],
+    "transfer::tests::production_runtime_receipt_requires_completed_evidence_without_admission_claim": [
+      "ok"
+    ],
+    "transfer::tests::stale_scope_and_forged_checkpoint_cursor_cannot_resume": [
+      "ok"
+    ],
+    "transfer::tests::unknown_chunk_and_ungranted_credit_reject_before_reservation": [
+      "ok"
+    ],
+    "transfer::tests::uploaded_bytes_and_missing_identity_fail_closed": [
+      "ok"
+    ],
+    "transfer::tests::uploaded_source_artifacts_require_exact_payload_and_unique_expected_refs": [
+      "ok"
+    ],
+    "trellis_projection::tests::authority_precedes_replay_and_replay_precedes_capacity_and_terminal": [
+      "ok"
+    ],
+    "trellis_projection::tests::complete_finite_matrix_matches_actual_trellis_admit": [
+      "ok"
+    ],
+    "trellis_projection::tests::complete_retained_history_classifies_the_last_entry": [
+      "ok"
+    ],
+    "trellis_projection::tests::exhausted_identity_domain_never_aliases_or_forgets_existing_values": [
+      "ok"
+    ],
+    "trellis_projection::tests::first_and_final_fences_keep_report_admission_separate_from_reassignment": [
+      "ok"
+    ],
+    "trellis_projection::tests::full_identity_equality_is_stable_across_a_trace": [
+      "ok"
+    ],
+    "trellis_projection::tests::out_of_model_progress_and_malformed_payloads_do_not_receive_coverage": [
+      "ok"
+    ]
+  },
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "non_claims": [
+    "Result lines come from the workspace lib/tests step of the tree-bound gate; module-path filters can include same-named tests from another target, so every matched name is listed.",
+    "A passing focused subset is not task acceptance, runtime proof or archive readiness.",
+    "The v13 flake repository check failed; named focused passes do not qualify the whole gate."
+  ]
+}

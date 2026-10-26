@@ -22,7 +22,7 @@ or runtime gates. Those require captured execution.
 ## Phase 3: Positive and negative verification
 
 - [x] [parallel] T3.1 Add positive fixtures: passing version output, clean leak scan, passing relocation rerun, declared optional soname. r[mantle.derivation_finish_gates.version_check] r[mantle.derivation_finish_gates.reference_leak_gate] r[mantle.derivation_finish_gates.relocated_rerun]
-- [ ] [parallel] T3.2 Add negative fixtures: wrong version, nonzero exit, missing binary without opt-out, cross leak, native report hit, failed rerun, undeclared missing dlopen, oversized or malformed gate record. r[mantle.derivation_finish_gates.version_check] r[mantle.derivation_finish_gates.reference_leak_gate] r[mantle.derivation_finish_gates.relocated_rerun] r[mantle.derivation_finish_gates.dlopen_audit]
+- [x] [parallel] T3.2 Add negative fixtures: wrong version, nonzero exit, missing binary without opt-out, cross leak, native report hit, failed rerun, undeclared missing dlopen, oversized or malformed gate record. r[mantle.derivation_finish_gates.version_check] r[mantle.derivation_finish_gates.reference_leak_gate] r[mantle.derivation_finish_gates.relocated_rerun] r[mantle.derivation_finish_gates.dlopen_audit]
 - [ ] [serial] T3.3 Prove existing recipes evaluate and build unchanged before any adoption commit. r[mantle.derivation_finish_gates.shared_contract]
 
 ## Phase 4: Adoption
@@ -87,3 +87,69 @@ strict Clippy/Nix gates, policy approval and archive/sync remain open.
 These reachable positive and wrong-version paths are exercised on the existing immutable wait-request-repaired CLI cohort, not a newly pinned exact-exec/final integrated subject. The receipt retains selected unchanged source bindings, command/environment and repeatability limits; it does not prove whole-tree source/binary identity. The original five policy-freshness failures remain historical evidence rather than being rewritten as passes.
 
 Build finish-shell/policy maintainers own bounded interpretation/repetition; Main owns final gate integration. Complete negative/core/shell matrix, isolated-origin inventory/baseline, unchanged recipe/family builds and bootstrap adoption are local actions, not external blockers. Gate-set ADR and family opt-out approval require the responsible human/policy owner; no signature or authority is invented. No checkbox, production adoption, provider authority, lifecycle acceptance, spec sync, archive or release claim changes.
+
+## T3.2 fixture inventory and verification (2026-10-26)
+
+The matching-version/nonzero-exit regression is now present as
+`real_finish_gate_denies_matching_version_with_nonzero_exit_without_publication`
+in `tests/finish_gates.rs`. It derives the negative recipe from the existing
+positive fixture by printing `demo-1.0` and then exiting 7, matching the recipe
+mutation in `target/cairn-finish-20261023/finish-nonzero-smoke-v13.py`. It requires
+CLI exit 1, expected version `1.0`, version denied, reference-leak/relocation
+not-run, built/cached counts zero, failed count one, empty successful outcomes,
+and no action-result publication phase. No source behavior or base fixture
+changes are needed. The existing positive runtime test supplies the zero-exit
+control; the standalone smoke runs both variants against the pinned CLI.
+
+Existing named coverage for the other T3.2 cases (inventory, not new execution
+claims):
+
+| T3.2 case | Existing named test | Boundary |
+| --- | --- | --- |
+| Wrong version, missing binary without opt-out, failed relocation rerun | `real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure` | Real sandboxed CLI; asserts version/relocation denial as appropriate. |
+| Builder default version mismatch | `real_builder_default_requires_matching_executable_version` | Real sandboxed builder-default path. |
+| Cross leak policy | `finish_gates::tests::reference_policy_reports_native_but_denies_cross_and_build_only_hits` | Pure policy with `cross_build=true`; also exercises native report and explicit native deny. |
+| Build-only wrapper leak and native report hit | `real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix` | Real sandboxed CLI, explicit build-platform deny path, and a native finding reported without denial. |
+| Undeclared missing dlopen | `finish_gates::tests::real_glibc_audit_distinguishes_missing_and_opened_sonames` | `mantle_native_dlopen`-gated host glibc probe and actual audit events passed to report evaluation; asserts denied before optional-soname adoption and passed after. |
+| Audit evidence cannot merge success across runs | `finish_gates::tests::audit_missing_soname_cannot_be_satisfied_by_another_run` | Pure audit parser; also checks malformed audit records. |
+| Oversized or malformed gate declaration | `finish_gates::tests::rejects_unbounded_gate_input` | Pure admission returns `DeclarationTooLarge` and `InvalidDeclaration`. |
+| Unsafe/missing command and invalid gate dependencies | `finish_gates::tests::declaration_denials_distinguish_unsafe_commands_and_gate_dependencies` | Pure typed admission denials. |
+| Reference bounds and absent execution evidence | `finish_gates::tests::reference_bounds_and_required_execution_evidence_fail_closed` | Pure boundary/evidence checks. |
+
+Scope gaps remain explicit: the cross-build flag is exercised by pure policy,
+not a real cross-toolchain CLI fixture; missing dlopen is exercised by a
+host-loader/report test, not a sandboxed CLI failure/publication test; malformed
+and oversized declarations are checked at pure admission, not through CLI
+reporting. Do not infer those broader end-to-end claims from the inventory.
+`real_builder_exit_and_shell_syntax_cannot_skip_required_version` additionally
+guards gate bypass and publication on child-builder failure, but does not
+replace the new matching-text/nonzero-exit case.
+
+The source-only worker handed these commands to Main without running checks.
+The post-integration execution and retained CLI reuse are recorded below:
+
+```sh
+nix develop -c cargo test -p mantle --test finish_gates real_finish_gate_denies_matching_version_with_nonzero_exit_without_publication -- --exact --nocapture
+nix develop -c cargo test -p mantle --test finish_gates -- --nocapture
+nix develop -c cargo test -p crunch-build --lib finish_gates -- --nocapture
+python3 target/cairn-finish-20261023/finish-nonzero-smoke-v13.py
+```
+
+Require actual sandbox execution, not capability-skipped tests; retain the
+native-dlopen configuration/availability for the conditional host-loader case.
+The pinned CLI smoke must retain its zero-exit passing control and nonzero
+denied result with zero built, one failed, no outcomes/publication, and unchanged
+executable binding. The permanent regression additionally asserts zero cached.
+`evidence/nonzero-exit-fixture-2026-10-26.json` records six core fixtures and
+eight real sandbox fixtures passing, including the new nonzero case. The actual
+glibc audit test was compiled and executed; no fixture skipped. Format, strict
+Clippy and both adoption-receipt typechecks/boundary fixtures also exited 0.
+The existing completed v8 CLI smoke retains a passing zero-exit control and
+matching-text/nonzero denial with no outcomes/publication. Its output and pin
+digests were checked; it was not overwritten or re-executed. Pueue task 28's
+attempted duplicate smoke launch refused the existing directory before running
+the CLI and remains exit 1, not a newly passed smoke.
+
+T3.2 is checked for the named fixture delivery only. Historical failures, the
+pure-policy/host-loader scope limits above and all ADR, bootstrap adoption,
+full-gate, spec-sync, archive and external-authority boundaries remain unchanged.

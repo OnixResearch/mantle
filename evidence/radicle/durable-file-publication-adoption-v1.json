@@ -52,7 +52,7 @@
     ]
   },
   "nix": {
-    "flake_blake3": "506d6a26af501959daa7d0a326b17ad39ba2ed58d9180ea123b0c82aff9cc03b",
+    "flake_blake3": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
     "lock_blake3": "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc",
     "locked_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
     "locked_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",

@@ -1,4 +1,11 @@
 {
+  "retained_v13_evidence_update_2026_10_26": {
+    "focused_record": "evidence/focused-tests-gate-v13-2026-10-26.json",
+    "matched_tests": 103,
+    "individual_tasks_closed": [],
+    "acceptance_claimed": false,
+    "remaining_boundary": "The remote-core subset and resolved no-std/semantic integration blockers do not establish every adapter/parity/cross-owner criterion. The integration addendum retains flake exit 1, a repository compile-time Python source-filter failure, not a host limitation. Earlier findings remain historical."
+  },
   "schema": "mantle-cairn-current-criterion-status-v1",
   "observed_date": "2026-10-23",
   "change": "separate-remote-build-hexagon",
@@ -792,5 +799,130 @@
       "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
       "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
     ]
+  },
+  "observed_integration_gate_update_v13": {
+    "acceptance_claimed": false,
+    "checkboxes_changed": false,
+    "qualification": {
+      "final_gates": {
+        "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+        "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+        "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+        "script_exit": 1,
+        "tree_unchanged": true,
+        "step_exits": {
+          "ordinary-first-party": 0,
+          "remaining-package-format": 0,
+          "architecture-self": 0,
+          "architecture": 0,
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0,
+          "no-std-core": 0,
+          "tigerstyle": 0,
+          "changed-no-std-wasm": 0,
+          "operator-contract": 0,
+          "flake": 1
+        }
+      },
+      "host_limited_steps": [],
+      "failed_gate_steps": [
+        {
+          "step": "flake",
+          "exit": 1,
+          "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+          "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+        }
+      ],
+      "all_gate_steps_passed": false,
+      "bound_step_reruns": [],
+      "pin_binding": {
+        "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+        "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+      },
+      "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+    },
+    "gate_run": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "changed_during_run": [],
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      },
+      "bound_step_reruns": []
+    },
+    "subject_boundary": {
+      "cohort": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort",
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "pin_binding_blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88",
+      "statement": "The gates ran over the hashed tree from which the v8 cohort was installed; they are ordinary repository gates, not this change's acceptance."
+    },
+    "blocker_outcomes": [
+      {
+        "finding": "Earlier no-std rail failed at missing alloc::format test import; strict Clippy later failed at misplaced unused alloc::format. Main owns repair/requalification, not this evidence worker.",
+        "gate_steps": {
+          "no-std-core": 0,
+          "ordinary-first-party": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Semantic compiler capture hit existing 268435456-byte bound; static architecture pass is not semantic acceptance.",
+        "gate_steps": {
+          "architecture-semantic-self": 0,
+          "architecture-semantic": 0
+        },
+        "status": "resolved-by-observed-gate-pass",
+        "failing_steps": [],
+        "bound_step_reruns": []
+      },
+      {
+        "finding": "Flake/Tiger Style commands exited 1 at Nix remote build-hook current-load lock filename too long/EOF; flake evaluated 236 checks before execution failure. This is not evidence the whole host/toolchain is inaccessible. Main may repair builder configuration or use explicitly documented local builders while preserving check semantics.",
+        "gate_steps": {
+          "tigerstyle": 0,
+          "flake": 1
+        },
+        "status": "still-failing",
+        "failing_steps": [
+          {
+            "step": "flake",
+            "exit": 1,
+            "host_classification": null,
+            "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+            "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+          }
+        ],
+        "bound_step_reruns": []
+      }
+    ],
+    "non_claims": [
+      "An observed gate pass resolves only the named integration blocker; criteria, tasks and acceptance are unchanged.",
+      "A host-prerequisite failure is not a pass; the listed step remains unexecuted past its host failure.",
+      "The v13 flake check failed in repository compilation, not a host prerequisite; it remains failing.",
+      "No archive, spec sync, publication or lifecycle acceptance is performed or implied."
+    ]
+  },
+  "observed_nix_maintenance_2026_10_26": {
+    "evidence": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/nix-orchestrator-repair-2026-10-26.json",
+    "evidence_blake3": "dad940db6ff12f7efdf99c0b7334ee2cab3c359d407623814c5932f4b1d46522",
+    "acceptance_claimed": false,
+    "sandboxed_nextest_and_clippy_exit": 0,
+    "nextest_summary": "Summary [ 247.534s] 6730 tests run: 6730 passed, 198 skipped",
+    "full_flake_status": "interrupted-no-completion",
+    "remaining_boundary": "Pueue failed with ENOSPC saving state during the later full flake run; there is no completed full-gate result. Historical failures, criterion-specific baselines, external authority, resource-admission and lifecycle boundaries remain unchanged."
   }
 }

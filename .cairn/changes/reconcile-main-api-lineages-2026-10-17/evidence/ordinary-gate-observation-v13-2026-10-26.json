@@ -1,0 +1,221 @@
+{
+  "schema": "mantle-ordinary-gate-observation-v2",
+  "date": "2026-10-26",
+  "change": "reconcile-main-api-lineages-2026-10-17",
+  "requirement": "mantle.semantic_reconciliation.evidence_scope",
+  "maintenance_owner": "Mantle integration and quality-gate maintainers",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "prior_record": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/ordinary-gate-observation-2026-10-25.json",
+    "blake3": "c12aebe4c0bd8f05ef235aa0795ee53055623ccf511a9384a04be1504dfcb091"
+  },
+  "v11_run": {
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-v11-host-hook",
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "head_end": "0acfdf2545eba138304de99f6d5c92e8c2d79477",
+      "files_start": 11926,
+      "files_end": 11926,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 1,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "212ad35de11018c148b2f84211c85d81ee94d8cdc980dc079b61fc8231201c9e",
+    "step_exits": {
+      "ordinary-first-party": 0,
+      "remaining-package-format": 0,
+      "architecture-self": 0,
+      "architecture": 0,
+      "architecture-semantic-self": 0,
+      "architecture-semantic": 0,
+      "no-std-core": 0,
+      "tigerstyle": 1,
+      "changed-no-std-wasm": 0,
+      "operator-contract": 0,
+      "flake": 1
+    },
+    "tigerstyle_bound_rerun": {
+      "schema": "mantle-final-gate-step-rerun-v1",
+      "step": "tigerstyle",
+      "exit": 0,
+      "tree_matches_gate_start": true,
+      "tree_unchanged": true
+    },
+    "note": "Directories renamed from exact-exec-final-gates*, exact-exec-final-gates-tree* and exact-exec-final-gates-tigerstyle-rerun after the v11 records were written."
+  },
+  "v12_run": {
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-v12-quota",
+    "tree": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree-v12-quota",
+    "tree_files": [
+      "start.blake3",
+      "start.head",
+      "start.unreadable"
+    ],
+    "start_head": "07ac54edad0eddd4218cadf6f077c14f371b74e4",
+    "start_snapshot_blake3": "ab0bb66e021a8b559c4a32f1689f8639838a8382927ec39e34ffe73747dc6489",
+    "step_exits": {},
+    "last_step_log": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-v12-quota/ordinary-first-party.stdout.log",
+      "blake3": "e82a66c62a453553642e1df21f0f161b8962dfce8ee969e65ebf207d4282eef8",
+      "bytes": 1138434,
+      "tail": "tected_exec_seccomp::linux::tests::seccomp_supervisor_allows_declared_execveat_descendant ... ok\ntest protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_digest_mismatch_before_execve ... "
+    },
+    "file_times": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/gate-v12-stop/v12-files.txt",
+      "blake3": "380f2e5c76c0100ddf65e95a17ee694487f86cd0aff25d6ff424f447696f46a7",
+      "text": "2026-10-25 15:35:09.426763787 -0400 42 target/cairn-finish-20261023/exact-exec-final-gates-v12-quota/ordinary-first-party.command\n2026-10-25 16:55:50.235952961 -0400 25290 target/cairn-finish-20261023/exact-exec-final-gates-v12-quota/ordinary-first-party.stderr.log\n2026-10-25 17:03:29.869567225 -0400 1138434 target/cairn-finish-20261023/exact-exec-final-gates-v12-quota/ordinary-first-party.stdout.log\n2026-10-25 15:35:09.412763712 -0400 1839246 target/cairn-finish-20261023/exact-exec-final-gates-tree-v12-quota/start.blake3\n2026-10-25 15:35:08.996761484 -0400 41 target/cairn-finish-20261023/exact-exec-final-gates-tree-v12-quota/start.head\n2026-10-25 15:35:08.997761489 -0400 0 target/cairn-finish-20261023/exact-exec-final-gates-tree-v12-quota/start.unreadable\n"
+    },
+    "scheduler_journal": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/gate-v12-stop/pueued-journal.txt",
+      "blake3": "d08bf5145dfad189da065b86eb7062c46b3f9bf2a1c510983f399c7b2871bdda",
+      "text": "2026-10-25T17:04:48.166712-04:00 britton-desktop pueued[1408565]: 17:04:48  INFO pueue::daemon::process_handler::finish: Task 26 finished with result: Failed(1)\n2026-10-25T18:21:58.686079-04:00 britton-desktop pueued[1408565]: 18:21:58  INFO pueue::daemon::process_handler::finish: Task 31 finished with result: Failed(1)\n"
+    },
+    "dataset_state_after": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/gate-v12-stop/zfs-after.txt",
+      "blake3": "f41a5292539c4874578a07dfb255fb4656e16ad80d41e9e6294c59be6fcfcd3d",
+      "text": "NAME                    USED  AVAIL  QUOTA\ndatapool/cargo-target   520G   979G  1.46T\ndatapool/git            787G  13.1G   800G\ndatapool/kache-nix     64.0G     0B    64G\ndatapool/tmp            252G  5.70G   258G\n"
+    },
+    "observed": "The workspace test step stopped writing at 17:03:29 inside protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_digest_mismatch_before_execve; the queue reported exit 1 at 17:04:48. No step exit, end snapshot, gates.exit or tree result was written.",
+    "unattributed": "The cause is not established. Every missing file sits on datapool/git, which carries an 800G quota and stood at 787G used after the run; a full dataset would fail all of these writes, but no write error was retained.",
+    "note": "Directories renamed from exact-exec-final-gates and exact-exec-final-gates-tree before v13 started."
+  },
+  "changes_since_v11": [
+    {
+      "commit": "08f910052",
+      "summary": "Ignore the Tiger Style runner default target and rustc ICE reports."
+    },
+    {
+      "commit": "07ac54eda",
+      "summary": "Keep Cargo stdin target-info probes tool probes in wait diagnostics (differential cohorts stage)."
+    },
+    {
+      "commit": "d7a1ffcc5",
+      "summary": "Keep the Cargo wait collector receiving after an interrupted receive (differential cohorts stage)."
+    },
+    {
+      "gate_script": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates.sh",
+      "gate_script_blake3": "ebc9d9b2ee4a46a8cf94b43924b3b91fc10d487f59bc44e98f738764ee51444a",
+      "bound_script": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-bound.sh",
+      "bound_script_blake3": "2cdb35c175f8f66f1581db9910293d46aad4ee2c63c6f537d77a9a5d21ce8c0f",
+      "summary": "Exports NIX_CONFIG with no remote builders and a scratch build directory (v12), and writes step outputs and the tree binding under ~/.cargo-target/mantle-final-gates-v13, linked from the run directory (v13); step commands unchanged."
+    }
+  ],
+  "final_tree_bound_run": {
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "d7a1ffcc58f3ee13c2fbf4adad05e85d17df6504",
+      "head_end": "d7a1ffcc58f3ee13c2fbf4adad05e85d17df6504",
+      "files_start": 11934,
+      "files_end": 11934,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 1,
+      "tree_unchanged": true
+    },
+    "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+    "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+    "outputs_resolved": {
+      "steps": "/home/brittonr/.cargo-target/mantle-final-gates-v13/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/.cargo-target/mantle-final-gates-v13/exact-exec-final-gates-tree/result.json"
+    },
+    "step_exits": {
+      "ordinary-first-party": 0,
+      "remaining-package-format": 0,
+      "architecture-self": 0,
+      "architecture": 0,
+      "architecture-semantic-self": 0,
+      "architecture-semantic": 0,
+      "no-std-core": 0,
+      "tigerstyle": 0,
+      "changed-no-std-wasm": 0,
+      "operator-contract": 0,
+      "flake": 1
+    },
+    "host_classified_failures": {
+      "flake": null
+    }
+  },
+  "full_flake_check": {
+    "command": "nix flake check --offline --no-write-lock-file -L",
+    "exit": 1,
+    "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+    "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef",
+    "stderr_lines": 82367,
+    "checks_announced": "running 297 flake checks...",
+    "host_hook_signature": null,
+    "repository_failure": {
+      "classification": "compile-time-python-source-files-omitted",
+      "missing_files": [
+        "crates/crunch-model-conversion/src/gguf_reader.py",
+        "crates/crunch-model-conversion/src/runner.py",
+        "crates/crunch-esp-idf/src/driver.py"
+      ],
+      "statement": "The source filter omitted compile-time include_str! inputs; flake did not pass."
+    },
+    "environment": {
+      "NIX_CONFIG": {
+        "builders": "",
+        "build-dir": "/datapool/mantle-store/nix-build-dir-20261025"
+      },
+      "reason": "The host /etc/nix/machines entry makes the remote-build hook fail on its current-load lock file name; local builds avoid it. The build directory sits on the mantle-store pool because the /tmp quota was nearly full. Flake inputs, pins and checks are unchanged.",
+      "build_dir_probe": {
+        "output": "/nix/store/6bji09f393h3l2ib451plrx74273m1jq-mantle-build-dir-probe-20261025",
+        "mountinfo": null
+      }
+    }
+  },
+  "g2_relation": {
+    "observed": "The current-system flake check ran inside this tree-bound gate and exited 1.",
+    "approval": "User instruction on 2026-10-25 (\"commit and do all\") covering the full flake check.",
+    "not_met": "G2 asks for the separately reviewed scratch route under the change's frozen resource caps, pool-availability baseline and accounting epoch. This run used a probed local build directory instead and applied none of that accounting; the task checkbox is unchanged."
+  },
+  "non_claims": [
+    "Observes the ordinary repository gate on the current tree; it is not G1 admission or acceptance under this change's resource-epoch rules, and it reuses no prior admission.",
+    "A host-classified failure is not a pass.",
+    "The v13 flake repository compilation failure is not host-limited and does not qualify as a pass.",
+    "No publication, archive or semantic parent review is performed."
+  ]
+}

@@ -10,9 +10,9 @@ T1 stack decision is recorded; baseline and end-to-end acceptance remain open.
 
 ## Phase 2: Core filter language
 
-- [ ] [serial] T2.1 Implement pure pattern matching with bindings, template instantiation, rewrite, reject, alternative lists, and unknown-rejects-everything. r[mantle.authority_attenuation.caveat_filter_semantics]
-- [ ] [serial] T2.2 Implement right-to-left composition and prove that composing chains cannot widen a grant. r[mantle.authority_attenuation.composition_order]
-- [ ] [parallel] T2.3 Add filter fixtures: rewrite with bindings, reject, alternatives, unknown caveat, oversized pattern, and malformed caveat. r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T2.1 Implement pure pattern matching with bindings, template instantiation, rewrite, reject, alternative lists, and unknown-rejects-everything. r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T2.2 Implement right-to-left composition and prove that composing chains cannot widen a grant. r[mantle.authority_attenuation.composition_order]
+- [x] [parallel] T2.3 Add filter fixtures: rewrite with bindings, reject, alternatives, unknown caveat, oversized pattern, and malformed caveat. r[mantle.authority_attenuation.caveat_filter_semantics]
 
 ## Phase 3: Grant sites
 
@@ -28,3 +28,9 @@ T1 stack decision is recorded; baseline and end-to-end acceptance remain open.
 - [ ] [serial] T4.3 Run the filter, composition, and grant-site rails before and after the change. Preserve exact results. r[mantle.authority_attenuation.composition_order]
 - [ ] [serial] T4.4 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[mantle.authority_attenuation.caveat_filter_semantics]
 - [ ] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.authority_attenuation.stack_authority_reuse]
+
+## Retained individual task support (2026-10-26)
+
+`evidence/task-closure-gate-v13-2026-10-26.json` maps T2.1–T2.3 to the v13-identical core source and exact passing tests. T2.2's no-widening argument is local and assumes one pure receiver-owned site predicate: a longer chain rechecks the original and every prefix checked by its parent, so its accepted input set is a subset. Finite enumeration and ancestor-rejection fixtures exercise that invariant; this is not cryptographic delegation or end-to-end grant acceptance.
+
+`evidence/focused-tests-gate-v13-2026-10-26.json` lists all 13 matched caveat tests as passing. The v13 flake step nevertheless exited 1 on omitted compile-time Python inputs; it is a repository failure and remains visible in the status addendum. Grant-site, before/after, whole-quality-gate and lifecycle tasks remain open; no ADR approval, acceptance or archive follows from the core subset.

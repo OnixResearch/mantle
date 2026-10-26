@@ -70,3 +70,24 @@ changed an output.
 - The dlopen audit needs a loader-audit module per dynamic output family; the
   first target is the GCC shared-runtime milestone, not the static musl chain.
 - Gate runtime cost is bounded by the version command and one optional copy.
+
+## Nonzero version-command fixture and verification boundary
+
+`tests/finish_gates.rs` reuses `tests/fixtures/finish_gates.ncl` and the existing
+isolated real-CLI helper. The negative variant prints the same `demo-1.0` as the
+positive fixture, then exits 7. Matching text is not sufficient: the build must
+exit 1, report the version gate denied with expected version `1.0`, leave
+reference-leak and relocation gates not-run, report zero built/cached and one
+failed derivation, return no successful outcomes, and emit no action-result
+publication report. Assertions use structured report fields, not diagnostic
+wording. The existing positive fixture is the zero-exit control.
+
+The fixture retains the existing bubblewrap capability gate and fresh temporary
+store/state per invocation; a capability skip is not execution evidence. It does
+not enable dlopen or claim a cross-toolchain build. The T3.2 coverage inventory
+and observed verification are in `tasks.md`; pure-policy and host-loader checks
+are distinguished there from sandboxed CLI fixtures. Six core and eight sandbox
+fixtures passed. The retained v8 CLI control/denial pair is reused without
+overwriting its evidence; the later duplicate-launch refusal remains a failed
+launch, not a product pass. This fixture delivery changes neither historical
+failures nor ADR/adoption/archive status.

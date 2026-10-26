@@ -1,0 +1,69 @@
+{
+  "schema": "mantle-focused-tests-from-gate-v1",
+  "date": "2026-10-26",
+  "change": "adopt-casita-store-backend",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "owed_action": "focused (current-status-2026-10-23.json remaining_local_actions)",
+  "filters": [
+    "^admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail$"
+  ],
+  "gate_log": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+    "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+    "command": "bash scripts/check-first-party-quality.sh"
+  },
+  "counts": {
+    "matched": 1,
+    "ok": 1,
+    "ignored": []
+  },
+  "tests": {
+    "admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail": [
+      "ok"
+    ]
+  },
+  "qualification": {
+    "final_gates": {
+      "steps": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates",
+      "tree_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates-tree/result.json",
+      "tree_binding_blake3": "702bdc3af8a177573a6ea33286f2f8a7291091f4c52aaf00cc4db5e7371040a9",
+      "script_exit": 1,
+      "tree_unchanged": true,
+      "step_exits": {
+        "ordinary-first-party": 0,
+        "remaining-package-format": 0,
+        "architecture-self": 0,
+        "architecture": 0,
+        "architecture-semantic-self": 0,
+        "architecture-semantic": 0,
+        "no-std-core": 0,
+        "tigerstyle": 0,
+        "changed-no-std-wasm": 0,
+        "operator-contract": 0,
+        "flake": 1
+      }
+    },
+    "host_limited_steps": [],
+    "failed_gate_steps": [
+      {
+        "step": "flake",
+        "exit": 1,
+        "stderr": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/flake.stderr.log",
+        "stderr_blake3": "f0221024d71fd4e3c7a25b89bda1014fdcf3153af7ec13b5508d2feebaa963ef"
+      }
+    ],
+    "all_gate_steps_passed": false,
+    "bound_step_reruns": [],
+    "pin_binding": {
+      "result": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    "statement": "Every declared gate step exited 0 except flake. flake failed its repository check; runtime subject binding does not make it a pass. v8 was installed from the release build of the tree the gates hashed at start and end; the pin step refused any tree difference before or during pinning."
+  },
+  "non_claims": [
+    "Result lines come from the workspace lib/tests step of the tree-bound gate; module-path filters can include same-named tests from another target, so every matched name is listed.",
+    "A passing focused subset is not task acceptance, runtime proof or archive readiness.",
+    "The v13 flake repository check failed; named focused passes do not qualify the whole gate."
+  ]
+}

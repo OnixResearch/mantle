@@ -1,0 +1,268 @@
+{
+  "schema": "mantle-finish-negative-fixture-evidence-v1",
+  "date": "2026-10-26",
+  "change": "standardize-derivation-finish-gates",
+  "maintenance_owner": "Mantle build finish-shell/policy maintainers",
+  "acceptance_claimed": false,
+  "closed_task": "T3.2",
+  "regression_source": {
+    "path": "/home/brittonr/git/OnixResearch/mantle/tests/finish_gates.rs",
+    "blake3": "9179566f77a783aadb008b1c67282359e4a75ba3adedca9202d91e3b70192594"
+  },
+  "verification_steps": {
+    "sandbox-probe": {
+      "exit": 0,
+      "command": "bwrap --ro-bind / / -- /bin/true",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/sandbox-probe.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/sandbox-probe.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "format": {
+      "exit": 0,
+      "command": "cargo fmt --check -p mantle",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/format.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/format.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "clippy": {
+      "exit": 0,
+      "command": "cargo clippy --locked --offline -p mantle -p crunch-build --all-targets --no-deps -- -D warnings",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/clippy.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/clippy.stderr.log",
+        "blake3": "751345d0083329da357725638cb2826547a6e5ca91aef188b1215efa754c96a9"
+      }
+    },
+    "core-fixtures": {
+      "exit": 0,
+      "command": "cargo test --locked --offline -p crunch-build --lib finish_gates::tests:: -- --nocapture --test-threads=1",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/core-fixtures.stdout.log",
+        "blake3": "7db03f3c6405c6480cfa3838540932356ece5c96bb41acd2ab326815f0bfa237",
+        "text": "\nrunning 6 tests\ntest finish_gates::tests::audit_missing_soname_cannot_be_satisfied_by_another_run ... ok\ntest finish_gates::tests::declaration_denials_distinguish_unsafe_commands_and_gate_dependencies ... ok\ntest finish_gates::tests::real_glibc_audit_distinguishes_missing_and_opened_sonames ... ok\ntest finish_gates::tests::reference_bounds_and_required_execution_evidence_fail_closed ... ok\ntest finish_gates::tests::reference_policy_reports_native_but_denies_cross_and_build_only_hits ... ok\ntest finish_gates::tests::rejects_unbounded_gate_input ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 770 filtered out; finished in 0.56s\n\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/core-fixtures.stderr.log",
+        "blake3": "26f5d431a15966d94a93bc27dd1c8605b832f9bbeb3281061f624ed1c65396f7"
+      }
+    },
+    "sandbox-fixtures": {
+      "exit": 0,
+      "command": "cargo test --locked --offline -p mantle --test finish_gates -- --nocapture --test-threads=1",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/sandbox-fixtures.stdout.log",
+        "blake3": "982e6167087baae6cc7ca2a7f1d52d791ee765fd9cc462d77e0f5ad576e6958c",
+        "text": "\nrunning 8 tests\ntest legacy_raw_recipe_builds_without_implicitly_adopting_gates ... ok\ntest real_builder_default_requires_matching_executable_version ... ok\ntest real_builder_exit_and_shell_syntax_cannot_skip_required_version ... ok\ntest real_builder_partial_gate_policy_keeps_version_defaults_and_explicit_override ... ok\ntest real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix ... ok\ntest real_finish_gate_denies_matching_version_with_nonzero_exit_without_publication ... ok\ntest real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure ... ok\ntest real_finish_gate_passes_version_and_relocation_and_reports_clean_scan ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.97s\n\n"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/sandbox-fixtures.stderr.log",
+        "blake3": "35f1635c643672c9ff15430a9be4d996d1ee427ffcda82fc1c4b36347c77d8e9"
+      }
+    },
+    "receipt-typecheck": {
+      "exit": 0,
+      "command": "nickel typecheck evidence/radicle/durable-file-publication-adoption-v1.ncl",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-typecheck.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-typecheck.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "receipt-validator-typecheck": {
+      "exit": 0,
+      "command": "nickel typecheck lib/durable-file-publication-adoption-receipt.ncl",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-validator-typecheck.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-validator-typecheck.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "receipt-boundaries": {
+      "exit": 0,
+      "command": "nickel export --format json tests/durable-file-publication-adoption.ncl",
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-boundaries.stdout.log",
+        "blake3": "cc556eac69dc44fea0fa836440b4827cb8a23367494d47f1b22f357eb121c4c3"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/receipt-boundaries.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  },
+  "native_dlopen": "The cfg(mantle_native_dlopen) real glibc audit test was present and passed; it runs real cc/LD_AUDIT probes and has no prerequisite-skip branch.",
+  "retained_v8_cli_smoke": {
+    "result": {
+      "path": "/home/brittonr/.cargo-target/finish-nonzero-v13/result.json",
+      "blake3": "97ab7f602f0155e12467a68233bd1f90b7ec35e16d24eea524dbd9e898f4d30b"
+    },
+    "observed_result": {
+      "schema": "mantle-finish-nonzero-smoke-v1",
+      "acceptance_claimed": false,
+      "mantle": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/mantle",
+      "mantle_blake3": "45b0890d8bf70a4e5763c229ca8a7e740ef1a09461483736d2338bbf39641ec2",
+      "executable_unchanged": true,
+      "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "pin_binding_blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88",
+      "bwrap_probe_exit": 0,
+      "environment": {
+        "SNIX_BUILD_BWRAP": null,
+        "SNIX_BUILD_SANDBOX_SHELL": "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+        "CRUNCH_NO_FUSE": "1",
+        "TMPDIR": "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo"
+      },
+      "cases": {
+        "zero-exit-control": {
+          "argv": [
+            "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/mantle",
+            "--json",
+            "--store",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/store",
+            "--state-dir",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/state",
+            "build",
+            "--no-substitute",
+            "-I",
+            "/home/brittonr/git/OnixResearch/mantle",
+            "-I",
+            "/home/brittonr/git/OnixResearch/mantle/lib",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/recipe.ncl"
+          ],
+          "exit": 0,
+          "finish_gate": {
+            "schema": "mantle-derivation-finish-gate-report-v1",
+            "derivation": "finish-gates-positive.drv",
+            "version": "passed",
+            "command": [
+              "bin/demo",
+              "--version"
+            ],
+            "expected": "1.0",
+            "reference_leak": "passed",
+            "reference_findings": [],
+            "relocation": "passed",
+            "dlopen": "opted-out",
+            "optional_sonames": [],
+            "missing_sonames": []
+          },
+          "counts": {
+            "succeeded_total": 1,
+            "built_total": 1,
+            "cached_total": 0,
+            "failed_total": 0
+          },
+          "outcomes": [
+            {
+              "drv_key": "/mantle/store/ds2k6j84pnh7aapkxgc6v1sypkq6n0pl-finish-gates-positive.drv",
+              "label": "finish-gates-positive",
+              "cached": false,
+              "log_file": "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/state/logs/ds2k6j84pnh7aapkxgc6v1sypkq6n0pl-finish-gates-positive.drv.log",
+              "outputs": [
+                {
+                  "name": "out",
+                  "path": "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/store/b16fbnwfxvridrgg9j2s3333m2x29xi6-finish-gates-positive",
+                  "artifact_attestation": {
+                    "logical_path": "/mantle/store/b16fbnwfxvridrgg9j2s3333m2x29xi6-finish-gates-positive",
+                    "path": "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-chhqgnvw/state/attestations/artifacts/afefe1d1c8aad5ed48175b96fc28f80b85f962d2ea72517eca455e5f198cb3c4.json"
+                  }
+                }
+              ]
+            }
+          ],
+          "stdout_blake3": "ec88a8dff3c3926fe7d8a031f46927b2c3e9ad94224c9f4d62911562a72c1b05",
+          "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "nonzero-matching-version": {
+          "argv": [
+            "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/mantle",
+            "--json",
+            "--store",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-7go5220_/store",
+            "--state-dir",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-7go5220_/state",
+            "build",
+            "--no-substitute",
+            "-I",
+            "/home/brittonr/git/OnixResearch/mantle",
+            "-I",
+            "/home/brittonr/git/OnixResearch/mantle/lib",
+            "/home/brittonr/.cargo-target/t/nix-shell.aO5lpo/finish-nonzero-7go5220_/recipe.ncl"
+          ],
+          "exit": 1,
+          "finish_gate": {
+            "schema": "mantle-derivation-finish-gate-report-v1",
+            "derivation": "finish-gates-positive.drv",
+            "version": "denied",
+            "command": [
+              "bin/demo",
+              "--version"
+            ],
+            "expected": "1.0",
+            "reference_leak": "not-run",
+            "reference_findings": [],
+            "relocation": "not-run",
+            "dlopen": "opted-out",
+            "optional_sonames": [],
+            "missing_sonames": []
+          },
+          "counts": {
+            "succeeded_total": 0,
+            "built_total": 0,
+            "cached_total": 0,
+            "failed_total": 1
+          },
+          "outcomes": [],
+          "stdout_blake3": "5db4840887c13460efdc75367a53d036149cdb1474970c5de5f6e6101559da01",
+          "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        }
+      },
+      "non_claims": [
+        "Small input-addressed shell fixture only; no bootstrap, dlopen or release acceptance."
+      ]
+    },
+    "selected_finish_sources_equal_v13": {
+      "crates/crunch-build/src/finish_gates.rs": "68704c5fd07287b5e8638dad50482008f7232c95a4ef4c7f9418cca200af4456",
+      "crates/crunch-build/src/build_request.rs": "44176711d2ce3167fd3e48a443cbeee1005da752b03fa0eb23f8490c060c265a",
+      "crates/crunch-build/src/orchestrate.rs": "4a81e96e42cae239591ae3e468853da0fb93f4d963c3dc0b4ce9fbee0c372733",
+      "crates/crunch-build/build.rs": "9d87735ef1dcb4832c88a46b19a38b17179d84688ece8e8439cace46c3b9be0b",
+      "crates/crunch-build/audit/finish_dlopen_audit.c": "1ce7a3cb96a620cd5900f15cf446ae037cbfa398bca2d5e145c52678f0085bf3",
+      "tests/fixtures/finish_gates.ncl": "45f3c1238c7aaf0c40c2633c8f5a1fb4969de40d226b19177b16cef71ccddced",
+      "builders/mk_derivation.ncl": "fd08e9efc75099412b1c4c06a3581a227eef2609cc102d8d16b0bb6a4279596a"
+    }
+  },
+  "duplicate_launch_refusal": {
+    "pueue_task": 28,
+    "task_exit": 1,
+    "step_exit": 1,
+    "stderr": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/focused/pinned-cli-smoke.stderr.log",
+      "blake3": "0344a8aa2b2d31296c2bb65772eab84ac805a046e2d3b3bec506d3587f858207",
+      "text": "Traceback (most recent call last):\n  File \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/finish-nonzero-smoke-v13.py\", line 82, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/finish-nonzero-smoke-v13.py\", line 21, in main\n    OUT.mkdir(exist_ok=False)\n    ~~~~~~~~~^^^^^^^^^^^^^^^^\n  File \"/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12/lib/python3.13/pathlib/_local.py\", line 722, in mkdir\n    os.mkdir(self, mode)\n    ~~~~~~~~^^^^^^^^^^^^\nFileExistsError: [Errno 17] File exists: '/home/brittonr/.cargo-target/finish-nonzero-v13'\n"
+    },
+    "statement": "The attempted smoke rerun refused its existing output directory before launching a CLI. Its exit is not a product pass. The completed retained v8 smoke above is reused without overwriting or re-executing it."
+  },
+  "non_claims": [
+    "Individual fixture delivery only; no ADR approval, bootstrap adoption, full quality-gate acceptance, spec sync, archive or release eligibility.",
+    "Cross-build and malformed/oversized declarations use pure policy/admission fixtures; the real host glibc audit is not a sandboxed cross-toolchain or dlopen CLI publication proof.",
+    "Selected unchanged finish inputs do not establish whole-current-tree binary identity. The v8 runtime observation retains its immutable cohort; the new regression ran in the integrated Cargo sandbox suite."
+  ]
+}
