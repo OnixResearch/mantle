@@ -901,6 +901,7 @@
       "--remote-build-time-secs",
       "--remote-delta",
       "--remote-observability-config",
+      "--remote-resource-requirements",
       "--remote-secret-manifest",
       "--remote-secret-profile",
       "--remote-secret-provider",
