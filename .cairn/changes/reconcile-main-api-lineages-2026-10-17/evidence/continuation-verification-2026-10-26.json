@@ -1,0 +1,717 @@
+{
+  "schema": "mantle-cairn-continuation-final-verification-v1",
+  "date": "2026-10-26",
+  "maintenance_owners": {
+    "resource_policy": "Mantle resource-policy maintainers",
+    "worker_demand": "Mantle scheduling/coordinator live-state maintainers",
+    "integration": "Main"
+  },
+  "immediate_outcome": "Added resource escalation and worker-demand controls pass focused execution; the unchanged selected subjects pass the ordinary first-party gate, targeted Tiger Style and affected Nix fmt/clippy/Nextest checks under an admitted private scratch-backed /tmp.",
+  "durable_capability": "Repeatable pure OOM escalation rejection matrix and real coordinator no-capacity-inference/placement-reservation comparison controls, retaining exact commands, named results and source/stream BLAKE3.",
+  "acceptance_claimed": false,
+  "archive_spec_sync_or_release_authorized": false,
+  "focused_evidence": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-focused-results-2026-10-26.json",
+    "blake3": "bbba82bf0126b4199ae21235974feb210e72a9cdf15931ce9895a6e8a5d3bd66"
+  },
+  "resource_fixture_evidence": {
+    "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/escalation-fixture-verification-2026-10-26.json",
+    "blake3": "f14b4f01365fe52f72c5ae78882a7eb9aa94044af8d14dea9dda05b075716917"
+  },
+  "demand_negative_evidence": {
+    "path": ".cairn/changes/declare-remote-worker-demand/evidence/negative-controls-verification-2026-10-26.json",
+    "blake3": "142fdce787829e95d5597c91649e5d70c337088fbc155cdef65be2c6ef0ea063"
+  },
+  "resource_native_evidence": {
+    "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/native-lifecycle-verification-2026-10-26.json",
+    "blake3": "e4fdc136d5db0fc04a201ed1fe66b013e3a4e2fe44a2bbee208735bafae1a8fa"
+  },
+  "passed_product_run": {
+    "record": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/result.json",
+      "blake3": "918e51387dfabf39437adcd82e88fce297379878b5293e04a898615ac7a3c846"
+    },
+    "supervisor_config": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/pueue.yml",
+    "pueue_task_id": 1,
+    "pueue_terminal": "Success",
+    "submission": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/submission.json",
+      "blake3": "aba12f698e66b1551767ec5ef36d1a0258fedded6bce8acdac80ef535f39c7eb"
+    },
+    "terminal_log": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/pueue-log.json",
+      "blake3": "9c2a822a9b668bc85b742be4ef029928364dbd2c26fcba8b2470713bf7a57944"
+    },
+    "source_before": {
+      "src/remote_build.rs": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e",
+      "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+      "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+      "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+      "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+      "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d",
+      "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "flake.nix": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
+      "scripts/check-first-party-quality.sh": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+      "scripts/quality-gate-common.sh": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551"
+    },
+    "source_after": {
+      "src/remote_build.rs": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e",
+      "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+      "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+      "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+      "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+      "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d",
+      "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "flake.nix": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
+      "scripts/check-first-party-quality.sh": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+      "scripts/quality-gate-common.sh": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551"
+    },
+    "selected_source_unchanged": true,
+    "current_selected_sources_match_finished_run": true,
+    "steps": [
+      {
+        "label": "private-tmp-admission",
+        "argv": [
+          "python3",
+          "-c",
+          "import json, os, pathlib, subprocess, tempfile; expected=pathlib.Path('/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/tmp'); assert os.path.samefile('/tmp', expected); assert os.statvfs('/tmp').f_bavail * os.statvfs('/tmp').f_frsize >= 4 * 1024**3; probe=subprocess.run(['bwrap','--ro-bind','/','/','--','/bin/true'],capture_output=True,text=True); assert probe.returncode == 0, probe.stderr; assert pathlib.Path('/nix/store').is_dir(); tmp=tempfile.TemporaryDirectory(dir='/tmp'); marker=pathlib.Path(tmp.name)/'marker'; marker.write_bytes(b'private-tmp'); assert marker.read_bytes()==b'private-tmp'; tmp.cleanup(); print(json.dumps({'private_tmp_samefile': True, 'minimum_free_bytes': 4*1024**3, 'observed_free_bytes': os.statvfs('/tmp').f_bavail*os.statvfs('/tmp').f_frsize, 'nested_bwrap_exit': probe.returncode, 'nix_store_present': True, 'write_read_remove': 'passed'}))"
+        ],
+        "started_at": "2026-10-26T19:51:54.379575-04:00",
+        "stdout": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/private-tmp-admission.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/private-tmp-admission.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:51:54.408743-04:00",
+        "streams_blake3": {
+          "stdout": "7d5349aefcafef1e8f036e4fe8152b41c5a6df44d2e5901dc1097a3d72968f50",
+          "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        }
+      },
+      {
+        "label": "ordinary-first-party",
+        "argv": [
+          "bash",
+          "scripts/check-first-party-quality.sh"
+        ],
+        "started_at": "2026-10-26T19:51:54.411755-04:00",
+        "stdout": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/ordinary-first-party.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/ordinary-first-party.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:03:53.882332-04:00",
+        "streams_blake3": {
+          "stdout": "99145b4754f892c4f366d458f127f2487f4d9b291e01f01cb988d57b7a7b2d05",
+          "stderr": "339d59d7eb48f813b0f77c97601699e2b6e7104cd47e665b0d3320b69fb9f3bf"
+        }
+      },
+      {
+        "label": "targeted-tigerstyle",
+        "argv": [
+          "bash",
+          "scripts/check-first-party-tigerstyle.sh",
+          "-p",
+          "crunch-build",
+          "-p",
+          "mantle"
+        ],
+        "started_at": "2026-10-26T22:03:53.892751-04:00",
+        "stdout": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/targeted-tigerstyle.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/targeted-tigerstyle.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:04:25.548945-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "30498a4f2b0f1c4eb807a806e41247b39b52385459d71350d355bf4938ce2a0d"
+        }
+      },
+      {
+        "label": "affected-nix-checks",
+        "argv": [
+          "nix",
+          "build",
+          "--offline",
+          "--no-write-lock-file",
+          "--no-link",
+          "-L",
+          ".#checks.x86_64-linux.fmt",
+          ".#checks.x86_64-linux.clippy",
+          ".#checks.x86_64-linux.nextest"
+        ],
+        "started_at": "2026-10-26T22:04:25.552052-04:00",
+        "stdout": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/affected-nix-checks.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/affected-nix-checks.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:29:22.587121-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "18dae0519b01aa9498413cdc9e9d9f335b3c38cd54331fc7c6ccf39daa480c4a"
+        }
+      }
+    ],
+    "nix_nextest_literal_summary": [
+      {
+        "line": 6964,
+        "text": "mantle-nextest>      Summary [ 264.689s] 6736 tests run: 6736 passed, 198 skipped"
+      }
+    ]
+  },
+  "failed_runs_preserved": [
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/result.json",
+      "blake3": "df30cba25e4e626e400a8a66dcf89d2f3efda1167c58263a70d8f5ef9d520c56",
+      "result": "Focused rails passed; later ordinary gate exit 101 with 10 failing crunch-build tests and explicit archive/attestation Disk quota exceeded messages under host /tmp."
+    },
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/diff-check-initial-failure.json",
+      "blake3": "0c3ef2978b88ca1a72198d80d7ba8074996309beae0edb51891d24dfcffc80be",
+      "result": "Initial diff check found one trailing blank line in the edited demand task document; repaired without weakening a check."
+    }
+  ],
+  "namespace_admission": {
+    "literal_result": {
+      "private_tmp_samefile": true,
+      "minimum_free_bytes": 4294967296,
+      "observed_free_bytes": 857756270592,
+      "nested_bwrap_exit": 0,
+      "nix_store_present": true,
+      "write_read_remove": "passed"
+    },
+    "temporary_filesystem_observation": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-private-tmp-20261026-9_c708lp/temporary-filesystem-observation.json",
+      "blake3": "0697b10eb90118e0f5be3392b93e8a8fa9b367858b5f13e6d10867d9be21d34f"
+    },
+    "scope": "Private bind mount to an owned scratch directory; host /tmp remains untouched. Real nested bwrap, Nix store presence and write/read/remove admission passed. No production source behavior changed."
+  },
+  "declared_tracey_coverage_scope": {
+    "profile_id": "mantle-default",
+    "requirements": 155,
+    "referenced": 155,
+    "requirement_sources": [
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": ".cairn/specs/release-provenance/spec.md",
+        "source_kind": "accepted_specs"
+      }
+    ],
+    "evidence_sources": [
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tools/release_provenance_tracey_refs.rs",
+        "source_kind": "rust_source"
+      }
+    ],
+    "valid": true,
+    "verdict": "pass",
+    "boundary": "Declared release-provenance marker coverage only; not implementation or scenario coverage for demand/resource/fault requirements."
+  },
+  "criterion_mapping": {
+    "add-evidence-driven-resource-policy:3.4": {
+      "requirement": "remote_builds.positive_oom_retry",
+      "named_results_required": [
+        "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits",
+        "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class"
+      ],
+      "subcriteria": [
+        "positive fenced escalation with successor/predecessor linkage",
+        "failed attempt with no OOM category rejected independently of nonfailed attempt",
+        "unknown termination and untrusted evidence rejected",
+        "fence/retry/charge/wall/class limits enforced",
+        "unavailable sole larger class rejected even with sufficient quota",
+        "quota denial rejected"
+      ],
+      "boundary": "Pure planner fixture results only; no actual platform OOM, successor dispatch or settlement."
+    },
+    "declare-remote-worker-demand:T2.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history"
+      ],
+      "subcriteria": [
+        "present registrations at distinct concurrency values without inventory retain exact production blocker and create no job/lease/output claim",
+        "completed execution history and withdrawn inventory cannot authorize the next distinct action"
+      ],
+      "boundary": "Exercises real coordinator admission/registration/completion transitions, not external worker provisioning or delivered demand events."
+    },
+    "declare-remote-worker-demand:T4.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history",
+        "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations"
+      ],
+      "subcriteria": [
+        "creating demand creates no job, resource reservation, workspace lease or live output claim",
+        "actual two-worker placement order and reservations are identical with and without unrelated unmet demand",
+        "overflow admission rejects identically with both workers fully reserved",
+        "core and daemon fail-closed count limits remain supported by the retained core-bound/daemon-bound named results"
+      ],
+      "retained_count_bound_evidence": ".cairn/changes/declare-remote-worker-demand/evidence/obligation-reconciliation-2026-10-26.json#named_retained_tests",
+      "boundary": "New coordinator negatives supplement, not relabel, prior named count-bound passes; demand is not capacity or placement authority."
+    }
+  },
+  "non_claims": [
+    "No observed platform OOM, real fenced successor dispatch/settlement, benchmark or campaign acceptance.",
+    "No long-lived derived building-plane demand delivery/retraction, actual placement report proof or external supervisor provisioning.",
+    "No historical-before rail, isolated baseline, accepted-spec sync, archive, rollout or release acceptance.",
+    "Older v13/full-flake receipts retain their own pre-extension source subjects; new results do not relabel their inputs.",
+    "Structural gates do not grant semantic acceptance, accepted-spec sync or archive authority.",
+    "The default declared Tracey profile covers release-provenance markers, not every requirement in these active changes.",
+    "Affected Nix fmt/clippy/Nextest checks are not a new full-flake or whole-tree/release identity claim.",
+    "Nix Nextest summary retains 198 skipped tests; a skipped test is not executed scenario evidence."
+  ],
+  "native_lifecycle": {
+    "record": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/result.json",
+      "blake3": "aeac0eb95649638e381fcb09f9c49eb7df4aadb173a7328d394271624f42f895"
+    },
+    "commands": [
+      {
+        "label": "traceability-coverage",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "traceability",
+          "coverage",
+          "--root",
+          ".",
+          "--json"
+        ],
+        "started_at": "2026-10-26T19:40:54.616674-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/traceability-coverage.stdout.json",
+            "blake3": "56fae877fb2a08b395ea86e1cd816f39f0d9894411314dc68432a7567a3896b9"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/traceability-coverage.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.649103-04:00",
+        "verdict": "pass",
+        "receipt_hash": "a175ad5ca5e6c11db0f5ba1c7571da1ba0ad249c86d63e582258070f1199c558",
+        "input_hash": "341d35b42e50e82ef09174984e8ab60fbcb71d6deb1fc4f3ad2ee9db8db7eb15",
+        "issues": []
+      },
+      {
+        "label": "adopt-fault-injection-io-tests-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "adopt-fault-injection-io-tests",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.652827-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-proposal.stdout.json",
+            "blake3": "f1e5f6ca420574feabf1c6e9c776eacfc57d2b79ea7ef8b2c0b30c51ae797381"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-proposal.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.684340-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "209e7f30fd6fc6de7129acd30a6f07d9f3ddc22258c765a39a32da49843c23c9",
+        "input_hash": "0a7e576a76b0c5483de7cfcaef350fdd93002c27c875e8613779606a33c30209",
+        "issues": []
+      },
+      {
+        "label": "adopt-fault-injection-io-tests-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "adopt-fault-injection-io-tests",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.686966-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-design.stdout.json",
+            "blake3": "f52319b0a4e3f97f40cdb88944aa06307f65e2d902bb2aa5ef225a104575d3ff"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-design.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.702592-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "7e6fe66a27332ee166e416153e4e214094d03bf5a34164e85166c44f46b90961",
+        "input_hash": "f7a712e3ea13cd9a9ef6fea0998ef4b1f991514edc6d64536b1fcbb13c42de12",
+        "issues": []
+      },
+      {
+        "label": "add-evidence-driven-resource-policy-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "add-evidence-driven-resource-policy",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.705285-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-proposal.stdout.json",
+            "blake3": "982502e26101b46d82a43e363b5bed9e720c6364182b61022417669983dda34e"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-proposal.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.720794-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "f8ee14ee94bde2ed53fd97d84db9cebc4d162f52dc62967c9d7c48be603bacf6",
+        "input_hash": "3de01ff0eb5a44408cccdb0f0e02395e94616b9683f3bd829fbf5063d2e7d35d",
+        "issues": []
+      },
+      {
+        "label": "add-evidence-driven-resource-policy-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "add-evidence-driven-resource-policy",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.723672-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-design.stdout.json",
+            "blake3": "5c5f1573319b70abfd6e781afdd8ae10a8b1cf5b72a1bc5ec62b062887d12aec"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-design.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.739277-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "8a924b1ed6350d2b537a575f47916cc415bed49ae7a19f4bacb96563ced5b7e1",
+        "input_hash": "82e1f5f4b8b9c8046e1363ae9d3b33d5e21cec5488cbca6e429be617c461df90",
+        "issues": []
+      },
+      {
+        "label": "declare-remote-worker-demand-proposal",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "proposal",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.741765-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-proposal.stdout.json",
+            "blake3": "17e626c3effe04f605278027c3323b1ad166b4fd4a6b39a40c23a3ea12944753"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-proposal.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.757328-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "d2035d4e25988283ceabe80370dda86d11ef6d5bb51d1e80cbfd292a277807fd",
+        "input_hash": "595b2a1bb4f0ed477a00f8012859cb4f021044d17c4c7bf229e06b3c572c5084",
+        "issues": []
+      },
+      {
+        "label": "declare-remote-worker-demand-design",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "design",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:40:54.760461-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-design.stdout.json",
+            "blake3": "97989178843f39ae9681422d459d5095f029e07541acfea72c75f5134e3ee701"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-design.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:40:54.776027-04:00",
+        "verdict": "PASS",
+        "receipt_hash": "a1b71b515e2ceea65fc09530cd732615d11cab1543b60a4551704164fa2448e4",
+        "input_hash": "0caccfc6908a4ad11e8d6013172089c752b96741ffce3d3bd6e57c77639127d3",
+        "issues": []
+      },
+      {
+        "label": "validate",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:54:19.986044-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/validate.stdout.json",
+            "blake3": "1e661d5b5430ea41663de734d100630311ff445423c243de0204bca8d79567b2"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/validate.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:54:20.100787-04:00",
+        "valid": true,
+        "verdict": null,
+        "receipt_hash": "a9173d1280d37010a3663972e6c562740caa0236d29e694232ba0a889a6cfc41",
+        "input_hash": null,
+        "issues": []
+      },
+      {
+        "label": "adopt-fault-injection-io-tests-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "adopt-fault-injection-io-tests",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:54:20.103889-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-tasks.stdout.json",
+            "blake3": "0fab53f36c6d4f30a82d1fbe2c5459d4e9f5725c4294b0b8696fa2a6535df2ac"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/adopt-fault-injection-io-tests-tasks.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:54:20.119329-04:00",
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "d5f952ddc985f5659463943095667f1cb4a770191b12022b4dded8bf82307687",
+        "input_hash": "0bf65553e3ae7f71f0973bb5b2e1dee9d05aee9df3723ded0b02ac22c9457b25",
+        "issues": []
+      },
+      {
+        "label": "add-evidence-driven-resource-policy-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "add-evidence-driven-resource-policy",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:54:20.122325-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-tasks.stdout.json",
+            "blake3": "b40bff50dcbd7008523286e3ae5fa5f1df041c541381150698be9b095427d8b9"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-tasks.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:54:20.137733-04:00",
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "5858dc4a3908c954d6a46d3a33762908300714bc2e074bf75b90c588974f38b7",
+        "input_hash": "e31f7f57866094c36d74c9592711625a5eadf8f3bf72017738bc26a27be9b13b",
+        "issues": []
+      },
+      {
+        "label": "declare-remote-worker-demand-tasks",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T19:54:20.140418-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-tasks.stdout.json",
+            "blake3": "838764c2e5e261bd7e4405377902e172e06c28084ab36ac0451b34091dc15c36"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-tasks.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T19:54:20.147808-04:00",
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "49e9dca8cce6ba4506edcef30a73984a0123416bec319dca54b1a35b55422a79",
+        "input_hash": "831f8aa545d3de68f9baee94d2a8d1f725b863468774c3c69ab5fe9440737384",
+        "issues": []
+      },
+      {
+        "label": "validate-final",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T22:33:53.094048-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/validate-final.stdout.json",
+            "blake3": "d4f77e4df0d23b468e86f4555958c823a23fb5ce2466d71cc98149dc00d93cf3"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/validate-final.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:33:53.218515-04:00",
+        "valid": true,
+        "verdict": null,
+        "receipt_hash": "5754b4e5852601d6cf76649f132d6f9f2b4351344426f710044985a9ddded1f6",
+        "input_hash": null,
+        "issues": []
+      },
+      {
+        "label": "add-evidence-driven-resource-policy-tasks-final",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "add-evidence-driven-resource-policy",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T22:33:53.222033-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-tasks-final.stdout.json",
+            "blake3": "a7707d44c92054eb2ee3371b85420698a662699ad64d13611b4b346fa5ae1acd"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/add-evidence-driven-resource-policy-tasks-final.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:33:53.237597-04:00",
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "81b0d302a1c0ebee1419e265613d90fcde7f9d9868636fadaf339cb8c5aa6e44",
+        "input_hash": "bff34acfef9d34900381de03002364eca0cee9047b7ae55edbe476adb9bf5c28",
+        "issues": []
+      },
+      {
+        "label": "declare-remote-worker-demand-tasks-final",
+        "argv": [
+          "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+          "gate",
+          "tasks",
+          "declare-remote-worker-demand",
+          "--root",
+          "."
+        ],
+        "started_at": "2026-10-26T22:33:53.241809-04:00",
+        "streams": {
+          "stdout": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-tasks-final.stdout.json",
+            "blake3": "ea6a41d0676fa4c922e5ecc314e5cde5c6fef7778e0710d7360aae67c152cade"
+          },
+          "stderr": {
+            "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/lifecycle/declare-remote-worker-demand-tasks-final.stderr.log",
+            "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        },
+        "exit_code": 0,
+        "finished_at": "2026-10-26T22:33:53.257303-04:00",
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "3b749c4b550c2c24e59b8eee145925a432b6f6dadb482d632ae49c5b683a4f69",
+        "input_hash": "f5d4116a84f104be65c1a41390f38a89f5adb7d6dd29be554468614c224a7619",
+        "issues": []
+      }
+    ],
+    "all_commands_exit_zero": true,
+    "final_annotation_checks": [
+      {
+        "label": "validate-final",
+        "exit_code": 0
+      },
+      {
+        "label": "add-evidence-driven-resource-policy-tasks-final",
+        "exit_code": 0
+      },
+      {
+        "label": "declare-remote-worker-demand-tasks-final",
+        "exit_code": 0
+      }
+    ],
+    "boundary": "Only validate and the two changed task gates were repeated after completion annotations; unchanged proposal/design and declared coverage inputs were not rerun."
+  },
+  "final_diff_check": {
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "individual_task_counts": {
+    "adopt-fault-injection-io-tests": {
+      "complete": 10,
+      "open": 0,
+      "total": 10
+    },
+    "add-evidence-driven-resource-policy": {
+      "complete": 24,
+      "open": 9,
+      "total": 33
+    },
+    "declare-remote-worker-demand": {
+      "complete": 7,
+      "open": 5,
+      "total": 12
+    }
+  },
+  "verification_task_closure": {
+    "add-evidence-driven-resource-policy:7.7": "Pinned native validation, declared coverage and proposal/design/tasks gates passed; post-annotation root/task checks also passed.",
+    "declare-remote-worker-demand:T4.4": "Focused demand rail, ordinary first-party fmt/strict Clippy/workspace tests, repaired diff, native validation/declared Tracey and affected Nix checks all passed. This does not close historical-before, production delivery/report or archive tasks."
+  }
+}

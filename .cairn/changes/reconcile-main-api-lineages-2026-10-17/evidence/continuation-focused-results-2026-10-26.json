@@ -1,0 +1,223 @@
+{
+  "schema": "mantle-cairn-continuation-focused-results-v1",
+  "date": "2026-10-26",
+  "maintenance_owners": {
+    "resource_policy": "Mantle resource-policy maintainers",
+    "worker_demand": "Mantle scheduling/coordinator live-state maintainers",
+    "integration": "Main"
+  },
+  "immediate_outcome": "Both added-control rails execute successfully on the unchanged selected subjects. Resource task 3.4 and demand T2.2/T4.2 are now individually supported; the ordinary gate later fails and final product/lifecycle verification remains separate.",
+  "durable_capability": "Repeatable pure OOM escalation rejection matrix and real coordinator no-capacity-inference/placement-reservation comparison controls, retaining exact commands, named results and source/stream BLAKE3.",
+  "acceptance_claimed": false,
+  "newly_supported_tasks": [
+    "add-evidence-driven-resource-policy:3.4",
+    "declare-remote-worker-demand:T2.2",
+    "declare-remote-worker-demand:T4.2"
+  ],
+  "supervisor": {
+    "config": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/pueue.yml",
+    "task_id": 0,
+    "terminal_result": "Failed(1)",
+    "log": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/pueue-log.json",
+      "blake3": "7874ab6bab5ef02e375ac210d887c656b1f20c3050d3f11483dae9203b40d7f4"
+    }
+  },
+  "run_record": {
+    "path": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/result.json",
+    "blake3": "df30cba25e4e626e400a8a66dcf89d2f3efda1167c58263a70d8f5ef9d520c56"
+  },
+  "source_before": {
+    "src/remote_build.rs": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e",
+    "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+    "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+    "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+    "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+    "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d",
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "flake.nix": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
+    "scripts/check-first-party-quality.sh": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+    "scripts/quality-gate-common.sh": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551"
+  },
+  "source_after": {
+    "src/remote_build.rs": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e",
+    "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+    "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+    "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+    "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+    "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d",
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "flake.nix": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
+    "scripts/check-first-party-quality.sh": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+    "scripts/quality-gate-common.sh": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551"
+  },
+  "selected_source_unchanged": true,
+  "focused_observations": [
+    {
+      "label": "resource-policy-focused",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-build",
+        "--lib",
+        "distributed::resource_policy::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-26T19:37:59.941787-04:00",
+      "stdout": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/resource-policy-focused.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/resource-policy-focused.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-26T19:39:41.938990-04:00",
+      "streams_blake3": {
+        "stdout": "220f38af3c379218d988f1c3dfc78ca83a3ed834b32b48e8c8453420480b50ed",
+        "stderr": "9c433faa3d156f17fdb3479f25a448820e391eceb4c06af71a311489ce244fc9"
+      },
+      "named_passes": {
+        "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits": [
+          {
+            "line": 8,
+            "text": "test distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits ... ok"
+          }
+        ],
+        "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class": [
+          {
+            "line": 9,
+            "text": "test distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class ... ok"
+          }
+        ]
+      },
+      "literal_test_result_lines": [
+        {
+          "line": 14,
+          "text": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 767 filtered out; finished in 0.01s"
+        }
+      ]
+    },
+    {
+      "label": "worker-demand-focused",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "remote_build::tests::worker_demand_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-26T19:39:41.942853-04:00",
+      "stdout": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/worker-demand-focused.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/worker-demand-focused.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-26T19:42:52.292134-04:00",
+      "streams_blake3": {
+        "stdout": "456be89bc0335f2c2865a11140130d99e56c39c23a1ff0463a000407c389d81b",
+        "stderr": "4f446df6f806302be27b8f86779a8046fdf6bb9892a3c3e228a671a3cf248fd9"
+      },
+      "named_passes": {
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency": [
+          {
+            "line": 5,
+            "text": "test remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency ... ok"
+          }
+        ],
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history": [
+          {
+            "line": 4,
+            "text": "test remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history ... ok"
+          }
+        ],
+        "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations": [
+          {
+            "line": 7,
+            "text": "test remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations ... ok"
+          }
+        ]
+      },
+      "literal_test_result_lines": [
+        {
+          "line": 9,
+          "text": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2849 filtered out; finished in 0.02s"
+        }
+      ]
+    }
+  ],
+  "criterion_mapping": {
+    "add-evidence-driven-resource-policy:3.4": {
+      "requirement": "remote_builds.positive_oom_retry",
+      "named_results_required": [
+        "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits",
+        "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class"
+      ],
+      "subcriteria": [
+        "positive fenced escalation with successor/predecessor linkage",
+        "failed attempt with no OOM category rejected independently of nonfailed attempt",
+        "unknown termination and untrusted evidence rejected",
+        "fence/retry/charge/wall/class limits enforced",
+        "unavailable sole larger class rejected even with sufficient quota",
+        "quota denial rejected"
+      ],
+      "boundary": "Pure planner fixture results only; no actual platform OOM, successor dispatch or settlement."
+    },
+    "declare-remote-worker-demand:T2.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history"
+      ],
+      "subcriteria": [
+        "present registrations at distinct concurrency values without inventory retain exact production blocker and create no job/lease/output claim",
+        "completed execution history and withdrawn inventory cannot authorize the next distinct action"
+      ],
+      "boundary": "Exercises real coordinator admission/registration/completion transitions, not external worker provisioning or delivered demand events."
+    },
+    "declare-remote-worker-demand:T4.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history",
+        "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations"
+      ],
+      "subcriteria": [
+        "creating demand creates no job, resource reservation, workspace lease or live output claim",
+        "actual two-worker placement order and reservations are identical with and without unrelated unmet demand",
+        "overflow admission rejects identically with both workers fully reserved",
+        "core and daemon fail-closed count limits remain supported by the retained core-bound/daemon-bound named results"
+      ],
+      "retained_count_bound_evidence": ".cairn/changes/declare-remote-worker-demand/evidence/obligation-reconciliation-2026-10-26.json#named_retained_tests",
+      "boundary": "New coordinator negatives supplement, not relabel, prior named count-bound passes; demand is not capacity or placement authority."
+    }
+  },
+  "later_ordinary_failure": {
+    "label": "ordinary-first-party",
+    "argv": [
+      "bash",
+      "scripts/check-first-party-quality.sh"
+    ],
+    "started_at": "2026-10-26T19:42:52.295589-04:00",
+    "stdout": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/ordinary-first-party.stdout.log",
+    "stderr": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/ordinary-first-party.stderr.log",
+    "exit_code": 101,
+    "finished_at": "2026-10-26T19:48:22.953183-04:00",
+    "streams_blake3": {
+      "stdout": "6ef6bb3efd5f20d8b898497e48cb2b516049fe5a8e19afb003ade53a9c26bb88",
+      "stderr": "b15421bf925537056f89a023c771ec1bfbf3fcacf41e406bf84e41ba3af3eca0"
+    },
+    "boundary": "Full ordinary gate failed: 767 crunch-build tests passed and 10 failed. Raw log explicitly records Disk quota exceeded for archive and attestation writes below hard-coded /tmp roots. No later flake/tigerstyle step ran. Focused successes are not an all-gates success."
+  },
+  "non_claims": [
+    "No observed platform OOM, real fenced successor dispatch/settlement, benchmark or campaign acceptance.",
+    "No long-lived derived building-plane demand delivery/retraction, actual placement report proof or external supervisor provisioning.",
+    "No historical-before rail, isolated baseline, accepted-spec sync, archive, rollout or release acceptance.",
+    "Older v13/full-flake receipts retain their own pre-extension source subjects; new results do not relabel their inputs."
+  ]
+}

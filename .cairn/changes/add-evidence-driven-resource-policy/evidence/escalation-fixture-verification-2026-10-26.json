@@ -1,0 +1,70 @@
+{
+  "schema": "mantle-resource-policy-escalation-fixture-verification-v1",
+  "date": "2026-10-26",
+  "change": "add-evidence-driven-resource-policy",
+  "maintenance_owner": "Mantle resource-policy maintainers",
+  "task": "3.4",
+  "task_checked": true,
+  "acceptance_claimed": false,
+  "immediate_outcome": "The refactored positive/limit fixture and added nonfailed-attempt/unavailable-class negative fixture both execute successfully. The full pure escalation fixture matrix is now individually supported.",
+  "durable_capability": "Shared fixture request plus distinct positive/failure/class/quota assertions remain under the existing deterministic pure planner rail.",
+  "focused_record": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-focused-results-2026-10-26.json",
+    "blake3": "bbba82bf0126b4199ae21235974feb210e72a9cdf15931ce9895a6e8a5d3bd66"
+  },
+  "observed_test_result": [
+    {
+      "line": 14,
+      "text": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 767 filtered out; finished in 0.01s"
+    }
+  ],
+  "named_passes": {
+    "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits": [
+      {
+        "line": 8,
+        "text": "test distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits ... ok"
+      }
+    ],
+    "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class": [
+      {
+        "line": 9,
+        "text": "test distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class ... ok"
+      }
+    ]
+  },
+  "subject": {
+    "path": "crates/crunch-build/src/distributed/resource_policy_tests.rs",
+    "blake3": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d"
+  },
+  "criterion_mapping": {
+    "requirement": "remote_builds.positive_oom_retry",
+    "named_results_required": [
+      "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits",
+      "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class"
+    ],
+    "subcriteria": [
+      "positive fenced escalation with successor/predecessor linkage",
+      "failed attempt with no OOM category rejected independently of nonfailed attempt",
+      "unknown termination and untrusted evidence rejected",
+      "fence/retry/charge/wall/class limits enforced",
+      "unavailable sole larger class rejected even with sufficient quota",
+      "quota denial rejected"
+    ],
+    "boundary": "Pure planner fixture results only; no actual platform OOM, successor dispatch or settlement."
+  },
+  "historical_handoff": "evidence/escalation-fixture-handoff-2026-10-26.json",
+  "history_boundary": "Earlier handoff and local-obligations fields retain pre-execution/pre-extension subjects and 22-task scope. This later execution supports only the added fixture task; it does not rewrite those captures.",
+  "remaining_prerequisites": [
+    "Trusted OOM evidence for every supported worker platform (3.1)",
+    "Actual fenced successor dispatch/settlement (3.3)",
+    "Bounded public usage API (4.3)",
+    "Historical-before evidence, review chronology, real benchmarks, complete campaigns/Valence export and external acceptance",
+    "Final applicable product and native lifecycle gates"
+  ],
+  "non_claims": [
+    "No observed platform OOM, real fenced successor dispatch/settlement, benchmark or campaign acceptance.",
+    "No long-lived derived building-plane demand delivery/retraction, actual placement report proof or external supervisor provisioning.",
+    "No historical-before rail, isolated baseline, accepted-spec sync, archive, rollout or release acceptance.",
+    "Older v13/full-flake receipts retain their own pre-extension source subjects; new results do not relabel their inputs."
+  ]
+}

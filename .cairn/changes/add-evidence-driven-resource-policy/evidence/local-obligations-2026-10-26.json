@@ -1,0 +1,913 @@
+{
+  "schema": "mantle-resource-policy-local-obligations-v1",
+  "date": "2026-10-26",
+  "change": "add-evidence-driven-resource-policy",
+  "maintenance_owner": "Mantle remote resource-policy, quota-store and gateway maintainers; Main owns integration/lifecycle validation; OnixOS and Valence owners retain external acceptance",
+  "acceptance_claimed": false,
+  "archive_spec_sync_or_release_authorized": false,
+  "immediate_outcome": "Closed 22 individually supported implementation/fixture/retained-gate criteria; kept 11 historical-before, platform-OOM, full retry, API, review-chronology, benchmark, campaign, export and fresh-lifecycle criteria unchecked. Executed eight bounded real offline production replay invocations; no builds, tests, linters, formatters, VM/OOM/fault campaigns or Cairn/Nix gates launched.",
+  "durable_repeatable_capability": "Existing bounded production replay executable and canonical adapter serialize explicit facts; exact supplied stdin/stdout/stderr/exit/BLAKE3 here allow repeating the local observe-only/rejection scenarios without rebuilding. Existing source-bound named passing selector/quota/evidence fixtures and immutable cohort pins remain reusable within their recorded scope.",
+  "evidence_classes": {
+    "source_and_fixture": "Current selected source bytes match v13, later full-gate and v8 cohort-pin manifests. Named library/unit fixture passes are read from v13 ordinary-first-party.stdout.log, not inferred from the later flake Nextest count.",
+    "offline_execution": "Supplied facts only. trusted_collector=true is a caller-supplied replay input, never proof of authenticated worker authority. Replay positive selects large historically but active remains small static baseline.",
+    "gate_history": "v13 ordinary-first-party and additional package formatting passed; v13 aggregate/flake failed. Separate later Pueue 40 full flake passed. No global pass closes an unobserved scenario.",
+    "campaign_history": "Prior campaign receipt retained unchanged: reviewed full three-seed acceptance incomplete; no selected bug/replay or minimization claim."
+  },
+  "raw_references": [
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-final-gates-v13/exact-exec-final-gates-tree/start.blake3",
+      "blake3": "3bed87263b97c81820330da2e8039f78842716ece80a35a3a8743c6b27a0a4ac"
+    },
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/start.blake3",
+      "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/tree-before.blake3",
+      "blake3": "3bed87263b97c81820330da2e8039f78842716ece80a35a3a8743c6b27a0a4ac"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/ready-executable-pins.json",
+      "blake3": "cabfea100ee34d4cf69ebe526d356a09a722eab877ec86d67fa1d7dac9a53082"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+      "blake3": "54718828afde597d557f901e995915b4c0150672d1de2e9cad0e9ecafdfc2f88"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/build.exit",
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/build.stderr.log",
+      "blake3": "f0d72e3f9fe4e4553fdd0b13612eaf5e4eb555128c8b8d2e25e7a5f03fd8412b"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+      "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stderr.log",
+      "blake3": "15200420d0a073bf8672abf3c7c068eb7633f3df1ab131041aa59d9166c0fc6c"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.command",
+      "blake3": "5a30a60fe365df2c5ed131fff8830959b5a9e46a2f0cb64dc578afa82d491129"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.exit",
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/remaining-package-format.command",
+      "blake3": "b2b67f7631b8e036693131e1b529f21f0b991d85fe8876ce6dc9734020b9a53b"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/remaining-package-format.stdout.log",
+      "blake3": "7c73349e87ec74939c077228974f67b49b09ca4dd470380914961b7247718b8d"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/remaining-package-format.exit",
+      "blake3": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/ordinary-gate-observation-v13-2026-10-26.json",
+      "blake3": "fad4e051039c4aa9401d656c4b1d9f64161c1003ae5fb8d5e0f56400ff04b664"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+      "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/lifecycle-after-full-gate-2026-10-26.json",
+      "blake3": "0abb3e72d87da14c3757111ef0c1e5c9105aa1f78b7d3f343c6b4a06cc3843d8"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/add-evidence-driven-resource-policy/evidence/runtime-campaign-status-2026-10-23.json",
+      "blake3": "aa49f24d001df270910ed88a1dd22d59c309bcca465da07799d55d8fe164dc03"
+    }
+  ],
+  "source_bindings": [
+    {
+      "path": "crates/crunch-remote-core/src/resource_policy.rs",
+      "blake3": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+      "v13": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+      "full_gate": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+      "matches_both": true,
+      "cohort_pin_source": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71"
+    },
+    {
+      "path": "crates/crunch-remote-core/src/resource_quota.rs",
+      "blake3": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+      "v13": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+      "full_gate": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+      "matches_both": true,
+      "cohort_pin_source": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5"
+    },
+    {
+      "path": "crates/crunch-build/src/distributed/resource_policy.rs",
+      "blake3": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+      "v13": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+      "full_gate": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+      "matches_both": true,
+      "cohort_pin_source": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08"
+    },
+    {
+      "path": "crates/crunch-build/src/distributed/resource_policy_tests.rs",
+      "blake3": "8236a9664468a55efa41f462b5245f7450ac372373df79c25151d57a04515648",
+      "v13": "8236a9664468a55efa41f462b5245f7450ac372373df79c25151d57a04515648",
+      "full_gate": "8236a9664468a55efa41f462b5245f7450ac372373df79c25151d57a04515648",
+      "matches_both": true,
+      "cohort_pin_source": "8236a9664468a55efa41f462b5245f7450ac372373df79c25151d57a04515648"
+    },
+    {
+      "path": "crates/crunch-build/src/distributed/resource_quota_store.rs",
+      "blake3": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+      "v13": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+      "full_gate": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+      "matches_both": true,
+      "cohort_pin_source": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4"
+    },
+    {
+      "path": "crates/crunch-build/src/distributed/resource_quota_store_tests.rs",
+      "blake3": "52bacea07b3f57b74e1341b884251fc86969b44028d50139540e6a74b425146a",
+      "v13": "52bacea07b3f57b74e1341b884251fc86969b44028d50139540e6a74b425146a",
+      "full_gate": "52bacea07b3f57b74e1341b884251fc86969b44028d50139540e6a74b425146a",
+      "matches_both": true,
+      "cohort_pin_source": "52bacea07b3f57b74e1341b884251fc86969b44028d50139540e6a74b425146a"
+    },
+    {
+      "path": "src/nix_gateway/resource_host.rs",
+      "blake3": "60772198d01fdabe4cea36faaf751bec74149833b91416acc528913c70d4c1da",
+      "v13": "60772198d01fdabe4cea36faaf751bec74149833b91416acc528913c70d4c1da",
+      "full_gate": "60772198d01fdabe4cea36faaf751bec74149833b91416acc528913c70d4c1da",
+      "matches_both": true,
+      "cohort_pin_source": "60772198d01fdabe4cea36faaf751bec74149833b91416acc528913c70d4c1da"
+    },
+    {
+      "path": "src/nix_gateway/resource_host_tests.rs",
+      "blake3": "47962e4088632aa1cbb8411a64b4cbe49cecf728c3af9e4cc972012e3159fa7f",
+      "v13": "47962e4088632aa1cbb8411a64b4cbe49cecf728c3af9e4cc972012e3159fa7f",
+      "full_gate": "47962e4088632aa1cbb8411a64b4cbe49cecf728c3af9e4cc972012e3159fa7f",
+      "matches_both": true,
+      "cohort_pin_source": "47962e4088632aa1cbb8411a64b4cbe49cecf728c3af9e4cc972012e3159fa7f"
+    },
+    {
+      "path": "src/nix_gateway/evidence.rs",
+      "blake3": "44b67291b97faffc6d0a0813089dfbd0fa8da9f15d19dc6eb033c91bd54db302",
+      "v13": "44b67291b97faffc6d0a0813089dfbd0fa8da9f15d19dc6eb033c91bd54db302",
+      "full_gate": "44b67291b97faffc6d0a0813089dfbd0fa8da9f15d19dc6eb033c91bd54db302",
+      "matches_both": true,
+      "cohort_pin_source": "44b67291b97faffc6d0a0813089dfbd0fa8da9f15d19dc6eb033c91bd54db302"
+    },
+    {
+      "path": "src/nix_gateway/evidence/tests.rs",
+      "blake3": "414f885f70ea590f7141e15bedfcc14fa93e35228b73c7c27b29142b4bae37a6",
+      "v13": "414f885f70ea590f7141e15bedfcc14fa93e35228b73c7c27b29142b4bae37a6",
+      "full_gate": "414f885f70ea590f7141e15bedfcc14fa93e35228b73c7c27b29142b4bae37a6",
+      "matches_both": true,
+      "cohort_pin_source": "414f885f70ea590f7141e15bedfcc14fa93e35228b73c7c27b29142b4bae37a6"
+    },
+    {
+      "path": "examples/resource_policy_replay.rs",
+      "blake3": "f91d11c5da446eeaedf528872765119e03240512095197e8f08132c0a2a51ecb",
+      "v13": "f91d11c5da446eeaedf528872765119e03240512095197e8f08132c0a2a51ecb",
+      "full_gate": "f91d11c5da446eeaedf528872765119e03240512095197e8f08132c0a2a51ecb",
+      "matches_both": true,
+      "cohort_pin_source": "f91d11c5da446eeaedf528872765119e03240512095197e8f08132c0a2a51ecb"
+    },
+    {
+      "path": "scripts/benchmark-resource-policy.py",
+      "blake3": "3419175bbe1ae16dd8f9b129fc3a6ab94d0af0a93ca49e852ea718cac1cbd8a6",
+      "v13": "3419175bbe1ae16dd8f9b129fc3a6ab94d0af0a93ca49e852ea718cac1cbd8a6",
+      "full_gate": "3419175bbe1ae16dd8f9b129fc3a6ab94d0af0a93ca49e852ea718cac1cbd8a6",
+      "matches_both": true,
+      "cohort_pin_source": "3419175bbe1ae16dd8f9b129fc3a6ab94d0af0a93ca49e852ea718cac1cbd8a6"
+    },
+    {
+      "path": "config/resource-policy/benchmark.ncl",
+      "blake3": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b",
+      "v13": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b",
+      "full_gate": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b",
+      "matches_both": true,
+      "cohort_pin_source": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b"
+    },
+    {
+      "path": "scripts/check-first-party-quality.sh",
+      "blake3": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+      "v13": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+      "full_gate": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf",
+      "matches_both": true,
+      "cohort_pin_source": "f72b9b10201b3ec233c9c21b118a75f84326f547598d8c85cdd6873737da1ebf"
+    },
+    {
+      "path": "scripts/quality-gate-common.sh",
+      "blake3": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551",
+      "v13": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551",
+      "full_gate": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551",
+      "matches_both": true,
+      "cohort_pin_source": "4a02752da878fc0d3c3b371df81f06a839f6cff5d0751094fcb5c45e1d04a551"
+    }
+  ],
+  "replay_cohort": {
+    "executable": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay",
+    "blake3_before": "9b38d1d6aeed019e7a4bd5af7a6fad25883476e2ed2cd1a9f257b154c06bc3fd",
+    "blake3_after": "9b38d1d6aeed019e7a4bd5af7a6fad25883476e2ed2cd1a9f257b154c06bc3fd",
+    "source_pin_manifest": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/tree-before.blake3",
+    "pin_binding": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/pin-v8-cohort/binding.json",
+    "cohort_build_exit": 0,
+    "binding_fields": {
+      "tree_matches_gate_start": true,
+      "tree_stable_while_pinning": true,
+      "pins_equal_installed": true
+    },
+    "scope": "Existing immutable v8 executable, not a newly built current release; selected resource sources match both retained gate snapshots and current bytes."
+  },
+  "commands_executed": [
+    {
+      "label": "supplied-positive",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}},\"historical_decision\":{\"Ok\":{\"class_index\":1,\"requested\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"samples\":1,\"exclusions\":[],\"reason\":\"HistoryUsed\",\"policy_version\":1}},\"active\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "a02b3abadef712bb6367f9cbe7b00da83172aefc939ac0af230f1152c6cd031e",
+        "stdout": "084f57572d9d981beefafadd53777fbcd94bbe48919fedc85b1328b67f5ce132",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "same-input-repeat",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}},\"historical_decision\":{\"Ok\":{\"class_index\":1,\"requested\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"samples\":1,\"exclusions\":[],\"reason\":\"HistoryUsed\",\"policy_version\":1}},\"active\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "a02b3abadef712bb6367f9cbe7b00da83172aefc939ac0af230f1152c6cd031e",
+        "stdout": "084f57572d9d981beefafadd53777fbcd94bbe48919fedc85b1328b67f5ce132",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "untrusted-history",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":false}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}},\"historical_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[[0,\"HistoryUntrusted\"]],\"reason\":\"HistoryInsufficient\",\"policy_version\":1}},\"active\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "a6abdb64894310f862a5eb6c76fbcd7f0e8df4bd654093e70ed78957e65bfcd8",
+        "stdout": "ea591e8b048ed571d4e8e378f2e69684c5e9194c537e223fa11cb5a70275c0e0",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "stale-history",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":101,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}},\"historical_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[[0,\"HistoryStale\"]],\"reason\":\"HistoryInsufficient\",\"policy_version\":1}},\"active\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "4d77c592b2c7cbbc59e8725b26e44e17d877c42c339c16d4d97cb0cf66fe0e70",
+        "stdout": "26985ab6b809edfa3c48ed677d355a97a2bebac25e5ead7d9c78a03f1c9d1837",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "compatible-aarch64-supplied-facts",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"aarch64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"aarch64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"aarch64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"aarch64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}},\"historical_decision\":{\"Ok\":{\"class_index\":1,\"requested\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"samples\":1,\"exclusions\":[],\"reason\":\"HistoryUsed\",\"policy_version\":1}},\"active\":{\"Ok\":{\"class_index\":0,\"requested\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"samples\":0,\"exclusions\":[],\"reason\":\"HistoryMissing\",\"policy_version\":1}}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "308694bc70063bd52c3a52b2aeaa8defc5dd0ef9ff1eee02135cd2d5b1e867d5",
+        "stdout": "084f57572d9d981beefafadd53777fbcd94bbe48919fedc85b1328b67f5ce132",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "quota-denied",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":9}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Err\":\"QuotaDenied\"},\"historical_decision\":{\"Err\":\"QuotaDenied\"},\"active\":{\"Err\":\"QuotaDenied\"}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "f3ba93a41d8e99752d03816c0ca4d5faa9887f0b9994f7372dfa292390e87d20",
+        "stdout": "64dbdd3a09fe96bf4e3ceb4433b18d50a04c2f1368a2b9289cbd46c341279e58",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "unknown-field",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100,\"unexpected\":true}\n",
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "resource-policy-replay: unknown field `unexpected`, expected one of `declared`, `features`, `action_family`, `classes`, `history`, `now_unix_s`, `project_remaining_units`, `account_remaining_units`, `policy` at line 1 column 1943\n",
+      "streams_blake3": {
+        "stdin": "44899c277a58b2e4be77ff9b57e419d4559c8f74ea5483f6381ca95d2fdcdd1c",
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "f0031cf7a0d432fe3f7cb84fc558d540ae87fc551602ab5fad16d298fb8cda74"
+      }
+    },
+    {
+      "label": "independent-architecture-mismatch",
+      "argv": [
+        "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-repaired-v8-immutable-release-cohort/resource_policy_replay"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+      "stdin": "{\"account_remaining_units\":100,\"action_family\":\"supplied-public-family\",\"classes\":[{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"small\",\"order\":1,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"reservation_units\":10},{\"available\":true,\"existing_admission_compatible\":true,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"id\":\"large\",\"order\":2,\"quantities\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"reservation_units\":20}],\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"features\":{\"architecture\":\"aarch64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"history\":[{\"action_family\":\"supplied-public-family\",\"attempt_id\":\"supplied-terminal\",\"collector_version\":\"offline-supplied-v2\",\"cpu_ms\":10,\"declared\":{\"cpu_units\":1,\"memory_bytes\":100,\"scratch_bytes\":100},\"execution_ms\":10,\"executor_output_bytes\":10,\"features\":{\"architecture\":\"x86_64\",\"isolation\":\"sandbox\",\"kvm\":true,\"platform\":\"linux\",\"trust_domain\":\"offline-supplied-facts\"},\"io_bytes\":10,\"machine_class\":\"large\",\"measured\":{\"cpu_units\":1,\"memory_bytes\":150,\"scratch_bytes\":100},\"oom\":\"None\",\"outcome\":\"Success\",\"policy_version\":1,\"predecessor\":null,\"process_peak_rss_bytes\":null,\"queue_ms\":1,\"schema\":\"mantle-resource-observation-v2\",\"scratch_sampled_peak_bytes\":null,\"selected\":{\"cpu_units\":1,\"memory_bytes\":200,\"scratch_bytes\":100},\"terminal_unix_s\":100,\"transfer_bytes\":null,\"trusted_collector\":true}],\"now_unix_s\":100,\"policy\":{\"margin_basis_points\":0,\"max_age_s\":100,\"max_duration_ms\":1000,\"max_io_bytes\":1000,\"max_measurement\":{\"cpu_units\":1,\"memory_bytes\":1000,\"scratch_bytes\":100},\"min_samples\":1,\"version\":1},\"project_remaining_units\":100}\n",
+      "exit_code": 0,
+      "stdout": "{\"static_decision\":{\"Err\":\"NoClass\"},\"historical_decision\":{\"Err\":\"NoClass\"},\"active\":{\"Err\":\"NoClass\"}}\n",
+      "stderr": "",
+      "streams_blake3": {
+        "stdin": "991346ab6e6fd3a1da9486d7165dee843e4011df29e8f73560c946b758fb7396",
+        "stdout": "c7274c5c39f76e4e30153808601452a12118101e3bd60f3d34bbea81eedef36d",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  ],
+  "capture_method": {
+    "program": "Python subprocess.run",
+    "argv": "Each commands_executed entry records exact executable argv; literal stdin is retained, not a shell shorthand.",
+    "cwd": "/home/brittonr/.cargo-target/mantle-resource-policy-20261026-lj1ujmyg",
+    "timeout_seconds_per_replay": 10,
+    "environment": "Inherited host environment, no overrides; selector time is supplied now_unix_s=100, not ambient clock.",
+    "digest_commands": [
+      "b3sum --no-names <exact retained path>",
+      "b3sum --no-names with literal UTF-8 stdin/stdout/stderr bytes on stdin"
+    ],
+    "scratch_state": "Fresh empty private directory under ~/.cargo-target; no replay output files or throwaway scripts created. Raw streams are embedded in this evidence JSON."
+  },
+  "capture_incidents": [
+    {
+      "operation": "tempfile.mkdtemp under default /tmp",
+      "outcome": "OSError errno 122 Disk quota exceeded before replay invocation",
+      "resolution": "Used fresh private directory on already-existing ~/.cargo-target; no repeated /tmp probe."
+    },
+    {
+      "operation": "initial intended feature-mismatch input construction",
+      "outcome": "Python deepcopy preserved within-object feature aliases, changing catalog and history with request; actual compatible aarch64 supplied-facts output retained, not relabelled a negative pass. A local assertion failed, not the production program.",
+      "resolution": "Additional independent-architecture-mismatch request copies only request features; actual NoClass observed. All eight invocations retained."
+    },
+    {
+      "operation": "evidence assembly helper namespace",
+      "outcome": "Concurrent eval generic globals manifest/full were replaced before evidence capture; failed helper calls did not mutate product files.",
+      "resolution": "Namespaced rp_state, retained exact execution entries and recomputed references; no replay reruns."
+    }
+  ],
+  "replay_observations": {
+    "supplied_positive": "Historical class large, memory request 150, HistoryUsed; static/active small, memory request 100, HistoryMissing. This is not historical real placement.",
+    "identical_repeat": "Literal stdout identical for the two identical inputs.",
+    "untrusted": "HistoryUntrusted exclusion and zero history samples; active static unchanged.",
+    "future_stale": "Future terminal timestamp is HistoryStale, not accepted history.",
+    "quota": "Both historical and static reject QuotaDenied with exit 0 because typed policy rejection is a successful replay operation.",
+    "feature": "Independent required aarch64 request against x86_64 classes rejects NoClass with exit 0.",
+    "unknown_field": "Unknown input field fails closed with exit 2 and exact stderr."
+  },
+  "criteria": [
+    {
+      "task_id": "1.1",
+      "authored_text": "- [ ] [serial] 1.1 Run existing scheduler, resource declaration, lease, report, result-discovery, and accounting tests before core changes. r[remote_builds.resource_observations]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Historical-before criterion remains unestablished: a later green gate cannot prove tests ran before the original core changes. Supply contemporaneous pre-change source-bound receipts or keep this historical obligation open."
+    },
+    {
+      "task_id": "1.2",
+      "authored_text": "- [ ] [serial] 1.2 Define versioned resource-observation and action-family identity schemas. r[remote_builds.resource_observations]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:12-23,144-205",
+        "crates/crunch-build/src/distributed/resource_policy.rs:34-61"
+      ],
+      "basis": "Versioned observation v2 and public action-family v1 domain-separated BLAKE3 schemas are defined. Missing measurements remain Option values, not zero.",
+      "named_passing_results": [
+        {
+          "line": 451,
+          "text": "test distributed::resource_policy::tests::missing_dimensions_and_sampled_scratch_never_become_resource_measurements ... ok"
+        },
+        {
+          "line": 454,
+          "text": "test distributed::resource_policy::tests::sample_threshold_applies_independently_to_each_known_dimension ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "1.3",
+      "authored_text": "- [ ] [serial] 1.3 Define named sample, age, margin, retry, class, charge, time, and measurement bounds. r[remote_builds.replayable_resource_selection] r[remote_builds.positive_oom_retry]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:12-15,194-205,595-602,665-755"
+      ],
+      "basis": "SelectionPolicy names sample, age, margin, duration, I/O and measurement limits; EscalationPolicy names retry, class, cumulative charge and wall-time limits; fixed class/history/public-ID bounds are explicit.",
+      "named_passing_results": [
+        {
+          "line": 453,
+          "text": "test distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits ... ok"
+        },
+        {
+          "line": 456,
+          "text": "test distributed::resource_policy::tests::unknown_untrusted_stale_incompatible_and_outlier_history_fall_back ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "1.4",
+      "authored_text": "- [ ] [serial] 1.4 Add positive observations and negative missing, stale, incompatible, oversized, and untrusted fixtures. r[remote_builds.resource_observations]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-build/src/distributed/resource_policy_tests.rs:69-162,446-512"
+      ],
+      "basis": "Positive v2 fixtures and missing/stale/incompatible/untrusted/outlier measurements are covered; the oversized measurement fixture exceeds max_measurement and falls back without weakening minima.",
+      "named_passing_results": [
+        {
+          "line": 450,
+          "text": "test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok"
+        },
+        {
+          "line": 451,
+          "text": "test distributed::resource_policy::tests::missing_dimensions_and_sampled_scratch_never_become_resource_measurements ... ok"
+        },
+        {
+          "line": 456,
+          "text": "test distributed::resource_policy::tests::unknown_untrusted_stale_incompatible_and_outlier_history_fall_back ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "2.1",
+      "authored_text": "- [ ] [serial] 2.1 Add typed policy inputs, eligible machine classes, quota facts, observations, decisions, and reason codes. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:25-223,365-377,520-538",
+        "crates/crunch-build/src/distributed/resource_policy.rs:149-222"
+      ],
+      "basis": "Typed quantities/features/catalog/observation/quota/policy/selection and reason codes are consumed by the pure selector and canonical adapter.",
+      "named_passing_results": [
+        {
+          "line": 448,
+          "text": "test distributed::resource_policy::tests::callable_adapter_rechecks_live_capacity_and_canonicalizes_replay ... ok"
+        },
+        {
+          "line": 450,
+          "text": "test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "2.2",
+      "authored_text": "- [ ] [serial] 2.2 Enforce declared minima and required architecture, platform, KVM, trust, and isolation features. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:89-108,455-476,490-517",
+        "crates/crunch-build/src/distributed/resource_policy.rs:76-110"
+      ],
+      "basis": "Declared quantities are lower bounds; architecture, platform, KVM, trust, isolation and ordinary named-resource/live-lease admission remain required.",
+      "named_passing_results": [
+        {
+          "line": 448,
+          "text": "test distributed::resource_policy::tests::callable_adapter_rechecks_live_capacity_and_canonicalizes_replay ... ok"
+        },
+        {
+          "line": 450,
+          "text": "test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "2.3",
+      "authored_text": "- [ ] [serial] 2.3 Add deterministic tie-breaking and canonical replay serialization. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:354-363,498-517",
+        "crates/crunch-build/src/distributed/resource_policy.rs:112-138,141-193"
+      ],
+      "basis": "Stable class-key tie breaking and adapter class/history canonical ordering precede replay serialization and BLAKE3. The offline executable uses its own bounded Replay shape; this is not a claim that adapter payloads can be piped unchanged into that example.",
+      "named_passing_results": [
+        {
+          "line": 448,
+          "text": "test distributed::resource_policy::tests::callable_adapter_rechecks_live_capacity_and_canonicalizes_replay ... ok"
+        },
+        {
+          "line": 450,
+          "text": "test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "2.4",
+      "authored_text": "- [ ] [serial] 2.4 Add positive selection tests and negative no-class, stale-history, quota-denial, and feature-mismatch tests. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-build/src/distributed/resource_policy_tests.rs:111-162"
+      ],
+      "basis": "Named passing fixtures cover positive selection, no class, stale history, quota denial and every required feature mismatch.",
+      "named_passing_results": [
+        {
+          "line": 450,
+          "text": "test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok"
+        },
+        {
+          "line": 456,
+          "text": "test distributed::resource_policy::tests::unknown_untrusted_stale_incompatible_and_outlier_history_fall_back ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "2.5",
+      "authored_text": "- [ ] [serial] 2.5 Add property tests for determinism, monotonic minima, stable ordering, and bounded output. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-build/src/distributed/resource_policy_tests.rs:362-443"
+      ],
+      "basis": "The existing proptest varies declared memory across the eligible range, verifies minima fit, selected identity invariance under reversed catalog order, and bounded exclusions; deterministic replay/order fixtures supplement it. This is bounded property execution, not exhaustive inputs.",
+      "named_passing_results": [
+        {
+          "line": 448,
+          "text": "test distributed::resource_policy::tests::callable_adapter_rechecks_live_capacity_and_canonicalizes_replay ... ok"
+        },
+        {
+          "line": 449,
+          "text": "test distributed::resource_policy::tests::declared_minima_never_decrease_and_input_order_is_irrelevant ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "3.1",
+      "authored_text": "- [ ] [serial] 3.1 Define trusted positive OOM evidence for each supported worker platform. r[remote_builds.positive_oom_retry]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Define/verify each supported worker-platform OOM contract with authenticated collector authority. The core enum/boolean and supplied Linux fixture facts do not establish every supported-platform collector contract or actual delegated-cgroup OOM."
+    },
+    {
+      "task_id": "3.2",
+      "authored_text": "- [ ] [serial] 3.2 Implement the pure escalation planner with named retry, class, charge, and wall-time limits. r[remote_builds.positive_oom_retry]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:595-755"
+      ],
+      "basis": "The pure escalation planner verifies supplied positive/current OOM and fences, then applies named retry/class/charge/wall limits and deterministic strictly greater memory-class choice. Supplied trust facts are not authenticated by the core.",
+      "named_passing_results": [
+        {
+          "line": 453,
+          "text": "test distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "3.3",
+      "authored_text": "- [ ] [serial] 3.3 Create each retry as a new fenced attempt with predecessor linkage. r[remote_builds.positive_oom_retry]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Pure plans and evidence fixtures retain a new attempt, predecessor and advanced fence, but this record does not observe actual authenticated positive-OOM successor reservation, lease, dispatch and settlement. Retain that real linked path before closing the full criterion."
+    },
+    {
+      "task_id": "3.4",
+      "authored_text": "- [ ] [serial] 3.4 Add positive OOM escalation tests and negative arbitrary-failure, ambiguous-exit, exhausted-limit, unavailable-class, and quota-denial tests. r[remote_builds.positive_oom_retry]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Named core test covers positive supplied OOM, unknown/none/untrusted categories, fence and retry/class/charge/wall/quota limits. It does not independently demonstrate the entire authored arbitrary-failure plus unavailable-class matrix; retain exact additional named passing cases without promoting campaign input facts into real OOM."
+    },
+    {
+      "task_id": "4.1",
+      "authored_text": "- [ ] [serial] 4.1 Add explicit project and account reservation and reconciliation records. r[remote_builds.usage_reservation_and_reconciliation]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_quota.rs:11-150,306-395"
+      ],
+      "basis": "Versioned project/account reservation, schedule, reconciliation, pending and settled records exist; combined ledger admission checks both scopes and completion preserves unresolved holds.",
+      "named_passing_results": [
+        {
+          "line": 459,
+          "text": "test distributed::resource_quota_store::tests::durable_duplicate_reservation_and_completion_charge_once_across_reopen ... ok"
+        },
+        {
+          "line": 462,
+          "text": "test distributed::resource_quota_store::tests::project_and_shared_account_limits_both_block_admission ... ok"
+        },
+        {
+          "line": 465,
+          "text": "test distributed::resource_quota_store::tests::worker_loss_partial_and_cancellation_hold_quota_until_final_observation ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "4.2",
+      "authored_text": "- [ ] [serial] 4.2 Make ledger mutations idempotent by attempt identity. r[remote_builds.usage_reservation_and_reconciliation]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_quota.rs:151-153,333-395",
+        "crates/crunch-build/src/distributed/resource_quota_store_tests.rs:59-82"
+      ],
+      "basis": "Attempt-keyed mutations compare exact reservations and terminal reconciliation; exact duplicates charge once across reopening and conflicts fail closed.",
+      "named_passing_results": [
+        {
+          "line": 457,
+          "text": "test distributed::resource_quota_store::tests::admitted_context_and_observation_survive_reopen_without_cross_attempt_authority ... ok"
+        },
+        {
+          "line": 459,
+          "text": "test distributed::resource_quota_store::tests::durable_duplicate_reservation_and_completion_charge_once_across_reopen ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "4.3",
+      "authored_text": "- [ ] [serial] 4.3 Add bounded API summaries with public units and reason codes. r[remote_builds.usage_reservation_and_reconciliation]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Ledger/host summaries expose public schedule and totals, but this bounded run does not exercise the public usage API including bounded error/reason-code summaries. Retain real configured API request/output, exact bounds and reason coverage."
+    },
+    {
+      "task_id": "4.4",
+      "authored_text": "- [ ] [serial] 4.4 Add positive charge tests and negative duplicate, cancellation, worker-loss, partial-observation, overflow, and store-failure tests. r[remote_builds.usage_reservation_and_reconciliation]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-build/src/distributed/resource_quota_store_tests.rs:59-214"
+      ],
+      "basis": "Captured positive charge and duplicate/cancellation/worker-loss/partial/overflow/store-failure fixtures exercise real core and filesystem shell. The injected publication boundaries are deterministic filesystem fixtures, not VM fault or power-loss acceptance.",
+      "named_passing_results": [
+        {
+          "line": 458,
+          "text": "test distributed::resource_quota_store::tests::corrupt_missing_overflow_and_oversized_usage_fail_closed ... ok"
+        },
+        {
+          "line": 459,
+          "text": "test distributed::resource_quota_store::tests::durable_duplicate_reservation_and_completion_charge_once_across_reopen ... ok"
+        },
+        {
+          "line": 460,
+          "text": "test distributed::resource_quota_store::tests::interrupted_mutations_recover_idempotently_and_do_not_grant_quota ... ok"
+        },
+        {
+          "line": 461,
+          "text": "test distributed::resource_quota_store::tests::only_verified_never_started_cancellation_can_release_zero ... ok"
+        },
+        {
+          "line": 465,
+          "text": "test distributed::resource_quota_store::tests::worker_loss_partial_and_cancellation_hold_quota_until_final_observation ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "5.1",
+      "authored_text": "- [ ] [serial] 5.1 Add private, project, and explicitly named sharing-scope policy. r[remote_builds.authorized_result_sharing]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:758-843",
+        "src/nix_gateway/resource_host.rs:79-103,638-689"
+      ],
+      "basis": "Default same-project/private reuse and explicitly named producer/consumer scopes are implemented. Both configured projects must opt in for cross-project sharing.",
+      "named_passing_results": [
+        {
+          "line": 455,
+          "text": "test distributed::resource_policy::tests::sharing_never_skips_existing_signed_result_admission ... ok"
+        },
+        {
+          "line": 7334,
+          "text": "test nix_gateway::evidence::tests::explicit_reuse_keeps_producer_and_consumer_request_and_authority_distinct ... ok"
+        },
+        {
+          "line": 7342,
+          "text": "test nix_gateway::evidence::tests::unauthorized_reuse_is_rejected_despite_linked_result ... ok"
+        },
+        {
+          "line": 13092,
+          "text": "test nix_gateway::evidence::tests::explicit_reuse_keeps_producer_and_consumer_request_and_authority_distinct ... ok"
+        },
+        {
+          "line": 13100,
+          "text": "test nix_gateway::evidence::tests::unauthorized_reuse_is_rejected_despite_linked_result ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "5.2",
+      "authored_text": "- [ ] [serial] 5.2 Require request identity, producer signature, policy and platform compatibility, authorized scopes, output identity, and CAS availability. r[remote_builds.authorized_result_sharing]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:790-843",
+        "crates/crunch-build/src/distributed/resource_policy.rs:225-248",
+        "src/nix_gateway/resource_host.rs:558-633"
+      ],
+      "basis": "Pure sharing checks require identity/signature/policy/platform/output/CAS facts. Concrete host obtains them only after current completed-fence, producer full-key signature, signed action/result and retained PathInfo/CAS verification; adapter requires ordinary admission callback. These implementation/fixture results do not prove an unrun external signed cross-project scenario.",
+      "named_passing_results": [
+        {
+          "line": 455,
+          "text": "test distributed::resource_policy::tests::sharing_never_skips_existing_signed_result_admission ... ok"
+        },
+        {
+          "line": 7342,
+          "text": "test nix_gateway::evidence::tests::unauthorized_reuse_is_rejected_despite_linked_result ... ok"
+        },
+        {
+          "line": 7346,
+          "text": "test nix_gateway::resource_host::tests::retained_producer_signature_requires_full_key_material_not_a_matching_name ... ok"
+        },
+        {
+          "line": 13100,
+          "text": "test nix_gateway::evidence::tests::unauthorized_reuse_is_rejected_despite_linked_result ... ok"
+        },
+        {
+          "line": 13104,
+          "text": "test nix_gateway::resource_host::tests::retained_producer_signature_requires_full_key_material_not_a_matching_name ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "5.3",
+      "authored_text": "- [ ] [serial] 5.3 Record producer-to-consumer evidence links. r[remote_builds.authorized_result_sharing]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:773-779,837-842",
+        "src/nix_gateway/evidence.rs:244-285,814-871",
+        "src/nix_gateway/evidence/tests.rs:368-444"
+      ],
+      "basis": "Producer result to consumer request/authority links are recorded with sharing policy, signature/output/CAS references and non-claims; retained reuse and alias fixtures pass.",
+      "named_passing_results": [
+        {
+          "line": 7333,
+          "text": "test nix_gateway::evidence::tests::consumer_alias_has_no_new_execution_or_charge_and_requires_read_authority ... ok"
+        },
+        {
+          "line": 7334,
+          "text": "test nix_gateway::evidence::tests::explicit_reuse_keeps_producer_and_consumer_request_and_authority_distinct ... ok"
+        },
+        {
+          "line": 13091,
+          "text": "test nix_gateway::evidence::tests::consumer_alias_has_no_new_execution_or_charge_and_requires_read_authority ... ok"
+        },
+        {
+          "line": 13092,
+          "text": "test nix_gateway::evidence::tests::explicit_reuse_keeps_producer_and_consumer_request_and_authority_distinct ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "5.4",
+      "authored_text": "- [ ] [serial] 5.4 Add positive same-project and explicit-sharing fixtures plus negative signature, scope, platform, policy, identity, and CAS fixtures. r[remote_builds.authorized_result_sharing]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-build/src/distributed/resource_policy_tests.rs:269-360"
+      ],
+      "basis": "Existing sharing fixtures cover positive same-project/explicit scopes and every negative signature/scope/platform/policy/identity/CAS check; existing signed admission failure is not skipped.",
+      "named_passing_results": [
+        {
+          "line": 455,
+          "text": "test distributed::resource_policy::tests::sharing_never_skips_existing_signed_result_admission ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "6.1",
+      "authored_text": "- [ ] [serial] 6.1 Review `nixbench` workload patterns and licenses before adapting any fixture. r[remote_builds.resource_benchmark_evidence]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Pinned source/license comments describe review, but no contemporaneous evidence establishes the authored before-adaptation review chronology. Retain the reviewed source/license decision rather than infer temporal review from current metadata."
+    },
+    {
+      "task_id": "6.2",
+      "authored_text": "- [ ] [serial] 6.2 Add fixed-input workloads with public source, license, platform, outcome, and measurement metadata. r[remote_builds.resource_benchmark_evidence]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "config/resource-policy/benchmark.ncl:1-35",
+        "scripts/benchmark-resource-policy.py:59-73,75-90,93-194"
+      ],
+      "basis": "The original bounded fixed-input zero-file/compression recipes and Nickel corpus declare pinned public pattern source, both licenses, x86_64-linux, fixed byte geometry/epoch, expected byte outcomes and measurement limits. This closes adding workloads/metadata only, not running benchmarks or proving license-review chronology.",
+      "named_passing_results": []
+    },
+    {
+      "task_id": "6.3",
+      "authored_text": "- [ ] [serial] 6.3 Compare observe-only policy decisions with the declared static baseline. r[remote_builds.resource_benchmark_evidence] r[remote_builds.resource_policy_rollout]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Fresh offline supplied-fact comparison keeps static active selection and excludes untrusted history. It is not execution of the real fixed-input signed benchmark driver or authenticated-worker historical placement. Run the existing driver with its explicitly trusted signed inputs and retain real metrics/static comparison; preserve performance/adoption prerequisites."
+    },
+    {
+      "task_id": "6.4",
+      "authored_text": "- [ ] [serial] 6.4 Add ChaosControl campaigns for OOM, worker loss, duplicate events, accounting interruption, and CAS failure. r[remote_builds.positive_oom_retry] r[remote_builds.usage_reservation_and_reconciliation]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Preserve retained campaign status: seeds 64001/64002 covered named oracles, seed 64003 lacked outcomes and exited 3; full reviewed three-seed acceptance is not established. Harness OOM facts are inputs, not a real cgroup OOM collector. No campaign was rerun."
+    },
+    {
+      "task_id": "6.5",
+      "authored_text": "- [ ] [serial] 6.5 Export observations and non-claims through Valence and gate them through Cairn. r[remote_builds.resource_benchmark_evidence]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Valence export source/fixtures do not establish complete actual observations/non-claims export plus Cairn gating and external consumer acceptance. Retain the actual bound export/consumer evidence and applicable fresh gates."
+    },
+    {
+      "task_id": "7.1",
+      "authored_text": "- [ ] [serial] 7.1 Add observe-only mode and project opt-in controls. r[remote_builds.resource_policy_rollout]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:540-593",
+        "src/nix_gateway/resource_host.rs:87-103,363-371",
+        "examples/resource_policy_replay.rs:43-74"
+      ],
+      "basis": "Observe-only and per-project opt-in controls are implemented and tested: observe-only retains static active decision while separately retaining history decision. Fresh replay observes this even when supplied trusted history would choose a larger class.",
+      "named_passing_results": [
+        {
+          "line": 452,
+          "text": "test distributed::resource_policy::tests::observe_only_and_retry_rollback_are_independent ... ok"
+        },
+        {
+          "line": 7344,
+          "text": "test nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class ... ok"
+        },
+        {
+          "line": 13102,
+          "text": "test nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "7.2",
+      "authored_text": "- [ ] [serial] 7.2 Add independent rollback controls for selection, retry, quota enforcement, and sharing. r[remote_builds.resource_policy_rollout]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "crates/crunch-remote-core/src/resource_policy.rs:548-568",
+        "crates/crunch-build/src/distributed/resource_policy.rs:175-182",
+        "src/nix_gateway/resource_host.rs:363-371"
+      ],
+      "basis": "Four independent selection/retry/quota/sharing enablement fields and predicates exist; project opt-in and mode still gate them. Retry-off while selection/sharing remain enabled is captured by the existing test. This is availability of rollback controls, not a deployment rollback exercise.",
+      "named_passing_results": [
+        {
+          "line": 452,
+          "text": "test distributed::resource_policy::tests::observe_only_and_retry_rollback_are_independent ... ok"
+        }
+      ]
+    },
+    {
+      "task_id": "7.3",
+      "authored_text": "- [ ] [serial] 7.3 Run the canonical first-party format check plus format checks for affected first-party packages outside its declared scope. Vendored snapshots are excluded by repository policy. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "scripts/check-first-party-quality.sh",
+        "scripts/quality-gate-common.sh"
+      ],
+      "basis": "Retained v13 ordinary-first-party rustfmt and remaining-package-format steps both exited 0. Exact commands, package coverage, raw results and source bindings are retained. No formatter was run by this worker.",
+      "named_passing_results": []
+    },
+    {
+      "task_id": "7.4",
+      "authored_text": "- [ ] [serial] 7.4 Run focused positive, negative, replay, property, benchmark, and fault tests. r[remote_builds.resource_benchmark_evidence]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "The focused selector/quota/property fixtures pass in retained workspace output and the replay executable ran here. Actual benchmark/fault/full OOM acceptance is not complete, so the composite positive/negative/replay/property/benchmark/fault task remains unchecked."
+    },
+    {
+      "task_id": "7.5",
+      "authored_text": "- [ ] [serial] 7.5 Run `scripts/check-first-party-quality.sh`: GCC4.0 bridge, scoped formatting, vendor-excluded strict Clippy, and serialized workspace lib/tests. Preserve failures and capability skips. r[remote_builds.replayable_resource_selection]",
+      "outcome": "complete-authored-criterion",
+      "source": [
+        "scripts/check-first-party-quality.sh",
+        "scripts/quality-gate-common.sh"
+      ],
+      "basis": "Retained v13 bash scripts/check-first-party-quality.sh exited 0, including GCC bridge, canonical formatting, vendor-excluded strict Clippy and serialized workspace lib/tests. Named resource passes come from that stdout, not the later full-flake aggregate. Raw capability skips/warnings are preserved. v13 flake remains failed.",
+      "named_passing_results": []
+    },
+    {
+      "task_id": "7.6",
+      "authored_text": "- [ ] [serial] 7.6 Run the relevant Nix flake checks. r[remote_builds.resource_benchmark_evidence]",
+      "outcome": "complete-authored-criterion",
+      "source": [],
+      "basis": "The separate later full x86_64-linux flake command completed exit 0 (Pueue 40) on an unchanged 11957-file snapshot. Current selected source bytes match that manifest. This does not relabel v13 flake exit 1 or prove the open external scenarios.",
+      "named_passing_results": []
+    },
+    {
+      "task_id": "7.7",
+      "authored_text": "- [ ] [serial] 7.7 Run Cairn validation, requirement coverage, design gate, and tasks gate. r[remote_builds.resource_policy_rollout]",
+      "outcome": "unchecked",
+      "remaining_prerequisite": "Earlier lifecycle validation is not fresh for this evidence/task update. Main will run Cairn validate, declared coverage and proposal/design/tasks gates after both workers land; declared release-provenance 155/155 coverage is not coverage of all open changes."
+    }
+  ],
+  "non_claims": [
+    "No historical-before test execution reconstructed from after-the-fact gates.",
+    "No authenticated worker observation, actual cgroup OOM, remote successor dispatch, lease authority or complete settlement established by supplied replay facts.",
+    "No actual benchmark driver invocation, performance improvement, historical-placement benefit, representative Onix build/adoption or deployment rollback observation.",
+    "No full three-seed VM/fault acceptance, persistent block-device power-loss proof, bug replay/minimization or snapshot_backed_reproduced.",
+    "No complete actual Valence consumer acceptance, fresh Cairn gate result, accepted-spec sync, archive or release promotion.",
+    "No future resource sufficiency, whole-build correctness, host isolation or fair billing proof.",
+    "Prior lifecycle declared release-provenance marker coverage 155/155 is not coverage of all open changes."
+  ],
+  "parent_follow_up": "After both workers land, run fresh Cairn validate, declared coverage and all scoped proposal/design/tasks gates; retain exact outputs. Reassess 7.7 only against its full authored criterion and those outputs. Do not rerun historical failures simply to reconfirm them."
+}

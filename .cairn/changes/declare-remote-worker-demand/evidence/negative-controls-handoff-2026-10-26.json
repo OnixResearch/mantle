@@ -1,0 +1,55 @@
+{
+  "schema": "mantle-demand-negative-controls-handoff-v1",
+  "date": "2026-10-26",
+  "change": "declare-remote-worker-demand",
+  "maintenance_owner": "Mantle scheduling/coordinator live-state maintainers",
+  "integration_owner": "Main",
+  "immediate_outcome": "Three consumer-visible negative controls added to the existing remote coordinator test module in src/remote_build.rs. No production logic changed. T2.2 and T4.2 remain unchecked because these new tests have not executed.",
+  "durable_repeatable_capability": "The existing real coordinator registration/admission/completion transitions now have explicit controls for current presence/concurrency without inventory, completed execution and withdrawn inventory, and two-worker placement/reservation equivalence with and without an unrelated unmet demand.",
+  "acceptance_claimed": false,
+  "newly_checked_tasks": [],
+  "test_owner": "src/remote_build.rs embedded tests module; existing production admission and coordinator fixture helpers reused",
+  "unexecuted_test_subject": {
+    "path": "src/remote_build.rs",
+    "blake3": "0c7d83d2e8741e8f4971db73040f1106ad64759620a83f32e730ae3d9f65d995",
+    "identity_command": "b3sum src/remote_build.rs",
+    "identity_command_exit": 0,
+    "limit": "Post-addition file pin only, not a build/test result or claim about Main's subsequent edits."
+  },
+  "new_tests": [
+    {
+      "name": "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+      "tasks": ["T2.2", "T4.2"],
+      "scenario": "Production admission registers a present worker at concurrency 1 and TEST_WORKER_CONCURRENCY, each without quantified inventory, and is required to retain the exact missing-inventory blocker and admitted demand quantities.",
+      "required_outcomes": "Neither case may create a job, resource reservation/lease, workspace lease or live output claim. The production-created current worker must remain registered with its requested concurrency and absent inventory.",
+      "execution_status": "not-run-awaiting-Main"
+    },
+    {
+      "name": "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history",
+      "tasks": ["T2.2", "T4.2"],
+      "scenario": "Ordinary quantified admission first creates a real coordinator job and lease. Existing attempt report helpers complete that job and release its lease. A distinct action then enters production admission with current registration omitting the formerly known inventory while completed history remains recorded.",
+      "required_outcomes": "Current inventory must be absent, exact missing-inventory blocker retained, prior completed job/claims unchanged, no new job or resource/workspace lease, and exactly one demand restating the new request rather than historical capacity.",
+      "execution_status": "not-run-awaiting-Main"
+    },
+    {
+      "name": "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations",
+      "tasks": ["T4.2"],
+      "scenario": "Register two actually eligible quantified workers. Clone that admitted state, then derive an unrelated unmet demand through real admission using CPU need exceeding either inventory and a distinct request identity. Admit the same two full-inventory jobs into each state, then attempt an overflow job.",
+      "required_outcomes": "Creating demand must create no job/resource/workspace lease/output claim. Actual admission decisions must match in both states, select a-worker then b-worker, and leave identical jobs, live output claims and resource/workspace reservation maps after each dispatch. Once both workers are fully reserved, overflow must return the same resource-cpu-unavailable rejection without changing jobs/reservations, while unrelated demand remains live.",
+      "execution_status": "not-run-awaiting-Main"
+    }
+  ],
+  "parent_execution_recipes_not_run_here": [
+    "nix develop -c cargo test --locked --offline -p mantle --bin mantle worker_demand_ -- --test-threads=1"
+  ],
+  "parent_gate_boundary": "Main owns execution and applicable formatting/Clippy/workspace/Nix/document/lifecycle gates once after both slices land. Above focused commands are optional precise selectors, not evidence of execution. Only retained passing new results can close T2.2/T4.2. No failure has been rerun by this worker.",
+  "source_subject_boundary": "The prior obligation-reconciliation-2026-10-26.json source hashes and old fixture line ranges describe the inspection before these test additions. src/remote_build.rs now differs by added tests only, so its old whole-file hash must not be presented as the post-addition test subject or proof that new tests ran. Existing T4.1 results remain historical named passing fixture evidence, not qualification of these new controls.",
+  "T3_live_runtime_gap_preserved": "The retained daemon socket fixture publishes a manually constructed fact; the retained real service runtime captures only an empty subscription. A real long-lived building-plane adapter/subscriber must still capture derived demand and ordered retraction after queued best-effort writes drain, plus actual placement/plan/build-report controls with daemon absent. No fake publisher, event-delivery claim or immediate-exit CLI substitution was introduced.",
+  "other_boundaries_preserved": [
+    "T1.1 isolated current-origin baseline remains open.",
+    "T4.3 historical-before/after exact rail evidence remains open; a newly passing test cannot manufacture the historical-before run.",
+    "T4.4 final applicable gate and coverage reconciliation belongs to Main; declared release-provenance Tracey coverage is not all-demand-requirement coverage.",
+    "T4.5 external semantic/lifecycle acceptance, accepted-spec sync, isolated archive workflow, rollout and release authorization remain separate and open.",
+    "No production logic defect identified or production behavior changed; new controls are unexecuted until Main observes their results."
+  ]
+}

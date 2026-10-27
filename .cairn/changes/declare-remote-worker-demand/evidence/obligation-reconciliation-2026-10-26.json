@@ -1,0 +1,225 @@
+{
+  "schema": "mantle-demand-obligation-reconciliation-v1",
+  "date": "2026-10-26",
+  "change": "declare-remote-worker-demand",
+  "classification": "source-bound-retained-fixture-reconciliation-not-new-runtime",
+  "maintenance_owner": "Mantle scheduling/coordinator live-state maintainers",
+  "integration_owner": "Main",
+  "immediate_outcome": "T4.1's five positive fixture obligations have individually identified passing retained results on matching source bytes. Only T4.1 is newly checked. Production long-lived delivery, report observations, complete negative controls, historical before/after and isolated-worktree obligations remain distinct and open.",
+  "durable_repeatable_capability": "Existing pure DemandBook and coordinator fixtures cover one unmet requirement, repeated placement rounds, explicit cancellation/lifetime retractions, and demand resolution through ordinary worker registration and admission. Retained real socket fixture separately covers subscriber publication, owner-loss retraction and identity rejection. Reuse these named rails; do not substitute an empty subscription or queued write for production delivery.",
+  "individual_tasks_closed": ["T4.1"],
+  "acceptance_claimed": false,
+  "publication_archive_or_spec_sync_authorized": false,
+  "new_runtime_commands": [],
+  "new_tests_builds_linters_formatters_or_gates": [],
+  "subsequent_negative_controls_handoff": {
+    "evidence": "evidence/negative-controls-handoff-2026-10-26.json",
+    "execution_status": "not-run-awaiting-Main",
+    "current_T2_2_T4_2_outcome": "Three explicit negative controls have now been added to the existing coordinator tests; only their execution is owed locally before task closure. T2.2/T4.2 remain unchecked pending Main's observed results.",
+    "historical_record_interpretation": "All inspected source hashes, fixture source line ranges, no-new-fixture wording and task gap descriptions below describe the initial reconciliation before these additions. src/remote_build.rs now differs by added tests only, without production logic changes; its old whole-file hash must not be presented as the post-addition subject or proof that new controls ran. Other five source files remain unedited by this worker.",
+    "live_runtime_boundary_unchanged": "No live adapter or fake publisher was added; T3 real long-lived derived demand delivery/retraction and actual report controls remain owed. New negative tests do not prove delivery."
+  },
+  "verification": {
+    "method": "Read authored proposal/design/tasks/spec delta, historical status and runtime receipts, exact fixture bodies, raw retained result lines and source manifests; execute b3sum only to bind inspected source/log bytes.",
+    "command": "b3sum crates/crunch-remote-core/src/demand.rs src/remote_build/demand.rs src/remote_build.rs src/remote_build/live_state/daemon.rs src/remote_build/live_state.rs src/remote_build/live_state/producer.rs target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log target/cairn-finish-20261023/exact-exec-final-gates-tree/start.blake3 /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/start.blake3 /home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stderr.log",
+    "exit_code": 0,
+    "stderr": "",
+    "reference_integrity_check": {
+      "executor": "Python JSON/reference assertions in an ephemeral eval cell; not a product rail or project gate",
+      "json_records_parsed": 2,
+      "exact_retained_pass_lines_verified": 22,
+      "source_manifest_rows_verified": 12,
+      "result": "passed",
+      "library_result_boundary": "The two crunch-remote-core demand library fixtures are evidenced only by their exact v13 ordinary log ok lines here. No execution of those library fixtures is inferred from the full-flake Nextest 6730 total; full-gate nextest lines are cited only for the five explicitly named binary fixtures."
+    },
+    "scope": "Documentary reconciliation only; no new product behavior, CLI smoke, before rail, daemon or subscriber was executed. Previously reported failures were not rerun."
+  },
+  "source_binding": {
+    "files": {
+      "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+      "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+      "src/remote_build.rs": "14bbbec8b83079650ab51f00c395b8da20c16a18d58585fcf5b7e1a247746b8b",
+      "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+      "src/remote_build/live_state.rs": "c2b8c1ec6b2daf97a4b87055a6236ee0429a31e169c4a16035f80eced572ccde",
+      "src/remote_build/live_state/producer.rs": "e66ce212b20e0245e80486a555b0d863a8d077cdcb623a79c39bdee32e1539c9"
+    },
+    "v13_manifest": {
+      "path": "target/cairn-finish-20261023/exact-exec-final-gates-tree/start.blake3",
+      "blake3": "3bed87263b97c81820330da2e8039f78842716ece80a35a3a8743c6b27a0a4ac",
+      "matching_rows": [6093, 11034, 11037, 11042, 11043, 11044]
+    },
+    "full_gate_manifest": {
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/start.blake3",
+      "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838",
+      "matching_rows": [6116, 11057, 11060, 11065, 11066, 11067]
+    },
+    "boundary": "Selected inspected source bytes match both retained manifests. This is not a fresh whole-worktree provenance or release identity claim."
+  },
+  "retained_commands": {
+    "v13_ordinary": {
+      "command": "bash scripts/check-first-party-quality.sh",
+      "exit_code": 0,
+      "stdout": "target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+      "stdout_blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+      "qualification_ref": "evidence/focused-tests-gate-v13-2026-10-26.json",
+      "boundary": "Ordinary step passed; v13 aggregate and flake step exited 1. This record never relabels v13 flake as passing."
+    },
+    "full_flake": {
+      "command": "nix flake check --offline --no-write-lock-file -L",
+      "pueue_task_id": 40,
+      "exit_code": 0,
+      "receipt": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stderr.log",
+      "stderr_blake3": "85fe148b181cfb570bdf3dde966a8c236f26f586ea8f83b7765b3a6dc162067d",
+      "boundary": "Later independently retained passing gate; not a historical before run or change-specific external acceptance."
+    }
+  },
+  "named_retained_tests": [
+    {
+      "id": "core-lifetimes",
+      "name": "demand::tests::repeated_rounds_dedupe_changed_requirements_replace_and_every_lifetime_end_retracts",
+      "source": "crates/crunch-remote-core/src/demand.rs:282-305",
+      "ordinary_ok_lines": [2375],
+      "observed": "First observation Published, same fact Unchanged; changed requirement Replaced with exactly that fact; explicit Placed, Cancelled, TimedOut, RequirementChanged and OwnerStopped each retract to zero.",
+      "limit": "Pure book transition fixture, not a production cancellation or delivered subscriber event."
+    },
+    {
+      "id": "core-bound",
+      "name": "demand::tests::forged_identity_noncanonical_resources_and_count_bound_do_not_mutate_book",
+      "source": "crates/crunch-remote-core/src/demand.rs:307-329",
+      "ordinary_ok_lines": [2374],
+      "observed": "Forged requirement identity rejected, zero named quantity invalid; 1024-fact book rejects overflow with CountExceeded and exact unchanged book."
+    },
+    {
+      "id": "registration",
+      "name": "remote_build::tests::worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts",
+      "source": "src/remote_build.rs:18186-18224",
+      "ordinary_ok_lines": [8022, 13780],
+      "full_gate_nextest_pass_lines": [18469, 21584],
+      "observed": "No-worker quantified request is Pending/no-workers-registered. Three further rounds retain the identical single fact and no jobs, leases or live output claims. Ordinary registration without quantified inventory remains Pending. Registration with a satisfying inventory followed by ordinary admission Dispatch retracts demand.",
+      "authority_boundary": "Supervisor response is represented by the ordinary apply_worker_registration input in this fixture; no external supervisor process is claimed. The succeeding admission creates exactly one normal resource lease. Demand did not create that lease; this is not a claim that successful placement is lease-free."
+    },
+    {
+      "id": "cancellation",
+      "name": "remote_build::tests::worker_demand_changes_retract_and_scoped_projection_cannot_claim_another_owner",
+      "source": "src/remote_build.rs:18226-18270",
+      "ordinary_ok_lines": [8021, 13779],
+      "full_gate_nextest_pass_lines": [18468, 21583],
+      "observed": "Requirement change changes identity and emits Retract before Publish; other owner sees no facts; Cancelled, TimedOut, RequirementChanged and OwnerStopped each clear demand without a lease; serialized/restored scheduling state does not resurrect demand.",
+      "limit": "Explicit coordinator cancellation helper fixture, not end-to-end sandbox cancellation or real production subscriber delivery."
+    },
+    {
+      "id": "production-blocker",
+      "name": "remote_build::tests::production_missing_inventory_keeps_exact_blocker_and_only_observes_demand",
+      "source": "src/remote_build.rs:18161-18184",
+      "ordinary_ok_lines": [7940, 13698],
+      "full_gate_nextest_pass_lines": [18366, 21485],
+      "observed": "Two production admission calls return exactly remote-worker-resource-inventory-missing, preserve one demand with that same blocker, and create no jobs, resource leases or live output claims; OwnerStopped clears demand.",
+      "limit": "Production admission function fixture only: not placement report/CLI output, daemon-absence comparison, or long-lived best-effort publisher drain."
+    },
+    {
+      "id": "socket-relay",
+      "name": "remote_build::live_state::daemon::tests::worker_demand_socket_relay_retracts_on_owner_loss_and_rejects_forged_identity",
+      "source": "src/remote_build/live_state/daemon.rs:1553-1620",
+      "ordinary_ok_lines": [7836, 13594],
+      "full_gate_nextest_pass_lines": [18227, 21353],
+      "observed": "Real socket fixture subscriber receives manually constructed demand CPU 4 and exact blocker; new subscriber snapshots same identity; owner shutdown delivers retraction and fresh snapshot empty. Forged identity disconnects; changed requirement without prior retract disconnects and retracts old owner fact.",
+      "limit": "Real daemon/subscriber transport fixture with manually constructed fact, not a real building-plane long-lived adapter deriving and delivering demand."
+    },
+    {
+      "id": "daemon-bound",
+      "name": "remote_build::live_state::daemon::tests::demand_count_bound_is_global_and_retraction_restores_admission",
+      "source": "src/remote_build/live_state/daemon.rs:1622-1667",
+      "ordinary_ok_lines": [7818, 13576],
+      "full_gate_nextest_pass_lines": [18091, 21255],
+      "observed": "Daemon state admits 1024 demands across owners, rejects next demand without reducing other fact kinds, and admits another after one retraction.",
+      "limit": "Daemon state admission fixture, not a 1025-client production socket scenario."
+    }
+  ],
+  "task_mapping": [
+    {
+      "task": "T1.1",
+      "closed": false,
+      "remaining": "Isolated worktree from current origin/main with recorded baseline blocker path and an unmet-demand observation. This shared-worktree reconciliation neither creates nor substitutes for it; VCS mutation is outside this worker's scope."
+    },
+    {
+      "task": "T1.2/T1.3/T2.1",
+      "already_checked_unchanged": true,
+      "boundary": "Schema/Proposed ADR/implementation completion remains separate from execution acceptance."
+    },
+    {
+      "task": "T2.2",
+      "closed": false,
+      "supported": ["registration", "production-blocker", "core-bound"],
+      "source_boundary": "src/remote_build/demand.rs:18-57 only accepts validated request and actual Pending decision; no quantified requirement returns None; resource quantities come from canonical explicit request, not coordinator state. This structurally excludes direct inventory/history mutation from this derivation function, but is not a retained historical-capacity negative observation.",
+      "remaining": "Retain explicit no-inference controls for historical execution and concurrency/presence variants on the admission/derivation path; existing no-inventory registration control alone is not the entire composite proof."
+    },
+    {
+      "task": "T3.1",
+      "closed": false,
+      "supported": ["socket-relay", "production-blocker", "cancellation"],
+      "remaining": "Run a real long-lived building-plane adapter with subscriber and retain derived unmet demand plus retraction after queued writes drain; separately retain plan/build report same-blocker observations with daemon absent. Synthetic protocol publication and an empty real subscription are not substitutes. Dependency publish-live-build-state-subscriptions and external semantic acceptance remain separate."
+    },
+    {
+      "task": "T3.2",
+      "closed": false,
+      "supported": ["production-blocker"],
+      "remaining": "Retain actual placement report showing mandatory demand vector/job/policy/requirement/blocker and unchanged blocker without added capacity claim. Admission state equality is not report visibility."
+    },
+    {
+      "task": "T4.1",
+      "closed": true,
+      "exact_task_text": "[parallel] T4.1 Add positive fixtures: one unmet demand per requirement, retraction on placement, retraction on cancellation, deduplication across placement rounds, and resolution after a supervisor-registered worker. r[build_scheduling.declared_worker_demand]",
+      "subcriteria": {
+        "one_unmet_per_requirement": ["registration", "core-lifetimes"],
+        "retraction_on_placement": ["registration", "core-lifetimes"],
+        "retraction_on_cancellation": ["cancellation", "core-lifetimes"],
+        "dedup_across_placement_rounds": ["registration"],
+        "resolution_after_supervisor_registered_worker_fixture": ["registration"]
+      },
+      "boundary": "Closes positive fixture addition and retained passing execution only. No live supervisor deployment, production delivery, before/after run or whole-change acceptance is implied."
+    },
+    {
+      "task": "T4.2",
+      "closed": false,
+      "supported": ["registration", "production-blocker", "core-bound", "daemon-bound"],
+      "remaining": "Retain a demand-present versus demand-absent placement-order comparison with multiple eligible candidates and explicit unchanged reservation outcome. Existing demand fixtures show no job/lease/live-output-claim creation and fail-closed bounds, but do not compare placement order; unrelated root-priority tests are not demand-order controls."
+    },
+    {
+      "task": "T4.3",
+      "closed": false,
+      "remaining": "Exact historical before and after demand/retraction/dedup/no-inference rail results on identified source subjects. The two later passing gates are not a historical-before rail, and their result must not be relabeled as one."
+    },
+    {
+      "task": "T4.4",
+      "closed": false,
+      "supported": "Retained named focused results and later completed full x86_64-linux gate; v13 ordinary step passed while its flake failed.",
+      "remaining": "Main to run applicable document/lifecycle validation and diff check once after workers land and retain complete criterion-specific coverage mapping. Declared release-provenance Tracey 155/155 is not coverage of all open changes or these two demand requirements."
+    },
+    {
+      "task": "T4.5",
+      "closed": false,
+      "remaining": "Accepted specs and archive only after individually satisfied criteria, external semantic/lifecycle acceptance and authorized isolated branch workflow. No spec-sync/archive/release authorization is given."
+    }
+  ],
+  "runtime_reuse_decision": {
+    "retained_service_receipt": ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-observations-2026-10-23.json",
+    "retained_remote_receipt": ".cairn/changes/separate-remote-build-hexagon/evidence/runtime-observations-2026-10-23.json",
+    "demand_runtime_receipt": "evidence/runtime-observations-2026-10-23.json",
+    "finding": "The retained real coordinator observation is an empty subscription; retained remote scenario is successful ticket build plus authority rejection, not quantified unmet demand. No retained long-lived demand-producing recipe is supplied by these scenarios. Authored design/tasks explicitly require a real long-lived adapter because production fail-fast CLI queues detached best-effort publication then OwnerStopped before exit.",
+    "action": "No new adapter, fixture or fake publisher was constructed and no absent-daemon immediate-exit CLI was promoted to a positive observation. The smallest missing positive action remains a bounded existing long-lived building-plane adapter request with real subscriber, explicit quantified no-fit input, safe teardown, exact streams/status and executable/input BLAKE3 pins. An absent-daemon CLI, if later run, is a separate negative control only.",
+    "scope_limit": "No claim that long-lived execution is impossible or externally blocked; only that the retained recipes inspected here do not execute it."
+  },
+  "historical_records_preserved": [
+    "evidence/current-status-2026-10-23.json",
+    "evidence/runtime-observations-2026-10-23.json",
+    "evidence/focused-tests-gate-v13-2026-10-26.json"
+  ],
+  "non_claims": [
+    "Demand is a restatement of admitted quantified requirements, never capacity, placement, reservation or lease authority.",
+    "Fixture-supplied registration represents the supervisor boundary, not observed external provisioning. Ordinary successful admission may create a lease; demand cannot.",
+    "Detached best-effort delivery has not become acknowledged/reliable delivery. Connected socket, queued write and immediately exiting CLI do not prove delivered building-plane events.",
+    "No historical-before, isolated-worktree, external acceptance, rollout, release, archive or spec-sync boundary is closed by these fixture results.",
+    "The later passing full gate does not rewrite earlier failed or incomplete receipts, and release-provenance Tracey coverage is not whole-open-change coverage."
+  ]
+}

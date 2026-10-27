@@ -176,95 +176,109 @@ fn observe_only_and_retry_rollback_are_independent() {
     assert!(c.sharing_active());
     assert!(core::NON_CLAIMS.contains(&"no simulated service acceptance"));
 }
+struct EscalationFixture {
+    job: RemoteJobId,
+    attempt: RemoteAttemptId,
+    next: RemoteAttemptId,
+}
+impl EscalationFixture {
+    fn new() -> Self {
+        Self {
+            job: RemoteJobId::new("job").unwrap(),
+            attempt: RemoteAttemptId::new("old").unwrap(),
+            next: RemoteAttemptId::new("new").unwrap(),
+        }
+    }
+
+    fn request<'a>(&'a self, catalog: &'a [MachineClass]) -> core::EscalationRequest<'a> {
+        let fence = RemoteFenceGeneration::INITIAL;
+        core::EscalationRequest {
+            controls: controls(),
+            context: core::RetryContext {
+                job: &self.job,
+                attempt: &self.attempt,
+                fence,
+                next_attempt: &self.next,
+                next_fence: fence.advance().unwrap(),
+                failed: true,
+                retries: 0,
+                cumulative_units: 10,
+                elapsed_ms: 10,
+                next_wall_budget_ms: 10,
+            },
+            evidence: core::OomEvidence {
+                job: &self.job,
+                attempt: &self.attempt,
+                fence,
+                platform: "linux-cgroup-v2",
+                category: OomCategory::LinuxCgroupV2Kill,
+                trusted_positive_platform_evidence: true,
+            },
+            prior: &catalog[0],
+            classes: catalog,
+            quota: QuotaFacts {
+                project_remaining_units: 20,
+                account_remaining_units: 20,
+            },
+            policy: core::EscalationPolicy {
+                version: 1,
+                max_retries: 1,
+                largest_class_order: 2,
+                max_cumulative_units: 30,
+                max_wall_ms: 20,
+            },
+        }
+    }
+}
+
 #[test]
 fn oom_retry_needs_positive_current_fenced_evidence_and_all_limits() {
-    let job = RemoteJobId::new("job").unwrap();
-    let attempt = RemoteAttemptId::new("old").unwrap();
-    let next = RemoteAttemptId::new("new").unwrap();
-    let fence = RemoteFenceGeneration::INITIAL;
-    let context = || core::RetryContext {
-        job: &job,
-        attempt: &attempt,
-        fence,
-        next_attempt: &next,
-        next_fence: fence.advance().unwrap(),
-        failed: true,
-        retries: 0,
-        cumulative_units: 10,
-        elapsed_ms: 10,
-        next_wall_budget_ms: 10,
-    };
-    let evidence = || core::OomEvidence {
-        job: &job,
-        attempt: &attempt,
-        fence,
-        platform: "linux-cgroup-v2",
-        category: OomCategory::LinuxCgroupV2Kill,
-        trusted_positive_platform_evidence: true,
-    };
-    let p = core::EscalationPolicy {
-        version: 1,
-        max_retries: 1,
-        largest_class_order: 2,
-        max_cumulative_units: 30,
-        max_wall_ms: 20,
-    };
-    let quota = QuotaFacts {
-        project_remaining_units: 20,
-        account_remaining_units: 20,
-    };
+    let fixture = EscalationFixture::new();
     let catalog = classes();
-    let run = |c: core::RetryContext<'_>, e: core::OomEvidence<'_>, quota: QuotaFacts, p: core::EscalationPolicy| {
-        core::plan_escalation(core::EscalationRequest {
-            controls: controls(),
-            context: c,
-            evidence: e,
-            prior: &catalog[0],
-            classes: &catalog,
-            quota,
-            policy: p,
-        })
-    };
-    let retry = run(context(), evidence(), quota, p).unwrap();
-    assert_eq!(retry.predecessor, attempt);
-    assert_eq!(retry.next_attempt, next);
-    assert_eq!(retry.next_fence, fence.advance().unwrap());
+    let request = || fixture.request(&catalog);
+    let retry = core::plan_escalation(request()).unwrap();
+    assert_eq!(retry.predecessor, fixture.attempt);
+    assert_eq!(retry.next_attempt, fixture.next);
+    assert_eq!(retry.next_fence, RemoteFenceGeneration::INITIAL.advance().unwrap());
     assert_eq!(retry.class_index, 1);
+    // The context remains failed: None covers non-OOM failure, Unknown ambiguous termination.
     for category in [OomCategory::Unknown, OomCategory::None] {
-        let mut e = evidence();
-        e.category = category;
-        assert_eq!(run(context(), e, quota, p), Err(Reason::NotPositiveOom));
+        let mut r = request();
+        r.evidence.category = category;
+        assert_eq!(core::plan_escalation(r), Err(Reason::NotPositiveOom));
     }
-    let mut e = evidence();
-    e.trusted_positive_platform_evidence = false;
-    assert_eq!(run(context(), e, quota, p), Err(Reason::NotPositiveOom));
-    let mut c = context();
-    c.next_fence = fence;
-    assert_eq!(run(c, evidence(), quota, p), Err(Reason::FenceInvalid));
-    let mut c = context();
-    c.retries = 1;
-    assert_eq!(run(c, evidence(), quota, p), Err(Reason::RetryLimit));
-    let mut small = p;
-    small.max_cumulative_units = 29;
-    assert_eq!(run(context(), evidence(), quota, small), Err(Reason::ChargeLimit));
-    small = p;
-    small.max_wall_ms = 19;
-    assert_eq!(run(context(), evidence(), quota, small), Err(Reason::WallTimeLimit));
-    small = p;
-    small.largest_class_order = 1;
-    assert_eq!(run(context(), evidence(), quota, small), Err(Reason::ClassLimit));
-    assert_eq!(
-        run(
-            context(),
-            evidence(),
-            QuotaFacts {
-                project_remaining_units: 19,
-                account_remaining_units: 20
-            },
-            p
-        ),
-        Err(Reason::QuotaDenied)
-    );
+    let mut r = request();
+    r.evidence.trusted_positive_platform_evidence = false;
+    assert_eq!(core::plan_escalation(r), Err(Reason::NotPositiveOom));
+    let mut r = request();
+    r.context.next_fence = RemoteFenceGeneration::INITIAL;
+    assert_eq!(core::plan_escalation(r), Err(Reason::FenceInvalid));
+    let mut r = request();
+    r.context.retries = 1;
+    assert_eq!(core::plan_escalation(r), Err(Reason::RetryLimit));
+    let mut r = request();
+    r.policy.max_cumulative_units = 29;
+    assert_eq!(core::plan_escalation(r), Err(Reason::ChargeLimit));
+    let mut r = request();
+    r.policy.max_wall_ms = 19;
+    assert_eq!(core::plan_escalation(r), Err(Reason::WallTimeLimit));
+    let mut r = request();
+    r.policy.largest_class_order = 1;
+    assert_eq!(core::plan_escalation(r), Err(Reason::ClassLimit));
+    let mut r = request();
+    r.quota.project_remaining_units = 19;
+    assert_eq!(core::plan_escalation(r), Err(Reason::QuotaDenied));
+}
+
+#[test]
+fn oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class() {
+    let fixture = EscalationFixture::new();
+    let mut catalog = classes();
+    let mut not_failed = fixture.request(&catalog);
+    not_failed.context.failed = false;
+    assert_eq!(core::plan_escalation(not_failed), Err(Reason::NotPositiveOom));
+    catalog[1].available = false;
+    assert_eq!(core::plan_escalation(fixture.request(&catalog)), Err(Reason::ClassLimit));
 }
 #[test]
 fn sharing_never_skips_existing_signed_result_admission() {

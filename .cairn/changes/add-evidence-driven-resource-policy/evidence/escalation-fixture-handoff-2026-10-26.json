@@ -1,0 +1,70 @@
+{
+  "schema": "mantle-resource-policy-escalation-fixture-handoff-v1",
+  "date": "2026-10-26",
+  "change": "add-evidence-driven-resource-policy",
+  "maintenance_owner": "Mantle resource-policy maintainers own escalation fixtures; Main owns named test execution and final checks",
+  "acceptance_claimed": false,
+  "task_id": "3.4",
+  "authored_text": "Add positive OOM escalation tests and negative arbitrary-failure, ambiguous-exit, exhausted-limit, unavailable-class, and quota-denial tests.",
+  "task_checked": false,
+  "immediate_outcome": "Refactored the existing real pure-planner setup into a shared EscalationFixture and moved the two new controls into a focused negative test. Every new or changed function is under 70 lines; no allow was added. No production semantic/API changes or duplicate negative cases. No tests/builds/formatters/linters/gates executed for the edit.",
+  "durable_repeatable_capability": "The shared request fixture preserves positive and complete prior limit checks. The new focused test rejects nonfailed attempts despite supplied positive OOM and rejects an unavailable sole larger class even when it otherwise fits and quota permits. The original test explicitly retains failed=true with OomCategory::None for arbitrary non-OOM failure and Unknown for ambiguous termination.",
+  "prior_capture": {
+    "path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/local-obligations-2026-10-26.json",
+    "blake3": "e454fab73620ee717dc574afa9aeb914ff6560f7001acff922e8aa8d78a92829",
+    "boundary": "The prior retained v13 passing row and source-binding observations remain historical facts for the pre-extension fixture bytes. They do not execute or validate this added matrix. Production selector bytes are unchanged."
+  },
+  "edited_source": {
+    "path": "crates/crunch-build/src/distributed/resource_policy_tests.rs",
+    "blake3_before": "8236a9664468a55efa41f462b5245f7450ac372373df79c25151d57a04515648",
+    "blake3_after": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d"
+  },
+  "unchanged_production_source": {
+    "path": "crates/crunch-remote-core/src/resource_policy.rs",
+    "blake3": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71"
+  },
+  "refactored_existing_test": "distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits",
+  "new_test_names": [
+    "distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class"
+  ],
+  "function_line_counts": {
+    "EscalationFixture::new": 7,
+    "EscalationFixture::request": 39,
+    "oom_retry_needs_positive_current_fenced_evidence_and_all_limits": 37,
+    "oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class": 9
+  },
+  "new_controls": [
+    {
+      "input_change": "context.failed = false while retaining valid current positive OOM evidence, eligible classes and quota",
+      "expected_typed_outcome": "Err(Reason::NotPositiveOom)"
+    },
+    {
+      "input_change": "Set only larger catalog class available = false; retain valid failed context/OOM, unchanged prior class, quota and policy",
+      "expected_typed_outcome": "Err(Reason::ClassLimit)"
+    }
+  ],
+  "existing_nonduplicated_controls": [
+    "Successful escalation links predecessor/new attempt/advanced fence and chooses the larger class",
+    "The context remains failed=true with OomCategory::None (arbitrary non-OOM failure) or OomCategory::Unknown (ambiguous termination); both reject NotPositiveOom",
+    "Untrusted supplied evidence rejects NotPositiveOom",
+    "Unadvanced fence rejects FenceInvalid",
+    "Retry exhaustion rejects RetryLimit",
+    "Cumulative charge limit rejects ChargeLimit",
+    "Wall-time limit rejects WallTimeLimit",
+    "Class-order limit rejects ClassLimit",
+    "Insufficient project quota rejects QuotaDenied"
+  ],
+  "focused_commands_for_main": [
+    "cargo test -p crunch-build --lib distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits -- --exact --test-threads=1",
+    "cargo test -p crunch-build --lib distributed::resource_policy::tests::oom_retry_rejects_nonfailed_attempt_and_unavailable_larger_class -- --exact --test-threads=1"
+  ],
+  "parent_follow_up": "Execute both exact named tests once and retain commands, named results, source digest and exits. Run final applicable checks once after integration. Reassess 3.4 only after execution; refresh gate evidence for the changed fixture source rather than promote the prior source snapshot.",
+  "commands_actually_executed": [
+    "b3sum --no-names for edited test, unchanged production selector and prior evidence paths"
+  ],
+  "non_claims": [
+    "No newly executed fixture result; typed outcomes listed here are test expectations, not observed runtime outputs.",
+    "No actual trusted platform/cgroup OOM, fenced successor dispatch or settlement.",
+    "No API 4.3, benchmark, campaign, export, external acceptance, archive, spec-sync or release closure."
+  ]
+}

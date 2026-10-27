@@ -943,5 +943,15 @@
     "nextest_summary": "mantle-nextest>      Summary [ 321.134s] 6730 tests run: 6730 passed, 198 skipped",
     "resolved_boundary": "A completed ordinary full-flake/Tiger Style gate is now observed; the earlier interruption and v13 repository failure remain historical.",
     "remaining_boundary": "Change-specific baselines/adoption, external authority, resource-admission and lifecycle boundaries are unchanged. This gate does not accept criteria, sync specs or authorize archive."
+  },
+  "observed_final_verification_2026_10_26": {
+    "evidence": ".cairn/changes/adopt-fault-injection-io-tests/evidence/final-verification-2026-10-26.json",
+    "evidence_blake3": "d8d536b1c598164a4bd1dcdd64c72d343ab6a6f53f237b6895a2fa86f158c89c",
+    "acceptance_claimed": false,
+    "verification_task_closed": true,
+    "named_fixture_results": 8,
+    "selected_subjects_matching_passing_full_gate": 10,
+    "resolved_boundary": "Retained package/workspace/Clippy checks, completed full Nix gate, captured post-gate Cairn validation, and the existing README reference/non-claims support the final authored verification task. The v13 failed flake is preserved separately.",
+    "remaining_boundary": "Parent semantic/lifecycle acceptance, accepted-spec sync and authorized isolated archive remain separate. No arbitrary-fault, sandbox-hermeticity, store-correctness or release-eligibility claim. Fresh continuation validation is recorded by Main separately."
   }
 }

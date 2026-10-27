@@ -1,0 +1,243 @@
+{
+  "schema": "mantle-fault-io-final-verification-v1",
+  "date": "2026-10-26",
+  "change": "adopt-fault-injection-io-tests",
+  "maintenance_owner": "Mantle crunch-store action-result/store-export and build-publication maintainers",
+  "acceptance_claimed": false,
+  "immediate_outcome": "The remaining package/workspace/Clippy/Cairn/Nix verification task is supported by retained passing executions, unchanged selected fault subjects, and the existing README reference and non-claims.",
+  "durable_capability": "Named deterministic, test-only store/export/publication fault fixtures now have a repeatable source-bound verification chain through the ordinary first-party gate and the subsequent completed full Nix gate, preserving the earlier failed run.",
+  "all_gates_task_closed": true,
+  "closed_task": "Run package, workspace, Clippy, Cairn, and Nix checks; append the komora-io reference under `## References` in `README.md`; document non-claims.",
+  "requirement": "mantle.io_fault.verification",
+  "ordinary_first_party": {
+    "command": "bash scripts/check-first-party-quality.sh",
+    "exit_code": 0,
+    "log": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/exact-exec-final-gates/ordinary-first-party.stdout.log",
+      "blake3": "3be3d7f951070acf0136b190589fbf1effe6d8e9077b6fe02091b87d8b76c0a3",
+      "command": "bash scripts/check-first-party-quality.sh"
+    },
+    "individual_task_record": {
+      "path": ".cairn/changes/adopt-fault-injection-io-tests/evidence/fault-injection-individual-tasks-gate-v13-2026-10-26.json",
+      "blake3": "eef618682afbf6106d63b08a84251c45f79e34bf4f19a38b317af5d89c062450"
+    },
+    "named_passes": {
+      "action_result::tests::io_fault_default_counter_keeps_store_and_cache_cycle": [
+        {
+          "line": 2809,
+          "text": "test action_result::tests::io_fault_default_counter_keeps_store_and_cache_cycle ... ok"
+        }
+      ],
+      "action_result::tests::io_fault_store_read_is_classified_as_store_failure": [
+        {
+          "line": 2812,
+          "text": "test action_result::tests::io_fault_store_read_is_classified_as_store_failure ... ok"
+        }
+      ],
+      "action_result::tests::io_fault_nar_write_is_classified_as_export_failure": [
+        {
+          "line": 2811,
+          "text": "test action_result::tests::io_fault_nar_write_is_classified_as_export_failure ... ok"
+        }
+      ],
+      "action_result::tests::io_fault_cache_publication_is_undiscoverable_until_retry_commits": [
+        {
+          "line": 2807,
+          "text": "test action_result::tests::io_fault_cache_publication_is_undiscoverable_until_retry_commits ... ok"
+        }
+      ],
+      "action_result::tests::io_fault_counter_is_serialized_and_unrelated_store_reads_cannot_consume_it": [
+        {
+          "line": 2808,
+          "text": "test action_result::tests::io_fault_counter_is_serialized_and_unrelated_store_reads_cannot_consume_it ... ok"
+        }
+      ],
+      "action_result::tests::io_fault_guard_restores_ownership_after_unwind": [
+        {
+          "line": 2810,
+          "text": "test action_result::tests::io_fault_guard_restores_ownership_after_unwind ... ok"
+        }
+      ],
+      "orchestrate::tests::io_fault_publication_is_diagnostic_only_for_ordinary_builds": [
+        {
+          "line": 839,
+          "text": "test orchestrate::tests::io_fault_publication_is_diagnostic_only_for_ordinary_builds ... ok"
+        }
+      ],
+      "smoke_build_cached_on_second_run": [
+        {
+          "line": 16314,
+          "text": "test smoke_build_cached_on_second_run ... ok"
+        }
+      ]
+    },
+    "scope": "The serialized v13 first-party workspace gate includes the six crunch-store fixtures, the crunch-build orchestration fixture and the real build/cache smoke. Its separate flake step remains exit 1."
+  },
+  "actual_build_cache_cycle": {
+    "probe": {
+      "path": "/home/brittonr/git/OnixResearch/mantle/target/cairn-finish-20261023/gate-env-probe-v13/probe.txt",
+      "blake3": "0335108aff1b5b917eb2a06e98129acaa1405e61b68a113190f94f37130ad7f3",
+      "text": "bwrap=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\nbubblewrap 0.11.0\nbwrap_namespace_exit=0\nnix_store_exit=0\nSNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\nSNIX_BUILD_BWRAP=unset\nexit=0\n"
+    },
+    "statement": "tests/smoke.rs runs its build only when /nix/store exists and bwrap answers; the gate shell has both and bwrap admits a namespace, so the passing result is a build/cache cycle, not a skip. libtest captures a skip message, so the log alone cannot show this."
+  },
+  "full_flake": {
+    "record": {
+      "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/full-flake-recovery-2026-10-26.json",
+      "blake3": "8711b9eff42de9f57a868d4c83aea2365cfc0f5640f2c5f914ad2373b8886a03"
+    },
+    "command": "nix flake check --offline --no-write-lock-file -L",
+    "exit_code": 0,
+    "pueue_task_id": 40,
+    "tree_binding": {
+      "schema": "mantle-final-gates-tree-binding-v1",
+      "head_start": "9c758f089495d991050eea81f1921807f4071a94",
+      "head_end": "9c758f089495d991050eea81f1921807f4071a94",
+      "files_start": 11957,
+      "files_end": 11957,
+      "changed": [],
+      "added": [],
+      "removed": [],
+      "gates_exit": 0,
+      "snapshot_read_errors": {
+        "start": "",
+        "end": ""
+      },
+      "tree_unchanged": true
+    },
+    "source_manifests": {
+      "start": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/start.blake3",
+        "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838"
+      },
+      "end": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/end.blake3",
+        "blake3": "0ab4c691530fd4323673a855dcd853f22157b5c85cab07dd994ffc1110a89838"
+      }
+    },
+    "streams": {
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stdout.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-cairn-resume-20261026/nix-full-after-supervisor-recovery/flake.stderr.log",
+        "blake3": "85fe148b181cfb570bdf3dde966a8c236f26f586ea8f83b7765b3a6dc162067d"
+      }
+    },
+    "reported_running_checks": 29,
+    "evaluated_check_attributes": 39,
+    "decisive_output": [
+      {
+        "line": 136,
+        "text": "running 29 flake checks..."
+      },
+      {
+        "line": 23006,
+        "text": "mantle-nextest>      Summary [ 321.134s] 6730 tests run: 6730 passed, 198 skipped"
+      },
+      {
+        "line": 89295,
+        "text": "all checks passed!"
+      }
+    ],
+    "scope": "Later, separately captured full x86_64-linux check; not a relabeling of v13. Root-package Nextest does not itself prove execution of the crunch-store library fixtures."
+  },
+  "selected_source_binding": {
+    "crates/crunch-store/Cargo.toml": {
+      "v13": "c94d3601d0fca77f75deb1d117672b14ffa05cfd3c1e67cacef5e8150fc85c90",
+      "full_gate": "c94d3601d0fca77f75deb1d117672b14ffa05cfd3c1e67cacef5e8150fc85c90",
+      "current": "c94d3601d0fca77f75deb1d117672b14ffa05cfd3c1e67cacef5e8150fc85c90"
+    },
+    "crates/crunch-store/src/action_result.rs": {
+      "v13": "e17ba5cc5ac082103fa0744b6fb41539b1f13ea86eedc737b595e2597233d45f",
+      "full_gate": "e17ba5cc5ac082103fa0744b6fb41539b1f13ea86eedc737b595e2597233d45f",
+      "current": "e17ba5cc5ac082103fa0744b6fb41539b1f13ea86eedc737b595e2597233d45f"
+    },
+    "crates/crunch-store/src/build_io.rs": {
+      "v13": "deb54f22974e2410da091dfd46f1e7a903b569e48e28ed2a03c4311a97974ecf",
+      "full_gate": "deb54f22974e2410da091dfd46f1e7a903b569e48e28ed2a03c4311a97974ecf",
+      "current": "deb54f22974e2410da091dfd46f1e7a903b569e48e28ed2a03c4311a97974ecf"
+    },
+    "crates/crunch-store/src/handle.rs": {
+      "v13": "65a9327e3da9279e6554dbc7cea5f2f6aa7c88694a21ebb27bf9806dfcd23b26",
+      "full_gate": "65a9327e3da9279e6554dbc7cea5f2f6aa7c88694a21ebb27bf9806dfcd23b26",
+      "current": "65a9327e3da9279e6554dbc7cea5f2f6aa7c88694a21ebb27bf9806dfcd23b26"
+    },
+    "crates/crunch-store/src/fault_scope.rs": {
+      "v13": "65d5955bef0b81372654a12e1004dfdf4b15b96d80fb030cae3338435d5431ed",
+      "full_gate": "65d5955bef0b81372654a12e1004dfdf4b15b96d80fb030cae3338435d5431ed",
+      "current": "65d5955bef0b81372654a12e1004dfdf4b15b96d80fb030cae3338435d5431ed"
+    },
+    "crates/crunch-build/src/orchestrate.rs": {
+      "v13": "4a81e96e42cae239591ae3e468853da0fb93f4d963c3dc0b4ce9fbee0c372733",
+      "full_gate": "4a81e96e42cae239591ae3e468853da0fb93f4d963c3dc0b4ce9fbee0c372733",
+      "current": "4a81e96e42cae239591ae3e468853da0fb93f4d963c3dc0b4ce9fbee0c372733"
+    },
+    "tests/smoke.rs": {
+      "v13": "ec6a0c247eb18cec69154f3afb178636712ff606dc1a378218852308651a31d2",
+      "full_gate": "ec6a0c247eb18cec69154f3afb178636712ff606dc1a378218852308651a31d2",
+      "current": "ec6a0c247eb18cec69154f3afb178636712ff606dc1a378218852308651a31d2"
+    },
+    "Cargo.lock": {
+      "v13": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "full_gate": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "current": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36"
+    },
+    "flake.nix": {
+      "v13": "506d6a26af501959daa7d0a326b17ad39ba2ed58d9180ea123b0c82aff9cc03b",
+      "full_gate": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28",
+      "current": "2611482aa7c2128a17b0aad0e86189f2e9672fae41101b6884a0168dcf5c6f28"
+    },
+    ".github/workflows/flake-check.yml": {
+      "v13": "aedb5aad07ff544da0b26f460d5663585bb0d8c91164358feeb06de94ad446fb",
+      "full_gate": "aedb5aad07ff544da0b26f460d5663585bb0d8c91164358feeb06de94ad446fb",
+      "current": "aedb5aad07ff544da0b26f460d5663585bb0d8c91164358feeb06de94ad446fb"
+    }
+  },
+  "binding_boundary": "All ten selected current subjects match the later passing full-gate snapshot. Nine, including every named fault fixture and wrapped site, also match v13. flake.nix differs from v13 and is covered by the later full gate. Selected hashes do not assert a post-document-edit whole-tree identity.",
+  "post_full_gate_cairn": {
+    "record": {
+      "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/lifecycle-after-full-gate-2026-10-26.json",
+      "blake3": "0abb3e72d87da14c3757111ef0c1e5c9105aa1f78b7d3f343c6b4a06cc3843d8"
+    },
+    "argv": [
+      "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+      "validate",
+      "--root",
+      "."
+    ],
+    "exit_code": 0,
+    "validation": {
+      "valid": true,
+      "changes": 29,
+      "issues": [],
+      "receipt_hash": "fe2b4fcbd7c7468ae265222420224c5164d2ec4e5934cc0dd5320550f975ddd9"
+    },
+    "scope": "Captured validation of 29 active changes after the full gate and earlier task/evidence edits; fresh validation of this continuation is recorded by Main separately."
+  },
+  "readme_reference": {
+    "path": "README.md",
+    "blake3": "0467e262d6fe0c256df5bd5f7ef705aa5c9cae7c169f5e0460ce45ca5cd88934",
+    "section": "References",
+    "text": "- [komora-io/fault-injection](https://github.com/komora-io/fault-injection) supplies pinned, test-only annotated I/O faults for Mantle's store-shell fixtures. The fixtures cover named failure paths only; they do not establish sandbox hermeticity, store correctness, or release eligibility."
+  },
+  "repeatability_commands": [
+    "cargo test --locked --offline -p crunch-store --lib io_fault_ -- --test-threads=4 --nocapture",
+    "cargo test --locked --offline -p crunch-build --lib io_fault_publication_is_diagnostic_only_for_ordinary_builds -- --nocapture",
+    "cargo test --locked --offline -p mantle --test smoke smoke_build_cached_on_second_run -- --exact --nocapture",
+    "bash scripts/check-first-party-quality.sh",
+    "nix flake check --offline --no-write-lock-file -L"
+  ],
+  "repeatability_boundary": "Commands identify the maintained repeatable paths; this continuation inspects the retained executions instead of rerunning unchanged product code. The smoke needs the retained bwrap/store prerequisites and is not proved merely by an ok line.",
+  "remaining_prerequisites": [
+    "Parent semantic and lifecycle acceptance remains separate from verification.",
+    "Accepted-spec sync and isolated-branch archive workflow have not been authorized or performed by this record."
+  ],
+  "non_claims": [
+    "Injected faults cover named I/O sites only; no sandbox-hermeticity, store-correctness or release-eligibility claim.",
+    "No spec sync, archive, external approval, reconciliation G1/G2 admission, bootstrap proof or new full-gate execution is claimed.",
+    "The 198 skipped full-flake Nextest cases were not executed.",
+    "Historical source-only handoffs and failed/interrupted gates remain retained, not erased or retroactively qualified."
+  ]
+}

@@ -18184,6 +18184,148 @@ mod tests {
     }
 
     #[test]
+    fn worker_demand_production_never_infers_inventory_from_presence_or_concurrency() {
+        let request =
+            fixture_quantified_coordinator_request("demand-no-inference", "demand-no-inference-claim").request;
+        let keys = fixture_worker_registration().output_signing_key_ids;
+        for concurrency in [1, TEST_WORKER_CONCURRENCY] {
+            let mut state = RemoteCoordinatorState::default();
+            let error = admit_remote_production_dispatch(
+                &mut state,
+                &request,
+                "builder-1",
+                1,
+                concurrency,
+                None,
+                &keys,
+                TEST_ATTEMPT_NOW_UNIX_S,
+            )
+            .unwrap_err();
+            assert_eq!(error, "remote-worker-resource-inventory-missing");
+            assert_eq!(state.workers["builder-1"].concurrency, concurrency);
+            assert!(state.workers["builder-1"].resource_inventory.is_none());
+            let demand = state.worker_demands.facts().next().unwrap();
+            assert_eq!(demand.blocker_reason, error);
+            assert_eq!(demand.requirement.cpu_units, TEST_RESOURCE_CPU_UNITS);
+            assert_eq!(demand.requirement.memory_bytes, TEST_RESOURCE_MEMORY_BYTES);
+            assert_eq!(state.worker_demands.facts().count(), 1);
+            assert!(state.jobs.is_empty());
+            assert!(state.resource_leases.is_empty());
+            assert!(state.workspace_leases.is_empty());
+            assert!(state.live_output_claims.is_empty());
+        }
+    }
+
+    #[test]
+    fn worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut worker = fixture_worker_registration();
+        worker.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut state, worker).unwrap();
+        let previous = fixture_quantified_coordinator_request("demand-history", "demand-history-claim");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } =
+            admit_fixture_dispatch(&mut state, &previous).unwrap()
+        else {
+            panic!("explicit inventory must permit the historical job");
+        };
+        assert!(state.jobs[&job_id].resource_lease_id_blake3.is_some());
+        complete_current_fixture_attempt(&mut state, &job_id);
+        assert_eq!(state.jobs[&job_id].phase, RemoteCoordinatorJobPhase::Finished);
+        assert!(state.resource_leases.is_empty());
+        let history = state.jobs.clone();
+        let claims = state.live_output_claims.clone();
+        let request =
+            fixture_quantified_coordinator_request("demand-after-history", "demand-after-history-claim").request;
+        let keys = fixture_worker_registration().output_signing_key_ids;
+        // Production registration replaces the formerly quantified worker with
+        // current presence/concurrency only; the finished job remains recorded.
+        let error = admit_remote_production_dispatch(
+            &mut state,
+            &request,
+            "builder-1",
+            1,
+            TEST_WORKER_CONCURRENCY,
+            None,
+            &keys,
+            TEST_ATTEMPT_NOW_UNIX_S,
+        )
+        .unwrap_err();
+        assert_eq!(error, "remote-worker-resource-inventory-missing");
+        assert!(state.workers["builder-1"].resource_inventory.is_none());
+        assert_eq!(state.jobs, history);
+        assert_eq!(state.live_output_claims, claims);
+        assert!(state.resource_leases.is_empty());
+        assert!(state.workspace_leases.is_empty());
+        assert_eq!(state.worker_demands.facts().count(), 1);
+        let demand = state.worker_demands.facts().next().unwrap();
+        assert_eq!(demand.job_id, request.request_id);
+        assert_eq!(demand.blocker_reason, error);
+        assert_eq!(demand.requirement.cpu_units, TEST_RESOURCE_CPU_UNITS);
+    }
+
+    #[test]
+    fn worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations() {
+        let mut baseline = RemoteCoordinatorState::default();
+        for endpoint_id in ["a-worker", "b-worker"] {
+            let mut worker = fixture_worker_registration();
+            worker.endpoint_id = endpoint_id.to_string();
+            worker.concurrency = TEST_WORKER_CONCURRENCY;
+            worker.resource_inventory = Some(fixture_resource_inventory());
+            apply_worker_registration(&mut baseline, worker).unwrap();
+        }
+        let mut with_demand = baseline.clone();
+        let mut unmet = fixture_quantified_coordinator_request("unrelated-demand", "unrelated-demand-claim");
+        unmet.request.request_id = "unrelated-demand".to_string();
+        unmet.wait_for_worker = true;
+        unmet.resource_requirements.as_mut().unwrap().quantities.cpu_units =
+            TEST_RESOURCE_CPU_UNITS.checked_add(1).unwrap();
+        unmet.request.resource_requirements = unmet.resource_requirements.clone();
+        assert_eq!(
+            admit_fixture_dispatch(&mut with_demand, &unmet).unwrap(),
+            RemoteCoordinatorDispatchDecision::Pending {
+                reason: RemoteResourceReasonCode::CpuUnavailable.as_str().to_string(),
+            }
+        );
+        assert_eq!(with_demand.worker_demands.facts().count(), 1);
+        assert!(with_demand.jobs.is_empty());
+        assert!(with_demand.resource_leases.is_empty());
+        assert!(with_demand.workspace_leases.is_empty());
+        assert!(with_demand.live_output_claims.is_empty());
+        for (action_id, endpoint_id) in [("placed-first", "a-worker"), ("placed-second", "b-worker")] {
+            let request = fixture_quantified_coordinator_request(action_id, action_id);
+            let expected = admit_fixture_dispatch(&mut baseline, &request).unwrap();
+            let actual = admit_fixture_dispatch(&mut with_demand, &request).unwrap();
+            assert_eq!(actual, expected);
+            let RemoteCoordinatorDispatchDecision::Dispatch {
+                worker_endpoint_id,
+                job_id,
+                ..
+            } = actual
+            else {
+                panic!("each available worker must receive one quantified job");
+            };
+            assert_eq!(worker_endpoint_id, endpoint_id);
+            assert!(with_demand.jobs[&job_id].resource_lease_id_blake3.is_some());
+            assert_eq!(with_demand.jobs, baseline.jobs);
+            assert_eq!(with_demand.resource_leases, baseline.resource_leases);
+            assert_eq!(with_demand.workspace_leases, baseline.workspace_leases);
+            assert_eq!(with_demand.live_output_claims, baseline.live_output_claims);
+        }
+        let full_jobs = with_demand.jobs.clone();
+        let full_reservations = with_demand.resource_leases.clone();
+        let overflow = fixture_quantified_coordinator_request("placement-overflow", "placement-overflow-claim");
+        let expected = admit_fixture_dispatch(&mut baseline, &overflow).unwrap();
+        assert_eq!(admit_fixture_dispatch(&mut with_demand, &overflow).unwrap(), expected);
+        assert_eq!(expected, RemoteCoordinatorDispatchDecision::Reject {
+            reason: RemoteResourceReasonCode::CpuUnavailable.as_str().to_string(),
+        });
+        assert_eq!(with_demand.jobs, full_jobs);
+        assert_eq!(with_demand.resource_leases, full_reservations);
+        assert_eq!(with_demand.worker_demands.facts().next().unwrap().job_id, unmet.request.request_id);
+        assert_eq!(baseline.worker_demands.facts().count(), 0);
+    }
+
+    #[test]
     fn worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts() {
         let mut state = RemoteCoordinatorState::default();
         let mut request = fixture_quantified_coordinator_request("unmet-demand", "unmet-claim");

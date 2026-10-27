@@ -1,0 +1,107 @@
+{
+  "schema": "mantle-demand-negative-controls-verification-v1",
+  "date": "2026-10-26",
+  "change": "declare-remote-worker-demand",
+  "maintenance_owner": "Mantle scheduling/coordinator live-state maintainers",
+  "tasks_checked": [
+    "T2.2",
+    "T4.2"
+  ],
+  "acceptance_claimed": false,
+  "immediate_outcome": "All three newly added real coordinator controls pass in the five-test focused demand rail: no inference from presence/concurrency or completed history, and identical two-worker placement/reservations with or without unrelated unmet demand.",
+  "durable_capability": "Deterministic production registration/admission/completion fixtures protect capacity and reservation authority against unqualified demand/history inputs.",
+  "focused_record": {
+    "path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-focused-results-2026-10-26.json",
+    "blake3": "bbba82bf0126b4199ae21235974feb210e72a9cdf15931ce9895a6e8a5d3bd66"
+  },
+  "observed_test_result": [
+    {
+      "line": 9,
+      "text": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2849 filtered out; finished in 0.02s"
+    }
+  ],
+  "named_passes": {
+    "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency": [
+      {
+        "line": 5,
+        "text": "test remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency ... ok"
+      }
+    ],
+    "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history": [
+      {
+        "line": 4,
+        "text": "test remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history ... ok"
+      }
+    ],
+    "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations": [
+      {
+        "line": 7,
+        "text": "test remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations ... ok"
+      }
+    ]
+  },
+  "subject": {
+    "path": "src/remote_build.rs",
+    "blake3": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e"
+  },
+  "criterion_mapping": {
+    "declare-remote-worker-demand:T2.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history"
+      ],
+      "subcriteria": [
+        "present registrations at distinct concurrency values without inventory retain exact production blocker and create no job/lease/output claim",
+        "completed execution history and withdrawn inventory cannot authorize the next distinct action"
+      ],
+      "boundary": "Exercises real coordinator admission/registration/completion transitions, not external worker provisioning or delivered demand events."
+    },
+    "declare-remote-worker-demand:T4.2": {
+      "requirement": "build_scheduling.demand_without_capacity_inference",
+      "named_results_required": [
+        "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+        "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history",
+        "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations"
+      ],
+      "subcriteria": [
+        "creating demand creates no job, resource reservation, workspace lease or live output claim",
+        "actual two-worker placement order and reservations are identical with and without unrelated unmet demand",
+        "overflow admission rejects identically with both workers fully reserved",
+        "core and daemon fail-closed count limits remain supported by the retained core-bound/daemon-bound named results"
+      ],
+      "retained_count_bound_evidence": ".cairn/changes/declare-remote-worker-demand/evidence/obligation-reconciliation-2026-10-26.json#named_retained_tests",
+      "boundary": "New coordinator negatives supplement, not relabel, prior named count-bound passes; demand is not capacity or placement authority."
+    }
+  },
+  "retained_count_bounds": {
+    "receipt": {
+      "path": ".cairn/changes/declare-remote-worker-demand/evidence/obligation-reconciliation-2026-10-26.json",
+      "blake3": "4eb2fc688ac46493cd59b88a95712c30d27f40eb60a3be64a3562cf4424d5309"
+    },
+    "named_evidence_ids": [
+      "core-bound",
+      "daemon-bound"
+    ],
+    "current_source_blake3_matches_retained_subject": {
+      "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8",
+      "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b"
+    },
+    "boundary": "Named v13 count-bound successes are reused on unchanged bound source; the focused coordinator selector does not rerun either count-bound library/daemon fixture."
+  },
+  "historical_handoff": "evidence/negative-controls-handoff-2026-10-26.json",
+  "history_boundary": "Older current-status/reconciliation and handoff records remain historical observations before these executions, not current pending decisions.",
+  "remaining_tasks": {
+    "T1.1": "Isolated current-origin baseline",
+    "T3.1/T3.2": "Real long-lived derived building-plane demand publication/retraction and actual mandatory placement/plan/build-report controls",
+    "T4.3": "Historical-before/after rail; a later passing run cannot manufacture the before result",
+    "T4.4": "Final applicable product, diff and native document/lifecycle checks",
+    "T4.5": "Accepted-spec sync/archive through authorized isolated workflow after acceptance"
+  },
+  "non_claims": [
+    "No observed platform OOM, real fenced successor dispatch/settlement, benchmark or campaign acceptance.",
+    "No long-lived derived building-plane demand delivery/retraction, actual placement report proof or external supervisor provisioning.",
+    "No historical-before rail, isolated baseline, accepted-spec sync, archive, rollout or release acceptance.",
+    "Older v13/full-flake receipts retain their own pre-extension source subjects; new results do not relabel their inputs."
+  ]
+}

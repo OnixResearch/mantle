@@ -18,7 +18,7 @@
 - [x] [parallel] Add a default-counter store/NAR/cache fixture and prove an unchanged actual build/cache cycle with the existing smoke scenario. r[mantle.io_fault.verification]
 - [x] [parallel] Add negative fixtures at each wrapped site asserting the existing store/export error or cache-publication diagnostic, while preserving CA-required fail-closed publication. r[mantle.io_fault.verification]
 - [x] [parallel] Add boundary fixtures asserting the crate/file/line annotation, default counter restoration, and fixture-serialized counter ownership. r[mantle.io_fault.verification]
-- [ ] [serial] Run package, workspace, Clippy, Cairn, and Nix checks; append the komora-io reference under `## References` in `README.md`; document non-claims. r[mantle.io_fault.verification]
+- [x] [serial] Run package, workspace, Clippy, Cairn, and Nix checks; append the komora-io reference under `## References` in `README.md`; document non-claims. r[mantle.io_fault.verification]
 
 ## Current implementation and remaining evidence
 
@@ -49,3 +49,9 @@ The store wrapped-site matrix is now observed for the recorded subject. Complete
 The actual retained `target/cairn-finish-20261023/gate-env-probe-v13/probe.txt` records bwrap version/namespace exit 0 and Nix store exit 0. Together with the inspected smoke's prerequisite gate and cache assertions, this supports execution rather than treating a potential skip as success. It does not pin a new test executable or establish arbitrary fault coverage.
 
 The full package/workspace/Clippy/Cairn/Nix task stays open. The default all-gates completion recorder still refuses v13 because flake exited 1 on omitted compile-time Python inputs, a repository failure. Only its explicit `--individual-fixtures` evidence mode was executed; it retains `all_gate_steps_passed=false` and does not perform lifecycle acceptance, spec sync or archive.
+
+## Completed final verification (2026-10-26)
+
+`evidence/final-verification-2026-10-26.json` closes the remaining verification task using the retained ordinary first-party gate, the later completed full x86_64-linux flake check (Pueue 40, exit 0), captured post-gate Cairn validation, and the existing README reference/non-claims. Exact named passes for the six store fixtures, publication-policy fixture and actual build/cache smoke remain bound to the v13 ordinary log; the root-package full-flake Nextest count is not substituted for library-fixture execution.
+
+The ten selected current fault, smoke, dependency and CI subjects match the later passing full-gate snapshot. Nine also match v13; `flake.nix` changed and is covered by the later full gate. The v13 flake failure and prior supervisor interruption remain historical, not relabeled. This closes authored implementation/verification checkboxes only: parent semantic/lifecycle acceptance, accepted-spec sync and the authorized isolated archive workflow remain separate. No sandbox-hermeticity, store-correctness or release-eligibility claim follows.

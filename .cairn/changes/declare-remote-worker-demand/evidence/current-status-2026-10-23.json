@@ -1,4 +1,22 @@
 {
+  "negative_controls_continuation_2026_10_26": {
+    "evidence": "evidence/negative-controls-handoff-2026-10-26.json",
+    "source": "src/remote_build.rs embedded tests only; production logic unchanged",
+    "new_tests_added": 3,
+    "execution_status": "not-run-awaiting-Main",
+    "T2_2_and_T4_2_checked": false,
+    "remaining_local_action": "Main to execute named production no-inference/history and actual placement/reservation comparison controls, then retain exact source-bound passing results before checkbox closure.",
+    "subject_limit": "Earlier source-hash matches in obligation-reconciliation describe the pre-addition inspection. That file now explicitly links the subsequent changed test subject. Existing historical observations are preserved, not promoted into evidence that new tests ran.",
+    "T3_boundary": "Real long-lived derived demand subscriber delivery/retraction and actual report controls remain unobserved and open."
+  },
+  "current_obligation_addendum_2026_10_26": {
+    "evidence": "evidence/obligation-reconciliation-2026-10-26.json",
+    "individual_tasks_closed": ["T4.1"],
+    "acceptance_claimed": false,
+    "new_runtime_or_test_execution": false,
+    "immediate_outcome": "Every positive fixture subcriterion now maps to retained named passing results and matching source manifests. T4.1 closes fixture addition only, not production delivery or supervisor deployment.",
+    "remaining_boundary": "Complete no-inference and demand-order controls, real long-lived producer/subscriber and actual report observations, isolated baseline, historical before/after, final applicable lifecycle validation, accepted spec sync and archive remain open. All older fields below are preserved historical snapshots, not the current task decision."
+  },
   "retained_v13_evidence_update_2026_10_26": {
     "focused_record": "evidence/focused-tests-gate-v13-2026-10-26.json",
     "matched_tests": 3,
