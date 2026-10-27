@@ -106,6 +106,18 @@ and checks exactly one eventual charge. These are guest-driven faults, not an
 unattached virtio-block fault profile. The filesystem is the writable initrd;
 this does not model persistent block-device power loss.
 
+The pinned VMM ends a branch when every VM is paused by guest idle/HLT, even
+without `workload_done`. While the scenario is active, the harness owns one
+separate runnable child that yields to the real filesystem/accounting tasks;
+it has no SDK transport or production authority. The parent stays single-threaded
+for the existing fork-based crash operations. The activity child is killed and
+reaped on both normal and error paths before the final progress/done event. This
+avoids mistaking transient Linux idle for workload completion without changing
+faults, limits, assertions or production store decisions. The retained seed64003
+ended after retry assertions and repeated a no-progress snapshot; the exact old
+blocked syscall was not retained. This correction needs its own current-source
+local and three-seed VM results, not relabeling of that historical failure.
+
 Other scenarios call production retry decisions with explicit trusted-positive,
 ambiguous, untrusted and stale OOM facts, exercise every retry/quota/class/wall
 boundary, retain worker-loss reservations, reject stale-fence completion, apply
@@ -178,6 +190,12 @@ or an unobserved crash/reopen outcome fails this acceptance path; zero exit
 alone does not pass. Retain each seed's checkpoint, `assertions.json`, report,
 logs and any snapshots/bug files. This is bounded VM execution evidence only.
 
+The runner retains `campaign-results.json` after each seed, including failed
+admission/observation attempts, and continues the remaining declared independent
+seeds without changing any bounds. It exits nonzero when any seed fails and emits
+the success-only classification only when every declared seed passes. This keeps
+an early failed seed from hiding the rest of the declared campaign matrix.
+
 Passing execution needs no planted bug or snapshot replay claim. If a real bug
 is observed, stop passing classification and select its actual assertion ID,
 checkpoint and valid retained parent snapshot. `commands.json` records the
@@ -195,6 +213,32 @@ until the parent executes and retains these commands.
 Valence links request, selection, observation, retry, accounting, result, producer, and consumer identities. Cairn gates require policy replay, fixture coverage, and benchmark comparison.
 
 The evidence does not prove future resource sufficiency, whole-build correctness, host isolation, fair billing, or production performance outside tested inputs.
+
+The repository-owned independent consumer is built with
+`cargo build -p mantle --example resource_evidence_check`. Invoke
+`resource_evidence_check <actual-published-leaf.json> <separately-retained-blake3>`
+on the actual gateway publication, not a copied Valence example or ledger fixture.
+It calls the pinned `valence_core::build_service` validator, emits its report,
+and exits 0 only for a valid bounded bundle. A wrong digest/oversized or changed
+encoding exits 2; a canonical but semantically invalid bundle exits 1. Preserve
+the original publication and separately retain mutated negative artifacts and
+their supplied digests. Remove required non-claims or promote an observation role
+to exercise independent profile rejection; do not treat a freshly computed digest
+as independent source authority. Valence linkage validation is not Cairn acceptance:
+the parent must retain current Cairn validation, coverage and design/tasks gate
+outputs alongside the actual publication/consumer report. The exporter explicitly
+marks missing CPU capacity, memory/scratch high-water, executor-output, sampled
+scratch and process RSS dimensions; sampled scratch/RSS never fill missing exact
+resource dimensions or become authenticated selection history.
+
+For repeatable positive/digest/non-claim/role negatives, run
+`python3 scripts/check-resource-evidence.py --checker "$checker_binary" --publication "$actual_published_leaf" --expected-blake3 "$separately_retained_digest" --b3sum "$b3sum_binary" --output "$fresh_consumer_directory"`.
+The driver requires an actual resource observation, retains each literal command
+and stream, checks checker/publication immutability, and writes a scoped receipt
+only after every expected result. It creates negative copies only; no positive
+fixture or source authentication is manufactured. The generic Valence validator
+checks linkage/non-claims; the checker separately enforces Mantle producer
+recorded-only observation/usage/transition roles.
 
 ## Rollout
 
@@ -267,6 +311,14 @@ replay explicitly excludes them as `HistoryUntrusted`, retains declared minima
 and the static active decision, and checks identical input replays. This is a
 real local output/measurement and fail-closed comparison, not evidence of
 historical placement benefits, positive OOM, remote usage settlement or billing.
+
+The benchmark checks the executable, replay, driver and corpus BLAKE3 identities
+again after its last round before publishing `evidence.json`; drift retains
+`source-drift.json` and fails instead. The retained 2026-10-23 immutable runtime
+comparison is historical evidence for its recorded executable bytes and baseline
+driver/corpus only. It is not a fresh integrated-source run or a measurement of
+historical-placement gains; current-source execution still requires the command
+below with fresh output and immutable built binaries.
 
 The existing captured resource-host failures are the three `StoreUnavailable`
 cases in

@@ -1,0 +1,186 @@
+{
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results",
+  "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+  "environment": {
+    "CARGO_HOME": "/home/brittonr/.cargo",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/target",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  },
+  "subjects": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "flake.nix",
+    "flake.lock",
+    "src/main.rs",
+    "patches/casita-blake3-finalize.patch"
+  ],
+  "commands": [
+    {
+      "label": "proc-macro2-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ]
+    },
+    {
+      "label": "proc-macro2-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.toml"
+      ]
+    },
+    {
+      "label": "serde-derive-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ]
+    },
+    {
+      "label": "serde-derive-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.toml"
+      ]
+    },
+    {
+      "label": "libc-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ]
+    },
+    {
+      "label": "libc-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.toml"
+      ]
+    },
+    {
+      "label": "native-answer-sys-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ]
+    },
+    {
+      "label": "native-answer-sys-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.toml"
+      ]
+    }
+  ],
+  "continue_independent_commands": true,
+  "non_claims": [
+    "Record the authored baseline inside its original detached da00 Git worktree using the already source-bound original binary; no historical product source or dependency override changes. The earlier archived-source build succeeded and remains the binary provenance.",
+    "Constructed fixture inputs and current serde lock are separately retained; not contemporaneous history, not the historical pinned serde lock, and not execution of build scripts."
+  ]
+}

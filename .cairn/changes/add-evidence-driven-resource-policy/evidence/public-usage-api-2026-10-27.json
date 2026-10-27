@@ -1,0 +1,36 @@
+{
+  "schema": "mantle-public-usage-api-completion-v1",
+  "date": "2026-10-27",
+  "criterion": "add-evidence-driven-resource-policy task 4.3",
+  "status": "individually-complete; whole-change acceptance not granted",
+  "owner": "Mantle gateway/resource-host and quota-ledger maintainers",
+  "immediate_outcome": "The real signed private gateway completed a process-only build; fresh UsageRead reported public units, fixed reason codes and retained reservation. Invalid limits, unknown project and status-only authority were rejected without changing the ledger.",
+  "durable_capability": "Repeatable opt-in production gateway CLI fixture with normal UCAN ticket/holder flows, signed store admission, actual worker execution, output/CAS verification, API reads and source/executable bindings.",
+  "pueue": {
+    "id": "72",
+    "request": "public-usage-api-2026-10-27/request.json",
+    "result": "public-usage-api-2026-10-27/result.json",
+    "actual_exit": 0,
+    "source_unchanged": true
+  },
+  "executable": {
+    "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+    "blake3": "8ae1230cc774f5e889ccac98862655cfad5cd8aa9631474441f9d118c90dd0ed"
+  },
+  "raw_test_result": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 143.32s"
+  ],
+  "asserted_public_behavior": [
+    "schedule_version=1 and cpu_ms_per_unit=1000",
+    "partial_observation attempt count=1; project_reserved_units=100; project_charged_units=0",
+    "items=0 and items=MAX_USAGE_ITEMS+1 reject with gateway-limit-exceeded",
+    "unknown project and status-only bound authority cannot read Usage",
+    "denied reads preserve the entire quota snapshot",
+    "successful signed output retrieval and terminal event agree; ProcessOnly/unavailable OOM retains no retry"
+  ],
+  "supporting_scope": "resource-host.stdout.log retains window/project scoping, pending reason categories, idempotent charge and full-key trust fixtures; its delegated OOM test remains explicitly ignored and is not counted as actual positive OOM execution.",
+  "source_limit": "This exact execution preceded removal of the compiler-reported unused mut receiver qualifier in usage.rs. The public API/accounting sources in its manifest were not changed by that cleanup. It is not a final whole-tree or frozen-gate source approval.",
+  "non_claims": [
+    "No dedicated-cgroup completeness, positive gateway OOM successor, campaign completion, G1/G2 admission, billing correctness, rollout, lifecycle acceptance, accepted-spec synchronization, archive or publication follows."
+  ]
+}

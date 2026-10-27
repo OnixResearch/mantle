@@ -85,3 +85,33 @@ dependency manifest. Cross-target compatibility requires a real pinned compiler
 with the target standard library and separate sandbox evidence; neither the
 configuration seam nor a host cdylib test establishes Android or universal cross
 compilation support.
+
+## Execution compiler boundary correction (2026-10-27)
+
+Current-source lowering separates producer Cargo/oracle inputs from execution
+compiler/runtime inputs. A mixed compiler/Cargo store root is indivisible and
+now rejects instead of becoming a script execution input; removing Cargo from
+PATH alone is not sufficient. The helper's compiler PATH comes from declared
+`MANTLE_UNIT_RUSTC`, replacing `MANTLE_UNIT_TOOLCHAIN` with no compatibility alias.
+The locked flake exposes `cargo-unit-compiler`, built from the same nightly's
+independent compiler and standard-library components using rust-overlay's own
+sysroot/RPATH construction. See operator workflows and ADR 0134 for explicit
+adoption and transitive-closure review requirements.
+
+This correction does not relabel historical receipts. The retained direct
+current-helper bwrap observation found both PATH and absolute Cargo execution
+successful with the mixed root; the separate Mantle import probe timed out
+before script execution. Neither is a passing no-Cargo pipeline proof.
+
+Fresh scoped verification is now retained in
+[`compiler-only-boundary-2026-10-27.json`](../../.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/compiler-only-boundary-2026-10-27.json)
+and
+[`frozen-mantle-no-cargo-singleton-2026-10-27.json`](../../.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/frozen-mantle-no-cargo-singleton-2026-10-27.json).
+Pueue 78 executes real compiler cfg, pkg-config and a native consumer returning
+`no-cargo-native-answer=42` through the current helper's actual bwrap boundary;
+both PATH and absolute Cargo launches fail. Pueue 79 then builds one fresh
+signed-input no-substitute script unit through Mantle with verified frozen
+CLI/helper copies: 1 built, 0 cached, 0 failed; real compiler cfg succeeds and
+both Cargo routes remain unavailable. The earlier shared-CLI drift envelope
+stays failed. These are not a full dynamic application/provider replay,
+frozen G1/G2 admission, source/snapshot approval, T4.6 acceptance or archive.

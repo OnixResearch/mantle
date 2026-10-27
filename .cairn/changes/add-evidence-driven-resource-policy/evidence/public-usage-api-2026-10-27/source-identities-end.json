@@ -1,0 +1,22 @@
+{
+  "binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+  "binary_blake3": "8ae1230cc774f5e889ccac98862655cfad5cd8aa9631474441f9d118c90dd0ed",
+  "schema": "mantle-gateway-runtime-source-binding-v1",
+  "source_blake3": {
+    "crates/crunch-build/src/distributed/resource_quota_store.rs": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+    "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+    "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+    "crates/crunch-remote-core/src/resource_quota.rs": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+    "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+    "src/nix_gateway/authority.rs": "b54f7839631ff41ed740c9074b5a2a91dd882c13c6ad2804875d278c6ac46d1f",
+    "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+    "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+    "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+    "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+    "src/remote_build/usage.rs": "e7bb6de8e115bfcbd8c2ee57cbcdc9b47344969e468b5927244e2377785bfcb3",
+    "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+    "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+    "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+    "tests/support/remote_endpoint_binding.rs": "589b6c0afd1418446e7cd1442fa278c69cb95b557f5e200d7de01787c9d224bb"
+  }
+}

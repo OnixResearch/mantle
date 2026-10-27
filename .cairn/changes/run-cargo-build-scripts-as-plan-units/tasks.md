@@ -6,7 +6,7 @@ build-script support.
 ## Phase 1: Baseline and contract
 
 - [x] [serial] T1.1 Record the baseline in an isolated worktree: unit graphs and `rust-plan` build-script receipts for `proc-macro2`, `serde` with derive, `libc`, and one `-sys` fixture, plus the current lane blockers. r[mantle.rust_unit_plan.build_scripts.run_units]
-  - Evidence: `evidence/historical-da00-baseline-2026-10-14.md` records original da00's pinned Casita E0599 build blocker; receipts from a privately patched CLI are retrospective only, not an unmodified da00 baseline. T1.1 remains open.
+  - Bounded retrospective recovery: `evidence/source-owned-da00-baseline-2026-10-27.json` and `evidence/source-owned-da00-baseline-isolated-confirmation-2026-10-27.json` bind unchanged original da00 `da00f58425740adea559ef926c9dfa97b2cb8240`, its source-owned locked Nix/Crane cohort and binary BLAKE3 `436ebb09e23d04d8049c212d404843d94337f8cb2a15714ebf79873ed6f74a70`, to four original `rust-plan` planning receipts and four raw Cargo graphs (5/16/4/4 units; custom-build compile/run modes 1/4/1/1 each) executed literally from `/home/brittonr/scratch/mantle-cargo-units-origin-baseline`. Confirmation request BLAKE3 `138780d35d28b49a707236156764ded118d75f51869c96ce09f672515eb7e5ae`, 2026-10-27T03:28:11.138087-04:00–03:28:11.742465-04:00, retains eight exit-0 streams, driver exit 0 and `source_unchanged: true` for six selected identity files. Registry native planning remains blocked on missing declared vendor roots; the path-only sys fixture establishes bounded topology only. Constructed fixture provenance and the current serde lock's difference from the historical 2026-10-14 lock remain explicit; no exact old-lock equivalence or build-script execution is claimed. `evidence/historical-da00-baseline-2026-10-14.md` retains ambient Casita E0599 and privately patched CLI non-acceptance, and the initial source-owned external-supply failure is preserved. Only the authored T1.1 baseline-record requirement is closed; no run-unit semantic, other-task, final-source gate or lifecycle acceptance follows.
 - [x] [serial] T1.2 Define the supported directive set, propagation rules, `flags` file formats, the target-facts format, and the native-input Nickel contract with role markers. r[mantle.rust_unit_plan.build_scripts.directive_propagation] r[mantle.rust_unit_plan.build_scripts.native_inputs]
 
 ## Phase 2: Core and lowering
@@ -46,3 +46,40 @@ build-script support.
 ## Mandatory lifecycle actions outside task checkboxes
 
 Actual Cairn archive and captured post-archive validation remain mandatory, separate from T4.6. Archive may occur only after all other obligations, required gates, approved isolated source snapshot, and implementation commit hold; this boundary repair does not satisfy or waive them. T4.6 remains unchecked, and no acceptance or archival is recorded here. Approval scope: `evidence/pre-archive-readiness-approval-2026-10-16.md`.
+
+## Before-fix no-Cargo boundary observation (2026-10-27)
+
+`evidence/no-cargo-boundary-observation-2026-10-27.json` records the same
+compiled probe outside and inside the current helper's real bwrap subprocess.
+With the declared full toolchain root and no native PATH entries, Cargo ran
+successfully by both PATH and its absolute store path; the host marker was
+hidden inside the sandbox. This is a negative boundary observation, not host
+escape or requirement satisfaction. The separate actual Mantle import timed
+out before sandbox execution and is not relabeled as a pipeline result.
+The no-Cargo exposure must be resolved and negatively exercised before T4.6
+or whole-change acceptance. Historical planning-shim and application receipts
+remain scoped to their original subjects; none establishes this missing bound.
+T4.6 stays unchecked. No accepted spec, archive or source approval is recorded.
+
+## Corrected execution boundary evidence (2026-10-27)
+
+`evidence/compiler-only-boundary-2026-10-27.json` retains Pueue 78's
+current-helper bwrap execution: the same compiled script can execute Cargo
+outside, but neither PATH nor absolute Cargo launches inside. Real compiler
+cfg and pkg-config queries succeed; a separately compiled native archive is
+linked through the emitted flags and the consumer prints
+`no-cargo-native-answer=42`.
+
+`evidence/frozen-mantle-no-cargo-singleton-2026-10-27.json` retains Pueue
+79's actual same-client, no-substitute Mantle build using verified frozen
+CLI/helper copies and a fresh signed-input singleton identity: 1 built,
+0 cached, 0 failed. Its script executes real compiler cfg while both Cargo
+routes and the host marker remain unavailable. Pueue 73's earlier shared-CLI
+drift failure remains failed, not promoted to success.
+
+These observations resolve the exposed Cargo execution path for the declared
+compiler closure. They do not replay the full dynamic producer/application or
+Mantle-built native-provider/selective-rerun campaign. T4.6 remains unchecked;
+required gates, approved source/snapshot custody and the separate lifecycle
+actions above are not replaced by these bounded runtime results.
+

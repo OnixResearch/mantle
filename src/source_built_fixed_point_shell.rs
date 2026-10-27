@@ -447,7 +447,7 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
     };
     write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
     if development_only {
-        // Any development mode, including source-only resume, is ineligible
+        // Any development mode, including stage resume, is ineligible
         // for promoted cold receipts and both successful-proof aliases.
         print_dev_completion(&options, &prepared)?;
         return Ok(());
@@ -495,6 +495,12 @@ where
 fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
     if !is_development_run(options) {
         validate_cold_compiler_environment(std::env::vars_os().map(|(name, _)| name))?;
+    }
+    if options.dev_resume && options.dev_provider_cache.is_none() {
+        return Err(proof_error("dev resume requires an explicit dev provider-cache directory".into()));
+    }
+    if let Some(cache) = options.dev_provider_cache.filter(|cache| !cache.is_absolute()) {
+        return Err(proof_error(format!("dev provider-cache path must be absolute: {}", cache.display())));
     }
     for (label, path) in [
         ("source profile", options.source_profile),
@@ -1045,7 +1051,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
-    let resume_plan = if options.dev_resume {
+    let resume_plan = if options.dev_resume && !adopt {
         let plan = plan_dev_resume(prepared, options)?;
         write_json_create_new(&prepared.staging_dir.join("dev-resume-authority.json"), &plan)?;
         emit_resume_plan_notice(options, prepared, &plan);
@@ -1120,6 +1126,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     if options.verbose {
         eprintln!("{}", render_stage_readiness(&[])?);
     }
+    let mut transition_restored = false;
     let providers = if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
         read_adopted_stagex_report(prepared)?;
@@ -1135,6 +1142,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             if let Some(bundle_digest_blake3) = restored {
                 restore_dev_stage_bundle(options, prepared, &bundle_digest_blake3, &stagex_transition_execution_dir)?;
                 write_stage_marker(prepared, "stagex-transition", &transition_replay_digest)?;
+                transition_restored = true;
             }
         }
         let transition_resume = options.dev_resume
@@ -1312,6 +1320,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     if options.dev_provider_cache.is_some() && !adopt {
         write_dev_provider_cache(options, prepared, &providers)?;
     }
+    write_dev_execution_report(prepared, adopt, transition_restored)?;
     Ok(true)
 }
 
@@ -1331,6 +1340,45 @@ fn write_development_authority(
         "notice": "development execution cannot authorize a promoted cold receipt or release alias",
     });
     write_json_create_new(&root.join("dev-run-report.json"), &report)
+}
+
+fn write_dev_execution_report(
+    prepared: &PreparedAttempt,
+    providers_adopted: bool,
+    transition_restored: bool,
+) -> Result<(), RunError> {
+    assert!(!(providers_adopted && transition_restored));
+    let stages = prepared
+        .plan
+        .stages
+        .iter()
+        .map(|stage| {
+            let disposition = match stage.kind {
+                ProofStageKind::StagexTransition if providers_adopted => "skipped-provider-adoption",
+                ProofStageKind::StagexTransition if transition_restored => "restored",
+                ProofStageKind::StagexProviderPublication | ProofStageKind::FullSourceNativeProvider
+                    if providers_adopted =>
+                {
+                    "adopted"
+                }
+                _ => "dispatched",
+            };
+            serde_json::json!({"stage_id": stage.stage_id, "disposition": disposition})
+        })
+        .collect::<Vec<_>>();
+    debug_assert_eq!(stages.len(), EXPECTED_STAGE_COUNT);
+    let report = serde_json::json!({
+        "schema": "mantle-source-built-fixed-point-dev-execution-v1",
+        "status": "development-only",
+        "plan_digest_blake3": prepared.plan.plan_digest_blake3,
+        "source_authority_digest_blake3": prepared.plan.source_authority_digest_blake3,
+        "native_provider_digest_blake3": prepared.plan.policies.expected_native_provider_digest_blake3,
+        "store": prepared.native_store_dir,
+        "state": prepared.native_state_dir,
+        "stages": stages,
+        "non_claim": "stage dispatch is not fresh action execution; consult build transcripts for store hits; no promoted proof or release authority",
+    });
+    write_json_create_new(&prepared.staging_dir.join("dev-execution-report.json"), &report)
 }
 
 /// After a successful cold dev run, publish the StageX and native provider store
@@ -1495,11 +1543,14 @@ fn stage_markers_dir(staging_dir: &Path) -> PathBuf {
 }
 
 /// Persistent root for published cross-run stage bundles.
-fn resume_bundles_root(options: &SourceBuiltFixedPointOptions<'_>) -> std::path::PathBuf {
-    let root = options.output_dir.join(RESUME_BUNDLES_SUBDIR);
-    debug_assert!(root.starts_with(options.output_dir));
+fn resume_bundles_root(options: &SourceBuiltFixedPointOptions<'_>) -> Result<PathBuf, RunError> {
+    let cache = options
+        .dev_provider_cache
+        .ok_or_else(|| proof_error("dev resume requires an explicit dev provider-cache directory".into()))?;
+    let root = cache.join(RESUME_BUNDLES_SUBDIR);
+    debug_assert!(root.starts_with(cache));
     debug_assert!(!RESUME_BUNDLES_SUBDIR.is_empty());
-    root
+    Ok(root)
 }
 
 /// Plan a dev resume from published bundles against the current plan.
@@ -1507,7 +1558,7 @@ fn plan_dev_resume(
     prepared: &PreparedAttempt,
     options: &SourceBuiltFixedPointOptions<'_>,
 ) -> Result<ResumePlan, RunError> {
-    let bundles_root = resume_bundles_root(options);
+    let bundles_root = resume_bundles_root(options)?;
     let bundles = read_stage_bundles(&bundles_root)?;
     let stage_ids: Vec<String> = prepared.plan.stages.iter().map(|stage| stage.stage_id.clone()).collect();
     let policies = DevCachePolicies::from_plan(&prepared.plan);
@@ -1531,7 +1582,7 @@ fn restore_dev_stage_bundle(
     bundle_digest_blake3: &str,
     destination: &Path,
 ) -> Result<(), RunError> {
-    let bundles_root = resume_bundles_root(options);
+    let bundles_root = resume_bundles_root(options)?;
     let bundles = read_stage_bundles(&bundles_root)?;
     let reference = bundles
         .iter()
@@ -1556,7 +1607,7 @@ fn publish_dev_stage_bundle(
     payload_dir: &Path,
     required_outputs: &[ResumeOutputReference],
 ) -> Result<(), RunError> {
-    let bundles_root = resume_bundles_root(options);
+    let bundles_root = resume_bundles_root(options)?;
     std::fs::create_dir_all(&bundles_root).map_err(|error| {
         RunError::Internal(format!("creating resume bundles root {}: {error}", bundles_root.display()))
     })?;
@@ -3742,6 +3793,41 @@ mod tests {
         assert!(prepared.native_store_dir.join("aaa-stagex").is_dir());
         assert!(prepared.native_store_dir.join("aaa-native").join("bin").is_file());
         assert!(adopted.output.path.ends_with("aaa-native"));
+    }
+
+    #[test]
+    fn dev_resume_restores_into_a_different_fresh_attempt() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().join("cache");
+        let profile = temp.path().join("profile.json");
+        let executable = temp.path().join("bwrap");
+        let first_out = temp.path().join("first-proof");
+        let next_out = temp.path().join("next-proof");
+        let first = options_fixture(&profile, &first_out, &executable, Some(&cache), true, false);
+        let next = options_fixture(&profile, &next_out, &executable, Some(&cache), true, false);
+        let prepared = prepared_fixture(&temp, temp.path().join("first-staging"));
+        let payload = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
+        fs::create_dir(&payload).unwrap();
+        fs::write(payload.join("transition-output"), b"completed transition").unwrap();
+        let outputs = [ResumeOutputReference {
+            role: "transition-execution-tree".into(),
+            digest_blake3: DIGEST.into(),
+        }];
+        publish_dev_stage_bundle(&first, &prepared, "stagex-transition", &payload, &outputs).unwrap();
+        let fresh = prepared_fixture(&temp, temp.path().join("next-staging"));
+        let plan = plan_dev_resume(&fresh, &next).unwrap();
+        assert_eq!(plan.restored_stages[0].stage_id, "stagex-transition");
+        let digest = plan.restored_stages[0].restored_bundle_digest_blake3.as_ref().unwrap();
+        let destination = fresh.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
+        restore_dev_stage_bundle(&next, &fresh, digest, &destination).unwrap();
+        assert_eq!(fs::read(destination.join("transition-output")).unwrap(), b"completed transition");
+        assert!(!first_out.exists());
+        assert!(!next_out.exists());
+        fs::write(cache.join(RESUME_BUNDLES_SUBDIR).join(digest).join("payload/transition-output"), b"tampered")
+            .unwrap();
+        let rejected = plan_dev_resume(&fresh, &next).unwrap();
+        assert!(rejected.restored_stages.is_empty());
+        assert!(rejected.blockers.iter().any(|blocker| blocker.code == "resume-mutated-bundle"));
     }
 
     fn prepared_fixture(temp: &tempfile::TempDir, staging: PathBuf) -> PreparedAttempt {

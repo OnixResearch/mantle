@@ -1,0 +1,257 @@
+{
+  "schema": "mantle-current-origin-demand-baseline-v1",
+  "recorded_at": "2026-10-26T23:57:23.108152-04:00",
+  "criterion": "declare-remote-worker-demand T1.1 only",
+  "isolated_worktree": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "origin_main": "db98fd8bcf2d96614b8fe7f49ec131408b43018d",
+  "origin_tree": "c6a40e3ff06fd03abe510e3931cd7fec109a0683",
+  "origin_archive": {
+    "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/origin-source.tar",
+    "blake3": "3662ce229c2d0bccb5ce2638fd14e7ca61a562c00c3c68dd3a26b87ebf4f4de3"
+  },
+  "instrumented_original_source_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/repro-dev-resume",
+  "instrumentation_boundary": "Two parent-owned temporary test bodies only; production dispatch and demand logic are original db98fd8 bytes. Not final integration source.",
+  "source_before": {
+    "src/remote_build.rs": "7e353eef3dae432ca27497a1fb25db05267afe51044f4cd5e240f2d3080b53ee",
+    "src/source_built_fixed_point_shell.rs": "e5aae433668001310a8ee42cc05520c1de68542ba0173101d1d6908c94a30554",
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+    "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d"
+  },
+  "source_after": {
+    "src/remote_build.rs": "7e353eef3dae432ca27497a1fb25db05267afe51044f4cd5e240f2d3080b53ee",
+    "src/source_built_fixed_point_shell.rs": "e5aae433668001310a8ee42cc05520c1de68542ba0173101d1d6908c94a30554",
+    "Cargo.toml": "862dcb7150c8c80878b985ebf460aa1a56a68b1e82238c53ad97a03dfda1a27a",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "crates/crunch-build/src/distributed/resource_policy.rs": "a07dfccf555033468bad5ad1d8c19c0e87d06823bb6f255929b033bb70bdda08",
+    "crates/crunch-build/src/distributed/resource_policy_tests.rs": "766a9067fc59d818e4444f888b9333d834dc07dd90d14bcbce1298c7cef8057d"
+  },
+  "source_unchanged": true,
+  "retained_result": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-supplement-results/result.json",
+  "actual_command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "-p",
+    "mantle",
+    "--bin",
+    "mantle",
+    "remote_build::tests::temporary_initial_source_quantified_dispatch_observation",
+    "--",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-supplement-results/converted-quantified-api-before.stdout.log",
+  "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-supplement-results/converted-quantified-api-before.stderr.log",
+  "streams_blake3": {
+    "stdout": "88203ec182fa1bcd0051657d148152f0b96e2e83ad9ec0c8b80b5a507ad3c59e",
+    "stderr": "4918401f89ab1b98708a812e8c980d50a3a6871d1278ae9369f41c9227c85815"
+  },
+  "test_result_lines": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2855 filtered out; finished in 0.01s"
+  ],
+  "converted_quantified_dispatch": {
+    "converted_drv_path": "/mantle/store/z8x5smr1qh28zp3lpch14x8n1q55i1rf-remote-fixture.drv",
+    "non_claims": [
+      "Temporary API instrumentation only; no original CLI quantified ingress, ticket authorization, signed worker execution or daemon delivery"
+    ],
+    "observations": [
+      {
+        "blocker": "remote-worker-resource-inventory-missing",
+        "demand": {
+          "blocker_reason": "remote-worker-resource-inventory-missing",
+          "job_id": "6e824e5afa28c1fd9dde219ddbb50d5509073770a222aa74495c711c80a29e5d",
+          "policy_id": "mantle-lazy-priority-v1",
+          "requirement": {
+            "accelerators": [],
+            "cpu_units": 1,
+            "memory_bytes": 67108864,
+            "named_tokens": [],
+            "placement_key_blake3": "4dd7554d6d68ace413ab1f13d9e4f8830cae647bb6803447cc389e0cb5e736e2",
+            "scratch_bytes": 268435456,
+            "semantic_accelerator_classes": []
+          },
+          "requirement_id_blake3": "f2f89790d02ce85d5453ccb3ce5508f0aeacd0d2fb52ab599387bcae0f67635c"
+        },
+        "inventory": null,
+        "jobs": 0,
+        "live_output_claims": 0,
+        "resource_leases": 0,
+        "round": 0,
+        "worker_concurrency": 1,
+        "workspace_leases": 0
+      },
+      {
+        "blocker": "remote-worker-resource-inventory-missing",
+        "demand": {
+          "blocker_reason": "remote-worker-resource-inventory-missing",
+          "job_id": "6e824e5afa28c1fd9dde219ddbb50d5509073770a222aa74495c711c80a29e5d",
+          "policy_id": "mantle-lazy-priority-v1",
+          "requirement": {
+            "accelerators": [],
+            "cpu_units": 1,
+            "memory_bytes": 67108864,
+            "named_tokens": [],
+            "placement_key_blake3": "4dd7554d6d68ace413ab1f13d9e4f8830cae647bb6803447cc389e0cb5e736e2",
+            "scratch_bytes": 268435456,
+            "semantic_accelerator_classes": []
+          },
+          "requirement_id_blake3": "f2f89790d02ce85d5453ccb3ce5508f0aeacd0d2fb52ab599387bcae0f67635c"
+        },
+        "inventory": null,
+        "jobs": 0,
+        "live_output_claims": 0,
+        "resource_leases": 0,
+        "round": 1,
+        "worker_concurrency": 1,
+        "workspace_leases": 0
+      },
+      {
+        "blocker": "remote-worker-resource-inventory-missing",
+        "demand": {
+          "blocker_reason": "remote-worker-resource-inventory-missing",
+          "job_id": "6e824e5afa28c1fd9dde219ddbb50d5509073770a222aa74495c711c80a29e5d",
+          "policy_id": "mantle-lazy-priority-v1",
+          "requirement": {
+            "accelerators": [],
+            "cpu_units": 1,
+            "memory_bytes": 67108864,
+            "named_tokens": [],
+            "placement_key_blake3": "4dd7554d6d68ace413ab1f13d9e4f8830cae647bb6803447cc389e0cb5e736e2",
+            "scratch_bytes": 268435456,
+            "semantic_accelerator_classes": []
+          },
+          "requirement_id_blake3": "f2f89790d02ce85d5453ccb3ce5508f0aeacd0d2fb52ab599387bcae0f67635c"
+        },
+        "inventory": null,
+        "jobs": 0,
+        "live_output_claims": 0,
+        "resource_leases": 0,
+        "round": 0,
+        "worker_concurrency": 64,
+        "workspace_leases": 0
+      },
+      {
+        "blocker": "remote-worker-resource-inventory-missing",
+        "demand": {
+          "blocker_reason": "remote-worker-resource-inventory-missing",
+          "job_id": "6e824e5afa28c1fd9dde219ddbb50d5509073770a222aa74495c711c80a29e5d",
+          "policy_id": "mantle-lazy-priority-v1",
+          "requirement": {
+            "accelerators": [],
+            "cpu_units": 1,
+            "memory_bytes": 67108864,
+            "named_tokens": [],
+            "placement_key_blake3": "4dd7554d6d68ace413ab1f13d9e4f8830cae647bb6803447cc389e0cb5e736e2",
+            "scratch_bytes": 268435456,
+            "semantic_accelerator_classes": []
+          },
+          "requirement_id_blake3": "f2f89790d02ce85d5453ccb3ce5508f0aeacd0d2fb52ab599387bcae0f67635c"
+        },
+        "inventory": null,
+        "jobs": 0,
+        "live_output_claims": 0,
+        "resource_leases": 0,
+        "round": 1,
+        "worker_concurrency": 64,
+        "workspace_leases": 0
+      }
+    ],
+    "path": "convert -> concrete_remote_derivation_request -> admit_remote_production_dispatch",
+    "request": {
+      "build_time_limit_secs": 3600,
+      "contains_raw_frontend_eval": false,
+      "endpoint_binding": {
+        "generation": 1,
+        "spec": {
+          "expires_unix_s": 18446744073709551615,
+          "kind": "builder-ticket",
+          "name": "builder-1",
+          "scope": "fixture-builds",
+          "store_prefix": "/mantle/store",
+          "trust_requirement": "fixture-builder-key"
+        }
+      },
+      "expected_outputs": [
+        {
+          "logical_path": "/mantle/store/cbf240b6nn4z36nk6xyrkj57rbjf63n2-remote-fixture",
+          "name": "out"
+        }
+      ],
+      "failure_debug_policy": {
+        "capture": {
+          "allowed_relative_paths": [],
+          "depth_max": 16,
+          "enabled": false,
+          "failure_mode": "diagnostic-only",
+          "file_bytes_max": 8388608,
+          "file_count_max": 32,
+          "sensitivity": "restricted-diagnostic",
+          "total_bytes_max": 16777216
+        },
+        "metadata_bytes_max": 1048576,
+        "object_bytes_max": 67108864,
+        "policy_name": "mantle-remote-failure-debug-default-v1",
+        "replay_enabled": false,
+        "retention_secs": 604800
+      },
+      "input_refs": [],
+      "payload": {
+        "drv_json": "{\"name\":\"remote-fixture\",\"builder\":\"/bin/sh\",\"system\":\"x86_64-linux\",\"args\":[\"-c\",\"echo hi\"],\"outputs\":[\"out\"],\"dynamic_plan_outputs\":[],\"env\":{},\"inputs\":[],\"fixed_output\":null,\"addressing_mode\":\"input-addressed\",\"provenance\":null}",
+        "drv_path": "/mantle/store/z8x5smr1qh28zp3lpch14x8n1q55i1rf-remote-fixture.drv",
+        "kind": "derivation"
+      },
+      "request_id": "6e824e5afa28c1fd9dde219ddbb50d5509073770a222aa74495c711c80a29e5d",
+      "resource_requirements": {
+        "quantities": {
+          "accelerators": [],
+          "cpu_units": 1,
+          "memory_bytes": 67108864,
+          "named_tokens": [],
+          "scratch_bytes": 268435456
+        },
+        "semantic_accelerator_classes": []
+      },
+      "store_prefix": "/mantle/store",
+      "upload_bytes": 0
+    },
+    "source_commit": "db98fd8bcf2d96614b8fe7f49ec131408b43018d"
+  },
+  "original_cli_negative_control": {
+    "label": "ordinary-cli-declaration-before",
+    "argv": [
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-results/mantle-initial-source",
+      "--json",
+      "build",
+      "examples/hello.ncl",
+      "--plan",
+      "--remote-resource-requirements",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/declared-requirements.json"
+    ],
+    "started_at": "2026-10-26T23:46:07.233182-04:00",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/repro-dev-resume",
+    "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-supplement-results/ordinary-cli-declaration-before.stdout.log",
+    "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/baseline-supplement-results/ordinary-cli-declaration-before.stderr.log",
+    "exit_code": 2,
+    "finished_at": "2026-10-26T23:46:07.321783-04:00",
+    "streams_blake3": {
+      "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr": "4ae513f3e8b0ec9b02dd8539380f96fa78fea54a660d9c4eff98d068dbd1a202"
+    },
+    "observation_checks": {
+      "expected_exit_code_observed": true,
+      "stderr_required_0": true,
+      "stderr_required_1": true
+    },
+    "expected_failure_observation": true,
+    "observation_accepted": true
+  },
+  "non_claims": [
+    "Current-origin isolated baseline, not historical pre-feature evidence for T4.3.",
+    "Actual converted-derivation dispatch API observation; no original CLI quantified ingress, signed execution, daemon delivery, capacity grant, semantic acceptance or archive."
+  ]
+}

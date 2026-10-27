@@ -640,3 +640,69 @@ fn consumer_alias_has_no_new_execution_or_charge_and_requires_read_authority() {
     altered.build_results[0].policy = "changed".into();
     assert!(GatewayEvidence::new_reuse(&alias, [1; 32], &altered).is_err());
 }
+
+#[test]
+fn sampled_scratch_and_process_rss_never_become_complete_resource_dimensions() {
+    let (record, entry) = fixture();
+    let class = &selection_fixture().classes[0];
+    let observation = resource::Observation {
+        schema: resource::OBSERVATION_SCHEMA.into(),
+        attempt_id: record.binding.as_ref().unwrap().attempt_id.clone(),
+        action_family: "family".into(),
+        features: class.features.clone(),
+        policy_version: 1,
+        machine_class: class.id.clone(),
+        declared: class.quantities,
+        selected: class.quantities,
+        measured: resource::Measurements {
+            cpu_units: None,
+            memory_bytes: None,
+            scratch_bytes: None,
+        },
+        scratch_sampled_peak_bytes: Some(4096),
+        queue_ms: None,
+        execution_ms: Some(10),
+        terminal_unix_s: 1_760_000_002,
+        cpu_ms: Some(0),
+        io_bytes: None,
+        transfer_bytes: None,
+        executor_output_bytes: None,
+        process_peak_rss_bytes: Some(2048),
+        oom: resource::OomCategory::Unknown,
+        outcome: resource::Outcome::Success,
+        predecessor: None,
+        collector_version: "process-only-fixture-v1".into(),
+        trusted_collector: false,
+    };
+    let mut evidence = produce(&record, &entry);
+    evidence.record_observation(&observation).unwrap();
+    let exported = evidence.finish().unwrap();
+    let row = &exported.bundle.resource_observations[0];
+    assert_eq!(row.role, v::BuildServiceRole::RecordedOnly);
+    assert!(row.measurements.iter().any(|m| m.name == "sampled-scratch-lower-bound" && m.value == 4096));
+    assert!(row.measurements.iter().any(|m| m.name == "exact-child-peak-rss-not-tree-peak" && m.value == 2048));
+    assert!(
+        !row.measurements
+            .iter()
+            .any(|m| matches!(m.name.as_str(), "peak-memory" | "scratch-high-water" | "transfer"))
+    );
+    let scope: serde_json::Value = serde_json::from_str(&row.compatibility_scope).unwrap();
+    assert_eq!(
+        scope["known_resource_dimensions"],
+        serde_json::json!({"cpu_units":null,"memory_bytes":null,"scratch_bytes":null})
+    );
+    for name in [
+        "cpu_units",
+        "peak_memory",
+        "scratch_high_water",
+        "transfer",
+        "executor_output",
+    ] {
+        assert_eq!(scope["unknown_measurements"][name], true);
+    }
+    for name in ["cpu", "execution", "sampled_scratch_lower_bound", "process_peak_rss"] {
+        assert_eq!(scope["unknown_measurements"][name], false);
+    }
+    assert_eq!(scope["trusted_collector"], false);
+    assert_eq!(scope["oom"], "Unknown");
+}

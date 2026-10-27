@@ -125,14 +125,17 @@ fn signed_submit_cannot_follow_endpoint_rotation_or_changed_idempotency_key() {
 }
 
 #[test]
-fn owner_peer_error_envelope_cannot_be_reported_as_completed_call() {
+fn private_gateway_call_rejects_ambiguous_or_unknown_peer_outcomes() {
     use std::io::Write as _;
-    let responses: &[(&[u8], bool)] = &[
-        (br#"{"version":1,"error":"gateway-authority-denied"}"#, false),
-        (br#"{"version":1,"response":{"Submitted":{"attempt_id":"attempt-1","recovered":false}}}"#, true),
-        (br#"{"response":{"Submitted":{"attempt_id":"attempt-1","recovered":false}}}"#, false),
+    let responses: &[(&[u8], Result<bool, super::Error>)] = &[
+        (br#"{"version":1,"response":{"Submitted":{"attempt_id":"attempt-1","recovered":false}}}"#, Ok(true)),
+        (br#"{"response":{"Submitted":{"attempt_id":"attempt-1","recovered":false}}}"#, Ok(false)),
+        (br#"{"version":1,"error":"unknown-private-error"}"#, Err(super::Error::Integrity)),
+        (br#"{"version":2,"error":"gateway-authority-denied"}"#, Err(super::Error::Integrity)),
+        (br#"{"version":1,"response":{},"error":"gateway-authority-denied"}"#, Err(super::Error::Integrity)),
+        (br#"{"version":1,"error":null}"#, Err(super::Error::Integrity)),
     ];
-    for &(response, expected_completed) in responses {
+    for &(response, expected) in responses {
         let directory = tempfile::tempdir().unwrap();
         std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
         let socket = directory.path().join("gateway.sock");
@@ -154,11 +157,33 @@ fn owner_peer_error_envelope_cannot_be_reported_as_completed_call() {
             send_frame(&mut stream, &response).unwrap();
         });
         let plan = plan_gateway_operation(GatewayOperation::Call).unwrap();
-        let observed = call_private(&socket, &envelope).unwrap();
+        let observed = call_private(&socket, &envelope)
+            .map(|result| classify_gateway_operation(&plan, &result.evidence) == ApplicationOutcome::Completed);
         peer.join().unwrap();
-        assert_eq!(
-            classify_gateway_operation(&plan, &observed.evidence) == ApplicationOutcome::Completed,
-            expected_completed
-        );
+        assert_eq!(observed, expected);
     }
+}
+
+#[test]
+fn gateway_requires_exact_canonical_resources_for_each_reviewed_system() {
+    let features = BTreeMap::from([("x86_64-linux".into(), crunch_remote_core::resource_policy::Features {
+        architecture: "x86_64".into(),
+        platform: "linux".into(),
+        trust_domain: "test".into(),
+        isolation: "sandbox".into(),
+        kvm: false,
+    })]);
+    let requirements: remote_build::RemoteResourceRequirements = serde_json::from_value(serde_json::json!({
+        "quantities":{"cpu_units":1,"memory_bytes":1024,"scratch_bytes":1024,"accelerators":[],"named_tokens":[]},
+        "semantic_accelerator_classes":[]
+    }))
+    .unwrap();
+    let declared = BTreeMap::from([("x86_64-linux".into(), requirements.clone())]);
+    assert!(validate_required_resources(&declared, &features).is_ok());
+    assert!(validate_required_resources(&BTreeMap::new(), &features).is_err());
+    let wrong_system = BTreeMap::from([("aarch64-linux".into(), requirements.clone())]);
+    assert!(validate_required_resources(&wrong_system, &features).is_err());
+    let mut invalid = requirements;
+    invalid.quantities.cpu_units = 0;
+    assert!(validate_required_resources(&BTreeMap::from([("x86_64-linux".into(), invalid)]), &features).is_err());
 }

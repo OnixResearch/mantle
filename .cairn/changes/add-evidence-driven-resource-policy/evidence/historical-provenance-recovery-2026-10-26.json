@@ -1,0 +1,314 @@
+{
+  "schema": "mantle-historical-provenance-recovery-v1",
+  "recorded_date": "2026-10-26",
+  "scope": "Resource task 1.1 original pre-core baseline and task 6.1 workload/source review chronology; additive recovery, no acceptance or execution",
+  "recovery_subject": "db98fd8bcf2d96614b8fe7f49ec131408b43018d",
+  "chronology": [
+    {
+      "commit": "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+      "commit_date": "2026-09-03T23:58:02-04:00",
+      "fact": "Exact parent of original policy-core introduction; original crates/crunch-resource-policy-core and fixtures/resource-policy are absent."
+    },
+    {
+      "commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "commit_date": "2026-09-04T03:40:37-04:00",
+      "fact": "Introduces original policy core, retained pre-core baseline streams, source-review receipt, and first adapted benchmark corpus in one commit."
+    },
+    {
+      "commit": "41d0bdfc29ad60716a15943c812f2cddc4083741",
+      "commit_date": "2026-10-21T10:43:35-04:00",
+      "fact": "First reachable introduction of current config/resource-policy/benchmark.ncl; older review commit is its ancestor."
+    }
+  ],
+  "recovered_raw_artifacts": [
+    {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/commands.log",
+      "git_blob": "ff25d4baa2f39fc06f627e787a0f43ce65ca2fdc",
+      "bytes": 69406,
+      "blake3": "a0a7d421eb293fe484e722502e96dedf15fcaea6e1ea6757db27e0e2b742761f",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/commands.log"
+    },
+    {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/retry-and-lifecycle.log",
+      "git_blob": "9c53188a775c64bc30690efe75870679e0553606",
+      "bytes": 24241,
+      "blake3": "e566f5bc8a9878b5e2fb2a4c786d26c571eed5e970c34453c46de4029213b3c2",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/retry-and-lifecycle.log"
+    },
+    {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/status.txt",
+      "git_blob": "54e7b4bf698ae8df023dff281ecda662a7ab78c0",
+      "bytes": 143,
+      "blake3": "6fecf837e819b27ea6df18da27162352d47da5a8e53a338de53ace72a9d7c23c",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/status.txt"
+    },
+    {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/summary.md",
+      "git_blob": "301576a40b3452d48ca63356a0f4003c9d8a906b",
+      "bytes": 796,
+      "blake3": "ee8d52d3e6209c88e4652e4439d2a4321e4b3676aca255f3b7b4d754119eb0bb",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/summary.original.txt"
+    },
+    {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": "fixtures/resource-policy/nixbench-source-review.json",
+      "git_blob": "074cf71999e88c793013d777855a387b82b63f1d",
+      "bytes": 803,
+      "blake3": "5dd013ce7c194aae5ba87510951a84d5ff62e1253b6cee0fa34f1daf487a11b6",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/nixbench-source-review.original.json"
+    }
+  ],
+  "baseline": {
+    "recorded_head": "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+    "recorded_worktree": "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy",
+    "recorded_target": "/tmp/mantle-resource-policy-target",
+    "source_identity_commands": [
+      "git rev-parse e0b25b5b4d9fce6d947010f7a0465f50f084c636^",
+      "git archive --format=tar bb5aabb2a734196123545770b4a1f1c6e61fba62 | b3sum"
+    ],
+    "source_identity_outputs": [
+      "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+      "32362e8a86a2badb9fbfe8fd96dafdb18e06882d759d4d60cdf0355202526228  -"
+    ],
+    "source_bindings": [
+      {
+        "commit": "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+        "path": "src/remote_build.rs",
+        "git_blob": "e0b09bf179b90cfded28970457f7d8a73e4b36fe",
+        "bytes": 814330,
+        "blake3": "74e43104968d364598fe514f05a4fc4deb1fb7f3e1a925ffd653e0190a0227d8"
+      },
+      {
+        "commit": "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+        "path": "Cargo.lock",
+        "git_blob": "0228c4c50ec505b15457e39025ccab7b681cff9b",
+        "bytes": 230030,
+        "blake3": "6461894ab90a7b42ba7dfa20b5a92fc7476b398093582f06970ec6f7881b55c4"
+      }
+    ],
+    "commands_log_rails": [
+      {
+        "command": "cargo test -p crunch-build remote_resources --offline",
+        "raw_lines": [
+          3,
+          491
+        ],
+        "results": [
+          {
+            "line": 484,
+            "text": "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 692 filtered out; finished in 0.03s"
+          },
+          {
+            "line": 490,
+            "text": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+          }
+        ]
+      },
+      {
+        "command": "cargo test -p crunch-build scheduling --offline",
+        "raw_lines": [
+          492,
+          541
+        ],
+        "results": [
+          {
+            "line": 534,
+            "text": "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 673 filtered out; finished in 0.00s"
+          },
+          {
+            "line": 540,
+            "text": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+          }
+        ]
+      },
+      {
+        "command": "cargo test -p crunch-action-result-core --offline",
+        "raw_lines": [
+          542,
+          589
+        ],
+        "results": [
+          {
+            "line": 575,
+            "text": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          },
+          {
+            "line": 582,
+            "text": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          },
+          {
+            "line": 588,
+            "text": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          }
+        ]
+      },
+      {
+        "command": "cargo test -p crunch-store action_result --offline",
+        "raw_lines": [
+          590,
+          692
+        ],
+        "results": [
+          {
+            "line": 685,
+            "text": "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.13s"
+          },
+          {
+            "line": 691,
+            "text": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s"
+          }
+        ]
+      },
+      {
+        "command": "cargo test -p mantle --bin mantle remote_gateway --offline",
+        "raw_lines": [
+          693,
+          1045
+        ],
+        "results": [
+          {
+            "line": 1044,
+            "text": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 2606 filtered out; finished in 0.01s"
+          }
+        ]
+      },
+      {
+        "command": "cargo test -p mantle --bin mantle remote_build --offline",
+        "raw_lines": [
+          1046,
+          1228
+        ],
+        "results": [
+          {
+            "line": 1226,
+            "text": "test result: FAILED. 152 passed; 1 failed; 0 ignored; 0 measured; 2473 filtered out; finished in 1.03s"
+          }
+        ]
+      }
+    ],
+    "broad_failure": {
+      "raw_lines": [
+        1216,
+        1228
+      ],
+      "test": "remote_build::tests::concurrent_resource_dispatches_commit_once_and_never_overcommit",
+      "error": "remote-coordinator-mutation-lock-busy: Resource temporarily unavailable (os error 11)",
+      "result": "152 passed; 1 failed; 0 ignored"
+    },
+    "exact_retry_chronology": {
+      "artifact": "retry-and-lifecycle.log",
+      "command": "cargo test -p mantle --bin mantle remote_build::tests::concurrent_resource_dispatches_commit_once_and_never_overcommit --offline -- --exact --nocapture",
+      "runs": [
+        {
+          "command_line": 1,
+          "result_line": 16
+        },
+        {
+          "command_line": 18,
+          "result_line": 31
+        },
+        {
+          "command_line": 33,
+          "result_line": 46
+        }
+      ],
+      "each_result": "1 passed; 0 failed; 0 ignored",
+      "qualification": "Original summary calls it a concurrency flake; raw evidence establishes the initial failure and three later isolated passes, not a retrospectively green first run."
+    },
+    "accounting_and_declaration_scope": "Resource shape/capacity/lease invariant tests, store action-result NAR byte accounting/discovery, gateway and remote coordinator/report rails are literal named test results in recovered streams. No later resource-policy accounting tests are claimed to exist pre-core.",
+    "limitations": [
+      "Historical HEAD is recorded but no clean-status manifest or original executable digest is present in these streams. Do not upgrade this to independently attested pristine-worktree execution.",
+      "This is the recovered original September pre-core baseline, not a new run or the October 26 initial-source baseline.",
+      "Prior September accepted/archive commit messages do not accept the currently active change."
+    ]
+  },
+  "workload_review": {
+    "original_receipt": {
+      "schema": "mantle-resource-benchmark-source-review-v1",
+      "repository": "github.com/nixbuild/nixbench",
+      "revision": "b256cd275d8c79ba485be8d317005f973879825a",
+      "tree_path": "nix/packages/write-one-file.nix",
+      "source_blake3": "737a5a42181fdd59ba451159db7558c516f31ea82ffcc771f66a0f2d6421a5a8",
+      "readme_blake3": "95bbe021e75cbd2caf651604fa9b70adb23ad27845d49bc3c68a56b8ac829279",
+      "license": "Apache-2.0",
+      "license_blake3": "14ec1590aae4c4e763d123c31085d5d37703f7a838e589b0d356058ad99177dd",
+      "copied_source": false,
+      "adapted_pattern": "separate fixed rebuild seed, content seed, size, compressibility, and CPU facts",
+      "excluded_authority": [
+        "ambient environment",
+        "hosted-service tags",
+        "hosted-service API",
+        "unbounded parallelism",
+        "random runtime bytes"
+      ]
+    },
+    "prior_review_binding": {
+      "original_commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "original_path": "fixtures/resource-policy/nixbench-source-review.json",
+      "git_blob": "074cf71999e88c793013d777855a387b82b63f1d",
+      "bytes": 803,
+      "blake3": "5dd013ce7c194aae5ba87510951a84d5ff62e1253b6cee0fa34f1daf487a11b6",
+      "recovered_path": ".cairn/changes/add-evidence-driven-resource-policy/evidence/recovered-baseline-2026-09-04/nixbench-source-review.original.json"
+    },
+    "upstream_verified_on": "2026-10-26",
+    "upstream_bytes": [
+      {
+        "url": "https://raw.githubusercontent.com/nixbuild/nixbench/b256cd275d8c79ba485be8d317005f973879825a/nix/packages/write-one-file.nix",
+        "bytes": 1021,
+        "blake3": "737a5a42181fdd59ba451159db7558c516f31ea82ffcc771f66a0f2d6421a5a8"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/nixbuild/nixbench/b256cd275d8c79ba485be8d317005f973879825a/README.md",
+        "bytes": 1870,
+        "blake3": "95bbe021e75cbd2caf651604fa9b70adb23ad27845d49bc3c68a56b8ac829279"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/nixbuild/nixbench/b256cd275d8c79ba485be8d317005f973879825a/LICENSE",
+        "bytes": 11352,
+        "blake3": "14ec1590aae4c4e763d123c31085d5d37703f7a838e589b0d356058ad99177dd"
+      }
+    ],
+    "authoritative_license_fact": "Pinned upstream LICENSE is Apache License Version 2.0, January 2004, with Copyright 2025 Immutable Solutions AB. It contains redistribution/notice conditions; this factual source review does not invent legal approval.",
+    "current_implementation_attribution": "config/resource-policy/benchmark.ncl declares original Mantle zero-file/packaging implementation under AGPL-3.0-or-later and concepts-only reuse. Upstream source uses fio, environment variables and hosted-service tags; those are not copied into the original Mantle synthetic zero/gzip workloads.",
+    "dimensions": {
+      "reviewed_patterns": [
+        "separate derivation rebuild seed and file-content seed",
+        "fixed file size",
+        "compressibility",
+        "explicit CPU facts"
+      ],
+      "do_not_conflate": [
+        "upstream FILE_SIZE is decimal megabytes; Mantle corpus uses explicit byte counts 1048576 and 16777216",
+        "source pattern review is not fio performance parity, representative Onix performance or hosted-service authority",
+        "original September corpus observations are supplied fixtures; its repeated-a fixed-input digest and sample metrics are not measurements"
+      ]
+    },
+    "satisfied_historical_facts": [
+      "Exact source/license review receipt was retained in September, before October current-corpus introduction and before October 26 further adaptation.",
+      "Current retrieval of pinned upstream reproduces all three original review BLAKE3 identities."
+    ],
+    "unrecoverable_first_adaptation_timing": "The first adapted fixtures/resource-policy/benchmark-corpus.json and first nixbench-source-review.json enter reachable Git history together in e0b25b5. No earlier separate review receipt, timestamped review action, or designated reviewer authority was recovered. Commit order cannot prove review happened before that FIRST adaptation. Task 6.1 strict first-adaptation chronology remains unproven; do not backdate current review.",
+    "original_corpus_binding": {
+      "commit": "e0b25b5b4d9fce6d947010f7a0465f50f084c636",
+      "path": "fixtures/resource-policy/benchmark-corpus.json",
+      "git_blob": "7f9e721ffcf234a4490ae6814b2b6190e6053e54",
+      "bytes": 1807,
+      "blake3": "0a7bfac3af9e166fec6ab97a55815eea125aca9a1b86a820db58276a28ec24d6"
+    },
+    "current_corpus_first_commit_binding": {
+      "commit": "41d0bdfc29ad60716a15943c812f2cddc4083741",
+      "path": "config/resource-policy/benchmark.ncl",
+      "git_blob": "82852abbba71b75c60d7fc56eb74553195acc643",
+      "bytes": 2051,
+      "blake3": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b"
+    }
+  },
+  "execution_non_claims": [
+    "No build, test, smoke, campaign or lifecycle gate executed during recovery. Only Git object inspection, read-only source retrieval, and identity computations ran.",
+    "No checklist mutation, spec sync, archive, rollout, release, legal approval or consumer acceptance follows."
+  ]
+}

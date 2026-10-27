@@ -1,0 +1,73 @@
+{
+  "schema": "mantle-change-native-gate-reference-v1",
+  "date": "2026-10-27",
+  "change": "run-cargo-build-scripts-as-plan-units",
+  "transcript": {
+    "repository_relative_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-final-native-checks-2026-10-27.json",
+    "blake3": "fa5e69ad8a080a2af048cc12890b469e8dfc56c4ea27c79e5d82c4f2316ea397"
+  },
+  "source_unchanged_during_commands": true,
+  "selected_verdicts": [
+    {
+      "label": "Cairn-final-validate",
+      "valid": true,
+      "verdict": null,
+      "issues": [],
+      "receipt_hash": "8d0ea43ade74f307e9fc72b8aa2dc0cd141680f2720eef0335c0f04126574047",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-run-cargo-build-scripts-as-plan-units-proposal",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "5a7dd798112fce522bcd3869dc3e5ee7490e76958da65af1a0cab5666b3c4a84",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-run-cargo-build-scripts-as-plan-units-design",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "36a5da022b29d16fe0801691690b760e3e4a5df6be1e9994fd111642342106da",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-run-cargo-build-scripts-as-plan-units-tasks",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "2160feb0dc71bd4267a6bfb7aefee8d25fde9448903161cf286149bf0e10bd74",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    }
+  ],
+  "non_claims": [
+    "Native structural PASS is not artifact truth, semantic acceptance, source/snapshot approval, frozen G1/G2 admission, accepted-spec synchronization, archive, post-archive validation, publication or release.",
+    "The preserved historical and current failed outcomes are not reclassified. The exact independent missing prerequisites remain held in the referenced readiness record.",
+    "No independent reviewer verdict is claimed from the two failed review-tool attempts."
+  ]
+}

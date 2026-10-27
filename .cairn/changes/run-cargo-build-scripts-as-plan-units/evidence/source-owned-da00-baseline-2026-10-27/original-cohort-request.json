@@ -1,0 +1,82 @@
+{
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+  "environment": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  },
+  "subjects": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "flake.nix",
+    "flake.lock",
+    "src/main.rs",
+    "patches/casita-blake3-finalize.patch"
+  ],
+  "commands": [
+    {
+      "label": "original-locked-rust-cohort",
+      "argv": [
+        "rustc",
+        "--version",
+        "--verbose"
+      ]
+    },
+    {
+      "label": "original-locked-cargo-cohort",
+      "argv": [
+        "cargo",
+        "--version",
+        "--verbose"
+      ]
+    },
+    {
+      "label": "original-source-archive-identity",
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source.tar"
+      ]
+    },
+    {
+      "label": "build-unmodified-source-owned-dev-shell",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle"
+      ]
+    },
+    {
+      "label": "unmodified-original-cli-identity",
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle"
+      ]
+    },
+    {
+      "label": "collect-reconstructed-fixture-baseline-receipts",
+      "argv": [
+        "python3",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/collect-receipts.py",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle"
+      ],
+      "stdout_must_contain": [
+        "original source-owned da00 baseline receipts retained"
+      ]
+    }
+  ],
+  "non_claims": [
+    "The da00 tracked flake and its own checked-in Casita patch define this development cohort; no private dependency override or historical product-source modification.",
+    "Reconstructed fixture baseline, not contemporaneous historical execution; not current-source acceptance or build-script app success.",
+    "Every raw exit and stderr remain retained; a failed build does not produce qualifying baseline receipts."
+  ]
+}

@@ -129,3 +129,6 @@ compatibility surface, crate name, or historical decision.
 | [0129](0129-enforce-application-authority-with-resolved-compiler-views.md) | Enforce application authority with resolved compiler views and runtime dependency edges | Proposed |
 | [0130](0130-observe-owned-descendant-execs-at-kernel-transition.md) | Observe owned descendant execs at the kernel transition | Proposed |
 | [0131](0131-report-remote-execution-failures-through-one-terminal-effect.md) | Report remote execution failures through one terminal effect | Proposed |
+| [0132](0132-require-explicit-remote-resource-declarations.md) | Require explicit remote resource declarations | Proposed |
+| [0133](0133-keep-resume-bundles-under-explicit-dev-cache-authority.md) | Keep resume bundles under explicit development cache authority | Proposed |
+| [0134](0134-separate-cargo-oracle-roots-from-compiler-execution.md) | Separate Cargo oracle roots from compiler execution capabilities | Proposed |

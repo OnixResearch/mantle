@@ -1,0 +1,10 @@
+[package]
+name = "mantle-da00-proc-macro2"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+proc-macro2 = "=1.0.106"

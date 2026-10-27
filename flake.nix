@@ -154,6 +154,23 @@
           targets = [ "wasm32-wasip2" ];
         };
 
+        # The oracle uses the full toolchain; plan execution gets independently
+        # installed compiler/std components, with the overlay's native sysroot
+        # and RPATH construction. Never filter a combined toolchain output.
+        cargoUnitCompiler =
+          let
+            cohort = pkgs.rust-bin.nightly."2026-04-08";
+            aggregate = pkgs.callPackage (rust-overlay + "/lib/mk-aggregated.nix") { };
+          in
+          aggregate {
+            pname = "mantle-cargo-unit-compiler";
+            version = cohort.rustc.version;
+            date = "2026-04-08";
+            selectedComponents = [ cohort.rustc cohort.rust-std ]
+              ++ pkgs.lib.optional (system == "x86_64-linux")
+                cohort._components.x86_64-unknown-linux-musl.rust-std;
+          };
+
         # Use the static crates.io CDN instead of the crates.io API download
         # endpoint: the API returns HTTP 403 to curl's default User-Agent,
         # which breaks fetchurl's builder; the CDN does not.
@@ -1446,6 +1463,7 @@
         packages = {
           default = crunch;
           crunch = crunch;
+          cargo-unit-compiler = cargoUnitCompiler;
           ast-grep-toolchain = astGrepToolchain;
           ast-grep-package-identity = astGrepPackageIdentity;
           wasm-component-toolchain = wasmComponentToolchain;

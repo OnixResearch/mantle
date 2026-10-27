@@ -66,6 +66,8 @@ pub struct BuildPlanEntry {
     pub cache_admission: Option<BuildJsonCacheAdmission>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action_result: Option<crunch_build::ActionResultRuntimeReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_placement: Option<crate::remote_build::demand::PlacementReport>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -107,6 +109,14 @@ impl BuildPlanReport {
             }
             if let Some(action_result) = &entry.action_result {
                 out.push_str(&render_action_result_plan_human(action_result));
+            }
+            if let Some(placement) = &entry.remote_placement {
+                if let Some(reason) = &placement.blocker_reason {
+                    out.push_str(&format!("  remote-placement-blocker: {reason}\n"));
+                }
+                if let Some(demand) = &placement.worker_demand {
+                    out.push_str(&format!("  remote-worker-demand: {}\n", serde_json::json!(demand)));
+                }
             }
         }
         out
@@ -170,6 +180,7 @@ pub struct BuildPlanConfig<'a> {
     pub trusted_public_keys: Option<&'a [VerifyingKey]>,
     pub trust_unsigned: bool,
     pub remote_builder: Option<&'a crate::realization_routing::RemoteBuilderPlanFacts>,
+    pub(crate) remote_placement: Option<&'a crate::RemoteBuildSelection>,
     pub source_preflight: Option<&'a crate::source_bundle::SourceOfflinePreflightReport>,
     pub output_mode: BuildOutputMode,
 }
@@ -217,7 +228,7 @@ fn run_build_plan(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunEr
 }
 
 async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunError> {
-    let roots = evaluate_roots(config.file, config.import_paths, config.store_dir)?;
+    let roots = evaluate_roots(config.file, config.import_paths, config.store_dir, config.remote_placement.is_some())?;
     let root_count = roots.len();
     let preflight_error = validate_plan_config(config);
     let doctor_preflight = collect_doctor_report(DoctorRequest {
@@ -246,7 +257,7 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
 
     let mut entries = Vec::with_capacity(roots.len());
     for root in roots {
-        let action = plan_root_action(PlanRootRequest {
+        let mut action = plan_root_action(PlanRootRequest {
             plan_store: &plan_store,
             trust: &trust,
             doctor_report: &doctor_preflight,
@@ -256,6 +267,27 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
             root: &root,
         })
         .await?;
+        if let Some(selection) = config.remote_placement {
+            let input = crate::remote_build::RemoteClientDerivationInput {
+                label: root.label,
+                drv_path: root.drv_path,
+                crunch_derivation: root.crunch_derivation.ok_or_else(|| {
+                    RunError::Internal("quantified plan omitted its converted source derivation".into())
+                })?,
+                nix_derivation: root.derivation,
+            };
+            let mut request = crate::remote_build::concrete_remote_derivation_request(&input, &selection.options)
+                .map_err(RunError::Internal)?;
+            request.resource_requirements = selection.resource_requirements.clone();
+            let placement =
+                crate::remote_build::demand::plan_production_placement(config.state_dir, &request, selection)
+                    .map_err(RunError::Internal)?;
+            if let Some(reason) = &placement.blocker_reason {
+                action.action = PlanAction::PreflightError;
+                action.detail = Some(format!("remote coordinator dispatch failed: {reason}"));
+            }
+            action.remote_placement = Some(placement);
+        }
         entries.push(action);
     }
     entries.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
@@ -300,7 +332,12 @@ fn eval_error_is_build(err: &crunch_eval::Error) -> bool {
     true
 }
 
-fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Result<Vec<PlannedRoot>, RunError> {
+fn evaluate_roots(
+    file: &Path,
+    import_paths: &[OsString],
+    store_dir: &str,
+    retain_concrete: bool,
+) -> Result<Vec<PlannedRoot>, RunError> {
     let mut session = crunch_eval::session::EvaluationSession::open_file(file, import_paths)
         .map_err(|e| RunError::Eval(format!("{e}")))?;
     let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| {
@@ -319,6 +356,7 @@ fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Re
             label,
             drv_path,
             derivation,
+            crunch_derivation: retain_concrete.then_some(drv),
         });
     }
     debug_assert_eq!(roots.len(), derivation_count);
@@ -495,6 +533,7 @@ struct PlannedRoot {
     label: String,
     drv_path: StorePath<String>,
     derivation: Derivation,
+    crunch_derivation: Option<CrunchDerivation>,
 }
 
 impl PlannedRoot {
@@ -521,6 +560,7 @@ impl PlannedRoot {
             detail,
             cache_admission: None,
             action_result: None,
+            remote_placement: None,
         }
     }
 

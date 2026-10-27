@@ -2,6 +2,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 //! External Rust guest: real production policy and filesystem accounting shell.
+mod activity;
 mod crash;
 mod decisions;
 // Deliberately compile the production shell, not a copied accounting model.
@@ -272,7 +273,12 @@ fn main() {
     let harness = WorkloadHarness::new(WORKLOAD);
     harness.init();
     harness.setup_complete(json!({"adoption_track":"external-harness", "production_shell":"resource_quota_store", "platform_oom_collector_exercised":false}));
-    let result = harness.scenario("production resource and quota faults", || run(control));
+    let result = harness.scenario("production resource and quota faults", || {
+        let activity = activity::GuestActivity::start()?;
+        let result = run(control);
+        let stopped = activity.stop();
+        result.and(stopped)
+    });
     if result.is_err() {
         FAILED.store(true, Ordering::Relaxed);
     }

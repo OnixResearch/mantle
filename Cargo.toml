@@ -233,6 +233,10 @@ name = "resource_policy_replay"
 path = "examples/resource_policy_replay.rs"
 
 [[example]]
+name = "resource_evidence_check"
+path = "examples/resource_evidence_check.rs"
+
+[[example]]
 name = "hardware_simulation_plan"
 path = "examples/hardware_simulation_plan.rs"
 

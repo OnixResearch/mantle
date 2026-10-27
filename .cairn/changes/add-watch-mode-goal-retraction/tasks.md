@@ -36,5 +36,6 @@ recorded in `evidence/verification-2026-10-26.json`.
 ## Phase 4: Verification
 
 - [ ] [serial] T4.1 Run the edit, delete-during-build, invalid-source, and coalescing rails before and after the change. Preserve exact results. r[build_scheduling.watch_retraction_cancellation]
+  - Retrospective reconciliation: `evidence/before-after-observations-2026-10-27.json` binds the genuine historical binary's `--watch` rejection (product exit 2, same-driver exit 1, no transitions) and the immutable integrated v2 binary's six observed transitions, including all four requested after scenarios and 21-second teardown/no-late-output observation. Before scenarios were not reached, so the literal four-scenario before obligation remains unresolved; no historical pass or T4.1 acceptance is claimed. The retained v3 request has no observed result and cannot establish latest-source coverage.
 - [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[build_scheduling.watch_plan_assertion]
 - [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[build_scheduling.watch_error_retention]

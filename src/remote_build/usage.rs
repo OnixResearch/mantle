@@ -330,7 +330,7 @@ impl RemoteUsageCollector {
     /// wait: no other waiter may reap this child. stdin is preserved for a
     /// host-created regular input file; stdout/stderr are exclusively observed.
     #[cfg(target_os = "linux")]
-    pub fn spawn(mut self, command: &mut Command) -> Result<RemoteUsageChild, String> {
+    pub fn spawn(self, command: &mut Command) -> Result<RemoteUsageChild, String> {
         use std::os::fd::AsRawFd;
         use std::os::unix::process::CommandExt;
         let mut membership_status = None;
@@ -356,12 +356,8 @@ impl RemoteUsageCollector {
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
         let started = Instant::now();
         let mut child = command.spawn().map_err(|e| format!("remote-usage-spawn: {e}"))?;
-        if let Some(mut reader) = membership_status {
-            let mut status = [0_u8];
-            if reader.read_exact(&mut status).is_err() || status != *b"1" {
-                self.cgroup = None;
-            }
-        }
+        let cgroup_migrated =
+            membership_status.is_some_and(|reader| cgroup_membership_ack(reader, started, self.wall_limit));
         if let Err(error) = nonblocking(child.stdout.as_ref().expect("piped stdout"))
             .and_then(|()| nonblocking(child.stderr.as_ref().expect("piped stderr")))
         {
@@ -374,6 +370,7 @@ impl RemoteUsageCollector {
             child,
             started,
             reaped: false,
+            cgroup_migrated,
         })
     }
 
@@ -383,11 +380,35 @@ impl RemoteUsageCollector {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn cgroup_membership_ack(mut reader: std::os::unix::net::UnixStream, started: Instant, wall_limit: Duration) -> bool {
+    debug_assert!(!wall_limit.is_zero());
+    debug_assert!(wall_limit.as_secs() <= MAX_USAGE_WALL_SECS);
+    let remaining = wall_limit.saturating_sub(started.elapsed());
+    if remaining.is_zero() {
+        return false;
+    }
+    if reader.set_read_timeout(Some(remaining)).is_err() {
+        return false;
+    }
+    let mut status = [0_u8];
+    // One byte needs no implicit read_exact retries after an interrupt.
+    if !matches!(reader.read(&mut status), Ok(1)) {
+        return false;
+    }
+    if started.elapsed() >= wall_limit {
+        return false;
+    }
+    status == *b"1"
+}
+
 pub struct RemoteUsageChild {
     collector: RemoteUsageCollector,
     child: Child,
     started: Instant,
     reaped: bool,
+    #[cfg(target_os = "linux")]
+    cgroup_migrated: bool,
 }
 
 /// Captures are bounded independently from the exact byte counters. A caller
@@ -518,8 +539,6 @@ impl RemoteUsageChild {
             }
             std::thread::sleep(Duration::from_millis(2));
         }
-        let wall_time_millis =
-            u64::try_from(self.started.elapsed().as_millis()).map_err(|_| "remote-usage-wall-overflow")?;
         fn micros(time: libc::timeval) -> Result<u64, String> {
             let seconds = u64::try_from(time.tv_sec).map_err(|_| "remote-usage-cpu-invalid")?;
             let micros = u64::try_from(time.tv_usec).map_err(|_| "remote-usage-cpu-invalid")?;
@@ -539,13 +558,20 @@ impl RemoteUsageChild {
             .and_then(|n| n.checked_mul(1024))
             .ok_or("remote-usage-rss-invalid")?;
         let status = ExitStatus::from_raw(status);
-        let cgroup_facts = self.collector.cgroup.as_ref().and_then(|probe| probe.finish().ok());
+        let cgroup_facts = self
+            .collector
+            .cgroup
+            .as_ref()
+            .and_then(|probe| probe.finish(self.started, self.collector.wall_limit).ok())
+            .filter(|_| self.cgroup_migrated);
         let (completeness, oom, cgroup_peak_memory_bytes, cpu_time_millis) = match cgroup_facts {
             Some((oom, peak, cpu_ms)) => (RemoteUsageCompleteness::DedicatedCgroup, oom, peak, cpu_ms),
             None => {
                 (RemoteUsageCompleteness::ProcessOnly, RemoteUsageOomEvidence::Unavailable, None, cpu_micros / 1000)
             }
         };
+        let wall_time_millis =
+            u64::try_from(self.started.elapsed().as_millis()).map_err(|_| "remote-usage-wall-overflow")?;
         let scratch = match &mut self.collector.scratch {
             Some(probe) => {
                 probe.sample(true);
@@ -726,12 +752,19 @@ impl CgroupProbe {
         }
         Ok(probe)
     }
-    fn finish(&self) -> io::Result<(RemoteUsageOomEvidence, Option<u64>, u64)> {
-        // cgroup.events populated includes nested subgroups too; checking only
-        // cgroup.procs would miss still-running descendant subgroup members.
-        if named_counter(&bounded_cgroup_read(&self.directory, c"cgroup.events")?, "populated")? != 0
-            || !bounded_cgroup_read(&self.directory, c"cgroup.procs")?.trim().is_empty()
-        {
+    fn finish(&self, started: Instant, wall_limit: Duration) -> io::Result<(RemoteUsageOomEvidence, Option<u64>, u64)> {
+        debug_assert!(!wall_limit.is_zero());
+        debug_assert!(wall_limit.as_secs() <= MAX_USAGE_WALL_SECS);
+        // wait4 and pipe EOF can precede the kernel's final subtree removal.
+        // Keep the original deadline; never promote a still-populated group.
+        while named_counter(&bounded_cgroup_read(&self.directory, c"cgroup.events")?, "populated")? != 0 {
+            if started.elapsed() >= wall_limit {
+                return Err(io::Error::other("cgroup still populated at time limit"));
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        // The event covers descendant subgroups; this also checks direct members.
+        if !bounded_cgroup_read(&self.directory, c"cgroup.procs")?.trim().is_empty() {
             return Err(io::Error::other("cgroup still populated"));
         }
         let kills = named_counter(&bounded_cgroup_read(&self.directory, c"memory.events")?, "oom_kill")?;
@@ -873,4 +906,31 @@ impl ScratchProbe {
         }
         Ok(bytes)
     }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+fn cgroup_acknowledgement_requires_positive_migration_before_original_deadline() {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+
+    for status in [b'0', b'1'] {
+        let (reader, mut writer) = UnixStream::pair().unwrap();
+        writer.write_all(&[status]).unwrap();
+        assert_eq!(cgroup_membership_ack(reader, Instant::now(), Duration::from_secs(1)), status == b'1');
+    }
+    let (reader, mut writer) = UnixStream::pair().unwrap();
+    writer.write_all(b"1").unwrap();
+    let started = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+    assert!(!cgroup_membership_ack(reader, started, Duration::from_secs(1)));
+
+    // A pre-exec OOM can prevent the child from acknowledging its migration.
+    // The parent's command still owns a writer: EOF alone cannot bound this wait.
+    let (reader, _writer) = UnixStream::pair().unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let waiting = std::thread::spawn(move || {
+        sender.send(cgroup_membership_ack(reader, Instant::now(), Duration::from_millis(50))).unwrap();
+    });
+    assert!(!receiver.recv_timeout(Duration::from_secs(5)).expect("migration acknowledgement exceeded deadline"));
+    waiting.join().unwrap();
 }

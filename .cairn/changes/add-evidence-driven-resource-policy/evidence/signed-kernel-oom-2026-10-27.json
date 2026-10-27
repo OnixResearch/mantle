@@ -1,0 +1,122 @@
+{
+  "schema": "mantle-positive-oom-platform-observation-v1",
+  "date": "2026-10-27",
+  "task": "3.1",
+  "source_subject": {
+    "tests/resource_gateway_runtime.rs": "fbf708c167d36218ad9ce3f0a9418fdb098d0ed347c742b873ed4a9e489ba4d9",
+    "tests/support/gateway_runtime.rs": "1c09f01d09cceaa37e0ce786e090d91599b424b04b2ddf6260cd41893b663f89",
+    "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+    "src/nix_gateway/resource_host_tests.rs": "57f9b29cc18f4357a33c50f696ab94f290d1bbf0a9a4f50f83df209e71e39429",
+    "src/remote_build.rs": "6e8ca864daf8f6120fa3ba26c88b09e654ad7df4d4e426ce283297dedc9660b5",
+    "src/remote_build/usage.rs": "e79d60db34fe9a42b2a67d1b2c7b9a561182097101635a524d516da2b3241ac1",
+    "src/main.rs": "c46720f0d47d57b71ea690d18636a1c1492c708782a0670e4bbf9ff5e280331e",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36"
+  },
+  "source_unchanged_during_execution": true,
+  "source_contract": {
+    "collector": "src/remote_build/usage.rs:24-37,201-221,245-257,645-750",
+    "execution": "src/nix_gateway/resource_host_tests.rs:376-475",
+    "supported_positive_backend": "Linux dedicated fresh delegated cgroup-v2 cpu+memory subtree; unobserved/unsupported collectors remain OOM-unavailable, never positive by exit code"
+  },
+  "command": {
+    "label": "real-kernel-collector-signed-successor-sigkill-control",
+    "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "mantle",
+      "--bin",
+      "mantle",
+      "nix_gateway::resource_host::tests::delegated_oom_signed_successor_and_sigkill_negative",
+      "--",
+      "--ignored",
+      "--exact",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "started_at": "2026-10-27T01:09:29.752761-04:00",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-resource-runtime-v3-results/real-kernel-collector-signed-successor-sigkill-control.stdout.log",
+    "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-resource-runtime-v3-results/real-kernel-collector-signed-successor-sigkill-control.stderr.log",
+    "exit_code": 0,
+    "finished_at": "2026-10-27T01:11:39.891253-04:00",
+    "streams_blake3": {
+      "stdout": "5c99a481df7525dd745aaee121ea8d1b0e4e8be506cac5269e3517b669a8dc00",
+      "stderr": "9341f34b45291b8ad83a2bf902cca5507a8d3891f5abb8414ab1fa0ded4c1bdf"
+    },
+    "observation_checks": {
+      "expected_exit_code_observed": true,
+      "stdout_required_0": true
+    },
+    "expected_failure_observation": false,
+    "observation_accepted": true
+  },
+  "stdout": "\nrunning 1 test\ntest nix_gateway::resource_host::tests::delegated_oom_signed_successor_and_sigkill_negative ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2861 filtered out; finished in 0.23s\n\n",
+  "launch_supervision": {
+    "schema": "mantle-owned-delegated-runtime-launch-v1",
+    "pid": 2331462,
+    "command": [
+      "--",
+      "env",
+      "TMPDIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp",
+      "XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache",
+      "NIX_CONFIG=builders =\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025",
+      "nix",
+      "develop",
+      "--offline",
+      "--no-write-lock-file",
+      "-c",
+      "bwrap",
+      "--die-with-parent",
+      "--bind",
+      "/",
+      "/",
+      "--bind",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp",
+      "/tmp",
+      "--proc",
+      "/proc",
+      "--dev-bind",
+      "/dev",
+      "/dev",
+      "--setenv",
+      "TMPDIR",
+      "/tmp",
+      "--",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-commands.py",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-resource-runtime-v3-request.json"
+    ],
+    "non_claims": [
+      "Controller admission only until actual retained workload commands execute."
+    ],
+    "service_root": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-runtime-20261026-9ar4jfgk-v3.service",
+    "supervisor_cgroup": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-runtime-20261026-9ar4jfgk-v3.service/control",
+    "worker_root": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-runtime-20261026-9ar4jfgk-v3.service/attempts",
+    "controllers": [
+      "cpu",
+      "memory"
+    ],
+    "memory_swap_max": "0",
+    "initial_worker_pids": [],
+    "workload_executed": true,
+    "workload_exit_code": 1,
+    "final_worker_pids": [],
+    "remaining_worker_subtrees": [],
+    "exit_code": 1
+  },
+  "observed": [
+    "A real 64 MiB delegated cgroup kills the 96 MiB child; the signed current request/result-bound report verifies positive oom_kill_delta.",
+    "The same signed report with a different result digest is rejected.",
+    "Resource-host retry planning produces a new attempt and advanced fence; a real 256 MiB successor completes and settles.",
+    "An actual SIGKILL with no cgroup OOM event remains NotPositiveOom."
+  ],
+  "non_claims": [
+    "The enclosing v3 command set exited 1 because the real gateway fixtures selected no signed input; its failure remains retained.",
+    "This collector/resource-host scenario is not real gateway retry dispatch, a public UsageRead proof, VM campaign evidence or lifecycle acceptance.",
+    "No non-Linux positive OOM collector or non-Linux runtime execution is claimed.",
+    "The shared gateway fixture was corrected after this run; no rerun of this unchanged successful kernel scenario is required by that test-only change."
+  ]
+}

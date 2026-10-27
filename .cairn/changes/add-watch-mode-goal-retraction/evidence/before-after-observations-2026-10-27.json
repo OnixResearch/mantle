@@ -1,0 +1,214 @@
+{
+  "schema": "mantle-watch-before-after-observation-receipt-v1",
+  "recorded_date": "2026-10-27",
+  "change": "add-watch-mode-goal-retraction",
+  "scope": "Retrospective genuine pre-watch startup failure and retained implemented-watch observations; documentary reconciliation only",
+  "run_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk",
+  "path_convention": "Runtime artifact paths below are relative to run_root unless absolute; evidence/ references are relative to this change. Original requests/results retain literal absolute argv, environment, stream paths and timestamps.",
+  "authored_criterion": {
+    "task": "T4.1",
+    "source": "tasks.md:38",
+    "text": "Run the edit, delete-during-build, invalid-source, and coalescing rails before and after the change. Preserve exact results.",
+    "requirement": "build_scheduling.watch_retraction_cancellation",
+    "records_alone_satisfy_literal_criterion": false,
+    "reason": "The same driver was invoked on genuine historical source, but --watch was rejected before initial settlement and before any of the four scenarios executed. The implemented-watch side executed all four successfully. This is a valid failing-before/passing-after capability comparison, not an executed four-scenario historical runtime or contemporaneous before-implementation record.",
+    "task_checkbox_changed": false
+  },
+  "historical_before": {
+    "classification": "retrospective-genuine-pre-feature-product-with-separate-test-driver",
+    "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "source_archive_blake3": "d8bdd22f8f332099a1813def0ab6fe6e6681dc64eaa5fa8e9fce2d0e4ed9a332",
+    "source_provenance": "evidence/historical-before-source-2026-10-26.json#/historical_subject",
+    "source_identity_limit": "Archive identity is retained provenance, not freshly recomputed here. The command result records only its explicitly selected source files; source_unchanged does not establish a whole-tree comparison.",
+    "selected_source_blake3": {
+      "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+      "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+      "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+      "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+      "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+      "rust-toolchain.toml": "686ea6636a0442261a526d175351dc7112fa19ed864ebc4b9e4b84a7dff532f5",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "instrumentation": {
+      "path": "historical-watch-before/scripts/watch-goal-retraction-smoke.py",
+      "blake3": "da0d23c40a76de6dc19a76139bb6ce824984085c878bb1c0d87bed888430bd13",
+      "boundary": "Driver absent from historical product was copied as a separate smoke instrument. It matches the successful after driver and resolves the historical library. It does not add --watch or watch implementation to the historical executable. This driver differs from the earlier e63a9184... driver described in the preparation receipt."
+    },
+    "binary": {
+      "path": "historical-watch-target/debug/mantle",
+      "blake3": "0d7377ef66dcd51c07bbd4dd5780a1817b668ce207ab9e925967b1e65c6dbd07",
+      "identity_source": "historical-watch-before-rail-v1/result.json#/binary"
+    },
+    "command_record": {
+      "path": "historical-watch-before-v1-results/result.json",
+      "blake3": "83b05515404b8e5c37935453fd569a29f4e91a24f3d519abe5944780b4d5ca77",
+      "request": "historical-watch-before-v1-request.json",
+      "request_blake3": "4ec80dc5a7f04e8a8addc1b9ea68c9c1de6c1e4ae972177cc9444a33424ef997",
+      "submission": "historical-watch-before-v1-submission.json",
+      "submission_blake3": "087044711c23c44bed2b6bd2db817c25fda15e162dc551e33d48034bc7c8ce90",
+      "pueue_task_id": 17,
+      "started_at": "2026-10-27T01:47:56.651871-04:00",
+      "finished_at": "2026-10-27T01:53:12.334575-04:00",
+      "cwd": "historical-watch-before",
+      "environment_ref": "historical-watch-before-v1-results/result.json#/environment_overrides",
+      "execution_envelope_ref": "historical-watch-before-v1-submission.json#/command_argv",
+      "envelope_boundary": "Original historical nix develop --offline --no-write-lock-file shell, private scratch-backed /tmp bind, retained explicit linker/recursion flags and CRUNCH_NO_FUSE=1. Submission exit 0 means queued, not product success.",
+      "driver_exit_code": 0,
+      "driver_exit_boundary": "Expected nonzero before observations were accepted by the command recorder. Its exit 0 does not turn the child parser/rail failures into successful watch scenarios."
+    },
+    "commands": [
+      {
+        "label": "actual-historical-rust-cohort",
+        "argv": ["rustc", "--version", "--verbose"],
+        "exit_code": 0,
+        "stdout": "historical-watch-before-v1-results/actual-historical-rust-cohort.stdout.log",
+        "stdout_blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+        "observed": "rustc 1.96.0-nightly (c75612477 2026-04-07); commit c756124775121dea0e640652c5ee3c89e3dd0eb4; LLVM 22.1.2"
+      },
+      {
+        "label": "build-unmodified-historical-product",
+        "argv": ["cargo", "build", "--locked", "--offline", "-p", "mantle", "--bin", "mantle"],
+        "exit_code": 0,
+        "stdout": "historical-watch-before-v1-results/build-unmodified-historical-product.stdout.log",
+        "stderr": "historical-watch-before-v1-results/build-unmodified-historical-product.stderr.log",
+        "stderr_blake3": "5848884da62164ed90564be267a7ed674d7a3faf07ffc960e5a9f4ed5d77883c",
+        "boundary": "Successful build on source-defined historical dependency cohort, not a relabeling of the previously reported ambient unpatched-Casita build failure."
+      },
+      {
+        "label": "actual-historical-watch-surface",
+        "argv": ["/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-target/debug/mantle", "--store", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-store", "--state-dir", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-state", "build", "--watch", "examples/hello.ncl", "--no-substitute"],
+        "exit_code": 2,
+        "stdout": "historical-watch-before-v1-results/actual-historical-watch-surface.stdout.log",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "historical-watch-before-v1-results/actual-historical-watch-surface.stderr.log",
+        "stderr_blake3": "e504e00d13065965009e99c16eafe529c26b27848579dae879d2cb462d7e1628",
+        "observed_error": "error: unexpected argument '--watch' found",
+        "classification": "genuine-product-startup-failure"
+      },
+      {
+        "label": "same-four-scenario-driver-on-historical-source",
+        "argv": ["python3", "scripts/watch-goal-retraction-smoke.py", "--mantle", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-target/debug/mantle", "--scratch", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-before-rail-v1"],
+        "exit_code": 1,
+        "stdout": "historical-watch-before-v1-results/same-four-scenario-driver-on-historical-source.stdout.log",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "historical-watch-before-v1-results/same-four-scenario-driver-on-historical-source.stderr.log",
+        "stderr_blake3": "c6968d00c61b6bc84d0a1f18ff2581b58f365852fa306cdf8c764c9adf22cfe0",
+        "native_result": "historical-watch-before-rail-v1/result.json",
+        "native_result_blake3": "eb6d09ac90414b84f7e74466381fb62c69e8580e681b98cc22e4fac64d9db9eb",
+        "native_status": "failed",
+        "native_child_exit_code": 2,
+        "native_error": "watch shutdown exited 2",
+        "transitions": [],
+        "child_stderr": "historical-watch-before-rail-v1/watch.stderr.log",
+        "child_stderr_blake3": "e504e00d13065965009e99c16eafe529c26b27848579dae879d2cb462d7e1628",
+        "boundary": "Failed in initial settle_after(0, 2), before edit/delete/invalid/coalescing steps. No historical cancellation, retention, coalescing or descendant outcome is synthesized."
+      }
+    ]
+  },
+  "implemented_watch_after": {
+    "classification": "actual-retained-implemented-watch-runtime-on-immutable-integrated-cli-v1",
+    "command_record": "watch-after-v2-results/result.json",
+    "command_record_blake3": "114e2e9d7894c3fb171ef6af2137c9139ec21e01be8e77c8697454f92a4268d7",
+    "request": "watch-after-v2-request.json",
+    "request_blake3": "bccc367fd521df2cac52f7baed8b1bc1fed95907c618cd26f6d7f4d8d7f84e9e",
+    "submission": "watch-after-v2-submission.json",
+    "submission_blake3": "d6a8d2bcf6772d4f6f39036ab69285450867a793c30f2a0b2451bf7621451138",
+    "pueue_task_id": 11,
+    "cwd": "worktree",
+    "argv": ["python3", "scripts/watch-goal-retraction-smoke.py", "--mantle", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/immutable-integrated-cli-v1/mantle", "--scratch", "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/watch-after-v2"],
+    "started_at": "2026-10-27T00:24:41.882183-04:00",
+    "finished_at": "2026-10-27T00:25:19.203178-04:00",
+    "exit_code": 0,
+    "native_result": "watch-after-v2/result.json",
+    "native_result_blake3": "e36b0c65c0778efbb3eb7668f8d94c34edca64908b8084e0f342394f648d79d2",
+    "native_status": "passed",
+    "native_child_exit_code": 0,
+    "run_identity": "watch-1486216-1793075082006569599",
+    "binary": {
+      "path": "immutable-integrated-cli-v1/mantle",
+      "blake3": "10742c55031b70dce4eafc00009aa28df7df91f5579b352906c4b331fc755f1f",
+      "identity_record": "immutable-integrated-cli-v1/identities.json",
+      "identity_record_blake3": "070f449ee05680c9890d6c01edca699d8a45c7e1354c4511c24f92fecfe99aa4",
+      "compiled_source_manifest": "integration-build-v1-results/result.json",
+      "compiled_build_step": "integrated-cli-examples",
+      "compiled_build_argv": ["cargo", "build", "--locked", "--offline", "-p", "mantle", "--bin", "mantle", "--bin", "generate-operator-command-contract", "--example", "resource_policy_replay", "--example", "resource_evidence_check"],
+      "compiled_build_exit_code": 0,
+      "boundary": "Identified integrated executable, not a claim that later Main repairs were built into or exercised by this binary. The overall integration-build recorder later exited 1 at a separate runtime-discovery fixture."
+    },
+    "selected_source_blake3_at_observation": {
+      "scripts/watch-goal-retraction-smoke.py": "da0d23c40a76de6dc19a76139bb6ce824984085c878bb1c0d87bed888430bd13",
+      "src/main.rs": "d760077a3ec7e2eadd1a9592d37b8fcd41095602b50b15b24b932abcd037032e",
+      "src/build_cmd.rs": "7afa5e2e2a81f8fbe01ca9e28785245f13d3fc494df3ef824092c716e729b50d",
+      "crates/crunch-pipeline/src/watch.rs": "96a0add17cfe0664282fa25571614750648149f7ab42db76936c39e3a2f4ff3b",
+      "crates/crunch-eval/src/watch_imports.rs": "76be835a17eabf528d9d03a78d93379fee152478b9f4ea4e377a62fc25fc8bb5",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36"
+    },
+    "raw_streams": {
+      "driver_stdout": "watch-after-v2-results/actual-watch-after.stdout.log",
+      "driver_stdout_blake3": "e36b0c65c0778efbb3eb7668f8d94c34edca64908b8084e0f342394f648d79d2",
+      "driver_stderr": "watch-after-v2-results/actual-watch-after.stderr.log",
+      "driver_stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "watch_stdout": "watch-after-v2/watch.stdout.log",
+      "watch_stdout_blake3": "3d93341f4a646ee3d4f549d1209d74472dfff052adeadd73bd34c9073a65c6e7",
+      "watch_stderr": "watch-after-v2/watch.stderr.log",
+      "watch_stderr_blake3": "2dfdc9d5cfd97633603077732f8446af382821cfe543ff9eb909d7b45afdadfd",
+      "stderr_boundary": "Retained signing-key generation and two redb unclean-shutdown repair warnings remain visible. Cancellation logs watch sandbox stopped after cancellation, then SIGTERM waiting for watched builds to stop. Passing exit does not suppress those observations or establish a pristine initial store."
+    }
+  },
+  "scenario_mapping": [
+    {"criterion": "edit", "before": "unsupported-startup; not executed", "after": "one-root-edit transition; generation 2 adds moving-v2 and retracts moving-v1, retains keep, settles 2 successful/0 failed", "after_result_pointer": "watch-after-v2/result.json#/transitions/1"},
+    {"criterion": "delete-during-build", "before": "unsupported-startup; not executed", "after": "running-root-deletion transition; slow root retracted at generation 7; owned descendant identities retained; descendants_stopped=true; cancelled_output_present=false during 21-second late-write observation", "after_result_pointer": "watch-after-v2/result.json#/transitions/5", "limit": "Bounded retained process/output observation; not all future writes or arbitrary sandbox programs"},
+    {"criterion": "invalid-source", "before": "unsupported-startup; not executed", "after": "invalid-source transition and exact edit-rejected message; keep inode 26157414, mtime_ns 1000000000 and BLAKE3 f04d62a61fed803fca5cf2c9d90a5895a5925cc26985342a640cbfce56105be8 preserved", "after_result_pointer": "watch-after-v2/result.json#/transitions/3"},
+    {"criterion": "coalescing", "before": "unsupported-startup; not executed", "after": "20 edits, one admitted replacement, rapid-20 final output; generation 5 settles 3 successful/0 failed", "after_result_pointer": "watch-after-v2/result.json#/transitions/4", "limit": "This bounded revision sequence only; no unbounded edit-rate guarantee"},
+    {"criterion": "preserve exact results", "before": "Literal command record, parser stream, driver traceback and native failed result retained with identities", "after": "Literal driver/native results, full child streams, scenario logs, source-revisions and process identities retained", "records_satisfy_preservation_for_observed_invocations": true}
+  ],
+  "history_and_exclusions": [
+    "Before/after labels denote source capability, not wall-clock chronology: implemented-watch observation began 00:24:41-04:00 and retrospective historical run began 01:47:56-04:00 on October 27.",
+    "watch-after-v1-withdrawal.json records a pre-launch nonexistent-subject rejection (src/watch_build.rs); it is not executed failure or passing runtime evidence.",
+    "watch-before-results/result.json is an actual successful current-origin before-continuation run, expressly not genuine pre-feature source. Its e63a9184... driver differs from the da0d23c4... driver used in this historical/implemented comparison.",
+    "evidence/final-immutable-watch-runtime-20261023.json remains a separately scoped earlier after observation. Neither that pass nor the old shared-binary baseline can create missing historical scenario execution.",
+    "Existing historical/source and verification receipts remain intact; this receipt supplements them and does not rewrite failed observations or original execution dates."
+  ],
+  "remaining_gaps": [
+    "No executed historical edit, delete-during-build, invalid-source or coalescing scenario: the genuine old CLI rejects --watch before any transition. Records alone do not satisfy the authored literal four-scenario before execution criterion.",
+    "No contemporaneous source-bound pre-feature four-scenario rail or review-before-first-adaptation history is established by a retrospective rebuild.",
+    "Main owns any semantic reconciliation of an inherently unsupported historical surface; this receipt grants no task closure, accepted-spec sync, archive, merge, commit or publication authorization.",
+    "Later source repairs are outside the identity of immutable-integrated-cli-v1; this retained pass is not a new run of the latest in-progress worktree."
+  ],
+  "task_reconciliation_review": {
+    "recorded_date": "2026-10-27",
+    "method": "Retrospective documentary review of authored T4.1, design.md:37-62,128-182, specs/build-scheduling/spec.md:16-71, and the retained request/result/raw-stream identities referenced here. No commands rerun.",
+    "before_driver_invoked": true,
+    "before_requested_scenarios_reached": [],
+    "before_observed_failure": "Historical product rejects --watch with exit 2; same driver exits 1 in initial settle_after(0, 2); native result remains status failed, exit_code 2, transitions []. The command recorder's expected-failure acceptance is not semantic scenario acceptance.",
+    "after_observed_transitions": ["initial", "one-root-edit", "added-root", "invalid-source", "coalescing", "running-root-deletion"],
+    "after_coverage": "All four T4.1 scenarios executed on the identified immutable-integrated-cli-v1 binary; six transition records include initial and added-root coverage. Descendant teardown and 21-second no-late-output observation belong to running-root-deletion, not additional fabricated historical passes.",
+    "identity_boundary": "Historical archive provenance and selected-file runtime manifests are retained separately. Neither a --locked command nor selected-file source_unchanged establishes original historical whole-tree/exact-lock dependency-source equivalence. The after binary is bound by immutable-integrated-cli-v1/identities.json to integration-build-v1-results/result.json, not to subsequent unbuilt worktree repairs.",
+    "latest_requested_after": {
+      "request": "watch-after-v3-request.json",
+      "command_label": "actual-current-watch-edit-cancel-invalid-coalesce",
+      "requested_binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+      "requested_output": "watch-after-v3-results",
+      "requested_scratch": "watch-after-v3",
+      "retained_artifacts_observed": ["watch-after-v3-request.json"],
+      "observation_boundary": "Complete retained-root directory reads and watch-after-v3* filename lookup found only the request at this review. No result/native output, executable digest, selected-source runtime manifest, or exit is inferred from that request. This is not a newly executed after observation."
+    },
+    "decision": "T4.1 remains unchecked: exact observed invocations are preserved, but invoking the historical rail and failing at unsupported startup does not establish execution of the four historical scenarios required by the literal authored task. No criterion is rewritten to startup-only coverage.",
+    "remaining_blockers": [
+      "Genuine historical --watch absence prevents reaching edit, delete-during-build, invalid-source and coalescing scenarios; no retained historical scenario observations close that part of T4.1.",
+      "watch-after-v3-request.json alone supplies no current-after runtime result; the successful v2 record remains scoped to its own binary/source identities."
+    ],
+    "task_annotation_changed": true,
+    "task_checkbox_changed": false,
+    "acceptance_claimed": false,
+    "whole_tree_gate_or_lifecycle_claimed": false
+  },
+  "receipt_work": {
+    "new_product_runtime_commands": [],
+    "builds_tests_linters_formatters_or_lifecycle_gates_run": [],
+    "method": "Read authored criterion and retained requests/results/raw streams/provenance; BLAKE3-bound retained artifacts; parse and cross-check receipt references only. No failed product check was rerun.",
+    "documentary_validation": "JSON parsed; exact retained argv/exits/stream digests and selected source maps compared; native 21-second teardown fields and no-acceptance boundaries verified in ephemeral eval. Passed. No product execution."
+  },
+  "acceptance_claimed": false,
+  "non_claims": ["No synthetic green before scenarios", "No historical execution chronology invented", "No whole-source identity inferred from selected-file manifests", "No claim of latest repaired product verification", "No task checkbox or lifecycle mutation"]
+}

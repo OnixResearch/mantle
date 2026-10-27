@@ -2588,6 +2588,7 @@ pub(crate) fn reject_development_authority(proof_root: &Path) -> Result<(), RunE
     let mut absent_markers = 0_usize;
     for marker in [
         "dev-run-report.json",
+        "dev-execution-report.json",
         "dev-adopted-report.json",
         "dev-cache-hit.json",
         "dev-resume-authority.json",
@@ -2606,7 +2607,7 @@ pub(crate) fn reject_development_authority(proof_root: &Path) -> Result<(), RunE
         }
         absent_markers = absent_markers.saturating_add(1);
     }
-    debug_assert_eq!(absent_markers, 5);
+    debug_assert_eq!(absent_markers, 6);
     debug_assert!(!proof_root.as_os_str().is_empty());
     Ok(())
 }
@@ -2697,6 +2698,7 @@ mod receipt_tests {
     fn promoted_receipts_reject_every_development_authority_marker() {
         for marker in [
             "dev-run-report.json",
+            "dev-execution-report.json",
             "dev-adopted-report.json",
             "dev-cache-hit.json",
             "dev-resume-authority.json",

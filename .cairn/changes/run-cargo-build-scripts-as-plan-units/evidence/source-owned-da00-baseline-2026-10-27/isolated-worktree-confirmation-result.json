@@ -1,0 +1,321 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/request.json",
+  "request_blake3": "138780d35d28b49a707236156764ded118d75f51869c96ce09f672515eb7e5ae",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+  "started_at": "2026-10-27T03:28:11.138087-04:00",
+  "environment_overrides": {
+    "CARGO_HOME": "/home/brittonr/.cargo",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/target",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  },
+  "source_before": {
+    "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+    "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+    "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+    "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+    "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+    "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+  },
+  "steps": [
+    {
+      "label": "proc-macro2-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:28:11.145229-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-plan.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-plan.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.317014-04:00",
+      "streams_blake3": {
+        "stdout": "5b72bf3f0da687d2d3e8b2d1274e8fce81b0756cde07f5bfc64de37c013074c1",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "proc-macro2-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:28:11.319848-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.345909-04:00",
+      "streams_blake3": {
+        "stdout": "438640a8c5003cb2db1a2690df01cfd4e3c5810e842929532f06835fd59a9f9d",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "serde-derive-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:28:11.348339-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-plan.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-plan.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.432359-04:00",
+      "streams_blake3": {
+        "stdout": "17a2a4545c790e8c06bd920777b62acd5f62666895f74c72383c5ac2e1e66593",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "serde-derive-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:28:11.435418-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.467095-04:00",
+      "streams_blake3": {
+        "stdout": "1b7f1c8beaf54663748e811c514a6112b6ad95b98e65536f4222be0806609623",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "libc-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:28:11.470110-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-plan.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-plan.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.555299-04:00",
+      "streams_blake3": {
+        "stdout": "1fad2d88550f45ea836f19cf8415f981ae9d1b823407eac4ad26ec7436a1e851",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "libc-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:28:11.559391-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.591669-04:00",
+      "streams_blake3": {
+        "stdout": "8b436c220a58586bf04800124a53e6179a9778883cb45382a6d179d3e4e82ae7",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "native-answer-sys-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:28:11.595334-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-plan.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-plan.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.691351-04:00",
+      "streams_blake3": {
+        "stdout": "0081205d6984695052a4880be07b16ac285499e83e68e4f5c3147caf705327ca",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "native-answer-sys-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:28:11.695053-04:00",
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:28:11.731391-04:00",
+      "streams_blake3": {
+        "stdout": "5dd251a4bb1ca43754bd85c09cc5a783467bd9b23491a71057cd380c6b0e1bd1",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    }
+  ],
+  "non_claims": [
+    "Record the authored baseline inside its original detached da00 Git worktree using the already source-bound original binary; no historical product source or dependency override changes. The earlier archived-source build succeeded and remains the binary provenance.",
+    "Constructed fixture inputs and current serde lock are separately retained; not contemporaneous history, not the historical pinned serde lock, and not execution of build scripts."
+  ],
+  "immutable_artifacts": [],
+  "source_after": {
+    "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+    "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+    "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+    "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+    "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+    "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T03:28:11.742465-04:00",
+  "driver_exit_code": 0
+}

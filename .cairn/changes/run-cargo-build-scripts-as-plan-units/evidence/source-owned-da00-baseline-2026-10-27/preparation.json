@@ -1,0 +1,10 @@
+{
+  "schema": "mantle-da00-source-owned-baseline-preparation-v1",
+  "revision": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "origin": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+  "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+  "product_source_edits": false,
+  "decision": "Use the original tracked flake-defined Crane Casita patch and locked dev shell; do not repeat the known ambient unpatched-Casita E0599 route or introduce a private override.",
+  "fixtures": "/home/brittonr/scratch/mantle-da00-t11-fixtures",
+  "boundary": "Reconstructed fixture execution on original source, not contemporaneous history or current implementation acceptance."
+}

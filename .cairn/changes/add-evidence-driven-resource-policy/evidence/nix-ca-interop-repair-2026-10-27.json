@@ -1,0 +1,292 @@
+{
+  "schema": "mantle-nix-ca-interop-repair-v1",
+  "date": "2026-10-27",
+  "immediate_outcome": "Correctly signed standard Nix content-addressed inputs retain their original identity and pass gateway import/read/remote projection; a different derived path is rejected.",
+  "durable_capability": "The gateway reuses the existing SHA256 standard-Nix path implementation rather than confusing the native BLAKE3 path builder with Nix interoperability.",
+  "maintenance_owner": "Mantle store-interoperability and Nix-gateway maintainers",
+  "source_files": {
+    "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef",
+    "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+    "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+    "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad"
+  },
+  "implementation": {
+    "gateway": "crates/crunch-nix-gateway/src/store.rs",
+    "shared_nix_primitive": "crates/crunch-store/src/nario.rs::standard_nix_ca_path",
+    "export": "crates/crunch-store/src/lib.rs",
+    "regression": "crates/crunch-nix-gateway/tests/nix_path_info.rs::signed_standard_nix_ca_import_and_read_reject_a_different_path_identity",
+    "documentation": "README.md"
+  },
+  "independent_oracles": [
+    {
+      "argv": [
+        "nix-store",
+        "--print-fixed-path",
+        "--recursive",
+        "sha256",
+        "1r4lsy9s11lh6rwnffdmsysakia6sq82qjvll9cx6i658w152n3c",
+        "mantle-resource-static-busybox"
+      ],
+      "exit_code": 0,
+      "stdout": "/nix/store/n54ynyi8r1zqag4zgrbd62baqlfpk2k7-mantle-resource-static-busybox\n"
+    },
+    {
+      "argv": [
+        "nix-store",
+        "--print-fixed-path",
+        "--recursive",
+        "sha256",
+        "cba3505e877648ecc3075f69f9f788713fd07f77eab8723ec0f79acc1af8490a",
+        "gateway-client"
+      ],
+      "exit_code": 0,
+      "stdout": "/nix/store/1bsmf8faj0p4b089xil6mxa3yjgr6rsz-gateway-client\n",
+      "nar_bytes": 128
+    }
+  ],
+  "before": {
+    "retained_result": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-before-results/result.json",
+    "source_before": {
+      "crates/crunch-nix-gateway/tests/nix_path_info.rs": "d769de77db6c7c2976c9a6d6a2ac9eb252ddf290ecf9ca10c8251b13f9f52053",
+      "crates/crunch-nix-gateway/src/store.rs": "ab57564ba434739e3f66bf2b9392841c9ca7c952f822af751944c0b39def0a84",
+      "crates/crunch-store/src/nario.rs": "48f6a4afed4b8a42006ede650b5db2f80f60277d2e24cf34a8d39dfe785c17d6",
+      "crates/crunch-store/src/lib.rs": "1ed0db88dc6e36387b888e8ccb0467f99a872a897936ec773e09c3b6844a187e"
+    },
+    "source_unchanged": true,
+    "command": {
+      "label": "standard-nix-ca-before",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-nix-gateway",
+        "--test",
+        "nix_path_info",
+        "signed_standard_nix_ca_import_and_read_reject_a_different_path_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T02:11:34.945040-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-before-results/standard-nix-ca-before.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-before-results/standard-nix-ca-before.stderr.log",
+      "exit_code": 101,
+      "finished_at": "2026-10-27T02:11:40.860703-04:00",
+      "streams_blake3": {
+        "stdout": "cf51bc1cc9c7c86ea218c677b4541ca9f924f7f6e6aca5e702ebf6cf557291ac",
+        "stderr": "179a16eb1210091bb839b713d66a9b384dbf6acac7f7c4e26fdf15a262fad771"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true,
+        "stdout_required_0": true,
+        "stdout_required_1": true
+      },
+      "expected_failure_observation": true,
+      "observation_accepted": true
+    },
+    "failure": "called Result::unwrap() on Err Identity for the valid Nix input; expected baseline failure, not a product pass"
+  },
+  "after": {
+    "retained_result": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/result.json",
+    "source_unchanged": true,
+    "commands": [
+      {
+        "label": "gateway-nix-path-info-and-admitted-imports",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-nix-gateway",
+          "--test",
+          "nix_path_info",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T02:14:02.936717-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/gateway-nix-path-info-and-admitted-imports.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/gateway-nix-path-info-and-admitted-imports.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T02:14:28.313302-04:00",
+        "streams_blake3": {
+          "stdout": "598448fb4c7a73b7dd95649cd24ee41cb87dc4aa97bd4e5722ecfb1c54448f22",
+          "stderr": "133539cd1efe9d407409dc36995588bce1a1909e7cfdb8df2f9d915382a082d8"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true,
+          "stdout_required_0": true,
+          "stdout_required_1": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "existing-nario-interoperability",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-store",
+          "--lib",
+          "nario::tests::",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T02:14:28.316866-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/existing-nario-interoperability.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/existing-nario-interoperability.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T02:18:13.859759-04:00",
+        "streams_blake3": {
+          "stdout": "e897f847d510f557f06116401cb2a2722cb05c5baf2465982739993a9acc9af4",
+          "stderr": "5c0b317a0e63759c1135d11c38a306e2d85b9cb8f8a6070b87577ed916a86895"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true,
+          "stdout_required_0": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "affected-package-format-checks",
+        "argv": [
+          "cargo",
+          "fmt",
+          "--check",
+          "-p",
+          "crunch-nix-gateway",
+          "-p",
+          "crunch-store"
+        ],
+        "started_at": "2026-10-27T02:18:13.910792-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/affected-package-format-checks.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/affected-package-format-checks.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T02:18:14.484873-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "affected-package-strict-clippy",
+        "argv": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-nix-gateway",
+          "-p",
+          "crunch-store",
+          "--all-targets",
+          "--no-deps",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "started_at": "2026-10-27T02:18:14.520658-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/affected-package-strict-clippy.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/nix-ca-regression-after-results/affected-package-strict-clippy.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T02:19:23.064587-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "3efb7266f9ac4fe2949d1443b7252c1e93dd87e8b0fec2b73fd7f110dde37c45"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      }
+    ],
+    "test_result_lines": [
+      {
+        "label": "gateway-nix-path-info-and-admitted-imports",
+        "lines": [
+          "test result: ok. 11 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.69s"
+        ]
+      },
+      {
+        "label": "existing-nario-interoperability",
+        "lines": [
+          "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 438 filtered out; finished in 96.73s"
+        ]
+      }
+    ]
+  },
+  "actual_retained_input_smoke": {
+    "command": [
+      "env",
+      "TMPDIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp",
+      "XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache",
+      "NIX_CONFIG=builders =\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025",
+      "nix",
+      "develop",
+      "--offline",
+      "--no-write-lock-file",
+      "-c",
+      "rustc",
+      "--edition",
+      "2024",
+      "-C",
+      "linker=clang",
+      "-C",
+      "link-arg=-fuse-ld=mold",
+      "-C",
+      "link-arg=-Wl,--allow-multiple-definition",
+      "-L",
+      "dependency=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps",
+      "--extern",
+      "crunch_nix_gateway=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_nix_gateway-5048d9dd40db3516.rlib",
+      "--extern",
+      "crunch_store=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_store-111b1b5b8cbc383b.rlib",
+      "--extern",
+      "nix_compat=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libnix_compat-26ec6c9ef3597384.rlib",
+      "--extern",
+      "tokio=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libtokio-7bc78642093b78aa.rlib",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/probe-retained-projection.rs",
+      "-o",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/probe-retained-projection"
+    ],
+    "run_argv": [
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/probe-retained-projection",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-runtime-v5/process-only",
+      "/nix/store/6kjwgcw1pdjc087089z1dzyr605y29qx-gateway-runtime-simple.drv"
+    ],
+    "exit_code": 0,
+    "observed": [
+      "Signed derivation IsValidPath: Ok(())",
+      "Original signed BusyBox IsValidPath: Ok(())",
+      "signed derivation projection admitted 1 request(s)"
+    ],
+    "native_comparison_path": "/nix/store/9hiciy24cmq9d9v64j1a3cqzar9xndky-mantle-resource-static-busybox",
+    "scope": "Throwaway API smoke against retained original private gateway state and actual signed CAS input, not a new worker dispatch or full gateway lifecycle pass."
+  },
+  "non_claims": [
+    "Three installed-Nix client tests remain ignored; their execution is not claimed.",
+    "No original cache input was renamed or re-signed; the earlier cache-invalid diagnosis is superseded by the independent Nix oracle.",
+    "Native BLAKE3 acceptance and existing exact signature/NAR/CAS/admitted-input requirements are preserved.",
+    "Focused package checks are not whole-workspace, frozen G1/G2, proof, release or lifecycle acceptance.",
+    "Real signed gateway/OOM/public usage and worker demand after rails are recorded separately."
+  ]
+}

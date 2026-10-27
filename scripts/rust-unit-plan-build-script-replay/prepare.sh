@@ -8,6 +8,7 @@ TARGET=$R/targets/rust-efficiency-20261011
 MANTLE=$TARGET/release/mantle
 STATIC=$TARGET/static/x86_64-unknown-linux-gnu/debug
 TOOLCHAIN=/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08
+COMPILER=${RCBS_COMPILER:?supply the admitted cargo-unit-compiler store root}
 LINKER=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
 PKG_CONFIG=/nix/store/d0immrndpxnhx32vcfbxngmnf7hmqyc3-pkg-config-wrapper-0.29.2
 VENDOR=/nix/store/l5bfq4vwqh1sifhvkajjf0iimh7yg6b3-build-script-vendor
@@ -17,7 +18,7 @@ LINKS=/nix/store/6rhlil1lnr0h5zspa7ivdm65bhnsak0m-links-meta
 BUSYBOX=/nix/store/h75l4bwd606k94l22ajqdb98vfar5x66-busybox-static-x86_64-unknown-linux-musl-1.37.0
 [[ ! -e $B ]] || { echo "existing scratch is not a clean proof: $B" >&2; exit 1; }
 for f in "$MANTLE" "$STATIC/mantle-cargo-unit-helper" "$STATIC/mantle-cargo-unit-producer"; do test -x "$f"; done
-for d in "$TOOLCHAIN" "$LINKER" "$PKG_CONFIG" "$VENDOR" "$GRAPHS" "$BZ" "$LINKS" "$BUSYBOX"; do test -e "$d"; done
+for d in "$TOOLCHAIN" "$COMPILER" "$LINKER" "$PKG_CONFIG" "$VENDOR" "$GRAPHS" "$BZ" "$LINKS" "$BUSYBOX"; do test -e "$d"; done
 "$PKG_CONFIG/bin/pkg-config" --version >/dev/null
 mkdir -p "$B/stage" "$B/keys" "$B/ncl" "$B/runs" "$B/offline"
 add_binary() { local d; d=$(mktemp -d "$B/stage/binary.XXXXXXXX"); cp "$1" "$d/$2"; nix-store --add "$d/$2"; }
@@ -56,10 +57,10 @@ ROOT_NETWORK=$(nix-store --add "$B/stage/network")
 # No historical binary or result is copied; immutable historical fixture *sources* are admitted by signed cache.
 nix key generate-secret --key-name rcbs-rust-efficiency-20261011 > "$B/keys/secret"
 nix key convert-secret-to-public < "$B/keys/secret" > "$B/keys/public"
-ROOTS=("$PRODUCER" "$HELPER" "$PLANNER" "$TOOLCHAIN" "$LINKER" "$PKG_CONFIG" "$BUSYBOX" "$VENDOR" "$GRAPHS" "$BZ" "$LINKS" "$ROOT_NONZERO" "$ROOT_HOST" "$ROOT_NETWORK")
+ROOTS=("$PRODUCER" "$HELPER" "$PLANNER" "$TOOLCHAIN" "$COMPILER" "$LINKER" "$PKG_CONFIG" "$BUSYBOX" "$VENDOR" "$GRAPHS" "$BZ" "$LINKS" "$ROOT_NONZERO" "$ROOT_HOST" "$ROOT_NETWORK")
 nix copy --offline --to "file://$B/input-cache?compression=none&secret-key=$B/keys/secret" "${ROOTS[@]}"
 jq -n --arg producer "$PRODUCER" --arg helper "$HELPER" --arg planner "$PLANNER" \
-  --arg toolchain "$TOOLCHAIN" --arg linker "$LINKER" --arg pkg_config "$PKG_CONFIG" \
+  --arg toolchain "$TOOLCHAIN" --arg compiler "$COMPILER" --arg linker "$LINKER" --arg pkg_config "$PKG_CONFIG" \
   --arg vendor "$VENDOR" --arg graphs "$GRAPHS" --arg bz "$BZ" --arg links "$LINKS" \
   --arg nonzero "$ROOT_NONZERO" --arg host "$ROOT_HOST" --arg network "$ROOT_NETWORK" \
   --arg public_key "$(cat "$B/keys/public")" --arg busybox "$BUSYBOX" '$ARGS.named' > "$B/paths.json"

@@ -1,0 +1,106 @@
+{
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-valence-v17/results",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "environment": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-full-key-v16/runtime"
+  },
+  "subjects": [
+    "examples/resource_evidence_check.rs",
+    "scripts/check-resource-evidence.py",
+    "src/nix_gateway/evidence.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "docs/remote-transfer.md",
+    ".cairn/changes/add-evidence-driven-resource-policy/tasks.md",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/consume-actual-gateway-evidence-v3.py"
+  ],
+  "commands": [
+    {
+      "label": "build-current-pinned-Valence-consumer",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--example",
+        "resource_evidence_check"
+      ]
+    },
+    {
+      "label": "consume-actual-terminal-process-observation",
+      "argv": [
+        "python3",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/consume-actual-gateway-evidence-v3.py",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk",
+        "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/examples/resource_evidence_check",
+        "/nix/store/rg6xkvmlsn9gk1h0l5b0ywkbhp6rgrvj-b3sum-1.8.7/bin/b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-bounded-ack-v17/runtime/process-only",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/valence-actual-publication-v17"
+      ],
+      "stdout_must_contain": [
+        "actual gateway Valence positive/digest/nonclaim/role controls PASS"
+      ]
+    },
+    {
+      "label": "Cairn-validate-after-actual-resource-export",
+      "argv": [
+        "cairn",
+        "validate",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-resource-proposal-gate",
+      "argv": [
+        "cairn",
+        "gate",
+        "proposal",
+        "add-evidence-driven-resource-policy",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-resource-design-gate",
+      "argv": [
+        "cairn",
+        "gate",
+        "design",
+        "add-evidence-driven-resource-policy",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-resource-tasks-gate",
+      "argv": [
+        "cairn",
+        "gate",
+        "tasks",
+        "add-evidence-driven-resource-policy",
+        "--root",
+        "."
+      ]
+    }
+  ],
+  "continue_independent_commands": false,
+  "non_claims": [
+    "Actual successful gateway process-only publication identified by its retained public published_evidence leaf; mutations only test digest/nonclaim/role rejection and are not provenance.",
+    "Pinned Valence validates declared identity/linkage and producer roles, not worker authentication, positive OOM, complete campaigns or behavioral correctness.",
+    "Cairn read-only validation/gates are structural, not whole-change acceptance, frozen G1/G2 admission, accepted-spec sync, archive or publication."
+  ]
+}

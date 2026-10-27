@@ -1,0 +1,60 @@
+{
+  "schema": "mantle-fault-injection-upstream-prerequisite-review-v1",
+  "date": "2026-10-27",
+  "mantle_change": "adopt-fault-injection-io-tests",
+  "authored_prerequisite": {
+    "source": "proposal.md:19-21",
+    "text": "The durable-file-publication pilot `adopt-fault-injection-io-tests` must land first.",
+    "owner": "durable-file-publication",
+    "repository": "rad://z3tAR4For7qw8ZirkJzoDw1VNDDLM",
+    "change": "adopt-fault-injection-io-tests",
+    "not_a_mantle_self_dependency": true
+  },
+  "observations": [
+    {
+      "source": "durable-file-publication/.cairn/changes/adopt-fault-injection-io-tests/tasks.md:1-21",
+      "observation": "The named upstream pilot exists as an active change. All ten listed implementation, determinism, boundary and verification tasks are unchecked. This is documentary state, not a global remote landing verdict."
+    },
+    {
+      "source": "durable-file-publication/Cargo.toml:15-20",
+      "observation": "The inspected package has rustix as its runtime dependency and only blake3/tempfile under dev-dependencies. It does not declare fault-injection."
+    },
+    {
+      "source": "durable-file-publication/.cairn/archive/*fault*",
+      "observation": "The scoped active/archive name lookup returned only the active pilot. No qualifying landing or archived completion receipt was found there."
+    },
+    {
+      "source": "durable-file-publication/.cairn/changes/adopt-fault-injection-io-tests/metadata.json",
+      "observation": "The exact metadata read returned not found. No metadata edge or source revision is invented."
+    }
+  ],
+  "advertised_upstream_review": {
+    "repository": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+    "command": "git ls-remote https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git HEAD refs/heads/main",
+    "exit_code": 0,
+    "head_and_main": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+    "other_advertised_namespace_main": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+    "object_inspection": [
+      {
+        "command": "git show 8e05e74e24b45f752d77145c4455385daaf6d6ab:.cairn/changes/adopt-fault-injection-io-tests/tasks.md",
+        "exit_code": 128,
+        "observation": "The active task file exists on disk but is absent from this advertised revision. Its working-tree presence is not a landed receipt."
+      },
+      {
+        "command": "git show 8e05e74e24b45f752d77145c4455385daaf6d6ab:Cargo.toml",
+        "exit_code": 0,
+        "observed_dev_dependencies": {"blake3": "1.8", "tempfile": "3.20"},
+        "observation": "The advertised revision does not declare the pilot's required fault-injection dependency. It does not supply the qualifying implementation/fixture/lifecycle receipt."
+      }
+    ],
+    "limit": "Read-only advertised-main and existing local Git-object inspection only; not an audit of every branch or remote history, an approved dependency-pin migration, or authority to modify the upstream repository."
+  },
+  "decision": "The upstream owner/slug ambiguity is resolved, but the required landed pilot is not established by the inspected authoritative checkout or advertised upstream main. Mantle fault-I/O semantic/lifecycle acceptance and archive remain blocked on a qualifying upstream landing record, as well as the separate final-source integration gates.",
+  "required_prerequisite": "The durable-file-publication owner must supply or complete the named pilot and retain its actual implementation revision, deterministic fixture results and lifecycle evidence. Mantle must then review that record before accepting the prerequisite.",
+  "authority_boundary": "This Mantle continuation does not authorize editing, landing, committing or archiving the independent upstream repository. No upstream product or lifecycle file was changed.",
+  "non_claims": [
+    "An active unchecked task file alone does not prove that no other remote revision exists.",
+    "Mantle's retained passing injection tests do not satisfy an explicitly ordered upstream dependency by themselves.",
+    "No test, gate, source approval, commit, accepted-spec synchronization, archive or publication was performed by this prerequisite review."
+  ]
+}

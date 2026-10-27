@@ -1,0 +1,50 @@
+{
+  "schema": "mantle-build-script-no-cargo-boundary-observation-v1",
+  "date": "2026-10-27",
+  "change": "run-cargo-build-scripts-as-plan-units",
+  "criterion": "mantle.rust_unit_plan.build_scripts.sandbox_boundary",
+  "disposition": "unaccepted: current full-root toolchain exposure allows Cargo in a real helper subprocess",
+  "source_blake3": {
+    "crates/mantle-cargo-unit-plan/src/unit_helper.rs": "cc89057632ba2117a504aaa55d590bf28429caad06ed4d82dbceacc9c410a634",
+    "crates/mantle-cargo-unit-plan/src/build_script.rs": "b3554d869b1a4528f2110c4f470e039f80bd4b027dda5e3b3392f54c9ea79467"
+  },
+  "helper_binary_blake3": "a29e47268aaece56fdba8e2bf29e28b3c3a4ea5bfadd057f018ee4fcaf956d08",
+  "retained_runtime": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-direct-bwrap-v1",
+  "runtime_receipt_blake3": "6ed745ae1034067c2112ef391c0f259c191b9cb691a238c505138cda062952ea",
+  "driver": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-direct-runtime-probe.py",
+  "driver_blake3": "53338a7226a1190061e21f3f8fda5062787fdf1df0ff0f13b7fdeff3d0e74cb0",
+  "command": [
+    "python3",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-direct-runtime-probe.py",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-contract-v2/runtime",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-direct-bwrap-v1"
+  ],
+  "observed": {
+    "measurement_exit_code": 0,
+    "same_compiled_script_outside_path_and_absolute_cargo_exit": [0, 0],
+    "current_helper_inside_bwrap_path_and_absolute_cargo_exit": [0, 0],
+    "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+    "outside_host_hostname_visible": true,
+    "inside_host_hostname_visible": false,
+    "explicit_native_inputs": [],
+    "script_requested_path_entries": []
+  },
+  "separate_actual_pipeline_attempt": {
+    "pueue_task": 65,
+    "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/no-cargo-contract-v2/request.json",
+    "outcome": "failed: signed store pull exceeded 600 seconds before executing the sandbox unit",
+    "not_a_pipeline_sandbox_result": true
+  },
+  "source_findings": [
+    "lower_run_unit includes all declared tool roots; run_unit_env supplies the compiler and whole toolchain.",
+    "run_build_script prepends the toolchain/bin directory even when the script has no native PATH declarations.",
+    "A no-oracle planning CLI shim does not establish Cargo absence inside a build-script execution unit."
+  ],
+  "remaining_prerequisite": "Resolve Cargo-capable toolchain/input exposure and retain a real negative execution control before accepting the authored no-Cargo sandbox boundary or T4.6 readiness. Removing PATH alone cannot establish absence at the known absolute path.",
+  "non_claims": [
+    "Direct current-helper bwrap evidence, not a completed Mantle signed import/build or full dynamic application replay.",
+    "The copied private tool/runtime closure is explicit fixture authority; this is not a host escape or claim about arbitrary custom input closures.",
+    "Exit zero records successful measurement of a gap, not requirement satisfaction, source approval, lifecycle acceptance, spec synchronization or archive.",
+    "No historical receipt, accepted contract, helper implementation or task completion was rewritten to hide the observation."
+  ]
+}

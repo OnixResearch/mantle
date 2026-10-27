@@ -240,7 +240,7 @@ pub fn local_cancel_requested(command: &super::RemoteStdioCommand) -> Result<boo
             _ => None,
         })
         .ok_or_else(|| crate::errors::RunError::Internal("gateway-worker-binding-missing".into()))?;
-    let _guard = super::acquire_remote_coordinator_mutation_guard(&production.state_dir)
+    let _guard = super::RemoteCoordinatorMutationGuard::acquire_wait(&production.state_dir)
         .map_err(crate::errors::RunError::Internal)?;
     let state = super::load_coordinator_state(&production.state_dir)?;
     Ok(cancellation_requested(&state, binding))
@@ -259,7 +259,7 @@ pub fn confirm_local_teardown(command: &super::RemoteStdioCommand) -> Result<(),
             _ => None,
         })
         .ok_or_else(|| crate::errors::RunError::Internal("gateway-worker-binding-missing".into()))?;
-    let _guard = super::acquire_remote_coordinator_mutation_guard(&production.state_dir)
+    let _guard = super::RemoteCoordinatorMutationGuard::acquire_wait(&production.state_dir)
         .map_err(crate::errors::RunError::Internal)?;
     let mut state = super::load_coordinator_state(&production.state_dir)?;
     for record in state.gateway_attempts.values_mut().filter(|record| record.binding.as_ref() == Some(binding)) {
@@ -293,7 +293,7 @@ pub fn record_failed_usage(
         }
     }
     let usage = verified.ok_or_else(|| format!("gateway-failure-usage-signature-invalid: {rejection}"))?;
-    let _guard = super::acquire_remote_coordinator_mutation_guard(state_dir)?;
+    let _guard = super::RemoteCoordinatorMutationGuard::acquire_wait(state_dir)?;
     let mut state = super::load_coordinator_state(state_dir).map_err(|_| "gateway-coordinator-unavailable")?;
     let job = state.jobs.get(&binding.job_id).ok_or("gateway-failure-job-missing")?;
     let attempt = job.current_attempt.as_ref().ok_or("gateway-failure-attempt-missing")?;

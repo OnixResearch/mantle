@@ -105,6 +105,67 @@ Watch output is human-readable, not the stable `--json` aggregate report;
 
 Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
 
+For explicitly quantified remote work, pass
+`--remote-resource-requirements /absolute/path/requirements.json` to the existing
+`build` command, with the ordinary `--builder`, endpoint binding, ticket FD,
+trusted builder keys, and remote farm configuration. The JSON is a bounded
+(16 KiB) runtime export of `lib/remote-builders.ncl`'s `ResourceRequirements`
+contract; keep human-authored declarations in Nickel and export them with
+`nickel export --format json`. Quantities are canonicalized and never inferred
+from `--jobs`, worker presence, or history. This explicit mode also performs
+read-only quantified placement during `--plan`: each entry's
+`remote_placement.blocker_reason` and `remote_placement.worker_demand` describe
+the same current registration and resource-lease facts used by admission. A
+known no-fit entry remains `preflight-error` and the plan exits 1.
+It does not register a worker, allocate a lease, or publish a plan as live demand.
+Without the explicit declaration, the existing unquantified plan remains unchanged.
+The fail-fast build error keeps its original code and message, and its JSON
+envelope adds `worker_demand` with the exact blocker and requirement. Daemon
+availability does not change either report or admission. Live publication remains
+best-effort: use an actual long-lived gateway adapter and a real subscriber to
+observe publication and owner-stop retraction; an exiting CLI is not delivery
+evidence.
+
+The opt-in real gateway/demand rail uses a fresh private scratch root and a
+retained signed static Busybox cache descriptor (full trusted key and cache
+location, verified by the ordinary importer):
+
+```bash
+MANTLE_DEMAND_RUNTIME_ROOT="$RUN/demand" \
+MANTLE_RESOURCE_INPUT_PATHS="$SIGNED_INPUT_PATHS_JSON" \
+  cargo test -p mantle --test demand_runtime \
+  real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker \
+  -- --ignored --exact --nocapture --test-threads=1
+```
+
+It explicitly provisions ephemeral development authority through the supported
+ticket/UCAN/holder APIs, signs the converted job, and runs the real CLI gateway,
+coordination daemon and subscriber. Its catalog fits the declared 64 MiB while
+the configured worker admits only 32 MiB; concurrency 64 cannot repair that
+blocker. `result.json` binds the executable and driver/helper source hashes,
+the daemon-present/absent ordinary plan/build demands, and each real gateway
+publish/retract pair. Raw command/output/exit files, subscriber NDJSON, signed
+source/store inputs and private configuration remain under the scratch root.
+Keep the root private: retained invocation envelopes contain scoped dev
+credentials. This rail does not run blocked work or provision capacity; its two
+fail-fast request lifetimes are not repeated pending placement rounds. It is
+ignored by ordinary test runs and is not runtime evidence until executed.
+
+Gateway content-address admission distinguishes Mantle-native BLAKE3 paths from
+standard Nix SHA-256 paths; using `/nix/store` does not change the native hash
+algorithm. Correctly addressed signed Nix inputs are verified at their original
+paths, without renaming or re-signing the cache. Signature, measured NAR
+size/hash, complete CAS content and explicit input-scope checks still apply;
+a content address that derives a different path remains rejected.
+
+The real local watch rail is
+`python3 scripts/watch-goal-retraction-smoke.py --mantle /absolute/path/mantle
+--scratch /absolute/path/new-watch-run` (scratch must not exist). It retains
+per-transition logs and source snapshots plus executable/driver BLAKE3 in
+`result.json`. A pass requires actual edit/add/invalid-source/coalescing,
+delete-during-build descendant teardown, no late output, and graceful shutdown;
+adding or compiling the driver is not a runtime result.
+
 External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
 
 Use `mantle build --evaluation-stream ...` for bounded NDJSON selected-root events. Stdout contains only `mantle-evaluation-stream-v1` records. See [the evaluation stream contract](docs/evaluation-stream-contract.md) for ordering, status, cancellation, and compatibility rules.

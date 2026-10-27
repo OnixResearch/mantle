@@ -332,6 +332,46 @@ runner, not by weakening proof admission. Do not pass any `--dev-*` option to
 the promoted proof. Development resume always remains diagnostic and must be
 followed by an independent cold proof from empty authority/store state.
 
+### Development cold, cached, and adoption confirmation
+
+`--dev-resume` requires an explicit absolute `--dev-provider-cache` directory.
+The owned cache holds `.resume-bundles/`, `dev-store/`, `dev-state/`, and
+receipt-bound `providers/` entries; bundles never live beneath the absent
+`--out` destination. Use distinct absent output names for every attempt.
+The same source, plan, lineage, provider pin, resource bounds, and executable
+must be used throughout the development cycle.
+
+1. Run the cold development attempt with both `--dev-provider-cache
+   "$COLD_DEV_CACHE"` and `--dev-resume`, starting from an absent cache.
+2. For a separate cached-stage attempt, copy only `.resume-bundles/`,
+   `dev-store/`, and `dev-state/` into a fresh explicitly selected
+   `$CACHED_DEV_CACHE`; do not copy `providers/`. Run the same command with that
+   cache and a new absent output. This exercises revalidated transition restore
+   and ordinary store hits without short-circuiting into provider adoption.
+3. Run again with `$CACHED_DEV_CACHE` and another absent output, now allowing
+   its validated provider entry to select adoption. Do not use `--dev-fast-fail`:
+   reporting an older receipt is not execution of this cycle.
+
+Retain each private staging directory, `attempt-status.json`,
+`dev-run-report.json`, `dev-execution-report.json`, native build transcripts,
+provider entry and payload identities, stage bundle references, and the
+pre/post values (including absence) of both success aliases. The execution
+report records actual `restored`, `adopted`, `skipped-provider-adoption`, or
+`dispatched` stage dispositions. `dispatched` does not assert fresh action
+execution: inspect the native build transcripts for actual store hits. A
+resume authority plan describes intended restores, not observed execution;
+provider-adoption runs do not emit one. No development attempt publishes a
+promoted receipt or changes either success alias.
+
+Use disposable copies of the owned cache to check stale source/policy/producer
+and tampered or partial bundles. Retain their rejection reports and verify
+that rejected state cannot authorize a restore. Then run the separate promoted
+command above with the reviewed prepared cohort, no development flags, a fresh
+absent proof root, and empty provider/store authority. Existing development
+state is not an input to that command. Independently check the new v2 receipt
+and complete action reconciliation before claiming either V3 or a final-source
+fixed point; successful development reports alone satisfy neither.
+
 Keep every failure's private staging directory and `attempt-status.json`.
 Only inspect success aliases after independently validating the newly
 published bundle, matching stage binaries, provider/closure links, bounded

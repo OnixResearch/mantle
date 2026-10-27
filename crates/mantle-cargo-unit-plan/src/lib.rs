@@ -106,7 +106,10 @@ pub struct PlanBindings {
     pub host_triple: String,
     pub helper: String,
     pub rustc: String,
+    /// Producer/oracle identity only; never an execution input.
     pub toolchain: String,
+    /// Whole producer-only Cargo/oracle roots, excluded from execution inputs.
+    pub oracle_inputs: Vec<String>,
     pub linker: String,
     #[serde(default)]
     pub target_linker: Option<TargetLinkerBinding>,
@@ -681,6 +684,21 @@ fn lower_units(
     Ok(units)
 }
 
+/// Store roots are indivisible capabilities: an oracle root may not be mounted
+/// for compilation or script execution, even when its PATH entry is omitted.
+fn check_execution_root(plan: &PlanBindings, root: &str) -> Result<(), Vec<Blocker>> {
+    if plan
+        .oracle_inputs
+        .iter()
+        .any(|oracle| validated_store_root(oracle, &plan.store_prefix) == Some(root))
+    {
+        return Err(blocked("unit-plan-oracle-execution-overlap", "execution_inputs", root));
+    }
+    debug_assert!(root.starts_with(&plan.store_prefix));
+    debug_assert!(!plan.oracle_inputs.iter().any(|oracle| oracle == root));
+    Ok(())
+}
+
 #[allow(tigerstyle::unbounded_collection_growth)] // BTree sets cannot reserve; slice and unit counts were checked.
 fn lowering_context<'a>(
     effects: &'a [ExistingUnitEffect],
@@ -688,11 +706,25 @@ fn lowering_context<'a>(
 ) -> Result<LoweringContext<'a>, Vec<Blocker>> {
     debug_assert!(!effects.is_empty());
     debug_assert!(plan.sources.len() <= 256);
+    if plan.oracle_inputs.is_empty() || plan.oracle_inputs.len() > 64 {
+        return Err(blocked("unit-plan-limit", "oracle_inputs", "declare 1 to 64 producer-only store roots"));
+    }
+    for root in &plan.oracle_inputs {
+        if validated_store_root(root, &plan.store_prefix) != Some(root.as_str()) {
+            return Err(blocked("unit-plan-host-path", "oracle_inputs", root));
+        }
+    }
+    let oracle_toolchain = validated_store_root(&plan.toolchain, &plan.store_prefix)
+        .ok_or_else(|| blocked("unit-plan-host-path", "toolchain", &plan.toolchain))?;
+    if !plan.oracle_inputs.iter().any(|root| root == oracle_toolchain) {
+        return Err(blocked("unit-plan-host-path", "oracle_inputs", "oracle toolchain root is not declared"));
+    }
     let mut tool_roots = BTreeSet::new();
-    for path in [&plan.helper, &plan.rustc, &plan.toolchain, &plan.linker] {
+    for path in [&plan.helper, &plan.rustc, &plan.linker] {
         let root = validated_store_root(path, &plan.store_prefix)
             .ok_or_else(|| blocked("unit-plan-host-path", "toolchain", path))?;
         tool_roots.insert(root);
+        check_execution_root(plan, root)?;
     }
     if plan.runtime_inputs.len() > 64 {
         return Err(blocked("unit-plan-limit", "runtime_inputs", "runtime tool roots exceed 64"));
@@ -704,6 +736,7 @@ fn lowering_context<'a>(
         if root != path || !declared_runtime.insert(root) {
             return Err(blocked("unit-plan-host-path", "runtime_inputs", "runtime input must be a unique store root"));
         }
+        check_execution_root(plan, root)?;
         tool_roots.insert(root);
     }
     validate_target_linker(plan)?;
@@ -735,10 +768,12 @@ fn validate_target_linker(plan: &PlanBindings) -> Result<(), Vec<Blocker>> {
     }
     let executable_root = validated_store_root(&linker.executable, &plan.store_prefix)
         .ok_or_else(|| blocked("unit-plan-host-path", "target_linker", &linker.executable))?;
+    check_execution_root(plan, executable_root)?;
     for input in &linker.inputs {
         if validated_store_root(input, &plan.store_prefix) != Some(input.as_str()) {
             return Err(blocked("unit-plan-host-path", "target_linker", input));
         }
+        check_execution_root(plan, input)?;
     }
     for argument in &linker.arguments {
         let is_empty_argument = argument.is_empty();

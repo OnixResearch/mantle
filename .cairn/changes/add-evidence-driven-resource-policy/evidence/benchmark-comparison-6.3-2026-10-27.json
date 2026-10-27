@@ -1,0 +1,494 @@
+{
+  "schema": "mantle-resource-benchmark-comparison-observation-v1",
+  "date": "2026-10-27",
+  "task": "6.3",
+  "authored_criterion": "Compare observe-only policy decisions with the declared static baseline.",
+  "requirement_refs": [
+    "remote_builds.resource_benchmark_evidence",
+    "remote_builds.resource_policy_rollout"
+  ],
+  "criterion_sources": [
+    "tasks.md:43-49",
+    "design.md:75-79,303-321",
+    "specs/remote-builds/spec.md:112-142"
+  ],
+  "classification": "supported-authored-comparison-at-declared-local-scope",
+  "claim": "The completed signed local fixed-input benchmark retains an actual production-selector observe-only versus declared-static comparison. All three workloads retain static active decisions while all nine local timer samples are rejected as HistoryUntrusted. This satisfies the comparison operation, not authenticated historical placement or broader requirement/lifecycle acceptance.",
+  "run_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk",
+  "evidence_class": "real signed local builds; process-resource metrics; offline observe-only fail-closed replay",
+  "retained_links": [
+    {
+      "path": "actual-benchmark-v1-results/result.json",
+      "blake3": "09929274cc64e6754fcecbaaebff1c6155b9cafa87c1e593b21c4ec5c1b4c4ac"
+    },
+    {
+      "path": "actual-benchmark-v1-request.json",
+      "blake3": "38934ba5abe3c1aec1c50558c25aee9b457f409b9ae143ee6c9ada19a81ade05"
+    },
+    {
+      "path": "benchmark-v1/evidence.json",
+      "blake3": "7bfabdcbb8dc8b845bad1f6b0849f2e33d3ab20c0d469e4fe7cc8a09525bd54a"
+    },
+    {
+      "path": "benchmark-v1/commands.json",
+      "blake3": "231da42b0e08b491789f4ef3e3318270632c65a6ff5cf3b733398af6d9439adc"
+    },
+    {
+      "path": "immutable-integrated-cli-v1/identities.json",
+      "blake3": "070f449ee05680c9890d6c01edca699d8a45c7e1354c4511c24f92fecfe99aa4"
+    },
+    {
+      "path": "integration-build-v1-results/result.json",
+      "blake3": "3cdce09ef2808f2bd524daf91ba42d93b974ad54a71a1c10f300a0386f021eb2"
+    }
+  ],
+  "command": {
+    "label": "signed-static-versus-observe-only-benchmark",
+    "argv": [
+      "python3",
+      "scripts/benchmark-resource-policy.py",
+      "--mantle",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/immutable-integrated-cli-v1/mantle",
+      "--replay",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/immutable-integrated-cli-v1/resource_policy_replay",
+      "--nickel",
+      "/nix/store/ck3a4k9az87z5rjwgy8nmpcs34xp9cc5-nickel-lang-rev-fixup-1.17.0/bin/nickel",
+      "--b3sum",
+      "/nix/store/rg6xkvmlsn9gk1h0l5b0ywkbhp6rgrvj-b3sum-1.8.7/bin/b3sum",
+      "--signing-key",
+      "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/keys/secret",
+      "--input-cache",
+      "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/input-cache",
+      "--trusted-public-key",
+      "mantle-resource-benchmark-20261023:OO21r65PUUftEE2QH0BwVDkxwr+xAJbeL9uR+bB6P4o=",
+      "--busybox-root",
+      "/nix/store/n54ynyi8r1zqag4zgrbd62baqlfpk2k7-mantle-resource-static-busybox",
+      "--output",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/benchmark-v1"
+    ],
+    "started_at": "2026-10-27T01:53:15.118958-04:00",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-benchmark-v1-results/signed-static-versus-observe-only-benchmark.stdout.log",
+    "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-benchmark-v1-results/signed-static-versus-observe-only-benchmark.stderr.log",
+    "exit_code": 0,
+    "finished_at": "2026-10-27T01:55:21.878336-04:00",
+    "streams_blake3": {
+      "stdout": "4628742fe84d508ecaceef232a8ce58545ffcf72ed5b997318e6bb4621d73ea9",
+      "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    "observation_checks": {
+      "expected_exit_code_observed": true,
+      "stdout_required_0": true
+    },
+    "expected_failure_observation": false,
+    "observation_accepted": true,
+    "outer_driver_exit_code": 0,
+    "request_argv_matches_observed": true,
+    "stdout_stderr_digests_recomputed": true,
+    "benchmark_internal_commands": 73,
+    "internal_exit_histogram": {
+      "0": 73
+    },
+    "evidence_commands_equal_commands_json": true
+  },
+  "identity_binding": {
+    "digest_algorithm": "BLAKE3",
+    "executables": [
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/immutable-integrated-cli-v1/mantle",
+        "blake3": "10742c55031b70dce4eafc00009aa28df7df91f5579b352906c4b331fc755f1f",
+        "compiled_source_manifest": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/integration-build-v1-results/result.json",
+        "build_step": "integrated-cli-examples"
+      },
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/immutable-integrated-cli-v1/resource_policy_replay",
+        "blake3": "70d22393d4dd7d8d529623e5f43acadc486209de7e296d513e8216e2635ce8b1",
+        "compiled_source_manifest": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/integration-build-v1-results/result.json",
+        "build_step": "integrated-cli-examples"
+      }
+    ],
+    "benchmark_start_end_and_current_identities": {
+      "corpus": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b",
+      "driver": "d878dc82bc6e7ec4b2feb880c1f19054aba43cb2ed459964a37a926b184e9751",
+      "mantle": "10742c55031b70dce4eafc00009aa28df7df91f5579b352906c4b331fc755f1f",
+      "replay": "70d22393d4dd7d8d529623e5f43acadc486209de7e296d513e8216e2635ce8b1"
+    },
+    "selected_source_before_after_and_current": {
+      "scripts/benchmark-resource-policy.py": "d878dc82bc6e7ec4b2feb880c1f19054aba43cb2ed459964a37a926b184e9751",
+      "config/resource-policy/benchmark.ncl": "50d72548992cbe46d68b7465bd64f8215c976244122707a77d8db4014e46ca5b",
+      "examples/resource_policy_replay.rs": "f91d11c5da446eeaedf528872765119e03240512095197e8f08132c0a2a51ecb",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36"
+    },
+    "selected_source_also_matches_build_receipt_before_after": true,
+    "binding_scope": "Only the four named selected source files, two named executable byte subjects and driver/corpus start/end checks were compared. No whole-current-source equality or reproducible compilation claim. The build receipt records integrated-cli-examples exit 0 but later actual-gateway-runtime-discovery exit 101; that separate failure remains a failure.",
+    "source_references": [
+      "scripts/benchmark-resource-policy.py:75-90,93-201",
+      "examples/resource_policy_replay.rs:32-79",
+      "config/resource-policy/benchmark.ncl:1-35"
+    ]
+  },
+  "declared_comparison": {
+    "platform": "x86_64-linux",
+    "rounds": 3,
+    "source": {
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/nixbuild/nixbench/blob/b256cd275d8c79ba485be8d317005f973879825a/LICENSE",
+      "reference": "https://github.com/nixbuild/nixbench/tree/b256cd275d8c79ba485be8d317005f973879825a",
+      "reuse": "Independent derivation seed versus file seed, fixed byte geometry, compression and explicit CPU requirements; not a port of fio or the hosted service."
+    },
+    "implementation_license": "AGPL-3.0-or-later",
+    "selection_policy": {
+      "margin_basis_points": 2500,
+      "max_age_s": 3600,
+      "max_duration_ms": 120000,
+      "max_io_bytes": 1073741824,
+      "max_measurement": {
+        "cpu_units": 1,
+        "memory_bytes": 67108864,
+        "scratch_bytes": 67108864
+      },
+      "min_samples": 3,
+      "version": 1
+    },
+    "declared": {
+      "cpu_units": 1,
+      "memory_bytes": 1048576,
+      "scratch_bytes": 1048576
+    },
+    "classes": [
+      {
+        "id": "small",
+        "order": 0,
+        "quantities": {
+          "cpu_units": 1,
+          "memory_bytes": 2097152,
+          "scratch_bytes": 2097152
+        },
+        "reservation_units": 1
+      },
+      {
+        "id": "medium",
+        "order": 1,
+        "quantities": {
+          "cpu_units": 1,
+          "memory_bytes": 16777216,
+          "scratch_bytes": 33554432
+        },
+        "reservation_units": 4
+      },
+      {
+        "id": "large",
+        "order": 2,
+        "quantities": {
+          "cpu_units": 1,
+          "memory_bytes": 67108864,
+          "scratch_bytes": 67108864
+        },
+        "reservation_units": 16
+      }
+    ],
+    "quota_facts": {
+      "project_remaining_units": 1000,
+      "account_remaining_units": 1000
+    },
+    "replay_controls": {
+      "mode": "ObserveOnly",
+      "project_opted_in": false,
+      "selection_enabled": false,
+      "oom_retry_enabled": false,
+      "quota_enforcement_enabled": false,
+      "sharing_enabled": false
+    },
+    "common_decision": {
+      "active": {
+        "Ok": {
+          "class_index": 0,
+          "exclusions": [],
+          "policy_version": 1,
+          "reason": "HistoryMissing",
+          "requested": {
+            "cpu_units": 1,
+            "memory_bytes": 1048576,
+            "scratch_bytes": 1048576
+          },
+          "samples": 0
+        }
+      },
+      "historical_decision": {
+        "Ok": {
+          "class_index": 0,
+          "exclusions": [
+            [
+              0,
+              "HistoryUntrusted"
+            ],
+            [
+              1,
+              "HistoryUntrusted"
+            ],
+            [
+              2,
+              "HistoryUntrusted"
+            ]
+          ],
+          "policy_version": 1,
+          "reason": "HistoryInsufficient",
+          "requested": {
+            "cpu_units": 1,
+            "memory_bytes": 1048576,
+            "scratch_bytes": 1048576
+          },
+          "samples": 0
+        }
+      },
+      "static_decision": {
+        "Ok": {
+          "class_index": 0,
+          "exclusions": [],
+          "policy_version": 1,
+          "reason": "HistoryMissing",
+          "requested": {
+            "cpu_units": 1,
+            "memory_bytes": 1048576,
+            "scratch_bytes": 1048576
+          },
+          "samples": 0
+        }
+      }
+    },
+    "static_and_historical_reservation_units": {
+      "static": 1,
+      "historical": 1
+    },
+    "cost_scope": "reviewed class reservation units only; no billing or measured remote charge",
+    "actual_measurement_context": {
+      "machine_class": "large",
+      "selected": {
+        "cpu_units": 1,
+        "memory_bytes": 67108864,
+        "scratch_bytes": 67108864
+      },
+      "address_space_bytes_max": 67108864,
+      "output_file_bytes_max": 16777216,
+      "command_timeout_seconds": 120,
+      "explanation": "Build recipes use large-class measurement context with RLIMIT_AS and per-file RLIMIT_FSIZE. The small class_index=0 decision is an offline selector result, not an observed sandbox run constrained to the small class. No static-versus-historical dispatch performance A/B experiment occurred."
+    }
+  },
+  "workloads": [
+    {
+      "workload": {
+        "bytes": 1048576,
+        "expected": "success-exact-zero-bytes",
+        "id": "zero-file-1m",
+        "kind": "write-zero",
+        "source_date_epoch": 1
+      },
+      "attempt_ids": [
+        "zero-file-1m-0",
+        "zero-file-1m-1",
+        "zero-file-1m-2"
+      ],
+      "execution_ms": [
+        10,
+        0,
+        10
+      ],
+      "cpu_ms": [
+        0,
+        0,
+        0
+      ],
+      "process_peak_rss_bytes": [
+        266240,
+        266240,
+        266240
+      ],
+      "io_bytes": [
+        1048576,
+        1048576,
+        1048576
+      ],
+      "outcome": "Success",
+      "collector_version": "busybox-time-local-v2",
+      "trusted_collector": false,
+      "oom": "Unknown",
+      "artifact_blake3_identical_across_three_rounds": {
+        "data": "488de202f73bd976de4e7048f4e1f39a776d86d582b7348ff53bf432b987fca8"
+      },
+      "cold_builds_observed": 3,
+      "warm_hits_observed": 3,
+      "selected_output_trusted_signature_checks_observed": "3 checks, each 1/1",
+      "identical_replay_stdout_bytes": true,
+      "decision_matches_common_decision": true,
+      "raw_artifacts": {
+        "replay_input": "benchmark-v1/zero-file-1m-replay.json",
+        "decision": "benchmark-v1/zero-file-1m-decision.stdout",
+        "repeated_decision": "benchmark-v1/zero-file-1m-repeated-decision.stdout",
+        "per_round_reports": "benchmark-v1/zero-file-1m-{0,1,2}-{build,warm,verify}.stdout",
+        "builder_logs": [
+          "benchmark-v1/zero-file-1m-0-state/logs/sh0j6bp0fv4swnrgpa8kv4y37gd79mb8-resource-zero-file-1m.drv.log",
+          "benchmark-v1/zero-file-1m-1-state/logs/sh0j6bp0fv4swnrgpa8kv4y37gd79mb8-resource-zero-file-1m.drv.log",
+          "benchmark-v1/zero-file-1m-2-state/logs/sh0j6bp0fv4swnrgpa8kv4y37gd79mb8-resource-zero-file-1m.drv.log"
+        ]
+      }
+    },
+    {
+      "workload": {
+        "bytes": 16777216,
+        "expected": "success-exact-zero-bytes",
+        "id": "zero-file-16m",
+        "kind": "write-zero",
+        "source_date_epoch": 1
+      },
+      "attempt_ids": [
+        "zero-file-16m-0",
+        "zero-file-16m-1",
+        "zero-file-16m-2"
+      ],
+      "execution_ms": [
+        50,
+        40,
+        40
+      ],
+      "cpu_ms": [
+        40,
+        40,
+        40
+      ],
+      "process_peak_rss_bytes": [
+        266240,
+        266240,
+        266240
+      ],
+      "io_bytes": [
+        16777216,
+        16777216,
+        16777216
+      ],
+      "outcome": "Success",
+      "collector_version": "busybox-time-local-v2",
+      "trusted_collector": false,
+      "oom": "Unknown",
+      "artifact_blake3_identical_across_three_rounds": {
+        "data": "b4834959bc889fed1abf3c45d5da0e384134386a4b2786cc5dbb9fe8fa853bbb"
+      },
+      "cold_builds_observed": 3,
+      "warm_hits_observed": 3,
+      "selected_output_trusted_signature_checks_observed": "3 checks, each 1/1",
+      "identical_replay_stdout_bytes": true,
+      "decision_matches_common_decision": true,
+      "raw_artifacts": {
+        "replay_input": "benchmark-v1/zero-file-16m-replay.json",
+        "decision": "benchmark-v1/zero-file-16m-decision.stdout",
+        "repeated_decision": "benchmark-v1/zero-file-16m-repeated-decision.stdout",
+        "per_round_reports": "benchmark-v1/zero-file-16m-{0,1,2}-{build,warm,verify}.stdout",
+        "builder_logs": [
+          "benchmark-v1/zero-file-16m-0-state/logs/2xw3gxdwj3v6r57ghgh9vdxgkqlq9klk-resource-zero-file-16m.drv.log",
+          "benchmark-v1/zero-file-16m-1-state/logs/2xw3gxdwj3v6r57ghgh9vdxgkqlq9klk-resource-zero-file-16m.drv.log",
+          "benchmark-v1/zero-file-16m-2-state/logs/2xw3gxdwj3v6r57ghgh9vdxgkqlq9klk-resource-zero-file-16m.drv.log"
+        ]
+      }
+    },
+    {
+      "workload": {
+        "bytes": 16777216,
+        "expected": "success-exact-zero-bytes-and-gzip-roundtrip",
+        "id": "package-zero-16m",
+        "kind": "gzip-zero",
+        "source_date_epoch": 1
+      },
+      "attempt_ids": [
+        "package-zero-16m-0",
+        "package-zero-16m-1",
+        "package-zero-16m-2"
+      ],
+      "execution_ms": [
+        110,
+        120,
+        100
+      ],
+      "cpu_ms": [
+        110,
+        120,
+        100
+      ],
+      "process_peak_rss_bytes": [
+        524288,
+        524288,
+        524288
+      ],
+      "io_bytes": [
+        16793088,
+        16793088,
+        16793088
+      ],
+      "outcome": "Success",
+      "collector_version": "busybox-time-local-v2",
+      "trusted_collector": false,
+      "oom": "Unknown",
+      "artifact_blake3_identical_across_three_rounds": {
+        "data": "b4834959bc889fed1abf3c45d5da0e384134386a4b2786cc5dbb9fe8fa853bbb",
+        "data.gz": "e90b66c31070ee66f7ef2a3eef1d5cc6b18f6f51a9bc563efc46c3ff0a865dbd"
+      },
+      "cold_builds_observed": 3,
+      "warm_hits_observed": 3,
+      "selected_output_trusted_signature_checks_observed": "3 checks, each 1/1",
+      "identical_replay_stdout_bytes": true,
+      "decision_matches_common_decision": true,
+      "raw_artifacts": {
+        "replay_input": "benchmark-v1/package-zero-16m-replay.json",
+        "decision": "benchmark-v1/package-zero-16m-decision.stdout",
+        "repeated_decision": "benchmark-v1/package-zero-16m-repeated-decision.stdout",
+        "per_round_reports": "benchmark-v1/package-zero-16m-{0,1,2}-{build,warm,verify}.stdout",
+        "builder_logs": [
+          "benchmark-v1/package-zero-16m-0-state/logs/l7n7xzdi07k15qc6zz83alyrz9w4s1q4-resource-package-zero-16m.drv.log",
+          "benchmark-v1/package-zero-16m-1-state/logs/l7n7xzdi07k15qc6zz83alyrz9w4s1q4-resource-package-zero-16m.drv.log",
+          "benchmark-v1/package-zero-16m-2-state/logs/l7n7xzdi07k15qc6zz83alyrz9w4s1q4-resource-package-zero-16m.drv.log"
+        ]
+      }
+    }
+  ],
+  "inspection": {
+    "execution": "Read-only retained JSON/streams/source/log inspection and BLAKE3 hashing only; no benchmark, build, test, formatter, linter or gate rerun.",
+    "checks": [
+      "Observed outer command exit 0 and driver exit 0; exact requested argv agrees with retained observed argv.",
+      "All 73 retained internal command entries exit 0; embedded evidence command array agrees with commands.json.",
+      "Nine cold reports have cached=false, succeeded_total=1, built_total=1 and failed_total=0; nine warm reports have cached=true, cached_total=1 and identical output objects; nine selected-path verify streams report trusted_signatures=1/1.",
+      "All nine persisted builder timer lines reproduce execution_ms, cpu_ms, process_peak_rss_bytes and io_bytes in observation records.",
+      "All three retained replay inputs carry the same history as their evidence record; decision stdout matches its record; repeated stdout is byte-identical.",
+      "Four named selected source BLAKE3 values match before/after execution, current bytes and build-manifest entries; four start/end benchmark identity stdout pairs match evidence; current immutable mantle/replay hashes match identities.json.",
+      "Driver success publishes only after exact zero-byte geometry, gzip roundtrip, independent-round artifact equality, signed warm-reuse/output verification and drift checks. These checks were read in source and the successful execution/retained reports inspected; the worker did not rerun them."
+    ],
+    "limits": "No new negative drift/trust-key experiment was run. Recorded output hashes/geometry checks are bounded workload observations, not compiler or arbitrary-output correctness."
+  },
+  "measurement_limits": [
+    "queue, transfer, executor-output bytes and scratch peaks are unknown, not zero",
+    "process RSS is not an execution-tree or dedicated-cgroup memory peak",
+    "large measurement class uses RLIMIT_AS and per-file RLIMIT_FSIZE, not a delegated worker cgroup",
+    "local timer observations are not authenticated worker reports and are excluded from history",
+    "this corpus does not measure historical placement benefits or remote accounting",
+    "measured.cpu_units, measured.memory_bytes, measured.scratch_bytes, scratch_sampled_peak_bytes, queue_ms, transfer_bytes and executor_output_bytes are null in every retained observation; null is unknown, not zero.",
+    "cpu_ms and execution_ms are quantized BusyBox timer observations; recorded zero is not proof of no CPU work or instantaneous completion.",
+    "io_bytes is (input_blocks + output_blocks) * 512 from the local timer, not remote transfer or billed usage.",
+    "Class compatibility/availability/quota inputs are supplied local replay facts. Neither these flags nor output-signing trust authenticate resource-worker measurement authority."
+  ],
+  "remaining_scope": [
+    "6.1 review-before-first-adaptation chronology remains separate and is not repaired or backdated by this benchmark.",
+    "This run has no trusted historical samples and no differing selected class. It does not exercise the rollout spec scenario requiring a historical decision that differs from static; it proves fail-closed observe-only comparison for this untrusted local history.",
+    "6.4 fault campaign, 6.5 actual Valence export/Cairn gating, external consumer/Onix acceptance, feature adoption and rollout/rollback remain independently scoped evidence.",
+    "Earlier missing-run statements and historical failures remain retained; this receipt supplies the new 6.3 local benchmark comparison only."
+  ],
+  "non_claims": [
+    "no future resource sufficiency",
+    "no whole-build correctness",
+    "no host isolation proof",
+    "no fair billing claim",
+    "no production performance claim",
+    "no simulated service acceptance",
+    "synthetic file/compression corpus, not representative Onix system-build performance",
+    "observe-only replay does not change actual scheduling or grant machine authority",
+    "no authenticated worker observation, historical placement gain, dedicated-cgroup memory/scratch bound, positive platform OOM, remote usage settlement or charge measurement",
+    "no task checkbox modification, requirement acceptance, accepted-spec sync, archive, merge, commit, publication or lifecycle/release authorization"
+  ],
+  "task_checkboxes_changed": false
+}

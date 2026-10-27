@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-dev-resume-cold-input-supply-review-v1",
+  "date": "2026-10-27",
+  "criteria": ["add-dev-cache-cross-run-resume V2", "add-dev-cache-cross-run-resume V3"],
+  "disposition": "blocked before final-source proof execution; verified input supply is not proof admission",
+  "supply_receipt": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cold-input-supply-v1/receipt.json",
+  "supply_receipt_blake3": "287282296947be9b26ac9b5bb3955e350d75e50c6242a4779fd56034f8c156a4",
+  "completion_receipt": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cold-input-supply-v1/completion.json",
+  "verified_supply": {
+    "all_supply_integrity_checks_passed": true,
+    "cargo_lock_blake3": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "vendor_archive_blake3": "23388b2543fd39282ad2eca64dc93d5aadfb60f31c1486fa0d4373bd46ccc801",
+    "vendor_inventory_blake3": "31e0a7cc585a6813cdf0f59696588555cfee8be9d8eb43e8fc81f65c94c229a0",
+    "vendor_inventory_entries": 56272,
+    "rust_archives": "all six byte hashes compared against checked-in pins",
+    "historical_runner_scope": "supported source-bundle integrity verification only; not compiled from current source"
+  },
+  "required_before_execution": [
+    "Freeze the actual final integrated Mantle source and matching lock/vendor cohort.",
+    "Export and verify the complete native, Rust host-tool and StageX source closure union from that source.",
+    "Retain a complete seven-role source-built profile, audited seed and exact lineage; no built-provider substitution.",
+    "Independently review and freeze validated profile identity, exact lineage bytes and native-provider pin.",
+    "Run source-program preparation on Leviathan with a current source-bound runner, then separately review its output profile identity.",
+    "Use that same admitted cohort for the complete development cold/cached/adopt sequence, and a separate fresh empty-authority/store proof without any dev state for V3."
+  ],
+  "authority_source": "docs/operator-proof-guide.md:263-378",
+  "owner": "Mantle source-profile/proof maintainers and integration source owner",
+  "non_claims": [
+    "No final-source freeze, profile fabrication, independent pin approval, source preparation or provider execution was performed by this review.",
+    "A historical admission, transferred vendor tree, prepared input or successful development alias cannot satisfy a fresh v2 receipt with complete root action-trust reconciliation.",
+    "V2 and V3 remain unchecked; no accepted-spec sync, archive, release or publication is claimed."
+  ]
+}

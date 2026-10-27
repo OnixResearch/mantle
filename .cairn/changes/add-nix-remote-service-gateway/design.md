@@ -146,6 +146,17 @@ SecretSpec manifest/profile/provider. All classes must target that configured
 endpoint; the existing runner inventory and leases still determine admission.
 The API adapter does not supply a sandbox or invent platform feature facts.
 
+`required_resources` is an explicit map from each exact reviewed system to its
+canonical `RemoteResourceRequirements` (quantities plus semantic accelerator
+classes). Its key set must equal `features`, be nonempty and remain within the
+existing class bound. Missing systems, zero/oversized quantities, mismatched
+semantic accelerators and noncanonical vectors are rejected; no catalog capacity
+or inferred default supplies a request declaration. The gateway attaches those
+operator-declared minima before selection and ordinary lease admission. Retries
+may increase selected quantities but cannot lower this declaration. The public
+submit target remains the raw `.drv` identity; the host internally projects its
+all-output `.drv!*` native target after ordinary signed-derivation verification.
+
 The envelope contains API version, the operation-specific authority request,
 compact UCAN, holder nonce/signature, and a typed request. `binding` prints only
 the public operation/target/request-digest tuple for the holder to sign. A new

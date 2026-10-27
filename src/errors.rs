@@ -29,6 +29,11 @@ pub enum RunError {
     Build(String),
     /// Internal error (IO, configuration, missing tools).
     Internal(String),
+    /// Original fail-fast placement error with its derived diagnostic demand.
+    UnmetWorkerDemand {
+        message: String,
+        demand: Box<crunch_remote_core::demand::WorkerDemand>,
+    },
     /// The command already emitted its own structured output.
     Reported(u8),
 }
@@ -43,7 +48,7 @@ impl RunError {
         match self {
             RunError::Eval(_) => ExitCode::from(2),
             RunError::Build(_) => ExitCode::from(1),
-            RunError::Internal(_) => ExitCode::from(3),
+            RunError::Internal(_) | RunError::UnmetWorkerDemand { .. } => ExitCode::from(3),
             RunError::Reported(code) => ExitCode::from(*code),
         }
     }
@@ -53,7 +58,7 @@ impl RunError {
         match self {
             RunError::Eval(_) => "eval",
             RunError::Build(_) => "build",
-            RunError::Internal(_) => "internal",
+            RunError::Internal(_) | RunError::UnmetWorkerDemand { .. } => "internal",
             RunError::Reported(_) => REPORTED_EXIT_CODE_KIND,
         }
     }
@@ -62,6 +67,7 @@ impl RunError {
     pub fn message(&self) -> &str {
         match self {
             RunError::Eval(msg) | RunError::Build(msg) | RunError::Internal(msg) => msg,
+            RunError::UnmetWorkerDemand { message, .. } => message,
             RunError::Reported(_) => "",
         }
     }
@@ -72,6 +78,9 @@ impl RunError {
             RunError::Eval(msg) => format!("error: evaluation failed\n{msg}"),
             RunError::Build(msg) => format!("error: build failed\n{}", extract_build_body(msg)),
             RunError::Internal(msg) => format!("error: {msg}"),
+            RunError::UnmetWorkerDemand { message, demand } => {
+                format!("error: {message}\nremote worker demand: {}", serde_json::json!(demand))
+            }
             RunError::Reported(_) => return String::new(),
         };
         match self.remediation() {
@@ -86,10 +95,19 @@ impl RunError {
             return String::new();
         }
 
+        if let RunError::UnmetWorkerDemand { message, demand } = self {
+            return serde_json::json!({
+                "error": message,
+                "code": 3,
+                "kind": self.kind(),
+                "worker_demand": demand,
+            })
+            .to_string();
+        }
         let code: u8 = match self {
             RunError::Eval(_) => 2,
             RunError::Build(_) => 1,
-            RunError::Internal(_) => 3,
+            RunError::Internal(_) | RunError::UnmetWorkerDemand { .. } => 3,
             RunError::Reported(_) => 4,
         };
         let Some(record) = self.remediation() else {
@@ -220,6 +238,36 @@ mod tests {
         let e = RunError::Internal("no store".into());
         let j = e.format_json();
         assert_eq!(j, r#"{"error":"no store","code":3,"kind":"internal"}"#);
+    }
+
+    #[test]
+    fn quantified_blocker_keeps_error_contract_and_complete_demand() {
+        let demand = crunch_remote_core::demand::WorkerDemand::new(
+            "request-1",
+            "policy-1",
+            crunch_remote_core::demand::Requirement {
+                cpu_units: 2,
+                memory_bytes: 4096,
+                scratch_bytes: 8192,
+                accelerators: Vec::new(),
+                named_tokens: Vec::new(),
+                semantic_accelerator_classes: Vec::new(),
+                placement_key_blake3: "a".repeat(64),
+            },
+            "remote-worker-resource-inventory-missing",
+        )
+        .unwrap();
+        let original = RunError::Internal(format!("remote coordinator dispatch failed: {}", demand.blocker_reason));
+        let reported = RunError::UnmetWorkerDemand {
+            message: original.message().to_owned(),
+            demand: Box::new(demand.clone()),
+        };
+        let value: serde_json::Value = serde_json::from_str(&reported.format_json()).unwrap();
+        assert_eq!(reported.exit_code(), original.exit_code());
+        assert_eq!(reported.kind(), original.kind());
+        assert_eq!(value["error"], original.message());
+        assert_eq!(value["code"], 3);
+        assert_eq!(value["worker_demand"], serde_json::to_value(demand).unwrap());
     }
 
     #[test]

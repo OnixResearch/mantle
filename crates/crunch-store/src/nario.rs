@@ -734,7 +734,8 @@ fn require_standard_nix_ca_identity(path_info: &PathInfo) -> Result<(), Error> {
     require_metadata_ca_identity(&metadata)
 }
 
-fn standard_nix_ca_path(name: &str, ca: &CAHash, references: &[String]) -> Result<StorePath<String>, Error> {
+/// Derive the standard SHA-256 Nix path from its content address and reference strings.
+pub fn standard_nix_ca_path(name: &str, ca: &CAHash, references: &[String]) -> Result<StorePath<String>, Error> {
     let (ty, inner_digest) = match ca {
         CAHash::Text(digest) => (reference_type("text", references), *digest),
         CAHash::Nar(NixHash::Sha256(digest)) => (reference_type("source", references), *digest),

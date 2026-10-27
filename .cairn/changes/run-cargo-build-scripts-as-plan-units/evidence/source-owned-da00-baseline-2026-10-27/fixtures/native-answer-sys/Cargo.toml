@@ -1,0 +1,10 @@
+[package]
+name = "mantle-da00-native-answer-sys"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+native-answer-sys = { path = "native-answer-sys" }

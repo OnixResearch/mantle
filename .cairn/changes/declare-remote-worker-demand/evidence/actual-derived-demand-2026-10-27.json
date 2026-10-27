@@ -1,0 +1,109 @@
+{
+  "schema": "mantle-actual-derived-demand-observations-v1",
+  "date": "2026-10-27",
+  "task_decisions": {
+    "T3_1": "complete for the recorded long-lived gateway and actual ordinary plan/build controls",
+    "T3_2": "complete for the recorded mandatory-visible placement/report controls",
+    "T4_3": "open: historical no-demand functions and current rails are separately recorded; literal before-scenario demand protocol coverage remains absent"
+  },
+  "owner": "Mantle scheduling/coordinator live-state maintainers",
+  "durable_capability": "Repeatable actual signed CLI/gateway/daemon/subscriber demand rail in tests/demand_runtime.rs",
+  "execution": {
+    "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-demand-runtime-v4-request.json",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "started_at": "2026-10-27T02:49:50.409595-04:00",
+    "finished_at": "2026-10-27T02:55:20.926039-04:00",
+    "source_before": {
+      "src/main.rs": "c46720f0d47d57b71ea690d18636a1c1492c708782a0670e4bbf9ff5e280331e",
+      "tests/demand_runtime.rs": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/remote_build/demand.rs": "25e8a6e1b2952bf5707178846fcce28f83f47898b3d9ff72425fcccbf6fe9559",
+      "src/remote_build/live_state.rs": "c2b8c1ec6b2daf97a4b87055a6236ee0429a31e169c4a16035f80eced572ccde",
+      "src/build_plan.rs": "5914b7910a2aab7a17f6743a9b9e5d03b1c5f9ed9c5580d3a92247081ebd31d5",
+      "src/errors.rs": "b6cb80b982c1e7c4c6e5958f9a65d57b046a5888b1b88be4508d8a873ee0de36",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway.rs": "9ce935b130a6afd73338752e99649ac281c14203165f1807d0985b0fb2da2033",
+      "src/nix_gateway/api_host.rs": "58cd5604516e66a201e4670e86c4327c362c3024245797a7ae014265d2095d04",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25"
+    },
+    "source_after": {
+      "src/main.rs": "c46720f0d47d57b71ea690d18636a1c1492c708782a0670e4bbf9ff5e280331e",
+      "tests/demand_runtime.rs": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/remote_build/demand.rs": "25e8a6e1b2952bf5707178846fcce28f83f47898b3d9ff72425fcccbf6fe9559",
+      "src/remote_build/live_state.rs": "c2b8c1ec6b2daf97a4b87055a6236ee0429a31e169c4a16035f80eced572ccde",
+      "src/build_plan.rs": "5914b7910a2aab7a17f6743a9b9e5d03b1c5f9ed9c5580d3a92247081ebd31d5",
+      "src/errors.rs": "b6cb80b982c1e7c4c6e5958f9a65d57b046a5888b1b88be4508d8a873ee0de36",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway.rs": "9ce935b130a6afd73338752e99649ac281c14203165f1807d0985b0fb2da2033",
+      "src/nix_gateway/api_host.rs": "58cd5604516e66a201e4670e86c4327c362c3024245797a7ae014265d2095d04",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25"
+    },
+    "source_unchanged": true,
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "mantle",
+      "--test",
+      "demand_runtime",
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "stdout_blake3": "fa5a35a3ea09566577fb763eb41f0b66288d484d32f32a3646191bc196f79da4",
+    "stderr_blake3": "82aceee66059e409ddb1550ab900bb964ac3fbc611cd4abf7ffc35747ca3a482",
+    "test_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 224.19s",
+    "binary": {
+      "blake3": "2d40f1d6b57e4a2c7c9aef4e98e7011f60e769bd69abd706c833d22aa9517f70",
+      "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle"
+    },
+    "driver_blake3": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+    "fixture_blake3": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8"
+  },
+  "observations": {
+    "demand_derived_from_signed_derivation": true,
+    "constructed_demand_fact": false,
+    "request_lifetimes": 2,
+    "events_per_request": 2,
+    "events": [
+      "publish",
+      "retract"
+    ],
+    "owner_process_alive_and_cmdline_gateway_serve": true,
+    "daemon_and_subscriber_alive_at_finish": true,
+    "quantified_blocker": "resource-memory-unavailable",
+    "required_memory_bytes": 67108864,
+    "inventory_memory_bytes": 33554432,
+    "concurrency": 64,
+    "jobs": 0,
+    "resource_leases": 0,
+    "workspace_leases": 0,
+    "live_output_claims": 0,
+    "plan_exit": 1,
+    "plan_action": "preflight-error",
+    "build_exit": 3,
+    "build_error": "remote coordinator dispatch failed: resource-memory-unavailable",
+    "absent_and_present_daemon_plan_build_demands_equal": true,
+    "readonly_plan_state_unchanged": true
+  },
+  "raw_directory": "actual-derived-demand-2026-10-27",
+  "non_claims": [
+    "no capacity inference",
+    "no supervisor provisioning",
+    "blocked work did not execute",
+    "repeat fail-fast request lifetimes are not repeated pending placement rounds",
+    "Gateway API public error remains gateway-host-unavailable; concrete blocker is retained in the derived fact and ordinary CLI plan/build reports.",
+    "Two repeated fail-fast request lifetimes are not repeated pending placement rounds, supervisor provisioning, or an exactly-once delivery guarantee.",
+    "This is the captured immutable executable/selected-source observation, not a later edited whole-tree or frozen G1/G2 gate claim.",
+    "Historical before-scenario and final lifecycle acceptance/archive remain separate. No private credential bytes are copied."
+  ]
+}

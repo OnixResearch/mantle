@@ -1,0 +1,128 @@
+{
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-bounded-ack-v17/results",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "environment": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-bounded-ack-v17/runtime"
+  },
+  "subjects": [
+    "tests/resource_gateway_runtime.rs",
+    "tests/support/gateway_runtime.rs",
+    "src/nix_gateway/resource_host.rs",
+    "src/nix_gateway/resource_host_tests.rs",
+    "src/remote_build.rs",
+    "src/remote_build/usage.rs",
+    "src/main.rs",
+    "Cargo.lock",
+    "src/nix_gateway/api_host.rs",
+    "src/nix_gateway/evidence.rs",
+    "src/remote_build/usage_child.rs",
+    "src/remote_build/gateway.rs",
+    "crates/crunch-nix-gateway/src/api.rs",
+    "crates/crunch-nix-gateway/src/store.rs",
+    "src/nix_gateway/api_host_tests.rs",
+    "crates/crunch-nix-gateway-core/src/lib.rs",
+    "crates/crunch-store/src/nario.rs",
+    "crates/crunch-store/src/lib.rs",
+    "crates/crunch-nix-gateway/tests/nix_path_info.rs"
+  ],
+  "commands": [
+    {
+      "label": "build-signer-and-no-private-diagnostics-worker",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle"
+      ]
+    },
+    {
+      "label": "bounded-cgroup-migration-acknowledgement",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "cgroup_acknowledgement_requires_positive_migration_before_original_deadline",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ]
+    },
+    {
+      "label": "resource-host-full-key-and-accounting-regressions",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "nix_gateway::resource_host::tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ]
+    },
+    {
+      "label": "gateway-evidence-boundary-regressions",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "nix_gateway::evidence::tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ]
+    },
+    {
+      "label": "real-gateway-process-only-and-authority-controls",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--test",
+        "resource_gateway_runtime",
+        "real_gateway_public_usage_process_only_and_authority_negatives",
+        "--",
+        "--ignored",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ]
+    }
+  ],
+  "continue_independent_commands": false,
+  "non_claims": [
+    "Focused fresh worker/gateway behavior after bounding the cgroup migration acknowledgement. Not G1/G2, frozen admission, positive OOM until separately observed, whole-change acceptance or publication."
+  ]
+}

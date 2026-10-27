@@ -855,6 +855,57 @@ fn admitted_nar_import_requires_exact_scope_signature_content_and_budget() {
 }
 
 #[test]
+fn signed_standard_nix_ca_import_and_read_reject_a_different_path_identity() {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    // Independent oracle: nix-store --print-fixed-path --recursive sha256
+    // cba3505e877648ecc3075f69f9f788713fd07f77eab8723ec0f79acc1af8490a gateway-client
+    let canonical = "/nix/store/1bsmf8faj0p4b089xil6mxa3yjgr6rsz-gateway-client";
+    let wrong = "/nix/store/00000000000000000000000000000000-gateway-client";
+    for (path, accepted) in [(canonical, true), (wrong, false)] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut store, _) = fixture(Case::Missing, &temp, &runtime);
+        let (mut request, bytes) = signed_import(&runtime, path);
+        if let crunch_nix_gateway::ParsedRequest::AddToStoreNar {
+            nar_hash,
+            content_address,
+            ..
+        } = &mut request
+        {
+            let hash = NixHash::from_str(nar_hash, Some(nix_compat::nixhash::HashAlgo::Sha256)).unwrap();
+            *content_address = format!("fixed:r:sha256:{}", nix_compat::nixbase32::encode(hash.digest_as_bytes()));
+        } else {
+            panic!("expected signed NAR import");
+        }
+        let imported = runtime.block_on(store.import_admitted_nar(
+            request,
+            &mut std::io::Cursor::new(bytes),
+            &[path.to_string()],
+            1_048_576,
+            || Ok(()),
+        ));
+        if !accepted {
+            assert_eq!(imported, Err(Reject::Identity));
+            assert_eq!(runtime.block_on(store.query_missing(&[path.to_string()])).unwrap(), vec![path]);
+            continue;
+        }
+        assert_eq!(imported.unwrap(), 128);
+        let mut response = Vec::new();
+        runtime
+            .block_on(
+                store.answer(crunch_nix_gateway::ParsedRequest::IsValidPath { path: path.to_string() }, &mut response),
+            )
+            .unwrap();
+        let mut wire = std::io::Cursor::new(response);
+        assert_eq!(crunch_nix_gateway::read_number(&mut wire).unwrap(), 0x616c7473);
+        assert_eq!(crunch_nix_gateway::read_number(&mut wire).unwrap(), 1);
+        assert_eq!(
+            std::fs::read_link(temp.path().join(path.rsplit('/').next().unwrap())).unwrap(),
+            std::path::Path::new("actual-content")
+        );
+    }
+}
+
+#[test]
 fn disconnected_import_discards_staging_without_publishing_metadata() {
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     let temp = tempfile::tempdir().unwrap();

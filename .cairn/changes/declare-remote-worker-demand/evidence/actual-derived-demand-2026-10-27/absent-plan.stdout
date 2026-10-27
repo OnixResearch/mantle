@@ -1,0 +1,94 @@
+{
+  "schema": "crunch-build-plan-v1",
+  "file": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/demand-runtime-v4/derivation.ncl",
+  "output_dir": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/demand-runtime-v4/store",
+  "state_dir": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/demand-runtime-v4/state",
+  "store_dir": "/nix/store",
+  "entries": [
+    {
+      "drv_key": "/nix/store/6kjwgcw1pdjc087089z1dzyr605y29qx-gateway-runtime-simple.drv",
+      "label": "gateway-runtime-simple",
+      "action": "preflight-error",
+      "route_plan": {
+        "schema": "mantle-realization-route-plan-v1",
+        "selected_route": "p2p-remote-builder",
+        "selected_reason_code": "builder-capability-and-output-trust-match",
+        "selected_detail": "endpoint=gateway-runtime-worker; capabilities=stdio-default; upload_objects=0; upload_bytes=0; output_trust_keys=1; non_claim=route-eligibility-only",
+        "policy": {
+          "network": "online",
+          "requested_claim_strength": "practical"
+        },
+        "tie_breaker": "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error",
+        "rejected_routes": [
+          {
+            "route": "cached-local",
+            "reason_code": "local-output-missing",
+            "detail": "out=build"
+          },
+          {
+            "route": "trusted-substitute",
+            "reason_code": "trusted-substitute-missing"
+          },
+          {
+            "route": "archive-import",
+            "reason_code": "not-configured"
+          },
+          {
+            "route": "source-bundle",
+            "reason_code": "source-inputs-present-or-fetchable"
+          }
+        ],
+        "upload_summary": {
+          "classes": [],
+          "object_count": 0,
+          "byte_count": 0
+        },
+        "selected_store_layers": [
+          {
+            "store_path": "n54ynyi8r1zqag4zgrbd62baqlfpk2k7-mantle-resource-static-busybox",
+            "selected_layer": "overlay"
+          }
+        ],
+        "non_claim": "route planning is advisory and does not prove transport execution or artifact correctness"
+      },
+      "detail": "remote coordinator dispatch failed: resource-memory-unavailable",
+      "action_result": {
+        "schema": "mantle-action-result-runtime-report-v1",
+        "phase": "discovery",
+        "action_ref": "mantle-action://blake3/1eee6ad48a13f8f3da399454bcc8e659f9c02d48212b9aa88b1fb2eb62f13f2f",
+        "disposition": "miss",
+        "selected_result_ref": null,
+        "selected_source_id": null,
+        "selected_source_class": null,
+        "trust_basis": [],
+        "conflict_class": null,
+        "candidate_decisions": [],
+        "publication_result_refs": [],
+        "diagnostics": [],
+        "non_claims": [
+          "ca-mapping-presence-is-not-output-trust",
+          "executor-correctness",
+          "index-presence-is-not-output-trust"
+        ]
+      },
+      "remote_placement": {
+        "blocker_reason": "resource-memory-unavailable",
+        "worker_demand": {
+          "job_id": "9667308be9a841a55e07d0754d2ae396c52f9be7e45d4265045ce61d08dadf78",
+          "policy_id": "mantle-lazy-priority-v1",
+          "requirement_id_blake3": "bf70d956b4f89b9f353c31618b3677a40c928660eab98e6a61674772867fc599",
+          "requirement": {
+            "cpu_units": 1,
+            "memory_bytes": 67108864,
+            "scratch_bytes": 268435456,
+            "accelerators": [],
+            "named_tokens": [],
+            "semantic_accelerator_classes": [],
+            "placement_key_blake3": "5aeb2076378991cb299f3c8931607cc299a49771c27d5bc89bcb51931e929b56"
+          },
+          "blocker_reason": "resource-memory-unavailable"
+        }
+      }
+    }
+  ]
+}

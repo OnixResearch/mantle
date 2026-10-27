@@ -1,0 +1,96 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-demand-runtime-v4-request.json",
+  "request_blake3": "bcb98b337cdcdf7774ccd276dbeef4c4efd0ed999bd82cb9fdaa404c5543fb85",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "started_at": "2026-10-27T02:49:50.409595-04:00",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_DEMAND_RUNTIME_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/demand-runtime-v4",
+    "MANTLE_RESOURCE_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json"
+  },
+  "source_before": {
+    "src/main.rs": "c46720f0d47d57b71ea690d18636a1c1492c708782a0670e4bbf9ff5e280331e",
+    "tests/demand_runtime.rs": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+    "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+    "src/remote_build/demand.rs": "25e8a6e1b2952bf5707178846fcce28f83f47898b3d9ff72425fcccbf6fe9559",
+    "src/remote_build/live_state.rs": "c2b8c1ec6b2daf97a4b87055a6236ee0429a31e169c4a16035f80eced572ccde",
+    "src/build_plan.rs": "5914b7910a2aab7a17f6743a9b9e5d03b1c5f9ed9c5580d3a92247081ebd31d5",
+    "src/errors.rs": "b6cb80b982c1e7c4c6e5958f9a65d57b046a5888b1b88be4508d8a873ee0de36",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "src/nix_gateway.rs": "9ce935b130a6afd73338752e99649ac281c14203165f1807d0985b0fb2da2033",
+    "src/nix_gateway/api_host.rs": "58cd5604516e66a201e4670e86c4327c362c3024245797a7ae014265d2095d04",
+    "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+    "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+    "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25"
+  },
+  "steps": [
+    {
+      "label": "real-derived-demand-and-report-controls",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--test",
+        "demand_runtime",
+        "--",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T02:49:50.451000-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-demand-runtime-v4-results/real-derived-demand-and-report-controls.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/actual-demand-runtime-v4-results/real-derived-demand-and-report-controls.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T02:55:20.896892-04:00",
+      "streams_blake3": {
+        "stdout": "fa5a35a3ea09566577fb763eb41f0b66288d484d32f32a3646191bc196f79da4",
+        "stderr": "82aceee66059e409ddb1550ab900bb964ac3fbc611cd4abf7ffc35747ca3a482"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true,
+        "stdout_required_0": true,
+        "stdout_required_1": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    }
+  ],
+  "non_claims": [
+    "Actual derived-demand and daemon-present/absent CLI observations only; no lifecycle acceptance.",
+    "Earlier failures remain retained. This run follows actual Basalt-policy digest binding and closed peer-error handling; no admission bypass or fabricated demand."
+  ],
+  "immutable_artifacts": [],
+  "source_after": {
+    "src/main.rs": "c46720f0d47d57b71ea690d18636a1c1492c708782a0670e4bbf9ff5e280331e",
+    "tests/demand_runtime.rs": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+    "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+    "src/remote_build/demand.rs": "25e8a6e1b2952bf5707178846fcce28f83f47898b3d9ff72425fcccbf6fe9559",
+    "src/remote_build/live_state.rs": "c2b8c1ec6b2daf97a4b87055a6236ee0429a31e169c4a16035f80eced572ccde",
+    "src/build_plan.rs": "5914b7910a2aab7a17f6743a9b9e5d03b1c5f9ed9c5580d3a92247081ebd31d5",
+    "src/errors.rs": "b6cb80b982c1e7c4c6e5958f9a65d57b046a5888b1b88be4508d8a873ee0de36",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "src/nix_gateway.rs": "9ce935b130a6afd73338752e99649ac281c14203165f1807d0985b0fb2da2033",
+    "src/nix_gateway/api_host.rs": "58cd5604516e66a201e4670e86c4327c362c3024245797a7ae014265d2095d04",
+    "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+    "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+    "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T02:55:20.926039-04:00",
+  "driver_exit_code": 0
+}

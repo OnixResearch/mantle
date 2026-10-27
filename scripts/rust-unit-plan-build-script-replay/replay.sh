@@ -70,9 +70,9 @@ PKG_ID='registry+https://github.com/rust-lang/crates.io-index#bzip2-sys@0.1.13+1
 config() { # tag workspace native-JSON -> immutable signed producer config
   local tag=$1 workspace=$2 native=$3 path
   jq -cn --arg workspace "$workspace" --arg vendor "$(p vendor)" --arg planner "$(p planner)" \
-    --arg toolchain "$(p toolchain)" --arg linker "$(p linker)" --arg helper "$(p helper)" \
+    --arg toolchain "$(p toolchain)" --arg compiler "$(p compiler)" --arg linker "$(p linker)" --arg helper "$(p helper)" \
     --argjson native "$(cat "$native")" '{workspace:$workspace,vendor:$vendor,planner:$planner,
-      cargo:($toolchain + "/bin/cargo"),rustc:($toolchain + "/bin/rustc"),linker:($linker + "/bin/cc"),
+      cargo:($toolchain + "/bin/cargo"),rustc:($compiler + "/bin/rustc"),linker:($linker + "/bin/cc"),runtime_inputs:[$compiler],
       toolchain:$toolchain,helper:$helper,store_prefix:"/nix/store",system:"x86_64-linux",
       host_triple:"x86_64-unknown-linux-gnu",target_triple:"x86_64-unknown-linux-gnu",
       profile:"dev",native_inputs:$native}' > "$B/stage/$tag-config.json"
@@ -90,6 +90,7 @@ cargo_unit_plan {
   goal_name = "rcbs-$tag", producer = "$(p producer)", config = "$cfg",
   workspace = "$ws", planner = "$(p planner)", toolchain = "$(p toolchain)",
   linker = "$(p linker)", helper = "$(p helper)", vendor_sources = ["$(p vendor)"],
+  runtime_inputs = ["$(p compiler)"],
   native_inputs = import "$native",
 }
 EOF

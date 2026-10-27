@@ -1,0 +1,12 @@
+
+running 7 tests
+test nix_gateway::resource_host::tests::actual_process_only_collector_neither_releases_hold_nor_promises_tree_memory ... ok
+test nix_gateway::resource_host::tests::delegated_oom_signed_successor_and_sigkill_negative ... ignored, requires python3 and MANTLE_TEST_CGROUP_ROOT: empty delegated cgroup-v2 cpu+memory subtree
+test nix_gateway::resource_host::tests::durable_known_memory_changes_only_its_project_and_observe_only_keeps_static_class ... ok
+test nix_gateway::resource_host::tests::lost_worker_keeps_quota_and_records_unknown_not_zero_measurements ... ok
+test nix_gateway::resource_host::tests::public_summary_preserves_pending_reasons_scope_window_and_idempotent_charge ... ok
+test nix_gateway::resource_host::tests::retained_producer_signature_requires_full_key_material_not_a_matching_name ... ok
+test nix_gateway::resource_host::tests::stale_fence_and_changed_scope_cannot_mutate_reserved_accounting ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 2858 filtered out; finished in 0.09s
+

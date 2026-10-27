@@ -23,6 +23,7 @@ let plan_producer = cargo_unit_plan {
   linker = "$(p linker)",
   helper = "$(p helper)",
   vendor_sources = [],
+  runtime_inputs = ["$(p compiler)"],
 } in
 {
   producer = plan_producer,

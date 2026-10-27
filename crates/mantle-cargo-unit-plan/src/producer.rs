@@ -52,6 +52,8 @@ struct Config {
     linker: String,
     #[serde(default)]
     target_linker: Option<TargetLinkerBinding>,
+    // Producer-only oracle toolchain. `rustc` must name a distinct compiler-only
+    // store root, with its complete runtime/sysroot closure independently admitted.
     toolchain: String,
     helper: String,
     #[serde(default)]
@@ -1418,6 +1420,19 @@ fn run() -> Result<(), Vec<Blocker>> {
             })
             .collect::<Vec<_>>()
     })?;
+    let mut oracle_inputs = [&config.cargo, &config.toolchain]
+        .into_iter()
+        .map(|path| {
+            let name = path
+                .strip_prefix(&config.store_prefix)
+                .and_then(|suffix| suffix.strip_prefix('/'))
+                .and_then(|suffix| suffix.split('/').next())
+                .ok_or_else(|| block("unit-plan-host-path", "oracle_inputs", path))?;
+            Ok::<_, Vec<Blocker>>(format!("{}/{name}", config.store_prefix))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    oracle_inputs.sort();
+    oracle_inputs.dedup();
     let bindings = PlanBindings {
         store_prefix: config.store_prefix,
         system: config.system,
@@ -1428,6 +1443,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         linker: config.linker,
         target_linker: config.target_linker,
         toolchain: config.toolchain,
+        oracle_inputs,
         runtime_inputs: config.runtime_inputs,
         wait_units,
         sources,

@@ -20,6 +20,7 @@ use crunch_store::BuildServiceStore;
 use crunch_store::BuildStore;
 use crunch_store::OutputLookup;
 use crunch_store::StoreHandle;
+use crunch_store::standard_nix_ca_path;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint_with_store_dir;
@@ -43,15 +44,27 @@ fn ca_identity_matches(info: &PathInfo) -> bool {
         return true;
     }
     let self_reference = info.references.iter().any(|path| path == &info.store_path);
-    let references = info
+    let references = info.references.iter().filter(|path| *path != &info.store_path).map(ToString::to_string);
+    let native: Result<StorePath<String>, _> =
+        build_ca_path_with_store_dir(info.store_path.name(), ca, references, self_reference, PREFIX);
+    if native.is_ok_and(|candidate| candidate == info.store_path) {
+        return true;
+    }
+    // The vendored native path builder uses BLAKE3 even with /nix/store.
+    // Signed Nix imports instead require the existing SHA-256 interop path.
+    let mut references = info
         .references
         .iter()
         .filter(|path| *path != &info.store_path)
-        .map(ToString::to_string)
+        .map(StorePath::to_absolute_path)
         .collect::<Vec<_>>();
-    let standard: Result<StorePath<String>, _> =
-        build_ca_path_with_store_dir(info.store_path.name(), ca, references, self_reference, PREFIX);
-    standard.is_ok_and(|candidate| candidate == info.store_path)
+    if self_reference {
+        let nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(_)) = ca else {
+            return false;
+        };
+        references.push("self".to_string());
+    }
+    standard_nix_ca_path(info.store_path.name(), ca, &references).is_ok_and(|candidate| candidate == info.store_path)
 }
 
 /// The verified, lossless IA subset that the existing remote shell can

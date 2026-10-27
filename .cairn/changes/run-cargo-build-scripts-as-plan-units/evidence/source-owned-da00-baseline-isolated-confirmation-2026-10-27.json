@@ -1,0 +1,1415 @@
+{
+  "schema": "mantle-source-owned-build-script-baseline-isolated-confirmation-v1",
+  "recorded_date": "2026-10-27",
+  "classification": "retrospective baseline recovery; literal isolated-worktree confirmation",
+  "authored_task": "T1.1",
+  "authored_criterion": "Record the baseline in an isolated worktree: unit graphs and rust-plan build-script receipts for proc-macro2, serde with derive, libc, and one -sys fixture, plus the current lane blockers.",
+  "decision": {
+    "criterion_holds": true,
+    "boundary": "T1.1 records the pre-implementation planning baseline and blockers; it does not require successful build-script execution. Four original-source rust-plan planning receipts and four Cargo graphs are now recorded from the original isolated worktree. This does not accept the tagged run_units specification, any other task, or lifecycle acceptance.",
+    "remaining_T1_1_prerequisite": null
+  },
+  "provenance": {
+    "base_record": "source-owned-da00-baseline-2026-10-27.json",
+    "historical_record": "historical-da00-baseline-2026-10-14.md",
+    "source_revision": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "source_origin": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+    "binary_build_execution_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+    "binary_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+    "binary_blake3": "436ebb09e23d04d8049c212d404843d94337f8cb2a15714ebf79873ed6f74a70",
+    "archive_blake3": "0fdaedf3f5e538a8d876b21ee0401a19b062fbf72fd3e4b4b951b013488a73aa",
+    "dependency_boundary": "Original tracked flake/flake.lock development cohort and tracked patches/casita-blake3-finalize.patch, not the prior private Casita override. Pueue47 built the archived original source successfully; Pueue48 supplied external registry fixtures without changing their current locks. Confirmation reuses that binary and explicit Cargo/rustc cohort paths.",
+    "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+    "rustc_version_verbose": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2",
+    "fixture_classification": "Constructed external scratch fixtures first documented 2026-10-14, recovered 2026-10-27; not da00-era repository fixtures, contemporaneous execution, or exact historical fixture equivalence.",
+    "serde_lock_difference": {
+      "current_sha256": "5867dd1e47f8b4b15d1ee12748b52e9c34590d558c850918d4cfaab1185be5b2",
+      "historical_pinned_2026_10_14_sha256": "ff4a919fca41f63514b19851704ea247ec1a2a9653d43d52682ac0d6a04f626d",
+      "claim": "Different locks; current serde transitive versions are inspected below. Equal graph unit counts do not establish old-lock equivalence. The contrary general digest-match sentence in unit-graph-baseline-2026-10-22.md is not adopted."
+    }
+  },
+  "confirmation_identity": {
+    "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/request.json",
+    "request_blake3": "138780d35d28b49a707236156764ded118d75f51869c96ce09f672515eb7e5ae",
+    "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+    "retained_request": "source-owned-da00-baseline-2026-10-27/isolated-worktree-confirmation-request.json",
+    "retained_result": "source-owned-da00-baseline-2026-10-27/isolated-worktree-confirmation-result.json",
+    "result_blake3": "c29591abc05ba00fbd02bb81959ac042df9e3448244e20aab6bb638a23dc4bed",
+    "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+    "started_at": "2026-10-27T03:28:11.138087-04:00",
+    "finished_at": "2026-10-27T03:28:11.742465-04:00",
+    "environment_overrides": {
+      "CARGO_HOME": "/home/brittonr/.cargo",
+      "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/target",
+      "CARGO_INCREMENTAL": "0",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
+    },
+    "driver_exit_code": 0,
+    "source_before": {
+      "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+      "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+      "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+      "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+      "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "source_after": {
+      "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+      "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+      "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+      "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+      "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "source_unchanged": true,
+    "invariance_scope": "The six selected original-source identity files are identical before/after and match the original build/supply records. No product-source edits are made by this evidence recovery. This is not a whole-tree final integration-source equivalence claim."
+  },
+  "raw_output_bindings": [
+    {
+      "label": "proc-macro2-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.145229-04:00",
+      "finished_at": "2026-10-27T03:28:11.317014-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-plan.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/proc-macro2-cargo-oracle.json",
+        "blake3": "5b72bf3f0da687d2d3e8b2d1274e8fce81b0756cde07f5bfc64de37c013074c1",
+        "byte_identical_to_retained_file": true
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-plan.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "proc-macro2-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.toml"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.319848-04:00",
+      "finished_at": "2026-10-27T03:28:11.345909-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-unit-graph.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/proc-macro2-original-cargo-unit-graph.json",
+        "blake3": "438640a8c5003cb2db1a2690df01cfd4e3c5810e842929532f06835fd59a9f9d",
+        "byte_identical_to_retained_file": true
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/proc-macro2-isolated-original-unit-graph.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "serde-derive-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.348339-04:00",
+      "finished_at": "2026-10-27T03:28:11.432359-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-plan.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/serde-derive-cargo-oracle.json",
+        "blake3": "17a2a4545c790e8c06bd920777b62acd5f62666895f74c72383c5ac2e1e66593",
+        "byte_identical_to_retained_file": true
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-plan.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "serde-derive-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.toml"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.435418-04:00",
+      "finished_at": "2026-10-27T03:28:11.467095-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-unit-graph.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/serde-derive-original-cargo-unit-graph.json",
+        "blake3": "1b7f1c8beaf54663748e811c514a6112b6ad95b98e65536f4222be0806609623",
+        "byte_identical_to_retained_file": true
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/serde-derive-isolated-original-unit-graph.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "libc-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.470110-04:00",
+      "finished_at": "2026-10-27T03:28:11.555299-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-plan.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/libc-isolated-original-plan.stdout.log",
+        "blake3": "1fad2d88550f45ea836f19cf8415f981ae9d1b823407eac4ad26ec7436a1e851",
+        "byte_identical_to_prior_baseline_file": false,
+        "prior_baseline_file": "source-owned-da00-baseline-2026-10-27/libc-cargo-oracle.json"
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-plan.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "libc-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.toml"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.559391-04:00",
+      "finished_at": "2026-10-27T03:28:11.591669-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-unit-graph.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/libc-original-cargo-unit-graph.json",
+        "blake3": "8b436c220a58586bf04800124a53e6179a9778883cb45382a6d179d3e4e82ae7",
+        "byte_identical_to_prior_baseline_file": true,
+        "prior_baseline_file": "source-owned-da00-baseline-2026-10-27/libc-original-cargo-unit-graph.json"
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/libc-isolated-original-unit-graph.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "native-answer-sys-isolated-original-plan",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.595334-04:00",
+      "finished_at": "2026-10-27T03:28:11.691351-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-plan.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-isolated-original-plan.stdout.log",
+        "blake3": "0081205d6984695052a4880be07b16ac285499e83e68e4f5c3147caf705327ca",
+        "byte_identical_to_prior_baseline_file": false,
+        "prior_baseline_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-cargo-oracle.json"
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-plan.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    },
+    {
+      "label": "native-answer-sys-isolated-original-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.toml"
+      ],
+      "cwd": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+      "exit_code": 0,
+      "started_at": "2026-10-27T03:28:11.695053-04:00",
+      "finished_at": "2026-10-27T03:28:11.731391-04:00",
+      "stdout": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-unit-graph.stdout.log",
+        "retained_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-original-cargo-unit-graph.json",
+        "blake3": "5dd251a4bb1ca43754bd85c09cc5a783467bd9b23491a71057cd380c6b0e1bd1",
+        "byte_identical_to_prior_baseline_file": true,
+        "prior_baseline_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-original-cargo-unit-graph.json"
+      },
+      "stderr": {
+        "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-isolated-worktree-confirmation-v3/results/native-answer-sys-isolated-original-unit-graph.stderr.log",
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "content": ""
+      }
+    }
+  ],
+  "fixture_inspections": [
+    {
+      "fixture": "proc-macro2",
+      "receipt_hash": "67dd7b696f0a5083b7d9d49556c02d721ea2e25faa3d529e58103833129bd7fe",
+      "unit_graph": {
+        "unit_count": 5,
+        "root_count": 1,
+        "digest_blake3": "c5be1f80a88d79bc0e3d01a6ba1fcb0f5db4cfaec55c7072e1890ee857a04dda"
+      },
+      "lockfile": {
+        "path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.lock",
+        "blake3": "e72e243cdaff466d863720ddfe2706cfe0905479a7d0787bea57c3f5e2788c7c"
+      },
+      "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+      "rustc_version_verbose": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2",
+      "packages": [
+        {
+          "name": "mantle-da00-proc-macro2",
+          "version": "0.1.0"
+        },
+        {
+          "name": "proc-macro2",
+          "version": "1.0.106"
+        },
+        {
+          "name": "unicode-ident",
+          "version": "1.0.27"
+        }
+      ],
+      "graph_unit_count": 5,
+      "roots": [
+        0
+      ],
+      "graph_units": [
+        {
+          "index": 0,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2#mantle-da00-proc-macro2@0.1.0",
+          "target": "mantle-da00-proc-macro2",
+          "kind": [
+            "bin"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": [
+            1
+          ]
+        },
+        {
+          "index": 1,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+          "target": "proc_macro2",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "proc-macro"
+          ],
+          "dependencies": [
+            3,
+            4
+          ]
+        },
+        {
+          "index": 2,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "proc-macro"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 3,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "default",
+            "proc-macro"
+          ],
+          "dependencies": [
+            2
+          ]
+        },
+        {
+          "index": 4,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27",
+          "target": "unicode_ident",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": []
+        }
+      ],
+      "planning_layers": {
+        "native_registry_source_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            }
+          ]
+        },
+        "native_package_target_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2#mantle-da00-proc-macro2@0.1.0",
+              "class": "native-missing-cargo-package",
+              "message": "Cargo oracle workspace package is absent from native planning fragment"
+            },
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2#mantle-da00-proc-macro2@0.1.0",
+              "class": "unsupported-non-path-dependency",
+              "message": "dependency `proc-macro2` is outside the bounded path, declared-registry, or captured-git dependency fragment"
+            }
+          ]
+        },
+        "native_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        },
+        "native_host_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            }
+          ]
+        },
+        "unit_derivation_graph": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            },
+            {
+              "unit_id": "native-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        }
+      },
+      "native_host_units": [],
+      "graph_boundary": "build and run-custom-build are graph mode labels, not observed executions."
+    },
+    {
+      "fixture": "serde-derive",
+      "receipt_hash": "e5cc909a824ddf90e803dbdc2a78f0f586ccaf9152a3e12d9fe5310310c3e435",
+      "unit_graph": {
+        "unit_count": 16,
+        "root_count": 1,
+        "digest_blake3": "c75f4f55dcd0ba49f474b30288af14451efecaf77f8720fa37a273d2f2f26398"
+      },
+      "lockfile": {
+        "path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.lock",
+        "blake3": "bc554578e126fc1d1983d766d10489667ce7a7c849874d30d88a57c0dfbd8270"
+      },
+      "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+      "rustc_version_verbose": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2",
+      "packages": [
+        {
+          "name": "mantle-da00-serde-derive",
+          "version": "0.1.0"
+        },
+        {
+          "name": "proc-macro2",
+          "version": "1.0.107"
+        },
+        {
+          "name": "quote",
+          "version": "1.0.47"
+        },
+        {
+          "name": "serde",
+          "version": "1.0.228"
+        },
+        {
+          "name": "serde_core",
+          "version": "1.0.228"
+        },
+        {
+          "name": "serde_derive",
+          "version": "1.0.228"
+        },
+        {
+          "name": "syn",
+          "version": "2.0.119"
+        },
+        {
+          "name": "unicode-ident",
+          "version": "1.0.27"
+        }
+      ],
+      "graph_unit_count": 16,
+      "roots": [
+        0
+      ],
+      "graph_units": [
+        {
+          "index": 0,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive#mantle-da00-serde-derive@0.1.0",
+          "target": "mantle-da00-serde-derive",
+          "kind": [
+            "bin"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": [
+            7
+          ]
+        },
+        {
+          "index": 1,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107",
+          "target": "proc_macro2",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": [
+            2,
+            15
+          ]
+        },
+        {
+          "index": 2,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": [
+            3
+          ]
+        },
+        {
+          "index": 3,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 4,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47",
+          "target": "quote",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": [
+            1,
+            5
+          ]
+        },
+        {
+          "index": 5,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": [
+            6
+          ]
+        },
+        {
+          "index": 6,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "proc-macro"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 7,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "target": "serde",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "derive",
+            "serde_derive",
+            "std"
+          ],
+          "dependencies": [
+            9,
+            10,
+            13
+          ]
+        },
+        {
+          "index": 8,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "derive",
+            "serde_derive",
+            "std"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 9,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "default",
+            "derive",
+            "serde_derive",
+            "std"
+          ],
+          "dependencies": [
+            8
+          ]
+        },
+        {
+          "index": 10,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "target": "serde_core",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "result",
+            "std"
+          ],
+          "dependencies": [
+            12
+          ]
+        },
+        {
+          "index": 11,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "result",
+            "std"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 12,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "result",
+            "std"
+          ],
+          "dependencies": [
+            11
+          ]
+        },
+        {
+          "index": 13,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+          "target": "serde_derive",
+          "kind": [
+            "proc-macro"
+          ],
+          "mode": "build",
+          "features": [
+            "default"
+          ],
+          "dependencies": [
+            1,
+            4,
+            14
+          ]
+        },
+        {
+          "index": 14,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.119",
+          "target": "syn",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "clone-impls",
+            "derive",
+            "parsing",
+            "printing",
+            "proc-macro"
+          ],
+          "dependencies": [
+            1,
+            4,
+            15
+          ]
+        },
+        {
+          "index": 15,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27",
+          "target": "unicode_ident",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": []
+        }
+      ],
+      "planning_layers": {
+        "native_registry_source_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.119",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            },
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            }
+          ]
+        },
+        "native_package_target_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive#mantle-da00-serde-derive@0.1.0",
+              "class": "native-missing-cargo-package",
+              "message": "Cargo oracle workspace package is absent from native planning fragment"
+            },
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive#mantle-da00-serde-derive@0.1.0",
+              "class": "unsupported-non-path-dependency",
+              "message": "dependency `serde` is outside the bounded path, declared-registry, or captured-git dependency fragment"
+            }
+          ]
+        },
+        "native_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        },
+        "native_host_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            }
+          ]
+        },
+        "unit_derivation_graph": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            },
+            {
+              "unit_id": "native-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        }
+      },
+      "native_host_units": [],
+      "graph_boundary": "build and run-custom-build are graph mode labels, not observed executions."
+    },
+    {
+      "fixture": "libc",
+      "receipt_hash": "316b1922b1697c44ccfa3144ebf90e76659dcaa7c6881012e52fffd5d059e0a7",
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "f1956b3cdeae25e8e6317d325fda6e29c5fad34492e9074c5f3f474710daf5f5"
+      },
+      "lockfile": {
+        "path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.lock",
+        "blake3": "d91fdbc023c6afebce94f344c0c6895e4ba5b0aa0e525feb325810d5218a2ac6"
+      },
+      "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+      "rustc_version_verbose": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2",
+      "packages": [
+        {
+          "name": "mantle-da00-libc",
+          "version": "0.1.0"
+        },
+        {
+          "name": "libc",
+          "version": "0.2.186"
+        }
+      ],
+      "graph_unit_count": 4,
+      "roots": [
+        3
+      ],
+      "graph_units": [
+        {
+          "index": 0,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "target": "libc",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "std"
+          ],
+          "dependencies": [
+            2
+          ]
+        },
+        {
+          "index": 1,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [
+            "default",
+            "std"
+          ],
+          "dependencies": []
+        },
+        {
+          "index": 2,
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [
+            "default",
+            "std"
+          ],
+          "dependencies": [
+            1
+          ]
+        },
+        {
+          "index": 3,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/libc#mantle-da00-libc@0.1.0",
+          "target": "mantle-da00-libc",
+          "kind": [
+            "bin"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": [
+            0
+          ]
+        }
+      ],
+      "planning_layers": {
+        "native_registry_source_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+              "class": "missing-declared-vendor-root",
+              "message": "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted"
+            }
+          ]
+        },
+        "native_package_target_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/libc#mantle-da00-libc@0.1.0",
+              "class": "native-missing-cargo-package",
+              "message": "Cargo oracle workspace package is absent from native planning fragment"
+            },
+            {
+              "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/libc#mantle-da00-libc@0.1.0",
+              "class": "unsupported-non-path-dependency",
+              "message": "dependency `libc` is outside the bounded path, declared-registry, or captured-git dependency fragment"
+            }
+          ]
+        },
+        "native_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        },
+        "native_host_unit_graph_planning": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": null,
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            }
+          ]
+        },
+        "unit_derivation_graph": {
+          "ready": false,
+          "blockers": [
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native host-unit graph planning requires ready native package/target facts"
+            },
+            {
+              "unit_id": "native-host-unit-graph",
+              "package_id": null,
+              "class": "native-unit-graph-planning-blocked",
+              "message": "native host-unit graph planning requires ready native target unit facts"
+            },
+            {
+              "unit_id": "native-unit-graph",
+              "package_id": null,
+              "class": "native-package-target-planning-blocked",
+              "message": "native unit graph planning requires ready native package/target facts"
+            }
+          ]
+        }
+      },
+      "native_host_units": [],
+      "graph_boundary": "build and run-custom-build are graph mode labels, not observed executions."
+    },
+    {
+      "fixture": "native-answer-sys",
+      "receipt_hash": "7e4d5cfc066ecb3e9e588746cd21eca175cca2221480cc071a79e6d28d8480f4",
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "a0a110368ea7991c9d5c8fcd1da4ea5012245e16052563daf1ca78b4d3693a03"
+      },
+      "lockfile": {
+        "path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.lock",
+        "blake3": "1dd3e0cf0660e169a2d2fdac9412577a8729553e5b6c447f8f9a85f01f0d02a4"
+      },
+      "cargo_version": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+      "rustc_version_verbose": "rustc 1.96.0-nightly (c75612477 2026-04-07)\nbinary: rustc\ncommit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4\ncommit-date: 2026-04-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0-nightly\nLLVM version: 22.1.2",
+      "packages": [
+        {
+          "name": "mantle-da00-native-answer-sys",
+          "version": "0.1.0"
+        },
+        {
+          "name": "native-answer-sys",
+          "version": "0.1.0"
+        }
+      ],
+      "graph_unit_count": 4,
+      "roots": [
+        0
+      ],
+      "graph_units": [
+        {
+          "index": 0,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys#mantle-da00-native-answer-sys@0.1.0",
+          "target": "mantle-da00-native-answer-sys",
+          "kind": [
+            "bin"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": [
+            1
+          ]
+        },
+        {
+          "index": 1,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+          "target": "native_answer_sys",
+          "kind": [
+            "lib"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": [
+            3
+          ]
+        },
+        {
+          "index": 2,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "build",
+          "features": [],
+          "dependencies": []
+        },
+        {
+          "index": 3,
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+          "target": "build-script-build",
+          "kind": [
+            "custom-build"
+          ],
+          "mode": "run-custom-build",
+          "features": [],
+          "dependencies": [
+            2
+          ]
+        }
+      ],
+      "planning_layers": {
+        "native_registry_source_planning": {
+          "ready": true,
+          "blockers": []
+        },
+        "native_package_target_planning": {
+          "ready": true,
+          "blockers": []
+        },
+        "native_unit_graph_planning": {
+          "ready": true,
+          "blockers": []
+        },
+        "native_host_unit_graph_planning": {
+          "ready": true,
+          "blockers": []
+        },
+        "unit_derivation_graph": {
+          "ready": true,
+          "blockers": []
+        }
+      },
+      "native_host_units": [
+        {
+          "unit_id": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+          "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+          "package_links": "native_answer",
+          "mode": "build",
+          "source_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/build.rs",
+          "generated_metadata": {
+            "out_dir": "host-metadata:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:OUT_DIR",
+            "rustc_cfg": [],
+            "rustc_env": {},
+            "rustc_link_lib": [],
+            "rustc_link_search": [],
+            "rerun_if_changed": [],
+            "metadata": {},
+            "digest_blake3": "52dd7a85b2c36c820b7d629c1ac1de58e97c693b2f89a93340ceca56acfecc17"
+          }
+        }
+      ],
+      "graph_boundary": "build and run-custom-build are graph mode labels, not observed executions."
+    }
+  ],
+  "differences_from_prior_receipts": {
+    "summary": "All four confirmation Cargo graph streams and proc-macro2/serde planning streams are byte-identical to retained prior files. libc and sys plan receipts differ and are retained separately, never substituted for the old records. libc now binds its source manifest to the user registry rather than the product vendor map. The sys graph-index-dependent unit identity changes from 3 to 2; both receipts remain planning facts.",
+    "exact_field_differences": [
+      {
+        "path": "libc.source_closure.digest_blake3",
+        "before": "8c2d7f894d5e77b7e0ca5b7c697ddf1b0d6043c06fa1c5d513c60ad41255b8d4",
+        "confirmation": "343a766ee010a6e28e40377b06a50cd91217bb477d4a9e6bf589cf04010a1147"
+      },
+      {
+        "path": "libc.source_closure.sources.1.manifest_path",
+        "before": "/nix/store/cvw2bbgcw4v3zfqhkkfydl2c8j9s0ifa-vendor-cargo-deps/c19b7c6f923b580ac259164a89f2577984ad5ab09ee9d583b888f934adbbe8d0/libc-0.2.186/Cargo.toml",
+        "confirmation": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libc-0.2.186/Cargo.toml"
+      },
+      {
+        "path": "libc.native_git_source_planning.source_closure_digest_blake3",
+        "before": "8c2d7f894d5e77b7e0ca5b7c697ddf1b0d6043c06fa1c5d513c60ad41255b8d4",
+        "confirmation": "343a766ee010a6e28e40377b06a50cd91217bb477d4a9e6bf589cf04010a1147"
+      },
+      {
+        "path": "libc.native_git_source_planning.digest_blake3",
+        "before": "cbfe14c557030a1de28321f65699717b2199f73d68968b9ef20484736874da93",
+        "confirmation": "dbacbde9c65162f8e2da22658ca5c4b4b13dafa9cd005f0c2d6315f9c9ae19c3"
+      },
+      {
+        "path": "libc.native_unit_graph_planning.cargo_unit_graph_oracle_digest",
+        "before": "fd1f122ee96113e8a6fa03ff603553aa05490944ca0baefc180470e2e88af1b7",
+        "confirmation": "f1956b3cdeae25e8e6317d325fda6e29c5fad34492e9074c5f3f474710daf5f5"
+      },
+      {
+        "path": "libc.native_host_unit_graph_planning.cargo_host_oracle_digest",
+        "before": "ebd0168357df3d3a0027ee2d6bf14c75437bf354926791231d3501af5839fcb4",
+        "confirmation": "92bef13e81ea8bebfd184bfcca3f5eae0249d823a9cbc53528d15a961412bc1b"
+      },
+      {
+        "path": "libc.native_host_unit_graph_planning.oracle_comparison_digest",
+        "before": "46c3840a4e92dc552513d4c5f7ec2bf2f6fcdac2b94ce8117087ca0bc82fa802",
+        "confirmation": "c8b6bb51b515e28a33c1f48f9bbe5b5f108e15201d7e191460c4fc71c9c8004d"
+      },
+      {
+        "path": "libc.unit_graph.digest_blake3",
+        "before": "fd1f122ee96113e8a6fa03ff603553aa05490944ca0baefc180470e2e88af1b7",
+        "confirmation": "f1956b3cdeae25e8e6317d325fda6e29c5fad34492e9074c5f3f474710daf5f5"
+      },
+      {
+        "path": "libc.receipt_hash",
+        "before": "f472d64af61640e10b76dd8e9e8a9afbe39d663268a92d2e828e0f31a940a931",
+        "confirmation": "316b1922b1697c44ccfa3144ebf90e76659dcaa7c6881012e52fffd5d059e0a7"
+      },
+      {
+        "path": "native-answer-sys.native_unit_graph_planning.cargo_unit_graph_oracle_digest",
+        "before": "d299b78cc8295dc365e58931d74880af82b1be4eb3add706f59861f12297bc8a",
+        "confirmation": "a0a110368ea7991c9d5c8fcd1da4ea5012245e16052563daf1ca78b4d3693a03"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.cargo_host_oracle_digest",
+        "before": "2f67459a1b8982bae0683468023f7d5c575c435f81f7c1c5a1b7d3f351df8bb3",
+        "confirmation": "ead465093af00253d1fcbc9832ec02feba39b2b1594152bb15514316ceb426a6"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.native_host_graph_digest",
+        "before": "ba1ebbc4374d13be32c05f78c115c4521ec78c961aa396db0b45c3aba0803de1",
+        "confirmation": "77226650c7c501d73e1daeafa42c9621ba83e184ae8ce546653e73c49b1fb93c"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.oracle_comparison_digest",
+        "before": "348a3e539ee9241d5ae3de1ee60c9e50bb7f57b8096339bc3b59c2a586a35865",
+        "confirmation": "645946487bf9beb6b534725ff63e9bbe834e4e927ef558edabb712a8f2ceee5f"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.host_units.0.unit_id",
+        "before": "3:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+        "confirmation": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.host_units.0.artifact.producer_unit_id",
+        "before": "3:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+        "confirmation": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build"
+      },
+      {
+        "path": "native-answer-sys.native_host_unit_graph_planning.target_consumers.0.consumed_host_artifacts.0.producer_unit_id",
+        "before": "3:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+        "confirmation": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build"
+      },
+      {
+        "path": "native-answer-sys.unit_graph.digest_blake3",
+        "before": "d299b78cc8295dc365e58931d74880af82b1be4eb3add706f59861f12297bc8a",
+        "confirmation": "a0a110368ea7991c9d5c8fcd1da4ea5012245e16052563daf1ca78b4d3693a03"
+      },
+      {
+        "path": "native-answer-sys.unit_derivation_graph.digest_blake3",
+        "before": "d9503a218261edf56dd6d64760fbd4ddece0eca3f4d07aeb6f23a84e9e222616",
+        "confirmation": "5e1927bd7a5feac22b49e16b000c643d76edcc8eb743e8c9ad426ea5ee09da54"
+      },
+      {
+        "path": "native-answer-sys.unit_derivation_graph.derivations.0.unit_id",
+        "before": "3:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+        "confirmation": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build"
+      },
+      {
+        "path": "native-answer-sys.unit_derivation_graph.derivations.0.derivation.name",
+        "before": "rust-unit-3-build_script_build",
+        "confirmation": "rust-unit-2-build_script_build"
+      },
+      {
+        "path": "native-answer-sys.unit_derivation_graph.derivations.2.consumed_host_artifacts.0.producer_unit_id",
+        "before": "3:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build",
+        "confirmation": "2:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:build-script-build:custom-build:build"
+      },
+      {
+        "path": "native-answer-sys.receipt_hash",
+        "before": "7a77d8004174a19597d3fb90c5b904da67f037df3b1c78fbea58d6b0bc8ce8d7",
+        "confirmation": "7e4d5cfc066ecb3e9e588746cd21eca175cca2221480cc071a79e6d28d8480f4"
+      }
+    ]
+  },
+  "current_lane_blockers": {
+    "observed_scope": "Original da00 baseline planning, not a fresh final-source lane execution.",
+    "registry_fixture_missing_declared_vendor_roots": {
+      "proc-macro2": 2,
+      "serde-derive": 7,
+      "libc": 1
+    },
+    "observed": "Registry fixtures retain missing-declared-vendor-root, unsupported-non-path-dependency and blocked native package/target/host/unit-derivation planning, despite Cargo oracle success. The path-only native-answer-sys plan is ready for bounded topology and declares links=native_answer; it is not script/application execution evidence.",
+    "authored_design_lane_boundary": "design.md Current behavior records unit-plan-build-script-run-unsupported for run-custom-build units. That pre-implementation lane blocker is retained as authored context, not re-executed current-source evidence.",
+    "unestablished": "Full Cargo compatibility, native C compilation inside build.rs, application success, trusted import/verification, sandbox execution and provider-selective rebuilds are not established by these planning commands."
+  },
+  "retained_history": {
+    "initial_source_owned_run": "da00-source-owned-v1/results/result.json: build-unmodified-source-owned-dev-shell exit 0; collect-reconstructed-fixture-baseline-receipts exit 1; driver exit 1. Missing external versions in the product-only vendor map remain a recorded failure.",
+    "external_supply_run": "da00-original-fixture-supply-v2/results/result.json: two missing oracle plans and four graphs exit 0; driver exit 0. Original binary/cohort reused.",
+    "historical_nonacceptance": "historical-da00-baseline-2026-10-14.md remains unchanged: ambient unmodified pinned-Casita E0599, privately patched compilation failures/receipt provenance and nonacceptance are preserved. None is relabeled successful or unmodified by this separate source-owned cohort recovery."
+  },
+  "new_retained_files": [
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/isolated-worktree-confirmation-request.json",
+      "bytes": 6880,
+      "blake3": "138780d35d28b49a707236156764ded118d75f51869c96ce09f672515eb7e5ae"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/isolated-worktree-confirmation-result.json",
+      "bytes": 15728,
+      "blake3": "c29591abc05ba00fbd02bb81959ac042df9e3448244e20aab6bb638a23dc4bed"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-isolated-original-plan.stdout.log",
+      "bytes": 7890,
+      "blake3": "1fad2d88550f45ea836f19cf8415f981ae9d1b823407eac4ad26ec7436a1e851"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-isolated-original-plan.stdout.log",
+      "bytes": 30512,
+      "blake3": "0081205d6984695052a4880be07b16ac285499e83e68e4f5c3147caf705327ca"
+    }
+  ],
+  "non_claims": [
+    "No contemporaneous da00 execution or exact historical 2026-10-14 serde lock/source equivalence.",
+    "No build-script host/sandbox execution, daemon execution, app result, native-link execution or selective rebuild from these receipts.",
+    "No acceptance of run_units semantics, any task except the T1.1 baseline record, final-source whole-tree gates, frozen G1/G2 admission, sync, archive, publication or release eligibility.",
+    "No historical failed or privately patched attempt is removed or promoted."
+  ],
+  "verification_method": "Read and parse the eight existing raw confirmation stdout streams and eight empty stderr streams, inspect graph units/features/dependency indices and plan blockers, and compare retained prior raw bytes. No build, test, lint, formatter, gate, VCS mutation, sync, archive, cleanup or pueue command was run for this evidence closure."
+}

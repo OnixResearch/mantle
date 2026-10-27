@@ -1,13 +1,18 @@
 # Tasks: Declare remote worker demand
 
-Source implementation, positive/negative fixtures and applicable verification
-are individually evidenced below. Production delivery/report acceptance,
-historical before/after rails, isolated-worktree workflow and archive eligibility
-remain open. Passing fixtures and gates are not whole-change acceptance.
+Source implementation, positive/negative fixtures, applicable verification,
+and scoped production delivery/report observations are individually evidenced
+below. Historical before/after rails and lifecycle/archive eligibility remain
+open. Passing fixtures and gates are not whole-change acceptance.
 
 ## Phase 1: Contract
 
-- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current quantified-resource blocker path and one unmet-demand observation. r[build_scheduling.declared_worker_demand]
+- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current quantified-resource blocker path and one unmet-demand observation. r[build_scheduling.declared_worker_demand]
+  `evidence/current-origin-baseline-2026-10-26.json` binds the original
+  `db98fd8bc` converted-derivation dispatch observation and exact blocker;
+  repeated rounds and concurrency 1/64 create no jobs, leases, or capacity.
+  This temporary API instrumentation is not historical pre-feature evidence
+  or original CLI ingress/delivery evidence.
 - [x] [serial] T1.2 Define the demand fact: requirement vector, job identity, policy identity, blocker reason, requirement identity, and bounds (`crunch-remote-core::demand`; canonical quantities and semantic placement digest). r[build_scheduling.declared_worker_demand]
 - [x] [serial] T1.3 Record the restate-only, lifetime-bound, and cannot-grant decisions in Proposed ADR 0127 (not runtime acceptance). r[build_scheduling.demand_without_capacity_inference]
 
@@ -18,8 +23,8 @@ remain open. Passing fixtures and gates are not whole-change acceptance.
 
 ## Phase 3: Publication
 
-- [ ] [depends:publish-live-build-state-subscriptions] [serial] T3.1 Publish and retract demand facts through the coordination daemon, with the plan result and build report keeping the same blocker when the daemon is absent. r[build_scheduling.declared_worker_demand]
-- [ ] [serial] T3.2 Keep demand mandatory-visible in the placement report with the same blocker reason and no added capacity claim. r[build_scheduling.demand_without_capacity_inference]
+- [x] [depends:publish-live-build-state-subscriptions] [serial] T3.1 Publish and retract demand facts through the coordination daemon, with the plan result and build report keeping the same blocker when the daemon is absent. r[build_scheduling.declared_worker_demand]
+- [x] [serial] T3.2 Keep demand mandatory-visible in the placement report with the same blocker reason and no added capacity claim. r[build_scheduling.demand_without_capacity_inference]
 
 Source adapters exist: coordinator admission records a pending unmet quantified
 requirement without adding capacity; scoped live snapshots relay only the
@@ -31,9 +36,11 @@ daemon enforces the global demand count bound and rejects publishing a changed
 requirement before the old per-job fact retracts. Its absent/unreachable
 endpoint never controls admission. The existing publisher is detached and
 best-effort: an immediately exiting CLI is not proof of delivered events.
-Positive event evidence must use a real long-lived adapter/subscriber where
-queued publications can drain; the absent-daemon CLI remains a negative
-control. T3 remains unchecked until those observations are captured.
+`evidence/actual-derived-demand-2026-10-27.json` retains the real long-lived
+gateway/subscriber observation and actual daemon-present/absent CLI controls:
+one publish/retract pair per request, unchanged quantified blocker, no jobs or
+leases, and no capacity inferred from concurrency 64. T3.1/T3.2 close only this
+recorded runtime scope, not reliable delivery or whole-change acceptance.
 
 
 ## Phase 4: Fixtures and verification
@@ -66,11 +73,14 @@ T2.2/T4.2 are complete. The earlier handoff and reconciliation are historical
 pre-execution records, not evidence that these new controls were previously run.
 No production logic changed and no live-delivery claim follows.
 
-The retained real socket fixture establishes transport delivery of a constructed
-fact, while the retained real CLI service observation is an empty subscription;
-neither proves a long-lived building-plane adapter drained derived demand.
-T3.1/T3.2 still need that observation and actual placement/plan/build report
-controls. An absent-daemon immediate-exit CLI remains negative evidence only.
+The earlier real socket fixture established delivery of a constructed fact,
+while the earlier CLI service observation was an empty subscription. The later
+`evidence/actual-derived-demand-2026-10-27.json` and its nine retained raw files
+record a production-derived fact draining through a real long-lived gateway,
+daemon and subscriber, plus mandatory-visible placement/plan/build controls.
+The executed rail reports **1 passed, 0 failed, 0 ignored**. Its exact binary
+and selected-source bindings are retained; subsequent unrelated source edits
+do not turn it into a fresh whole-tree gate.
 T4.3's historical-before result and T1.1's isolated current-origin baseline
 cannot be supplied by later green gates. The first ordinary gate after the
 focused passes failed with retained archive/attestation disk-quota errors under
@@ -88,6 +98,6 @@ The [shared final verification](../reconcile-main-api-lineages-2026-10-17/eviden
 retains exact commands, exits, selected source/stream BLAKE3, native receipts,
 the five-test demand rail and the failed attempts without relabeling them.
 Affected Nix Nextest reports **6736 passed, 198 skipped**; skipped cases are not
-executed scenario evidence. Seven authored tasks are complete; T1.1, T3.1,
-T3.2, T4.3 and T4.5 remain open. No production semantic/API change, reliable
-publication, external provisioning, whole-change acceptance or archive follows.
+executed scenario evidence. T1.1 and the scoped T3.1/T3.2 observations are now
+recorded separately; T4.3 and T4.5 remain open. No reliable publication,
+external provisioning, whole-change acceptance or archive follows.

@@ -393,6 +393,7 @@ pub(crate) fn finish_unit(parts: UnitParts, plan: &PlanBindings) -> Result<Unit,
 fn tool_root(plan: &PlanBindings, path: &str) -> Result<Input, Vec<Blocker>> {
     let root = validated_store_root(path, &plan.store_prefix)
         .ok_or_else(|| blocked("unit-plan-host-path", "toolchain", path))?;
+    crate::check_execution_root(plan, root)?;
     debug_assert!(root.len() <= path.len());
     debug_assert!(path.starts_with(root));
     Ok(Input::StorePath { path: root.to_string() })
@@ -403,12 +404,8 @@ fn tool_root(plan: &PlanBindings, path: &str) -> Result<Input, Vec<Blocker>> {
 // r[impl mantle.rust_unit_plan.build_scripts.target_facts]
 pub(crate) fn target_facts_unit(plan: &PlanBindings, triple: &str) -> Result<Unit, Vec<Blocker>> {
     let id = target_facts_id(plan, triple);
-    let mut inputs = Vec::with_capacity(plan.runtime_inputs.len().saturating_add(3));
-    inputs.extend([
-        tool_root(plan, &plan.helper)?,
-        tool_root(plan, &plan.rustc)?,
-        tool_root(plan, &plan.toolchain)?,
-    ]);
+    let mut inputs = Vec::with_capacity(plan.runtime_inputs.len().saturating_add(2));
+    inputs.extend([tool_root(plan, &plan.helper)?, tool_root(plan, &plan.rustc)?]);
     for path in &plan.runtime_inputs {
         inputs.push(tool_root(plan, path)?);
     }
@@ -510,6 +507,7 @@ fn native_input_roots(binding: &UnitBinding, plan: &PlanBindings) -> Result<Vec<
         if validated_store_root(path, &plan.store_prefix) != Some(path.as_str()) {
             return Err(blocked("unit-plan-host-path", id, path));
         }
+        crate::check_execution_root(plan, path)?;
         roots.push(path.clone());
     }
     roots.sort();
@@ -566,7 +564,7 @@ fn run_unit_env(
         ("MANTLE_UNIT_SCRIPT_ENV".to_string(), json(id, &script_env)?),
         ("MANTLE_UNIT_SCRIPT_PATH".to_string(), json(id, &run.native_path)?),
         ("MANTLE_UNIT_NATIVE_INPUTS".to_string(), json(id, &native)?),
-        ("MANTLE_UNIT_TOOLCHAIN".to_string(), plan.toolchain.clone()),
+        ("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone()),
     ]);
     debug_assert!(script_env.contains_key("RUSTC"));
     debug_assert_eq!(env.len(), 4);

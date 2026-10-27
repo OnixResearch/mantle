@@ -156,6 +156,18 @@ authority, conflicting reconciliation identity, unsupported role, invalid link,
 privacy marker or changed retained artifact bytes is an error, not a partial
 success artifact.
 
+Worker inventory and retained output signer identities carry the complete
+encoded public key. Nix signature headers carry only its name; that header is
+an interoperability check, never authority. Result retrieval matches the full
+configured key and verifies its signature, revalidates the current signed
+input-addressed derivation and its exact declared outputs, then checks the
+retained signed PathInfo against the current measured CAS content. It does
+not require an optional action-result cache-discovery index to exist.
+Coordinator mutation locks cover bounded state transactions, not async store
+or worker execution; committing a result still rechecks the current attempt,
+fence and result identity. Temporary private executor diagnostics are not part
+of the public JSON/stderr contract.
+
 Reservations and pending reconciliation are real observations. A failed or
 partially observed execution can therefore export the `usage` observation
 class without claiming a build result. The `build` class appears only with
@@ -187,6 +199,124 @@ replay the existing escalation planner and link its predecessor and successor
 with the checked fence and limits. Backend support is not an observation that
 a particular run obtained a delegated cgroup or reproduced OOM; those require
 the retained signed runtime records.
+
+The configured gateway's authorized `usage` operation returns bounded attempt
+sample counts and measured CPU/output totals, plus **window-wide** project and
+account accounting totals. `items` bounds the caller's attempt sample; it does
+not truncate the durable accounting totals or their reason counts. Accounting
+publishes the unit-schedule version, all three per-unit divisors, window bounds,
+limits and reservation/charge totals. Its fixed `project_reason_counts` and
+`account_reason_counts` keys are `reserved`, `settled`,
+`cancelled_without_final_usage`, `worker_lost`, `partial_observation`,
+`untrusted_observation` and `usage_exceeds_reservation`. These are attempt counts,
+not monetary prices or measurement-completeness claims. All pending categories
+retain reservations. Other windows are excluded; unknown project/account bindings,
+inconsistent schedules, unavailable stores and arithmetic overflow fail closed.
+Usage requires its own fresh `UsageRead` invocation; result/status permission
+does not authorize it. The current production transport is the owner-private
+Unix socket and `mantle remote gateway call`, **not an HTTP listener**.
+
+Trusted positive OOM collection is supported only on Linux with a fresh,
+worker-owned delegated cgroup-v2 subtree whose CPU and memory controllers are
+enabled. `memory.events` must expose an actual positive OOM-kill delta after the
+whole attempt subtree is empty. Without delegation, collection is process-only;
+other platforms have no positive-OOM collector contract. SIGKILL/exit 137 without
+that authenticated counter never authorizes escalation. See the gateway
+[configured-host runbook](../.cairn/changes/add-nix-remote-service-gateway/design.md#configured-production-host)
+for ticket, holder-invocation, signed store and worker-inventory prerequisites.
+
+Configuring a cgroup does not establish that the executor entered it. The worker
+requires a positive acknowledgement of the actual pre-exec migration syscall
+within the original wall deadline. Missing, negative or late acknowledgement
+keeps the observation process-only and cannot authorize an OOM retry. Reaping
+the direct child and reaching pipe EOF do not establish subtree teardown:
+dedicated accounting also waits for the kernel's populated flag to clear,
+without extending that deadline.
+
+The opt-in host exercise below performs a real 64-MiB cgroup OOM, signs and
+authenticates that usage, plans/reserves a linked higher-fence 256-MiB successor,
+executes and reconciles that successor, and rejects a separate SIGKILL as OOM.
+It requires Python 3, an empty owner-controlled cgroup-v2 subtree with CPU/memory
+enabled and swap disabled (`memory.swap.max=0`) for deterministic memory pressure.
+It fails rather than capability-skipping if delegation is unavailable. This is
+resource-host/collector coverage, **not** full gateway admission/remote dispatch:
+
+```bash
+MANTLE_TEST_CGROUP_ROOT="$delegated_empty_root" \
+  cargo test -p mantle --bin mantle \
+  nix_gateway::resource_host::tests::delegated_oom_signed_successor_and_sigkill_negative \
+  -- --ignored --exact --nocapture
+cargo test -p mantle --bin mantle \
+  nix_gateway::resource_host::tests::public_summary_preserves_pending_reasons_scope_window_and_idempotent_charge \
+  -- --exact --nocapture
+```
+
+For actual gateway proof, launch the configured local-build worker with
+`--usage-cgroup-root "$delegated_empty_root"`, use two reviewed classes on its
+same endpoint, submit a signed fixed-input workload that exceeds the first cap
+and succeeds within the second, then call status, events, usage and result using
+fresh operation-specific holder envelopes. Retain the public request, both
+signed usage reports, immutable predecessor publication, escalation replay,
+coordinator attempt/fence and lease snapshots, quota ledger, API responses,
+final signed output metadata and all source/config/executable BLAKE3 identities.
+Repeat with retry disabled, non-opted-in project and explicit SIGKILL: no
+successor may appear. Usage bounds 0 and above `MAX_USAGE_ITEMS`, wrong-project
+authority and status-only authority must be rejected. Do not relabel the opt-in
+host test or a supplied OOM replay flag as this complete gateway execution.
+
+`tests/resource_gateway_runtime.rs` provides this complete private-service path
+with fresh scoped development issuer/holder/result keys and normal library UCAN
+issuance, FD-delivered `remote ticket create`, signed store publication/import,
+the real gateway/worker executables, and actual `gateway binding`/`call` CLI
+operations. It creates no coordinator jobs or worker measurements itself. The
+gateway configuration explicitly declares per-system `required_resources`; the
+fixture's signed input-cache descriptor must supply a real static x86_64 BusyBox
+root and its full trusted public key. Ordinary signature and NAR verification
+are never bypassed. The positive service case starts at 64 MiB and executes its
+successor at 512 MiB; separate services exercise retry-disabled, non-opted-in and
+SIGKILL negatives. The process-only case checks retained pending reservations
+and rejected usage bounds/project/operation authority.
+
+After integration, execute through the existing guarded workflow, preserving its
+admission and accounting controls:
+
+```bash
+export MANTLE_GATEWAY_INPUT_PATHS="$signed_input_paths_json"
+export MANTLE_GATEWAY_ARTIFACT_ROOT="$fresh_retained_runtime_directory"
+export MANTLE_TEST_CGROUP_ROOT="$delegated_empty_root"
+cargo test -p mantle --test resource_gateway_runtime \
+  -- --ignored --nocapture --test-threads=1
+```
+
+The test process and delegated root must belong to the same delegated systemd
+user-service subtree, not a root-owned login-session cgroup. An operator can
+start a fresh `systemd-run --user --property=Delegate=yes` service, move its shell
+to a child control cgroup, enable `+cpu +memory` on the now-empty service root,
+then create a separate empty attempt subtree with both controllers enabled and
+`memory.swap.max=0`. Run the **same guarded test command** in that service; do
+not use service migration to evade its supervisor or resource accounting.
+Only Linux/cgroup-v2 x86_64 fixture execution is claimed by this driver. Missing
+delegation, missing signed input, failed admission and failed assertions remain
+failures, not successful skips.
+
+Each fresh case retains CLI requests/bindings/responses/stdout/stderr/exits,
+signed-input import report, exact signed derivation ATerm, coordinator snapshot,
+quota state, signed worker reports and immutable evidence files. Start/end BLAKE3
+receipts bind the executable and selected production/fixture source bytes and
+reject source drift. `private/` also retains **development credentials and holder
+envelopes** for the bounded run; keep the whole run owner-private and publish
+only redacted public evidence. Do not export that directory as a Valence bundle.
+Execution is established only by source-bound retained outcomes, not by these
+command examples. The 2026-10-27
+[`actual-fenced-oom-successor` receipt](../.cairn/changes/add-evidence-driven-resource-policy/evidence/actual-fenced-oom-successor-2026-10-27.json)
+retains Pueue 74's actual gateway rail: **1 passed, 0 failed, 0 ignored**.
+The signed OOM predecessor advances to a distinct successful attempt at fence
+2; both quota entries settle with predecessor linkage. Retry-disabled,
+non-opted-in and SIGKILL services retain fence 1 without a successor. The
+owned CPU/memory cgroup subtree finishes empty. Public usage authority/bounds
+controls have their separate `public-usage-api-2026-10-27.json` receipt.
+These scoped Linux observations do not establish complete VM campaign coverage,
+frozen G1/G2 admission, whole-change acceptance, archive or release.
 
 Reuse evidence separates producer result and consumer request, explicit sharing
 scope, current `result-read` authority, request/platform compatibility, output

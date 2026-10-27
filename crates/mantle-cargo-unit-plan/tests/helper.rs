@@ -253,7 +253,7 @@ fn run_script(store: &Path, run: &ScriptRun<'_>) -> (std::process::Output, PathB
         ("flags", flags.display().to_string()),
         ("MANTLE_UNIT_SOURCE", run.source.display().to_string()),
         ("MANTLE_UNIT_BUILD_SCRIPT", run.script.display().to_string()),
-        ("MANTLE_UNIT_TOOLCHAIN", tool("rustc").parent().unwrap().parent().unwrap().display().to_string()),
+        ("MANTLE_UNIT_RUSTC", tool("rustc").display().to_string()),
         ("MANTLE_UNIT_TARGET_FACTS", run.facts.display().to_string()),
         ("MANTLE_UNIT_SCRIPT_ENV", run.script_env.to_string()),
         ("MANTLE_UNIT_SCRIPT_PATH", "[]".into()),
@@ -612,7 +612,7 @@ fn main() {
         .env("flags", &flags)
         .env("MANTLE_UNIT_SOURCE", &source)
         .env("MANTLE_UNIT_BUILD_SCRIPT", &script)
-        .env("MANTLE_UNIT_TOOLCHAIN", tool("rustc").parent().unwrap().parent().unwrap())
+        .env("MANTLE_UNIT_RUSTC", tool("rustc"))
         .env("MANTLE_UNIT_TARGET_FACTS", &facts)
         .env(
             "MANTLE_UNIT_SCRIPT_ENV",
@@ -718,7 +718,7 @@ fn main() {
         .env("flags", &flags)
         .env("MANTLE_UNIT_SOURCE", &source)
         .env("MANTLE_UNIT_BUILD_SCRIPT", &script)
-        .env("MANTLE_UNIT_TOOLCHAIN", tool("rustc").parent().unwrap().parent().unwrap())
+        .env("MANTLE_UNIT_RUSTC", tool("rustc"))
         .env("MANTLE_UNIT_TARGET_FACTS", &facts)
         .env(
             "MANTLE_UNIT_SCRIPT_ENV",

@@ -1,0 +1,10 @@
+[package]
+name = "mantle-da00-serde-derive"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }

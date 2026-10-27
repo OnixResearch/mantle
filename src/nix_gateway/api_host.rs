@@ -62,6 +62,9 @@ pub(crate) struct GatewayConfig {
     pub resources: ResourcePolicyConfig,
     /// Reviewed features indexed by the exact admitted derivation system.
     pub features: BTreeMap<String, crunch_remote_core::resource_policy::Features>,
+    /// Explicit operator-declared minima for each reviewed system. No catalog
+    /// capacity or missing derivation measurement may stand in for a request.
+    pub required_resources: BTreeMap<String, remote_build::RemoteResourceRequirements>,
     pub builder_program: PathBuf,
     pub builder_args: Vec<String>,
     pub trusted_builder_keys: Vec<String>,
@@ -84,6 +87,7 @@ struct Host {
     endpoint_scope: String,
     endpoint_trust_requirement: String,
     features: BTreeMap<String, crunch_remote_core::resource_policy::Features>,
+    required_resources: BTreeMap<String, remote_build::RemoteResourceRequirements>,
     active: Mutex<BTreeMap<String, std::thread::JoinHandle<()>>>,
     producer_policy: [u8; 32],
     evidence_directory: std::fs::File,
@@ -177,6 +181,26 @@ pub(crate) fn request_binding(
     Ok((operation, target.into(), *binding.finalize().as_bytes()))
 }
 
+fn validate_required_resources(
+    required: &BTreeMap<String, remote_build::RemoteResourceRequirements>,
+    features: &BTreeMap<String, crunch_remote_core::resource_policy::Features>,
+) -> Result<(), Error> {
+    if required.len() != features.len()
+        || required.is_empty()
+        || required.len() > crunch_remote_core::resource_policy::MAX_CLASSES
+    {
+        return Err(Reject::Authority.into());
+    }
+    for (system, requirements) in required {
+        let canonical = crunch_build::distributed::canonical_remote_resource_requirements(requirements)
+            .map_err(|_| Error::Rejected(Reject::Authority))?;
+        if !features.contains_key(system) || canonical != *requirements {
+            return Err(Reject::Authority.into());
+        }
+    }
+    Ok(())
+}
+
 impl GatewayHost {
     pub(crate) fn new(
         ctx: RunContext,
@@ -197,6 +221,7 @@ impl GatewayHost {
         if config.builder_endpoint_binding.spec.name != config.endpoint {
             return Err(Reject::Authority.into());
         }
+        validate_required_resources(&config.required_resources, &config.features)?;
         let endpoint_store =
             remote_build::endpoint::EndpointBindingStore::open(&config.builder_endpoint_state_directory)
                 .map_err(host_error)?;
@@ -243,6 +268,7 @@ impl GatewayHost {
             endpoint_scope: config.builder_endpoint_scope.clone(),
             endpoint_trust_requirement: config.builder_endpoint_trust_requirement.clone(),
             features: config.features.clone(),
+            required_resources: config.required_resources.clone(),
             active: Mutex::new(BTreeMap::new()),
             producer_policy: config.policy,
             evidence_directory,
@@ -298,7 +324,7 @@ impl GatewayHost {
     }
 
     fn completed_record(&self, authority: Authority<'_>, id: &str) -> Result<GatewayAttemptRecord, Error> {
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let record = state.gateway_attempts.get(id).ok_or(Error::Unknown)?;
@@ -529,7 +555,7 @@ impl GatewayHost {
     /// current signed completion remains discoverable; uncertain worker loss
     /// retains its reservation and fence for explicit reconciliation.
     pub(crate) fn recover(&self) -> Result<(), Error> {
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let mut state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let at = now()?;
@@ -550,7 +576,7 @@ impl GatewayHost {
 
     fn record_worker_error(&self, id: &str) -> Result<(), Error> {
         let state_dir = &self.0.ctx.resolved_state_dir;
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(host_error)?;
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(host_error)?;
         let mut state = remote_build::load_coordinator_state(state_dir).map_err(host_error)?;
         let record = state.gateway_attempts.get_mut(id).ok_or(Error::Unknown)?;
         if record.result_evidence.is_some() {
@@ -755,7 +781,8 @@ impl GatewayHost {
         loop {
             self.verify_builder_endpoint(now()?)?;
             {
-                let _guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(host_error)?;
+                let _guard =
+                    remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(host_error)?;
                 let mut state = remote_build::load_coordinator_state(state_dir).map_err(host_error)?;
                 self.0.verifier.revalidate(&session, now()?).map_err(|_| Error::Rejected(Reject::Authority))?;
                 let record = state.gateway_attempts.get_mut(&id).ok_or(Error::Unknown)?;
@@ -793,7 +820,7 @@ impl GatewayHost {
                 .await
                 .map_err(host_error)
             });
-            let _guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(host_error)?;
+            let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(host_error)?;
             let mut state = remote_build::load_coordinator_state(state_dir).map_err(host_error)?;
             let record = state.gateway_attempts.get(&id).ok_or(Error::Unknown)?.clone();
             if result.is_err()
@@ -859,7 +886,7 @@ impl Services for GatewayHost {
         self.verify_builder_endpoint(now()?)?;
         let authority = authorization.facts();
         {
-            let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+            let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
                 .map_err(host_error)?;
             let state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
             if let Some(record) = state.gateway_attempts.get(id) {
@@ -884,7 +911,7 @@ impl Services for GatewayHost {
             }
         }
         let store = super::open_read_authority_async(&self.0.ctx).await.map_err(host_error)?;
-        let mut inputs = super::prepare_build_paths(&store, &[drv_path.into()]).await.map_err(host_error)?;
+        let mut inputs = super::prepare_build_paths(&store, &[format!("{drv_path}!*")]).await.map_err(host_error)?;
         if inputs.len() != 1 {
             return Err(Error::Integrity);
         }
@@ -892,13 +919,15 @@ impl Services for GatewayHost {
         input.label = id.into();
         let mut selection = self.0.selection.clone();
         selection.options.now_unix_s = now()?;
-        let request =
+        let mut request =
             remote_build::concrete_remote_derivation_request(&input, &selection.options).map_err(host_error)?;
         let executable = remote_build::plan_remote_executable_request(&request).map_err(host_error)?;
         let features = self.0.features.get(&executable.system).ok_or(Error::Rejected(Reject::Authority))?;
+        request.resource_requirements =
+            Some(self.0.required_resources.get(&executable.system).ok_or(Error::Rejected(Reject::Authority))?.clone());
         let requirements = request.resource_requirements.as_ref().ok_or(Error::Rejected(Reject::Authority))?;
         let state_dir = &self.0.ctx.resolved_state_dir;
-        let guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(host_error)?;
+        let guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(host_error)?;
         let mut coordinator = remote_build::load_coordinator_state(state_dir).map_err(host_error)?;
         if let Some(record) = coordinator.gateway_attempts.get(id) {
             if !record.matches(authority.subject, authority.scope)
@@ -1136,7 +1165,7 @@ impl Services for GatewayHost {
 
     async fn observe(&self, authorization: &Self::Authorization, id: &str) -> Result<Observation, Error> {
         let authority = authorization.facts();
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let record = state.gateway_attempts.get(id).ok_or(Error::Unknown)?;
@@ -1170,7 +1199,7 @@ impl Services for GatewayHost {
             .session
             .require(operation, &target, digest)
             .map_err(|_| Error::Rejected(Reject::Authority))?;
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let mut state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let record = state.gateway_attempts.get_mut(id).ok_or(Error::Unknown)?;
@@ -1197,7 +1226,7 @@ impl Services for GatewayHost {
         if maximum == 0 || maximum > crunch_nix_gateway_core::MAX_LOG_WINDOW_BYTES {
             return Err(Reject::Bound.into());
         }
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let record = state.gateway_attempts.get(id).ok_or(Error::Unknown)?;
@@ -1241,14 +1270,14 @@ impl Services for GatewayHost {
             &self.0.selection.options.trusted_output_keys,
         )
         .map_err(|_| Error::Integrity)?;
-        // This includes the current signed derivation/action-result admission,
-        // then exact current signed PathInfo and measured CAS checks.
-        if !store
-            .query_missing(&[format!("{}!*", record.drv_path)])
-            .await
-            .map_err(|_| Error::Integrity)?
-            .is_empty()
-        {
+        // The completed attempt already binds its signed result; recheck the
+        // current signed derivation rather than requiring a separate cache index.
+        let projected = store.project_signed_ia_for_remote(&record.drv_path).await.map_err(|_| Error::Integrity)?;
+        let mut declared = projected.declared_output_paths().collect::<Vec<_>>();
+        let mut retained_paths = record.outputs.iter().collect::<Vec<_>>();
+        declared.sort_unstable();
+        retained_paths.sort_unstable();
+        if !declared.iter().eq(retained_paths) {
             return Err(Error::Integrity);
         }
         let retained = record
@@ -1259,7 +1288,7 @@ impl Services for GatewayHost {
         store.verify_retained_path_infos(&retained).await.map_err(|_| Error::Integrity)?;
         let entry = self.reconcile(&record)?;
         let publication = self.publish_evidence(&record, &entry, None, true, Some(session))?;
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let mut state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let current = state.gateway_attempts.get_mut(id).ok_or(Error::Unknown)?;
@@ -1285,7 +1314,7 @@ impl Services for GatewayHost {
         if items == 0 || items > api::MAX_USAGE_ITEMS {
             return Err(Reject::Bound.into());
         }
-        let _guard = remote_build::acquire_remote_coordinator_mutation_guard(&self.0.ctx.resolved_state_dir)
+        let _guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(&self.0.ctx.resolved_state_dir)
             .map_err(host_error)?;
         let state = remote_build::load_coordinator_state(&self.0.ctx.resolved_state_dir).map_err(host_error)?;
         let summary = self.0.resources.summary(authority.scope, session.account()).map_err(host_error)?;
@@ -1295,18 +1324,7 @@ impl Services for GatewayHost {
             completed: 0,
             cpu_millis: 0,
             output_bytes: 0,
-            accounting: Some(api::UsageAccounting {
-                unit: summary.schedule.unit,
-                window_id: summary.schedule.window_id,
-                window_start_s: summary.schedule.window_start_s,
-                window_end_s: summary.schedule.window_end_s,
-                project_reserved_units: summary.totals.project_reserved,
-                project_charged_units: summary.totals.project_charged,
-                account_reserved_units: summary.totals.account_reserved,
-                account_charged_units: summary.totals.account_charged,
-                memory_measurement: summary.memory_accounting.into(),
-                output_measurement: summary.output_accounting.into(),
-            }),
+            accounting: Some(summary.into_accounting()),
         };
         for record in state
             .gateway_attempts
@@ -1770,6 +1788,15 @@ fn call_private(socket: &Path, envelope: &Path) -> Result<GatewayOperationResult
     // credentials never cross stdout and an error envelope is not success.
     let response_bytes = response.len();
     let response: serde_json::Value = serde_json::from_slice(&response).map_err(host_error)?;
+    if let Some(code) = response.get("error") {
+        if response.get("version").and_then(serde_json::Value::as_u64) != Some(u64::from(api::API_VERSION)) {
+            return Err(Error::Integrity);
+        }
+        if response.get("response").is_some() {
+            return Err(Error::Integrity);
+        }
+        return Err(code.as_str().and_then(Error::from_code).unwrap_or(Error::Integrity));
+    }
     let evidence = GatewayOperationEvidence::Call {
         envelope_bytes: bytes.len(),
         response_bytes,

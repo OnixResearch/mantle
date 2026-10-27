@@ -1,0 +1,566 @@
+{
+  "schema": "mantle-da00-original-source-receipts-v1",
+  "records": [
+    {
+      "fixture": "proc-macro2",
+      "mode": "cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "exit_code": 1,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-cargo-oracle.stderr",
+      "valid_baseline_receipt": false,
+      "parse_error": "Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "fixture": "proc-macro2",
+      "mode": "no-cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-no-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-no-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "454b46265a507466f7caf942d708a72d78634339b7e1f8cf1d8a6284e4fef93d",
+      "cargo_mode": {
+        "no_cargo_oracle": true,
+        "compatibility_class": "blocked-unsupported-surface",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "blocked-unsupported-surface",
+          "status": "blocked",
+          "surface_ids": [
+            "blocked-unsupported-surface"
+          ],
+          "blocker_classes": [
+            "native-host-unit-graph-planning-blocked",
+            "native-package-target-planning-blocked",
+            "native-unit-graph-planning-blocked",
+            "unit-derivation-graph-blocked"
+          ],
+          "non_claims": [
+            "bounded-path-workspace-only",
+            "declared-vendor-and-captured-git-only",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-full-cargo-feature-resolution",
+            "not-network-or-ambient-cargo-source-resolution",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [
+          "native-host-unit-graph-planning-blocked",
+          "native-package-target-planning-blocked",
+          "native-unit-graph-planning-blocked",
+          "unit-derivation-graph-blocked"
+        ],
+        "non_claims": [
+          "bounded-path-workspace-only",
+          "declared-vendor-and-captured-git-only",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-full-cargo-feature-resolution",
+          "not-network-or-ambient-cargo-source-resolution",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ]
+    },
+    {
+      "fixture": "serde-derive",
+      "mode": "cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "exit_code": 1,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-cargo-oracle.stderr",
+      "valid_baseline_receipt": false,
+      "parse_error": "Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "fixture": "serde-derive",
+      "mode": "no-cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-no-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-no-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "39f407ba1c018fd08022a947e8d6eebdea198474bd497a63990f4d6d7cfb70ee",
+      "cargo_mode": {
+        "no_cargo_oracle": true,
+        "compatibility_class": "blocked-unsupported-surface",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "blocked-unsupported-surface",
+          "status": "blocked",
+          "surface_ids": [
+            "blocked-unsupported-surface"
+          ],
+          "blocker_classes": [
+            "native-host-unit-graph-planning-blocked",
+            "native-package-target-planning-blocked",
+            "native-unit-graph-planning-blocked",
+            "unit-derivation-graph-blocked"
+          ],
+          "non_claims": [
+            "bounded-path-workspace-only",
+            "declared-vendor-and-captured-git-only",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-full-cargo-feature-resolution",
+            "not-network-or-ambient-cargo-source-resolution",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [
+          "native-host-unit-graph-planning-blocked",
+          "native-package-target-planning-blocked",
+          "native-unit-graph-planning-blocked",
+          "unit-derivation-graph-blocked"
+        ],
+        "non_claims": [
+          "bounded-path-workspace-only",
+          "declared-vendor-and-captured-git-only",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-full-cargo-feature-resolution",
+          "not-network-or-ambient-cargo-source-resolution",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ]
+    },
+    {
+      "fixture": "libc",
+      "mode": "cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "f472d64af61640e10b76dd8e9e8a9afbe39d663268a92d2e828e0f31a940a931",
+      "cargo_mode": {
+        "no_cargo_oracle": false,
+        "compatibility_class": "cargo-oracle-evidence",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "cargo-oracle-evidence",
+          "status": "oracle",
+          "surface_ids": [
+            "cargo-oracle-reference"
+          ],
+          "blocker_classes": [],
+          "non_claims": [
+            "cargo-used-for-oracle-metadata-and-unit-graph",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [],
+        "non_claims": [
+          "cargo-used-for-oracle-metadata-and-unit-graph",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "fd1f122ee96113e8a6fa03ff603553aa05490944ca0baefc180470e2e88af1b7"
+      },
+      "host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ]
+    },
+    {
+      "fixture": "libc",
+      "mode": "no-cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-no-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-no-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "5d6c655c15de93a395915584a369f445a37a047e8e5cd375d97b27768dc38f56",
+      "cargo_mode": {
+        "no_cargo_oracle": true,
+        "compatibility_class": "blocked-unsupported-surface",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "blocked-unsupported-surface",
+          "status": "blocked",
+          "surface_ids": [
+            "blocked-unsupported-surface"
+          ],
+          "blocker_classes": [
+            "native-host-unit-graph-planning-blocked",
+            "native-package-target-planning-blocked",
+            "native-unit-graph-planning-blocked",
+            "unit-derivation-graph-blocked"
+          ],
+          "non_claims": [
+            "bounded-path-workspace-only",
+            "declared-vendor-and-captured-git-only",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-full-cargo-feature-resolution",
+            "not-network-or-ambient-cargo-source-resolution",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [
+          "native-host-unit-graph-planning-blocked",
+          "native-package-target-planning-blocked",
+          "native-unit-graph-planning-blocked",
+          "unit-derivation-graph-blocked"
+        ],
+        "non_claims": [
+          "bounded-path-workspace-only",
+          "declared-vendor-and-captured-git-only",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-full-cargo-feature-resolution",
+          "not-network-or-ambient-cargo-source-resolution",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ]
+    },
+    {
+      "fixture": "native-answer-sys",
+      "mode": "cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "7a77d8004174a19597d3fb90c5b904da67f037df3b1c78fbea58d6b0bc8ce8d7",
+      "cargo_mode": {
+        "no_cargo_oracle": false,
+        "compatibility_class": "cargo-oracle-evidence",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "cargo-oracle-evidence",
+          "status": "oracle",
+          "surface_ids": [
+            "cargo-oracle-reference"
+          ],
+          "blocker_classes": [],
+          "non_claims": [
+            "cargo-used-for-oracle-metadata-and-unit-graph",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [],
+        "non_claims": [
+          "cargo-used-for-oracle-metadata-and-unit-graph",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "d299b78cc8295dc365e58931d74880af82b1be4eb3add706f59861f12297bc8a"
+      },
+      "host_blockers": []
+    },
+    {
+      "fixture": "native-answer-sys",
+      "mode": "no-cargo-oracle",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-no-cargo-oracle.json",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-no-cargo-oracle.stderr",
+      "valid_baseline_receipt": true,
+      "schema_version": 1,
+      "receipt_hash": "34ab50ca6d7eeb1ad66feedef1d409eb8ed5d4af06b8fadd8b80d72db58f21fa",
+      "cargo_mode": {
+        "no_cargo_oracle": true,
+        "compatibility_class": "cargo-free-bounded-topology",
+        "project_build_status": "not-default-project-build",
+        "compatibility_surface_matrix": {
+          "matrix_id": "representative-rust-compatibility-v1",
+          "matrix_path": "examples/rust_compatibility_surface_matrix.ncl",
+          "evidence_class": "cargo-free-bounded-topology",
+          "status": "supported",
+          "surface_ids": [
+            "local-path-dependency",
+            "path-workspace-basic",
+            "source-closure-digest",
+            "unit-graph-facts",
+            "workspace-inheritance"
+          ],
+          "blocker_classes": [],
+          "non_claims": [
+            "bounded-path-workspace-only",
+            "declared-vendor-and-captured-git-only",
+            "not-bootstrap-correctness",
+            "not-compiler-correctness",
+            "not-full-cargo-compatibility",
+            "not-full-cargo-feature-resolution",
+            "not-network-or-ambient-cargo-source-resolution",
+            "not-release-reproducibility"
+          ]
+        },
+        "blockers": [],
+        "non_claims": [
+          "bounded-path-workspace-only",
+          "declared-vendor-and-captured-git-only",
+          "not-bootstrap-correctness",
+          "not-compiler-correctness",
+          "not-full-cargo-compatibility",
+          "not-full-cargo-feature-resolution",
+          "not-network-or-ambient-cargo-source-resolution",
+          "not-release-reproducibility"
+        ]
+      },
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "host_blockers": []
+    }
+  ],
+  "boundary": "reconstructed fixture baseline, not contemporaneous execution or app success"
+}

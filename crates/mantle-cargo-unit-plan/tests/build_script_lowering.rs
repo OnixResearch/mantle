@@ -195,7 +195,8 @@ fn bindings() -> PlanBindings {
         host_triple: TRIPLE.into(),
         helper: store("unit-helper"),
         rustc: format!("{}/bin/rustc", store("rust-toolchain")),
-        toolchain: store("rust-toolchain"),
+        toolchain: store("oracle-toolchain"),
+        oracle_inputs: vec![store("oracle-toolchain")],
         linker: format!("{}/bin/cc", store("linker")),
         target_linker: None,
         runtime_inputs: Vec::new(),
@@ -206,6 +207,35 @@ fn bindings() -> PlanBindings {
     };
     refresh_wait_units(&mut plan, &effects());
     plan
+}
+
+#[test]
+fn producer_oracle_roots_cannot_be_reintroduced_as_execution_capabilities() {
+    for role in ["compiler", "helper", "linker", "runtime", "native", "target-linker"] {
+        let mut plan = bindings();
+        let oracle = plan.oracle_inputs[0].clone();
+        match role {
+            "compiler" => plan.rustc = format!("{oracle}/bin/rustc"),
+            "helper" => plan.helper = format!("{oracle}/bin/helper"),
+            "linker" => plan.linker = format!("{oracle}/bin/cc"),
+            "runtime" => plan.runtime_inputs.push(oracle.clone()),
+            "native" => {
+                let run = binding_mut(&mut plan, "leaf-run").build_script_run.as_mut().unwrap();
+                run.native_inputs.push(oracle.clone());
+            }
+            "target-linker" => {
+                plan.target_linker = Some(mantle_cargo_unit_plan::TargetLinkerBinding {
+                    executable: format!("{oracle}/bin/ld"),
+                    arguments: Vec::new(),
+                    inputs: vec![oracle.clone()],
+                });
+            }
+            _ => unreachable!(),
+        }
+        let blockers = lower(&effects(), &plan).unwrap_err();
+        assert_eq!(blockers[0].code, "unit-plan-oracle-execution-overlap", "{role}: {blockers:?}");
+        assert_eq!(blockers[0].detail, oracle, "{role}");
+    }
 }
 
 fn binding_mut<'a>(plan: &'a mut PlanBindings, id: &str) -> &'a mut UnitBinding {
@@ -262,8 +292,9 @@ fn two_build_scripts_share_one_target_description_unit() {
 fn toolchain_change_gives_the_target_description_unit_a_new_identity() {
     let before = lowered(&bindings());
     let mut changed = bindings();
-    changed.toolchain = format!("/mantle/store/{}-rust-toolchain-next", "1".repeat(32));
-    changed.rustc = format!("{}/bin/rustc", changed.toolchain);
+    changed.toolchain = format!("/mantle/store/{}-oracle-toolchain-next", "1".repeat(32));
+    changed.oracle_inputs = vec![changed.toolchain.clone()];
+    changed.rustc = format!("{}/bin/rustc", store("rust-toolchain-next"));
     refresh_wait_units(&mut changed, &effects());
     let after = lowered(&changed);
     let (old, new) = (target_fact_units(&before)[0], target_fact_units(&after)[0]);

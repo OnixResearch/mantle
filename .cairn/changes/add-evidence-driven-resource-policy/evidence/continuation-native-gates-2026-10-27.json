@@ -1,0 +1,73 @@
+{
+  "schema": "mantle-change-native-gate-reference-v1",
+  "date": "2026-10-27",
+  "change": "add-evidence-driven-resource-policy",
+  "transcript": {
+    "repository_relative_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-final-native-checks-2026-10-27.json",
+    "blake3": "fa5e69ad8a080a2af048cc12890b469e8dfc56c4ea27c79e5d82c4f2316ea397"
+  },
+  "source_unchanged_during_commands": true,
+  "selected_verdicts": [
+    {
+      "label": "Cairn-final-validate",
+      "valid": true,
+      "verdict": null,
+      "issues": [],
+      "receipt_hash": "8d0ea43ade74f307e9fc72b8aa2dc0cd141680f2720eef0335c0f04126574047",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-add-evidence-driven-resource-policy-proposal",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "22fa3d65edf57a6e8ec2279a78df9ba81c817e634fa2a2736ba056a6f6375d29",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-add-evidence-driven-resource-policy-design",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "61c8ed77e6bf6a56996b0935c17c4080d5eecdceef0baa83ddcb1305956c3705",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    },
+    {
+      "label": "Cairn-add-evidence-driven-resource-policy-tasks",
+      "valid": true,
+      "verdict": "PASS",
+      "issues": [],
+      "receipt_hash": "c5171a10c0e6aab16960e09d2519606147160fc81184cea42c9933ac527ef7e1",
+      "policy": "mantle-default",
+      "policy_selection": {
+        "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+        "installation_receipt": false,
+        "locator": "cairn-policy/generated/cairn-policy.json",
+        "source": "legacy_default"
+      }
+    }
+  ],
+  "non_claims": [
+    "Native structural PASS is not artifact truth, semantic acceptance, source/snapshot approval, frozen G1/G2 admission, accepted-spec synchronization, archive, post-archive validation, publication or release.",
+    "The preserved historical and current failed outcomes are not reclassified. The exact independent missing prerequisites remain held in the referenced readiness record.",
+    "No independent reviewer verdict is claimed from the two failed review-tool attempts."
+  ]
+}

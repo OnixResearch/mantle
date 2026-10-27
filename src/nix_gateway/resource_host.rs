@@ -19,6 +19,7 @@ use crunch_build::distributed::action_family_identity;
 use crunch_build::distributed::canonical_remote_resource_requirements;
 use crunch_build::distributed::canonical_remote_worker_resource_inventory;
 use crunch_build::distributed::evaluate_resource_policy;
+use crunch_nix_gateway::api::UsageReasonCounts;
 use crunch_remote_core::attempt::RemoteAttemptId;
 use crunch_remote_core::attempt::RemoteFenceGeneration;
 use crunch_remote_core::attempt::RemoteJobId;
@@ -216,10 +217,36 @@ impl SelectedResources {
 pub(crate) struct ResourceUsageSummary {
     pub schedule: quota::UnitSchedule,
     pub totals: quota::Summary,
+    pub project_reason_counts: UsageReasonCounts,
+    pub account_reason_counts: UsageReasonCounts,
     pub project_limit_units: u64,
     pub account_limit_units: u64,
     pub memory_accounting: &'static str,
     pub output_accounting: &'static str,
+}
+impl ResourceUsageSummary {
+    pub(crate) fn into_accounting(self) -> crunch_nix_gateway::api::UsageAccounting {
+        crunch_nix_gateway::api::UsageAccounting {
+            schedule_version: self.schedule.version,
+            cpu_ms_per_unit: self.schedule.cpu_ms_per_unit,
+            memory_byte_ms_per_unit: self.schedule.memory_byte_ms_per_unit,
+            executor_output_bytes_per_unit: self.schedule.executor_output_bytes_per_unit,
+            project_limit_units: self.project_limit_units,
+            account_limit_units: self.account_limit_units,
+            project_reason_counts: self.project_reason_counts,
+            account_reason_counts: self.account_reason_counts,
+            unit: self.schedule.unit,
+            window_id: self.schedule.window_id,
+            window_start_s: self.schedule.window_start_s,
+            window_end_s: self.schedule.window_end_s,
+            project_reserved_units: self.totals.project_reserved,
+            project_charged_units: self.totals.project_charged,
+            account_reserved_units: self.totals.account_reserved,
+            account_charged_units: self.totals.account_charged,
+            memory_measurement: self.memory_accounting.into(),
+            output_measurement: self.output_accounting.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -391,6 +418,8 @@ impl ResourcePolicyHost {
         let limits = self.project(project, account)?;
         let ledger = self.store.snapshot()?;
         let mut totals = quota::Summary::default();
+        let mut project_reason_counts = UsageReasonCounts::default();
+        let mut account_reason_counts = UsageReasonCounts::default();
         for entry in ledger.entries.values() {
             let r = &entry.reservation;
             if r.schedule.window_id != self.config.schedule.window_id {
@@ -407,12 +436,14 @@ impl ResourcePolicyHost {
                 if r.account != account {
                     return Err(quota::QuotaError::Conflict.into());
                 }
+                count_reconciliation(&mut project_reason_counts, &entry.reconciliation)?;
                 totals.project_reserved =
                     totals.project_reserved.checked_add(reserved).ok_or(quota::QuotaError::Overflow)?;
                 totals.project_charged =
                     totals.project_charged.checked_add(charged).ok_or(quota::QuotaError::Overflow)?;
             }
             if r.account == account {
+                count_reconciliation(&mut account_reason_counts, &entry.reconciliation)?;
                 totals.account_reserved =
                     totals.account_reserved.checked_add(reserved).ok_or(quota::QuotaError::Overflow)?;
                 totals.account_charged =
@@ -422,6 +453,8 @@ impl ResourcePolicyHost {
         Ok(ResourceUsageSummary {
             schedule: self.config.schedule.clone(),
             totals,
+            project_reason_counts,
+            account_reason_counts,
             project_limit_units: limits.project_units,
             account_limit_units: limits.account_units,
             memory_accounting: MEMORY_ACCOUNTING,
@@ -1107,6 +1140,25 @@ impl ResourcePolicyHost {
             replay_json,
         })
     }
+}
+
+fn count_reconciliation(
+    counts: &mut UsageReasonCounts,
+    state: &quota::Reconciliation,
+) -> Result<(), quota::QuotaError> {
+    use quota::PendingReason as P;
+    use quota::Reconciliation as R;
+    let count = match state {
+        R::Reserved => &mut counts.reserved,
+        R::Settled { .. } => &mut counts.settled,
+        R::Pending(P::CancelledWithoutFinalUsage) => &mut counts.cancelled_without_final_usage,
+        R::Pending(P::WorkerLost) => &mut counts.worker_lost,
+        R::Pending(P::PartialObservation) => &mut counts.partial_observation,
+        R::Pending(P::UntrustedObservation) => &mut counts.untrusted_observation,
+        R::Pending(P::UsageExceedsReservation) => &mut counts.usage_exceeds_reservation,
+    };
+    *count = count.checked_add(1).ok_or(quota::QuotaError::Overflow)?;
+    Ok(())
 }
 
 #[cfg(test)]

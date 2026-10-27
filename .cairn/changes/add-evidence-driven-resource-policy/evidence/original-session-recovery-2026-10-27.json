@@ -1,0 +1,63 @@
+{
+  "schema": "mantle-original-review-chronology-recovery-v1",
+  "date": "2026-10-27",
+  "task": "6.1",
+  "strict_before_first_adaptation_proven": false,
+  "observations": [
+    {
+      "path": "/home/brittonr/.pi/agent/sessions/2026-09-0[234]*.jsonl",
+      "operation": "literal grep",
+      "patterns": [
+        "b256cd275d8c79ba485be8d317005f973879825a",
+        "nixbench-source-review",
+        "fixtures/resource-policy/benchmark-corpus"
+      ],
+      "result": "No matches found"
+    },
+    {
+      "path": "/home/brittonr/.pi/agent/sessions/2026-08-*.jsonl;/home/brittonr/.pi/agent/sessions/2026-09-0[1-5]*.jsonl",
+      "operation": "literal grep",
+      "patterns": [
+        "nixbench",
+        "nixbuild/nixbench",
+        "737a5a42181fdd59"
+      ],
+      "result": "No matches found"
+    },
+    {
+      "path": "/home/brittonr/.pi/agent/sessions",
+      "operation": "literal grep",
+      "patterns": [
+        "nixbuild/nixbench",
+        "b256cd275d8c79ba485be8d317005f973879825a"
+      ],
+      "result": "No matches found; searched storage only, not proof that an original event never occurred"
+    },
+    {
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle",
+      "operation": "directory listing",
+      "result": "The earliest retained Mantle root session shown is September15, later than the September4 first adaptation"
+    },
+    {
+      "path": "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy",
+      "operation": "read",
+      "result": "Path not found"
+    },
+    {
+      "path": "/home/brittonr/.pi/agent/sessions/--home-brittonr-git-OnixResearch-mantle--",
+      "operation": "directory listing",
+      "result": "Encoded Mantle-root session files shown predate August11; no original September3-4 review event found"
+    },
+    {
+      "operation": "scout",
+      "agent": "RecoverOriginalChronology",
+      "result": "Provider returned HTTP429 before investigation; no evidence obtained"
+    }
+  ],
+  "missing_prerequisite": "An original timestamped source/license review event demonstrably before FIRST adaptation, or explicit user-approved change to that authored historical obligation. Git co-introduction and current re-review cannot supply that fact.",
+  "related_evidence": "historical-provenance-recovery-2026-10-26.json:229-308",
+  "non_claims": [
+    "No pre-first-adaptation order, legal approval, acceptance or archive claimed.",
+    "No test/build/gate was rerun to infer historical chronology."
+  ]
+}

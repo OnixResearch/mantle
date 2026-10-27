@@ -1,0 +1,139 @@
+{
+  "schema": "mantle-historical-before-source-recovery-v1",
+  "recorded_date": "2026-10-26",
+  "scope": "Watch T4.1 historical source and exact scenario boundaries; preserves existing T1.1 qualification, no runtime execution or checklist mutation",
+  "historical_subject": {
+    "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "commit_date": "2026-09-30T18:39:48-04:00",
+    "relation": "Exact full identity of origin/main da00f5842 recorded in historical design; no crunch-watch-core, pipeline watch shell, or --watch CLI surface in this source.",
+    "archive_command": "git archive --format=tar da00f58425740adea559ef926c9dfa97b2cb8240 | b3sum",
+    "archive_command_output": "d8bdd22f8f332099a1813def0ab6fe6e6681dc64eaa5fa8e9fce2d0e4ed9a332  -",
+    "source_bindings": [
+      {
+        "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+        "path": "src/main.rs",
+        "git_blob": "be54cee29a5b0f1f3e402c14aca7ef9f491e8974",
+        "bytes": 425658,
+        "blake3": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2"
+      },
+      {
+        "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+        "path": "crates/crunch-pipeline/src/lib.rs",
+        "git_blob": "7ebcb7b2d0975d972af8766b6b3686c7a56616ca",
+        "bytes": 67701,
+        "blake3": "1dc68a4707f0f842b07d1c182775e0f53206f9e4ff3b0cd9d957e62f2484235f"
+      },
+      {
+        "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+        "path": "crates/crunch-build/src/worker.rs",
+        "git_blob": "fa5373e5598c86c06efa810d35dcf54270fbcb0d",
+        "bytes": 172328,
+        "blake3": "354b1607caf34d2be1ada8c11327f2de226c44fe05fcf56a40cc83b9ae000ddb"
+      },
+      {
+        "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+        "path": "Cargo.lock",
+        "git_blob": "692c9d2afe243546b9ef5894665afbb5e5b1f6c3",
+        "bytes": 255436,
+        "blake3": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b"
+      },
+      {
+        "commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+        "path": "rust-toolchain.toml",
+        "git_blob": "85b8aca95a9e5bd25eba1111d33b2d394062c8c3",
+        "bytes": 200,
+        "blake3": "686ea6636a0442261a526d175351dc7112fa19ed864ebc4b9e4b84a7dff532f5"
+      }
+    ]
+  },
+  "original_baseline_record": {
+    "commit": "a5b73f103c16beed9c26116457093a2ec32b4727",
+    "path": ".cairn/changes/add-watch-mode-goal-retraction/design.md",
+    "later_qualification_commit": "fbae3f2f279457e38fd46cb10dd27b90864684fc",
+    "current_source_record": ".cairn/changes/add-watch-mode-goal-retraction/design.md:37-62",
+    "facts": [
+      "Original design reports isolated source at da00f5842 but uses an existing shared mantle 0.1.0 executable, NOT a binary rebuilt from that source.",
+      "Two explicit eval processes see watch-baseline-first/echo first and watch-baseline-second/echo second. This is repeated-edit evaluation, not a live watcher.",
+      "The subsequent one-shot hello build output was /home/brittonr/scratch/mantle-watch-baseline-store-20260930/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello; it establishes one-shot sandbox feasibility only.",
+      "Historical clarification says cooperative cancellation covered selected-root evaluation, not teardown of a running sandbox child."
+    ],
+    "limitations": [
+      "No shared-binary BLAKE3 or source provenance was recorded for those baseline invocations.",
+      "The retained final edited source is watch-baseline-second; it cannot recover bytes/output of the first invocation by inference.",
+      "No original source-bound before edit/delete/invalid/coalescing runtime rail was recovered."
+    ]
+  },
+  "retained_local_artifacts": [
+    {
+      "path": "/home/brittonr/scratch/mantle-watch-baseline-edit-20260930.ncl",
+      "bytes": 153,
+      "blake3": "c50679052b2fe8152f31e040924ff5d76624aba8e4b9bda5811e9bb4c03a1af1"
+    },
+    {
+      "path": "/home/brittonr/scratch/mantle-watch-baseline-delete-20261001.ncl",
+      "bytes": 163,
+      "blake3": "383311f4cad829534f741622cdba41d29bf9cbaea691c5ef01c78b2e3ff2e523"
+    },
+    {
+      "path": "/home/brittonr/scratch/mantle-watch-goals-live-20260930/watch-live-evidence.json",
+      "bytes": 26282,
+      "blake3": "bf788beb0ad051d2c468ca92f71c12ac923a47702ca982fa65be651a0660b7ec"
+    }
+  ],
+  "excluded_post_change_artifact": {
+    "path": "/home/brittonr/scratch/mantle-watch-goals-live-20260930/watch-live-evidence.json",
+    "classification": "post-feature observation, never before-source evidence",
+    "reason": "Contains generation added/retained/retracted events, invalid-import retention, rapid edits, running sandbox cancellation and exit_status 0. It does not bind the producing binary/commit and necessarily exercises an implemented watcher absent from da00f584. Its filename date is not proof of before-feature execution."
+  },
+  "after_evidence_existing": {
+    "identity": {
+      "commit": "db98fd8bcf2d96614b8fe7f49ec131408b43018d",
+      "path": ".cairn/changes/add-watch-mode-goal-retraction/evidence/final-immutable-watch-runtime-20261023.json",
+      "git_blob": "3a0a4a67904d81b67cedbd76e7e343e91d12cbb1",
+      "bytes": 12609,
+      "blake3": "438d928119300cba18ef7f5eb1b4149b8f39a1d6fe255a49efcec54397c283c8"
+    },
+    "scope": "Retained October 23 immutable after rail only; not reused as a before observation."
+  },
+  "scenario_contract": {
+    "driver_identity_at_initial_source": {
+      "commit": "db98fd8bcf2d96614b8fe7f49ec131408b43018d",
+      "path": "scripts/watch-goal-retraction-smoke.py",
+      "git_blob": "04181044f324520a84a3313d176c86d1a70af71a",
+      "bytes": 10883,
+      "blake3": "e63a9184a5729db8b7532ee972fe70435725b225a092207364ffdec1d5b721ff"
+    },
+    "steps": [
+      "Initial keep and moving roots settle; edit moving root and require only changed identity rebuild.",
+      "Add a root, retain completed root; preserve the same admitted set after invalid imported source.",
+      "Rapid atomic edits coalesce without duplicate dispatch; inspect source revisions and actual outputs.",
+      "Introduce slow sandbox, delete root while descendants run, require teardown, no late output/CAS; then test graceful stop."
+    ],
+    "source_binding": "Use the same pinned driver and source-revision sequence for before/after, with separate fresh stores/state/scratch. Preserve driver bytes, each Nickel revision, all stdout/stderr, executable BLAKE3, archive/source identity and result per side. Paths/run names vary; normalize only declared run-path/goal-label components and never suppress substantive differences.",
+    "before_expectation": "The genuine before executable lacks --watch. Same rail cannot reach four watch scenarios; capture unsupported startup as unsupported, not 4 passes, and do not synthesize retraction/cancellation events. Before one-shot evaluation/build observations may supplement but cannot satisfy a missing four-scenario watch run."
+  },
+  "parent_only_preparation": {
+    "status": "Prepared recipes, NOT executed; parent owns Git mutation, builds and actual observation.",
+    "create_worktree_command": "git -C /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree worktree add --detach /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-before da00f58425740adea559ef926c9dfa97b2cb8240",
+    "build_from_historical_worktree": "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-target nix develop -c cargo build -p mantle --bin mantle --offline",
+    "unsupported_surface_command": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-target/debug/mantle --store /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-store --state-dir /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-state build --watch examples/hello.ncl --no-substitute",
+    "same_rail_command": "python3 /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-before/scripts/watch-goal-retraction-smoke.py --mantle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-target/debug/mantle --scratch /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-watch-before-rail",
+    "rail_preparation": "After verifying driver BLAKE3, copy the pinned integration driver into the otherwise absent historical scripts/watch-goal-retraction-smoke.py as test instrumentation only. This makes its library resolution use the historical lib/lib.ncl rather than silently importing the modern library. Retain original source archive and instrumented driver identities separately. Before unsupported startup/timeout is an expected capability boundary, not a successful full rail.",
+    "prerequisites": [
+      "Historical lockfile dependencies available; retain actual compiler/shell identity because historical toolchain says nightly.",
+      "Linux /proc, working Bubblewrap/user namespaces/pidfds and ordinary /bin/sh/BusyBox mappings for any later runtime scenario that reaches execution.",
+      "Fresh isolated state/store per side and scratch basename restricted to letters/digits/hyphen/underscore.",
+      "Capture exits and literal streams on unsupported/error paths; do not infer success from a zero-test filter or manually constructed event."
+    ],
+    "output_criteria": [
+      "Source/executable digest bound to da00f584 historical tree plus explicit test instrumentation.",
+      "Literal unsupported --watch parser output and nonzero exit, if observed; no historical runtime result is asserted here.",
+      "Current after scenario result must retain actual transition/source snapshots, descendant identities, teardown/no-late-output evidence and all failure records."
+    ]
+  },
+  "remaining_fact": "Genuine historical source is available; a contemporaneous source-bound four-scenario pre-feature run is not recoverable from retained records. A newly built historical subject can establish a retrospective missing-capability observation only. T4.1 remains a parent reconciliation decision, not silently closed.",
+  "execution_non_claims": [
+    "No builds, tests, smoke, campaigns or lifecycle gates ran during recovery.",
+    "No old shared-binary result is rebound to the isolated commit; no post-feature artifact is relabeled before-source evidence."
+  ]
+}

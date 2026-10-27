@@ -57,6 +57,10 @@ class Proof:
                             "CARGO_NET_OFFLINE": "true", "TMPDIR": str(args.scratch)}
         self.inputs = json.loads(args.acquisition_inputs.read_text())
         self.tools = json.loads(args.tools.read_text())
+        require("compiler" in self.tools, "tools manifest needs an independently admitted compiler-only rustc path")
+        compiler_root = source_root(self.tools["compiler"])
+        require(compiler_root != self.inputs["rust"], "execution compiler must not share the Cargo/oracle store root")
+        self.tools["runtime"] = sorted({compiler_root, *self.tools["runtime"]})
         require(self.tools["target_triple"] == "x86_64-unknown-linux-musl",
                 "matched proof needs a real musl Rust target; no gnu substitution")
         require(self.tools["host_triple"] == self.tools["target_triple"] or self.tools.get("target_linker"),
@@ -243,7 +247,7 @@ let producer = {{ name = "changed-lock-hash-producer", builder = {q(python)}, sy
         require(any(row["role"] == "vendored-dependencies" and row["path"] == vendor for row in evidence["source_closure"]),
                 "ordinary build evidence lost vendor identity")
         config = {"workspace": source, "vendor": vendor, "planner": self.tools["planner"],
-                  "cargo": self.inputs["rust"] + "/bin/cargo", "rustc": self.inputs["rust"] + "/bin/rustc",
+                  "cargo": self.inputs["rust"] + "/bin/cargo", "rustc": self.tools["compiler"],
                   "linker": self.tools["linker"], "toolchain": self.inputs["rust"], "helper": self.tools["helper"],
                   "runtime_inputs": self.tools["runtime"], "store_prefix": PREFIX, "system": "x86_64-linux",
                   "host_triple": self.tools["host_triple"], "target_triple": self.tools["target_triple"], "profile": "release"}

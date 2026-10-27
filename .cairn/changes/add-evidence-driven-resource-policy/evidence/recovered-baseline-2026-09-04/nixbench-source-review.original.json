@@ -1,0 +1,19 @@
+{
+  "schema": "mantle-resource-benchmark-source-review-v1",
+  "repository": "github.com/nixbuild/nixbench",
+  "revision": "b256cd275d8c79ba485be8d317005f973879825a",
+  "tree_path": "nix/packages/write-one-file.nix",
+  "source_blake3": "737a5a42181fdd59ba451159db7558c516f31ea82ffcc771f66a0f2d6421a5a8",
+  "readme_blake3": "95bbe021e75cbd2caf651604fa9b70adb23ad27845d49bc3c68a56b8ac829279",
+  "license": "Apache-2.0",
+  "license_blake3": "14ec1590aae4c4e763d123c31085d5d37703f7a838e589b0d356058ad99177dd",
+  "copied_source": false,
+  "adapted_pattern": "separate fixed rebuild seed, content seed, size, compressibility, and CPU facts",
+  "excluded_authority": [
+    "ambient environment",
+    "hosted-service tags",
+    "hosted-service API",
+    "unbounded parallelism",
+    "random runtime bytes"
+  ]
+}

@@ -24,7 +24,7 @@
   "tool_identity_requirement": "Every tool/source field is an exact immutable logical store root or executable beneath such a root, admitted by signed PathInfo and verified NAR. No tool is downloaded, built with a host compiler, or resolved from Cargo home by this proof driver.",
   "target": "x86_64-unknown-linux-musl",
   "host": "Must equal rustc -vV from the signed toolchain observation; cross-target compilation requires explicit target_linker {executable,arguments,inputs} in the tools manifest and identical producer config/Nickel declaration",
-  "rust_requirement": "Declared nightly Cargo/rustc supporting cargo build -Z unstable-options --unit-graph and the musl standard library; declared native linker/runtime closure",
+  "rust_requirement": "Declared nightly Cargo oracle supporting cargo build -Z unstable-options --unit-graph; tools.compiler names a separately admitted compiler-only rustc from the same cohort with host and musl standard libraries, and tools.runtime contains its explicit runtime roots; compiler/native closures must not reference Cargo/oracle roots",
   "execution_requirement": "Linux bubblewrap and user/network namespaces enabled; explicit pinned --bwrap path; strict Mantle native sandbox configured from declared tools",
   "network": "Only explicit positive and negative acquisition may fetch HTTPS; outer network namespace denies all subsequent planning, compilation, execution and signed clean-client reuse",
   "expected_stdout": "offline two-crate consumer: verified\n",

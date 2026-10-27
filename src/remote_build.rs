@@ -189,6 +189,8 @@ pub const DEFAULT_TICKET_UPLOAD_BYTES: u64 = 1_073_741_824;
 pub const DEFAULT_REMOTE_CONCURRENCY: u32 = 1;
 const COORDINATOR_STATE_FILE: &str = "remote-coordinator-state.json";
 const COORDINATOR_MUTATION_LOCK_FILE: &str = "remote-coordinator-mutation.lock";
+const COORDINATOR_MUTATION_LOCK_WAIT: Duration = Duration::from_secs(5);
+const COORDINATOR_MUTATION_LOCK_POLL: Duration = Duration::from_millis(10);
 #[cfg(unix)]
 const COORDINATOR_LOCK_FILE_MODE: u32 = 0o600;
 const SECRET_REDACTION: &str = "<redacted>";
@@ -539,7 +541,7 @@ pub struct RemoteLocalBuildExecutor {
 
 impl RemoteLocalBuildExecutor {
     fn signing_key_id(&self) -> String {
-        self.keypair.verifying_key.name().to_string()
+        self.keypair.verifying_key.to_string()
     }
 
     fn execute_at_unix_s(
@@ -4563,10 +4565,15 @@ pub fn validate_retained_remote_produced_outputs(
         {
             return Err("remote-retained-output-content-binding-mismatch".into());
         }
-        if !keys.iter().filter(|key| key.name() == output.path_info_signing_key_id).any(|key| {
-            crunch_build::verify_pathinfo_signatures_with_store_dir(info, std::slice::from_ref(key), store_prefix)
-                .is_trusted()
-        }) {
+        if !keys
+            .iter()
+            .zip(trusted_output_keys)
+            .filter(|(_, encoded)| encoded.as_str() == output.path_info_signing_key_id)
+            .any(|(key, _)| {
+                crunch_build::verify_pathinfo_signatures_with_store_dir(info, std::slice::from_ref(key), store_prefix)
+                    .is_trusted()
+            })
+        {
             return Err("remote-retained-output-signature-untrusted".into());
         }
     }
@@ -4943,6 +4950,21 @@ pub fn apply_worker_registration(
     state: &mut RemoteCoordinatorState,
     registration: RemoteWorkerRegistration,
 ) -> Result<Vec<RemoteJobId>, String> {
+    let (candidate, adopted, endpoint_id, worker_generation) = worker_registration_candidate(state, registration)?;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    debug_assert!(state.workers.contains_key(&endpoint_id));
+    debug_assert!(state.verified_locality_observations.values().all(|summary| {
+        summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
+    }));
+    Ok(adopted)
+}
+
+/// The same validated registration projection serves admission and readonly plans.
+fn worker_registration_candidate(
+    state: &RemoteCoordinatorState,
+    registration: RemoteWorkerRegistration,
+) -> Result<(RemoteCoordinatorState, Vec<RemoteJobId>, String, u64), String> {
     validate_worker_registration(&registration)?;
     let adopted = validate_worker_resume_summaries(state, &registration)?;
     let mut candidate = state.clone();
@@ -4959,13 +4981,11 @@ pub fn apply_worker_registration(
         summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
     });
     validate_coordinator_resource_state(&candidate)?;
-    persist_coordinator_candidate(&candidate)?;
-    *state = candidate;
-    debug_assert!(state.workers.contains_key(&endpoint_id));
-    debug_assert!(state.verified_locality_observations.values().all(|summary| {
+    debug_assert!(candidate.workers.contains_key(&endpoint_id));
+    debug_assert!(candidate.verified_locality_observations.values().all(|summary| {
         summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
     }));
-    Ok(adopted)
+    Ok((candidate, adopted, endpoint_id, worker_generation))
 }
 
 // r[impl external_batch_dispatchers.diagnostics]
@@ -7936,7 +7956,11 @@ fn select_coordinator_worker(
         .find(|placement| &placement.worker_endpoint_id == selected)
         .ok_or_else(|| "remote-worker-placement-selection-missing".to_string())?;
     debug_assert!(!placement.worker_endpoint_id.is_empty());
-    debug_assert_ne!(placement.resource_fit, crunch_build::ResourceFitClass::Constrained);
+    // Constrained describes post-reservation headroom, not failed admission.
+    debug_assert_eq!(
+        request.resource_requirements.is_some(),
+        placement.resource_fit != crunch_build::ResourceFitClass::Unknown
+    );
     Ok(Some(placement))
 }
 
@@ -11874,7 +11898,9 @@ fn validate_remote_pathinfo_artifact_digest(input: &RemotePathInfoBindingInput<'
 }
 
 fn pathinfo_has_signature_name(path_info: &PathInfo, signing_key_id: &str) -> bool {
-    path_info.signatures.iter().any(|signature| signature.name().as_str() == signing_key_id)
+    // Nix signature headers contain only names; output trust still matches public key material.
+    let signing_key_name = signing_key_id.split_once(':').map_or(signing_key_id, |(name, _)| name);
+    path_info.signatures.iter().any(|signature| signature.name().as_str() == signing_key_name)
 }
 
 fn remote_transfer_to_store_report(transfer: &RemoteTransferReport) -> crunch_store::OutputSubstitutionReport {
@@ -12477,18 +12503,47 @@ pub struct RemoteCoordinatorMutationGuard {
     _file: File,
 }
 
-pub fn acquire_remote_coordinator_mutation_guard(state_dir: &Path) -> Result<RemoteCoordinatorMutationGuard, String> {
+#[cfg(test)]
+fn acquire_remote_coordinator_mutation_guard(state_dir: &Path) -> Result<RemoteCoordinatorMutationGuard, String> {
+    let file = open_coordinator_mutation_lock(state_dir)?;
+    FileExt::try_lock_exclusive(&file).map_err(|err| format!("remote-coordinator-mutation-lock-busy: {err}"))?;
+    Ok(RemoteCoordinatorMutationGuard { _file: file })
+}
+
+impl RemoteCoordinatorMutationGuard {
+    /// Serialize short gateway transactions without making transient local
+    /// contention a host failure. Never hold this across worker execution.
+    pub fn acquire_wait(state_dir: &Path) -> Result<Self, String> {
+        debug_assert!(!COORDINATOR_MUTATION_LOCK_POLL.is_zero());
+        debug_assert!(COORDINATOR_MUTATION_LOCK_WAIT >= COORDINATOR_MUTATION_LOCK_POLL);
+        let file = open_coordinator_mutation_lock(state_dir)?;
+        let started = std::time::Instant::now();
+        loop {
+            match FileExt::try_lock_exclusive(&file) {
+                Ok(()) => return Ok(Self { _file: file }),
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && started.elapsed() < COORDINATOR_MUTATION_LOCK_WAIT =>
+                {
+                    thread::sleep(COORDINATOR_MUTATION_LOCK_POLL);
+                }
+                Err(error) => return Err(format!("remote-coordinator-mutation-lock-busy: {error}")),
+            }
+        }
+    }
+}
+
+fn open_coordinator_mutation_lock(state_dir: &Path) -> Result<File, String> {
     fs::create_dir_all(state_dir).map_err(|err| format!("creating coordinator state dir: {err}"))?;
     let path = state_dir.join(COORDINATOR_MUTATION_LOCK_FILE);
     let file = open_coordinator_lock_no_follow(&path)?;
-    FileExt::try_lock_exclusive(&file).map_err(|err| format!("remote-coordinator-mutation-lock-busy: {err}"))?;
     let metadata = file.metadata().map_err(|err| format!("reading coordinator mutation lock metadata: {err}"))?;
     if !metadata.is_file() {
         return Err("remote-coordinator-mutation-lock-not-regular".to_string());
     }
     assert!(metadata.is_file());
     assert_eq!(path.parent(), Some(state_dir));
-    Ok(RemoteCoordinatorMutationGuard { _file: file })
+    Ok(file)
 }
 
 #[cfg(unix)]
@@ -15307,7 +15362,37 @@ mod tests {
         symlink(&victim, hostile.join(COORDINATOR_MUTATION_LOCK_FILE)).unwrap();
         let rejected = acquire_remote_coordinator_mutation_guard(&hostile).unwrap_err();
         assert!(rejected.contains("without symlink following"));
+        assert!(
+            RemoteCoordinatorMutationGuard::acquire_wait(&hostile)
+                .unwrap_err()
+                .contains("without symlink following")
+        );
         assert_eq!(fs::read(victim).unwrap(), b"unchanged");
+    }
+
+    #[test]
+    fn coordinator_mutation_wait_serializes_contending_transactions() {
+        let root = tempfile::tempdir().unwrap();
+        let guard = acquire_remote_coordinator_mutation_guard(root.path()).unwrap();
+        let value = root.path().join("transaction-value");
+        fs::write(&value, b"before").unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let waiter_root = root.path().to_path_buf();
+        let waiter = thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let _guard = RemoteCoordinatorMutationGuard::acquire_wait(&waiter_root).unwrap();
+            result_tx.send(fs::read(waiter_root.join("transaction-value")).unwrap()).unwrap();
+        });
+        started_rx.recv().unwrap();
+        assert!(matches!(
+            result_rx.recv_timeout(Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        fs::write(&value, b"after").unwrap();
+        drop(guard);
+        assert_eq!(result_rx.recv_timeout(Duration::from_secs(5)).unwrap(), b"after");
+        waiter.join().unwrap();
     }
 
     #[test]
@@ -18003,6 +18088,32 @@ mod tests {
         assert!(
             matches!(second, RemoteCoordinatorDispatchDecision::AttachExisting { job_id: attached, .. } if attached == job_id)
         );
+    }
+
+    #[test]
+    fn coordinator_dispatch_accepts_constrained_headroom_without_overcommit() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut inventory = fixture_resource_inventory();
+        inventory.total.cpu_units = inventory.total.cpu_units.checked_mul(2).unwrap();
+        let mut worker = fixture_worker_registration();
+        worker.concurrency = TEST_WORKER_CONCURRENCY;
+        worker.resource_inventory = Some(inventory);
+        apply_worker_registration(&mut state, worker).unwrap();
+        let first = fixture_quantified_coordinator_request("constrained-first", "constrained-first-out");
+        let decision = admit_fixture_dispatch(&mut state, &first).unwrap();
+        assert!(matches!(decision, RemoteCoordinatorDispatchDecision::Dispatch {
+            resource_fit: crunch_build::ResourceFitClass::Constrained,
+            ..
+        }));
+        assert_eq!(state.jobs.len(), 1);
+        assert_eq!(state.resource_leases.len(), 1);
+        let reserved = state.clone();
+        let second = fixture_quantified_coordinator_request("constrained-second", "constrained-second-out");
+        assert!(matches!(
+            admit_fixture_dispatch(&mut state, &second).unwrap(),
+            RemoteCoordinatorDispatchDecision::Reject { .. }
+        ));
+        assert_eq!(state, reserved, "rejected capacity must not change reservations");
     }
 
     #[test]

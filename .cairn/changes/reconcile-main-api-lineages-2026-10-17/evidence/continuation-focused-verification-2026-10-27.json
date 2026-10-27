@@ -1,0 +1,764 @@
+{
+  "schema": "mantle-continuation-focused-verification-v1",
+  "date": "2026-10-27",
+  "pueue_task": 77,
+  "outcome": "PASS: all seven declared focused integration steps, selected source unchanged",
+  "verification": {
+    "schema": "mantle-retained-command-observations-v1",
+    "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/request.json",
+    "request_blake3": "903ae3217257740822f3bd82c97f63ebbebffea7f25026caf55aae42606f1445",
+    "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "started_at": "2026-10-27T06:09:17.692348-04:00",
+    "environment_overrides": {
+      "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_BUILD_JOBS": "4",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "CC": "clang",
+      "CXX": "clang++",
+      "AR": "ar",
+      "RANLIB": "ranlib",
+      "TMPDIR": "/tmp",
+      "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+      "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/runtime"
+    },
+    "source_before": {
+      "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+      "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+      "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+      "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+      "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+      "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+      "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+      "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+      "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+      "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+      "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+      "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef",
+      "src/source_built_fixed_point_shell.rs": "2f5165da7a3ebab6ed9920e39351a27c7f0f1b04335db772aab77eaecdd14d73"
+    },
+    "steps": [
+      {
+        "label": "affected-package-format-components",
+        "argv": [
+          "cargo",
+          "fmt",
+          "--check",
+          "-p",
+          "mantle",
+          "-p",
+          "crunch-nix-gateway",
+          "-p",
+          "crunch-nix-gateway-core",
+          "-p",
+          "crunch-remote-core",
+          "-p",
+          "crunch-store"
+        ],
+        "started_at": "2026-10-27T06:09:17.783929-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-format-components.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-format-components.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:09:23.226205-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "affected-package-strict-clippy-components",
+        "argv": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle",
+          "-p",
+          "crunch-nix-gateway",
+          "-p",
+          "crunch-nix-gateway-core",
+          "-p",
+          "crunch-remote-core",
+          "-p",
+          "crunch-store",
+          "--all-targets",
+          "--no-deps",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "started_at": "2026-10-27T06:09:23.232408-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-strict-clippy-components.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-strict-clippy-components.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:10:51.996412-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "d3024a91b15ca90ff84483a86df86e5bb39479f7dbf6bdb9e04aa4e9cb7b84fb"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "gateway-and-remote-protocol-regressions",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-nix-gateway",
+          "-p",
+          "crunch-nix-gateway-core",
+          "-p",
+          "crunch-remote-core",
+          "--lib",
+          "--tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T06:10:52.001939-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/gateway-and-remote-protocol-regressions.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/gateway-and-remote-protocol-regressions.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:14:10.970289-04:00",
+        "streams_blake3": {
+          "stdout": "ffc65163ad56798164c03933cce0f71b47ea2729cebde4673299018d30df6caf",
+          "stderr": "e1d7571d950e0a25de9f5e3732dac1ac5c6d270898268f0b2edcd2d06c435593"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "store-NAR-interoperability-regressions",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-store",
+          "--lib",
+          "nario",
+          "--",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T06:14:10.976868-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/store-NAR-interoperability-regressions.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/store-NAR-interoperability-regressions.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:15:08.979960-04:00",
+        "streams_blake3": {
+          "stdout": "ad9dacd072eb45796bc62ab02cf04596cfeba6b95d77a823535b80641f01d635",
+          "stderr": "f70898af2b42957f997d1b9853e418091c989a1dae53f5f04a918abccb763bfd"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "build-signer-and-no-private-diagnostics-worker",
+        "argv": [
+          "cargo",
+          "build",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle",
+          "--bin",
+          "mantle"
+        ],
+        "started_at": "2026-10-27T06:15:08.990261-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/build-signer-and-no-private-diagnostics-worker.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/build-signer-and-no-private-diagnostics-worker.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:16:29.859469-04:00",
+        "streams_blake3": {
+          "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "stderr": "0021cb05eddc607f494c50b9857a860d098d4a2714efd253ccf7080e1c556c2b"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "original-deadline-cgroup-acknowledgement",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle",
+          "--bin",
+          "mantle",
+          "cgroup_acknowledgement_requires_positive_migration_before_original_deadline",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T06:16:29.867778-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/original-deadline-cgroup-acknowledgement.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/original-deadline-cgroup-acknowledgement.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:18:18.579262-04:00",
+        "streams_blake3": {
+          "stdout": "9c380aefd13598e39c2efb3d4b40876b19558f70e149953f8305aa274277f59d",
+          "stderr": "37fb8235c60af31924cd60e99c61fa769bd84fcbc32502e55494031132a1748e"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      },
+      {
+        "label": "existing-proof-option-admission-regressions",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle",
+          "--bin",
+          "mantle",
+          "source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests",
+          "--",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T06:18:18.585698-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/existing-proof-option-admission-regressions.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/existing-proof-option-admission-regressions.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:18:20.246123-04:00",
+        "streams_blake3": {
+          "stdout": "4da93ba2795d12b0d4dd51e66dc3a2f736c5adf99e5a310a40dcf52e5e654640",
+          "stderr": "4449a9ae4ed0939701d50accab86f496cb064b01ee270cd09b1f2d33695331c9"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      }
+    ],
+    "non_claims": [
+      "Focused integration formatting, strict Clippy, gateway/remote/store behavior and fresh worker construction after removing the compiler-reported unused mutability. Not frozen G1/G2 admission, workspace/full-flake, acceptance, archive or publication.",
+      "V18 remains an actual strict-Clippy failure in the cache-path conditional and demand Option lookup. This run follows source-preserving Clippy repairs; no proof cohort or promoted cold workflow is launched."
+    ],
+    "immutable_artifacts": [],
+    "source_after": {
+      "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+      "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+      "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+      "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+      "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+      "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+      "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+      "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+      "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+      "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+      "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+      "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef",
+      "src/source_built_fixed_point_shell.rs": "2f5165da7a3ebab6ed9920e39351a27c7f0f1b04335db772aab77eaecdd14d73"
+    },
+    "source_unchanged": true,
+    "finished_at": "2026-10-27T06:18:20.304621-04:00",
+    "driver_exit_code": 0
+  },
+  "raw_steps": [
+    {
+      "label": "affected-package-format-components",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "mantle",
+        "-p",
+        "crunch-nix-gateway",
+        "-p",
+        "crunch-nix-gateway-core",
+        "-p",
+        "crunch-remote-core",
+        "-p",
+        "crunch-store"
+      ],
+      "started_at": "2026-10-27T06:09:17.783929-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-format-components.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-format-components.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:09:23.226205-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "text": ""
+        },
+        "stderr": {
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "text": ""
+        }
+      }
+    },
+    {
+      "label": "affected-package-strict-clippy-components",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "-p",
+        "crunch-nix-gateway",
+        "-p",
+        "crunch-nix-gateway-core",
+        "-p",
+        "crunch-remote-core",
+        "-p",
+        "crunch-store",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started_at": "2026-10-27T06:09:23.232408-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-strict-clippy-components.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/affected-package-strict-clippy-components.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:10:51.996412-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "d3024a91b15ca90ff84483a86df86e5bb39479f7dbf6bdb9e04aa4e9cb7b84fb"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "text": ""
+        },
+        "stderr": {
+          "blake3": "d3024a91b15ca90ff84483a86df86e5bb39479f7dbf6bdb9e04aa4e9cb7b84fb",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Checking mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 28s\n"
+        }
+      }
+    },
+    {
+      "label": "gateway-and-remote-protocol-regressions",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-nix-gateway",
+        "-p",
+        "crunch-nix-gateway-core",
+        "-p",
+        "crunch-remote-core",
+        "--lib",
+        "--tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T06:10:52.001939-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/gateway-and-remote-protocol-regressions.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/gateway-and-remote-protocol-regressions.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:14:10.970289-04:00",
+      "streams_blake3": {
+        "stdout": "ffc65163ad56798164c03933cce0f71b47ea2729cebde4673299018d30df6caf",
+        "stderr": "e1d7571d950e0a25de9f5e3732dac1ac5c6d270898268f0b2edcd2d06c435593"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "ffc65163ad56798164c03933cce0f71b47ea2729cebde4673299018d30df6caf",
+          "text": "\nrunning 21 tests\ntest api::tests::authority_unknown_cancellation_and_terminal_races ... ok\ntest api::tests::completion_delivery_linkage_and_signature_tampering ... ok\ntest api::tests::cursor_rejects_subject_scope_version_and_oversized_material ... ok\ntest api::tests::cursor_scope_purpose_expiry_and_response_bounds ... ok\ntest api::tests::damaged_deleted_and_wrong_key_journals_fail_closed ... ok\ntest api::tests::durable_duplicate_reconnect_and_pending_dispatch_recovery ... ok\ntest api::tests::event_budget_preserves_a_terminal_slot_and_rejects_fence_rollback ... ok\ntest api::tests::status_read_permission_does_not_grant_usage_accounting ... ok\ntest replay::tests::competing_replay_reservations_commit_only_once_across_independent_connections ... ok\ntest replay::tests::corrupt_or_nonprivate_ledger_fails_closed_without_erasing_committed_nonce ... ok\ntest replay::tests::replay_lock_contention_is_bounded_before_any_nonce_commit ... ok\ntest replay::tests::synchronized_replay_survives_reopen_and_conflicting_request_cannot_reuse_nonce ... ok\ntest tests::bounded_counts_and_bad_padding_reject_before_allocating ... ok\ntest tests::concrete_requests_and_denied_operations ... ok\ntest tests::import_header_requires_bounded_truthful_metadata ... ok\ntest tests::incomplete_transfer_never_commits_and_exact_transfer_does ... ok\ntest tests::installed_nix_client_negotiates_private_socket ... ignored, requires an installed Nix client and a private writable socket directory\ntest tests::installed_nix_client_receives_redacted_admin_denial ... ignored, requires installed Nix and a private socket; no real store is modified\ntest tests::installed_nix_client_sends_bounded_query_missing ... ignored, requires an installed Nix client and a private writable socket directory\ntest tests::installed_nix_store_realise_queries_missing_before_build ... ignored, requires an installed Nix client and a private writable socket directory\ntest tests::unsupported_version_and_partial_handshake_fail_before_options ... ok\n\ntest result: ok. 17 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.28s\n\n\nrunning 14 tests\ntest admitted_nar_import_requires_exact_scope_signature_content_and_budget ... ok\ntest build_target_projection_requires_signed_ia_and_exact_selected_output_set ... ok\ntest cached_derived_query_requires_signed_drv_and_unambiguous_complete_output ... ok\ntest disconnected_import_discards_staging_without_publishing_metadata ... ok\ntest installed_nix_cached_drv_never_acks_unauthorized_build_paths ... ignored, requires an installed Nix 2.36 client and private Unix sockets\ntest installed_nix_path_info_requires_signed_complete_store ... ignored, requires an installed Nix 2.36 client and private Unix sockets\ntest private_listener_rejects_shared_socket_directory ... ok\ntest private_listener_survives_malformed_peer_before_signed_read ... ignored, requires an installed Nix 2.36 client and private Unix sockets\ntest retained_producer_identity_must_match_current_verified_cas_not_only_path ... ok\ntest signed_ia_projection_requires_exact_remote_derivation_and_measured_inputs ... ok\ntest signed_path_info_is_bound_to_measured_cas_content ... ok\ntest signed_standard_nix_ca_import_and_read_reject_a_different_path_identity ... ok\ntest upload_revocation_after_content_ingest_never_publishes_pathinfo ... ok\ntest valid_paths_response_never_promotes_unmeasured_or_unsigned_metadata ... ok\n\ntest result: ok. 11 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.95s\n\n\nrunning 16 tests\ntest credential_frame_limit_rejects_before_reading_or_authenticating_secret ... ok\ntest remote_credentials::tests::invalid_entropy_and_repeated_entropy_fail_closed ... ok\ntest remote_credentials::tests::legacy_public_seed_prediction_does_not_match_new_token ... ok\ntest remote_credentials::tests::malformed_structural_state_cannot_reach_authentication_policy ... ok\ntest remote_credentials::tests::malformed_tokens_and_wrong_keys_fail_authentication ... ok\ntest remote_credentials::tests::nominal_roles_accept_valid_boundaries ... ok\ntest remote_credentials::tests::nominal_roles_reject_invalid_boundaries_and_overflow ... ok\ntest remote_credentials::tests::persisted_state_rejects_policy_limit_and_identity_violations ... ok\ntest remote_credentials::tests::policy_checks_follow_successful_verifier_comparison ... ok\ntest remote_credentials::tests::reviewed_ttl_and_use_boundaries_are_enforced ... ok\ntest remote_credentials::tests::secret_nominal_types_format_only_as_redacted ... ok\ntest remote_credentials::tests::state_serialization_contains_verifier_but_not_bearer_material ... ok\ntest remote_credentials::tests::valid_entropy_issues_and_verifies_ticket ... ok\ntest remote_credentials::tests::verifier_key_parser_rejects_malformed_and_zero_keys ... ok\ntest remote_credentials::tests::verifier_serialization_is_strict_and_debug_is_redacted ... ok\ntest ticket_envelope_checks_real_secret_expiration_endpoint_audience_and_replayed_frame ... ok\n\ntest result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 6 tests\ntest tests::authorities_are_distinct_and_ticket_cannot_admin ... ok\ntest tests::closed_wire_table_and_allocation_bounds ... ok\ntest tests::concrete_build_is_idempotent_only_for_matching_owner_scope_and_digest ... ok\ntest tests::event_pages_and_signed_results_require_independent_owner_scope_and_bounds ... ok\ntest tests::expired_or_wrong_audience_never_leaks_identity ... ok\ntest tests::store_reconnect_cancel_and_publication_require_exact_facts ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 110 tests\ntest admission::tests::a_matching_manifest_and_declared_sources_are_admitted ... ok\ntest admission::tests::coordinator_declaration_rejects_duplicate_features_before_live_claims_and_invalid_locality ... ok\ntest admission::tests::duplicate_empty_and_undeclared_sources_retain_distinct_rejections ... ok\ntest admission::tests::present_observation_order_does_not_change_missing_inputs ... ok\ntest admission::tests::worker_registration_checks_version_list_uniqueness_and_resume_fence_before_key ... ok\ntest admission::tests::wrong_manifest_identity_precedes_ref_bounds_and_mismatch ... ok\ntest attempt::tests::advancing_a_valid_fence_never_decreases ... ok\ntest attempt::tests::assignment_nonce_prevents_identity_reuse_after_state_reset ... ok\ntest attempt::tests::canonical_payload_byte_limit_includes_json_escaping_and_framing ... ok\ntest attempt::tests::canonical_payload_digests_match_the_existing_v1_serde_wire_bytes ... ok\ntest attempt::tests::deserialized_malformed_identity_is_rejected_by_the_pure_transition ... ok\ntest attempt::tests::duplicate_report_is_an_idempotent_no_op_and_conflict_is_rejected ... ok\ntest attempt::tests::durable_attempt_rejects_replayed_worker_identity_missing_nonce_and_forged_result ... ok\ntest attempt::tests::durable_coordinator_projection_rejects_stale_transfer_and_false_result_claims ... ok\ntest attempt::tests::equivalent_facts_produce_equivalent_decisions ... ok\ntest attempt::tests::event_retention_exhaustion_fails_closed_without_evicting_conflict_history ... ok\ntest attempt::tests::malformed_assignment_nonce_fails_before_identity_derivation ... ok\ntest attempt::tests::malformed_identity_and_unknown_future_fence_fail_without_state_change ... ok\ntest attempt::tests::output_result_requires_separate_output_admission_authorization ... ok\ntest attempt::tests::repeated_assignment_advances_every_fence_generation ... ok\ntest attempt::tests::result_ready_and_completion_require_matching_output_digest ... ok\ntest attempt::tests::retry_decision_uses_only_supplied_budget_and_time_facts ... ok\ntest attempt::tests::stale_report_is_rejected_before_output_admission ... ok\ntest attempt::tests::terminal_states_never_transition_to_live_states ... ok\ntest attempt::tests::transfer_checkpoints_cannot_regress_with_a_fresh_event_id ... ok\ntest attempt::tests::transition_table_accepts_only_declared_live_edges ... ok\ntest attempt_log::tests::append_and_manifest_ref_checks_reject_conflicts_without_reordering ... ok\ntest attempt_log::tests::cursor_and_page_boundaries ... ok\ntest attempt_log::tests::fence_and_chain_precedence ... ok\ntest attempt_log::tests::policy_redaction_and_metadata_fail_closed_at_boundaries ... ok\ntest attempt_log::tests::retention_accounts_for_oldest_segments_and_rejects_impossible_limits ... ok\ntest attempt_log::tests::segment_contiguity_and_manifest_anchor_invariants ... ok\ntest caveat::tests::alternatives_choose_first_match_and_deny_if_none_matches ... ok\ntest caveat::tests::bound_rewrite_matches_complete_segments_and_preserves_binding ... ok\ntest caveat::tests::exact_store_gate_denies_prefix_lookalikes_traversal_and_rewrites ... ok\ntest caveat::tests::expanded_output_over_bound_denies_without_alternative_fallback ... ok\ntest caveat::tests::finite_input_space_never_widens_under_appended_rewrites ... ok\ntest caveat::tests::known_variants_reject_missing_extra_and_invalid_fields ... ok\ntest caveat::tests::newest_runs_first_but_ancestor_rejection_cannot_be_rewritten_away ... ok\ntest caveat::tests::original_and_every_ancestor_output_must_pass_site_policy ... ok\ntest caveat::tests::pattern_value_segment_chain_and_alternative_bounds_fail_closed ... ok\ntest caveat::tests::project_gate_binds_original_owner_every_prefix_and_admitted_goal ... ok\ntest caveat::tests::record_ordinals_and_serialized_size_are_not_normalized_away ... ok\ntest caveat::tests::reject_is_identity_only_for_nonmatches_and_unknown_always_denies ... ok\ntest caveat::tests::remote_site_conjoins_parent_jobs_classes_and_receiver_deadlines_before_rewrite ... ok\ntest demand::tests::forged_identity_noncanonical_resources_and_count_bound_do_not_mutate_book ... ok\ntest demand::tests::repeated_rounds_dedupe_changed_requirements_replace_and_every_lifetime_end_retracts ... ok\ntest effect::tests::client_exchange_observation_requires_exact_actor_fence_and_frame_limit ... ok\ntest effect::tests::dependent_effect_requires_matching_bounded_observation ... ok\ntest effect::tests::failed_adapter_observation_is_terminal_and_cannot_claim_success ... ok\ntest effect::tests::failed_session_admits_exactly_one_terminal_failure_report ... ok\ntest effect::tests::fenced_session_rejects_other_job_attempt_and_generation_before_effect_planning ... ok\ntest effect::tests::healthy_session_has_no_failure_to_report ... ok\ntest effect::tests::lease_renewal_and_output_transfer_need_exact_observations ... ok\ntest effect::tests::partially_durable_store_failure_cannot_complete_or_persist_attempt ... ok\ntest endpoint::tests::exact_revoke_retains_tombstone_and_recreation_fences_old_presentations ... ok\ntest endpoint::tests::rejects_noncanonical_names_corrupt_tables_and_generation_overflow ... ok\ntest endpoint::tests::resolves_all_entry_kinds_and_receiver_rechecks_every_binding_fact ... ok\ntest external_batch::tests::fenced_response_rejects_stale_identity_before_untrusted_job_and_terminal_reconcile ... ok\ntest failure::tests::transient_transport_and_terminal_trust_failures_are_distinct ... ok\ntest identity::tests::external_allocation_retries_are_distinct_but_reproducible ... ok\ntest identity::tests::normalized_key_distinguishes_source_output_and_resource_requirements ... ok\ntest identity::tests::output_artifact_id_uses_exact_nul_separated_v1_identity_without_intermediate_allocation ... ok\ntest lease::tests::overlapping_refs_are_sorted_and_lease_release_is_only_a_plan ... ok\ntest lease::tests::pre_dedup_count_is_bounded ... ok\ntest nominal::tests::each_identity_role_admits_only_bounded_control_free_text ... ok\ntest output::tests::metadata_admission_checks_ordered_receipt_then_identity_and_nar_shape ... ok\ntest output::tests::nar_summary_rejects_bad_digest_and_unbound_pathinfo ... ok\ntest output::tests::output_artifact_sequence_requires_payload_identity_and_every_expected_artifact ... ok\ntest output::tests::policy_key_material_matching_does_not_claim_content_trust ... ok\ntest output::tests::scope_and_transfer_key_preserve_first_failure_precedence ... ok\ntest output::tests::transfer_report_distinguishes_fallback_and_actual_streaming ... ok\ntest output::tests::worker_output_facts_keep_nar_failure_before_later_metadata_errors ... ok\ntest protocol::tests::admitted_session_and_repeated_output_artifacts ... ok\ntest protocol::tests::wrong_direction_order_and_unadmitted_data_frames_fail_closed ... ok\ntest provider::tests::incomplete_build_request_never_reaches_remote_dispatch ... ok\ntest provider::tests::untrusted_remote_failure_cannot_enable_implicit_fallback ... ok\ntest receipt::tests::malformed_executor_and_oversized_outputs_never_get_a_digest ... ok\ntest receipt::tests::ordered_output_receipt_preserves_v1_absence_large_decimal_and_field_order ... ok\ntest receipt::tests::request_and_expected_path_are_bound_into_receipt_identity ... ok\ntest recovery::tests::only_terminal_jobs_plan_lease_release ... ok\ntest recovery::tests::same_session_precedes_exhausted_reconnect_attempts ... ok\ntest resource::tests::capacity_denies_each_shortfall_without_promoting_remaining_fit ... ok\ntest resource::tests::generation_fence_and_attempt_bind_existing_lease ... ok\ntest resource::tests::locality_cannot_invent_unverified_or_overflowing_receiver_presence ... ok\ntest resource::tests::preference_order_preserves_eligibility_independent_ranking ... ok\ntest transfer::tests::delta_accounting_and_fallback_preserve_accepted_bytes ... ok\ntest transfer::tests::negotiated_streaming_never_claims_fixture_runtime_completion ... ok\ntest transfer::tests::production_input_manifest_requires_current_fence_and_exact_nar_artifact_set ... ok\ntest transfer::tests::production_manifest_rejects_digest_then_stale_fence_before_output_artifacts ... ok\ntest transfer::tests::production_output_manifest_artifacts_bind_nar_and_exact_serialized_pathinfo_bytes ... ok\ntest transfer::tests::production_runtime_receipt_requires_completed_evidence_without_admission_claim ... ok\ntest transfer::tests::stale_scope_and_forged_checkpoint_cursor_cannot_resume ... ok\ntest transfer::tests::unknown_chunk_and_ungranted_credit_reject_before_reservation ... ok\ntest transfer::tests::uploaded_bytes_and_missing_identity_fail_closed ... ok\ntest transfer::tests::uploaded_source_artifacts_require_exact_payload_and_unique_expected_refs ... ok\ntest trellis_projection::tests::authority_precedes_replay_and_replay_precedes_capacity_and_terminal ... ok\ntest trellis_projection::tests::complete_finite_matrix_matches_actual_trellis_admit ... ok\ntest trellis_projection::tests::complete_retained_history_classifies_the_last_entry ... ok\ntest trellis_projection::tests::exhausted_identity_domain_never_aliases_or_forgets_existing_values ... ok\ntest trellis_projection::tests::first_and_final_fences_keep_report_admission_separate_from_reassignment ... ok\ntest trellis_projection::tests::full_identity_equality_is_stable_across_a_trace ... ok\ntest trellis_projection::tests::out_of_model_progress_and_malformed_payloads_do_not_receive_coverage ... ok\ntest trellis_projection::tests::trellis::verified_negative::duplicate_and_conflicting_events_preserve_terminal_state ... ok\ntest trellis_projection::tests::trellis::verified_negative::early_or_unlinked_completion_never_exposes_a_result ... ok\ntest trellis_projection::tests::trellis::verified_negative::fences_authority_events_history_and_linkage_reject_without_output_authority ... ok\ntest trellis_projection::tests::trellis::verified_negative::invalid_status_tags_reject_before_any_transition ... ok\ntest trellis_projection::tests::trellis::verified_positive::accepted_transitions_retain_exact_result_linkage ... ok\ntest trellis_projection::tests::trellis::verified_positive::every_phase_kind_pair_has_the_named_transition ... ok\ntest trellis_projection::tests::trellis::verified_positive::queued_and_ready_failure_close_without_output_authority ... ok\n\ntest result: ok. 110 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 63.60s\n\n\nrunning 1 test\ntest remote_core_runtime_dependency_graph_has_no_host_authority ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s\n\n"
+        },
+        "stderr": {
+          "blake3": "e1d7571d950e0a25de9f5e3732dac1ac5c6d270898268f0b2edcd2d06c435593",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling bstr v1.12.1\n   Compiling tokio v1.51.0\n   Compiling tracing-subscriber v0.3.23\n   Compiling chrono v0.4.44\n   Compiling gix-validate v0.11.0\n   Compiling gix-path v0.11.2\n   Compiling gix-utils v0.3.1\n   Compiling gix-error v0.2.1\n   Compiling gix-features v0.46.2\n   Compiling gix-date v0.15.1\n   Compiling gix-hash v0.23.0\n   Compiling gix-actor v0.40.0\n   Compiling gix-fs v0.19.2\n   Compiling gix-hashtable v0.13.0\n   Compiling gix-object v0.58.0\n   Compiling gix-chunk v0.7.0\n   Compiling gix-quote v0.7.0\n   Compiling gix-commitgraph v0.35.0\n   Compiling gix-tempfile v21.0.2\n   Compiling gix-glob v0.24.0\n   Compiling gix-lock v21.0.2\n   Compiling gix-command v0.8.0\n   Compiling gix-attributes v0.31.0\n   Compiling gix-revwalk v0.29.0\n   Compiling gix-config-value v0.17.1\n   Compiling miette v7.6.0\n   Compiling tokio-util v0.7.18\n   Compiling tokio-rustls v0.26.4\n   Compiling tower v0.5.3\n   Compiling tower-http v0.6.8\n   Compiling h2 v0.4.16\n   Compiling tokio-stream v0.1.18\n   Compiling curve25519-dalek v4.1.3\n   Compiling gix-traverse v0.55.0\n   Compiling gix-packetline v0.21.2\n   Compiling bindgen v0.69.5\n   Compiling ed25519-dalek v2.2.0\n   Compiling derive_more-impl v2.1.1\n   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling hyper v1.9.0\n   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling derive_more v2.1.1\n   Compiling num_enum_derive v0.7.6\n   Compiling hyper-util v0.1.20\n   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling hyper-rustls v0.27.7\n   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling gix-bitmap v0.3.0\n   Compiling reqwest v0.13.2\n   Compiling tracing-appender v0.2.5\n   Compiling gix-index v0.49.0\n   Compiling num_enum v0.7.6\n   Compiling n0-future v0.3.2\n   Compiling tracing-indicatif v0.3.14\n   Compiling astral-tokio-tar v0.6.4\n   Compiling reqwest-middleware v0.5.1\n   Compiling object_store v0.14.0\n   Compiling reqwest-tracing v0.6.0\n   Compiling gix-filter v0.28.0\n   Compiling gix-ref v0.61.0\n   Compiling gix-ignore v0.19.1\n   Compiling nix-compat v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/nix-compat)\n   Compiling irpc v0.13.0\n   Compiling gix-worktree v0.50.0\n   Compiling snix-tracing v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-tracing)\n   Compiling async-compression v0.4.19\n   Compiling fastcdc v3.2.1\n   Compiling gix-pathspec v0.16.1\n   Compiling snix-castore v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-castore)\n   Compiling iroh-io v0.6.2\n   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-attestation-core)\n   Compiling gix-url v0.35.2\n   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)\n   Compiling bao-tree v0.16.1\n   Compiling crunch-attestation v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-attestation)\n   Compiling oci-spec v0.7.1\n   Compiling fastcdc v5.0.0\n   Compiling gix-prompt v0.14.1\n   Compiling gix-revision v0.43.0\n   Compiling nix-archive v0.1.0\n   Compiling nix-archive v0.6.0\n   Compiling snix-store v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-store)\n   Compiling snix-build v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-build)\n   Compiling gix-diff v0.61.0\n   Compiling crunch-nar v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-nar)\n   Compiling gix-refspec v0.39.0\n   Compiling gix-credentials v0.37.1\n   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-action-result-core)\n   Compiling gix-discover v0.49.0\n   Compiling crunch-composition-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-composition-core)\n   Compiling gix-pack v0.68.0\n   Compiling gix-dir v0.23.0\n   Compiling gix-transport v0.55.1\n   Compiling gix-config v0.54.0\n   Compiling gix-worktree-stream v0.30.0\n   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rust-cache-core)\n   Compiling gix-negotiate v0.29.0\n   Compiling gix-shallow v0.10.0\n   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/mantle-rust-plan-core)\n   Compiling gix-protocol v0.59.0\n   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/mantle-rust-differential-core)\n   Compiling gix-worktree-state v0.28.0\n   Compiling gix-archive v0.30.0\n   Compiling gix-submodule v0.28.0\n   Compiling gix-odb v0.78.0\n   Compiling gix-status v0.28.0\n   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling gix-blame v0.11.0\n   Compiling gix-mailmap v0.32.0\n   Compiling crunch-remote-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-remote-core)\n   Compiling ureq v3.3.0\n   Compiling gix v0.81.0\n   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)\n   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/mantle-causal-trace-core)\n   Compiling crunch-glue v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-glue)\n   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)\n   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-nix-gateway-core)\n   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)\n   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)\n   Compiling crunch-store v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-store)\n   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rust-cache)\n   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rustc-wrapper)\n   Compiling crunch-build v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-build)\n   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-nix-gateway)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 13s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/crunch_nix_gateway-c8b17703a57e9459)\n     Running tests/nix_path_info.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/nix_path_info-4395816156265465)\n     Running tests/ticket_envelope.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/ticket_envelope-8171ddbf17364aa2)\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/crunch_nix_gateway_core-bfd90da428851d3f)\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/crunch_remote_core-9ff2253d203681b6)\n     Running tests/authority.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/authority-daf37bb1006f22b9)\n"
+        }
+      }
+    },
+    {
+      "label": "store-NAR-interoperability-regressions",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-store",
+        "--lib",
+        "nario",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T06:14:10.976868-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/store-NAR-interoperability-regressions.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/store-NAR-interoperability-regressions.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:15:08.979960-04:00",
+      "streams_blake3": {
+        "stdout": "ad9dacd072eb45796bc62ab02cf04596cfeba6b95d77a823535b80641f01d635",
+        "stderr": "f70898af2b42957f997d1b9853e418091c989a1dae53f5f04a918abccb763bfd"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "ad9dacd072eb45796bc62ab02cf04596cfeba6b95d77a823535b80641f01d635",
+          "text": "\nrunning 21 tests\ntest nario::tests::ca_identity_core_accepts_standard_path_and_rejects_mismatch ... ok\ntest nario::tests::materialization_publication_moves_all_staged_paths ... ok\ntest nario::tests::materialization_publication_rolls_back_prior_moves_on_failure ... ok\ntest nario::tests::nario_casita_accepts_configured_1024_root_boundary ... ok\ntest nario::tests::nario_casita_batch_publishes_both_verified_paths ... ok\ntest nario::tests::nario_casita_batch_rejects_conflicting_root_without_publishing_other_path ... ok\ntest nario::tests::nario_casita_late_envelope_failure_reclaims_first_staged_path ... ok\ntest nario::tests::nario_casita_later_bad_nar_leaves_earlier_path_unpublished ... ok\ntest nario::tests::nario_casita_later_envelope_staging_failure_leaves_earlier_object_collectable ... ok\ntest nario::tests::nario_casita_rechecks_import_policy_before_reading_archive ... ok\ntest nario::tests::nario_casita_rejects_1025_new_roots_before_any_publication ... ok\ntest nario::tests::nario_casita_rejects_out_of_policy_key_before_archive_or_mutation ... ok\ntest nario::tests::nario_casita_rejects_unsigned_override_before_reading_archive ... ok\ntest nario::tests::nario_casita_rejects_unsigned_record_under_signed_import ... ok\ntest nario::tests::nario_declared_profile_bounds_gate_batch_without_repository_mutation ... ok\ntest nario::tests::nario_snix_batch_import_accepts_unsigned_record_and_reopens_both_paths ... ok\ntest nario::tests::reference_closure_accepts_archive_member_and_rejects_missing_member ... ok\ntest nario::tests::sha256_parser_accepts_pinned_raw_hex_and_rejects_other_encodings ... ok\ntest nario::tests::state_core_accepts_record_and_end ... ok\ntest nario::tests::state_core_rejects_marker_duplicate_and_limit ... ok\ntest nario::tests::trust_core_accepts_matching_key_and_rejects_wrong_key ... ok\n\ntest result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 438 filtered out; finished in 57.50s\n\n"
+        },
+        "stderr": {
+          "blake3": "f70898af2b42957f997d1b9853e418091c989a1dae53f5f04a918abccb763bfd",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/crunch_store-8dabc26757b22128)\n"
+        }
+      }
+    },
+    {
+      "label": "build-signer-and-no-private-diagnostics-worker",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle"
+      ],
+      "started_at": "2026-10-27T06:15:08.990261-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/build-signer-and-no-private-diagnostics-worker.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/build-signer-and-no-private-diagnostics-worker.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:16:29.859469-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "0021cb05eddc607f494c50b9857a860d098d4a2714efd253ccf7080e1c556c2b"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "text": ""
+        },
+        "stderr": {
+          "blake3": "0021cb05eddc607f494c50b9857a860d098d4a2714efd253ccf7080e1c556c2b",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 20s\n"
+        }
+      }
+    },
+    {
+      "label": "original-deadline-cgroup-acknowledgement",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "cgroup_acknowledgement_requires_positive_migration_before_original_deadline",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T06:16:29.867778-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/original-deadline-cgroup-acknowledgement.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/original-deadline-cgroup-acknowledgement.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:18:18.579262-04:00",
+      "streams_blake3": {
+        "stdout": "9c380aefd13598e39c2efb3d4b40876b19558f70e149953f8305aa274277f59d",
+        "stderr": "37fb8235c60af31924cd60e99c61fa769bd84fcbc32502e55494031132a1748e"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "9c380aefd13598e39c2efb3d4b40876b19558f70e149953f8305aa274277f59d",
+          "text": "\nrunning 1 test\ntest remote_build::usage::cgroup_acknowledgement_requires_positive_migration_before_original_deadline ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2864 filtered out; finished in 0.05s\n\n"
+        },
+        "stderr": {
+          "blake3": "37fb8235c60af31924cd60e99c61fa769bd84fcbc32502e55494031132a1748e",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 48s\n     Running unittests src/main.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/mantle-bdc2a0af9615013d)\n"
+        }
+      }
+    },
+    {
+      "label": "existing-proof-option-admission-regressions",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_at": "2026-10-27T06:18:18.585698-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/existing-proof-option-admission-regressions.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v19/results/existing-proof-option-admission-regressions.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T06:18:20.246123-04:00",
+      "streams_blake3": {
+        "stdout": "4da93ba2795d12b0d4dd51e66dc3a2f736c5adf99e5a310a40dcf52e5e654640",
+        "stderr": "4449a9ae4ed0939701d50accab86f496cb064b01ee270cd09b1f2d33695331c9"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true,
+      "streams": {
+        "stdout": {
+          "blake3": "4da93ba2795d12b0d4dd51e66dc3a2f736c5adf99e5a310a40dcf52e5e654640",
+          "text": "\nrunning 1 test\ntest source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2864 filtered out; finished in 0.00s\n\n"
+        },
+        "stderr": {
+          "blake3": "4449a9ae4ed0939701d50accab86f496cb064b01ee270cd09b1f2d33695331c9",
+          "text": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.59s\n     Running unittests src/main.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/mantle-bdc2a0af9615013d)\n"
+        }
+      }
+    }
+  ],
+  "prior_failure": {
+    "pueue_task": 75,
+    "result": {
+      "schema": "mantle-retained-command-observations-v1",
+      "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/request.json",
+      "request_blake3": "cc8168bfd43ad0ae58ebc1f19fe438035cd6d1c3bed9a05cf4c8a0a540ff66fc",
+      "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "started_at": "2026-10-27T05:58:01.460111-04:00",
+      "environment_overrides": {
+        "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_BUILD_JOBS": "4",
+        "RUSTC_WRAPPER": "",
+        "RUSTC_WORKSPACE_WRAPPER": "",
+        "CC": "clang",
+        "CXX": "clang++",
+        "AR": "ar",
+        "RANLIB": "ranlib",
+        "TMPDIR": "/tmp",
+        "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+        "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/runtime"
+      },
+      "source_before": {
+        "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+        "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+        "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+        "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+        "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+        "src/remote_build/usage.rs": "af063531599507c77cced84c646a7752db8585c9d14a1eccbac51d89d45e6e84",
+        "src/main.rs": "e047f45def328e34d5ecae1e6ceb13cdc63590c13bc763dff3110973dba34350",
+        "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+        "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+        "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+        "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+        "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+        "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+        "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+        "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+        "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+        "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+        "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+        "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef"
+      },
+      "steps": [
+        {
+          "label": "affected-package-format-components",
+          "argv": [
+            "cargo",
+            "fmt",
+            "--check",
+            "-p",
+            "mantle",
+            "-p",
+            "crunch-nix-gateway",
+            "-p",
+            "crunch-nix-gateway-core",
+            "-p",
+            "crunch-remote-core",
+            "-p",
+            "crunch-store"
+          ],
+          "started_at": "2026-10-27T05:58:01.484894-04:00",
+          "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+          "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/results/affected-package-format-components.stdout.log",
+          "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/results/affected-package-format-components.stderr.log",
+          "exit_code": 0,
+          "finished_at": "2026-10-27T05:58:05.336783-04:00",
+          "streams_blake3": {
+            "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          "observation_checks": {
+            "expected_exit_code_observed": true
+          },
+          "expected_failure_observation": false,
+          "observation_accepted": true
+        },
+        {
+          "label": "affected-package-strict-clippy-components",
+          "argv": [
+            "cargo",
+            "clippy",
+            "--locked",
+            "--offline",
+            "-p",
+            "mantle",
+            "-p",
+            "crunch-nix-gateway",
+            "-p",
+            "crunch-nix-gateway-core",
+            "-p",
+            "crunch-remote-core",
+            "-p",
+            "crunch-store",
+            "--all-targets",
+            "--no-deps",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "started_at": "2026-10-27T05:58:05.341006-04:00",
+          "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+          "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/results/affected-package-strict-clippy-components.stdout.log",
+          "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-focused-quality-v18/results/affected-package-strict-clippy-components.stderr.log",
+          "exit_code": 101,
+          "finished_at": "2026-10-27T05:59:49.352308-04:00",
+          "streams_blake3": {
+            "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stderr": "6396e63ad1b8fc486a3f4d373988f85c79423305ce7f85d91738b37e12812115"
+          },
+          "observation_checks": {
+            "expected_exit_code_observed": false
+          },
+          "expected_failure_observation": false,
+          "observation_accepted": false
+        }
+      ],
+      "non_claims": [
+        "Focused integration formatting, strict Clippy, gateway/remote/store behavior and fresh worker construction after removing the compiler-reported unused mutability. Not frozen G1/G2 admission, workspace/full-flake, acceptance, archive or publication."
+      ],
+      "source_after": {
+        "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+        "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+        "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+        "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+        "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+        "src/remote_build/usage.rs": "af063531599507c77cced84c646a7752db8585c9d14a1eccbac51d89d45e6e84",
+        "src/main.rs": "e047f45def328e34d5ecae1e6ceb13cdc63590c13bc763dff3110973dba34350",
+        "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+        "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+        "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+        "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+        "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+        "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+        "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+        "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+        "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+        "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+        "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+        "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef"
+      },
+      "source_unchanged": true,
+      "finished_at": "2026-10-27T05:59:49.382213-04:00",
+      "driver_exit_code": 1
+    }
+  },
+  "maintenance_owner": "Mantle gateway, remote worker, store and source-built proof maintainers",
+  "non_claims": [
+    "Focused integration formatting, strict Clippy, gateway/remote/store behavior and fresh worker construction after removing the compiler-reported unused mutability. Not frozen G1/G2 admission, workspace/full-flake, acceptance, archive or publication.",
+    "V18 remains an actual strict-Clippy failure in the cache-path conditional and demand Option lookup. This run follows source-preserving Clippy repairs; no proof cohort or promoted cold workflow is launched."
+  ]
+}

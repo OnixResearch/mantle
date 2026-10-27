@@ -1,0 +1,160 @@
+{
+  "schema": "mantle-historical-before-source-recovery-v1",
+  "recorded_date": "2026-10-26",
+  "scope": "Worker demand T1.1/T4.3 before-source identity and executable scenario preparation, not runtime evidence",
+  "historical_subject": {
+    "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+    "commit_date": "2026-10-18T12:36:24-04:00",
+    "relation": "Exact first parent of 41d0bdfc29ad60716a15943c812f2cddc4083741, which first introduces crates/crunch-remote-core/src/demand.rs and src/remote_build/demand.rs in reachable history.",
+    "archive_command": "git archive --format=tar dbeb354ba29095467e13ee615f229d216e4e5fb6 | b3sum",
+    "archive_command_output": "0fdaedf3f5e538a8d876b21ee0401a19b062fbf72fd3e4b4b951b013488a73aa  -",
+    "source_bindings": [
+      {
+        "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+        "path": "src/remote_build.rs",
+        "git_blob": "40fe1303d1c72c4191d3cbe1d6db71269df98c85",
+        "bytes": 928627,
+        "blake3": "953e690f0b37d59862e7250f67ba7447e6a4730527c3429e383324aa2cdf3f68"
+      },
+      {
+        "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+        "path": "src/main.rs",
+        "git_blob": "a9f02aafb0997b8db6cee74ce2f27852d33dd98a",
+        "bytes": 475276,
+        "blake3": "96188636e2494460ced11074382db3fbdc14671d8c1a8b3507c70be07ef10625"
+      },
+      {
+        "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+        "path": "Cargo.lock",
+        "git_blob": "f06fedf25bdf8485800665dd8bfedc5bf4991904",
+        "bytes": 257309,
+        "blake3": "ce93be39bed03654a8d97219b58b00581504e95b4c623790eb4d83673ccc63ad"
+      },
+      {
+        "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+        "path": "rust-toolchain.toml",
+        "git_blob": "85b8aca95a9e5bd25eba1111d33b2d394062c8c3",
+        "bytes": 200,
+        "blake3": "686ea6636a0442261a526d175351dc7112fa19ed864ebc4b9e4b84a7dff532f5"
+      }
+    ]
+  },
+  "source_observations": [
+    {
+      "path": "src/remote_build.rs",
+      "lines": [
+        7839,
+        7869
+      ],
+      "fact": "Quantified request with missing inventory is excluded from placement candidates; presence/concurrency is not inventory."
+    },
+    {
+      "path": "src/remote_build.rs",
+      "lines": [
+        7889,
+        7915
+      ],
+      "fact": "The blocker is remote-worker-resource-inventory-missing; concurrency is checked separately and may take precedence if exhausted."
+    },
+    {
+      "path": "src/remote_build.rs",
+      "lines": [
+        6570,
+        6579
+      ],
+      "fact": "No-worker dispatch returns Pending when wait_for_worker=true, Reject otherwise; both retain the same blocker."
+    },
+    {
+      "path": "src/remote_build.rs",
+      "lines": [
+        20183,
+        20235
+      ],
+      "fact": "Existing quantified request fixture provides exact request geometry for a source-only before probe. No demand publication/retraction contract exists."
+    }
+  ],
+  "prepared_core_scenario_contract": {
+    "id": "quantified-no-inventory-repeated-owner-lifetime",
+    "worker": "builder-1 registered, matching system/features/sandbox/network/store; concurrency 64; resource_inventory absent",
+    "request": {
+      "cpu_units": 8,
+      "memory_bytes": 16384,
+      "scratch_bytes": 32768,
+      "accelerators": [
+        {
+          "name": "nvidia-sm90",
+          "quantity": 1
+        }
+      ],
+      "named_tokens": [
+        {
+          "name": "linker-seat",
+          "quantity": 2
+        }
+      ],
+      "semantic_accelerator_classes": [
+        "nvidia-sm90"
+      ]
+    },
+    "steps": [
+      "Submit identical waiting requirement three times; preserve identical missing-inventory blocker, zero jobs/leases/reservations.",
+      "Before: no worker-demand protocol exists; demand, deduplication and owner-stop retraction are unsupported, not passing absent-event tests.",
+      "An after core comparison of this scenario would require one derived fact over repeated rounds, owner-stop/cancellation retraction and the same blocker without creating capacity. The separately prepared current gateway scenario uses Some(insufficient) inventory, not this no-inventory fixture.",
+      "Separate registration with satisfying inventory permits ordinary admission; presence, concurrency and completed history alone must not create capacity."
+    ],
+    "binding_requirement": "Retain serialized historical-request line and compare exact payload/vector, policy identity and scenario steps to the after scenario. If using a different after fixture, label the dimension difference rather than claim identical inputs. A constructed transport fact is not a derived long-lived adapter observation."
+  },
+  "gateway_contract_boundary": {
+    "current_scenario": "DemandWatchRuntime prepares a real typed gateway Submit with class/catalog fits and a registered worker whose Some(inventory) is insufficient. Signed derivation resource policy declares the quantities. This differs from the prepared historical no-inventory coordinator probe.",
+    "before_source_inspection": "dbeb354ba29095467e13ee615f229d216e4e5fb6 contains src/nix_gateway.rs (87 lines); its header explicitly says it does not submit builds or import NARs. src/nix_gateway/api_host.rs and src/remote_build/gateway.rs are absent. Typed API host and demand files first enter the inspected lineage together in 41d0bdfc29ad60716a15943c812f2cddc4083741.",
+    "consequence": "Do not send the new --remote-resource-requirements CLI flag to a historical binary and call its unsupported-flag result a quantified-resource baseline. Do not assume current typed Submit is supported by this genuine pre-demand source. The current-origin frozen baseline has gateway and demand already implemented; it cannot become pre-feature evidence.",
+    "peer_coordination": "The dbeb354 capability mismatch and separately recovered older gateway lineage were sent to DemandWatchRuntime. No identical typed-gateway before/after run is claimed.",
+    "remaining_prerequisite": "Use the recovered older typed ingress below for an explicitly scoped historical comparison, or recover a genuinely pre-demand subject with the current typed contract. The prepared no-inventory core probe is narrower than the current insufficient-inventory signed-policy gateway scenario."
+  },
+  "older_typed_gateway_subject": {
+    "commit": "bb5aabb2a734196123545770b4a1f1c6e61fba62",
+    "introduction_commit": "b6a22a2f39bcf4608750454652cdc8c2be6461d9",
+    "archive_blake3": "32362e8a86a2badb9fbfe8fd96dafdb18e06882d759d4d60cdf0355202526228",
+    "source_path": "src/remote_gateway_api.rs",
+    "source_git_blob": "990434e1b8af4eb454390bafd2d924130a1588d9",
+    "source_blake3": "3fa99db8ea98f18a441fca8cdcd8e01bf13a313a66e0eda3cd2bb5ed25798fff",
+    "supported_contract": "RemoteGatewayDispatchRequest { api, coordinator_request, retry_policy }; GatewayOperation::SubmitBuild plans GatewayCommand::SubmitRemoteAttempt. src/remote_gateway_api.rs:363-373 calls the original admit_coordinator_dispatch. coordinator_request can carry explicit resource_requirements. No demand.rs exists at this subject.",
+    "original_operator_recipe": "docs/remote-service-gateway.md:103-120 and src/cli_inbound.rs:2412-2429 document the actual older api-dispatch-stdio-once command, not the modern gateway API host wire.",
+    "parent_create_worktree_command": "git -C /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree worktree add --detach /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-gateway-before bb5aabb2a734196123545770b4a1f1c6e61fba62",
+    "parent_build_from_that_worktree": "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-gateway-target nix develop -c cargo build -p mantle --bin mantle --offline",
+    "parent_runtime_command_template": "mantle --state-dir STATE remote gateway api-dispatch-stdio-once --authority AUTHORITY --cursor-key-fd 3 --secret-manifest MANIFEST --secret-profile production --secret-provider systemd",
+    "runtime_prerequisites": "STATE, AUTHORITY and MANIFEST name fresh operator-owned historical-fixture artifacts, not production credentials. FD3 must contain exactly 32 cursor-MAC key bytes; stdin is one bounded older RemoteGatewayDispatchRequest. Original shell compares request authority to verifier-produced authority, replaces caller time with service time and resolves signing through the declared SecretSpec provider. Preserve these admission boundaries. Never put bearer/signing secret bytes in argv, environment, evidence or this record.",
+    "comparison_preparation": "Populate the old typed coordinator request and registered Some(insufficient) inventory with the exact same quantified resource vector as the current scenario. Retain literal serialized requests, worker inventory, authority/policy identities, signatures and native responses on both sides. Register matching non-resource capabilities so an unrelated blocker cannot mask insufficient capacity. The current signed derivation/class/catalog policy is not thereby proven to exist on the old side.",
+    "prior_runtime_scope": "The recovered original baseline ran gateway tests with 20 named passes on this subject. Those are original gateway tests, not an execution of the newly proposed quantified before/after scenario.",
+    "status": "Genuine older source and supported operator recipe recovered; new historical gateway scenario not executed. No current-wire parity or reliable live-demand publication claim."
+  },
+  "parent_only_preparation": {
+    "status": "Prepared recipe; NOT executed. Parent alone owns Git worktree creation and all execution.",
+    "create_worktree_command": "git -C /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree worktree add --detach /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-demand-before dbeb354ba29095467e13ee615f229d216e4e5fb6",
+    "prerequisites": [
+      "Fresh isolated historical worktree, never integration/baseline/canonical checkout.",
+      "Resolve original Cargo.lock dependencies, pinned development shell and retained compiler identity before executing; rust-toolchain.toml says nightly, not an immutable compiler release.",
+      "Use separate CARGO_TARGET_DIR, private scratch-backed TMPDIR and record exact environment. Do not merge modern demand implementation into the historical source."
+    ],
+    "probe_preparation": "For an isolated test-only instrumented subject, insert probe_source once immediately before the unique line `    fn fixture_resource_inventory() -> RemoteWorkerResourceInventory {` in historical src/remote_build.rs after verifying the original BLAKE3 above. Preserve original and instrumented source digests. This runs the original coordinator functions; it is not an unmodified historical executable or live publication proof.",
+    "probe_source": "    #[test]\n    fn historical_quantified_no_inventory_is_not_capacity() {\n        let mut state = RemoteCoordinatorState::default();\n        let mut worker = fixture_worker_registration();\n        worker.concurrency = 64;\n        assert!(worker.resource_inventory.is_none());\n        apply_worker_registration(&mut state, worker).expect(\"worker registers without capacity inventory\");\n        let before = state.clone();\n        let mut request = fixture_quantified_coordinator_request(\"historical-demand\", \"historical-demand-claim\");\n        request.wait_for_worker = true;\n        println!(\"historical-request={}\", serde_json::to_string(&request).unwrap());\n        for round in 0..3 {\n            let decision = admit_fixture_dispatch(&mut state, &request).expect(\"valid quantified request\");\n            assert_eq!(decision, RemoteCoordinatorDispatchDecision::Pending {\n                reason: \"remote-worker-resource-inventory-missing\".to_string(),\n            });\n            assert_eq!(state, before);\n            assert!(state.jobs.is_empty());\n            assert!(state.resource_leases.is_empty());\n            println!(\"round={round} blocker=remote-worker-resource-inventory-missing jobs=0 leases=0 demand-contract=absent\");\n        }\n        request.wait_for_worker = false;\n        assert_eq!(admit_fixture_dispatch(&mut state, &request).unwrap(),\n            RemoteCoordinatorDispatchDecision::Reject {\n                reason: \"remote-worker-resource-inventory-missing\".to_string(),\n            });\n        assert_eq!(state, before);\n    }\n\n",
+    "probe_source_blake3": "e284fda03095f377eab0bb29283d4e0bb2783a5e5339a8087a117fe1e0de8a3d",
+    "commands_from_historical_worktree": [
+      "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-demand-target nix develop -c cargo test -p mantle --bin mantle remote_build::tests::historical_quantified_no_inventory_is_not_capacity --offline -- --exact --nocapture",
+      "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-demand-target nix develop -c cargo test -p crunch-build remote_resources --offline -- --nocapture",
+      "CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/historical-demand-target nix develop -c cargo test -p mantle --bin mantle remote_build::tests::resource_leases_release_on_completion_cancellation_timeout_and_worker_loss --offline -- --exact --nocapture"
+    ],
+    "expected_not_observed": [
+      "Probe: one named pass, three printed missing-inventory rounds, zero jobs/leases and serialized request; no demand protocol.",
+      "Resource rails: nonzero named test execution and retained statuses, not an empty `demand` test filter.",
+      "Retain literal stdout/stderr and exit even on failure; never rerun to erase it."
+    ],
+    "current_origin_baseline": "Parent froze db98fd8bcf2d96614b8fe7f49ec131408b43018d independently in baseline/. Its source archive BLAKE3 3662ce229c2d0bccb5ce2638fd14e7ca61a562c00c3c68dd3a26b87ebf4f4de3 is NOT before-demand source; any observed current-origin blocker belongs to T1.1, not to a pre-feature T4.3 runtime claim."
+  },
+  "remaining_facts": [
+    "No contemporaneous pre-demand runtime/retraction/deduplication stream was recovered. Current after passes cannot supply it.",
+    "A newly executed historical-source probe would be a dated retrospective observation, not proof it ran before implementation or a deployed supervisor result.",
+    "T1.1 current-origin observation and T4.3 actual before/after execution remain parent-owned; no task checkbox changed."
+  ],
+  "execution": "Only read-only Git/source inspection and source archive digest pipelines executed during this recovery. No build/test/smoke/lifecycle execution."
+}

@@ -1,0 +1,706 @@
+{
+  "schema": "mantle-actual-signed-oom-fenced-successor-v1",
+  "date": "2026-10-27",
+  "task": "3.3",
+  "pueue_task": 74,
+  "verification": {
+    "schema": "mantle-retained-command-observations-v1",
+    "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/request.json",
+    "request_blake3": "07c1d2f725301164caf7ab5312bf4ab6adf832ceeee9c7cd9fa8c4f0c2daa48d",
+    "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "started_at": "2026-10-27T06:20:45.462833-04:00",
+    "environment_overrides": {
+      "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_BUILD_JOBS": "4",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "CC": "clang",
+      "CXX": "clang++",
+      "AR": "ar",
+      "RANLIB": "ranlib",
+      "TMPDIR": "/tmp",
+      "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+      "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/runtime"
+    },
+    "source_before": {
+      "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+      "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+      "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+      "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+      "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+      "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+      "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+      "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+      "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+      "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+      "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+      "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/delegated-runtime.py": "4b73b5c4708bb06f0f000e048bded86c30ef3718416e688a716fdd33534daa85"
+    },
+    "steps": [
+      {
+        "label": "actual-signed-OOM-successor-and-controls",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle",
+          "--test",
+          "resource_gateway_runtime",
+          "real_gateway_signed_oom_retry_usage_and_negative_controls",
+          "--",
+          "--ignored",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "started_at": "2026-10-27T06:20:45.491731-04:00",
+        "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/results/actual-signed-OOM-successor-and-controls.stdout.log",
+        "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/results/actual-signed-OOM-successor-and-controls.stderr.log",
+        "exit_code": 0,
+        "finished_at": "2026-10-27T06:32:00.604340-04:00",
+        "streams_blake3": {
+          "stdout": "10569328b97bb30f7b01cf0b82cfb71602c087e4a1ca8e1d802dfb720c8b6ab1",
+          "stderr": "2d0c60e2729ab3f5a6d02ef0b49c804d3582512d7ce648c337968004fbd37199"
+        },
+        "observation_checks": {
+          "expected_exit_code_observed": true
+        },
+        "expected_failure_observation": false,
+        "observation_accepted": true
+      }
+    ],
+    "non_claims": [
+      "Actual new owned delegated cpu/memory subtree, swap disabled. Positive OOM, fenced predecessor/successor, accounting and rollback/SIGKILL controls require their actual assertions; no synthetic usage, limit change or early promotion. Not G1/G2, frozen gate admission, lifecycle or release."
+    ],
+    "immutable_artifacts": [],
+    "source_after": {
+      "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+      "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+      "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+      "src/nix_gateway/resource_host_tests.rs": "e512013da7b35f89d0ee766c53860a1e72a0e17ee2330cad533356d46aaf4c7f",
+      "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+      "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+      "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+      "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+      "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+      "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+      "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+      "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+      "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+      "crates/crunch-nix-gateway/src/store.rs": "e4d3ccf5d98d29f2cb0ad74f9137b4c66e4f6f0971431d630b75e5c30e8ec1aa",
+      "src/nix_gateway/api_host_tests.rs": "53454af82cc49d913a393b1b6557e88906195611a1531cee6456f34684c6bd25",
+      "crates/crunch-nix-gateway-core/src/lib.rs": "9215df7fd6bcc0dd331c6691620504756f729551d11bc6097b458d3210de7d81",
+      "crates/crunch-store/src/nario.rs": "c860aad6c3ceaaaa65620fbe044f738574f159eedcd08640f3390d6d1c7709f3",
+      "crates/crunch-store/src/lib.rs": "65772b6ab0c977291cbb9060e38444ec60b9fd1211bd280de0786dae4080e0ad",
+      "crates/crunch-nix-gateway/tests/nix_path_info.rs": "886e024388fe540ae801209792ba6bea4b6b60a1809467dbf13eb9e57d6453ef",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/delegated-runtime.py": "4b73b5c4708bb06f0f000e048bded86c30ef3718416e688a716fdd33534daa85"
+    },
+    "source_unchanged": true,
+    "finished_at": "2026-10-27T06:32:00.691417-04:00",
+    "driver_exit_code": 0
+  },
+  "launch_supervision": {
+    "schema": "mantle-owned-delegated-runtime-launch-v1",
+    "pid": 1727226,
+    "command": [
+      "--",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-integration-payload-v17.py",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-commands.py",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/request.json"
+    ],
+    "non_claims": [
+      "Controller admission only until actual retained workload commands execute."
+    ],
+    "service_root": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-fenced-bounded-ack-20261027-v17.service",
+    "supervisor_cgroup": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-fenced-bounded-ack-20261027-v17.service/control",
+    "worker_root": "/sys/fs/cgroup/user.slice/user-1555.slice/user@1555.service/app.slice/mantle-resource-fenced-bounded-ack-20261027-v17.service/attempts",
+    "controllers": [
+      "cpu",
+      "memory"
+    ],
+    "memory_swap_max": "0",
+    "initial_worker_pids": [],
+    "workload_executed": true,
+    "workload_exit_code": 0,
+    "final_worker_pids": [],
+    "remaining_worker_subtrees": [],
+    "exit_code": 0
+  },
+  "stdout": "\nrunning 1 test\ntest real_gateway_signed_oom_retry_usage_and_negative_controls ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 587.74s\n\n",
+  "stderr": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build — compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 27s\n     Running tests/resource_gateway_runtime.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/resource_gateway_runtime-fdf3355d9d899359)\n",
+  "cases": [
+    {
+      "name": "positive",
+      "coordinator_file": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/runtime/positive/final-coordinator.json",
+      "coordinator_blake3": "cd504192918ebe7f0af37d2c1dc3f42f8d65bc0dc844866f0d244dbdca58d87c",
+      "gateway": {
+        "public_id": "a026a8099ba240368cfb2d38ca52987d098226ecc2cd74ad95e03198d7458cba",
+        "binding": {
+          "attempt_id": "d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b",
+          "fence_generation": 2,
+          "job_id": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790"
+        },
+        "retries": [
+          {
+            "machine_class": "small",
+            "observed_unix_s": 1793096610,
+            "policy_version": 1,
+            "predecessor": {
+              "attempt_id": "66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205",
+              "fence_generation": 1,
+              "job_id": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790"
+            },
+            "predecessor_evidence": "2c9a54b2657c2fbdbf32d1cd55a7bf5c4eefc6835cb13f58095ad6213aac737c.json",
+            "replay_json": {
+              "classes": [
+                {
+                  "available": true,
+                  "existing_admission_compatible": true,
+                  "features": {
+                    "architecture": "x86_64",
+                    "isolation": "sandbox",
+                    "kvm": false,
+                    "platform": "linux",
+                    "trust_domain": "runtime-dev"
+                  },
+                  "id": "large",
+                  "order": 2,
+                  "quantities": {
+                    "cpu_units": 1,
+                    "memory_bytes": 536870912,
+                    "scratch_bytes": 268435456
+                  },
+                  "reservation_units": 200
+                },
+                {
+                  "available": true,
+                  "existing_admission_compatible": true,
+                  "features": {
+                    "architecture": "x86_64",
+                    "isolation": "sandbox",
+                    "kvm": false,
+                    "platform": "linux",
+                    "trust_domain": "runtime-dev"
+                  },
+                  "id": "small",
+                  "order": 1,
+                  "quantities": {
+                    "cpu_units": 1,
+                    "memory_bytes": 67108864,
+                    "scratch_bytes": 268435456
+                  },
+                  "reservation_units": 100
+                }
+              ],
+              "context": {
+                "attempt": "66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205",
+                "cumulative_units": 100,
+                "elapsed_ms": 1000,
+                "failed": true,
+                "fence": 1,
+                "job": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790",
+                "next_attempt": "d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b",
+                "next_fence": 2,
+                "next_wall_budget_ms": 30000,
+                "retries": 0
+              },
+              "controls": {
+                "mode": "ProjectOptIn",
+                "oom_retry_enabled": true,
+                "project_opted_in": true,
+                "quota_enforcement_enabled": true,
+                "selection_enabled": true,
+                "sharing_enabled": false
+              },
+              "evidence": {
+                "attempt": "66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205",
+                "category": "LinuxCgroupV2Kill",
+                "fence": 1,
+                "job": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790",
+                "platform": "linux",
+                "trusted_positive_platform_evidence": true
+              },
+              "plan": {
+                "class_index": 0,
+                "next_attempt": "d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b",
+                "next_fence": 2,
+                "policy_version": 1,
+                "predecessor": "66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205"
+              },
+              "policy": {
+                "largest_class_order": 2,
+                "max_cumulative_units": 300,
+                "max_retries": 1,
+                "max_wall_ms": 120000,
+                "version": 1
+              },
+              "prior": {
+                "available": true,
+                "existing_admission_compatible": true,
+                "features": {
+                  "architecture": "x86_64",
+                  "isolation": "sandbox",
+                  "kvm": false,
+                  "platform": "linux",
+                  "trust_domain": "runtime-dev"
+                },
+                "id": "small",
+                "order": 1,
+                "quantities": {
+                  "cpu_units": 1,
+                  "memory_bytes": 67108864,
+                  "scratch_bytes": 268435456
+                },
+                "reservation_units": 100
+              },
+              "quota": {
+                "account_remaining_units": 19997,
+                "project_remaining_units": 9997
+              },
+              "schema": "mantle-resource-escalation-replay-v1"
+            },
+            "reservation_units": 100,
+            "signed_usage": {
+              "facts": {
+                "binding": {
+                  "attempt_id": "66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205",
+                  "fence_generation": 1,
+                  "job_id": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790"
+                },
+                "cgroup_peak_memory_bytes": 67108864,
+                "child_pid": 1757571,
+                "completeness": "DedicatedCgroup",
+                "cpu_time_millis": 406,
+                "exit_code": null,
+                "oom": {
+                  "dedicated-cgroup-oom": {
+                    "oom_kill_delta": 5
+                  }
+                },
+                "peak_rss_bytes": 117960704,
+                "request_id": "ae2286e3decdfdad59cac4e6d29e9578f7e00d480c8c00a1ac827a4144bdad63",
+                "result_digest_blake3": "e9f08ea773d516cea327b86168b61979037296f6ecd75008e9df821872bb9dd2",
+                "schema": "mantle-exact-child-usage-v1",
+                "scratch": {
+                  "coverage": "TraversalIncomplete",
+                  "end_snapshot_bytes": null,
+                  "sampled_peak_bytes": 0,
+                  "samples": 6
+                },
+                "stderr_bytes": 405,
+                "stdout_bytes": 0,
+                "term_signal": 9,
+                "wall_time_millis": 444
+              },
+              "signature": "crunch-britton-desktop-1:wOatXvNUpX4EzZvOBHvT02lhdBJneI03PDJLoLxy8skgZWzmoQ8qnXVH+GJUReWdch14i92tJ7fP+cUe50KBCA=="
+            },
+            "successor": {
+              "attempt_id": "d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b",
+              "fence_generation": 2,
+              "job_id": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790"
+            }
+          }
+        ],
+        "usage": {
+          "facts": {
+            "binding": {
+              "attempt_id": "d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b",
+              "fence_generation": 2,
+              "job_id": "442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790"
+            },
+            "cgroup_peak_memory_bytes": 120725504,
+            "child_pid": 1757844,
+            "completeness": "DedicatedCgroup",
+            "cpu_time_millis": 422,
+            "exit_code": 0,
+            "oom": "dedicated-cgroup-no-oom",
+            "peak_rss_bytes": 128352256,
+            "request_id": "ae2286e3decdfdad59cac4e6d29e9578f7e00d480c8c00a1ac827a4144bdad63",
+            "result_digest_blake3": "9a1bbeadb1a8e171c80948d9027714f480e929047b253fc82cc64f9286500563",
+            "schema": "mantle-exact-child-usage-v1",
+            "scratch": {
+              "coverage": "TraversalIncomplete",
+              "end_snapshot_bytes": null,
+              "sampled_peak_bytes": 0,
+              "samples": 6
+            },
+            "stderr_bytes": 405,
+            "stdout_bytes": 1273,
+            "term_signal": null,
+            "wall_time_millis": 465
+          },
+          "signature": "crunch-britton-desktop-1:U0UTB03nMx78C0fmG8FqzIWx6DV9He0jz1qBChP51xCebqLtM5sR2Sc0EjYlHCXMajLQFmGTAewlRjaNaZGPAQ=="
+        },
+        "outputs": [
+          "/nix/store/sh6dqvfad7kdv3sdwyzjmd637wmrxyks-gateway-runtime-oom"
+        ],
+        "transitions": [
+          {
+            "observed_unix_s": 1793096610,
+            "phase": "Queued",
+            "reason": "gateway-positive-oom-retry-admitted",
+            "sequence": 1
+          },
+          {
+            "observed_unix_s": 1793096610,
+            "phase": "Running",
+            "reason": "gateway-worker-dispatch-started",
+            "sequence": 2
+          },
+          {
+            "observed_unix_s": 1793096612,
+            "phase": "Succeeded",
+            "reason": "gateway-output-admitted",
+            "sequence": 3
+          }
+        ],
+        "published_evidence": "265b7914fa7959cdf920e8a03825df6d3b480f9199600982d4f59cbf41642fd9.json"
+      },
+      "resource_leases": {},
+      "source_identity": {
+        "binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+        "binary_blake3": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+        "schema": "mantle-gateway-runtime-source-binding-v1",
+        "source_blake3": {
+          "crates/crunch-build/src/distributed/resource_quota_store.rs": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+          "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+          "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+          "crates/crunch-remote-core/src/resource_quota.rs": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+          "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+          "src/nix_gateway/authority.rs": "b54f7839631ff41ed740c9074b5a2a91dd882c13c6ad2804875d278c6ac46d1f",
+          "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+          "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+          "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+          "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+          "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+          "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+          "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+          "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+          "tests/support/remote_endpoint_binding.rs": "589b6c0afd1418446e7cd1442fa278c69cb95b557f5e200d7de01787c9d224bb"
+        }
+      },
+      "publications": [
+        {
+          "leaf": "265b7914fa7959cdf920e8a03825df6d3b480f9199600982d4f59cbf41642fd9.json",
+          "blake3": "265b7914fa7959cdf920e8a03825df6d3b480f9199600982d4f59cbf41642fd9",
+          "exact_json": "{\"profile\":{\"profile_id\":\"valence.build-service-evidence.v1\",\"profile_version\":1,\"canonicalization\":\"valence-canonical-json-v1\",\"producer_policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"claimed_observation_classes\":[\"usage\",\"retry\",\"build\"],\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},\"service_requests\":[{\"request_id\":\"a026a8099ba240368cfb2d38ca52987d098226ecc2cd74ad95e03198d7458cba\",\"concrete_request_hash\":\"3059d83a85ad50adbc596f7319335235b2a06b053c9c2630d983eb553e9b6bb4\",\"idempotency_key\":\"a026a8099ba240368cfb2d38ca52987d098226ecc2cd74ad95e03198d7458cba\",\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"attempts\":[{\"attempt_id\":\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b\",\"request_identity\":\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\",\"generation\":2,\"parent_attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"service_policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"attempt_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\",\"request_identity\":\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\",\"generation\":1,\"parent_attempt_identity\":null,\"service_policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"transitions\":[{\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"prior_state\":\"queued\",\"next_state\":\"running\",\"sequence\":2,\"observed_at\":\"2026-10-27T10:23:29Z\",\"producer\":\"mantle-gateway\",\"reason\":\"gateway-worker-dispatch-started\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"prior_state\":\"queued\",\"next_state\":\"running\",\"sequence\":2,\"observed_at\":\"2026-10-27T10:23:30Z\",\"producer\":\"mantle-gateway\",\"reason\":\"gateway-worker-dispatch-started\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"prior_state\":\"running\",\"next_state\":\"succeeded\",\"sequence\":3,\"observed_at\":\"2026-10-27T10:23:32Z\",\"producer\":\"mantle-gateway\",\"reason\":\"gateway-output-admitted\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"authority_decisions\":[{\"decision_id\":\"blake3:f1afcc51531bbce49e3fc68c4cd9cf14389ce119abc9f1525af312e17a406f17\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"subject_projection\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"platform\\\":\\\"x86_64-linux\\\",\\\"project\\\":\\\"runtime-project\\\",\\\"request_identity\\\":\\\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\\\",\\\"subject\\\":\\\"did:key:z6MkoK9U4STHRMGSKrubCoAZn94SUngAkZAes1DS4CCtC3QB\\\"}\",\"policy_identity\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"operation\":\"build-submit\",\"decision\":\"allow\",\"verifier_evidence_ref\":null,\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"decision_id\":\"blake3:f1afcc51531bbce49e3fc68c4cd9cf14389ce119abc9f1525af312e17a406f17\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"subject_projection\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"platform\\\":\\\"x86_64-linux\\\",\\\"project\\\":\\\"runtime-project\\\",\\\"request_identity\\\":\\\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\\\",\\\"subject\\\":\\\"did:key:z6MkoK9U4STHRMGSKrubCoAZn94SUngAkZAes1DS4CCtC3QB\\\"}\",\"policy_identity\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"operation\":\"build-submit\",\"decision\":\"allow\",\"verifier_evidence_ref\":null,\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"machine_classes\":[{\"class_id\":\"large\",\"platform\":\"linux\",\"resource_class\":\"{\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":200}\",\"ordinal\":2,\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"class_id\":\"small\",\"platform\":\"linux\",\"resource_class\":\"{\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":100}\",\"ordinal\":1,\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"resource_decisions\":[{\"decision_id\":\"d8be52f69e7ad19840c12d056153f0edf704a655409b46d923fd0896823c478a\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"declared_minima\":[\"{\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456,\\\"accelerators\\\":[],\\\"named_tokens\\\":[]},\\\"semantic_accelerator_classes\\\":[]}\",\"{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false}\"],\"eligible_class_identities\":[\"8f41fc841090558aab5b1d0bca47a611cd76cdc1ada3a754a6170a6a74dc68af\",\"20f17fb295da1abc44865918a58e281a53ff0d0c364d85d3faef0ff3f432b70b\"],\"selected_class_identity\":\"20f17fb295da1abc44865918a58e281a53ff0d0c364d85d3faef0ff3f432b70b\",\"policy\":\"{\\\"schema\\\":\\\"mantle-resource-policy-replay-v1\\\",\\\"requirements\\\":{\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456,\\\"accelerators\\\":[],\\\"named_tokens\\\":[]},\\\"semantic_accelerator_classes\\\":[]},\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"family\\\":\\\"d4be6fa7a6b2eaa628431186a94e34538773a3483c5715148e9c62c4b5855955\\\",\\\"classes\\\":[{\\\"id\\\":\\\"large\\\",\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"order\\\":2,\\\"reservation_units\\\":200,\\\"available\\\":true,\\\"existing_admission_compatible\\\":true},{\\\"id\\\":\\\"small\\\",\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"order\\\":1,\\\"reservation_units\\\":100,\\\"available\\\":true,\\\"existing_admission_compatible\\\":true}],\\\"history\\\":[],\\\"now_unix_s\\\":1793096609,\\\"project_remaining_units\\\":10000,\\\"account_remaining_units\\\":20000,\\\"policy\\\":{\\\"version\\\":1,\\\"min_samples\\\":1,\\\"max_age_s\\\":3600,\\\"margin_basis_points\\\":0,\\\"max_measurement\\\":{\\\"cpu_units\\\":1024,\\\"memory_bytes\\\":4294967296,\\\"scratch_bytes\\\":268435456},\\\"max_duration_ms\\\":120000,\\\"max_io_bytes\\\":67108864},\\\"switches\\\":[true,true,true,true,true,false]}\",\"compatible_observation_identities\":[],\"reasons\":[\"{\\\"static_decision\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}},\\\"historical_decision\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}},\\\"active\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}}}\"],\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"resource_observations\":[{\"observation_id\":\"6565b009bdc505fffab97ed246353fdef4e5d3f12456ed9f7bdde22f2e10a605\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"measurements\":[{\"name\":\"cpu\",\"value\":406,\"unit\":\"ms\"},{\"name\":\"wall\",\"value\":444,\"unit\":\"ms\"},{\"name\":\"peak-rss\",\"value\":117960704,\"unit\":\"bytes\"},{\"name\":\"stdout\",\"value\":0,\"unit\":\"bytes\"},{\"name\":\"stderr\",\"value\":405,\"unit\":\"bytes\"},{\"name\":\"dedicated-cgroup-peak-memory\",\"value\":67108864,\"unit\":\"bytes\"},{\"name\":\"sampled-workspace-allocated-blocks-peak-lower-bound\",\"value\":0,\"unit\":\"bytes\"}],\"collector\":\"mantle-exact-child-usage-v1\",\"compatibility_scope\":\"{\\\"attempt\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\",\\\"completeness\\\":\\\"DedicatedCgroup\\\",\\\"fence\\\":1,\\\"job\\\":\\\"442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790\\\",\\\"memory_accounting\\\":\\\"dedicated-cgroup-memory-peak-times-wall-ms-upper-bound-v2\\\",\\\"oom\\\":{\\\"dedicated-cgroup-oom\\\":{\\\"oom_kill_delta\\\":5}},\\\"output_accounting\\\":\\\"executor-stdout-plus-stderr-bytes-not-network-or-nar-v1\\\",\\\"request_id\\\":\\\"ae2286e3decdfdad59cac4e6d29e9578f7e00d480c8c00a1ac827a4144bdad63\\\",\\\"result\\\":\\\"e9f08ea773d516cea327b86168b61979037296f6ecd75008e9df821872bb9dd2\\\",\\\"scratch\\\":{\\\"coverage\\\":\\\"TraversalIncomplete\\\",\\\"end_snapshot_bytes\\\":null,\\\"sampled_peak_bytes\\\":0,\\\"samples\\\":6}}\",\"terminal_outcome\":\"signed-child-completion-observation\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"observation_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"measurements\":[{\"name\":\"terminal-observed-unix-time\",\"value\":1793096610,\"unit\":\"s\"},{\"name\":\"cpu\",\"value\":406,\"unit\":\"ms\"},{\"name\":\"execution\",\"value\":444,\"unit\":\"ms\"},{\"name\":\"peak-memory\",\"value\":67108864,\"unit\":\"bytes\"},{\"name\":\"sampled-scratch-lower-bound\",\"value\":0,\"unit\":\"bytes\"},{\"name\":\"executor-output-not-network\",\"value\":405,\"unit\":\"bytes\"},{\"name\":\"exact-child-peak-rss-not-tree-peak\",\"value\":117960704,\"unit\":\"bytes\"}],\"collector\":\"mantle-worker-dedicated-cgroup-v2\",\"compatibility_scope\":\"{\\\"action_family\\\":\\\"d4be6fa7a6b2eaa628431186a94e34538773a3483c5715148e9c62c4b5855955\\\",\\\"declared\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"known_resource_dimensions\\\":{\\\"cpu_units\\\":null,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":null},\\\"machine_class\\\":\\\"small\\\",\\\"oom\\\":\\\"LinuxCgroupV2Kill\\\",\\\"policy_version\\\":1,\\\"predecessor\\\":null,\\\"schema\\\":\\\"mantle-resource-observation-v2\\\",\\\"selected\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"terminal_unix_s\\\":1793096610,\\\"trusted_collector\\\":true,\\\"unknown_measurements\\\":{\\\"cpu\\\":false,\\\"cpu_units\\\":true,\\\"execution\\\":false,\\\"executor_output\\\":false,\\\"io\\\":true,\\\"peak_memory\\\":false,\\\"process_peak_rss\\\":false,\\\"queue\\\":true,\\\"sampled_scratch_lower_bound\\\":false,\\\"scratch_high_water\\\":true,\\\"transfer\\\":true}}\",\"terminal_outcome\":\"\\\"Failed\\\"\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"observation_id\":\"03b305e442096188d1debc1e90bdf5a4fec03374f5a81a071b0e7fd7fdfb221c\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"measurements\":[{\"name\":\"cpu\",\"value\":422,\"unit\":\"ms\"},{\"name\":\"wall\",\"value\":465,\"unit\":\"ms\"},{\"name\":\"peak-rss\",\"value\":128352256,\"unit\":\"bytes\"},{\"name\":\"stdout\",\"value\":1273,\"unit\":\"bytes\"},{\"name\":\"stderr\",\"value\":405,\"unit\":\"bytes\"},{\"name\":\"dedicated-cgroup-peak-memory\",\"value\":120725504,\"unit\":\"bytes\"},{\"name\":\"sampled-workspace-allocated-blocks-peak-lower-bound\",\"value\":0,\"unit\":\"bytes\"}],\"collector\":\"mantle-exact-child-usage-v1\",\"compatibility_scope\":\"{\\\"attempt\\\":\\\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b\\\",\\\"completeness\\\":\\\"DedicatedCgroup\\\",\\\"fence\\\":2,\\\"job\\\":\\\"442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790\\\",\\\"memory_accounting\\\":\\\"dedicated-cgroup-memory-peak-times-wall-ms-upper-bound-v2\\\",\\\"oom\\\":\\\"dedicated-cgroup-no-oom\\\",\\\"output_accounting\\\":\\\"executor-stdout-plus-stderr-bytes-not-network-or-nar-v1\\\",\\\"request_id\\\":\\\"ae2286e3decdfdad59cac4e6d29e9578f7e00d480c8c00a1ac827a4144bdad63\\\",\\\"result\\\":\\\"9a1bbeadb1a8e171c80948d9027714f480e929047b253fc82cc64f9286500563\\\",\\\"scratch\\\":{\\\"coverage\\\":\\\"TraversalIncomplete\\\",\\\"end_snapshot_bytes\\\":null,\\\"sampled_peak_bytes\\\":0,\\\"samples\\\":6}}\",\"terminal_outcome\":\"signed-child-completion-observation\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"observation_id\":\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"measurements\":[{\"name\":\"terminal-observed-unix-time\",\"value\":1793096612,\"unit\":\"s\"},{\"name\":\"cpu\",\"value\":422,\"unit\":\"ms\"},{\"name\":\"execution\",\"value\":465,\"unit\":\"ms\"},{\"name\":\"peak-memory\",\"value\":120725504,\"unit\":\"bytes\"},{\"name\":\"sampled-scratch-lower-bound\",\"value\":0,\"unit\":\"bytes\"},{\"name\":\"executor-output-not-network\",\"value\":1678,\"unit\":\"bytes\"},{\"name\":\"exact-child-peak-rss-not-tree-peak\",\"value\":128352256,\"unit\":\"bytes\"}],\"collector\":\"mantle-worker-dedicated-cgroup-v2\",\"compatibility_scope\":\"{\\\"action_family\\\":\\\"d4be6fa7a6b2eaa628431186a94e34538773a3483c5715148e9c62c4b5855955\\\",\\\"declared\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"known_resource_dimensions\\\":{\\\"cpu_units\\\":null,\\\"memory_bytes\\\":120725504,\\\"scratch_bytes\\\":null},\\\"machine_class\\\":\\\"large\\\",\\\"oom\\\":\\\"None\\\",\\\"policy_version\\\":1,\\\"predecessor\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\",\\\"schema\\\":\\\"mantle-resource-observation-v2\\\",\\\"selected\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"terminal_unix_s\\\":1793096612,\\\"trusted_collector\\\":true,\\\"unknown_measurements\\\":{\\\"cpu\\\":false,\\\"cpu_units\\\":true,\\\"execution\\\":false,\\\"executor_output\\\":false,\\\"io\\\":true,\\\"peak_memory\\\":false,\\\"process_peak_rss\\\":false,\\\"queue\\\":true,\\\"sampled_scratch_lower_bound\\\":false,\\\"scratch_high_water\\\":true,\\\"transfer\\\":true}}\",\"terminal_outcome\":\"\\\"Success\\\"\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"retry_edges\":[{\"predecessor_attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"successor_attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"trigger\":\"oom_escalation\",\"trigger_evidence\":\"{\\\"observation_identity\\\":\\\"9069fee00144106e777ad520ed0906858dcd0d2c2947945357a376a23f10c4d5\\\",\\\"oom\\\":{\\\"dedicated-cgroup-oom\\\":{\\\"oom_kill_delta\\\":5}},\\\"signed_event_identity\\\":\\\"6565b009bdc505fffab97ed246353fdef4e5d3f12456ed9f7bdde22f2e10a605\\\"}\",\"prior_class_identity\":\"20f17fb295da1abc44865918a58e281a53ff0d0c364d85d3faef0ff3f432b70b\",\"next_class_identity\":\"8f41fc841090558aab5b1d0bca47a611cd76cdc1ada3a754a6170a6a74dc68af\",\"limit_state\":\"{\\\"cumulative_units\\\":100,\\\"elapsed_ms\\\":1000,\\\"largest_class_order\\\":2,\\\"max_cumulative_units\\\":300,\\\"max_retries\\\":1,\\\"max_wall_ms\\\":120000,\\\"retries\\\":0}\",\"policy\":\"{\\\"classes\\\":[{\\\"available\\\":true,\\\"existing_admission_compatible\\\":true,\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"id\\\":\\\"large\\\",\\\"order\\\":2,\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":200},{\\\"available\\\":true,\\\"existing_admission_compatible\\\":true,\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"id\\\":\\\"small\\\",\\\"order\\\":1,\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":100}],\\\"context\\\":{\\\"attempt\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\",\\\"cumulative_units\\\":100,\\\"elapsed_ms\\\":1000,\\\"failed\\\":true,\\\"fence\\\":1,\\\"job\\\":\\\"442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790\\\",\\\"next_attempt\\\":\\\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b\\\",\\\"next_fence\\\":2,\\\"next_wall_budget_ms\\\":30000,\\\"retries\\\":0},\\\"controls\\\":{\\\"mode\\\":\\\"ProjectOptIn\\\",\\\"oom_retry_enabled\\\":true,\\\"project_opted_in\\\":true,\\\"quota_enforcement_enabled\\\":true,\\\"selection_enabled\\\":true,\\\"sharing_enabled\\\":false},\\\"evidence\\\":{\\\"attempt\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\",\\\"category\\\":\\\"LinuxCgroupV2Kill\\\",\\\"fence\\\":1,\\\"job\\\":\\\"442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790\\\",\\\"platform\\\":\\\"linux\\\",\\\"trusted_positive_platform_evidence\\\":true},\\\"plan\\\":{\\\"class_index\\\":0,\\\"next_attempt\\\":\\\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b\\\",\\\"next_fence\\\":2,\\\"policy_version\\\":1,\\\"predecessor\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\"},\\\"policy\\\":{\\\"largest_class_order\\\":2,\\\"max_cumulative_units\\\":300,\\\"max_retries\\\":1,\\\"max_wall_ms\\\":120000,\\\"version\\\":1},\\\"prior\\\":{\\\"available\\\":true,\\\"existing_admission_compatible\\\":true,\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"id\\\":\\\"small\\\",\\\"order\\\":1,\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":100},\\\"quota\\\":{\\\"account_remaining_units\\\":19997,\\\"project_remaining_units\\\":9997},\\\"schema\\\":\\\"mantle-resource-escalation-replay-v1\\\"}\",\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"usage_records\":[{\"usage_id\":\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b:2:reservation\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"usage_kind\":\"reservation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"reserved_units\\\":200,\\\"state\\\":\\\"reserved\\\"}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"usage_id\":\"d6271ce4b60d683b6b829096754f36dc4069f1c2e11b19bbc817f893e7a49b9b:2:reconciliation\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"usage_kind\":\"reconciliation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"Settled\\\":{\\\"event_digest\\\":\\\"03b305e442096188d1debc1e90bdf5a4fec03374f5a81a071b0e7fd7fdfb221c\\\",\\\"charged_units\\\":3}}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"usage_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205:1:reservation\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"usage_kind\":\"reservation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"reserved_units\\\":100,\\\"state\\\":\\\"reserved\\\"}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"usage_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205:1:reconciliation\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"usage_kind\":\"reconciliation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"Settled\\\":{\\\"event_digest\\\":\\\"6565b009bdc505fffab97ed246353fdef4e5d3f12456ed9f7bdde22f2e10a605\\\",\\\"charged_units\\\":3}}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"build_results\":[{\"result_id\":\"9a1bbeadb1a8e171c80948d9027714f480e929047b253fc82cc64f9286500563\",\"request_identity\":\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\",\"attempt_identity\":\"4f859297b95937bcc2a7c8e4dd38ad5c855c81680d936dad50f6ca0c6bfa3af0\",\"platform\":\"x86_64-linux\",\"policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"outputs\":[{\"path\":\"/nix/store/sh6dqvfad7kdv3sdwyzjmd637wmrxyks-gateway-runtime-oom\",\"content_hash\":\"e0f46b64be4e1c8929aa25242df0429ff6c232a20a8b5c8c7a96f35a7810542e\"}],\"producer_signature_ref\":\"signed-pathinfo-blake3:3c8a2ff5f91acdaf9cf9c138c70273f394076646996ac20e0f88488b67bd6273\",\"cas_observation\":\"current-signed-pathinfo-cas:9a1bbeadb1a8e171c80948d9027714f480e929047b253fc82cc64f9286500563\",\"role\":\"Signed\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"reuse_edges\":[],\"orchestration_jobs\":[],\"external_statuses\":[]}"
+        },
+        {
+          "leaf": "2c9a54b2657c2fbdbf32d1cd55a7bf5c4eefc6835cb13f58095ad6213aac737c.json",
+          "blake3": "2c9a54b2657c2fbdbf32d1cd55a7bf5c4eefc6835cb13f58095ad6213aac737c",
+          "exact_json": "{\"profile\":{\"profile_id\":\"valence.build-service-evidence.v1\",\"profile_version\":1,\"canonicalization\":\"valence-canonical-json-v1\",\"producer_policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"claimed_observation_classes\":[\"usage\"],\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},\"service_requests\":[{\"request_id\":\"a026a8099ba240368cfb2d38ca52987d098226ecc2cd74ad95e03198d7458cba\",\"concrete_request_hash\":\"3059d83a85ad50adbc596f7319335235b2a06b053c9c2630d983eb553e9b6bb4\",\"idempotency_key\":\"a026a8099ba240368cfb2d38ca52987d098226ecc2cd74ad95e03198d7458cba\",\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"attempts\":[{\"attempt_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\",\"request_identity\":\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\",\"generation\":1,\"parent_attempt_identity\":null,\"service_policy\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"transitions\":[{\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"prior_state\":\"queued\",\"next_state\":\"running\",\"sequence\":2,\"observed_at\":\"2026-10-27T10:23:29Z\",\"producer\":\"mantle-gateway\",\"reason\":\"gateway-worker-dispatch-started\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"authority_decisions\":[{\"decision_id\":\"blake3:f1afcc51531bbce49e3fc68c4cd9cf14389ce119abc9f1525af312e17a406f17\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"subject_projection\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"platform\\\":\\\"x86_64-linux\\\",\\\"project\\\":\\\"runtime-project\\\",\\\"request_identity\\\":\\\"043866a1d0aced9d883bf63641e0bba0c3f9ce538063ec88c0eb2a5fe7a69eea\\\",\\\"subject\\\":\\\"did:key:z6MkoK9U4STHRMGSKrubCoAZn94SUngAkZAes1DS4CCtC3QB\\\"}\",\"policy_identity\":\"978fd731f98c48cbdbdedd2106d98bbb44e918670bac9b5ab143aab2dc516874\",\"operation\":\"build-submit\",\"decision\":\"allow\",\"verifier_evidence_ref\":null,\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"machine_classes\":[{\"class_id\":\"large\",\"platform\":\"linux\",\"resource_class\":\"{\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":200}\",\"ordinal\":2,\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"class_id\":\"small\",\"platform\":\"linux\",\"resource_class\":\"{\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"reservation_units\\\":100}\",\"ordinal\":1,\"role\":\"Linked\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"resource_decisions\":[{\"decision_id\":\"d8be52f69e7ad19840c12d056153f0edf704a655409b46d923fd0896823c478a\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"declared_minima\":[\"{\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456,\\\"accelerators\\\":[],\\\"named_tokens\\\":[]},\\\"semantic_accelerator_classes\\\":[]}\",\"{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false}\"],\"eligible_class_identities\":[\"8f41fc841090558aab5b1d0bca47a611cd76cdc1ada3a754a6170a6a74dc68af\",\"20f17fb295da1abc44865918a58e281a53ff0d0c364d85d3faef0ff3f432b70b\"],\"selected_class_identity\":\"20f17fb295da1abc44865918a58e281a53ff0d0c364d85d3faef0ff3f432b70b\",\"policy\":\"{\\\"schema\\\":\\\"mantle-resource-policy-replay-v1\\\",\\\"requirements\\\":{\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456,\\\"accelerators\\\":[],\\\"named_tokens\\\":[]},\\\"semantic_accelerator_classes\\\":[]},\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"family\\\":\\\"d4be6fa7a6b2eaa628431186a94e34538773a3483c5715148e9c62c4b5855955\\\",\\\"classes\\\":[{\\\"id\\\":\\\"large\\\",\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":536870912,\\\"scratch_bytes\\\":268435456},\\\"order\\\":2,\\\"reservation_units\\\":200,\\\"available\\\":true,\\\"existing_admission_compatible\\\":true},{\\\"id\\\":\\\"small\\\",\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false},\\\"quantities\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"order\\\":1,\\\"reservation_units\\\":100,\\\"available\\\":true,\\\"existing_admission_compatible\\\":true}],\\\"history\\\":[],\\\"now_unix_s\\\":1793096609,\\\"project_remaining_units\\\":10000,\\\"account_remaining_units\\\":20000,\\\"policy\\\":{\\\"version\\\":1,\\\"min_samples\\\":1,\\\"max_age_s\\\":3600,\\\"margin_basis_points\\\":0,\\\"max_measurement\\\":{\\\"cpu_units\\\":1024,\\\"memory_bytes\\\":4294967296,\\\"scratch_bytes\\\":268435456},\\\"max_duration_ms\\\":120000,\\\"max_io_bytes\\\":67108864},\\\"switches\\\":[true,true,true,true,true,false]}\",\"compatible_observation_identities\":[],\"reasons\":[\"{\\\"static_decision\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}},\\\"historical_decision\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}},\\\"active\\\":{\\\"Ok\\\":{\\\"class_index\\\":1,\\\"requested\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"samples\\\":0,\\\"exclusions\\\":[],\\\"reason\\\":\\\"HistoryMissing\\\",\\\"policy_version\\\":1}}}\"],\"role\":\"Verified\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"resource_observations\":[{\"observation_id\":\"6565b009bdc505fffab97ed246353fdef4e5d3f12456ed9f7bdde22f2e10a605\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"measurements\":[{\"name\":\"cpu\",\"value\":406,\"unit\":\"ms\"},{\"name\":\"wall\",\"value\":444,\"unit\":\"ms\"},{\"name\":\"peak-rss\",\"value\":117960704,\"unit\":\"bytes\"},{\"name\":\"stdout\",\"value\":0,\"unit\":\"bytes\"},{\"name\":\"stderr\",\"value\":405,\"unit\":\"bytes\"},{\"name\":\"dedicated-cgroup-peak-memory\",\"value\":67108864,\"unit\":\"bytes\"},{\"name\":\"sampled-workspace-allocated-blocks-peak-lower-bound\",\"value\":0,\"unit\":\"bytes\"}],\"collector\":\"mantle-exact-child-usage-v1\",\"compatibility_scope\":\"{\\\"attempt\\\":\\\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\\\",\\\"completeness\\\":\\\"DedicatedCgroup\\\",\\\"fence\\\":1,\\\"job\\\":\\\"442660e99b5e5edc1b93a8ea3c96a1b7a394843452c4f68d7d89bd75b9279790\\\",\\\"memory_accounting\\\":\\\"dedicated-cgroup-memory-peak-times-wall-ms-upper-bound-v2\\\",\\\"oom\\\":{\\\"dedicated-cgroup-oom\\\":{\\\"oom_kill_delta\\\":5}},\\\"output_accounting\\\":\\\"executor-stdout-plus-stderr-bytes-not-network-or-nar-v1\\\",\\\"request_id\\\":\\\"ae2286e3decdfdad59cac4e6d29e9578f7e00d480c8c00a1ac827a4144bdad63\\\",\\\"result\\\":\\\"e9f08ea773d516cea327b86168b61979037296f6ecd75008e9df821872bb9dd2\\\",\\\"scratch\\\":{\\\"coverage\\\":\\\"TraversalIncomplete\\\",\\\"end_snapshot_bytes\\\":null,\\\"sampled_peak_bytes\\\":0,\\\"samples\\\":6}}\",\"terminal_outcome\":\"signed-child-completion-observation\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"observation_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"measurements\":[{\"name\":\"terminal-observed-unix-time\",\"value\":1793096610,\"unit\":\"s\"},{\"name\":\"cpu\",\"value\":406,\"unit\":\"ms\"},{\"name\":\"execution\",\"value\":444,\"unit\":\"ms\"},{\"name\":\"peak-memory\",\"value\":67108864,\"unit\":\"bytes\"},{\"name\":\"sampled-scratch-lower-bound\",\"value\":0,\"unit\":\"bytes\"},{\"name\":\"executor-output-not-network\",\"value\":405,\"unit\":\"bytes\"},{\"name\":\"exact-child-peak-rss-not-tree-peak\",\"value\":117960704,\"unit\":\"bytes\"}],\"collector\":\"mantle-worker-dedicated-cgroup-v2\",\"compatibility_scope\":\"{\\\"action_family\\\":\\\"d4be6fa7a6b2eaa628431186a94e34538773a3483c5715148e9c62c4b5855955\\\",\\\"declared\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"features\\\":{\\\"architecture\\\":\\\"x86_64\\\",\\\"isolation\\\":\\\"sandbox\\\",\\\"kvm\\\":false,\\\"platform\\\":\\\"linux\\\",\\\"trust_domain\\\":\\\"runtime-dev\\\"},\\\"known_resource_dimensions\\\":{\\\"cpu_units\\\":null,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":null},\\\"machine_class\\\":\\\"small\\\",\\\"oom\\\":\\\"LinuxCgroupV2Kill\\\",\\\"policy_version\\\":1,\\\"predecessor\\\":null,\\\"schema\\\":\\\"mantle-resource-observation-v2\\\",\\\"selected\\\":{\\\"cpu_units\\\":1,\\\"memory_bytes\\\":67108864,\\\"scratch_bytes\\\":268435456},\\\"terminal_unix_s\\\":1793096610,\\\"trusted_collector\\\":true,\\\"unknown_measurements\\\":{\\\"cpu\\\":false,\\\"cpu_units\\\":true,\\\"execution\\\":false,\\\"executor_output\\\":false,\\\"io\\\":true,\\\"peak_memory\\\":false,\\\"process_peak_rss\\\":false,\\\"queue\\\":true,\\\"sampled_scratch_lower_bound\\\":false,\\\"scratch_high_water\\\":true,\\\"transfer\\\":true}}\",\"terminal_outcome\":\"\\\"Failed\\\"\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"retry_edges\":[],\"usage_records\":[{\"usage_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205:1:reservation\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"usage_kind\":\"reservation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"reserved_units\\\":100,\\\"state\\\":\\\"reserved\\\"}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]},{\"usage_id\":\"66ea1494de01d89db252779731012b6b31264c94988d1ef767d99a6c80a7a205:1:reconciliation\",\"attempt_identity\":\"7cdc21fca07e3e94b4497e6ab5fc79c0530920a2f4c85f0b9d66e5fe902ad254\",\"usage_kind\":\"reconciliation\",\"unit_schedule\":\"{\\\"version\\\":1,\\\"unit\\\":\\\"runtime-compute-units\\\",\\\"window_id\\\":\\\"runtime-window\\\",\\\"window_start_s\\\":1793096531,\\\"window_end_s\\\":1793098332,\\\"cpu_ms_per_unit\\\":1000,\\\"memory_byte_ms_per_unit\\\":1125899906842624,\\\"executor_output_bytes_per_unit\\\":1048576}\",\"window\":\"{\\\"end_unix_s\\\":1793098332,\\\"id\\\":\\\"runtime-window\\\",\\\"start_unix_s\\\":1793096531}\",\"scope\":\"{\\\"account\\\":\\\"runtime-account\\\",\\\"project\\\":\\\"runtime-project\\\"}\",\"outcome\":\"{\\\"Settled\\\":{\\\"event_digest\\\":\\\"6565b009bdc505fffab97ed246353fdef4e5d3f12456ed9f7bdde22f2e10a605\\\",\\\"charged_units\\\":3}}\",\"role\":\"RecordedOnly\",\"non_claims\":[\"build-service linkage proves canonical identity and bounded observation linkage only; it does not prove build correctness, hermeticity, sandboxing, host isolation, identity beyond checked claims, authorization freshness, future resource sufficiency, accounting fairness, external status correctness, or release eligibility\"]}],\"build_results\":[],\"reuse_edges\":[],\"orchestration_jobs\":[],\"external_statuses\":[]}"
+        }
+      ]
+    },
+    {
+      "name": "retry-disabled",
+      "coordinator_file": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/runtime/retry-disabled/final-coordinator.json",
+      "coordinator_blake3": "b333cbeb0cb17f2928ae0abc64602759748b63dbada5e41875139c05fca43405",
+      "gateway": {
+        "public_id": "fd7dc36b8712c25b933a92a9a6f52aa39c58834723377976839b89d4ad04cc9c",
+        "binding": {
+          "attempt_id": "07423e90712d8922712fa623e364b995b03f08305759f6bbbf78d6e208bc822b",
+          "fence_generation": 1,
+          "job_id": "2101db8b27605e8ac4f9531670b9f52fffd9af794c4d31fecb3f94ff670a84ed"
+        },
+        "retries": [],
+        "usage": {
+          "facts": {
+            "binding": {
+              "attempt_id": "07423e90712d8922712fa623e364b995b03f08305759f6bbbf78d6e208bc822b",
+              "fence_generation": 1,
+              "job_id": "2101db8b27605e8ac4f9531670b9f52fffd9af794c4d31fecb3f94ff670a84ed"
+            },
+            "cgroup_peak_memory_bytes": 67108864,
+            "child_pid": 1780983,
+            "completeness": "DedicatedCgroup",
+            "cpu_time_millis": 418,
+            "exit_code": null,
+            "oom": {
+              "dedicated-cgroup-oom": {
+                "oom_kill_delta": 5
+              }
+            },
+            "peak_rss_bytes": 118194176,
+            "request_id": "ecc2b52b2c5ac22cc05c5897647c7ed5ad0326ec7d1012c43d02d6cfa8541fd2",
+            "result_digest_blake3": "83a48008137f172f03c6cc8e1e89aa285642bf3877f70daaac732b8a179019c7",
+            "schema": "mantle-exact-child-usage-v1",
+            "scratch": {
+              "coverage": "TraversalIncomplete",
+              "end_snapshot_bytes": null,
+              "sampled_peak_bytes": 2560,
+              "samples": 6
+            },
+            "stderr_bytes": 405,
+            "stdout_bytes": 0,
+            "term_signal": 9,
+            "wall_time_millis": 446
+          },
+          "signature": "crunch-britton-desktop-1:qmq8fv0A5gWv2fY16118WtqYRSbrHp9zYpq6xgOhZCugztP5g4prS5X5ulPMvP8GCxBj9pWXfPjRPrRcqinSDw=="
+        },
+        "outputs": [],
+        "transitions": [
+          {
+            "observed_unix_s": 1793096756,
+            "phase": "Queued",
+            "reason": "gateway-admission-intent",
+            "sequence": 1
+          },
+          {
+            "observed_unix_s": 1793096756,
+            "phase": "Running",
+            "reason": "gateway-worker-dispatch-started",
+            "sequence": 2
+          },
+          {
+            "observed_unix_s": 1793096758,
+            "phase": "Failed",
+            "reason": "gateway-worker-terminal-failure",
+            "sequence": 3
+          }
+        ],
+        "published_evidence": null
+      },
+      "resource_leases": {},
+      "source_identity": {
+        "binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+        "binary_blake3": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+        "schema": "mantle-gateway-runtime-source-binding-v1",
+        "source_blake3": {
+          "crates/crunch-build/src/distributed/resource_quota_store.rs": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+          "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+          "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+          "crates/crunch-remote-core/src/resource_quota.rs": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+          "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+          "src/nix_gateway/authority.rs": "b54f7839631ff41ed740c9074b5a2a91dd882c13c6ad2804875d278c6ac46d1f",
+          "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+          "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+          "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+          "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+          "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+          "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+          "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+          "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+          "tests/support/remote_endpoint_binding.rs": "589b6c0afd1418446e7cd1442fa278c69cb95b557f5e200d7de01787c9d224bb"
+        }
+      },
+      "publications": []
+    },
+    {
+      "name": "not-opted-in",
+      "coordinator_file": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/runtime/not-opted-in/final-coordinator.json",
+      "coordinator_blake3": "ab743bb97f38a0da8779a5333d66a2d7d59e44aafb18fcefbbc7727d0dc014c0",
+      "gateway": {
+        "public_id": "b9ef1d93899f248308604b0eb667506bbdf870d6ebe46bb160d8df405fa5826a",
+        "binding": {
+          "attempt_id": "77aa98a4be218ef1d2935fce6f058b549ab2dc74164a23890b445ef482088ca8",
+          "fence_generation": 1,
+          "job_id": "e1b28c97ce82aeafc627644de1dbb504814f78a14e6dd208b783139785249e66"
+        },
+        "retries": [],
+        "usage": {
+          "facts": {
+            "binding": {
+              "attempt_id": "77aa98a4be218ef1d2935fce6f058b549ab2dc74164a23890b445ef482088ca8",
+              "fence_generation": 1,
+              "job_id": "e1b28c97ce82aeafc627644de1dbb504814f78a14e6dd208b783139785249e66"
+            },
+            "cgroup_peak_memory_bytes": 67108864,
+            "child_pid": 1803095,
+            "completeness": "DedicatedCgroup",
+            "cpu_time_millis": 424,
+            "exit_code": null,
+            "oom": {
+              "dedicated-cgroup-oom": {
+                "oom_kill_delta": 5
+              }
+            },
+            "peak_rss_bytes": 119603200,
+            "request_id": "6e7443036a20e5c1f02ace488f5a1546790427708c9894c0a81ce9a4b10f8b3e",
+            "result_digest_blake3": "a3b708ae7e220ac37eb2adeaeace646fe0798917140723572d2a10453abba2ae",
+            "schema": "mantle-exact-child-usage-v1",
+            "scratch": {
+              "coverage": "TraversalIncomplete",
+              "end_snapshot_bytes": null,
+              "sampled_peak_bytes": 2560,
+              "samples": 6
+            },
+            "stderr_bytes": 405,
+            "stdout_bytes": 0,
+            "term_signal": 9,
+            "wall_time_millis": 453
+          },
+          "signature": "crunch-britton-desktop-1:OzI4cotFbgNdClZQ71qQ1k+GtvPKZBzW4jHqgacrJHghJC85uHdyHICUUYr4PJCbwmxhK1bFG/s7O2WdZ9RpDg=="
+        },
+        "outputs": [],
+        "transitions": [
+          {
+            "observed_unix_s": 1793096896,
+            "phase": "Queued",
+            "reason": "gateway-admission-intent",
+            "sequence": 1
+          },
+          {
+            "observed_unix_s": 1793096896,
+            "phase": "Running",
+            "reason": "gateway-worker-dispatch-started",
+            "sequence": 2
+          },
+          {
+            "observed_unix_s": 1793096898,
+            "phase": "Failed",
+            "reason": "gateway-worker-terminal-failure",
+            "sequence": 3
+          }
+        ],
+        "published_evidence": null
+      },
+      "resource_leases": {},
+      "source_identity": {
+        "binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+        "binary_blake3": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+        "schema": "mantle-gateway-runtime-source-binding-v1",
+        "source_blake3": {
+          "crates/crunch-build/src/distributed/resource_quota_store.rs": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+          "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+          "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+          "crates/crunch-remote-core/src/resource_quota.rs": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+          "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+          "src/nix_gateway/authority.rs": "b54f7839631ff41ed740c9074b5a2a91dd882c13c6ad2804875d278c6ac46d1f",
+          "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+          "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+          "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+          "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+          "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+          "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+          "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+          "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+          "tests/support/remote_endpoint_binding.rs": "589b6c0afd1418446e7cd1442fa278c69cb95b557f5e200d7de01787c9d224bb"
+        }
+      },
+      "publications": []
+    },
+    {
+      "name": "sigkill",
+      "coordinator_file": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-oom-bounded-ack-v17/runtime/sigkill/final-coordinator.json",
+      "coordinator_blake3": "da327140a2612be32b99e1836ac766b06e35f05761ceaa200ec8779d5008da89",
+      "gateway": {
+        "public_id": "1a505695d8f5d19b9944139d22c76ab1139d1b096aaabd516986b33835644adc",
+        "binding": {
+          "attempt_id": "8644676cd6052aeaa84315655c31adc8efa430c8cd6dbd2ec07c95675df253bf",
+          "fence_generation": 1,
+          "job_id": "07b01e4c59b9feb9b3ca58dd2ed8211edf7c89977e41a33e9d04ac837116eb31"
+        },
+        "retries": [],
+        "usage": {
+          "facts": {
+            "binding": {
+              "attempt_id": "8644676cd6052aeaa84315655c31adc8efa430c8cd6dbd2ec07c95675df253bf",
+              "fence_generation": 1,
+              "job_id": "07b01e4c59b9feb9b3ca58dd2ed8211edf7c89977e41a33e9d04ac837116eb31"
+            },
+            "cgroup_peak_memory_bytes": 28008448,
+            "child_pid": 1824071,
+            "completeness": "DedicatedCgroup",
+            "cpu_time_millis": 597,
+            "exit_code": 0,
+            "oom": "dedicated-cgroup-no-oom",
+            "peak_rss_bytes": 122556416,
+            "request_id": "2573523c2f4feb4c9a51d433652d7d127ae8f01c558c29e0379f4ddd4b97f274",
+            "result_digest_blake3": "34f9c1b8ca1afaf1fa2046f3eecfeef91a1dbadd5fa8aa3512cd35a46638eb65",
+            "schema": "mantle-exact-child-usage-v1",
+            "scratch": {
+              "coverage": "TraversalIncomplete",
+              "end_snapshot_bytes": null,
+              "sampled_peak_bytes": 2560,
+              "samples": 8
+            },
+            "stderr_bytes": 1045,
+            "stdout_bytes": 37,
+            "term_signal": null,
+            "wall_time_millis": 646
+          },
+          "signature": "crunch-britton-desktop-1:G33faiG+MgYtAj9RpzSsrkcMLwB4OxgyBIDpawr/vq9fK02UBX+B3n3AJtSvWXSpxuPcaeMil9NJSpfgDRl7Cg=="
+        },
+        "outputs": [],
+        "transitions": [
+          {
+            "observed_unix_s": 1793097044,
+            "phase": "Queued",
+            "reason": "gateway-admission-intent",
+            "sequence": 1
+          },
+          {
+            "observed_unix_s": 1793097044,
+            "phase": "Running",
+            "reason": "gateway-worker-dispatch-started",
+            "sequence": 2
+          },
+          {
+            "observed_unix_s": 1793097047,
+            "phase": "Failed",
+            "reason": "gateway-worker-terminal-failure",
+            "sequence": 3
+          }
+        ],
+        "published_evidence": null
+      },
+      "resource_leases": {},
+      "source_identity": {
+        "binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+        "binary_blake3": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+        "schema": "mantle-gateway-runtime-source-binding-v1",
+        "source_blake3": {
+          "crates/crunch-build/src/distributed/resource_quota_store.rs": "61383b12f54801eea835f08102ce660675dd6802311c51bd4b6941e9512436e4",
+          "crates/crunch-nix-gateway/src/api.rs": "1ae527c0de4ac2a3e71b9f652f1033781d21e198da73749f625c443185f252e0",
+          "crates/crunch-remote-core/src/resource_policy.rs": "0644bae671e1e6e191432651aeb66234a92dcfb41beeeaf7d57e1d6ccf669c71",
+          "crates/crunch-remote-core/src/resource_quota.rs": "f09c9498e23b2a8b8049512e3794bd9df91743ce7ded237bad7fd2de2ec223f5",
+          "src/nix_gateway/api_host.rs": "d626fdf94dd35645584152ae4865590e14f9f25e9f086e06eb5ac8edaf8573ee",
+          "src/nix_gateway/authority.rs": "b54f7839631ff41ed740c9074b5a2a91dd882c13c6ad2804875d278c6ac46d1f",
+          "src/nix_gateway/evidence.rs": "527bed17f98db0582988a78ec53dc992f001f777e7a9ab4ba1a6f1eb991def9a",
+          "src/nix_gateway/resource_host.rs": "a96bac6a4ab684c39a65409f270571e25d31c13f49cb0683514e57e82c86d67b",
+          "src/remote_build.rs": "8a0ed62b9e3f6222433abbc7dcea00bdc103adb5e9f5a473211b0e51e7d7ceae",
+          "src/remote_build/gateway.rs": "e56e201ced8f17abca553e34299bd815e73f79dfca6e4dc1f7ade37683dfb06d",
+          "src/remote_build/usage.rs": "eac7aaaac7475ecb34b259924f45a52ac27994209ff014b2fe2dc4f10de438b6",
+          "src/remote_build/usage_child.rs": "995db0e16e7e77662ae49c7b5ca88dbce3870613c631dac4c2475e3d8a37e98b",
+          "tests/resource_gateway_runtime.rs": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+          "tests/support/gateway_runtime.rs": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+          "tests/support/remote_endpoint_binding.rs": "589b6c0afd1418446e7cd1442fa278c69cb95b557f5e200d7de01787c9d224bb"
+        }
+      },
+      "publications": []
+    }
+  ],
+  "rail_source": {
+    "path": "tests/resource_gateway_runtime.rs",
+    "blake3": "4a4fd4e4a9389f3b1930ff81fbb067cd11678a0b66073906c9a677b2f410cd12",
+    "source": "#![cfg(target_os = \"linux\")]\n#[path = \"support/gateway_runtime.rs\"]\nmod gateway_runtime;\n\nuse std::fs;\nuse std::path::PathBuf;\n\nuse gateway_runtime::GatewayRuntime;\nuse gateway_runtime::PROJECT;\nuse gateway_runtime::private_dir;\nuse gateway_runtime::private_json;\nuse serde_json::Value;\nuse serde_json::json;\n\nfn inputs() -> PathBuf {\n    PathBuf::from(std::env::var_os(\"MANTLE_GATEWAY_INPUT_PATHS\").expect(\"signed input paths descriptor\"))\n}\nfn artifact_root() -> PathBuf {\n    let root = PathBuf::from(std::env::var_os(\"MANTLE_GATEWAY_ARTIFACT_ROOT\").expect(\"fresh retained artifact root\"));\n    private_dir(&root);\n    root\n}\nfn submit(runtime: &mut GatewayRuntime) -> String {\n    let (ok, response) = runtime.call(\n        json!({\"operation\":\"submit\",\"drv_path\":runtime.drv_path,\n        \"idempotency_key\":\"fixed-runtime-request\"}),\n        PROJECT,\n    );\n    assert!(ok, \"real signed submission rejected: {response}\");\n    response[\"response\"][\"Submitted\"][\"attempt_id\"].as_str().unwrap().into()\n}\nfn final_record(runtime: &GatewayRuntime, id: &str) -> Value {\n    let state = runtime.coordinator();\n    private_json(&runtime.root.join(\"final-coordinator.json\"), &state);\n    state[\"gateway_attempts\"][id].clone()\n}\nfn usage(runtime: &mut GatewayRuntime) -> Value {\n    let (ok, response) = runtime.call(json!({\"operation\":\"usage\",\"items\":16}), PROJECT);\n    assert!(ok, \"fresh UsageRead invocation failed: {response}\");\n    response[\"response\"][\"Usage\"].clone()\n}\nfn confirm_output(runtime: &mut GatewayRuntime, id: &str) {\n    let (ok, response) = runtime.call(json!({\"operation\":\"result\",\"attempt_id\":id}), PROJECT);\n    assert!(ok, \"signed result/CAS verification failed: {response}\");\n    let physical = runtime.store.join(runtime.output_path.rsplit('/').next().unwrap());\n    assert_eq!(fs::read(physical).unwrap(), b\"gateway-success\\n\");\n    confirm_events(runtime, id, \"Succeeded\");\n}\nfn quota_snapshot(runtime: &GatewayRuntime) -> crunch_remote_core::resource_quota::Ledger {\n    crunch_build::distributed::ResourceQuotaStore::open(&runtime.root.join(\"quota\"))\n        .unwrap()\n        .snapshot()\n        .unwrap()\n}\n\nfn confirm_events(runtime: &mut GatewayRuntime, id: &str, phase: &str) {\n    let (ok, response) = runtime.call(json!({\"operation\":\"events\",\"attempt_id\":id,\"items\":16}), PROJECT);\n    assert!(ok, \"EventRead invocation failed: {response}\");\n    assert_eq!(response[\"response\"][\"Events\"][\"values\"].as_array().unwrap().last().unwrap()[\"phase\"], phase);\n}\n\n#[test]\n#[ignore = \"requires signed static BusyBox descriptor and bwrap; retains actual private gateway/CLI artifacts\"]\nfn real_gateway_public_usage_process_only_and_authority_negatives() {\n    let mut runtime = GatewayRuntime::prepare(&artifact_root().join(\"process-only\"), &inputs(), None, \"simple\");\n    let gateway = runtime.start();\n    let id = submit(&mut runtime);\n    let status = runtime.wait_terminal(&id);\n    assert_eq!(status[\"response\"][\"Status\"][\"observation\"][\"phase\"], \"Succeeded\");\n    confirm_output(&mut runtime, &id);\n    let summary = usage(&mut runtime);\n    assert_eq!(summary[\"accounting\"][\"project_reason_counts\"][\"partial_observation\"], 1);\n    assert_eq!(summary[\"accounting\"][\"project_reserved_units\"], 100);\n    assert_eq!(summary[\"accounting\"][\"project_charged_units\"], 0);\n    assert_eq!(summary[\"accounting\"][\"schedule_version\"], 1);\n    assert_eq!(summary[\"accounting\"][\"cpu_ms_per_unit\"], 1000);\n    let before = quota_snapshot(&runtime);\n    for count in [0, crunch_nix_gateway::api::MAX_USAGE_ITEMS + 1] {\n        let (ok, response) = runtime.call(json!({\"operation\":\"usage\",\"items\":count}), PROJECT);\n        assert!(!ok);\n        assert_eq!(response[\"error\"], \"gateway-limit-exceeded\");\n    }\n    assert!(!runtime.call(json!({\"operation\":\"usage\",\"items\":1}), \"unknown-project\").0);\n    let (ok, response) = runtime.call_bound(\n        json!({\"operation\":\"status\",\"attempt_id\":id}),\n        json!({\"operation\":\"usage\",\"items\":1}),\n        PROJECT,\n    );\n    assert!(!ok);\n    assert_eq!(response[\"error\"], \"gateway-authority-denied\");\n    assert_eq!(quota_snapshot(&runtime), before, \"denied reads cannot mutate quota\");\n    let record = final_record(&runtime, &id);\n    assert_eq!(record[\"usage\"][\"facts\"][\"completeness\"], \"ProcessOnly\");\n    assert_eq!(record[\"usage\"][\"facts\"][\"oom\"], \"unavailable\");\n    assert_eq!(record[\"retries\"], json!([]));\n    drop(gateway);\n    runtime.retain_final_identity();\n}\n\n#[test]\n#[ignore = \"requires CPU+memory delegated cgroup-v2 root with swap disabled, signed BusyBox descriptor and bwrap\"]\nfn real_gateway_signed_oom_retry_usage_and_negative_controls() {\n    let root = artifact_root();\n    let cgroup = PathBuf::from(std::env::var_os(\"MANTLE_TEST_CGROUP_ROOT\").expect(\"empty delegated cgroup root\"));\n    for (name, workload, enabled, opted_in, retry_expected) in [\n        (\"positive\", \"oom\", true, true, true),\n        (\"retry-disabled\", \"oom\", false, true, false),\n        (\"not-opted-in\", \"oom\", true, false, false),\n        (\"sigkill\", \"sigkill\", true, true, false),\n    ] {\n        let mut runtime = GatewayRuntime::prepare(&root.join(name), &inputs(), Some(&cgroup), workload);\n        runtime.config[\"resources\"][\"oom_retry_enabled\"] = enabled.into();\n        if !opted_in {\n            runtime.config[\"resources\"][\"opted_in_projects\"] = json!([]);\n        }\n        let gateway = runtime.start();\n        let id = submit(&mut runtime);\n        let status = runtime.wait_terminal(&id);\n        let record = final_record(&runtime, &id);\n        if retry_expected {\n            assert_eq!(status[\"response\"][\"Status\"][\"observation\"][\"phase\"], \"Succeeded\");\n            verify_successor(&runtime, &record);\n            confirm_output(&mut runtime, &id);\n            let summary = usage(&mut runtime);\n            assert_eq!(summary[\"accounting\"][\"project_reason_counts\"][\"settled\"], 2);\n            assert_eq!(summary[\"accounting\"][\"project_reserved_units\"], 0);\n            assert_eq!(summary[\"accounting\"][\"project_charged_units\"], summary[\"accounting\"][\"account_charged_units\"]);\n            assert_eq!(quota_snapshot(&runtime).entries.len(), 2);\n        } else {\n            assert_eq!(status[\"response\"][\"Status\"][\"observation\"][\"phase\"], \"Failed\");\n            assert_eq!(record[\"retries\"], json!([]));\n            assert_eq!(record[\"binding\"][\"fence_generation\"], 1);\n            let facts = &record[\"usage\"][\"facts\"];\n            assert_eq!(facts[\"completeness\"], \"DedicatedCgroup\");\n            if workload == \"sigkill\" {\n                assert_eq!(facts[\"oom\"], \"dedicated-cgroup-no-oom\");\n            } else {\n                assert!(facts[\"oom\"][\"dedicated-cgroup-oom\"][\"oom_kill_delta\"].as_u64().unwrap() > 0);\n            }\n            assert_eq!(quota_snapshot(&runtime).entries.len(), 1);\n            usage(&mut runtime);\n            confirm_events(&mut runtime, &id, \"Failed\");\n        }\n        assert_eq!(runtime.coordinator()[\"resource_leases\"], json!({}));\n        drop(gateway);\n        runtime.retain_final_identity();\n    }\n}\n\nfn verify_successor(runtime: &GatewayRuntime, record: &Value) {\n    let retries = record[\"retries\"].as_array().unwrap();\n    assert_eq!(retries.len(), 1);\n    let retry = &retries[0];\n    assert_eq!(retry[\"successor\"], record[\"binding\"]);\n    assert_eq!(retry[\"predecessor\"][\"job_id\"], retry[\"successor\"][\"job_id\"]);\n    assert_ne!(retry[\"predecessor\"][\"attempt_id\"], retry[\"successor\"][\"attempt_id\"]);\n    assert!(\n        retry[\"successor\"][\"fence_generation\"].as_u64().unwrap()\n            > retry[\"predecessor\"][\"fence_generation\"].as_u64().unwrap()\n    );\n    assert_eq!(retry[\"signed_usage\"][\"facts\"][\"binding\"], retry[\"predecessor\"]);\n    assert_eq!(record[\"usage\"][\"facts\"][\"binding\"], retry[\"successor\"]);\n    assert!(retry[\"signed_usage\"][\"facts\"][\"oom\"][\"dedicated-cgroup-oom\"][\"oom_kill_delta\"].as_u64().unwrap() > 0);\n    assert_eq!(record[\"usage\"][\"facts\"][\"oom\"], \"dedicated-cgroup-no-oom\");\n    let ledger = quota_snapshot(runtime);\n    let predecessor = retry[\"predecessor\"][\"attempt_id\"].as_str().unwrap();\n    let successor = retry[\"successor\"][\"attempt_id\"].as_str().unwrap();\n    assert_eq!(ledger.resource_contexts[successor].predecessor.as_ref().unwrap().as_str(), predecessor);\n    assert_eq!(ledger.resource_contexts[predecessor].machine_class, \"small\");\n    assert_eq!(ledger.resource_contexts[successor].machine_class, \"large\");\n    let leaf = retry[\"predecessor_evidence\"].as_str().unwrap();\n    let bytes = fs::read(runtime.root.join(\"evidence\").join(leaf)).unwrap();\n    assert_eq!(format!(\"{}.json\", blake3::hash(&bytes).to_hex()), leaf);\n    let bundle: valence_core::build_service::BuildServiceBundle = serde_json::from_slice(&bytes).unwrap();\n    assert!(valence_core::build_service::validate_build_service_bundle(&bundle).valid);\n}\n"
+  },
+  "observed": [
+    "Actual signed gateway dispatch observes a dedicated-cgroup positive OOM and creates a distinct successor attempt with advanced fence.",
+    "The real successor succeeds; both predecessor and successor settle, quota contexts retain predecessor linkage, public UsageRead agrees with account/project charge, and final resource leases are empty.",
+    "Retry-disabled and not-opted-in OOM controls fail with no successor; ordinary SIGKILL remains dedicated-cgroup-no-oom and does not retry.",
+    "Per-case executable/source bindings remain unchanged; the owned delegated controller ends empty and exits 0."
+  ],
+  "maintenance_owner": "Mantle remote worker, gateway/resource host and quota-store maintainers",
+  "scope": "Final coordinator projections and published leaves only; private authority envelopes, private keys and full private runtime trees are deliberately not exported.",
+  "non_claims": [
+    "Linux delegated cgroup-v2 runtime only; no positive OOM collector on another platform is asserted.",
+    "A real gateway successor is not complete VM campaign coverage, historical license-review chronology, source-owner approval, frozen G1/G2, lifecycle acceptance, archive or release."
+  ]
+}

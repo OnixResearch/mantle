@@ -1,0 +1,248 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/request.json",
+  "request_blake3": "92edd9f9f3bb7537035024e685cddae79fef11de5e4c47a4c91971e4b3dd02a6",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+  "started_at": "2026-10-27T03:04:13.279946-04:00",
+  "environment_overrides": {
+    "CARGO_HOME": "/home/brittonr/.cargo",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/target",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  },
+  "source_before": {
+    "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+    "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+    "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+    "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+    "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+    "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+  },
+  "steps": [
+    {
+      "label": "proc-macro2-cargo-oracle-original-cli",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:04:13.288381-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-cargo-oracle-original-cli.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-cargo-oracle-original-cli.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.422432-04:00",
+      "streams_blake3": {
+        "stdout": "5b72bf3f0da687d2d3e8b2d1274e8fce81b0756cde07f5bfc64de37c013074c1",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "serde-derive-cargo-oracle-original-cli",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "started_at": "2026-10-27T03:04:13.425791-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-cargo-oracle-original-cli.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-cargo-oracle-original-cli.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.532707-04:00",
+      "streams_blake3": {
+        "stdout": "17a2a4545c790e8c06bd920777b62acd5f62666895f74c72383c5ac2e1e66593",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "proc-macro2-original-cargo-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:04:13.536062-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-original-cargo-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-original-cargo-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.570816-04:00",
+      "streams_blake3": {
+        "stdout": "438640a8c5003cb2db1a2690df01cfd4e3c5810e842929532f06835fd59a9f9d",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "serde-derive-original-cargo-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:04:13.573470-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-original-cargo-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-original-cargo-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.607619-04:00",
+      "streams_blake3": {
+        "stdout": "1b7f1c8beaf54663748e811c514a6112b6ad95b98e65536f4222be0806609623",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "libc-original-cargo-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:04:13.610722-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/libc-original-cargo-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/libc-original-cargo-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.658060-04:00",
+      "streams_blake3": {
+        "stdout": "8b436c220a58586bf04800124a53e6179a9778883cb45382a6d179d3e4e82ae7",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "native-answer-sys-original-cargo-unit-graph",
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-Z",
+        "unstable-options",
+        "--unit-graph",
+        "--manifest-path",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.toml"
+      ],
+      "started_at": "2026-10-27T03:04:13.661019-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/native-answer-sys-original-cargo-unit-graph.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/native-answer-sys-original-cargo-unit-graph.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T03:04:13.690321-04:00",
+      "streams_blake3": {
+        "stdout": "5dd251a4bb1ca43754bd85c09cc5a783467bd9b23491a71057cd380c6b0e1bd1",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    }
+  ],
+  "non_claims": [
+    "Use the already built, unchanged original da00 binary and original locked Cargo/Rustc cohort from Pueue47. No product dependency override or product rebuild.",
+    "CARGO_HOME here supplies the external user fixtures exact existing lockfile sources; the product-only Crane vendor map cannot supply their newer transitive packages. Fixture manifests and lockfiles are not changed.",
+    "Six qualifying original-source receipts from Pueue47 are reused, not rerun. These two missing receipts plus raw Cargo graphs remain reconstructed baseline evidence only, not contemporaneous history or app/build-script success."
+  ],
+  "immutable_artifacts": [],
+  "source_after": {
+    "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+    "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+    "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+    "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+    "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+    "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T03:04:13.700941-04:00",
+  "driver_exit_code": 0
+}

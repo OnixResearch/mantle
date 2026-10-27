@@ -1,6 +1,11 @@
 # Opt-in Cargo unit-graph producer. The config is a declared store file whose
 # tool/source paths must also be present among the explicit inputs below.
 # A plan is not a Cargo compilation fallback: rejected plans fail the build.
+# `toolchain` is producer/oracle-only. The config's `rustc` must name an
+# independently admitted compiler+std root (e.g. packages.cargo-unit-compiler),
+# included in runtime_inputs so it is visible to the producer too. Runtime and
+# native closures must not depend on the Cargo/oracle roots. Store roots cannot
+# be made safe by changing PATH or copying a filtered view of a mixed toolchain.
 #
 # `native_inputs` (optional) declares native libraries and tools for build
 # scripts, keyed by exact Cargo package id (not an ambiguous package name):

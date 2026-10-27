@@ -37,3 +37,13 @@ and store with no dev flags or inherited compiler-cache/scheduling authority.
 A reported prior success, an adoption marker, or a cached provider must never
 stand in for that new v2 receipt, action reconciliation, or stage equality.
 
+## Verified input supply, not runtime acceptance (2026-10-27)
+
+`evidence/cold-input-supply-review-2026-10-27.json` binds the transferred,
+exact-lock vendor cohort and source-input verification. The supply receipt
+explicitly excludes a final source freeze, complete source-built profile,
+native/StageX closure union and independent profile/provider/program admission.
+Those prerequisites remain required before execution. No source preparation,
+development cycle or promoted cold proof is recorded here; V2/V3 stay open.
+
+

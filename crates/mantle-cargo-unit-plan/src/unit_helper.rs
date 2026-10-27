@@ -664,11 +664,12 @@ fn run_build_script() -> Result<(), String> {
     }) {
         return Err(format!("unit-helper-invalid-environment: PATH entry {entry} is not a native input"));
     }
-    let toolchain = required("MANTLE_UNIT_TOOLCHAIN")?;
-    if !toolchain.starts_with('/') || toolchain.contains(['\0', ':']) {
-        return Err("unit-helper-invalid-environment: toolchain must be an absolute path".into());
-    }
-    path.insert(0, format!("{toolchain}/bin"));
+    let rustc = required("MANTLE_UNIT_RUSTC")?;
+    let compiler_bin = Path::new(&rustc)
+        .parent()
+        .filter(|path| path.is_absolute() && !rustc.contains(['\0', ':']))
+        .ok_or_else(|| "unit-helper-invalid-environment: rustc must be an absolute path".to_string())?;
+    path.insert(0, compiler_bin.to_string_lossy().into_owned());
     fs::create_dir_all(&out).map_err(|error| format!("unit-helper-output: {error}"))?;
     let run = ScriptRun {
         script: script_executable(&script_unit)?,

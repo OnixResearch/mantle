@@ -1,0 +1,266 @@
+{
+  "schema": "mantle-continuation-readiness-holds-v1",
+  "date": "2026-10-27",
+  "scope": "Remaining lifecycle obligations for the seven scoped continuation areas; not an inventory or acceptance of every open Mantle change.",
+  "completed_observations": [
+    {
+      "criterion": "resource policy 3.3",
+      "evidence": ".cairn/changes/add-evidence-driven-resource-policy/evidence/actual-fenced-oom-successor-2026-10-27.json",
+      "boundary": "Actual signed Linux gateway successor, accounting and rollback/SIGKILL controls; not whole-change acceptance."
+    },
+    {
+      "criterion": "Cargo compiler execution capability correction",
+      "evidence": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/compiler-only-boundary-2026-10-27.json",
+      "frozen_singleton_evidence": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/frozen-mantle-no-cargo-singleton-2026-10-27.json",
+      "boundary": "Real cfg/pkg-config/native consumer and both Cargo-denial routes in current helper bwrap, plus one actual fresh no-substitute Mantle script unit using frozen executable copies; not whole dynamic acceptance."
+    }
+  ],
+  "closure_holds": [
+    {
+      "task": "Synchronize accepted build-script specifications and verify isolated pre-archive readiness with completion evidence (build scripts T4.6)",
+      "reason": "The real compiler-only cfg/pkg-config/native consumer boundary now passes, but T4.6 still requires all required gates and an approved isolated source snapshot. The 2026-10-16 approval explicitly excludes source-owner/snapshot custody; frozen G1/G2 and source approval remain unsatisfied. No accepted-spec sync is authorized by runtime smoke."
+    },
+    {
+      "task": "Perform the separately authorized build-script archive and capture post-archive validation after all prerequisites hold",
+      "reason": "Depends on T4.6, the approved final source, required gates and implementation commit under tasks.md:46-48. Pre-archive boundary approval does not waive these conditions or authorize current successor publication."
+    },
+    {
+      "task": "Synchronize accepted watch specifications and archive through the isolated workflow with completion evidence (watch T4.3)",
+      "reason": "Authored T4.1 remains unaccepted: the historical pre-watch binary rejected --watch before any of the four scenario bodies. Existing after-runtime proof is retained, but is not four executed before scenarios or approved final-source/lifecycle acceptance."
+    },
+    {
+      "task": "Synchronize accepted worker-demand specifications and archive through the isolated workflow with completion evidence (worker demand T4.5)",
+      "reason": "Authored T4.3 still lacks historical protocol execution and an identical-vector/ingress before comparison. Current production-derived gateway/daemon/subscriber evidence does not create that historical observation or lifecycle acceptance."
+    },
+    {
+      "task": "Complete the remaining resource-policy and dev-cache lifecycle closure only after their authored obligations and acceptance requirements hold",
+      "reason": "Resource license-review chronology, complete unchanged-floor VM campaigns and the complete verification matrix remain open. Dev-cache cold/cached/adopt and fresh promoted proof require a final frozen source/cohort, complete source-built closure/program admission and independently reviewed pins; the input-supply receipt explicitly supplies none of those approvals."
+    }
+  ],
+  "parent_P1": {
+    "state": "HELD",
+    "depends_on": [
+      "G1",
+      "G2",
+      "G3",
+      "parent semantic acceptance",
+      "approved source/snapshot custody",
+      "sole Git-owner ordinary integration/publication"
+    ],
+    "publication_boundary": "The existing parent tasks/evidence separately record the original ordinary merge and main push. This receipt neither republishes it as current successor authority nor records a new publication."
+  },
+  "frozen_gate_route": {
+    "receipt": {
+      "schema": "mantle-frozen-gate-route-completion-v1",
+      "review_date": "2026-10-27",
+      "reviewer": "FrozenGateRouteCompletion",
+      "subject": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "frozen_run_root": "/datapool/mantle-store/mr.7p88_pl1",
+      "disposition": "HELD: no currently justified unchanged-contract executable route for the isolated subject",
+      "acceptance_boundary": "Review complete; gate execution, resource admission and parent acceptance are not claimed. Main has concrete missing authority decisions below. No failed admission was rerun.",
+      "retained_admission": {
+        "path": "/datapool/mantle-store/mr.7p88_pl1/admission-shared-pool-v3-seven-origin-capacity-20261026-v1.json",
+        "free": 835207299072,
+        "shared_pool_growth": 0,
+        "target": 9331496960,
+        "temp": 270171648,
+        "metadata": 3187712,
+        "capacity_admitted": false,
+        "product_launched": false,
+        "stop_reason": "owned-target process/lock measurement not clear",
+        "owned_state": {
+          "scan_complete_within_5_seconds": true,
+          "unreadable_or_transient": 8,
+          "measurement_error_kind": "PermissionError",
+          "errno": 13,
+          "paths": [
+            "/proc/2562794/environ",
+            "/proc/2562795/environ",
+            "/proc/2562797/environ",
+            "/proc/2562798/environ",
+            "/proc/2564254/environ",
+            "/proc/2564258/environ",
+            "/proc/2566122/environ",
+            "/proc/2566123/environ"
+          ],
+          "owned_compilers": [],
+          "existing_target_lock": "available at observation",
+          "interpretation": "The lock and empty observed compiler list do not repair incomplete observation. These are retained PID identities, not current targets for a retry. Permission errors remain errors, not absence. No descendant/daemon-settlement inference."
+        }
+      },
+      "frozen_contract": {
+        "free_initial": 124692987904,
+        "created_unix": 1792210364.526931,
+        "initial_interval_bytes": 777650176,
+        "exclusive_growth_credit": 0,
+        "formula": "max(0, 124692987904 - current_available_bytes)",
+        "caps_bytes": {
+          "target": 68719476736,
+          "shared_pool_growth": 85899345920,
+          "temp_and_stores": 4294967296,
+          "metadata": 134217728,
+          "minimum_free": 20000000000
+        },
+        "stop_bytes": {
+          "target": 64424509440,
+          "shared_pool_growth": 83751862272,
+          "temp_and_stores": 3221225472,
+          "metadata": 100663296,
+          "minimum_free": 22000000000
+        },
+        "root_accounting": "Monitor R is Path(__file__).resolve().parent. sample() counts R/target, R/t + R/stores and remaining R entries; shared availability is sampled on R. Original target/debug/.cargo-lock is checked. Preserve these roots, epoch, stop predicates and zero credit; no baseline reset or subtraction of retained artifacts.",
+        "serialization": "ONE monitor and ONE current leg; existing serial queue custody must be reviewed by Main, actual previous outcome reviewed before next enqueue. Admission and a point lock are not serialization. Exactly one separate explicit release, never automatic chaining.",
+        "enforcement_limit": "Sampling plus bounded process-group cancellation, not a hard quota; client/leader settlement does not establish descendant/daemon settlement."
+      },
+      "source_cwd_toolchain_findings": {
+        "original_cwd": "/home/brittonr/git/OnixResearch/mantle",
+        "current_isolated_cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+        "original_manifest_parents": [
+          "d20459c6db6d60ed2b08533911e279cbeadb742e",
+          "d75158b00b080535f2ffea12430665ca3d57ea82"
+        ],
+        "isolated_origin": {
+          "head": "db98fd8bcf2d96614b8fe7f49ec131408b43018d",
+          "tracked_tree": "c6a40e3ff06fd03abe510e3931cd7fec109a0683",
+          "scope": "origin-subject.json creation identity, explicitly not an approved future final-source snapshot"
+        },
+        "launcher_binding": "run-leg-shared-pool-v3.py:206-225 overwrites target/temp/jobs, builds nix develop ... . --command ..., then subprocess.Popen(..., cwd=m['repo']). External shell cwd or CARGO_TARGET_DIR cannot rebind it. Running it from the isolated directory still selects the original repository flake and original cwd. Copying the monitor to the new run root changes R and invalidates the original owned-root accounting; do not do this.",
+        "original_environment": {
+          "CARGO_TARGET_DIR": "/datapool/mantle-store/mr.7p88_pl1/target",
+          "TMPDIR_TMP_TEMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_HOME": "fresh shellHook-created home using generated patched Crane vendor config",
+          "profiles": "repository profiles/incremental/wrappers unchanged"
+        },
+        "original_observed_cohort": {
+          "evidence": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-closure.log:1-23",
+          "cargo_rustc_root": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+          "cargo": "cargo 1.96.0-nightly (a357df4c2 2026-04-03)",
+          "rustc": "rustc 1.96.0-nightly (c75612477 2026-04-07)",
+          "vendor_config": "/nix/store/d1rr9jlljwdsjh6yxw579carcfsf8l7z-vendor-cargo-deps/config.toml",
+          "canonical_sandbox_shell": "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+          "qualification": "Historical actual shell identities; not newly resolved toolchains for the isolated source. An isolated-origin binding alone does not prove the same flake/dev-shell/vendor cohort."
+        },
+        "current_integration_request_environment": {
+          "evidence": "integration-build-v1-request.json:1-15",
+          "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_BUILD_JOBS": "4",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "TMPDIR": "/tmp"
+        },
+        "current_request_is_not_frozen_route": "Current target is not the sampled original target and its lock is not the original lock. Current jobs/temp/incremental/wrapper overrides are not the frozen shell contract. Existing current integration build receipts cannot be relabeled frozen G1/G2 admission.",
+        "required_source_binding": "Before any future gate, Main/source owner must freeze the intended final tracked Git subject and scoped working/index inputs, bind Cargo.toml/Cargo.lock/flake.nix/flake.lock, actual gate scripts and complete affected package scope, then bind actual chosen shell/toolchain/vendor/profile to that subject. Prior source 124ca12d1f1cc1a3a8be252f6d0f12f7f1ca2014d85700b3a8a545633f60bfe3 and documentary 3cbaaa73105b8fca8e037fb8bbdc23b8a320c769dc2d64c9fcac89102b45fcb2 are historical, not this isolated final source. Do not transplant historical extra12 package selection without current impact review."
+      },
+      "actual_authority_review": {
+        "allocation_amendment": "shared-pool-growth-amendment-v1.json identifies itself as user-approved for CURRENT canonical reconciliation only; unchanged list explicitly retains same target/environment/cohort/source/pins/profiles and G2 daemon scratch/Git-input prerequisites. It is allocation authority, not broad privileged-observation authority or permission to relocate source/target.",
+        "old_G1_release": "preparation-G1-first-party-quality-post-cleanup-v1.json records parent release of exactly that twelve-extra-package plus standalone-gateway-leaf G1 attempt. refusal-G1-first-party-quality-post-cleanup-v1.json records exit75 before enqueue. A consumed historical one-leg release is not this subject's release.",
+        "old_administrator_route": "root-and-generators-no-auto-gc-v3-admin-read-only-handoff-v1.json records an actual sudo -n denial, password required, and no helper execution. Later admin-read-only-result-v3.json DOES record an actual effective_uid=0 run. Technical privileged execution therefore existed historically, but its limits are one exact-subgroup/socket-holder ownership batch for task5, no argv/env reads or global inventory, no product/gate replay, no autochain. It does not authorize the current monitor's compiler-candidate /proc/*/environ scan.",
+        "v3_preparation_is_not_approval": "admin-read-only-handoff-v3.json:85-88 says production/authentication invocations0 during preparation and STOP for parent plus independent final review; no administrator execution or retry authorized. The later actual result proves only its stated scoped execution, not a general privilege grant.",
+        "searched_scope": "Read original manifest/amendment/launcher; admission; no-auto-GC v2/v3 reviews; G1 preparation/refusal; G2 refusal, dispatch, command, terminal and raw builder witness; v1/v2/v3 administrator handoffs and v3 actual result; parent reconciliation design/tasks and relevant evidence. Literal approval/authorization searches across original run-root JSON found no approval pairing environment-read/current seven-origin admission with authority. Parent evidence explicitly separates ordinary gates from frozen admission.",
+        "negative_claim_limit": "No suitable authority was found in the reviewed records; this is not a claim that no external operator decision can exist. No credential, sudo-policy, privilege or admission probe was made. Current assignment explicitly forbids sudo/privilege changes and admission reruns."
+      },
+      "G2_review": {
+        "scratch_status": "The actual tiny witness route is already PROVEN historically; do not rerun it as a substitute for reviewing the existing evidence.",
+        "evidence": "/datapool/mantle-store/mr.7p88_pl1/terminal-G2-host-scratch-after-owned-cleanup-v1.json and t/g2-host-scratch-post-cleanup-v1/observation/builder-witness.txt",
+        "actual_witness": {
+          "controller_exit": 0,
+          "inner_nix_exit": 0,
+          "monitor_stop": null,
+          "builder_cwd": "/build",
+          "builder_mount": "3154 2909 0:47 /mr.7p88_pl1/t/nix-1602839-3028938880/build /build rw,noatime - zfs datapool/mantle-store rw,xattr,posixacl,casesensitive",
+          "mapped_host_cwd": "/datapool/mantle-store/mr.7p88_pl1/t/nix-1602839-3028938880/build"
+        },
+        "scope": "This proves a real daemon builder's host scratch under original R/t, not merely client TMPDIR/config recognition. It proves neither full G2 nor fit nor a fresh isolated-source route. Its literal immutable BusyBox storePath-only --impure authorization is not authority for an impure whole-checkout flake.",
+        "Git_input_constraints": "Use actual tracked Git flake source; no getFlake(toString ./.) or path:$PWD whole-checkout inclusion. Any new untracked product input requires reviewed Git-owner admission. No traversal/chmod/copy of preserved .pi/cairn-drain overlay tree, no /tmp fallback and no import of old proof authority.",
+        "no_auto_GC": "Keep outer nix develop and any inner nix flake check min-free=0/max-free=0; append these settings to inherited NIX_CONFIG with newline and preserve prefix bytes without logging them. Outer argv also carries --option min-free 0 --option max-free 0. Reassert/query only these two values inside the actual selected shell and fail before gate if either nonzero. Preserve canonical sandbox BusyBox binding and --option build-dir original R/t. No GC call, daemon restart/config change or zero-deletion assertion.",
+        "ordinary_gate_receipt_not_admission": "Parent evidence/full-flake-recovery-2026-10-26.json retains actual Pueue40 full x86_64-linux flake success on unchanged11957-file subject at 9c758f089495d991050eea81f1921807f4071a94; its non_claims explicitly exclude reconciliation G1/G2 resource admission, epoch review and acceptance. Its different build-dir route and source are not inherited authority for this run."
+      },
+      "smallest_required_decisions": [
+        {
+          "id": "bounded_observability_authority",
+          "decision_owner": "Authorized administrator/operator plus parent reviewer; not this worker",
+          "required_decision": "Authorize a specifically reviewed, bounded read-only owned-target observer capable of completing the existing compiler-candidate argv/target-environment equality decision despite protected environments, using an already authorized mechanism. Keep product/monitor execution unprivileged; privileged execution of the full current monitor would also launch nix/gates as root and is NOT the minimal route. Define exact helper digest, observation scope, deadline/byte/result bounds, transient sensitive-data handling, fail-closed predicates, current identity binding, and how its point evidence is consumed without omitting the ordinary launch-time owned-state requirement. No permission or capability policy changes are implied.",
+          "why_files_cannot_supply_it": "The retained failure supplies EACCES facts, not a grant. The only actual administrator result is task5 exact-subgroup socket-holder metadata, expressly excluding argv/env reads; its pins and one-leg purpose are historical. No approved privileged observation adapter for owned_state exists in the reviewed launcher. External authorization and implementation review, not another unprivileged admission rerun, are necessary.",
+          "forbidden_shortcuts": [
+            "ignore EACCES",
+            "restrict scan to current UID or the eight old PIDs and claim complete",
+            "treat exact lock as sufficient",
+            "sudo whole monitor",
+            "reuse task5 ownership result",
+            "modify proc mount/security/permissions or install capabilities"
+          ]
+        },
+        {
+          "id": "source_rebinding_without_accounting_rebinding",
+          "decision_owner": "Parent/source owner and sole Git owner for any source admission",
+          "required_decision": "Explicitly admit the finalized isolated tracked-Git subject as the successor source and approve an additive, reviewed launcher binding that selects its cwd and flake while preserving original R, target, temp/stores, baseline/time/credit, caps/stops, shell cohort/pins/profiles and serial one-leg custody. Do not edit original manifest or sealed v3 monitor. If the new source cannot use the same shell cohort, state and obtain the specific cohort decision rather than silently using current integration settings. No new target is needed for the minimal route.",
+          "why_files_cannot_supply_it": "Sealed v3 reads original manifest repo internally and derives flake '.' there; no cwd/source override API exists. The amendment explicitly retains same source/target/environment/cohort, while origin-subject.json expressly denies future final-source approval. Main's separate current runner uses a different target/temp/jobs/profile environment and does not enforce the original resource guard. A shell cd or exported CARGO_TARGET_DIR cannot change the sealed launcher's selection.",
+          "alternative_requiring_more_authority": "If retaining current integration target is required, explicit accounting/owned-root/lock-scope amendment is additionally necessary. Observing original target while building elsewhere is not unchanged-contract enforcement. This larger change is not recommended or authorized by this receipt."
+        }
+      ],
+      "safe_next_action": {
+        "now": "Main may use this receipt and existing raw evidence to obtain the two narrowly scoped decisions. Keep G1/G2 held. No executable gate/admission command is justified now; none was issued.",
+        "after_decisions_only": "Main owns reviewed implementation and exact one-leg release. Preserve sealed artifacts; bind final source and launcher/helper digests; confirm original root accounting and chosen cohort; review prior queue outcome and establish serial custody. Only after that authority exists may Main perform the authorized admission/launch path, retaining actual refusals and runtime outputs. Stop after that one outcome for review; never autochain G1 to G2.",
+        "gate_payloads_not_launch_authority": {
+          "G1": "Current source-derived extra affected-package cargo fmt --check, standalone affected leaves as warranted, then unchanged ./scripts/check-first-party-quality.sh; include GCC4 bridge, canonical scoped fmt, vendor-excluded strict Clippy and workspace lib/tests, preserving failures/skips.",
+          "G2": "Current-system tracked-Git nix flake check --offline --no-write-lock-file -L with --max-jobs 1 --cores 1 --option min-free 0 --option max-free 0 --option build-dir /datapool/mantle-store/mr.7p88_pl1/t, within the reviewed original-root monitor route and inherited no-auto-GC environment; this includes required TigerStyle, not an arbitrarily selected subset."
+        },
+        "no_claim": "The payload descriptions are preparation only, not an approved command to execute under current authority. No automatic release follows from resource headroom, old scratch success, ordinary gate success or this review."
+      },
+      "observed_digest_command": "b3sum of the nine explicit retained files below; exited0. No binaries, credentials, live proc contents, queue states or storage admission were probed.",
+      "blake3": {
+        "/datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py": "d199ef2c0d1454dd8f0b94687e0fea0d367880bc8d418948a9e586262e717126",
+        "/datapool/mantle-store/mr.7p88_pl1/shared-pool-growth-amendment-v1.json": "73676718ce18246e1dcb04927f54fc145d10072596d0b3369f2d0fa4ec92b3c4",
+        "/datapool/mantle-store/mr.7p88_pl1/manifest.json": "f9c26f88962fa0320fc8d6af383365983aec0dd12dbf616d136dc68b40745317",
+        "/datapool/mantle-store/mr.7p88_pl1/admission-shared-pool-v3-seven-origin-capacity-20261026-v1.json": "4eaa8ec401e7fa9c9605fd7a23ba530105c07833dd134daed01fcef246c1dc48",
+        "/datapool/mantle-store/mr.7p88_pl1/terminal-G2-host-scratch-after-owned-cleanup-v1.json": "63bc3fa3e69cf7f26e08cb56d29119b8c87d6072e49845445620c4e44478af09",
+        "/datapool/mantle-store/mr.7p88_pl1/root-and-generators-no-auto-gc-v3-admin-read-only-result-v3.json": "e5e0832c7cafd9f634140842896b50b6c0007d0c0d17348e03a9c5ac36ea4181",
+        "/datapool/mantle-store/mr.7p88_pl1/root-and-generators-no-auto-gc-v3-admin-read-only-handoff-v3.json": "f0e229057baa66c31b1f8cdc1b02d5b191a2a0048ef16e726ff43c5b7da11fe5",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/origin-subject.json": "be38e0362d6692918080e94345eb2e802587d6008c57c3be1b9c979d2c337405",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/integration-build-v1-request.json": "2a9d776c5336b64ef6dfeff662dd89eaa43d2b6f1250050b090915231c60baf5"
+      },
+      "review_limitations": [
+        "find semantic search was unavailable because every judge request failed; reported via xd://report_issue and replaced with filename/literal searches and direct source/receipt reads",
+        "No builds, tests, linters, formatters, gates, admission re-probes, sudo, live privilege probes, cleanup, policy/cap/baseline/epoch/source changes, Git mutation or publication",
+        "Only this uniquely assigned run-root review receipt was written"
+      ]
+    },
+    "disposition": "No admission or privileged-observation retry; two missing scoped decisions remain with the recorded administrator/operator and source/Git owners."
+  },
+  "other_authored_prerequisites": [
+    {
+      "area": "resource policy",
+      "open": [
+        "6.1 historical pre-adaptation license-review chronology",
+        "6.4 two incomplete fixed-floor VM seeds",
+        "7.4 complete verification matrix, including those campaigns"
+      ],
+      "boundary": "A real local OOM successor and process-only/API/Valence observations do not replace missing historical or VM evidence."
+    },
+    {
+      "area": "fault I/O",
+      "prerequisite": "Qualifying landed durable-file-publication upstream pilot implementation/fixture/lifecycle receipt and final source gates.",
+      "boundary": "The independent upstream repository is not admitted for implementation/publication by this Mantle continuation."
+    },
+    {
+      "area": "dev-cache/fixed-point",
+      "prerequisite": "Final frozen source and matching cohort; complete source-built native/Rust/StageX closure/program admission; independently reviewed source-profile, lineage and provider pins; real cold/cached/adopt and separate empty-authority promoted proof.",
+      "boundary": "Input-supply integrity is not cold-proof or profile/pin authority. See docs/operator-proof-guide.md:273-289."
+    }
+  ],
+  "authoritative_boundaries": [
+    ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/pre-archive-readiness-approval-2026-10-16.md",
+    ".cairn/changes/run-cargo-build-scripts-as-plan-units/tasks.md",
+    ".cairn/changes/add-watch-mode-goal-retraction/tasks.md",
+    ".cairn/changes/declare-remote-worker-demand/tasks.md",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+    "docs/operator-proof-guide.md"
+  ],
+  "non_claims": [
+    "No whole-change or parent semantic acceptance, accepted-spec synchronization, archive, post-archive validation, release eligibility or successor publication follows.",
+    "Runtime and focused quality proofs remain bound to their exact selected subjects; this documentary readiness record is not a new product gate.",
+    "Delegated review attempts in this resumed pass failed before returning analysis; no independent reviewer verdict is inferred."
+  ]
+}

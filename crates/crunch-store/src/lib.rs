@@ -176,6 +176,7 @@ pub use nario::NarioV2ListReport;
 pub use nario::NarioV2ListedPath;
 pub use nario::import_nario_v2;
 pub use nario::list_nario_v2;
+pub use nario::standard_nix_ca_path;
 pub use nario::validate_nario_record_state;
 pub use overlay::STORE_OVERLAY_REPORT_SCHEMA;
 pub use overlay::STORE_STATE_SCHEMA;

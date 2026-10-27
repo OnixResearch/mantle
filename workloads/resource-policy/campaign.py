@@ -153,24 +153,36 @@ def vm(manifest, out):
     if local_receipt["positive_report_identity"] != digest(positive):
         raise RuntimeError("local instrumentation report changed after acceptance")
     expected_messages = {row["message"] for row in json.loads(positive.read_text())["assertion_coverage"]}
-    observed_artifacts = {}
+    observed_artifacts, results = {}, []
     kvm = os.open("/dev/kvm", os.O_RDWR | os.O_CLOEXEC)
     os.close(kvm)
     # Each explicit seed is independent; no timing/fleet claims.
     for command in manifest["vm_commands"]:
         seed = command[command.index("--seed") + 1]
-        invoke(command, output=out / f"seed-{seed}.log")
-        summary_path = out / f"seed-{seed}" / "assertions.json"
-        summary = json.loads(summary_path.read_text())
-        rows = summary["assertions"]
-        observed = {row["message"] for row in rows if row["hit_count"] > 0 and row["verdict"] == "passed"}
-        if summary["schema"] != "chaoscontrol.assertion-summary.v2" or not summary["collision_safe_evidence"]:
-            raise RuntimeError(f"seed {seed}: non-authoritative assertion catalog")
-        if not expected_messages.issubset(observed) or any(row["verdict"] != "passed" for row in rows):
-            raise RuntimeError(f"seed {seed}: missing or failing workload outcome/invariant assertions")
-        if list((out / f"seed-{seed}").glob("bug_*.json")):
-            raise RuntimeError(f"seed {seed}: retained bug requires triage, not passing execution classification")
-        observed_artifacts[str(summary_path)] = digest(summary_path)
+        result = {"seed": int(seed), "accepted": False, "error": None}
+        try:
+            invoke(command, output=out / f"seed-{seed}.log")
+            summary_path = out / f"seed-{seed}" / "assertions.json"
+            summary = json.loads(summary_path.read_text())
+            observed_artifacts[str(summary_path)] = digest(summary_path)
+            rows = summary["assertions"]
+            observed = {row["message"] for row in rows if row["hit_count"] > 0 and row["verdict"] == "passed"}
+            result["missing_messages"] = sorted(expected_messages - observed)
+            if summary["schema"] != "chaoscontrol.assertion-summary.v2" or not summary["collision_safe_evidence"]:
+                raise RuntimeError("non-authoritative assertion catalog")
+            if result["missing_messages"] or any(row["verdict"] != "passed" for row in rows):
+                raise RuntimeError("missing or failing workload outcome/invariant assertions")
+            if list((out / f"seed-{seed}").glob("bug_*.json")):
+                raise RuntimeError("retained bug requires triage, not passing execution classification")
+            result["accepted"] = True
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+            result["error"] = str(error)
+        results.append(result)
+        dump(out / "campaign-results.json", {"manifest_identity": digest(out / "commands.json"),
+            "evidence_class": "bounded-vm-execution-attempts", "replay_evidence": False,
+            "seeds": results, "non_claims": manifest["config"]["non_claims"]})
+    if not all(result["accepted"] for result in results):
+        raise RuntimeError("declared campaign incomplete; inspect campaign-results.json and each retained seed log")
     dump(out / "execution-classification.json", {"evidence_class": "bounded-vm-execution", "replay_evidence": False,
         "verdict": "all-recorded-seeds-observed-all-workload-assertions-passing",
         "assertion_artifacts": observed_artifacts,

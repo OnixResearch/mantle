@@ -183,6 +183,13 @@ class Driver:
                 "decision": decision, "static_reservation_units": classes[decision["static_decision"]["Ok"]["class_index"]]["reservation_units"],
                 "historical_reservation_units": classes[historical["class_index"]]["reservation_units"],
                 "cost_scope": "reviewed class reservation units only; no billing or measured remote charge"})
+        final_identities = {"mantle": self.digest("end-mantle-blake3", self.args.mantle),
+                            "replay": self.digest("end-replay-blake3", self.args.replay),
+                            "driver": self.digest("end-driver-blake3", Path(__file__).resolve()),
+                            "corpus": self.digest("end-corpus-blake3", self.repo / "config/resource-policy/benchmark.ncl")}
+        if final_identities != identities:
+            save(self.root / "source-drift.json", {"start": identities, "end": final_identities})
+            raise RuntimeError("benchmark source/executable bytes changed during execution")
         save(self.root / "evidence.json", {"schema": "mantle-resource-benchmark-v2", "source_identities": identities,
             "corpus": corpus, "records": records, "commands": self.commands,
             "scope": "real signed local builds; process-resource metrics; offline observe-only fail-closed replay",

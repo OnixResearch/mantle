@@ -1,0 +1,1130 @@
+{
+  "schema": "mantle-source-owned-build-script-baseline-recovery-v1",
+  "recorded_date": "2026-10-27",
+  "authored_task": "T1.1",
+  "isolated_worktree_confirmation": "source-owned-da00-baseline-isolated-confirmation-2026-10-27.json",
+  "scope": "Reconstructed four-fixture plans and lane blockers on unchanged original da00 product sources using its own locked Nix/Crane development cohort; not contemporaneous execution.",
+  "source": {
+    "revision": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "origin": "/home/brittonr/scratch/mantle-cargo-units-origin-baseline",
+    "execution_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/source",
+    "archive_blake3": "0fdaedf3f5e538a8d876b21ee0401a19b062fbf72fd3e4b4b951b013488a73aa",
+    "archive_embedded_git_commit": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "binary_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+    "binary_blake3": "436ebb09e23d04d8049c212d404843d94337f8cb2a15714ebf79873ed6f74a70",
+    "selected_source_before": {
+      "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+      "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+      "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+      "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+      "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "selected_source_after": {
+      "Cargo.toml": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+      "Cargo.lock": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+      "flake.nix": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+      "flake.lock": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
+      "src/main.rs": "2e222a697f9d8e1af47259ed6c9842e7722b7ee258a0ffe00b3e48e24d3655d2",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "product_source_edits": false,
+    "dependency_boundary": "Original tracked flake-defined Crane patch at patches/casita-blake3-finalize.patch. No private Casita source override, source signature change or ambient unpatched E0599 rerun."
+  },
+  "commands": [
+    {
+      "pueue_task_id": 47,
+      "submitted_command": "'env' 'TMPDIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp' 'XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache' 'NIX_CONFIG=builders =\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025' 'nix' 'develop' '--offline' '--no-write-lock-file' '-c' 'bwrap' '--die-with-parent' '--bind' '/' '/' '--bind' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp' '/tmp' '--proc' '/proc' '--dev-bind' '/dev' '/dev' '--setenv' 'TMPDIR' '/tmp' '--' 'python3' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-commands.py' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/request.json'",
+      "build_exit_code": 0,
+      "driver_exit_code": 1,
+      "reason": "Build succeeded; six initial receipts qualified. Two Cargo-oracle invocations failed because the product-only vendor map lacked exact external fixture registry versions. Initial failure is preserved."
+    },
+    {
+      "pueue_task_id": 48,
+      "submitted_command": "'env' 'TMPDIR=/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp' 'XDG_CACHE_HOME=/home/brittonr/.cargo-target/xdg-cache' 'NIX_CONFIG=builders =\nbuild-dir = /datapool/mantle-store/nix-build-dir-20261025' 'nix' 'develop' '--offline' '--no-write-lock-file' '-c' 'bwrap' '--die-with-parent' '--bind' '/' '/' '--bind' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/tmp' '/tmp' '--proc' '/proc' '--dev-bind' '/dev' '/dev' '--setenv' 'TMPDIR' '/tmp' '--' 'python3' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-commands.py' '/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/request.json'",
+      "driver_exit_code": 0,
+      "reason": "Existing user Cargo registry supplies the unchanged exact external lockfiles. Original binary/cohort reused. Two missing oracle receipts and all four raw Cargo graphs exited zero."
+    }
+  ],
+  "fixture_provenance": {
+    "classification": "constructed external fixtures, first documented 2026-10-14; source-owned recovery executed 2026-10-27",
+    "inputs": [
+      {
+        "path": "proc-macro2/Cargo.toml",
+        "blake3": "7f09118809719a359fe71767cc6c857645801e8bb10b7ae5c53ea0e27a62d3b2"
+      },
+      {
+        "path": "proc-macro2/Cargo.lock",
+        "blake3": "e72e243cdaff466d863720ddfe2706cfe0905479a7d0787bea57c3f5e2788c7c"
+      },
+      {
+        "path": "proc-macro2/src/main.rs",
+        "blake3": "b3fc322153ba8ab7c7d5baf8d4be690bc4bc984b35af39725899fc085b430758"
+      },
+      {
+        "path": "serde-derive/Cargo.toml",
+        "blake3": "8a9af6fee3bb194db4b9e2cb0899fdf5ca12272447b320a083837e13f9676a41"
+      },
+      {
+        "path": "serde-derive/Cargo.lock",
+        "blake3": "bc554578e126fc1d1983d766d10489667ce7a7c849874d30d88a57c0dfbd8270"
+      },
+      {
+        "path": "serde-derive/src/main.rs",
+        "blake3": "fb0fedfb8dea1bb2db07d3c74963e7df5f2adcb8adf1394810cb09ca4d07b88d"
+      },
+      {
+        "path": "libc/Cargo.toml",
+        "blake3": "dd15d9c9597019e6b2a7f5f3dec667ede67a1605493927c7f0e982a2ce4edeba"
+      },
+      {
+        "path": "libc/Cargo.lock",
+        "blake3": "d91fdbc023c6afebce94f344c0c6895e4ba5b0aa0e525feb325810d5218a2ac6"
+      },
+      {
+        "path": "libc/src/main.rs",
+        "blake3": "e180adad61b9c7fdbf80c98c2c58ae2f847f9182c5f3533a6c96b60690dca24d"
+      },
+      {
+        "path": "native-answer-sys/Cargo.toml",
+        "blake3": "d13085ca26534d2cdafa53bbaceb514d893bc96d66ec508affdd96662418093f"
+      },
+      {
+        "path": "native-answer-sys/Cargo.lock",
+        "blake3": "1dd3e0cf0660e169a2d2fdac9412577a8729553e5b6c447f8f9a85f01f0d02a4"
+      },
+      {
+        "path": "native-answer-sys/src/main.rs",
+        "blake3": "7834b38f24653beebb1752b8187c56f091e2e6ec7ca7902eabced4d947da5c42"
+      },
+      {
+        "path": "native-answer-sys/native-answer-sys/Cargo.toml",
+        "blake3": "4841dc2659ee57b27b533b69d5e3004870176636b3c75d78d4ac007bbaee4775"
+      },
+      {
+        "path": "native-answer-sys/native-answer-sys/build.rs",
+        "blake3": "bfecc59f3a128e36c087010bf52aa0362b716702420c49014342313741cea70f"
+      },
+      {
+        "path": "native-answer-sys/native-answer-sys/src/lib.rs",
+        "blake3": "0e011c636c4ee841ea17522f69571b1608a44cd04eb0cf9f0cfd84f66b1a890e"
+      }
+    ],
+    "serde_lock_difference": {
+      "current_sha256": "5867dd1e47f8b4b15d1ee12748b52e9c34590d558c850918d4cfaab1185be5b2",
+      "historical_pinned_sha256": "ff4a919fca41f63514b19851704ea247ec1a2a9653d43d52682ac0d6a04f626d",
+      "scope": "This current reconstructed serde fixture lock differs from the historical pinned 2026-10-14 lock. Its complete bytes are retained; it selects proc-macro2 1.0.107, quote 1.0.47, syn 2.0.119 and unicode-ident 1.0.27. No exact old-lock equivalence or contemporaneous baseline is claimed."
+    }
+  },
+  "qualified_plan_receipts": [
+    {
+      "fixture": "proc-macro2",
+      "mode": "cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/proc-macro2-cargo-oracle.json",
+      "receipt_hash": "67dd7b696f0a5083b7d9d49556c02d721ea2e25faa3d529e58103833129bd7fe",
+      "unit_graph": {
+        "unit_count": 5,
+        "root_count": 1,
+        "digest_blake3": "c5be1f80a88d79bc0e3d01a6ba1fcb0f5db4cfaec55c7072e1890ee857a04dda"
+      },
+      "cargo_compatibility_class": "cargo-oracle-evidence",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "c5be1f80a88d79bc0e3d01a6ba1fcb0f5db4cfaec55c7072e1890ee857a04dda",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "8b5a3535e98f5396de76c74f47e4195698e66f5f8b3364a97371bb8bfabea402",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/external-fixture-supply-command-results.json"
+    },
+    {
+      "fixture": "proc-macro2",
+      "mode": "no-cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/proc-macro2-no-cargo-oracle.json",
+      "receipt_hash": "454b46265a507466f7caf942d708a72d78634339b7e1f8cf1d8a6284e4fef93d",
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "cargo_compatibility_class": "blocked-unsupported-surface",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "cargo-free:no-cargo-unit-graph-oracle",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "a7dd62580707c53949c2481d2a8289955084f5eaf3b4334d554bfbb4bb51b70a",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    },
+    {
+      "fixture": "serde-derive",
+      "mode": "cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/serde-derive-cargo-oracle.json",
+      "receipt_hash": "e5cc909a824ddf90e803dbdc2a78f0f586ccaf9152a3e12d9fe5310310c3e435",
+      "unit_graph": {
+        "unit_count": 16,
+        "root_count": 1,
+        "digest_blake3": "c75f4f55dcd0ba49f474b30288af14451efecaf77f8720fa37a273d2f2f26398"
+      },
+      "cargo_compatibility_class": "cargo-oracle-evidence",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "c75f4f55dcd0ba49f474b30288af14451efecaf77f8720fa37a273d2f2f26398",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "953b5796719e45e158d32e78835be2c6a000d68823595bf276765ca758d4d7b4",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/external-fixture-supply-command-results.json"
+    },
+    {
+      "fixture": "serde-derive",
+      "mode": "no-cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/serde-derive-no-cargo-oracle.json",
+      "receipt_hash": "39f407ba1c018fd08022a947e8d6eebdea198474bd497a63990f4d6d7cfb70ee",
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "cargo_compatibility_class": "blocked-unsupported-surface",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "cargo-free:no-cargo-unit-graph-oracle",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "a7dd62580707c53949c2481d2a8289955084f5eaf3b4334d554bfbb4bb51b70a",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    },
+    {
+      "fixture": "libc",
+      "mode": "cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/libc-cargo-oracle.json",
+      "receipt_hash": "f472d64af61640e10b76dd8e9e8a9afbe39d663268a92d2e828e0f31a940a931",
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "fd1f122ee96113e8a6fa03ff603553aa05490944ca0baefc180470e2e88af1b7"
+      },
+      "cargo_compatibility_class": "cargo-oracle-evidence",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "fd1f122ee96113e8a6fa03ff603553aa05490944ca0baefc180470e2e88af1b7",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "df0a89d43b35ce0778959b6bbb839bcbae4ee8bd1c91450a91e66a4f45bfcf33",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    },
+    {
+      "fixture": "libc",
+      "mode": "no-cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/libc-no-cargo-oracle.json",
+      "receipt_hash": "5d6c655c15de93a395915584a369f445a37a047e8e5cd375d97b27768dc38f56",
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "cargo_compatibility_class": "blocked-unsupported-surface",
+      "native_host_blockers": [
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-package-target-planning-blocked",
+          "message": "native host-unit graph planning requires ready native package/target facts"
+        },
+        {
+          "unit_id": null,
+          "package_id": null,
+          "class": "native-unit-graph-planning-blocked",
+          "message": "native host-unit graph planning requires ready native target unit facts"
+        }
+      ],
+      "native_unit_graph_planning": {
+        "ready": false,
+        "comparison_status": "blocked",
+        "cargo_unit_graph_oracle_digest": "cargo-free:no-cargo-unit-graph-oracle",
+        "native_unit_graph_digest": "b2e845f4952d6780d555adf9c8e9f42f978ca171c5985aad105c9d5f1ea4744e",
+        "oracle_comparison_digest": "a7dd62580707c53949c2481d2a8289955084f5eaf3b4334d554bfbb4bb51b70a",
+        "units": [],
+        "blockers": [
+          {
+            "unit_id": null,
+            "package_id": null,
+            "class": "native-package-target-planning-blocked",
+            "message": "native unit graph planning requires ready native package/target facts"
+          }
+        ],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    },
+    {
+      "fixture": "native-answer-sys",
+      "mode": "cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-cargo-oracle.json",
+      "receipt_hash": "7a77d8004174a19597d3fb90c5b904da67f037df3b1c78fbea58d6b0bc8ce8d7",
+      "unit_graph": {
+        "unit_count": 4,
+        "root_count": 1,
+        "digest_blake3": "d299b78cc8295dc365e58931d74880af82b1be4eb3add706f59861f12297bc8a"
+      },
+      "cargo_compatibility_class": "cargo-oracle-evidence",
+      "native_host_blockers": [],
+      "native_unit_graph_planning": {
+        "ready": true,
+        "comparison_status": "matched",
+        "cargo_unit_graph_oracle_digest": "d299b78cc8295dc365e58931d74880af82b1be4eb3add706f59861f12297bc8a",
+        "native_unit_graph_digest": "01871edece22fec79e87c0b89a1e6f67a90f50ad44d0b586e7e4065417861755",
+        "oracle_comparison_digest": "be1e56b63e53d3e9363c90b48ae982fd921981a36158b08a45431f1fff5f9f9d",
+        "units": [
+          {
+            "unit_id": "native:39b4f7edfd80ebb1315895e8d5c84b120dccd7ca77af301ae3ca1b79cf2e5f1d:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys#mantle-da00-native-answer-sys@0.1.0:mantle-da00-native-answer-sys:bin:build",
+            "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys#mantle-da00-native-answer-sys@0.1.0",
+            "package_name": "mantle-da00-native-answer-sys",
+            "package_links": null,
+            "package_root": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+            "cargo_package_env": {
+              "CARGO_MANIFEST_LINKS": "",
+              "CARGO_PKG_AUTHORS": "",
+              "CARGO_PKG_DESCRIPTION": "",
+              "CARGO_PKG_HOMEPAGE": "",
+              "CARGO_PKG_LICENSE": "",
+              "CARGO_PKG_LICENSE_FILE": "",
+              "CARGO_PKG_NAME": "mantle-da00-native-answer-sys",
+              "CARGO_PKG_README": "",
+              "CARGO_PKG_REPOSITORY": "",
+              "CARGO_PKG_RUST_VERSION": "",
+              "CARGO_PKG_VERSION": "0.1.0",
+              "CARGO_PKG_VERSION_MAJOR": "0",
+              "CARGO_PKG_VERSION_MINOR": "1",
+              "CARGO_PKG_VERSION_PATCH": "0",
+              "CARGO_PKG_VERSION_PRE": ""
+            },
+            "target_name": "mantle-da00-native-answer-sys",
+            "target_kind": "bin",
+            "crate_name": "mantle_da00_native_answer_sys",
+            "source_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/src/main.rs",
+            "edition": "2021",
+            "selected_features": [],
+            "crate_types": [
+              "bin"
+            ],
+            "mode": "build",
+            "profile": "dev",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "320eaea34f9a49e17c3befe48a8af7e7c5379183125fb2f2eb7e0d79f0647320"
+            },
+            "dependency_artifacts": [
+              {
+                "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+                "name": "native_answer_sys",
+                "artifact": "artifact:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:native_answer_sys"
+              }
+            ]
+          },
+          {
+            "unit_id": "native:5b3296c5b68233aea62affc17c8fb8cb8c1ff28ce7102984479dfad4eed17541:path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0:native-answer-sys:lib:build",
+            "package_id": "path+file:///home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys#0.1.0",
+            "package_name": "native-answer-sys",
+            "package_links": "native_answer",
+            "package_root": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys",
+            "cargo_package_env": {
+              "CARGO_MANIFEST_LINKS": "native_answer",
+              "CARGO_PKG_AUTHORS": "",
+              "CARGO_PKG_DESCRIPTION": "",
+              "CARGO_PKG_HOMEPAGE": "",
+              "CARGO_PKG_LICENSE": "",
+              "CARGO_PKG_LICENSE_FILE": "",
+              "CARGO_PKG_NAME": "native-answer-sys",
+              "CARGO_PKG_README": "",
+              "CARGO_PKG_REPOSITORY": "",
+              "CARGO_PKG_RUST_VERSION": "",
+              "CARGO_PKG_VERSION": "0.1.0",
+              "CARGO_PKG_VERSION_MAJOR": "0",
+              "CARGO_PKG_VERSION_MINOR": "1",
+              "CARGO_PKG_VERSION_PATCH": "0",
+              "CARGO_PKG_VERSION_PRE": ""
+            },
+            "target_name": "native-answer-sys",
+            "target_kind": "lib",
+            "crate_name": "native_answer_sys",
+            "source_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/src/lib.rs",
+            "edition": "2021",
+            "selected_features": [
+              "default"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "mode": "build",
+            "profile": "dev",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "94da8f5b22ffb86b0658b96392cce9daf0e55a632f39a76615d8db685ca9b255"
+            },
+            "dependency_artifacts": []
+          }
+        ],
+        "blockers": [],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    },
+    {
+      "fixture": "native-answer-sys",
+      "mode": "no-cargo-oracle",
+      "exit_code": 0,
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "120",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/target/debug/mantle",
+        "--json",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/state",
+        "rust-plan",
+        "--root",
+        "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+        "--cargo",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo",
+        "--rustc",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+        "--no-cargo-oracle"
+      ],
+      "raw_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-no-cargo-oracle.json",
+      "receipt_hash": "34ab50ca6d7eeb1ad66feedef1d409eb8ed5d4af06b8fadd8b80d72db58f21fa",
+      "unit_graph": {
+        "unit_count": 0,
+        "root_count": 0,
+        "digest_blake3": "9d26ecc8ffeae4e14089a623f1de3be81aecb3a09bd133436da63345fe7cc399"
+      },
+      "cargo_compatibility_class": "cargo-free-bounded-topology",
+      "native_host_blockers": [],
+      "native_unit_graph_planning": {
+        "ready": true,
+        "comparison_status": "cargo-free:no-oracle",
+        "cargo_unit_graph_oracle_digest": "cargo-free:no-cargo-unit-graph-oracle",
+        "native_unit_graph_digest": "6d5fbc4538424df6e52f12f8ab9a21913eb057945cff58d0086379b6d1b5b766",
+        "oracle_comparison_digest": "bc0753f1c87cf4af8a68d887e82aee56290fa302f1f7b8eea9a8a8eb94c2b24d",
+        "units": [
+          {
+            "unit_id": "native:62dd7125ab9ea92a475a717081af27a79542932064c6173ae48331dd96b0fa44:path+native#native-answer-sys@0.1.0:native-answer-sys:lib:build",
+            "package_id": "path+native#native-answer-sys@0.1.0",
+            "package_name": "native-answer-sys",
+            "package_links": "native_answer",
+            "package_root": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys",
+            "cargo_package_env": {
+              "CARGO_MANIFEST_LINKS": "native_answer",
+              "CARGO_PKG_AUTHORS": "",
+              "CARGO_PKG_DESCRIPTION": "",
+              "CARGO_PKG_HOMEPAGE": "",
+              "CARGO_PKG_LICENSE": "",
+              "CARGO_PKG_LICENSE_FILE": "",
+              "CARGO_PKG_NAME": "native-answer-sys",
+              "CARGO_PKG_README": "",
+              "CARGO_PKG_REPOSITORY": "",
+              "CARGO_PKG_RUST_VERSION": "",
+              "CARGO_PKG_VERSION": "0.1.0",
+              "CARGO_PKG_VERSION_MAJOR": "0",
+              "CARGO_PKG_VERSION_MINOR": "1",
+              "CARGO_PKG_VERSION_PATCH": "0",
+              "CARGO_PKG_VERSION_PRE": ""
+            },
+            "target_name": "native-answer-sys",
+            "target_kind": "lib",
+            "crate_name": "native_answer_sys",
+            "source_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/src/lib.rs",
+            "edition": "2021",
+            "selected_features": [
+              "default"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "mode": "build",
+            "profile": "dev",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "94da8f5b22ffb86b0658b96392cce9daf0e55a632f39a76615d8db685ca9b255"
+            },
+            "dependency_artifacts": []
+          },
+          {
+            "unit_id": "native:a0cd2b316479a1a10b01547934274a6e9e45bb0ad44840e948f861cbedf239a8:path+native#mantle-da00-native-answer-sys@0.1.0:mantle-da00-native-answer-sys:bin:build",
+            "package_id": "path+native#mantle-da00-native-answer-sys@0.1.0",
+            "package_name": "mantle-da00-native-answer-sys",
+            "package_links": null,
+            "package_root": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys",
+            "cargo_package_env": {
+              "CARGO_MANIFEST_LINKS": "",
+              "CARGO_PKG_AUTHORS": "",
+              "CARGO_PKG_DESCRIPTION": "",
+              "CARGO_PKG_HOMEPAGE": "",
+              "CARGO_PKG_LICENSE": "",
+              "CARGO_PKG_LICENSE_FILE": "",
+              "CARGO_PKG_NAME": "mantle-da00-native-answer-sys",
+              "CARGO_PKG_README": "",
+              "CARGO_PKG_REPOSITORY": "",
+              "CARGO_PKG_RUST_VERSION": "",
+              "CARGO_PKG_VERSION": "0.1.0",
+              "CARGO_PKG_VERSION_MAJOR": "0",
+              "CARGO_PKG_VERSION_MINOR": "1",
+              "CARGO_PKG_VERSION_PATCH": "0",
+              "CARGO_PKG_VERSION_PRE": ""
+            },
+            "target_name": "mantle-da00-native-answer-sys",
+            "target_kind": "bin",
+            "crate_name": "mantle_da00_native_answer_sys",
+            "source_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/src/main.rs",
+            "edition": "2021",
+            "selected_features": [],
+            "crate_types": [
+              "bin"
+            ],
+            "mode": "build",
+            "profile": "dev",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "320eaea34f9a49e17c3befe48a8af7e7c5379183125fb2f2eb7e0d79f0647320"
+            },
+            "dependency_artifacts": [
+              {
+                "package_id": "path+native#native-answer-sys@0.1.0",
+                "name": "native_answer_sys",
+                "artifact": "artifact:path+native#native-answer-sys@0.1.0:native_answer_sys"
+              }
+            ]
+          }
+        ],
+        "blockers": [],
+        "non_claims": [
+          "bounded-lib-bin-build-mode-path-fragment-only",
+          "cargo-unit-graph-retained-as-oracle-evidence-only",
+          "not-full-cargo-feature-resolution",
+          "host-units-planned-in-native_host_unit_graph_planning"
+        ]
+      },
+      "command_record": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json"
+    }
+  ],
+  "cargo_graphs": [
+    {
+      "fixture": "proc-macro2",
+      "raw_file": "source-owned-da00-baseline-2026-10-27/proc-macro2-original-cargo-unit-graph.json",
+      "exit_code": 0,
+      "unit_count": 5,
+      "compiled_custom_build_units": 1,
+      "executed_custom_build_graph_units": 1,
+      "boundary": "Cargo graph modes are planning facts, not executed build scripts."
+    },
+    {
+      "fixture": "serde-derive",
+      "raw_file": "source-owned-da00-baseline-2026-10-27/serde-derive-original-cargo-unit-graph.json",
+      "exit_code": 0,
+      "unit_count": 16,
+      "compiled_custom_build_units": 4,
+      "executed_custom_build_graph_units": 4,
+      "boundary": "Cargo graph modes are planning facts, not executed build scripts."
+    },
+    {
+      "fixture": "libc",
+      "raw_file": "source-owned-da00-baseline-2026-10-27/libc-original-cargo-unit-graph.json",
+      "exit_code": 0,
+      "unit_count": 4,
+      "compiled_custom_build_units": 1,
+      "executed_custom_build_graph_units": 1,
+      "boundary": "Cargo graph modes are planning facts, not executed build scripts."
+    },
+    {
+      "fixture": "native-answer-sys",
+      "raw_file": "source-owned-da00-baseline-2026-10-27/native-answer-sys-original-cargo-unit-graph.json",
+      "exit_code": 0,
+      "unit_count": 4,
+      "compiled_custom_build_units": 1,
+      "executed_custom_build_graph_units": 1,
+      "boundary": "Cargo graph modes are planning facts, not executed build scripts."
+    }
+  ],
+  "current_lane_boundaries": [
+    "Original registry fixtures remain blocked without declared native package/target inputs; ambient Cargo cache is not native input authority.",
+    "Original path-only sys fixture has bounded-topology planning, not a native build-script application success.",
+    "T4.1/T4.2 application and provider-selective evidence are separate retained observations; this baseline does not rerun or expand them.",
+    "Full Cargo compatibility and native C compilation inside build.rs are not established."
+  ],
+  "retained_files": [
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-cargo-oracle.json",
+      "blake3": "5b72bf3f0da687d2d3e8b2d1274e8fce81b0756cde07f5bfc64de37c013074c1",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-cargo-oracle-original-cli.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-cargo-oracle-original-cli.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-no-cargo-oracle.json",
+      "blake3": "b3f895307edb78b1a30a51798cb24de14e8463bc924fcd04f5cf5216a29e8b34",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-no-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-no-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/proc-macro2-no-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-cargo-oracle.json",
+      "blake3": "17a2a4545c790e8c06bd920777b62acd5f62666895f74c72383c5ac2e1e66593",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-cargo-oracle-original-cli.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-cargo-oracle-original-cli.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-no-cargo-oracle.json",
+      "blake3": "d9b53a8cf34d0b11896f362e71336077c3ea858c63f96176141613e9b4edc32e",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-no-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-no-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/serde-derive-no-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-cargo-oracle.json",
+      "blake3": "d69fd9c06eb4cd3f6f70dc2fad9a94864aedca03eb6a83c4204c67ec444d13f8",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-no-cargo-oracle.json",
+      "blake3": "8fdc39093f9e93d4fd66038f20267a8359e19374fe7703a935e4cfa599e808f0",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-no-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-no-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/libc-no-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-cargo-oracle.json",
+      "blake3": "42035278b984dd042333ed36e2a41bbfca27e36f0163317596535d0e420837e5",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-no-cargo-oracle.json",
+      "blake3": "b0a4afb490bdb47b721bee9c7a6284fcc6c59f7cd7cec4bbbfffd35bcb252309",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-no-cargo-oracle.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-no-cargo-oracle.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts/native-answer-sys-no-cargo-oracle.stderr"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-original-cargo-unit-graph.json",
+      "blake3": "438640a8c5003cb2db1a2690df01cfd4e3c5810e842929532f06835fd59a9f9d",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-original-cargo-unit-graph.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/proc-macro2-original-cargo-unit-graph.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/proc-macro2-original-cargo-unit-graph.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-original-cargo-unit-graph.json",
+      "blake3": "1b7f1c8beaf54663748e811c514a6112b6ad95b98e65536f4222be0806609623",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-original-cargo-unit-graph.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/serde-derive-original-cargo-unit-graph.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/serde-derive-original-cargo-unit-graph.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-original-cargo-unit-graph.json",
+      "blake3": "8b436c220a58586bf04800124a53e6179a9778883cb45382a6d179d3e4e82ae7",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/libc-original-cargo-unit-graph.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/libc-original-cargo-unit-graph.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/libc-original-cargo-unit-graph.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-original-cargo-unit-graph.json",
+      "blake3": "5dd251a4bb1ca43754bd85c09cc5a783467bd9b23491a71057cd380c6b0e1bd1",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/native-answer-sys-original-cargo-unit-graph.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/native-answer-sys-original-cargo-unit-graph.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/native-answer-sys-original-cargo-unit-graph.stderr.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/original-cohort-command-results.json",
+      "blake3": "8c5b84fecffd1b8e90114f32a3bbbbf69d6158c2b5f8fc1ecd181c91158b3e5d",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results/result.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/external-fixture-supply-command-results.json",
+      "blake3": "818d636c74a07f6fe3978fe1d771c62924ab6b6a11585cc763ee0baf04d0eb22",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/results/result.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/original-cohort-request.json",
+      "blake3": "6b4826fd4a8af3ca6399b0f573516c9122d1d37763a28af18b438aac2800e0bc",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/request.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/external-fixture-supply-request.json",
+      "blake3": "92edd9f9f3bb7537035024e685cddae79fef11de5e4c47a4c91971e4b3dd02a6",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-original-fixture-supply-v2/request.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/preparation.json",
+      "blake3": "162d1593dcfd54379bb637575ece5d93f86bc6910f0f8220338ba6551c2baa3e",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/preparation.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/collect-receipts.py",
+      "blake3": "a17c4ab7b7e7797e299a82686e5661b5b8520d9abc31594e35404152ae4daaef",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/collect-receipts.py"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/original-partial-receipts-result.json",
+      "blake3": "53c3eccc97f9997d465b778f7f0d44980374fb5e16a9447931c5b0c4ce31a872",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/receipts-result.json"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/rustc-cohort.stdout.log",
+      "blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results/original-locked-rust-cohort.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/cargo-cohort.stdout.log",
+      "blake3": "b591d879da0cc57f111bcfa32c1d3a029e0debf0773e3945338dd070e2de185e",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results/original-locked-cargo-cohort.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/binary-identity.stdout.log",
+      "blake3": "0a132ec973137b4282cc758ffef573ba27fe729fbea4a094d2e3d0f528d30971",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results/unmodified-original-cli-identity.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/archive-identity.stdout.log",
+      "blake3": "6f33866889df5c9b89afdeb38c0b7cd414fb9ad30d632d711bf864988b1f705a",
+      "original_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/da00-source-owned-v1/results/original-source-archive-identity.stdout.log"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/proc-macro2/Cargo.toml",
+      "blake3": "7f09118809719a359fe71767cc6c857645801e8bb10b7ae5c53ea0e27a62d3b2",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.toml"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/proc-macro2/Cargo.lock",
+      "blake3": "e72e243cdaff466d863720ddfe2706cfe0905479a7d0787bea57c3f5e2788c7c",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/Cargo.lock"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/proc-macro2/src/main.rs",
+      "blake3": "b3fc322153ba8ab7c7d5baf8d4be690bc4bc984b35af39725899fc085b430758",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/proc-macro2/src/main.rs"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/serde-derive/Cargo.toml",
+      "blake3": "8a9af6fee3bb194db4b9e2cb0899fdf5ca12272447b320a083837e13f9676a41",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.toml"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/serde-derive/Cargo.lock",
+      "blake3": "bc554578e126fc1d1983d766d10489667ce7a7c849874d30d88a57c0dfbd8270",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/Cargo.lock"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/serde-derive/src/main.rs",
+      "blake3": "fb0fedfb8dea1bb2db07d3c74963e7df5f2adcb8adf1394810cb09ca4d07b88d",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/serde-derive/src/main.rs"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/libc/Cargo.toml",
+      "blake3": "dd15d9c9597019e6b2a7f5f3dec667ede67a1605493927c7f0e982a2ce4edeba",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.toml"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/libc/Cargo.lock",
+      "blake3": "d91fdbc023c6afebce94f344c0c6895e4ba5b0aa0e525feb325810d5218a2ac6",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/Cargo.lock"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/libc/src/main.rs",
+      "blake3": "e180adad61b9c7fdbf80c98c2c58ae2f847f9182c5f3533a6c96b60690dca24d",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/libc/src/main.rs"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/Cargo.toml",
+      "blake3": "d13085ca26534d2cdafa53bbaceb514d893bc96d66ec508affdd96662418093f",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.toml"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/Cargo.lock",
+      "blake3": "1dd3e0cf0660e169a2d2fdac9412577a8729553e5b6c447f8f9a85f01f0d02a4",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/Cargo.lock"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/src/main.rs",
+      "blake3": "7834b38f24653beebb1752b8187c56f091e2e6ec7ca7902eabced4d947da5c42",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/src/main.rs"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/native-answer-sys/Cargo.toml",
+      "blake3": "4841dc2659ee57b27b533b69d5e3004870176636b3c75d78d4ac007bbaee4775",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/Cargo.toml"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/native-answer-sys/build.rs",
+      "blake3": "bfecc59f3a128e36c087010bf52aa0362b716702420c49014342313741cea70f",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/build.rs"
+    },
+    {
+      "path": "source-owned-da00-baseline-2026-10-27/fixtures/native-answer-sys/native-answer-sys/src/lib.rs",
+      "blake3": "0e011c636c4ee841ea17522f69571b1608a44cd04eb0cf9f0cfd84f66b1a890e",
+      "original_path": "/home/brittonr/scratch/mantle-da00-t11-fixtures/native-answer-sys/native-answer-sys/src/lib.rs"
+    }
+  ],
+  "verification": {
+    "qualified_receipts": 8,
+    "raw_cargo_graphs": 4,
+    "all_qualified_commands_exit_zero": true,
+    "source_unchanged_across_original_build_and_supply": true,
+    "all_retained_files_byte_identical": true
+  },
+  "capability": {
+    "immediate_outcome": "Recover the missing original-source planning baseline without privately patching historical product dependencies.",
+    "durable_contribution": "Retained source/cohort/fixture/graph/receipt identities and repeatable original locked-dev-shell invocation.",
+    "maintenance_owner": "Mantle Rust-plan and build-script unit maintainers",
+    "repeatability": "Exact Pueue47/48 argv/environments, external fixture bytes, raw streams and graph modes retained with BLAKE3."
+  },
+  "non_claims": [
+    "No contemporaneous 2026-09-30 execution.",
+    "No daemon, build-script host/sandbox execution, app success or selective rebuild evidence from these planning receipts.",
+    "No current-source whole-change acceptance, spec sync, archive, release eligibility, full Cargo compatibility or bootstrap correctness.",
+    "Prior ambient E0599 and private-patch attempts remain historical failures or patched observations; this separate source-owned Nix cohort does not relabel them."
+  ]
+}

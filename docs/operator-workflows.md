@@ -940,17 +940,61 @@ The producer requests RustPlan's exact Cargo-indexed compiler derivations with
 distinct feature and host-dependency units instead of reusing collapsed native
 unit identities. Default `rust-plan` receipts remain unchanged at schema 1.
 
-The producer config and `lib/cargo_unit_plan.ncl` must both explicitly list
-`runtime_inputs`: admitted absolute store **roots** for toolchain-wide ELF
-loaders and shared libraries outside the compiler/helper/linker store roots.
-Nickel includes these roots as producer inputs and forwards the exact list to
-the producer; a mismatch is rejected. Every emitted Rust unit, script run,
-and target-facts unit includes the listed roots, so changes affect their
-identities. For a toolchain made with `nix store add-path`, Nix does not infer
-the external ELF interpreter from the binary: inspect and sign its actual
-runtime roots rather than relying on host libraries or a package's
-`native_inputs`. `runtime_inputs = []` is appropriate only when the declared
-tool roots already carry the complete runtime closure.
+The producer's `toolchain` and `cargo` are oracle-only inputs. They do not
+become execution inputs. The config's `rustc` must instead name an independently
+admitted compiler+standard-library root. `packages.cargo-unit-compiler` constructs
+the same 2026-04-08 nightly cohort from the locked rust-overlay's individual
+`rustc` and `rust-std` components (host plus x86_64 Linux's musl target) using
+its own sysroot/RPATH aggregate builder, not by filtering a combined Rust/Cargo
+output. Build it with
+`nix build .#cargo-unit-compiler --no-link --print-out-paths`, then sign/import
+its complete store closure through the existing input-admission workflow.
+This is the construction/adoption route. Scoped observed execution evidence
+is recorded below; other configurations still need their own admitted closure
+and runtime verification.
+Other cross-target standard libraries/sysroots remain explicit matching-cohort
+execution inputs; the package does not add arbitrary targets implicitly.
+
+Set config `rustc` to `<compiler-root>/bin/rustc`, and include `<compiler-root>`
+in **both** the config and `lib/cargo_unit_plan.ncl` `runtime_inputs`. Keep
+`toolchain` and `cargo` bound to the oracle cohort. The producer derives
+`PlanBindings.oracle_inputs` from the whole Cargo and oracle-toolchain roots;
+lowering rejects reintroducing any of those roots as compiler/helper/linker,
+runtime, target-linker, or native inputs (`unit-plan-oracle-execution-overlap`).
+The helper uses the declared compiler's containing directory plus declared
+native PATH entries, never the oracle toolchain's bin directory or host PATH.
+
+`runtime_inputs` are admitted absolute store **roots** for the execution
+compiler/sysroot and any ELF loaders/shared libraries outside the execution
+tool roots. Nickel forwards the exact list; a mismatch is rejected. Every
+emitted Rust unit, script run and target-facts unit includes these roots.
+Review the **transitive** execution closure too: a wrapper, symlink, native tool,
+or library referencing an oracle root restores its whole-root authority and
+is not a compiler-only input. Direct root disjointness is not a substitute for
+that closure inspection. For inputs made with `nix store add-path`, external
+ELF interpreters are not inferred: inspect/sign their runtime roots explicitly.
+An empty list is appropriate only when the separately admitted execution tool
+roots already carry the complete runtime closure and are producer inputs.
+
+The replay preparation scripts accept the admitted compiler root via
+`RCBS_COMPILER` / `CU_COMPILER`; acquisition's tools manifest uses `compiler`
+for its absolute rustc executable and retains explicit `runtime` roots. These
+are required inputs, with no fallback to the mixed oracle toolchain. Historical
+signed configs and old binary fixtures remain historical; regenerate configs
+and rebuild current producers/helpers rather than rewriting their receipts.
+
+The 2026-10-27
+[`compiler-only boundary` receipt](../.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/compiler-only-boundary-2026-10-27.json)
+retains actual current-helper bwrap execution with real compiler cfg,
+pkg-config and a native flag consumer printing `no-cargo-native-answer=42`,
+while PATH and absolute Cargo execution both fail. The separate
+[`frozen Mantle singleton` receipt](../.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/frozen-mantle-no-cargo-singleton-2026-10-27.json)
+retains a fresh same-client signed-input no-substitute build: 1 built,
+0 cached, 0 failed, with real compiler cfg and both Cargo-denial controls.
+It uses verified immutable CLI/helper copies; the earlier shared-CLI drift
+failure stays failed. Neither observation is a full dynamic application,
+Mantle-built native-provider/selective-rerun campaign, frozen G1/G2 admission,
+source approval or lifecycle acceptance.
 
 For declared vendor sources, the producer writes Cargo's source config into
 its private sandbox copy of the workspace so RustPlan observes the same
@@ -1005,8 +1049,8 @@ Each package entry has `inputs = { answer = "/nix/store/<hash>-native-answer" }`
 Use the same declarations in `MANTLE_UNIT_NATIVE_INPUTS` (serialized by
 `lib/cargo_unit_plan.ncl`) and the producer config; contradictory values are
 rejected. Inputs must be realized, declared store roots; native script PATH
-contains only the declared toolchain and optional native PATH entries, never
-the invoking host PATH. A native-input change must change the affected script
+contains only the declared compiler's bin directory and optional native PATH
+entries, never the invoking host PATH. A native-input change must change the affected script
 and dependent effective canonical derivation/output identities, not unrelated
 package units. Nominal `u.<digest>` Cargo-unit labels can stay unchanged:
 compare resolved derivation/input/output bindings and actual build/cache events,

@@ -60,6 +60,32 @@ impl Error {
             Self::Conflict => "gateway-transition-conflict",
         }
     }
+
+    /// Decode only the stable, credential-free wire vocabulary.
+    pub fn from_code(code: &str) -> Option<Self> {
+        Some(match code {
+            "gateway-version-unsupported" => Self::Rejected(core::Reject::Version),
+            "gateway-operation-unsupported" => Self::Rejected(core::Reject::Operation),
+            "gateway-limit-exceeded" => Self::Rejected(core::Reject::Bound),
+            "gateway-identity-invalid" => Self::Rejected(core::Reject::Identity),
+            "gateway-authority-expired" => Self::Rejected(core::Reject::Expired),
+            "gateway-audience-mismatch" => Self::Rejected(core::Reject::Audience),
+            "gateway-scope-mismatch" => Self::Rejected(core::Reject::Scope),
+            "gateway-authority-denied" => Self::Rejected(core::Reject::Authority),
+            "gateway-ticket-admin-denied" => Self::Rejected(core::Reject::TicketAdministration),
+            "gateway-attempt-owner-mismatch" => Self::Rejected(core::Reject::NotOwner),
+            "gateway-idempotency-conflict" => Self::Rejected(core::Reject::Conflict),
+            "gateway-fence-stale" => Self::Rejected(core::Reject::StaleFence),
+            "gateway-attempt-unknown" => Self::Unknown,
+            "gateway-cursor-invalid" => Self::Cursor,
+            "gateway-journal-unavailable" => Self::Storage,
+            "gateway-api-busy" => Self::Busy,
+            "gateway-host-unavailable" => Self::Host,
+            "gateway-evidence-invalid" => Self::Integrity,
+            "gateway-transition-conflict" => Self::Conflict,
+            _ => return None,
+        })
+    }
 }
 
 impl From<core::Reject> for Error {
@@ -134,6 +160,14 @@ pub struct Usage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UsageAccounting {
+    pub schedule_version: u32,
+    pub cpu_ms_per_unit: u64,
+    pub memory_byte_ms_per_unit: u64,
+    pub executor_output_bytes_per_unit: u64,
+    pub project_limit_units: u64,
+    pub account_limit_units: u64,
+    pub project_reason_counts: UsageReasonCounts,
+    pub account_reason_counts: UsageReasonCounts,
     pub unit: String,
     pub window_id: String,
     pub window_start_s: u64,
@@ -144,6 +178,19 @@ pub struct UsageAccounting {
     pub account_charged_units: u64,
     pub memory_measurement: String,
     pub output_measurement: String,
+}
+
+/// Fixed public reason codes; counts cover the accounting window, not the
+/// caller's bounded attempt sample. Pending reasons retain their reservation.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct UsageReasonCounts {
+    pub reserved: u64,
+    pub settled: u64,
+    pub cancelled_without_final_usage: u64,
+    pub worker_lost: u64,
+    pub partial_observation: u64,
+    pub untrusted_observation: u64,
+    pub usage_exceeds_reservation: u64,
 }
 
 #[derive(Clone, Copy)]

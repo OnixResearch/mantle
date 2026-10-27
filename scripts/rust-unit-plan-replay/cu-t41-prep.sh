@@ -10,6 +10,7 @@ MANTLE=${CU_MANTLE:-$R/targets/rust-efficiency-20261011/release/mantle}
 STATIC=${CU_STATIC:-$R/targets/rust-efficiency-20261011/static/x86_64-unknown-linux-gnu/debug}
 APP_CONSUMER=${CU_APP_CONSUMER:-$R/targets/rust-efficiency-20261011/app-consumer}
 TOOLCHAIN=/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08
+COMPILER=${CU_COMPILER:?supply the admitted cargo-unit-compiler store root}
 LINKER=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
 MUSL=/nix/store/0nl9w8qhb0kvix80vpa191a59mkhw1q9-musl-x86_64-unknown-linux-musl-1.2.5
 W0=/nix/store/2cc8iz424blki3kgz09ajdndy0n6pjlc-baseline-workspace
@@ -46,9 +47,9 @@ W2=$(nix-store --add "$B/stage/outside-edit/baseline-workspace")
 config_for() { # config_for WORKSPACE TAG -> store path of producer-config.json
   local dir="$B/stage/config-$2"
   mkdir -p "$dir"
-  jq -cn --arg workspace "$1" --arg planner "$PLANNER" --arg toolchain "$TOOLCHAIN" --arg linker "$LINKER" --arg helper "$HELPER" '{
+  jq -cn --arg workspace "$1" --arg planner "$PLANNER" --arg toolchain "$TOOLCHAIN" --arg compiler "$COMPILER" --arg linker "$LINKER" --arg helper "$HELPER" '{
     workspace: $workspace, vendor: null, planner: $planner,
-    cargo: ($toolchain + "/bin/cargo"), rustc: ($toolchain + "/bin/rustc"), linker: ($linker + "/bin/cc"),
+    cargo: ($toolchain + "/bin/cargo"), rustc: ($compiler + "/bin/rustc"), linker: ($linker + "/bin/cc"), runtime_inputs: [$compiler],
     toolchain: $toolchain, helper: $helper, store_prefix: "/nix/store", system: "x86_64-linux",
     host_triple: "x86_64-unknown-linux-gnu", target_triple: "x86_64-unknown-linux-gnu", profile: "dev"}' > "$dir/producer-config.json"
   nix-store --add "$dir/producer-config.json"
@@ -60,12 +61,12 @@ CFG2=$(config_for "$W2" outside-edit)
 SHIM=$(nix-build --no-out-link "$WT/scripts/rust-unit-plan-replay/shim.nix")
 nix key generate-secret --key-name cargo-unit-rust-efficiency-1 > "$B/keys/secret"
 nix key convert-secret-to-public < "$B/keys/secret" > "$B/keys/public"
-ROOTS=("$PRODUCER" "$HELPER" "$PLANNER" "$TOOLCHAIN" "$LINKER" "$MUSL" "$SHIM" "$W0" "$W1" "$W2" "$CFG0" "$CFG1" "$CFG2" "$APPC")
+ROOTS=("$PRODUCER" "$HELPER" "$PLANNER" "$TOOLCHAIN" "$COMPILER" "$LINKER" "$MUSL" "$SHIM" "$W0" "$W1" "$W2" "$CFG0" "$CFG1" "$CFG2" "$APPC")
 nix copy --offline --to "file://$B/input-cache?compression=none&secret-key=$B/keys/secret" "${ROOTS[@]}"
 echo "input_cache_narinfos=$(find "$B/input-cache" -maxdepth 1 -name '*.narinfo' -type f | wc -l) input_cache_bytes=$(du -sb "$B/input-cache" | cut -f1)"
 
 jq -n --arg producer "$PRODUCER" --arg helper "$HELPER" --arg planner "$PLANNER" --arg app_consumer "$APPC" \
-  --arg toolchain "$TOOLCHAIN" --arg linker "$LINKER" --arg musl "$MUSL" --arg shim "$SHIM" \
+  --arg toolchain "$TOOLCHAIN" --arg compiler "$COMPILER" --arg linker "$LINKER" --arg musl "$MUSL" --arg shim "$SHIM" \
   --arg w0 "$W0" --arg w1 "$W1" --arg w2 "$W2" \
   --arg cfg0 "$CFG0" --arg cfg1 "$CFG1" --arg cfg2 "$CFG2" --arg public_key "$(cat "$B/keys/public")" \
   '$ARGS.named' | tee "$B/paths.json"

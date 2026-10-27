@@ -628,6 +628,10 @@ enum Command {
         #[arg(long = "trusted-builder-key")]
         trusted_builder_keys: Vec<String>,
 
+        /// Canonical quantified remote requirement JSON; never inferred from jobs or history.
+        #[arg(long, requires = "builder", conflicts_with = "watch")]
+        remote_resource_requirements: Option<PathBuf>,
+
         /// SecretSpec metadata manifest for the local remote service
         #[arg(long, default_value = "secretspec.toml", requires = "builder")]
         remote_secret_manifest: PathBuf,
@@ -1132,8 +1136,8 @@ enum Command {
         #[arg(long, requires = "source_built_fixed_point")]
         dev_provider_cache: Option<PathBuf>,
 
-        /// Resume a dev run from verified per-stage completion markers.
-        #[arg(long, requires = "source_built_fixed_point")]
+        /// Resume a dev run from verified bundles in the explicit dev provider-cache directory.
+        #[arg(long, requires_all = ["source_built_fixed_point", "dev_provider_cache"])]
         dev_resume: bool,
 
         /// Fast-fail a dev run when the current source profile is unchanged.
@@ -5500,6 +5504,7 @@ struct BuildCommandInput<'a> {
     remote_builder_program: Option<&'a Path>,
     remote_builder_args: &'a [String],
     trusted_builder_keys: &'a [String],
+    remote_resource_requirements: Option<&'a Path>,
     remote_secret_request: remote_service_secrets::RemoteServiceSecretRequest,
     remote_build_time_secs: u64,
     remote_delta: bool,
@@ -5538,6 +5543,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         builder_program,
         builder_args,
         trusted_builder_keys,
+        remote_resource_requirements,
         remote_secret_manifest,
         remote_secret_profile,
         remote_secret_provider,
@@ -5583,6 +5589,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         remote_builder_program: builder_program.as_deref(),
         remote_builder_args: builder_args,
         trusted_builder_keys,
+        remote_resource_requirements: remote_resource_requirements.as_deref(),
         remote_secret_request: remote_service_secrets::RemoteServiceSecretRequest {
             manifest_path: remote_secret_manifest.clone(),
             profile: remote_secret_profile.clone(),
@@ -5790,7 +5797,12 @@ fn prepare_build_command<'a>(
     debug_assert!(substituter_urls.iter().all(|url| !url.is_empty() && url.trim() == url.as_str()));
     let remote_plan_facts =
         remote_plan_facts_for_cli(input.remote_builder, input.remote_ticket_fd.is_some(), input.trusted_builder_keys)?;
-    let remote_selection = if input.plan {
+    let requirements = input
+        .remote_resource_requirements
+        .map(remote_build::demand::load_declared_requirements)
+        .transpose()
+        .map_err(RunError::Internal)?;
+    let mut remote_selection = if input.plan && requirements.is_none() {
         None
     } else {
         remote_build_selection(
@@ -5809,6 +5821,9 @@ fn prepare_build_command<'a>(
             None,
         )?
     };
+    if let Some(selection) = remote_selection.as_mut() {
+        selection.resource_requirements = requirements;
+    }
     if remote_selection.is_some() && input.fix {
         return Err(RunError::Internal("remote build dispatch does not support --fix yet".to_string()));
     }
@@ -5886,6 +5901,9 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
         } else {
             None
         };
+    if prepared.plan {
+        return run_file_build_plan(prepared, path, &nickel_search_dirs, source_preflight.as_ref());
+    }
     if let Some(selection) = &prepared.remote_selection {
         return run_remote_build_command(RemoteBuildCommandRequest {
             selection,
@@ -5893,9 +5911,6 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
             import_entries: &nickel_search_dirs,
             ctx: prepared.ctx,
         });
-    }
-    if prepared.plan {
-        return run_file_build_plan(prepared, path, &nickel_search_dirs, source_preflight.as_ref());
     }
     run_local_file_build(prepared, path, &nickel_search_dirs, source_fetch_plan.as_ref())
 }
@@ -5920,6 +5935,7 @@ fn run_file_build_plan(
         trusted_public_keys: prepared.parsed_trusted.as_deref(),
         trust_unsigned: prepared.trust_unsigned,
         remote_builder: prepared.remote_plan_facts.as_ref(),
+        remote_placement: prepared.remote_selection.as_ref(),
         source_preflight,
         output_mode: prepared.output_mode,
     })
@@ -6045,20 +6061,20 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
         &prepared.ctx.store_prefix,
         Some(&trust),
     )?;
-    if let Some(selection) = &prepared.remote_selection {
-        return run_remote_build_command(RemoteBuildCommandRequest {
-            selection,
-            source: RemoteBuildSource::Expr(&expr),
-            import_entries: &nickel_search_dirs,
-            ctx: prepared.ctx,
-        });
-    }
     if prepared.plan {
         return build_plan_from_expr(InlineBuildPlanRequest {
             expr: &expr,
             import_entries: &nickel_search_dirs,
             prepared,
             source_preflight: source_preflight.as_ref(),
+        });
+    }
+    if let Some(selection) = &prepared.remote_selection {
+        return run_remote_build_command(RemoteBuildCommandRequest {
+            selection,
+            source: RemoteBuildSource::Expr(&expr),
+            import_entries: &nickel_search_dirs,
+            ctx: prepared.ctx,
         });
     }
     let source_overrides = source_bundle::merge_source_fetch_overrides(
@@ -6075,12 +6091,13 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
 }
 
 #[derive(Clone)]
-struct RemoteBuildSelection {
+pub(crate) struct RemoteBuildSelection {
     options: remote_build::RemoteClientBuildOptions,
     endpoint_binding_config: std::sync::Arc<remote_build::endpoint_config::RemoteEndpointBindingConfig>,
     worker_generation: u64,
     worker_concurrency: u32,
     resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
+    resource_requirements: Option<remote_build::RemoteResourceRequirements>,
     telemetry: remote_telemetry_export::RemoteTelemetryExportConfig,
     failure_debug: crunch_build::distributed::RemoteFailureDebugPolicy,
     trace_context: Option<remote_trace_context::RemoteTraceContext>,
@@ -6209,6 +6226,7 @@ fn remote_build_selection(
         worker_generation,
         worker_concurrency,
         resource_inventory,
+        resource_requirements: None,
         telemetry: farm_config.telemetry,
         failure_debug: farm_config.failure_debug,
         trace_context,
@@ -6579,7 +6597,7 @@ async fn run_remote_failure_debug_replay_async(
     .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))?;
     let state_dir = input.state_dir;
     let coordinator_guard =
-        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+        remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(RunError::Internal)?;
     let bundle = input.bundle.clone();
     let mut runtime = prepare_remote_failure_replay_runtime(input).await?;
     drop(coordinator_guard);
@@ -6700,7 +6718,7 @@ async fn execute_remote_failure_replay(
         &mut session,
     );
     let _coordinator_guard =
-        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+        remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(RunError::Internal)?;
     runtime.coordinator = remote_build::load_coordinator_state(state_dir)?;
     let transcript = transcript.map_err(|error| {
         fail_remote_failure_replay(
@@ -7290,7 +7308,7 @@ async fn run_remote_build_dispatches_async(
             .and_then(Option::take)
             .ok_or_else(|| RunError::Internal("remote priority selected missing input".to_string()))?;
         let coordinator_guard =
-            remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+            remote_build::RemoteCoordinatorMutationGuard::acquire_wait(state_dir).map_err(RunError::Internal)?;
         let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
         let mut prepared = prepare_remote_dispatch(RemoteDispatchPreparationInput {
             selection,
@@ -7298,7 +7316,7 @@ async fn run_remote_build_dispatches_async(
             coordinator: &mut coordinator,
             input,
             priority_competing_goal_count: (priority_index == 0).then_some(competing_goal_count),
-            resource_requirements: None,
+            resource_requirements: selection.resource_requirements.as_ref(),
         })?;
         if let Some(observer) = live.as_mut() {
             observer.owned_jobs.insert(prepared.attempt.job_id.clone());
@@ -7414,11 +7432,12 @@ fn plan_remote_dispatch_priority(
 
 /// A fail-fast request has only this synchronous unmet-demand lifetime. Keep
 /// the original admission error authoritative even if observation is absent.
-fn publish_unplaced_remote_demand(coordinator: &mut remote_build::RemoteCoordinatorState, request_id: &str) {
-    let Some(demand) = coordinator.worker_demands.facts().find(|fact| fact.job_id == request_id) else {
-        return;
-    };
-    eprintln!("remote worker demand: {}", serde_json::json!(demand));
+fn publish_unplaced_remote_demand(
+    coordinator: &mut remote_build::RemoteCoordinatorState,
+    request_id: &str,
+) -> Option<crunch_remote_core::demand::WorkerDemand> {
+    let demand = coordinator.worker_demands.facts().find(|fact| fact.job_id == request_id)?;
+    let demand = demand.clone();
     let mut live = match RemoteLiveBuildObservation::start() {
         Ok(live) => live,
         Err(error) => {
@@ -7439,6 +7458,7 @@ fn publish_unplaced_remote_demand(coordinator: &mut remote_build::RemoteCoordina
         observer.observe(coordinator);
         observer.report_degraded();
     }
+    Some(demand)
 }
 
 fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<PreparedRemoteDispatch, RunError> {
@@ -7485,8 +7505,14 @@ fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<
         input.selection.options.now_unix_s,
     )
     .map_err(|err| {
-        publish_unplaced_remote_demand(input.coordinator, &plan.client.request.request_id);
-        RunError::Internal(format!("remote coordinator dispatch failed: {err}"))
+        let message = format!("remote coordinator dispatch failed: {err}");
+        match publish_unplaced_remote_demand(input.coordinator, &plan.client.request.request_id) {
+            Some(demand) => RunError::UnmetWorkerDemand {
+                message,
+                demand: Box::new(demand),
+            },
+            None => RunError::Internal(message),
+        }
     })?;
     for fact in [
         remote_build::RemoteProductionTelemetryFact::QueueAdmitted,
@@ -7589,7 +7615,7 @@ async fn execute_remote_dispatch(
             crunch_build::distributed::record_remote_telemetry(ports.telemetry, event.clone(), ports.telemetry_policy);
     }
     let _coordinator_guard =
-        remote_build::acquire_remote_coordinator_mutation_guard(input.state_dir).map_err(RunError::Internal)?;
+        remote_build::RemoteCoordinatorMutationGuard::acquire_wait(input.state_dir).map_err(RunError::Internal)?;
     *ports.coordinator = remote_build::load_coordinator_state(input.state_dir)?;
     let (admission, output_admission) = admit_remote_dispatch_outputs(
         &mut ports,
@@ -7610,8 +7636,8 @@ fn run_remote_dispatch_child(
     match remote_build::run_stdio_remote_child(command, &ports.request.request_id, session) {
         Ok(transcript) => Ok(transcript),
         Err(error) => {
-            let _coordinator_guard =
-                remote_build::acquire_remote_coordinator_mutation_guard(ports.state_dir).map_err(RunError::Internal)?;
+            let _coordinator_guard = remote_build::RemoteCoordinatorMutationGuard::acquire_wait(ports.state_dir)
+                .map_err(RunError::Internal)?;
             *ports.coordinator = remote_build::load_coordinator_state(ports.state_dir)?;
             let failure_fact = remote_protocol_failure_fact(&error.to_string());
             let failure_observability = record_remote_failure_observability(RemoteFailureObservabilityInput {
@@ -9619,6 +9645,7 @@ fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunEr
         trusted_public_keys: request.prepared.parsed_trusted.as_deref(),
         trust_unsigned: request.prepared.trust_unsigned,
         remote_builder: request.prepared.remote_plan_facts.as_ref(),
+        remote_placement: request.prepared.remote_selection.as_ref(),
         source_preflight: request.source_preflight,
         output_mode: request.prepared.output_mode,
     })
@@ -12150,6 +12177,19 @@ let Plan = {
             out: Some(_),
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_rejects_resume_without_explicit_cache_authority() {
+        let error = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--source-built-fixed-point",
+            "--dev-resume",
+        ]))
+        .expect_err("resume requires an explicitly owned persistent cache");
+        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--dev-provider-cache"));
     }
 
     #[test]

@@ -71,6 +71,20 @@ def main():
     source = scratch / "roots.ncl"
     store = scratch / "store"
     store.mkdir()
+    revisions = scratch / "source-revisions"
+    revisions.mkdir()
+    transitions = []
+
+    def record_transition(name, offset, **observations):
+        events = stdout.read_text()[offset:]
+        path = scratch / f"{len(transitions):02d}-{name}.log"
+        path.write_text(events)
+        snapshot = revisions / f"{len(transitions):02d}-{name}"
+        snapshot.mkdir()
+        for edited in scratch.glob("*.ncl"):
+            (snapshot / edited.name).write_bytes(edited.read_bytes())
+        transitions.append({"scenario": name, "log": str(path), "stdout_offset_chars": offset,
+                            "source_snapshot": str(snapshot), **observations})
     library = Path(__file__).resolve().parents[1] / "lib/lib.ncl"
     prefix = f"watch-{scratch.name}"
     require(re.fullmatch(r"[a-zA-Z0-9_-]+", prefix), "scratch basename must use letters, digits, hyphens or underscores")
@@ -134,6 +148,7 @@ def main():
             settle_after(0, 2)
             retained = artifact("keep", "keep")
             artifact("moving-v1", "moving-v1")
+            record_transition("initial", 0, retained=retained)
             offset = len(log())
             atomic_write(moving, derivation("moving-v2", "moving-v2"))
             settle_after(offset, 2)
@@ -142,6 +157,7 @@ def main():
                     "one-root edit did not classify retained/retracted/added identities")
             artifact("moving-v2", "moving-v2")
             require(artifact("keep", "keep") == retained, "unrelated completed artifact changed")
+            record_transition("one-root-edit", offset, replacement=artifact("moving-v2", "moving-v2"))
 
             offset = len(log())
             atomic_write(added, derivation("added", "added"))
@@ -151,12 +167,14 @@ def main():
             require(addition_events.count("  added ") == 1 and addition_events.count("  retained ") == 2,
                     "added-root edit did not retain exactly the previous roots")
             artifact("added", "added")
+            record_transition("added-root", offset, added=artifact("added", "added"))
 
             offset = len(log())
             atomic_write(moving, "{ invalid =\n")
             wait_until(lambda: "edit rejected:" in log()[offset:], "invalid import did not report rejection")
             require("  retracted " not in log()[offset:], "invalid import retracted admitted goals")
             require(artifact("keep", "keep") == retained, "invalid import damaged retained output")
+            record_transition("invalid-source", offset, retained=retained)
             offset = len(log())
             atomic_write(moving, derivation("moving-v2", "moving-v2"))
             settle_after(offset, 3)
@@ -177,6 +195,8 @@ def main():
             for revision in range(1, 20):
                 require(not list(store.glob(f"*-{prefix}-rapid-{revision}")), "unobserved intermediate edit produced output")
             require(log()[offset:].count("  added ") == 1, "coalesced edit admitted duplicate replacement goals")
+            record_transition("coalescing", offset, edits=20, admitted_replacements=1,
+                              final=artifact("rapid-20", "rapid-20"))
 
             offset = len(log())
             atomic_write(slow, derivation("slow", "slow-started", slow=True))
@@ -198,6 +218,9 @@ def main():
             result["run_identity"] = next(iter(run_ids))
             require(f"-{prefix}-slow\n" not in log(), "cancelled root was reported as a successful output")
             require(artifact("keep", "keep") == retained, "retained artifact changed during cancellation")
+            record_transition("running-root-deletion", offset, owned_processes=owned,
+                              descendants_stopped=True, late_write_observation_seconds=21,
+                              cancelled_output_present=False)
             result.update(status="passed", retained=retained, owned_slow_processes=owned,
                           assertions=["one-root edit", "added root", "invalid imported source retention",
                                       "coalesced replacements", "running-root deletion", "descendant teardown", "no late output"])
@@ -214,6 +237,11 @@ def main():
                     result.update(status="failed", pending_teardown_pid=process.pid)
                     result["error"] = "watch still owns pending teardown after SIGTERM; not force-killed"
             result["exit_code"] = process.poll()
+            result["transitions"] = transitions
+            result["binary"] = {"path": str(binary), "blake3": subprocess.check_output(
+                ["b3sum", "--no-names", str(binary)], text=True).strip()}
+            result["driver_blake3"] = subprocess.check_output(
+                ["b3sum", "--no-names", str(Path(__file__).resolve())], text=True).strip()
             if process.returncode not in (None, 0):
                 result.update(status="failed", error=f"watch shutdown exited {process.returncode}")
             (scratch / "result.json").write_text(json.dumps(result, indent=2) + "\n")

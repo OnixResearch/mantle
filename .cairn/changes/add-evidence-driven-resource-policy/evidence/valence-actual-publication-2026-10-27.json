@@ -1,0 +1,75 @@
+{
+  "schema": "mantle-actual-resource-valence-export-completion-v1",
+  "date": "2026-10-27",
+  "criterion": "add-evidence-driven-resource-policy task 6.5",
+  "status": "individually-complete; whole-change acceptance not granted",
+  "owner": "Mantle gateway evidence/resource-policy maintainers; Valence owns the pinned linkage/profile validator; Cairn owns native structural gates",
+  "immediate_outcome": "The pinned independent consumer accepted the actual successful gateway process-only publication at its retained public content identity and rejected independent digest mismatch, missing non-claims and observation-role promotion. Native Cairn validation and proposal/design/tasks gates passed.",
+  "durable_capability": "Production GatewayEvidence projection and scripts/check-resource-evidence.py provide repeatable bounded identity/non-claim/producer-role validation over actual published observations; they do not synthesize a successful fixture or grant worker authority.",
+  "publication": {
+    "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-bounded-ack-v17/runtime/process-only/evidence/cb58f12eace1d682d8023e7ae7520bbc3c2af2a6c7fcc7579795dfe0ee94c7e5.json",
+    "retained": "valence-actual-publication-2026-10-27/publication.json",
+    "public_leaf": "cb58f12eace1d682d8023e7ae7520bbc3c2af2a6c7fcc7579795dfe0ee94c7e5.json",
+    "blake3": "cb58f12eace1d682d8023e7ae7520bbc3c2af2a6c7fcc7579795dfe0ee94c7e5",
+    "producer_runtime": "Pueue 72 actual process-only private gateway; see public-usage-api-2026-10-27.json"
+  },
+  "consumer": {
+    "checker_blake3": "42004d481263fb7419b0c8e755884f6d4ececc4399187b8ab96788ce8ad004cc",
+    "driver_blake3": "5aa6087abfd2e58ffa4e6eccf54c75aa1bc38c8455c1e2d491985201488795de",
+    "actual_exits": [
+      {
+        "label": "actual-publication",
+        "exit": 0,
+        "expected_exit": 0
+      },
+      {
+        "label": "wrong-independent-digest",
+        "exit": 2,
+        "expected_exit": 2
+      },
+      {
+        "label": "missing-boundary",
+        "exit": 1,
+        "expected_exit": 1
+      },
+      {
+        "label": "promoted-observation",
+        "exit": 1,
+        "expected_exit": 1
+      }
+    ]
+  },
+  "native_cairn": {
+    "pueue": "76",
+    "source_unchanged": true,
+    "validation": {
+      "valid": true,
+      "issues": [],
+      "receipt_hash": "53716d28c4fa840a732cbe3f1c6c14f0116803998bffff52de1e7a9a89e4443d"
+    },
+    "gates": {
+      "proposal": {
+        "verdict": "PASS",
+        "receipt_hash": "bc3239f6cd7187737be20a4a111d48489a73db61334915d5a6c96c9217a16a3a",
+        "input_hash": "47f61257198c353fe1052780979c79f1dba001024c67c8be381b91af8d1d108e"
+      },
+      "design": {
+        "verdict": "PASS",
+        "receipt_hash": "d1fa8ce96695a3b4d31df0a8978f77818c0096aca6673010ba044628b65581dc",
+        "input_hash": "f62bdabf2060193bcd3cb7dba1384e611d8fc2462958f4f69b03f24439fe4570"
+      },
+      "tasks": {
+        "verdict": "PASS",
+        "receipt_hash": "936a674e942bfb30f67597ad5555f63af748391d2ab2ef47f3da3819f5700180",
+        "input_hash": "3e7017710d01528437a75245d6b9c2d52ccd8802c4d9b77ec253863ef5d1ba5a"
+      }
+    }
+  },
+  "raw": "valence-actual-publication-2026-10-27/ contains exact request/result, original publication, consumer/control streams and complete native gate output. Original absolute paths in transcripts identify the historical execution, not portable product dependencies.",
+  "source_limit": "Native gates ran before this additive completion record and task-6.5 annotation. Their explicit selected-input binding is in result.json; this is not a post-annotation or final whole-tree approval.",
+  "non_claims": [
+    "Valence identity/linkage and producer-role validity do not authenticate a worker, certify accounting or output behavior, grant authorization, or establish release eligibility.",
+    "The exported run is ProcessOnly with unavailable positive OOM authority; no dedicated-cgroup, retry or campaign success is inferred. Negative mutated copies are controls, not provenance.",
+    "Cairn structural PASS is not semantic whole-change acceptance, G1/G2 resource admission, accepted-spec synchronization, implementation commit, archive or publication. Outstanding authored tasks remain open."
+  ]
+}

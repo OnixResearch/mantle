@@ -1,0 +1,290 @@
+{
+  "schema": "mantle-demand-before-after-observation-receipt-v1",
+  "recorded_date": "2026-10-27",
+  "change": "declare-remote-worker-demand",
+  "scope": "Retrospective instrumented historical coordinator observation, retained implemented-demand fixture successes, and actual failed signed-gateway after attempts; documentary reconciliation, not repaired-runtime acceptance",
+  "run_root": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk",
+  "path_convention": "Runtime paths below are relative to run_root unless absolute; evidence/ references are relative to this change. Referenced command/request JSON retains exact argv, cwd, environment, timestamps and raw stream identities.",
+  "authored_criterion": {
+    "task": "T4.3",
+    "source": "tasks.md:48",
+    "text": "Run the demand, retraction, deduplication, and no-inference rails before and after the change. Preserve exact results.",
+    "requirement": "build_scheduling.demand_without_capacity_inference",
+    "records_alone_satisfy_literal_criterion": false,
+    "reason": "A bounded historical no-inventory admission probe passed, but historical demand publication/retraction/deduplication are absent capabilities, not successful absent-event tests. A separate historical resource rail failed compilation and prevented the queued terminal-lease rail. Implemented-demand coordinator fixtures passed on their identified sources, but the actual signed-gateway delivery rail failed in v1/v2/v3. No successful current repaired gateway after output is present in this receipt.",
+    "task_checkbox_changed": false
+  },
+  "historical_before": {
+    "classification": "retrospective-test-instrumented-historical-source-not-unchanged-historical-product",
+    "commit": "dbeb354ba29095467e13ee615f229d216e4e5fb6",
+    "source_archive_blake3": "0fdaedf3f5e538a8d876b21ee0401a19b062fbf72fd3e4b4b951b013488a73aa",
+    "source_provenance": "evidence/historical-before-source-2026-10-26.json#/historical_subject",
+    "instrumentation_record": "historical-demand-instrumentation.json",
+    "instrumentation_record_blake3": "fd1857de46e14a66921e8665936aaae2fce45e98f6cca8988a126dffcc6df8d5",
+    "source_path": "src/remote_build.rs",
+    "original_source_blake3": "953e690f0b37d59862e7250f67ba7447e6a4730527c3429e383324aa2cdf3f68",
+    "instrumented_source_blake3": "d340cf124f592a7c585ae08a1d0ecbb3fa07b0c357883814d5e71ab296e05e04",
+    "added_probe_blake3": "e284fda03095f377eab0bb29283d4e0bb2783a5e5339a8087a117fe1e0de8a3d",
+    "instrumentation_boundary": "Retained provenance identifies one added test body calling original coordinator functions; no modern demand implementation was copied. The tested file is the instrumented d340cf12... subject, not the original 953e690f... bytes. source_unchanged in the run record means selected instrumented inputs were unchanged across that run; it does not mean historical product was unmodified.",
+    "selected_other_source_blake3": {
+      "Cargo.toml": "0d016551043ed7884bc783432650c6fa5dce799bf4c14c321812b31b88ab28d6",
+      "Cargo.lock": "ce93be39bed03654a8d97219b58b00581504e95b4c623790eb4d83673ccc63ad",
+      "flake.nix": "43c410e84c68260faa1df4e5c7dd1ce7dbc5d119372424c124d3719a1f6bf92f",
+      "flake.lock": "206b693fe08b816766359ceb1b776748309c953e094d807ed2eba62143a6cf74",
+      "rust-toolchain.toml": "686ea6636a0442261a526d175351dc7112fa19ed864ebc4b9e4b84a7dff532f5",
+      "patches/casita-blake3-finalize.patch": "1e7e34e59882286ab75a3e30e2b8f62ec455c62eff9d64c9fbabd583c46504b9"
+    },
+    "command_record": {
+      "path": "historical-demand-before-v2-results/result.json",
+      "blake3": "4568c18c8f780c440620c622a1fc8aef4facfa8ba75e038aa7ed388c96cbc0cf",
+      "request": "historical-demand-before-v2-request.json",
+      "request_blake3": "85e4cc12971b0f080b5d98fd9f0194793da49602b35a9e52cf5cd7bb039f07dd",
+      "submission": "historical-demand-before-v2-submission.json",
+      "submission_blake3": "a1d96d0b15d04c4a1ae47a6de9b6fc68369f17df6ab8a0da3c97d5ab72525ce9",
+      "pueue_task_id": 16,
+      "cwd": "historical-demand-before",
+      "started_at": "2026-10-27T01:26:46.902355-04:00",
+      "finished_at": "2026-10-27T01:37:10.641725-04:00",
+      "driver_exit_code": 1,
+      "environment_ref": "historical-demand-before-v2-results/result.json#/environment_overrides",
+      "execution_envelope_ref": "historical-demand-before-v2-submission.json#/command_argv",
+      "boundary": "Historical nix develop --offline --no-write-lock-file, private scratch-backed /tmp and explicit linker/recursion flags. The source-defined Nix/Crane patched dependency route is separate from the earlier reported ambient unpatched-Casita E0599 failure, which remains a failed observation. Submission success is not runtime success."
+    },
+    "commands": [
+      {
+        "label": "actual-historical-rust-cohort",
+        "argv": ["rustc", "--version", "--verbose"],
+        "exit_code": 0,
+        "stdout": "historical-demand-before-v2-results/actual-historical-rust-cohort.stdout.log",
+        "stdout_blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+        "observed": "rustc 1.96.0-nightly (c75612477 2026-04-07); commit c756124775121dea0e640652c5ee3c89e3dd0eb4; LLVM 22.1.2"
+      },
+      {
+        "label": "original-dispatch-quantified-no-inventory",
+        "argv": ["cargo", "test", "--locked", "--offline", "-p", "mantle", "--bin", "mantle", "remote_build::tests::historical_quantified_no_inventory_is_not_capacity", "--", "--exact", "--nocapture", "--test-threads=1"],
+        "exit_code": 0,
+        "stdout": "historical-demand-before-v2-results/original-dispatch-quantified-no-inventory.stdout.log",
+        "stdout_blake3": "9539c0df81f1a6d899bd68e5cdb7dd7d24afe8a80d31e0dbc1000b712b7f0524",
+        "stderr": "historical-demand-before-v2-results/original-dispatch-quantified-no-inventory.stderr.log",
+        "stderr_blake3": "ec674713a9c528e312ecc2b539c956eab744458341b3b24f6ee2d7ee575e81e3",
+        "literal_test_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2629 filtered out; finished in 0.00s",
+        "request_identity": "Literal historical-request JSON retained on stdout line 3, including request and outer resource vectors, debug policy, input/output geometry, feature/system/sandbox/network requirements and wait_for_worker=true. This is a test API request, not typed signed-gateway ingress.",
+        "requirement": {
+          "cpu_units": 8,
+          "memory_bytes": 16384,
+          "scratch_bytes": 32768,
+          "accelerators": [{"name": "nvidia-sm90", "quantity": 1}],
+          "named_tokens": [{"name": "linker-seat", "quantity": 2}],
+          "semantic_accelerator_classes": ["nvidia-sm90"]
+        },
+        "worker": "Fixture registration with concurrency=64 and resource_inventory=None",
+        "literal_round_outputs": [
+          "round=0 blocker=remote-worker-resource-inventory-missing jobs=0 leases=0 demand-contract=absent",
+          "round=1 blocker=remote-worker-resource-inventory-missing jobs=0 leases=0 demand-contract=absent",
+          "round=2 blocker=remote-worker-resource-inventory-missing jobs=0 leases=0 demand-contract=absent"
+        ],
+        "executed_assertion_scope": "Three Pending admission rounds preserve exact coordinator state and create no jobs or resource leases. The same probe then sets wait_for_worker=false and asserts Reject with the same blocker and unchanged state. Passing test covers these bounded assertions, not an external supervisor or live demand protocol.",
+        "boundary": "demand-contract=absent is a probe annotation of a missing protocol, not a measured successful demand publication, retraction, deduplication or owner-stop transition. Repeated identical admission blockers are not deduplicated demand facts."
+      },
+      {
+        "label": "original-resource-declaration-rails",
+        "argv": ["cargo", "test", "--locked", "--offline", "-p", "crunch-build", "remote_resources", "--lib", "--", "--test-threads=1"],
+        "exit_code": 101,
+        "stdout": "historical-demand-before-v2-results/original-resource-declaration-rails.stdout.log",
+        "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "historical-demand-before-v2-results/original-resource-declaration-rails.stderr.log",
+        "stderr_blake3": "9d6a6ca8b6b0e5dfc49241b4a353dc363ba62c420cebbc1633fbb5fc26546875",
+        "observed_failure": "E0428 duplicate definitions in crates/crunch-build/src/worker.rs: watch_empty_generation_commits_and_settles_before_shutdown (5759/5939), superseded_candidate_token_cannot_dispatch_or_publish_stale_output (5804/5984), committed_candidate_builds_once_and_publishes_signed_pathinfo (5891/6071). could not compile crunch-build (lib test) due to 3 previous errors.",
+        "boundary": "Compilation failure, not executed resource assertions or a zero-test pass. Historical source was not repaired by this receipt."
+      },
+      {
+        "label": "original-lease-terminal-retraction-rails",
+        "argv": ["cargo", "test", "--locked", "--offline", "-p", "mantle", "--bin", "mantle", "remote_build::tests::resource_leases_release_on_completion_cancellation_timeout_and_worker_loss", "--", "--exact", "--nocapture", "--test-threads=1"],
+        "status": "not-executed",
+        "exit_code": null,
+        "reason": "Fourth command exists in historical-demand-before-v2-request.json, but result.steps contains only the first three; continue_independent_commands=false stopped after compilation failure. No terminal lease/retraction outcome may be inferred."
+      }
+    ]
+  },
+  "implemented_demand_retained_fixture_successes": {
+    "classification": "implemented-demand-coordinator-fixtures-not-live-delivery-or-current-repair-verification",
+    "receipt": "evidence/negative-controls-verification-2026-10-26.json",
+    "receipt_blake3": "142fdce787829e95d5597c91649e5d70c337088fbc155cdef65be2c6ef0ea063",
+    "command_record": "worktree/.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/continuation-focused-results-2026-10-26.json",
+    "command_record_blake3": "bbba82bf0126b4199ae21235974feb210e72a9cdf15931ce9895a6e8a5d3bd66",
+    "argv": ["cargo", "test", "--locked", "--offline", "-p", "mantle", "--bin", "mantle", "remote_build::tests::worker_demand_", "--", "--test-threads=1"],
+    "exit_code": 0,
+    "started_at": "2026-10-26T19:39:41.942853-04:00",
+    "finished_at": "2026-10-26T19:42:52.292134-04:00",
+    "stdout": "/home/brittonr/.cargo-target/mantle-cairn-continuation-fixed-20261026-aaxncb07/worker-demand-focused.stdout.log",
+    "stdout_blake3": "456be89bc0335f2c2865a11140130d99e56c39c23a1ff0463a000407c389d81b",
+    "literal_test_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2849 filtered out; finished in 0.02s",
+    "selected_source_blake3": {
+      "src/remote_build.rs": "be8d3ea2a7a0f6b1187b8546f3b5db6101b407818f5c6dbf3c1b94ef0e818f3e",
+      "src/remote_build/demand.rs": "3a0a265b4ae38fd08405655a8c6f09fed2efcb920731d62bd33ac2a63c4b53dd",
+      "crates/crunch-remote-core/src/demand.rs": "0e50b3a881a5ded5cbd4cf9ea26b9494085ea465c7b554cda307c26f82adf4a8"
+    },
+    "named_passes": [
+      "remote_build::tests::worker_demand_changes_retract_and_scoped_projection_cannot_claim_another_owner",
+      "remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history",
+      "remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency",
+      "remote_build::tests::worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts",
+      "remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations"
+    ],
+    "criterion_mapping_receipt": "evidence/obligation-reconciliation-2026-10-26.json",
+    "criterion_mapping_receipt_blake3": "4eb2fc688ac46493cd59b88a95712c30d27f40eb60a3be64a3562cf4424d5309",
+    "boundary": "Retained actual named fixture successes remain valid for these source identities and fixture paths. Explicit helper retraction, fixture worker registration, pure-book transitions and manually constructed socket publication are not derived production delivery or deployed supervisor evidence. Later source digests differ; no unchanged-current-product claim follows."
+  },
+  "current_signed_gateway_after": {
+    "classification": "observed-failing-runtime-attempts-with-partial-negative-control-output",
+    "shared_argv": ["cargo", "test", "--locked", "--offline", "-p", "mantle", "--test", "demand_runtime", "--", "--ignored", "--nocapture", "--test-threads=1"],
+    "cwd": "worktree",
+    "attempts": [
+      {
+        "id": "v1",
+        "record": "actual-demand-runtime-v1-results/result.json",
+        "record_blake3": "4d5fe07a8050cfd1076886ff4ff313224e67ff41706fe209e605d1800c2c42b4",
+        "request": "actual-demand-runtime-v1-request.json",
+        "request_blake3": "94561e0a400daf0c057b2aa7fce6a97e889f07566d8ce3229927e01104667fc8",
+        "exit_code": 101,
+        "driver_exit_code": 1,
+        "source_identity_ref": "actual-demand-runtime-v1-results/result.json#/source_before",
+        "stdout": "actual-demand-runtime-v1-results/real-derived-demand-and-report-controls.stdout.log",
+        "stdout_blake3": "d07e0e07f41a0ed840d571017a908f637e76d7ce8a39630f8fcd128c0e96a2af",
+        "stderr": "actual-demand-runtime-v1-results/real-derived-demand-and-report-controls.stderr.log",
+        "stderr_blake3": "b80b40263099e2e960932f864243c7c948b3a3cfc3714b6fb7f76bdeb3ffde70",
+        "observed_failure": "tests/demand_runtime.rs:142:9: no-fit plan must remain blocked; left Some(3), right Some(1)"
+      },
+      {
+        "id": "v2",
+        "record": "actual-demand-runtime-v2-results/result.json",
+        "record_blake3": "eae4d3fac94523b9ddfb24ded8150b576443e1bf601a3acce25a0f0e962bc43b",
+        "request": "actual-demand-runtime-v2-request.json",
+        "request_blake3": "ad8d1029ed7f5a52599d34fa6bb01c23671c20b688bb5e9d1cf1c41ef6c09ad6",
+        "exit_code": 101,
+        "driver_exit_code": 1,
+        "source_identity_ref": "actual-demand-runtime-v2-results/result.json#/source_before",
+        "stdout": "actual-demand-runtime-v2-results/real-derived-demand-and-report-controls.stdout.log",
+        "stdout_blake3": "4614d83bd706a7ff16fab136fe339e91f48c4b32c95a735c3f147a3a31c2c46d",
+        "stderr": "actual-demand-runtime-v2-results/real-derived-demand-and-report-controls.stderr.log",
+        "stderr_blake3": "03869a3a39ce583e378a489a4e02531e4546fec4876426e6102f0b8909a702bd",
+        "observed_failure": "tests/demand_runtime.rs:83:9: derived production demand did not publish and retract"
+      },
+      {
+        "id": "v3",
+        "record": "actual-demand-runtime-v3-results/result.json",
+        "record_blake3": "3dfff4fec76df12c00a0b12449826f598afd3c2d39a82c5ac32ea59a5b8614e6",
+        "request": "actual-demand-runtime-v3-request.json",
+        "request_blake3": "94c3d98574293c07ee825029c22b2a4b07ef9cb66063bddc81bd541b62e9d599",
+        "exit_code": 101,
+        "driver_exit_code": 1,
+        "source_identity_ref": "actual-demand-runtime-v3-results/result.json#/source_before",
+        "native_source_binding": "demand-runtime-v3/source-identities-start.json",
+        "native_source_binding_blake3": "6953d793a90c1bc56cc413c540308ffa0bd51becd90dc412048f741b81007550",
+        "native_binary": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle",
+        "native_binary_blake3_at_start": "2c8cefb6753bc1aac3fa3cd82b61590a9917a665a0136923df81fcfbed114e5d",
+        "stdout": "actual-demand-runtime-v3-results/real-derived-demand-and-report-controls.stdout.log",
+        "stdout_blake3": "1f323a2cebf2bdfb43a67f0a60a40c551e8316314fe15a1e234e8af9d89147a8",
+        "stderr": "actual-demand-runtime-v3-results/real-derived-demand-and-report-controls.stderr.log",
+        "stderr_blake3": "235d7daa578d8323a22896efa44afe8ce359ece547082296b1eebf91d01a8269",
+        "observed_failure": "tests/demand_runtime.rs:83:9: derived production demand did not publish and retract",
+        "literal_test_result": "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 96.07s",
+        "source_limit": "Native source binding and command recorder enumerate selected source files only; start-only binding is not a whole-tree/end-of-run executable immutability assertion."
+      }
+    ],
+    "v3_partial_actual_controls": {
+      "boundary": "These are observed outputs within a failed integration rail, not an overall pass or delivery/retraction success.",
+      "absent_plan": {
+        "exact_argv_file": "demand-runtime-v3/absent-plan.command.json",
+        "exact_argv_blake3": "9995d916e5e1c14826bbd662d181201d6e8f1debfc56fa34280a675383948a8e",
+        "exit_file": "demand-runtime-v3/absent-plan.exit",
+        "literal_exit": "Some(1)",
+        "stdout": "demand-runtime-v3/absent-plan.stdout",
+        "stdout_blake3": "826e9441eee5fcfef210649ac1e1949cb4c58d0a69eef559d2458b396d341494",
+        "observed": "crunch-build-plan-v1 entry action preflight-error; detail and remote_placement.blocker_reason resource-memory-unavailable; mandatory worker_demand has same blocker and explicit job/policy/requirement identities. Advisory route eligibility does not establish execution."
+      },
+      "absent_build": {
+        "exact_argv_file": "demand-runtime-v3/absent-build.command.json",
+        "exact_argv_blake3": "06d9f015dc6c307a246465c888893248a7b91f6383557bb855fd53c48ab4037f",
+        "exit_file": "demand-runtime-v3/absent-build.exit",
+        "literal_exit": "Some(3)",
+        "stderr": "demand-runtime-v3/absent-build.stderr",
+        "stderr_blake3": "ec3d54fcc1f5003f897316f448e91293a7158a065390f45264b9be1211a35fd4",
+        "observed": "live build observation degraded: EndpointMissing; internal code 3 dispatch failure resource-memory-unavailable with worker_demand and same identities/vector as absent plan. Negative blocked build, not successful execution."
+      },
+      "shared_reported_requirement": {
+        "cpu_units": 1,
+        "memory_bytes": 67108864,
+        "scratch_bytes": 268435456,
+        "accelerators": [],
+        "named_tokens": [],
+        "semantic_accelerator_classes": [],
+        "placement_key_blake3": "5aeb2076378991cb299f3c8931607cc299a49771c27d5bc89bcb51931e929b56"
+      },
+      "shared_reported_identity": {
+        "job_id": "9667308be9a841a55e07d0754d2ae396c52f9be7e45d4265045ce61d08dadf78",
+        "policy_id": "mantle-lazy-priority-v1",
+        "requirement_id_blake3": "bf70d956b4f89b9f353c31618b3677a40c928660eab98e6a61674772867fc599",
+        "blocker_reason": "resource-memory-unavailable"
+      },
+      "gateway_submit": {
+        "response_stderr": "demand-runtime-v3/calls/0001.response.stderr",
+        "response_stderr_blake3": "63b21732b5ab3c9c6a60c35385e6a3fe5b9402ddc46f08933b1d3879bc6bf5a8",
+        "exit_file": "demand-runtime-v3/calls/0001.response.exit",
+        "literal_exit": "Some(3)",
+        "literal_stderr": "{\"error\":\"gateway-evidence-invalid\",\"code\":3,\"kind\":\"internal\"}",
+        "boundary": "Gateway refused this request. This is not an admitted quantified placement or demand-producing success."
+      },
+      "subscription": {
+        "path": "demand-runtime-v3/subscriber.ndjson",
+        "blake3": "da194761666d932ca347744d835c241a97efc35514fe03f5d4a5183246279a4c",
+        "observed": "Only snapshot-start and snapshot-end for mantle-live-build-protocol-v1; no delivered demand publication or retraction."
+      }
+    },
+    "pending_repaired_request_at_receipt_inspection": {
+      "request": "actual-demand-runtime-v4-request.json",
+      "request_blake3": "bcb98b337cdcdf7774ccd276dbeef4c4efd0ed999bd82cb9fdaa404c5543fb85",
+      "submission": "actual-demand-runtime-v4-submission.json",
+      "submission_blake3": "6f15b154d9f40d848e244bf26979e0460738c5bf70ad74cfd374ab2a7ee9bc67",
+      "submission_text_task_id": "35",
+      "argv": ["cargo", "test", "--locked", "--offline", "-p", "mantle", "--test", "demand_runtime", "--", "--ignored", "--nocapture", "--test-threads=1"],
+      "status": "request-and-submission-only-no-result-observed",
+      "expected_stdout_is_not_observed_stdout": true,
+      "boundary": "Filename inspection found v4 request/submission, not a v4 result directory. Main owns runtime/source repair and subsequent output. This receipt cannot pronounce that path passing; later evidence must append its actual result without rewriting v1/v2/v3."
+    }
+  },
+  "comparison_limits": [
+    "Historical subject uses a test API action with resource_inventory=None, vector CPU 8/memory 16384/scratch 32768, nvidia-sm90 and linker-seat; current gateway fixture prepares signed derivation ingress and Some(insufficient) inventory. Actual v3 reports CPU 1/memory 67108864/scratch 268435456 and empty accelerator/token vectors. Inputs, policy/ingress and blockers differ; no identical-vector before/after comparison is claimed.",
+    "Historical source lacks the modern demand protocol and current typed API-host ingress. Retained older bb5aabb2a734196123545770b4a1f1c6e61fba62 gateway recipe in the source-recovery receipt is preparation only, not an executed equivalent baseline.",
+    "Before/after denotes source capability, not execution chronology. October 26 fixture passes and October 27 current-gateway attempts precede the October 27 01:26 retrospective historical probe.",
+    "A historical probe cannot establish review-before-first-adaptation history. No new review, acceptance or lifecycle decision is made here.",
+    "The current-origin db98fd8bcf2d96614b8fe7f49ec131408b43018d baseline already implements demand; it is baseline-before-continuation, not pre-demand source."
+  ],
+  "criterion_mapping": [
+    {"criterion": "demand", "before": "Protocol absent; no historical derived/delivered demand execution", "after": "Named coordinator fixtures support one fact per unmet requirement on their source identities. v3 absent plan/build display actual demand and blocker. Signed gateway refused request; live subscription empty.", "complete_before_after": false},
+    {"criterion": "retraction", "before": "No demand retraction protocol; queued separate lease-terminal test not executed after earlier compilation failure", "after": "Named changes_retract and repeated_rounds fixtures pass, but explicit fixture helper/registration transitions are not current gateway event delivery. v2/v3 live publish/retract requirement failed.", "complete_before_after": false},
+    {"criterion": "deduplication", "before": "Three same-blocker rounds create no jobs/leases; no demand facts exist to deduplicate", "after": "Named repeated_rounds coordinator fixture passes; no delivered production deduplication sequence in current signed-gateway outputs", "complete_before_after": false},
+    {"criterion": "no-inference", "before": "Actual bounded probe passes: present worker, concurrency 64, absent inventory, three identical Pending blockers plus Reject control, unchanged coordinator state", "after": "Five-test focused rail has named presence/concurrency, withdrawn-inventory/history and placement/reservation-equivalence passes; v3 negative plan/build remain blocked with explicit vector", "complete_before_after": "bounded-fixture-subset-only", "limit": "Different historical/current input geometries and source bindings; not a complete four-rail or live-delivery acceptance"},
+    {"criterion": "preserve exact results", "before": "Instrumented-source identity, literal request/rounds/pass, compilation failure and non-executed queued command distinguished", "after": "Scoped fixture passes, all three failed runtime command records/streams, partial negative outputs and pending v4 request distinguished", "records_satisfy_preservation_for_observed_invocations": true}
+  ],
+  "remaining_gaps": [
+    "Historical demand/retraction/deduplication runtime scenarios remain unsupported, not passing. Historical separate resource rail failed compilation; terminal lease rail has no execution result.",
+    "No actual current repaired signed-gateway success with derived demand publication and retraction is observed here; v1/v2/v3 fail and v4 has only request/submission at inspection.",
+    "No identical request/vector/inventory/policy/ingress historical-versus-current comparison, production delivered deduplication, or external supervisor provisioning observation is established.",
+    "Records alone do not satisfy authored T4.3 in full. Main must retain actual subsequent runtime results and own any criterion reconciliation; no criterion is weakened and no checkbox changed."
+  ],
+  "historical_records_preserved": [
+    "evidence/historical-before-source-2026-10-26.json remains the pre-execution preparation record, not silently rewritten as execution.",
+    "historical-demand-before-v1-withdrawal.json retains the queued, withdrawn flag-encoding defect; not an executed product failure or pass.",
+    "Historical result non-claims preserve the original reported ambient Casita E0599 failure. Newly successful instrumented probe does not erase that build observation.",
+    "Existing fixture, gate, raw runtime and source-provenance records remain intact. Failed gateway results are not replaced by expected-output strings, diagnostics, test-only constructed facts or green fixture gates."
+  ],
+  "receipt_work": {
+    "new_product_runtime_commands": [],
+    "builds_tests_linters_formatters_or_lifecycle_gates_run": [],
+    "method": "Read authored criterion, historical instrumentation/source provenance and exact retained commands/results/raw streams; BLAKE3-bind retained artifacts and parse/cross-check documentary references only. No failed product check was rerun.",
+    "documentary_validation": "JSON parsed; retained argv/exits/stream digests, instrumented/original source identities, exact historical round/pass lines, five focused named pass lines, focused selected sources and actual report identities compared successfully. First plan/build vector comparison used order-sensitive JSON.stringify and failed because object key order differs; canonical-key comparison passed. This was a receipt-helper comparison failure, not a product result or a rerun of the failed product rail."
+  },
+  "acceptance_claimed": false,
+  "non_claims": ["No synthetic historical green or contemporaneous chronology", "Instrumentation is not unchanged historical product", "No current signed-gateway pass without actual output", "No whole-source identity from selected manifests", "No reliable production delivery, demand-created capacity, lease or reservation authority", "No task checkbox, accepted-spec sync, archive, merge, commit or publication authorization"]
+}
