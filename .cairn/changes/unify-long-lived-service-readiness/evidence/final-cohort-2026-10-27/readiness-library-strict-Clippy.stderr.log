@@ -1,0 +1,32 @@
+warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking rustls-webpki v0.103.16
+    Checking turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking fuse-backend-rs v0.12.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/fuse-backend-rs)
+    Checking async-compression v0.4.19
+    Checking nix-compat v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/nix-compat)
+    Checking rustls v0.23.46
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rust-cache-core)
+    Checking crunch-nar v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-nar)
+    Checking crunch-service-readiness-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-service-readiness-core)
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking hyper-rustls v0.27.7
+    Checking reqwest v0.13.2
+    Checking reqwest-middleware v0.5.1
+    Checking object_store v0.14.0
+    Checking reqwest-tracing v0.6.0
+    Checking snix-tracing v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-tracing)
+    Checking snix-castore v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-castore)
+    Checking snix-store v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-store)
+    Checking snix-build v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/vendor/snix-build)
+    Checking turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+    Checking crunch-store v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rust-cache)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-rustc-wrapper)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 26s

@@ -1,0 +1,60 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/request.json",
+  "request_blake3": "a6c2c3cf9879deb9d9c44363ebc4655e3e03e94e147d182187b76c2b903210bf",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "started_at": "2026-10-27T12:04:21.395280-04:00",
+  "environment_overrides": {},
+  "source_before": {
+    "src/source_built_fixed_point_shell.rs": "2f5165da7a3ebab6ed9920e39351a27c7f0f1b04335db772aab77eaecdd14d73",
+    "src/source_built_fixed_point.rs": "4ed4e60340b02b0d5752cece2799c7737bff08b26f0c69e8b5c4b605428bec63",
+    "src/source_built_fixed_point_action_trust.rs": "48d6d9a376e3f68e3e31fbb5687c712412654ea6b5a91302ac34abd9c35666de"
+  },
+  "steps": [
+    {
+      "label": "missing-source-profile-rejected-before-proof-execution",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--json",
+        "--verbose",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/state",
+        "self-build",
+        "--source-built-fixed-point",
+        "--out",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/proof"
+      ],
+      "started_at": "2026-10-27T12:04:21.404996-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/missing-source-profile-rejected-before-proof-execution.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/missing-source-profile-rejected-before-proof-execution.stderr.log",
+      "exit_code": 1,
+      "finished_at": "2026-10-27T12:04:21.420915-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "9364aa3a1aef4c1a54406c9603f0f7b01270cfeee50a23bcbb918c7108d88794"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true,
+        "stderr_required_0": true
+      },
+      "expected_failure_observation": true,
+      "observation_accepted": true
+    }
+  ],
+  "non_claims": [
+    "Actual missing-input rejection only; no stage execution, graph projection, protected action reconciliation, full-source proof or lifecycle acceptance."
+  ],
+  "immutable_artifacts": [],
+  "source_after": {
+    "src/source_built_fixed_point_shell.rs": "2f5165da7a3ebab6ed9920e39351a27c7f0f1b04335db772aab77eaecdd14d73",
+    "src/source_built_fixed_point.rs": "4ed4e60340b02b0d5752cece2799c7737bff08b26f0c69e8b5c4b605428bec63",
+    "src/source_built_fixed_point_action_trust.rs": "48d6d9a376e3f68e3e31fbb5687c712412654ea6b5a91302ac34abd9c35666de"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T12:04:21.431844-04:00",
+  "driver_exit_code": 0
+}

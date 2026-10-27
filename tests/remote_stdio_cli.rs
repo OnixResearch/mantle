@@ -4,6 +4,8 @@ mod remote_endpoint_binding;
 use std::fs;
 use std::io::BufRead as _;
 use std::io::BufReader;
+use std::io::Read as _;
+use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt as _;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -40,17 +42,17 @@ const TICKET_VERIFIER_DOMAIN: &[u8] = b"mantle-remote-ticket-verifier-v2\0";
 const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 
+struct Reap(Child);
+
+impl Drop for Reap {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 #[test]
 fn live_subscriber_pipe_flushes_snapshot_and_later_real_goal_before_daemon_stops() {
-    struct Reap(Child);
-
-    impl Drop for Reap {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
-        }
-    }
-
     let temp = tempfile::tempdir().expect("live CLI tempdir");
     let socket = temp.path().join("live.sock");
     let binary = env!("CARGO_BIN_EXE_mantle");
@@ -212,6 +214,100 @@ fn remote_serve_stdio_once_exchanges_frames_and_redeems_ticket() {
         BLAKE3_HEX_LENGTH_CHARS
     );
     assert_eq!(ticket_state["tickets"][TEST_TICKET_ID]["uses_remaining"], 0);
+}
+
+#[test]
+fn remote_stdio_readiness_acknowledges_success_and_retains_failed_sessions() {
+    for (ticket_present, input, expected_state) in [
+        (true, encode_frames(&client_request_frames()), "complete"),
+        (false, encode_frames(&client_request_frames()), "failed"),
+        (true, vec![0], "failed"),
+    ] {
+        let temp = tempfile::tempdir().expect("isolated readiness session");
+        let socket = temp.path().join("live.sock");
+        let _daemon = start_readiness_daemon(&socket);
+        if ticket_present {
+            write_ticket_state(temp.path());
+        }
+        let credentials = write_service_credentials(temp.path());
+        let output = Command::cargo_bin("mantle")
+            .expect("mantle binary")
+            .arg("--state-dir")
+            .arg(temp.path())
+            .args([
+                "remote",
+                "serve",
+                "--endpoint-id",
+                "builder-1",
+                "--binding",
+                "stdio-once",
+                "--signing-key-id",
+                RESULT_SIGNING_KEY_ID,
+            ])
+            .arg("--secret-manifest")
+            .arg(secret_manifest())
+            .env("CREDENTIALS_DIRECTORY", credentials)
+            .env("MANTLE_LIVE_STATE_SOCKET", &socket)
+            .write_stdin(input)
+            .output()
+            .expect("real observed stdio session");
+        assert_eq!(output.status.success(), expected_state == "complete", "{output:?}");
+        if output.status.success() {
+            assert_eq!(frame_kind(decode_frames(&output.stdout).last().expect("response frame")), "done");
+        } else {
+            assert!(output.stdout.is_empty(), "rejected session has no success frames");
+        }
+        let report = query_service_readiness(&socket);
+        let component = report["components"]
+            .as_array()
+            .expect("readiness components")
+            .iter()
+            .find(|row| row["id"].as_str().is_some_and(|id| id.starts_with("remote-stdio-")))
+            .expect("the real daemon admitted the stdio component");
+        assert_eq!(component["states"], serde_json::json!([expected_state]));
+        assert_eq!(component["restart_policy"], "never");
+        assert_eq!(component["ready"], false, "terminal sessions cannot remain ready");
+    }
+}
+
+fn start_readiness_daemon(socket: &Path) -> Reap {
+    let mut daemon = Reap(
+        ProcessCommand::new(env!("CARGO_BIN_EXE_mantle"))
+            .arg("--state-dir")
+            .arg(socket.with_extension("state"))
+            .args(["remote", "live", "serve", "--socket"])
+            .arg(socket)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("real readiness daemon"),
+    );
+    let listening = (0..50).any(|_| {
+        if UnixStream::connect(socket).is_ok() {
+            return true;
+        }
+        assert!(daemon.0.try_wait().expect("poll readiness daemon").is_none());
+        thread::sleep(Duration::from_millis(100));
+        false
+    });
+    assert!(listening, "readiness daemon did not accept connections");
+    daemon
+}
+
+fn query_service_readiness(socket: &Path) -> Value {
+    const REPLY_BYTES_MAX: u64 = 2_097_152;
+    let mut stream = UnixStream::connect(socket).expect("query actual readiness daemon");
+    stream.set_read_timeout(Some(Duration::from_secs(5))).expect("bounded readiness read");
+    stream.set_write_timeout(Some(Duration::from_secs(5))).expect("bounded readiness write");
+    stream
+        .write_all(b"{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"query\",\"components\":[]}\n")
+        .expect("send readiness query");
+    let mut reply = String::new();
+    BufReader::new(stream.take(REPLY_BYTES_MAX)).read_line(&mut reply).expect("read readiness report");
+    let report: Value = serde_json::from_str(&reply).expect("typed readiness JSON");
+    assert_eq!(report["classification"], "coordination-state");
+    assert_eq!(report["evidence_eligible"], false);
+    report
 }
 
 #[test]

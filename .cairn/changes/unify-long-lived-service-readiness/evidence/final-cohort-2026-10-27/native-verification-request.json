@@ -1,0 +1,137 @@
+{
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results",
+  "environment": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-full-key-v16/runtime",
+    "MANTLE_EXECUTION_COMPILER": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+    "MANTLE_READINESS_EXECUTABLE": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "MANTLE_READINESS_EXECUTABLE_BLAKE3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "MANTLE_READINESS_COMPILER": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+  },
+  "subjects": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "flake.nix",
+    "flake.lock",
+    "src/main.rs",
+    "src/remote_build.rs",
+    "src/remote_build/live_state/daemon.rs",
+    "tests/remote_stdio_cli.rs",
+    "crates/crunch-service-readiness-core/src/lib.rs",
+    "crates/crunch-service-readiness-core/src/model.rs",
+    "crates/crunch-service-readiness-core/src/admission.rs",
+    "crates/crunch-service-readiness-core/src/evaluation.rs",
+    "crates/crunch-service-readiness-core/src/tests.rs",
+    "crates/crunch-rustc-wrapper/src/lib.rs",
+    "docs/operator-workflows.md",
+    "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md",
+    ".cairn/changes/unify-long-lived-service-readiness/tasks.md",
+    ".cairn/changes/unify-long-lived-service-readiness/design.md",
+    ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-final-cohort-2026-10-27.json"
+  ],
+  "commands": [
+    {
+      "label": "readiness-library-strict-Clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-service-readiness-core",
+        "-p",
+        "crunch-rustc-wrapper",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    },
+    {
+      "label": "readiness-scoped-diff-whitespace",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "src/main.rs",
+        "src/remote_build.rs",
+        "src/remote_build/live_state/daemon.rs",
+        "tests/remote_stdio_cli.rs",
+        "crates/crunch-service-readiness-core",
+        "crates/crunch-rustc-wrapper/src/lib.rs",
+        "docs/operator-workflows.md",
+        "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md",
+        ".cairn/changes/unify-long-lived-service-readiness"
+      ]
+    },
+    {
+      "label": "Cairn-readiness-validate",
+      "argv": [
+        "cairn",
+        "validate",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-readiness-proposal",
+      "argv": [
+        "cairn",
+        "gate",
+        "proposal",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-readiness-design",
+      "argv": [
+        "cairn",
+        "gate",
+        "design",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Cairn-readiness-tasks",
+      "argv": [
+        "cairn",
+        "gate",
+        "tasks",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "label": "Tracey-readiness-coverage",
+      "argv": [
+        "cairn",
+        "traceability",
+        "coverage",
+        "--root",
+        "."
+      ]
+    }
+  ],
+  "continue_independent_commands": true,
+  "non_claims": [
+    "Focused library quality plus native structural lifecycle/coverage checks only. No full workspace or required frozen G1/G2, final-source approval, authoritative proof receipt, accepted-spec sync, archive or publication."
+  ]
+}

@@ -1,0 +1,1 @@
+{"schema":"mantle-service-readiness-v1","classification":"coordination-state","evidence_eligible":false,"components":[{"id":"live-daemon-1362546","generation":1,"states":["started","ready"],"restart_policy":"never","restart_action":null,"ready":true,"blocked_by":[]}]}

@@ -1,0 +1,25 @@
+
+running 20 tests
+test remote_build::live_state::daemon::tests::demand_count_bound_is_global_and_retraction_restores_admission ... ok
+test remote_build::live_state::daemon::tests::dependent_socket_start_requires_upstream_request_and_reblocks_on_loss ... ok
+test remote_build::live_state::daemon::tests::disconnected_subscriber_does_not_remove_owner_facts ... ok
+test remote_build::live_state::daemon::tests::duplicate_owner_cannot_steal_active_facts ... ok
+test remote_build::live_state::daemon::tests::graceful_shutdown_retracts_and_closes_socket ... ok
+test remote_build::live_state::daemon::tests::invalid_inputs_disconnect_owner_and_retract_only_its_facts ... ok
+test remote_build::live_state::daemon::tests::local_dispatch_without_remote_attempt_is_accepted_and_owner_retracted ... ok
+test remote_build::live_state::daemon::tests::manual_daemon_relaunch_starts_an_empty_never_policy_epoch ... ok
+test remote_build::live_state::daemon::tests::multi_root_snapshot_then_independent_terminal_transitions_keep_unrelated_facts ... ok
+test remote_build::live_state::daemon::tests::owners_filters_and_snapshot_diffs ... ok
+test remote_build::live_state::daemon::tests::readiness_abnormal_exit_is_terminal_and_disallows_never_restart ... ok
+test remote_build::live_state::daemon::tests::readiness_frames_never_enter_existing_live_subscriber_stream ... ok
+test remote_build::live_state::daemon::tests::readiness_subscription_ack_precedes_ready_and_lost_publisher_retracts_it ... ok
+test remote_build::live_state::daemon::tests::remote_operation_subscription_never_forwards_foreign_schema ... ok
+test remote_build::live_state::daemon::tests::remote_operation_subscription_requires_complete_initial_snapshot ... ok
+test remote_build::live_state::daemon::tests::shutdown_accepts_only_owned_terminal_readiness_exit ... ok
+test remote_build::live_state::daemon::tests::slow_subscriber_is_dropped_without_blocking_publisher ... ok
+test remote_build::live_state::daemon::tests::stale_socket_restart_has_empty_state_and_preserves_live_socket ... ok
+test remote_build::live_state::daemon::tests::worker_demand_socket_relay_retracts_on_owner_loss_and_rejects_forged_identity ... ok
+test remote_build::live_state::daemon::tests::worker_loss_retracts_presence_but_terminal_persists_until_owner_stops ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 2845 filtered out; finished in 17.45s
+

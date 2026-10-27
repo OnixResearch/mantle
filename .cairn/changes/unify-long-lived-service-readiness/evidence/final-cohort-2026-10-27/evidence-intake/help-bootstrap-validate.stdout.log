@@ -1,0 +1,44 @@
+Run build-profile preflight, build a bootstrap derivation, and save evidence
+
+Usage: mantle bootstrap validate [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Bootstrap .ncl derivation to validate
+
+Options:
+  -I, --import-path <IMPORT_PATHS>
+          Additional import paths for Nickel
+  -v, --verbose
+          Enable verbose logging
+      --evidence-dir <EVIDENCE_DIR>
+          Directory where doctor/build/summary evidence is written
+      --log-level <LOG_LEVEL>
+          Log level (trace, debug, info, warn, error)
+      --json
+          Emit errors as JSON objects for tooling integration
+      --warmup <WARMUPS>
+          Bootstrap .ncl prerequisites to build before the target, reusing the same store/state
+      --resume
+          Reuse the existing state/store directories instead of treating this as a fresh run
+      --store <STORE>
+          Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]
+  -j, --jobs <JOBS>
+          Maximum number of concurrent builds
+      --store-prefix <STORE_PREFIX>
+          Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]
+      --nix-compat
+          Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations
+      --strict-hermetic
+          Reject degraded hermetic behavior once strict-mode blockers exist
+      --impure
+          Permit ambient host dependencies; outputs are not proof-eligible
+      --state-dir <STATE_DIR>
+          State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path
+      --remote-binding-config <REMOTE_BINDING_CONFIG>
+          Operator-owned endpoint binding configuration for production remote operations
+      --store-backend <STORE_BACKEND>
+          Durable store backend (snix or casita) [default: snix]
+      --base-store <BASE_STORES>
+          Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)
+  -h, --help
+          Print help

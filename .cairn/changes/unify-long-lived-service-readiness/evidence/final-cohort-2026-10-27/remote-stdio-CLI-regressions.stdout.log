@@ -1,0 +1,13 @@
+
+running 8 tests
+test concurrent_one_use_redemption_commits_exactly_once ... ok
+test live_subscriber_pipe_flushes_snapshot_and_later_real_goal_before_daemon_stops ... ok
+test remote_serve_stdio_once_exchanges_frames_and_redeems_ticket ... ok
+test remote_serve_stdio_once_rejects_unknown_ticket_without_stdout_frames ... ok
+test remote_stdio_readiness_acknowledges_success_and_retains_failed_sessions ... ok
+test selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets ... ok
+test stdio_rejects_clock_rollback_before_any_success_frame ... ok
+test stdio_rejects_endpoint_bound_ticket_without_authenticated_peer ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.23s
+

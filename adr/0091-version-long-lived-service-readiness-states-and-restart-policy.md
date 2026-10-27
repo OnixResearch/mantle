@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-09-30). The vocabulary and schema are specified; producer integration, actual supervised restart observations, doctor publication, source-built proof-stage evidence, gates, and acceptance remain open.
+Proposed (2026-09-30). Producer integration, separate doctor publication, and bounded real-process/externally supervised fixture observations are recorded in the [current runtime evidence](../.cairn/changes/unify-long-lived-service-readiness/evidence/runtime-final-cohort-2026-10-27.json). Source-built proof-stage authority, integrated authoritative receipt invariance, final required gates, and whole-change acceptance remain open. Production services still declare `never`; the fixtures do not implement their automatic supervision.
 
 ## Context
 

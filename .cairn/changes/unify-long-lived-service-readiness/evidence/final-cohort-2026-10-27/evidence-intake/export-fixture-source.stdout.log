@@ -1,0 +1,17 @@
+{
+  "format": "mantle-source-bundle-v1",
+  "store_prefix": "/mantle/store",
+  "record_count": 1,
+  "payload_bytes": 2937,
+  "ready_class": "ready",
+  "records": [
+    {
+      "kind": "local-path",
+      "identity": "portable-receipt-gallery",
+      "payload_bytes": 2937,
+      "content_blake3": "05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b",
+      "file_count": 2
+    }
+  ],
+  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+}

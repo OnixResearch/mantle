@@ -1,0 +1,907 @@
+{
+  "schema": "mantle-coordination-runtime-observations-v24",
+  "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+  "source_checkout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "expected_executable_blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "socket": "/tmp/mr24-coord-1362085.sock",
+  "commands": [
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle"
+      ],
+      "exit_code": 0,
+      "stdout": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle\n",
+      "stderr": "",
+      "stdout_bytes": 166,
+      "stderr_bytes": 0,
+      "elapsed_ns": 271047201
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/remote_build/live_state/daemon.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/remote_build/live_state/daemon.rs\n",
+      "stderr": "",
+      "stdout_bytes": 176,
+      "stderr_bytes": 0,
+      "elapsed_ns": 14915501
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/remote_build/operation.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "04fb063a03a9f0be9420ec388b95d5be86dd00975391111da6d4cac1c02c7b93  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/remote_build/operation.rs\n",
+      "stderr": "",
+      "stdout_bytes": 168,
+      "stderr_bytes": 0,
+      "elapsed_ns": 18034557
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs\n",
+      "stderr": "",
+      "stdout_bytes": 150,
+      "stderr_bytes": 0,
+      "elapsed_ns": 38173705
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/tasks.md"
+      ],
+      "exit_code": 0,
+      "stdout": "683c5310cc9e156b7cee6ecf3aca9527637b59eb6b5e3e298dd4ff84d953ebe3  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/tasks.md\n",
+      "stderr": "",
+      "stdout_bytes": 197,
+      "stderr_bytes": 0,
+      "elapsed_ns": 11534875
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/design.md"
+      ],
+      "exit_code": 0,
+      "stdout": "1dc0fdf5ab597df0bdc9816bd311ec0040df14ed917d5156d1753f6abc6e1b20  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/design.md\n",
+      "stderr": "",
+      "stdout_bytes": 198,
+      "stderr_bytes": 0,
+      "elapsed_ns": 17147051
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/docs/operator-workflows.md"
+      ],
+      "exit_code": 0,
+      "stdout": "8cc36d8fb7e5f2da0d32f6e4148c44aed88bc4b0b8d50138e1d850486680acb6  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/docs/operator-workflows.md\n",
+      "stderr": "",
+      "stdout_bytes": 165,
+      "stderr_bytes": 0,
+      "elapsed_ns": 13630600
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24.py"
+      ],
+      "exit_code": 0,
+      "stdout": "58519940edad4b7b0a61f432406bed485c3d233ed24fb5b31921b7bdcb487ec4  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24.py\n",
+      "stderr": "",
+      "stdout_bytes": 159,
+      "stderr_bytes": 0,
+      "elapsed_ns": 5194492
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "doctor"
+      ],
+      "exit_code": 0,
+      "stdout": "doctor profile: build\nstatus: ok\n- [ok] bwrap: found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\n- [ok] sandbox-shell: using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\n- [ok] fusermount3: found /run/wrappers/bin/fusermount3\n- [ok] state-dir: state directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state\n- [ok] store-dir: store directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store\n\n",
+      "stderr": "",
+      "stdout_bytes": 648,
+      "stderr_bytes": 0,
+      "elapsed_ns": 20028561
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "doctor",
+        "--readiness-socket",
+        "/tmp/mr24-coord-1362085.sock"
+      ],
+      "exit_code": 0,
+      "stdout": "doctor profile: build\nstatus: ok\n- [ok] bwrap: found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\n- [ok] sandbox-shell: using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\n- [ok] fusermount3: found /run/wrappers/bin/fusermount3\n- [ok] state-dir: state directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state\n- [ok] store-dir: store directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store\n\n",
+      "stderr": "{\"schema\":\"mantle-service-readiness-v1\",\"classification\":\"coordination-state\",\"evidence_eligible\":false,\"components\":[{\"id\":\"live-daemon-1362546\",\"generation\":1,\"states\":[\"started\",\"ready\"],\"restart_policy\":\"never\",\"restart_action\":null,\"ready\":true,\"blocked_by\":[]}]}\n",
+      "stdout_bytes": 648,
+      "stderr_bytes": 269,
+      "elapsed_ns": 98044464
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "--json",
+        "doctor"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n  \"schema\": \"crunch-doctor-report-v1\",\n  \"command\": \"doctor\",\n  \"profile\": \"build\",\n  \"ok\": true,\n  \"checks\": [\n    {\n      \"id\": \"bwrap\",\n      \"status\": \"ok\",\n      \"summary\": \"found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\"\n    },\n    {\n      \"id\": \"sandbox-shell\",\n      \"status\": \"ok\",\n      \"summary\": \"using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\"\n    },\n    {\n      \"id\": \"fusermount3\",\n      \"status\": \"ok\",\n      \"summary\": \"found /run/wrappers/bin/fusermount3\"\n    },\n    {\n      \"id\": \"state-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"state directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state\"\n    },\n    {\n      \"id\": \"store-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"store directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store\"\n    }\n  ]\n}\n",
+      "stderr": "",
+      "stdout_bytes": 1038,
+      "stderr_bytes": 0,
+      "elapsed_ns": 24988773
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "--json",
+        "doctor",
+        "--readiness-socket",
+        "/tmp/mr24-coord-1362085.sock"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n  \"schema\": \"crunch-doctor-report-v1\",\n  \"command\": \"doctor\",\n  \"profile\": \"build\",\n  \"ok\": true,\n  \"checks\": [\n    {\n      \"id\": \"bwrap\",\n      \"status\": \"ok\",\n      \"summary\": \"found /nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap\"\n    },\n    {\n      \"id\": \"sandbox-shell\",\n      \"status\": \"ok\",\n      \"summary\": \"using SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox\"\n    },\n    {\n      \"id\": \"fusermount3\",\n      \"status\": \"ok\",\n      \"summary\": \"found /run/wrappers/bin/fusermount3\"\n    },\n    {\n      \"id\": \"state-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"state directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state\"\n    },\n    {\n      \"id\": \"store-dir\",\n      \"status\": \"ok\",\n      \"summary\": \"store directory is writable via /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store\"\n    }\n  ]\n}\n",
+      "stderr": "{\"schema\":\"mantle-service-readiness-v1\",\"classification\":\"coordination-state\",\"evidence_eligible\":false,\"components\":[{\"id\":\"live-daemon-1362546\",\"generation\":1,\"states\":[\"started\",\"ready\"],\"restart_policy\":\"never\",\"restart_action\":null,\"ready\":true,\"blocked_by\":[]}]}\n",
+      "stdout_bytes": 1038,
+      "stderr_bytes": 269,
+      "elapsed_ns": 66707794
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle"
+      ],
+      "exit_code": 0,
+      "stdout": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle\n",
+      "stderr": "",
+      "stdout_bytes": 166,
+      "stderr_bytes": 0,
+      "elapsed_ns": 1241527811
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24.py"
+      ],
+      "exit_code": 0,
+      "stdout": "58519940edad4b7b0a61f432406bed485c3d233ed24fb5b31921b7bdcb487ec4  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24.py\n",
+      "stderr": "",
+      "stdout_bytes": 159,
+      "stderr_bytes": 0,
+      "elapsed_ns": 23457358
+    }
+  ],
+  "epochs": [
+    {
+      "label": "initial-normal",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr24-coord-1362085.sock"
+      ],
+      "pid": 1362546,
+      "declared_id": "live-daemon-1362546",
+      "query_request": {
+        "schema": "mantle-service-readiness-v1",
+        "op": "query",
+        "components": []
+      },
+      "query_transitions": [
+        {
+          "monotonic_ns": 339646904740298,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "monotonic_ns": 339646907382889,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362546",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "monotonic_ns": 339647008426223,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362546",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ],
+      "query_errors": [
+        {
+          "monotonic_ns": 339652520799001,
+          "error": "EOFError: protocol connection closed"
+        }
+      ],
+      "launch_monotonic_ns": 339646778692602,
+      "subscription": {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+          "remote",
+          "live",
+          "subscribe",
+          "--socket",
+          "/tmp/mr24-coord-1362085.sock"
+        ],
+        "initial_frames": [
+          {
+            "op": "snapshot-start",
+            "schema": "mantle-live-build-protocol-v1"
+          },
+          {
+            "op": "snapshot-end",
+            "schema": "mantle-live-build-protocol-v1"
+          }
+        ],
+        "exit_code": 0,
+        "remaining_stdout": "",
+        "stderr": ""
+      },
+      "signal": {
+        "number": 15,
+        "name": "SIGTERM",
+        "monotonic_ns": 339652330151249
+      },
+      "query_count": 2040,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "live build daemon listening on /tmp/mr24-coord-1362085.sock\n",
+      "post_exit_socket_exists": false,
+      "post_exit_query": {
+        "error": "FileNotFoundError: [Errno 2] No such file or directory"
+      },
+      "no_automatic_relaunch_query": {
+        "error": "FileNotFoundError: [Errno 2] No such file or directory"
+      },
+      "started_only_observed": true,
+      "ready_observed": true,
+      "terminal_rows_observed": []
+    },
+    {
+      "label": "manual-relaunch-abrupt",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr24-coord-1362085.sock"
+      ],
+      "pid": 1365899,
+      "declared_id": "live-daemon-1365899",
+      "query_request": {
+        "schema": "mantle-service-readiness-v1",
+        "op": "query",
+        "components": []
+      },
+      "query_transitions": [
+        {
+          "monotonic_ns": 339652973792598,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1365899",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "monotonic_ns": 339653076676587,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1365899",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ],
+      "query_errors": [
+        {
+          "monotonic_ns": 339658183482376,
+          "error": "ConnectionResetError: [Errno 104] Connection reset by peer"
+        }
+      ],
+      "launch_monotonic_ns": 339652833809501,
+      "subscription": {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+          "remote",
+          "live",
+          "subscribe",
+          "--socket",
+          "/tmp/mr24-coord-1362085.sock"
+        ],
+        "initial_frames": [
+          {
+            "op": "snapshot-start",
+            "schema": "mantle-live-build-protocol-v1"
+          },
+          {
+            "op": "snapshot-end",
+            "schema": "mantle-live-build-protocol-v1"
+          }
+        ],
+        "exit_code": 0,
+        "remaining_stdout": "",
+        "stderr": ""
+      },
+      "signal": {
+        "number": 9,
+        "name": "SIGKILL",
+        "monotonic_ns": 339658178104420
+      },
+      "query_count": 1875,
+      "exit_code": -9,
+      "stdout": "",
+      "stderr": "live build daemon listening on /tmp/mr24-coord-1362085.sock\n",
+      "post_exit_socket_exists": true,
+      "post_exit_query": {
+        "error": "ConnectionRefusedError: [Errno 111] Connection refused"
+      },
+      "no_automatic_relaunch_query": {
+        "error": "ConnectionRefusedError: [Errno 111] Connection refused"
+      },
+      "started_only_observed": true,
+      "ready_observed": true,
+      "terminal_rows_observed": []
+    },
+    {
+      "label": "manual-relaunch-after-kill",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr24-coord-1362085.sock"
+      ],
+      "pid": 1369174,
+      "declared_id": "live-daemon-1369174",
+      "query_request": {
+        "schema": "mantle-service-readiness-v1",
+        "op": "query",
+        "components": []
+      },
+      "query_transitions": [
+        {
+          "monotonic_ns": 339658569332902,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "monotonic_ns": 339658585605041,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1369174",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "monotonic_ns": 339658675787976,
+          "reply": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1369174",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ],
+      "query_errors": [
+        {
+          "monotonic_ns": 339658880324332,
+          "error": "EOFError: protocol connection closed"
+        }
+      ],
+      "launch_monotonic_ns": 339658394159981,
+      "subscription": {
+        "argv": [
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+          "--state-dir",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+          "--store",
+          "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+          "remote",
+          "live",
+          "subscribe",
+          "--socket",
+          "/tmp/mr24-coord-1362085.sock"
+        ],
+        "initial_frames": [
+          {
+            "op": "snapshot-start",
+            "schema": "mantle-live-build-protocol-v1"
+          },
+          {
+            "op": "snapshot-end",
+            "schema": "mantle-live-build-protocol-v1"
+          }
+        ],
+        "exit_code": 0,
+        "remaining_stdout": "",
+        "stderr": ""
+      },
+      "signal": {
+        "number": 2,
+        "name": "SIGINT",
+        "monotonic_ns": 339658773409736
+      },
+      "query_count": 60,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "live build daemon listening on /tmp/mr24-coord-1362085.sock\n",
+      "post_exit_socket_exists": false,
+      "post_exit_query": {
+        "error": "FileNotFoundError: [Errno 2] No such file or directory"
+      },
+      "no_automatic_relaunch_query": {
+        "error": "FileNotFoundError: [Errno 2] No such file or directory"
+      },
+      "started_only_observed": true,
+      "ready_observed": true,
+      "terminal_rows_observed": []
+    }
+  ],
+  "doctor": [
+    {
+      "format": "human",
+      "ordinary_command_index": 8,
+      "opt_in_command_index": 9,
+      "stdout_exact_equal": true,
+      "exit_codes_equal": true,
+      "ordinary_stderr": "",
+      "readiness_stderr_reports": [
+        {
+          "schema": "mantle-service-readiness-v1",
+          "classification": "coordination-state",
+          "evidence_eligible": false,
+          "components": [
+            {
+              "id": "live-daemon-1362546",
+              "generation": 1,
+              "states": [
+                "started",
+                "ready"
+              ],
+              "restart_policy": "never",
+              "restart_action": null,
+              "ready": true,
+              "blocked_by": []
+            }
+          ]
+        }
+      ],
+      "other_opt_in_stderr_lines": [],
+      "actual_unified_diff": []
+    },
+    {
+      "format": "json",
+      "ordinary_command_index": 10,
+      "opt_in_command_index": 11,
+      "stdout_exact_equal": true,
+      "exit_codes_equal": true,
+      "ordinary_stderr": "",
+      "readiness_stderr_reports": [
+        {
+          "schema": "mantle-service-readiness-v1",
+          "classification": "coordination-state",
+          "evidence_eligible": false,
+          "components": [
+            {
+              "id": "live-daemon-1362546",
+              "generation": 1,
+              "states": [
+                "started",
+                "ready"
+              ],
+              "restart_policy": "never",
+              "restart_action": null,
+              "ready": true,
+              "blocked_by": []
+            }
+          ]
+        }
+      ],
+      "other_opt_in_stderr_lines": [],
+      "ordinary_json_schema": "crunch-doctor-report-v1",
+      "opt_in_json_schema": "crunch-doctor-report-v1",
+      "top_level_key_sets_equal": true,
+      "actual_differences": {}
+    }
+  ],
+  "assertions": [
+    {
+      "name": "initial-normal actual subscription snapshot acknowledgment",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "initial-normal ready report non-evidence and policy never",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "human doctor stdout byte-for-byte unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "human doctor exit code unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "human readiness only separate typed stderr",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "json doctor stdout byte-for-byte unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "json doctor exit code unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "json readiness only separate typed stderr",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "initial-normal observed process exit",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "name": "initial-normal protocol unavailable after process exit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "initial-normal no automatic relaunch in observation window",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-abrupt actual subscription snapshot acknowledgment",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-abrupt ready report non-evidence and policy never",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-abrupt observed process exit",
+      "passed": true,
+      "detail": -9
+    },
+    {
+      "name": "manual-relaunch-abrupt protocol unavailable after process exit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-abrupt no automatic relaunch in observation window",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-after-kill actual subscription snapshot acknowledgment",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-after-kill ready report non-evidence and policy never",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-after-kill observed process exit",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "name": "manual-relaunch-after-kill protocol unavailable after process exit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "manual-relaunch-after-kill no automatic relaunch in observation window",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "initial-normal started observed separately before ready",
+      "passed": true,
+      "detail": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1362546",
+          "ready": false,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started"
+          ]
+        },
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1362546",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "manual-relaunch-abrupt started observed separately before ready",
+      "passed": true,
+      "detail": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1365899",
+          "ready": false,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started"
+          ]
+        },
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1365899",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "manual-relaunch-after-kill started observed separately before ready",
+      "passed": true,
+      "detail": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1369174",
+          "ready": false,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started"
+          ]
+        },
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1369174",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "manual-relaunch-abrupt fresh daemon identity and no inherited prior readiness",
+      "passed": true,
+      "detail": {
+        "prior": "live-daemon-1362546",
+        "current": "live-daemon-1365899",
+        "observed_ids": [
+          "live-daemon-1365899"
+        ]
+      }
+    },
+    {
+      "name": "manual-relaunch-after-kill fresh daemon identity and no inherited prior readiness",
+      "passed": true,
+      "detail": {
+        "prior": "live-daemon-1365899",
+        "current": "live-daemon-1369174",
+        "observed_ids": [
+          "live-daemon-1369174"
+        ]
+      }
+    },
+    {
+      "name": "frozen executable unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "owned driver unchanged during run",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "caveats": [
+    "Only never is declared and observed; no supervisor or automatic restart policy is claimed. Manual relaunch is a new process identity/daemon epoch, with generation 1 inside each epoch.",
+    "SIGKILL cannot publish its own terminal state; protocol unavailability and old subscriber termination are observed, not a fabricated failed row.",
+    "The daemon readiness self-probe frames are not separately exposed. Captured started/ready query transitions plus an independent actual CLI subscription snapshot establish the observed surface; source attribution is separate from runtime proof.",
+    "No all-policy matrix, T4.1/T4.2 full acceptance, validator/receipt separation T4.3, G1/G2, source-built proof, release, archive or lifecycle acceptance is claimed."
+  ],
+  "executable_blake3_before": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "source_blake3": {
+    "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+    "src/remote_build/operation.rs": "04fb063a03a9f0be9420ec388b95d5be86dd00975391111da6d4cac1c02c7b93",
+    "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+    ".cairn/changes/unify-long-lived-service-readiness/tasks.md": "683c5310cc9e156b7cee6ecf3aca9527637b59eb6b5e3e298dd4ff84d953ebe3",
+    ".cairn/changes/unify-long-lived-service-readiness/design.md": "1dc0fdf5ab597df0bdc9816bd311ec0040df14ed917d5156d1753f6abc6e1b20",
+    "docs/operator-workflows.md": "8cc36d8fb7e5f2da0d32f6e4148c44aed88bc4b0b8d50138e1d850486680acb6"
+  },
+  "driver_blake3_before": "58519940edad4b7b0a61f432406bed485c3d233ed24fb5b31921b7bdcb487ec4",
+  "criteria": {
+    "T3.1": "Runtime observations: separate started and ready, actual CLI snapshot acknowledgment, declared never, graceful SIGTERM/SIGINT and SIGKILL exits, manual relaunch fresh identity/state. Terminal-row visibility is reported per epoch, not assumed.",
+    "T3.5": "Actual ordinary human/JSON stdout compared verbatim against opt-in in equivalent fixed-directory environment; separate typed stderr and evidence_eligible=false observed. Does not prove evidence validator rejection or receipt invariance."
+  },
+  "cleanup": {
+    "owned_processes_reaped": true,
+    "socket_removed": true,
+    "owned_process_exit_codes": [
+      0,
+      0,
+      -9,
+      0,
+      0,
+      0
+    ]
+  },
+  "executable_blake3_after": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "driver_blake3_after": "58519940edad4b7b0a61f432406bed485c3d233ed24fb5b31921b7bdcb487ec4",
+  "all_assertions_passed": true
+}

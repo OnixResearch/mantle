@@ -1,0 +1,28 @@
+
+running 23 tests
+test tests::a_new_proof_stage_cannot_start_before_an_authoritative_predecessor ... ok
+test tests::a_running_service_cannot_change_its_declared_restart_policy ... ok
+test tests::a_terminal_exit_class_cannot_be_rewritten_to_change_restart_decision ... ok
+test tests::acknowledged_normal_exit_completes_and_abnormal_exit_never_becomes_complete ... ok
+test tests::admission_rejects_duplicate_id_state_observation_and_reserved_user_state ... ok
+test tests::admission_rejects_missing_policy_unknown_state_and_wrong_version ... ok
+test tests::declared_user_state_is_preserved_but_cannot_satisfy_a_dependency ... ok
+test tests::dependency_evaluation_is_order_independent_and_reports_direct_blockers ... ok
+test tests::dependency_graph_rejects_missing_cycle_and_duplicate_edges ... ok
+test tests::dependent_retracts_ready_after_predecessor_loses_readiness ... ok
+test tests::dependent_waits_for_real_request_ack_not_started_socket_or_local_ready_flag ... ok
+test tests::early_exits_report_failed_and_closed_restart_matrix_matches_exit_class ... ok
+test tests::even_claimed_proof_completion_is_rejected_if_predecessor_is_blocked ... ok
+test tests::excessive_component_count_is_rejected_before_duplicate_identity ... ok
+test tests::exit_cannot_introduce_a_request_ack_but_dependency_loss_preserves_a_real_one ... ok
+test tests::maximum_depth_dependency_chain_evaluates_and_detects_a_cycle_at_the_boundary ... ok
+test tests::proof_stage_requires_admitted_execution_digests_and_stage_specific_authority ... ok
+test tests::proof_stages_report_direct_blockers_without_inventing_completion ... ok
+test tests::proof_terminal_state_cannot_coexist_with_custom_state_or_unverified_execution ... ok
+test tests::restart_generation_cannot_inherit_a_predecessors_acknowledgement ... ok
+test tests::transition_does_not_accept_an_evidence_labeled_previous_report ... ok
+test tests::transition_requires_terminal_observation_and_fresh_started_generation ... ok
+test tests::transition_waits_for_a_real_ack_then_allows_the_dependent_to_start ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

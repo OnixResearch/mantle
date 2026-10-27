@@ -1,0 +1,12 @@
+{
+  "schema": "mantle-nix-free-demo-cli-v1",
+  "profile": "unknown",
+  "verdict": "malformed",
+  "demo_claimable": false,
+  "diagnostics": [
+    {
+      "code": "malformed-summary",
+      "message": "missing field `profile` at line 1 column 268"
+    }
+  ]
+}

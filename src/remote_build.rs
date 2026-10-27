@@ -14179,7 +14179,9 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
             let readiness_socket = crate::build_cmd::configured_live_socket()?;
             let mut readiness = readiness_socket.and_then(|socket| {
                 let nonce = remote_live_owner_nonce().ok()?;
-                let id = format!("remote-stdio-{}-{nonce}", std::process::id());
+                // Retain 192 nonce bits without exceeding the readiness label bound.
+                let (_, entropy_digest) = nonce.rsplit_once('-')?;
+                let id = format!("remote-stdio-{entropy_digest:.48}");
                 crate::remote_build::live_state::daemon::ReadinessPublisher::start_service(
                     &socket,
                     id,

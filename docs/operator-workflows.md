@@ -1375,8 +1375,16 @@ PathInfo, or release proof. A live Rust cache listener likewise declares
 validated compiler request's response is flushed. The one-shot remote stdio
 binding declares `never` and can become ready only after its admitted
 response is flushed, not from metadata-only transport advertising.
-Proposed ADR 0091 records these boundaries; real-process acceptance fixtures
-must pass before using readiness for operational claims.
+After an acknowledged normal exit, the terminal row retains `complete`; an
+abnormal exit or an exit before the first successful request retains `failed`.
+With `never`, neither terminal state requests a restart. Publisher connection
+loss retracts active readiness but is not itself proof of a process exit;
+it cannot invent a terminal state. A manual invocation uses a fresh identity.
+The bounded real-process and externally supervised fixture observations are
+recorded in the [readiness change evidence](../.cairn/changes/unify-long-lived-service-readiness/evidence/runtime-final-cohort-2026-10-27.json).
+Those fixtures do not add a production supervisor or validate source-built
+proof stages. Proposed ADR 0091 and the remaining lifecycle tasks retain those
+authority and verification boundaries.
 
 Run the live daemon before opting in to a service producer by setting
 `MANTLE_LIVE_STATE_SOCKET` to that daemon's socket path. A separate operator

@@ -1,0 +1,115 @@
+{
+  "status": "pass",
+  "scope": "consistency/chronology validation of captured actual runtime observations; no additional daemon launch",
+  "argv": [
+    "/run/current-system/sw/bin/b3sum",
+    "--check",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/blake3-manifest.txt"
+  ],
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27",
+  "exit": 0,
+  "stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/manifest-verification.stdout",
+  "stderr_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/manifest-verification.stderr",
+  "cells": [
+    {
+      "cell": "m-always-normal-before",
+      "terminal_state": "failed",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-always-normal-after",
+      "terminal_state": "complete",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-always-abnormal-before",
+      "terminal_state": "failed",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-always-abnormal-after",
+      "terminal_state": "failed",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-on-error-normal-before",
+      "terminal_state": "failed",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-on-error-normal-after",
+      "terminal_state": "complete",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-on-error-abnormal-before",
+      "terminal_state": "failed",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-on-error-abnormal-after",
+      "terminal_state": "failed",
+      "restart_action": "component",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-all-normal-before",
+      "terminal_state": "failed",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-all-normal-after",
+      "terminal_state": "complete",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-all-abnormal-before",
+      "terminal_state": "failed",
+      "restart_action": "group",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-all-abnormal-after",
+      "terminal_state": "failed",
+      "restart_action": "group",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-never-normal-before",
+      "terminal_state": "failed",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-never-normal-after",
+      "terminal_state": "complete",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-never-abnormal-before",
+      "terminal_state": "failed",
+      "restart_action": "none",
+      "chronology": "verified"
+    },
+    {
+      "cell": "m-never-abnormal-after",
+      "terminal_state": "failed",
+      "restart_action": "none",
+      "chronology": "verified"
+    }
+  ],
+  "processes_reaped_and_absent": 31,
+  "raw_frames": 436,
+  "declared_proof_rows": 6,
+  "cli_blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6"
+}

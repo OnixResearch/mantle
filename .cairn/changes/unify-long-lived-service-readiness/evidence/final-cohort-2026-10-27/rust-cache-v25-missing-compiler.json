@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-rust-cache-service-readiness-observation-v1",
+  "runtime": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/runtime",
+  "started_at": "2026-10-27T11:48:02.363478-04:00",
+  "commands": [],
+  "queries": [],
+  "assertions": {},
+  "non_claims": [
+    "Real bounded daemon/compiler/coordination observations, not source-built proof or compiler correctness.",
+    "No frozen G1/G2 admission, lifecycle acceptance, archive or release.",
+    "No automatic-supervisor or four-restart-policy claim; the exercised producer declares never."
+  ],
+  "success": false,
+  "error": "CalledProcessError(1, ['b3sum', '--no-names', '/nix/store/iy93ls6kxapwixmar6gyj9lqv3mbim8k-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08/bin/rustc'])",
+  "owned_processes_reaped": true,
+  "finished_at": "2026-10-27T11:48:03.113112-04:00"
+}

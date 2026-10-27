@@ -1,0 +1,270 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/request.json",
+  "request_blake3": "16793d49cfb3282db6b39013205d28bd20ebe9a33c835c9ba9cffabb9efa8d2d",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "started_at": "2026-10-27T12:18:17.005396-04:00",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-full-key-v16/runtime",
+    "MANTLE_EXECUTION_COMPILER": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+    "MANTLE_READINESS_EXECUTABLE": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "MANTLE_READINESS_EXECUTABLE_BLAKE3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "MANTLE_READINESS_COMPILER": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+  },
+  "source_before": {
+    "Cargo.toml": "517a0a1e952e2a9af45ed5fed4b769b301897506fcdb2e73515a3017f67f6318",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "flake.nix": "5012c81c9c30cfbe41a14c3294bd4ce0ee548cdd48f5c3733a5217979f850156",
+    "flake.lock": "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc",
+    "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+    "src/remote_build.rs": "7c15e86c14bdce898f12999ee47f87e19798e9383d0fea3e3b06ab2f38b5afda",
+    "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+    "tests/remote_stdio_cli.rs": "328f113ea971a3d6989a8a95481a2137f402a7fb8995a7a48cc6be4921494d3a",
+    "crates/crunch-service-readiness-core/src/lib.rs": "13a8c968399c489a8811ff8dbb1ca67e92d0bfbfbb161f981f0bece2a105adf4",
+    "crates/crunch-service-readiness-core/src/model.rs": "eed62ee2597b578993e5e7bd5a00eef5ee344660588254228e51b307a2acfadc",
+    "crates/crunch-service-readiness-core/src/admission.rs": "aa8c3a0054521a9f1f839da7c58c8292a1400501eda2205cded397a0231cd984",
+    "crates/crunch-service-readiness-core/src/evaluation.rs": "7b0e707ae01c58beba1b044911f0fe7b40be5b2a62d828cb130fb41e7e4da300",
+    "crates/crunch-service-readiness-core/src/tests.rs": "61d511e6765913d62a013e066f14410a25da07446e8cfdd93db097ee788153d9",
+    "crates/crunch-rustc-wrapper/src/lib.rs": "25390735c3c41820103929c29a0c1dbb49a7dd3336b52b6efd00e537fc864104",
+    "docs/operator-workflows.md": "b83f219805b163504c2e395154f531906fcf1c88a7ce0896a183a18226fb0407",
+    "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md": "9d31ed8f0a63d60f76a4b6fc02d217b9561f1495df240494c8156526a880f347",
+    ".cairn/changes/unify-long-lived-service-readiness/tasks.md": "8de92edf554e1450fb54c7ccf65995894892ded7d4410a5eeb64823bbc842547",
+    ".cairn/changes/unify-long-lived-service-readiness/design.md": "3f44f1a85aa3f241f724ba50610bdb8ff45d3e15579bf3c68a1d615e4493007f",
+    ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-final-cohort-2026-10-27.json": "d6cc77cbd05da5b4f8f82d10f6a8bdcae59ca59f60ae021132685353cc72a253"
+  },
+  "steps": [
+    {
+      "label": "readiness-library-strict-Clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "crunch-service-readiness-core",
+        "-p",
+        "crunch-rustc-wrapper",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started_at": "2026-10-27T12:18:17.086428-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:43.715881-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "4895d99b830cb02a33bebf86842b8cd6a3797f6a314500a6221dda6a47858b80"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "readiness-scoped-diff-whitespace",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "src/main.rs",
+        "src/remote_build.rs",
+        "src/remote_build/live_state/daemon.rs",
+        "tests/remote_stdio_cli.rs",
+        "crates/crunch-service-readiness-core",
+        "crates/crunch-rustc-wrapper/src/lib.rs",
+        "docs/operator-workflows.md",
+        "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md",
+        ".cairn/changes/unify-long-lived-service-readiness"
+      ],
+      "started_at": "2026-10-27T12:19:43.733399-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:43.766423-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "Cairn-readiness-validate",
+      "argv": [
+        "cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "started_at": "2026-10-27T12:19:43.773267-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:43.983151-04:00",
+      "streams_blake3": {
+        "stdout": "87ebcc4aefd1ac763adcfafb34aef0963cd7d8f185ddac5b7aa55fc9b51ea2a7",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "Cairn-readiness-proposal",
+      "argv": [
+        "cairn",
+        "gate",
+        "proposal",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ],
+      "started_at": "2026-10-27T12:19:44.005374-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:44.017873-04:00",
+      "streams_blake3": {
+        "stdout": "ad76c6ff6e2d2bd20b7a091d6bb981fa1421e6eae8716c352ed074d97ae58335",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "Cairn-readiness-design",
+      "argv": [
+        "cairn",
+        "gate",
+        "design",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ],
+      "started_at": "2026-10-27T12:19:44.023865-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:44.042950-04:00",
+      "streams_blake3": {
+        "stdout": "76c04abf76fe884f5af79641e7f8993b9c4006d3bd2eda35f5d95fd7aa2f8c82",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "Cairn-readiness-tasks",
+      "argv": [
+        "cairn",
+        "gate",
+        "tasks",
+        "unify-long-lived-service-readiness",
+        "--root",
+        "."
+      ],
+      "started_at": "2026-10-27T12:19:44.048928-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:44.069509-04:00",
+      "streams_blake3": {
+        "stdout": "29ec4c72f6aa196d0a7c235df8b40c756012ca7dd44931f41ebc5a20ffdb7735",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    },
+    {
+      "label": "Tracey-readiness-coverage",
+      "argv": [
+        "cairn",
+        "traceability",
+        "coverage",
+        "--root",
+        "."
+      ],
+      "started_at": "2026-10-27T12:19:44.078168-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stderr.log",
+      "exit_code": 0,
+      "finished_at": "2026-10-27T12:19:44.102677-04:00",
+      "streams_blake3": {
+        "stdout": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": true
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": true
+    }
+  ],
+  "non_claims": [
+    "Focused library quality plus native structural lifecycle/coverage checks only. No full workspace or required frozen G1/G2, final-source approval, authoritative proof receipt, accepted-spec sync, archive or publication."
+  ],
+  "immutable_artifacts": [],
+  "source_after": {
+    "Cargo.toml": "517a0a1e952e2a9af45ed5fed4b769b301897506fcdb2e73515a3017f67f6318",
+    "Cargo.lock": "6838b0045c18487579bd8f2bfb57001414ea544accabb43e162f841418eadb36",
+    "flake.nix": "5012c81c9c30cfbe41a14c3294bd4ce0ee548cdd48f5c3733a5217979f850156",
+    "flake.lock": "a24deee6f99134cfdfb141b33fca4959c831651f6a1d7f3815d1b298e66416bc",
+    "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+    "src/remote_build.rs": "7c15e86c14bdce898f12999ee47f87e19798e9383d0fea3e3b06ab2f38b5afda",
+    "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+    "tests/remote_stdio_cli.rs": "328f113ea971a3d6989a8a95481a2137f402a7fb8995a7a48cc6be4921494d3a",
+    "crates/crunch-service-readiness-core/src/lib.rs": "13a8c968399c489a8811ff8dbb1ca67e92d0bfbfbb161f981f0bece2a105adf4",
+    "crates/crunch-service-readiness-core/src/model.rs": "eed62ee2597b578993e5e7bd5a00eef5ee344660588254228e51b307a2acfadc",
+    "crates/crunch-service-readiness-core/src/admission.rs": "aa8c3a0054521a9f1f839da7c58c8292a1400501eda2205cded397a0231cd984",
+    "crates/crunch-service-readiness-core/src/evaluation.rs": "7b0e707ae01c58beba1b044911f0fe7b40be5b2a62d828cb130fb41e7e4da300",
+    "crates/crunch-service-readiness-core/src/tests.rs": "61d511e6765913d62a013e066f14410a25da07446e8cfdd93db097ee788153d9",
+    "crates/crunch-rustc-wrapper/src/lib.rs": "25390735c3c41820103929c29a0c1dbb49a7dd3336b52b6efd00e537fc864104",
+    "docs/operator-workflows.md": "b83f219805b163504c2e395154f531906fcf1c88a7ce0896a183a18226fb0407",
+    "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md": "9d31ed8f0a63d60f76a4b6fc02d217b9561f1495df240494c8156526a880f347",
+    ".cairn/changes/unify-long-lived-service-readiness/tasks.md": "8de92edf554e1450fb54c7ccf65995894892ded7d4410a5eeb64823bbc842547",
+    ".cairn/changes/unify-long-lived-service-readiness/design.md": "3f44f1a85aa3f241f724ba50610bdb8ff45d3e15579bf3c68a1d615e4493007f",
+    ".cairn/changes/unify-long-lived-service-readiness/evidence/runtime-final-cohort-2026-10-27.json": "d6cc77cbd05da5b4f8f82d10f6a8bdcae59ca59f60ae021132685353cc72a253"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T12:19:44.234240-04:00",
+  "driver_exit_code": 0
+}

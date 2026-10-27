@@ -1,0 +1,47 @@
+{
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "output": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/results",
+  "environment": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-full-key-v16/runtime",
+    "MANTLE_EXECUTION_COMPILER": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+    "MANTLE_READINESS_EXECUTABLE": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "MANTLE_READINESS_EXECUTABLE_BLAKE3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "MANTLE_READINESS_COMPILER": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+  },
+  "subjects": [
+    "crates/crunch-rustc-wrapper/src/lib.rs",
+    "crates/crunch-rust-cache-core/src/lib.rs",
+    "crates/crunch-rust-cache-core/src/wrapper.rs",
+    "src/main.rs",
+    "src/remote_build/live_state/daemon.rs",
+    "src/remote_build.rs"
+  ],
+  "commands": [
+    {
+      "label": "real-Rust-cache-start-request-response-and-exit",
+      "argv": [
+        "python3",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v23.py",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime"
+      ],
+      "stdout_must_contain": [
+        "\"success\": true",
+        "\"normal_exit_before_ready_failed_not_ready\": true"
+      ]
+    }
+  ],
+  "non_claims": [
+    "Actual bounded compiler/daemon serviceability only; no G1/G2, source-built proof, lifecycle acceptance, archive or release."
+  ]
+}

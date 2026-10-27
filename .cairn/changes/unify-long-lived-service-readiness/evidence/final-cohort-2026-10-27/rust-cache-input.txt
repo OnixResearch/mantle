@@ -1,0 +1,2 @@
+#[unsafe(no_mangle)]
+pub extern "C" fn readiness_answer() -> i32 { 42 }

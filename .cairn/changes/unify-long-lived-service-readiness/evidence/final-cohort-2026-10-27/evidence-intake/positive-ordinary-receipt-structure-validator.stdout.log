@@ -1,0 +1,18 @@
+{
+  "format": "mantle-build-receipt-bundle-v1",
+  "store_prefix": "/mantle/store",
+  "claim_strength": "diagnostic",
+  "evidence_complete": true,
+  "missing_evidence": [],
+  "output_identities": [],
+  "records": [
+    {
+      "kind": "source-ref",
+      "identity": "portable-receipt-gallery",
+      "digest": "blake3:05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b"
+    }
+  ],
+  "record_count": 1,
+  "bundle_blake3": "620504873fd85bce89e5a746a591a5ada93555ee80533dc1e75240dfe325c642",
+  "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+}

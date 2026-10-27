@@ -1,0 +1,53 @@
+
+running 48 tests
+test cc::tests::advisory_receipt_failure_preserves_real_exit_status ... ok
+test cc::tests::depfile_relocation_never_rewrites_filename_substrings ... ok
+test cc::tests::environment_relocation_preserves_identity_without_masking_other_inputs ... ok
+test cc::tests::real_command_streams_and_nonzero_status_are_preserved ... ok
+test cc::tests::replay_preserves_modes_and_does_not_replace_symlinks ... ok
+test cc::tests::timeout_terminates_descendants_even_without_slot_authority ... ok
+test cc::tests::volatile_input_crossing_digest_buffer_boundary_is_rejected ... ok
+test observed_process::tests::a_stopped_child_remains_deadline_bounded_and_is_reaped ... ok
+test observed_process::tests::observed_signal_exit_is_not_converted_to_an_exit_code ... ok
+test observed_process::tests::owned_task_bound_counts_all_group_members_without_uid_interference ... ok
+test observed_process::tests::short_lived_descendant_execs_survive_until_independently_observed ... ok
+test observed_process::tests::thread_spawning_helper ... ok
+test observed_process::tests::traced_threads_beyond_the_task_bound_are_reaped_without_blocking ... ok
+test slots::tests::absent_daemon_degrades_without_fabricated_grant_or_wait ... ok
+test slots::tests::disconnected_driver_kills_owned_child_before_reclaiming ... ok
+test slots::tests::occupied_authority_times_out_and_removes_waiter ... ok
+test slots::tests::process_group_member_holds_slot_after_leader_exit ... ok
+test slots::tests::simultaneous_build_children_respect_total_slots ... ok
+test slots::tests::successful_spawn_keeps_redirected_output_and_explicit_release ... ok
+test tests::compiler_timeout_kills_and_reaps_the_child ... ok
+test tests::concurrent_distinct_single_output_commits_do_not_collide ... ok
+test tests::concurrent_same_destination_commit_has_one_winner_without_clobber ... ok
+test tests::crunch_rust_cache_core_adoption_compiles_then_reuses_local_castore_result ... ok
+test tests::directory_identity_is_canonical_and_content_bound ... ok
+test tests::directory_identity_rejects_byte_limit_excess ... ok
+test tests::directory_identity_rejects_escaping_symlink ... ok
+test tests::failed_multi_output_commit_rolls_back_prior_moves ... ok
+test tests::framing_rejects_oversized_prefix_before_allocation ... ok
+test tests::framing_rejects_truncated_prefix_and_payload ... ok
+test tests::framing_round_trip_is_exact ... ok
+test tests::latency_summary_handles_bounded_samples_and_empty_input ... ok
+test tests::output_rewrite_changes_only_declared_destination_space ... ok
+test tests::output_rewrite_rejects_unbound_arguments ... ok
+test tests::peer_credentials_reject_a_different_uid ... ok
+test tests::production_bubblewrap_subprocess_clears_ambient_environment_and_writes_only_admitted_root ... ok
+test tests::signing_key_decoder_accepts_lower_hex_and_rejects_upper_hex ... ok
+test tests::socket_preparation_rejects_a_non_socket_entry ... ok
+test tests::socket_preparation_removes_stale_socket_but_preserves_active_daemon ... ok
+test tests::stale_destination_is_not_clobbered ... ok
+test waits::tests::a_current_cargo_artifact_without_its_compiler_observation_is_incomplete ... ok
+test waits::tests::a_helper_sequence_gap_cannot_claim_completed_compiler_lifetime ... ok
+test waits::tests::a_later_unreaped_helper_cannot_reuse_an_earlier_tree_reap ... ok
+test waits::tests::a_precollector_supervision_origin_cannot_claim_complete_drain_timing ... ok
+test waits::tests::an_interrupted_receive_keeps_capturing_compiler_frames ... ok
+test waits::tests::compiles_of_source_files_keep_their_host_and_target_roles ... ok
+test waits::tests::missing_reap_is_censored_and_optional_overflow_preserves_terminal_events ... ok
+test waits::tests::supervisor_elapsed_and_resource_offsets_use_the_wrapper_clock ... ok
+test waits::tests::target_info_probe_listing_proc_macro_stays_a_tool_probe ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.10s
+

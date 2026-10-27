@@ -1,0 +1,1 @@
+{"error":"parsing receipt bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json: missing field `format` at line 33 column 1","code":3,"kind":"internal"}

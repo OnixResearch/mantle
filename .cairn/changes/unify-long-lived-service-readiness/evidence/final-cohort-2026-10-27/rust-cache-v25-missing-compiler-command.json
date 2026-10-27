@@ -1,0 +1,74 @@
+{
+  "schema": "mantle-retained-command-observations-v1",
+  "request": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/request.json",
+  "request_blake3": "63f82f2672b9cd392ec8b39b2f5a14ceffc378ef89458faaa113526aae3f4035",
+  "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "started_at": "2026-10-27T11:48:02.270608-04:00",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CC": "clang",
+    "CXX": "clang++",
+    "AR": "ar",
+    "RANLIB": "ranlib",
+    "TMPDIR": "/tmp",
+    "MANTLE_GATEWAY_INPUT_PATHS": "/home/brittonr/.cargo-target/mantle-resource-benchmark-20261023/paths.json",
+    "MANTLE_GATEWAY_ARTIFACT_ROOT": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/gateway-full-key-v16/runtime",
+    "MANTLE_EXECUTION_COMPILER": "/nix/store/iy93ls6kxapwixmar6gyj9lqv3mbim8k-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08",
+    "MANTLE_READINESS_EXECUTABLE": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "MANTLE_READINESS_EXECUTABLE_BLAKE3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6"
+  },
+  "source_before": {
+    "crates/crunch-rustc-wrapper/src/lib.rs": "25390735c3c41820103929c29a0c1dbb49a7dd3336b52b6efd00e537fc864104",
+    "crates/crunch-rust-cache-core/src/lib.rs": "878509f505348723adad3ab5ed33a054df0b102d9a08c2744f4d88ec260881dd",
+    "crates/crunch-rust-cache-core/src/wrapper.rs": "ab2f30c175f0767a4c9b4668142ab39b050ef9f8e09d71bf58e81c9086037f76",
+    "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+    "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+    "src/remote_build.rs": "7c15e86c14bdce898f12999ee47f87e19798e9383d0fea3e3b06ab2f38b5afda"
+  },
+  "steps": [
+    {
+      "label": "real-Rust-cache-start-request-response-and-exit",
+      "argv": [
+        "python3",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v23.py",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/runtime"
+      ],
+      "started_at": "2026-10-27T11:48:02.328109-04:00",
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/results/real-Rust-cache-start-request-response-and-exit.stdout.log",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/results/real-Rust-cache-start-request-response-and-exit.stderr.log",
+      "exit_code": 1,
+      "finished_at": "2026-10-27T11:48:03.140814-04:00",
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "94d42639f435f18d048988e4d805e1952614fb02bd8b2105677779aea55dcb83"
+      },
+      "observation_checks": {
+        "expected_exit_code_observed": false,
+        "stdout_required_0": false,
+        "stdout_required_1": false
+      },
+      "expected_failure_observation": false,
+      "observation_accepted": false
+    }
+  ],
+  "non_claims": [
+    "Actual bounded compiler/daemon serviceability only; no G1/G2, source-built proof, lifecycle acceptance, archive or release."
+  ],
+  "source_after": {
+    "crates/crunch-rustc-wrapper/src/lib.rs": "25390735c3c41820103929c29a0c1dbb49a7dd3336b52b6efd00e537fc864104",
+    "crates/crunch-rust-cache-core/src/lib.rs": "878509f505348723adad3ab5ed33a054df0b102d9a08c2744f4d88ec260881dd",
+    "crates/crunch-rust-cache-core/src/wrapper.rs": "ab2f30c175f0767a4c9b4668142ab39b050ef9f8e09d71bf58e81c9086037f76",
+    "src/main.rs": "4b65a2ed6c5be45eba66f536ca0a59b65ea47b35d9ab682ec804cc6a1572e87b",
+    "src/remote_build/live_state/daemon.rs": "1ee1f6daa25d0d65da5dae9cc02f9aa15fae448c0dbc4bbc83a50169256b2c2b",
+    "src/remote_build.rs": "7c15e86c14bdce898f12999ee47f87e19798e9383d0fea3e3b06ab2f38b5afda"
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T11:48:03.232146-04:00",
+  "driver_exit_code": 1
+}

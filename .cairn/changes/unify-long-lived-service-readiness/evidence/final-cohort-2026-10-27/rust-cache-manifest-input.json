@@ -1,0 +1,245 @@
+{
+  "policy_id": "readiness-real-rustc-v23",
+  "action": {
+    "schema": "mantle-rust-unit-action-v1",
+    "action_ref": "mantle-rust-action://blake3/d6000e1266acd028b204c8b042f68dfbce5d61e569d2c49939dbb94383d25dc4",
+    "unit_id": "readiness-real-rustc",
+    "package_id": "readiness-consumer-0.1.0",
+    "crate_name": "readiness_consumer",
+    "target_kind": "lib",
+    "execution_kind": "target",
+    "host_triple": "x86_64-unknown-linux-gnu",
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "profile": "dev",
+    "mode": "build",
+    "features": [],
+    "source_digest_blake3": "7ea4f30e1a5842f1101e4bfef667ccce9686fddaea1adbb14aee161b6fb4b0ee",
+    "compiler_digest_blake3": "c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8",
+    "compiler_version_digest_blake3": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+    "toolchain_closure_digest_blake3": "31e312047aafe805b22b52265466e4338be17f66688cf6bbc4efbda2d72bcd8d",
+    "execution_platform_digest_blake3": "d2296875e68171b1d1fac88a740cf02bb394d9b5be33afdaafef2f7ebfe22dce",
+    "semantic_arguments": [
+      {
+        "value": "--crate-name=readiness_consumer",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "--crate-type=lib",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "--edition=2024",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "--emit=llvm-ir",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "--sysroot",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/sysroot",
+        "contains_absolute_path": true,
+        "absolute_paths_classified": true
+      },
+      {
+        "value": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+        "contains_absolute_path": true,
+        "absolute_paths_classified": true
+      },
+      {
+        "value": "-o",
+        "contains_absolute_path": false,
+        "absolute_paths_classified": false
+      },
+      {
+        "value": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+        "contains_absolute_path": true,
+        "absolute_paths_classified": true
+      }
+    ],
+    "admitted_environment": {
+      "LC_ALL": "C",
+      "TZ": "UTC"
+    },
+    "dependency_artifacts": [],
+    "host_artifacts": [],
+    "build_script_facts": [],
+    "native_link_facts": [],
+    "compiler_policy_digest_blake3": "3f2982a240e214b135111c016a8aa43107f70ab024fd459bac520624ac38b1ce"
+  },
+  "real_compiler_path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+  "arguments_blake3": "df252269a25a10a4dac0f0de0b79b906f85a6c27ecd7ffada702e431c06d5aa0",
+  "environment_blake3": "a013855431d3c2e641e45bdf6010d6f50dcc3283e9e17d01b80ceeaaf3af056e",
+  "working_directory": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+  "readable_roots": [
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+    "/nix/store/1ga782ml07vy0h503ac4cin0h8d7q6yh-libidn2-2.3.8",
+    "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+    "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2",
+    "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2/lib",
+    "/nix/store/30nc3ay283h843z5b3icirqj7brfcr4j-libselinux-3.10",
+    "/nix/store/4sabfgpxkbv6w3mvk0wil50vdi37m9r8-acl-2.3.2",
+    "/nix/store/68kslg4wrhdxz24saw62fzyqi1kjgcfs-expand-response-params",
+    "/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10",
+    "/nix/store/7xdhafpylz3bqd8pwhli54kc608a2ny9-rust-std-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/83av41qa0d9dmvvmww70n9swfhzkzd3j-rust-std-1.96.0-nightly-2026-04-08-aarch64-apple-darwin",
+    "/nix/store/8wcihj7188p5fjbcwdlzsxq0dxd68qmy-rust-std-1.96.0-nightly-2026-04-08-wasm32-wasip2",
+    "/nix/store/8zgy79sw0zjwfcfp78p883hkkdw0pdzs-libffi-3.5.2",
+    "/nix/store/9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin",
+    "/nix/store/ab3753m6i7isgvzphlar0a8xb84gl96i-gcc-15.2.0-lib",
+    "/nix/store/b72g81xim3r1ikmxs5wfn8nc0a8nplcp-rust-std-1.96.0-nightly-2026-04-08-wasm32-unknown-unknown",
+    "/nix/store/blbq8ip2kdj67fyjzbbhdg6q3ghp8ac9-rust-docs-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/brai493169i3dadrb2ymr6x8wibjbdfm-rust-std-1.96.0-nightly-2026-04-08-x86_64-apple-darwin",
+    "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.96.0-nightly",
+    "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/librustc_driver-b18915596020e2d8.so",
+    "/nix/store/cynwj0s5x0c84hyi879isn8pdpf1iihm-gmp-6.3.0",
+    "/nix/store/d864rlg855kf2hnnnfdzcx54grp8n10x-glib-2.86.3",
+    "/nix/store/dlr3cc27i1mjkqcm9jlp5bjmb0n57q01-gmp-with-cxx-6.3.0",
+    "/nix/store/f7jrpi16pis7lwagiamfmz1f88r3s455-libgpg-error-1.58",
+    "/nix/store/h0ip0h6qp7kc2wm7mwjaglkxxbzmjri4-glibc-2.42-51-dev",
+    "/nix/store/h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12",
+    "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0",
+    "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc",
+    "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc/lib/libgcc_s.so.1",
+    "/nix/store/jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib",
+    "/nix/store/jmkhifs8rwv7iwp29zrjprvrfw8a6973-rust-src-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libc.so.6",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libdl.so.2",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libm.so.6",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libpthread.so.0",
+    "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/librt.so.1",
+    "/nix/store/k34nnmlf0hnvdyvmf6aqh5j4m9zzh0nc-rustfmt-preview-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0",
+    "/nix/store/p2yk6q3bhcz1d0wlmk907ysj4l95ak7y-attr-2.5.2",
+    "/nix/store/p7jg95rzvfalb95k3mskk0jqxc9d724n-libunistring-1.4.1",
+    "/nix/store/pg99pd2gbwqs9y6z0q2hmx46m3hw9bns-linux-headers-6.18.7",
+    "/nix/store/rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44",
+    "/nix/store/rv8pqqhcgrbfbn8bbma5axj7k2x7kfqf-libsecret-0.21.7",
+    "/nix/store/safgshpdshpq8v8ww406szddpfws3vml-util-linux-minimal-2.41.3-lib",
+    "/nix/store/scabrfc47i7h73kfp4yn7vkw3qkxv8gk-isl-0.20",
+    "/nix/store/sjlfsbd2lk4a1iva4vjjgvp4r1hga1xg-mpfr-4.2.2",
+    "/nix/store/v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9",
+    "/nix/store/vpxblivamvic1p5r5zny934jvg33m50r-xgcc-15.2.0-libgcc",
+    "/nix/store/vwyj2mn39zx3kpq15g5vj11jqrsicw64-libgcrypt-1.11.2-lib",
+    "/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44",
+    "/nix/store/xvlxga16lg6kyc0yfav8kz488mnnj5vp-clippy-preview-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/ygdgqjzw03k8d05zq3pigzf67b62j7vs-pcre2-10.46",
+    "/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu",
+    "/nix/store/zfv59aslcf318vjkjs8zw855cdjcjdvq-libmpc-1.3.1"
+  ],
+  "writable_roots": [
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs"
+  ],
+  "declared_inputs": [
+    {
+      "role": "compiler",
+      "path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+      "kind": "file",
+      "digest_blake3": "c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8"
+    },
+    {
+      "role": "source",
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+      "kind": "file",
+      "digest_blake3": "7ea4f30e1a5842f1101e4bfef667ccce9686fddaea1adbb14aee161b6fb4b0ee"
+    },
+    {
+      "role": "sysroot",
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/sysroot",
+      "kind": "directory",
+      "digest_blake3": "31e312047aafe805b22b52265466e4338be17f66688cf6bbc4efbda2d72bcd8d"
+    },
+    {
+      "role": "runtime-0",
+      "path": "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2/lib",
+      "kind": "directory",
+      "digest_blake3": "4d97a54a58820c8d180349f2fdc4b1e2abd2bf99583538cf46dc65a37152387b"
+    },
+    {
+      "role": "runtime-1",
+      "path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.96.0-nightly",
+      "kind": "file",
+      "digest_blake3": "9e4ebddc8efd5c008e01e995389ac4254011a88f565e14e2bb681fec9a7e79ee"
+    },
+    {
+      "role": "runtime-2",
+      "path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/librustc_driver-b18915596020e2d8.so",
+      "kind": "file",
+      "digest_blake3": "8ea92ad721b3267aefe0373e4eae1fc568de86af7f0b9ce8ffc546066f29c60c"
+    },
+    {
+      "role": "runtime-3",
+      "path": "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc/lib/libgcc_s.so.1",
+      "kind": "file",
+      "digest_blake3": "8ecd0a9b2312a15aa1bc4e2464892bfa21e9e3b4299af1677cd5a727e6459806"
+    },
+    {
+      "role": "runtime-4",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2",
+      "kind": "file",
+      "digest_blake3": "0884bb1609e76955a419a92e27a62400ec54361f053d141211439cce8548aee0"
+    },
+    {
+      "role": "runtime-5",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libc.so.6",
+      "kind": "file",
+      "digest_blake3": "135e01d60358711ce3fac762f31577adc8f42958417d6e95ee5415c539e00017"
+    },
+    {
+      "role": "runtime-6",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libdl.so.2",
+      "kind": "file",
+      "digest_blake3": "dc52a09e06cc31541de17a2951b80b9c31926287c9c8b3b2b45c37f7a1acbce5"
+    },
+    {
+      "role": "runtime-7",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libm.so.6",
+      "kind": "file",
+      "digest_blake3": "b261241053e35eb2c1466282aed8f7c8155f77af9a95ca0e7adbe166fd4e97dc"
+    },
+    {
+      "role": "runtime-8",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libpthread.so.0",
+      "kind": "file",
+      "digest_blake3": "c051f5962f4162ec861cd7f32ab1ddf8b017d43adc0eb68bb2c384a0b8a27596"
+    },
+    {
+      "role": "runtime-9",
+      "path": "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/librt.so.1",
+      "kind": "file",
+      "digest_blake3": "f4bedc7f36e3a327adaf8473453d201976536b9bbd4edf22805c3fcef103fa29"
+    }
+  ],
+  "output_contracts": [
+    {
+      "staged_relative_path": "readiness.ll",
+      "destination_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+      "kind": "file",
+      "max_bytes": 1048576,
+      "executable": false
+    }
+  ],
+  "effects": {
+    "filesystem": "declared-roots",
+    "network": "deny",
+    "clock": "allow",
+    "randomness": "allow"
+  },
+  "limits": {
+    "elapsed_millis": 120000,
+    "stdout_bytes": 1048576,
+    "stderr_bytes": 1048576,
+    "artifact_bytes": 8589934592
+  }
+}

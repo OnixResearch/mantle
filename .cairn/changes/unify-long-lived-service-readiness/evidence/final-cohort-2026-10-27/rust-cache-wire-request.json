@@ -1,0 +1,32 @@
+{
+  "schema": "mantle-rustc-wrapper-request-v1",
+  "request_ref": "mantle-rustc-request://blake3/6a99c19fa85aa7583875be964d29129bb302191945bef5ac7848fd718a6dc44b",
+  "manifest_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/registry/df252269a25a10a4dac0f0de0b79b906f85a6c27ecd7ffada702e431c06d5aa0.json",
+  "expected_manifest_ref": "mantle-rustc-manifest://blake3/6c5087c8b687dc7d34d6a1cdb91dd1ce5d5d83eb06505fd6290a84f185ad830a",
+  "real_compiler_path": "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+  "arguments": [
+    "--crate-name=readiness_consumer",
+    "--crate-type=lib",
+    "--edition=2024",
+    "--emit=llvm-ir",
+    "--sysroot",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/sysroot",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+    "-o",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll"
+  ],
+  "admitted_environment": {
+    "LC_ALL": "C",
+    "TZ": "UTC"
+  },
+  "working_directory": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+  "output_contracts": [
+    {
+      "staged_relative_path": "readiness.ll",
+      "destination_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+      "kind": "file",
+      "max_bytes": 1048576,
+      "executable": false
+    }
+  ]
+}

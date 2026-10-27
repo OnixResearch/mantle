@@ -212,7 +212,7 @@ coordination projection can truthfully emit blockers without making a
 fixed-point claim; it must not turn source-plan existence, command launch,
 or an unverified output into `complete`.
 
-## Fixture acceptance matrix (not yet executed)
+## Fixture acceptance matrix
 
 | Case | Observation required | Expected contract result |
 | --- | --- | --- |
@@ -224,8 +224,16 @@ or an unverified output into `complete`.
 | Negative admission | Undeclared state, missing service policy, unknown dependency, duplicate ID, cycle | Admission error; never a partial derived report |
 | Negative evidence | Doctor publishes separate `coordination-state` report | Existing JSON/human doctor outputs unchanged; evidence validators reject state and receipts remain unchanged |
 
-These are acceptance fixtures to run against live adapters and the pure core,
-not successful tests or a substitute for actual source-built stage receipts.
+The 2026-10-27 selected-cohort observations are retained in
+`evidence/runtime-final-cohort-2026-10-27.json`: the three actual service
+producers, doctor stdout separation, real dependency admission/retraction,
+all 16 controlled exit/acknowledgment cells, and actual unknown-state/missing-
+policy rejections were exercised. Restarted programs are externally supervised
+owned fixtures, not production automatic supervisors. The six-stage query is
+declaration-only. Source-built stage authority and integrated authoritative
+receipt invariance remain open; diagnostic receipt equality and rejected
+coordination input do not replace them. These fixtures are not a substitute
+for actual source-built stage receipts.
 
 ## Decisions
 

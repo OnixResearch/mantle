@@ -1,0 +1,95 @@
+Build Mantle from its own source (self-hosting)
+
+Usage: mantle self-build [OPTIONS]
+
+Options:
+  -j, --jobs <JOBS>
+          Maximum concurrent builds (default: CPU count, max 16)
+  -v, --verbose
+          Enable verbose logging
+      --log-level <LOG_LEVEL>
+          Log level (trace, debug, info, warn, error)
+      --no-substitute
+          Disable remote binary cache substitution
+      --json
+          Emit errors as JSON objects for tooling integration
+      --no-verify
+          Skip verification of the output binary
+      --signing-key <SIGNING_KEY>
+          Path to a Nix-format ed25519 signing keypair file
+      --store <STORE>
+          Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]
+      --store-prefix <STORE_PREFIX>
+          Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]
+      --trusted-public-keys <TRUSTED_PUBLIC_KEYS>
+          Trusted public keys for signature verification (name:base64)
+      --nix-compat
+          Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations
+      --trust-unsigned
+          Accept unsigned/unverified PathInfo on cache hits
+      --state-dir <STATE_DIR>
+          State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path
+      --strict-hermetic
+          Reject degraded hermetic behavior once strict-mode blockers exist
+      --impure
+          Permit ambient host dependencies; outputs are not proof-eligible
+      --remote-binding-config <REMOTE_BINDING_CONFIG>
+          Operator-owned endpoint binding configuration for production remote operations
+      --no-host-tools
+          Require stage0 to use only declared inventory seed tools
+      --store-backend <STORE_BACKEND>
+          Durable store backend (snix or casita) [default: snix]
+      --base-store <BASE_STORES>
+          Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)
+      --stage0-inventory <STAGE0_INVENTORY>
+          Stage0 executable/source seed inventory for --no-host-tools
+      --offline-source-manifest-blake3 <OFFLINE_SOURCE_MANIFEST_BLAKE3>
+          Require all builtin fetches to resolve from this pinned full-proof source manifest BLAKE3
+      --offline-source-state-dir <OFFLINE_SOURCE_STATE_DIR>
+          Read the pinned full-proof source closure from this independently hydrated source-only state
+      --source-built-fixed-point
+          Construct the full source lineage and prove the Cargo-free Mantle fixed point
+      --prepare-source-programs
+          Publish a new authenticated source-program cohort without executing a proof
+      --source-profile <SOURCE_PROFILE>
+          Authenticated source-built-fixed-point source profile
+      --expected-source-profile-blake3 <EXPECTED_SOURCE_PROFILE_BLAKE3>
+          Independently authenticated BLAKE3 of --source-profile
+      --expected-stagex-lineage-blake3 <EXPECTED_STAGEX_LINEAGE_BLAKE3>
+          Independently authenticated StageX lineage-manifest BLAKE3
+      --expected-native-provider-blake3 <EXPECTED_NATIVE_PROVIDER_BLAKE3>
+          Independently authenticated normalized native-provider tree BLAKE3
+      --proof-bwrap <PROOF_BWRAP>
+          Explicit bubblewrap executable used by the native construction shell
+      --proof-sandbox-shell <PROOF_SANDBOX_SHELL>
+          Explicit static sandbox shell used by native derivations
+      --proof-elapsed-seconds-max <PROOF_ELAPSED_SECONDS_MAX>
+          Maximum proof elapsed time recorded in the immutable plan [default: 86400]
+      --proof-disk-bytes-max <PROOF_DISK_BYTES_MAX>
+          Maximum proof disk bytes recorded in the immutable plan [default: 1099511627776]
+      --proof-exec-events-max <PROOF_EXEC_EVENTS_MAX>
+          Maximum protected exec decisions recorded in the immutable plan [default: 262144]
+      --proof-source-records-max <PROOF_SOURCE_RECORDS_MAX>
+          Maximum native source records recorded in the immutable plan [default: 65536]
+      --dev-provider-cache <DEV_PROVIDER_CACHE>
+          Opt-in dev-only provider-output cache and store snapshot directory
+      --dev-resume
+          Resume a dev run from verified bundles in the explicit dev provider-cache directory
+      --dev-fast-fail
+          Fast-fail a dev run when the current source profile is unchanged
+      --cargo-free
+          Build Mantle through native Rust topology execution without invoking Cargo
+      --fixed-point
+          Run the bounded Cargo-free stage1/stage2 fixed-point proof
+      --out <OUT>
+          Output directory for evidence, or a new source cohort with --prepare-source-programs
+      --rustc <RUSTC>
+          rustc executable for --cargo-free topology execution [default: rustc]
+      --toolchain-closure <TOOLCHAIN_CLOSURE>
+          Source-built toolchain closure manifest for --cargo-free proof input validation
+      --rust-source-provider <RUST_SOURCE_PROVIDER>
+          Validated source-built Rust provider directory for --cargo-free rustc binding
+      --target <TARGETS>
+          Target triple for --cargo-free rust-plan execution; repeatable
+  -h, --help
+          Print help

@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-rustc-wrapper-response-v1",
+  "request_ref": "mantle-rustc-request://blake3/6a99c19fa85aa7583875be964d29129bb302191945bef5ac7848fd718a6dc44b",
+  "disposition": "compiled",
+  "bypass_class": null,
+  "reason_codes": [
+    "compiled"
+  ],
+  "compiler_status": 0,
+  "stdout": [],
+  "stderr": [],
+  "artifact_commit_complete": true,
+  "receipt_ref": "mantle-rustc-receipt://blake3/abbd76e33ec89a086a505d49f2a9e91f90c5f675d982469b10a312471b2ae00a"
+}

@@ -1,0 +1,854 @@
+{
+  "schema": "mantle-selected-readiness-capture-manifest-v1",
+  "date": "2026-10-27",
+  "verification": {
+    "argv": [
+      "b3sum",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/focused-quality.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/report.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/coordination-runtime.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/stdio-before-bug.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/stdio-after-runtime.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-v25-missing-compiler-command.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/runtime/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-v25-missing-compiler.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v26/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-v26-symlink-command.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v26/runtime/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-v26-symlink-rejection.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-final-request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-final-command.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-final-runtime.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-response.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-response.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-output.ll",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-receipts/abbd76e33ec89a086a505d49f2a9e91f90c5f675d982469b10a312471b2ae00a.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/daemon-policy.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-policy.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-wire-request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/manifest-input.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-manifest-input.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/rust-cache-input.txt",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/proof-input-admission.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/missing-source-profile-rejected-before-proof-execution.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/proof-input-admission.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-core-boundaries-and-transitions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-core-boundaries-and-transitions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/Rust-wrapper-real-response-and-invalid-frame-controls.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Rust-wrapper-real-response-and-invalid-frame-controls.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/remote-stdio-CLI-regressions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/remote-stdio-CLI-regressions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/coordination-daemon-state-and-non-evidence-regressions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/coordination-daemon-state-and-non-evidence-regressions.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/report.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/controlled-exits-runtime.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/validation.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/controlled-exits-chronology.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/blake3-manifest.txt",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/controlled-exits-original-manifest.txt",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/manifest-command.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/controlled-exits-manifest-command.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/report.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-separation-runtime.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/export-fixture-source.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/export-fixture-source.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-source-validator.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-source-validator.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-actual-readiness.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-actual-readiness.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-actual-readiness.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-actual-readiness.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-ordinary-doctor.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-ordinary-doctor.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-ordinary-doctor.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-ordinary-doctor.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-optin-doctor.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-optin-doctor.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-optin-doctor.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-optin-doctor.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-demo-readiness.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-demo-readiness.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/consume-ordinary-doctor-at-source-intake.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/consume-ordinary-doctor-at-source-intake.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/build-ordinary-diagnostic-receipt.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/build-ordinary-diagnostic-receipt.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-ordinary-receipt-structure-validator.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-ordinary-receipt-structure-validator.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/consume-optin-doctor-at-source-intake.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/consume-optin-doctor-at-source-intake.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/build-optin-diagnostic-receipt.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/build-optin-diagnostic-receipt.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-optin-receipt-structure-validator.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/positive-optin-receipt-structure-validator.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-flipped-labels.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-flipped-labels.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-flipped-labels.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-flipped-labels.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-content-corruption.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-source-content-corruption.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-content-corruption.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/negative-receipt-content-corruption.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-bootstrap-validate.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-bootstrap-validate.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-bootstrap-trust-report.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-bootstrap-trust-report.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-self-build.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-self-build.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stdout",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-receipt-export.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stderr",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/help-receipt-export.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/ordinary-doctor.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/optin-doctor.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/actual-readiness.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/labels-flipped-readiness.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-source-bundle.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/corrupt-source-bundle.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/corrupt-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/ordinary-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/optin-diagnostic-receipt.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/fixture-source-bundle.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/evidence-intake/fixture-source-bundle.json"
+    ],
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "additional_verification": {
+    "argv": [
+      "b3sum",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-affected-package-format.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-affected-package-format.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-affected-package-format.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-affected-package-format.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-root-strict-Clippy.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-root-strict-Clippy.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-root-strict-Clippy.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-root-strict-Clippy.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/native-verification-request.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/result.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/native-verification.json",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-library-strict-Clippy.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-library-strict-Clippy.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-validate.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-validate.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-proposal.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-proposal.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-design.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-design.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-tasks.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Cairn-readiness-tasks.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Tracey-readiness-coverage.stdout.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stderr.log",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/.cairn/changes/unify-long-lived-service-readiness/evidence/final-cohort-2026-10-27/Tracey-readiness-coverage.stderr.log"
+    ],
+    "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "captures": [
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/result.json",
+      "capture": "final-cohort-2026-10-27/focused-quality.json",
+      "blake3": "35ecf62112fe682d3e6fa63efd9339e4d015fb093495585a56c1cbd96063a5a1",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/report.json",
+      "capture": "final-cohort-2026-10-27/coordination-runtime.json",
+      "blake3": "2414f051153d8c8b75963fc1a1752095a1c769d9c573776f4811e9e3c0bb74e7",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/result.json",
+      "capture": "final-cohort-2026-10-27/stdio-before-bug.json",
+      "blake3": "eb09ec081187a5c3a60789dd2c64b56bd7fa2d8977a428c790a2eac3e0217719",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/result.json",
+      "capture": "final-cohort-2026-10-27/stdio-after-runtime.json",
+      "blake3": "b6f8e5c66392810731fec04155b61350d9cc1bc21232e0ba521767eb6f27c839",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/results/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-v25-missing-compiler-command.json",
+      "blake3": "51dd28d6f561611208d3431d3b69d3e3c59dc3d491c8b75d1339903f0f72e8ef",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v25/runtime/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-v25-missing-compiler.json",
+      "blake3": "ec63f10c0cf66efc820c898df9ae9e9789988688f992d883a87e70136c78a37f",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v26/results/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-v26-symlink-command.json",
+      "blake3": "f4a3f4b3d851119504224b7795ef371c3d781334e6f2791cf1b17e653d62af1c",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v26/runtime/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-v26-symlink-rejection.json",
+      "blake3": "166f687427b7f3eed9b3304bc9645f979b6de413136d676554297e9d02d7dd77",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/request.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-final-request.json",
+      "blake3": "08b4354d65ca695c0c348dce501d8b8ff8616f31a50c74725b82599b311d5aa1",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/results/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-final-command.json",
+      "blake3": "b99fe59d024cf9039e48dc37dffd8a51214a2348248ee0e007038100fa9e83b9",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/result.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-final-runtime.json",
+      "blake3": "5f5eb0b940f83218b217508e0241e6226a3e1e416e678a05eaa2d9b9466ce75c",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-response.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-response.json",
+      "blake3": "fe6d8cecf615788c0656b0bc89482d560a1a464a617b3d1c181ab2ae32a42c9e",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+      "capture": "final-cohort-2026-10-27/rust-cache-output.ll",
+      "blake3": "79cac3ba25e6fd9a7789aab68da4186a524eef469bcd286a0d768403aa4741a4",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-receipts/abbd76e33ec89a086a505d49f2a9e91f90c5f675d982469b10a312471b2ae00a.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-receipt.json",
+      "blake3": "97ed673fc71a05d1f9fced92be644c334f8554d4a64db6f2c9b18b7f2c239a0a",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/daemon-policy.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-policy.json",
+      "blake3": "3f2982a240e214b135111c016a8aa43107f70ab024fd459bac520624ac38b1ce",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/request.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-wire-request.json",
+      "blake3": "e0d8568e97ba88e2f93bed3875308ada7cd1078841ef0bc8fc3cb9b9e17ad8ba",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/manifest-input.json",
+      "capture": "final-cohort-2026-10-27/rust-cache-manifest-input.json",
+      "blake3": "0221c51fbbd5eff5a554ab66ad5ac8c860b5c119e83d961a2bbce4a533565a28",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+      "capture": "final-cohort-2026-10-27/rust-cache-input.txt",
+      "blake3": "7ea4f30e1a5842f1101e4bfef667ccce9686fddaea1adbb14aee161b6fb4b0ee",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/result.json",
+      "capture": "final-cohort-2026-10-27/proof-input-admission.json",
+      "blake3": "768a02dce14bd7f118fa99f3ba74e456208f355d44c0d1e3342d3d779a483703",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-proof-admission-v27/results/missing-source-profile-rejected-before-proof-execution.stderr.log",
+      "capture": "final-cohort-2026-10-27/proof-input-admission.stderr.log",
+      "blake3": "9364aa3a1aef4c1a54406c9603f0f7b01270cfeee50a23bcbb918c7108d88794",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-core-boundaries-and-transitions.stdout.log",
+      "capture": "final-cohort-2026-10-27/readiness-core-boundaries-and-transitions.stdout.log",
+      "blake3": "3c2c1c0161da5dda2af9c377c0fda45282fa0154adf2219c7d7e73ca1d6fd4db",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/Rust-wrapper-real-response-and-invalid-frame-controls.stdout.log",
+      "capture": "final-cohort-2026-10-27/Rust-wrapper-real-response-and-invalid-frame-controls.stdout.log",
+      "blake3": "0673117457a7d3744f17213528b825b5fbd74d25cdd9dca242c46c0d205a5d5b",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/remote-stdio-CLI-regressions.stdout.log",
+      "capture": "final-cohort-2026-10-27/remote-stdio-CLI-regressions.stdout.log",
+      "blake3": "42db43589469f5b3889a2b9fe0d66c136aabc7cf941faf34bdf94515f68511c2",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/coordination-daemon-state-and-non-evidence-regressions.stdout.log",
+      "capture": "final-cohort-2026-10-27/coordination-daemon-state-and-non-evidence-regressions.stdout.log",
+      "blake3": "fe88a6472c06c144eef37affa24e1ca27f9beec7192799d59e69929d7f2ab389",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/report.json",
+      "capture": "final-cohort-2026-10-27/controlled-exits-runtime.json",
+      "blake3": "d97a55eec4503c0ccde2c3acc402483ee423a844408ae222be6efc644fb0e982",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/validation.json",
+      "capture": "final-cohort-2026-10-27/controlled-exits-chronology.json",
+      "blake3": "173cab73b0b4390721f6843327b2db6bbf3e888ad06f936c014d4d81c38f9a6c",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/blake3-manifest.txt",
+      "capture": "final-cohort-2026-10-27/controlled-exits-original-manifest.txt",
+      "blake3": "269db857c40867809baad03ee42794090819ce99afa0c3ab27e85c2e6e8b8cc7",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-controlled-exits-v27/manifest-command.json",
+      "capture": "final-cohort-2026-10-27/controlled-exits-manifest-command.json",
+      "blake3": "0d806da8ae10b5034ef2713679eae678b87d4061505a74bbe70784cde2b0a4a0",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/report.json",
+      "capture": "final-cohort-2026-10-27/evidence-separation-runtime.json",
+      "blake3": "eadbd3515255171c989879a107b415dd657e820562495b43164097c971750e5e",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/export-fixture-source.stdout.log",
+      "blake3": "4f7f414db86be9db2eb45e6c47e052547a31448ed9faf6beb1de80a3cf60e0d1",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/export-fixture-source.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-source-validator.stdout.log",
+      "blake3": "4a0d9ea6c21d4e96770055f319110b99d478ca6f0442ece6c2d07b7c3462701f",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-source-validator.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-actual-readiness.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-actual-readiness.stderr.log",
+      "blake3": "c669cef7c29f54abb833bfe657e971923add2f3c8df774855b7fbf6fcfd9ca74",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-actual-readiness.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-actual-readiness.stderr.log",
+      "blake3": "4c7df3f120295cad4e9b777ede6f4733416e8e90dc0b2f1aa5b631daf334b537",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-ordinary-doctor.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-ordinary-doctor.stderr.log",
+      "blake3": "dd29a7bdd8a336fdf6fdbdee5c267c0b70d7807c787f45527497d079ed8708aa",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-ordinary-doctor.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-ordinary-doctor.stderr.log",
+      "blake3": "4c161e45768a62fcdce8596dee4740cf8bee1329f8cbdc91605be3db0fddd9aa",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-optin-doctor.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-optin-doctor.stderr.log",
+      "blake3": "93451cc0774d2d8f47617c2ab3afb4d212ec72b156ff72c0874dec4ea764e591",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-optin-doctor.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-optin-doctor.stderr.log",
+      "blake3": "cf2f2e435cebcda527bd6ba67a475871df192a2b4069d1e4bb07275522c41d49",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-demo-readiness.stdout.log",
+      "blake3": "c25ef6cbc8da5ed423f1bdb2281a548ec3fa33451a7f4e9f554277dba991a681",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-demo-readiness.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/consume-ordinary-doctor-at-source-intake.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/consume-ordinary-doctor-at-source-intake.stderr.log",
+      "blake3": "dd29a7bdd8a336fdf6fdbdee5c267c0b70d7807c787f45527497d079ed8708aa",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/build-ordinary-diagnostic-receipt.stdout.log",
+      "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/build-ordinary-diagnostic-receipt.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-ordinary-receipt-structure-validator.stdout.log",
+      "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-ordinary-receipt-structure-validator.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/consume-optin-doctor-at-source-intake.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/consume-optin-doctor-at-source-intake.stderr.log",
+      "blake3": "93451cc0774d2d8f47617c2ab3afb4d212ec72b156ff72c0874dec4ea764e591",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/build-optin-diagnostic-receipt.stdout.log",
+      "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/build-optin-diagnostic-receipt.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-optin-receipt-structure-validator.stdout.log",
+      "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/positive-optin-receipt-structure-validator.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-flipped-labels.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-flipped-labels.stderr.log",
+      "blake3": "614d3cc67105973e1cbdfd93f10bcf13da4eaa6770765e2f78eb7e960b238c2f",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-flipped-labels.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-flipped-labels.stderr.log",
+      "blake3": "f7aceed135efc5e231ce75df57988a0dd78c64ef0c9595ae39170e91c36fefe5",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-content-corruption.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-source-content-corruption.stderr.log",
+      "blake3": "b0cb1e196d7df833566640c40a3b3acead97ad271b009b992c23bf075278bafc",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-content-corruption.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/negative-receipt-content-corruption.stderr.log",
+      "blake3": "bb018a7024bc4182fe1d30f8be494a7a14050d85ac9da6298a5fb46c77cd2309",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-bootstrap-validate.stdout.log",
+      "blake3": "d05d3db4fb7ec387795e4b9ffbd2d940d66282d6cc1bfacfacfbe40aaaec1877",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-bootstrap-validate.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-bootstrap-trust-report.stdout.log",
+      "blake3": "0393fe6c8c01f22ba0ba7161e0d7baaedcadd4083e4916dfe90dbd7f9f7a4160",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-bootstrap-trust-report.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-self-build.stdout.log",
+      "blake3": "db0619813f8065f2a65016c8793789909a8c5f71db655b5d40e25e53ab4772b6",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-self-build.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stdout",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-receipt-export.stdout.log",
+      "blake3": "ceb1c998bc673ec3905703c60d16f6da7f2a6d12fbb7498856865d5f18218daa",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stderr",
+      "capture": "final-cohort-2026-10-27/evidence-intake/help-receipt-export.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/ordinary-doctor.json",
+      "blake3": "7d98b91f29a8d25b159c78f9cae9062996392de0897c6e43ca858d7620944efd",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/optin-doctor.json",
+      "blake3": "7d98b91f29a8d25b159c78f9cae9062996392de0897c6e43ca858d7620944efd",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/actual-readiness.json",
+      "blake3": "a2d0059197a5937fe7ff364786104ef8b3212ed6c3ce9d53ddc6bbc6148214d8",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/labels-flipped-readiness.json",
+      "blake3": "ebc09e3e41bf329d9a30d043f03870531a8a8733ef32c7fc4d995fa936097b66",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-source-bundle.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/corrupt-source-bundle.json",
+      "blake3": "49a57d65ffe4b412984908073c93692c0d203f843b531efaedbdead68233af46",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-diagnostic-receipt.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/corrupt-diagnostic-receipt.json",
+      "blake3": "7ac76e23953d5e1d1baa81b38563ef753f773f794e337c1a05e40de71b204568",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/ordinary-diagnostic-receipt.json",
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/optin-diagnostic-receipt.json",
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/fixture-source-bundle.json",
+      "capture": "final-cohort-2026-10-27/evidence-intake/fixture-source-bundle.json",
+      "blake3": "ad378108bfc306a59e4b77a5e08aac68d5282b8849039444adf4b31c2efc7fbf",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-affected-package-format.stdout.log",
+      "capture": "final-cohort-2026-10-27/readiness-affected-package-format.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-affected-package-format.stderr.log",
+      "capture": "final-cohort-2026-10-27/readiness-affected-package-format.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-root-strict-Clippy.stdout.log",
+      "capture": "final-cohort-2026-10-27/readiness-root-strict-Clippy.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/readiness-root-strict-Clippy.stderr.log",
+      "capture": "final-cohort-2026-10-27/readiness-root-strict-Clippy.stderr.log",
+      "blake3": "247a116c1d32a56b058b9741ca8902ca4bd3198fe534a6b411542ea9851b7e39",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/request.json",
+      "capture": "final-cohort-2026-10-27/native-verification-request.json",
+      "blake3": "16793d49cfb3282db6b39013205d28bd20ebe9a33c835c9ba9cffabb9efa8d2d",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/result.json",
+      "capture": "final-cohort-2026-10-27/native-verification.json",
+      "blake3": "dd61a27586acdbe5f7d520491a09a381b5fdb82c66bac1b54a1fa63d24fa8142",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stdout.log",
+      "capture": "final-cohort-2026-10-27/readiness-library-strict-Clippy.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-library-strict-Clippy.stderr.log",
+      "capture": "final-cohort-2026-10-27/readiness-library-strict-Clippy.stderr.log",
+      "blake3": "4895d99b830cb02a33bebf86842b8cd6a3797f6a314500a6221dda6a47858b80",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stdout.log",
+      "capture": "final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stdout.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/readiness-scoped-diff-whitespace.stderr.log",
+      "capture": "final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stdout.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-validate.stdout.log",
+      "blake3": "87ebcc4aefd1ac763adcfafb34aef0963cd7d8f185ddac5b7aa55fc9b51ea2a7",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-validate.stderr.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-validate.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stdout.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-proposal.stdout.log",
+      "blake3": "ad76c6ff6e2d2bd20b7a091d6bb981fa1421e6eae8716c352ed074d97ae58335",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-proposal.stderr.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-proposal.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stdout.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-design.stdout.log",
+      "blake3": "76c04abf76fe884f5af79641e7f8993b9c4006d3bd2eda35f5d95fd7aa2f8c82",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-design.stderr.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-design.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stdout.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-tasks.stdout.log",
+      "blake3": "29ec4c72f6aa196d0a7c235df8b40c756012ca7dd44931f41ebc5a20ffdb7735",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Cairn-readiness-tasks.stderr.log",
+      "capture": "final-cohort-2026-10-27/Cairn-readiness-tasks.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stdout.log",
+      "capture": "final-cohort-2026-10-27/Tracey-readiness-coverage.stdout.log",
+      "blake3": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+      "source_and_retained_bytes_identical": true
+    },
+    {
+      "source": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-native-v28/results/Tracey-readiness-coverage.stderr.log",
+      "capture": "final-cohort-2026-10-27/Tracey-readiness-coverage.stderr.log",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source_and_retained_bytes_identical": true
+    }
+  ]
+}

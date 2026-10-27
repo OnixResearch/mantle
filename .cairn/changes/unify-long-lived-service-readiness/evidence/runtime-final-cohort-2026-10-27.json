@@ -1,0 +1,266 @@
+{
+  "schema": "mantle-readiness-selected-cohort-outcomes-v1",
+  "date": "2026-10-27",
+  "change": "unify-long-lived-service-readiness",
+  "classification": "bounded-consumer-and-fixture-runtime-observations",
+  "integration_owner": "Main",
+  "maintenance_owner": "Mantle operator diagnostics, coordination, Rust cache and remote maintainers; source-built proof owners retain stage/action authority",
+  "whole_change_accepted": false,
+  "spec_sync_archive_or_publication_claimed": false,
+  "subject": {
+    "checkout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+    "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "executable_blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "source_receipt": "final-cohort-2026-10-27/focused-quality.json",
+    "boundary": "Selected source identities and byte-pinned executable only; not an approved whole-source snapshot, frozen G1/G2 admission or release cohort."
+  },
+  "immediate_outcome": "Three actual service producers and doctor side-channel exercised; controlled dependency/exit/restart and admission fixtures passed against the actual daemon. Six authored bounded tasks completed; proof authority, authoritative receipt invariance and final gates remain open.",
+  "durable_capability": "Shared bounded readiness transitions and real CLI regressions retain request-before-ready, early-failure, terminal-state and dependency-retraction behavior without turning coordination into build evidence.",
+  "completed_tasks": [
+    {
+      "id": "T3.1",
+      "capture": "final-cohort-2026-10-27/coordination-runtime.json",
+      "observed": "Actual subscription snapshot, separate started/ready, declared never, graceful termination and SIGKILL unavailability, fresh manual relaunch with no inherited facts.",
+      "limit": "No automatic supervisor; SIGKILL does not synthesize a terminal row."
+    },
+    {
+      "id": "T3.2",
+      "capture": "final-cohort-2026-10-27/rust-cache-final-runtime.json",
+      "observed": "Actual admitted rustc request compiled LLVM IR returning i32 42; output committed before successful response. Observed started before request, ready after response, complete on normal acknowledged exit; malformed and normal-before-ready controls remain failed; manual invocation has a fresh identity.",
+      "policy": "never",
+      "pueue_task": 86,
+      "compiler_response": "final-cohort-2026-10-27/rust-cache-response.json",
+      "compiler_receipt": "final-cohort-2026-10-27/rust-cache-receipt.json",
+      "output": "final-cohort-2026-10-27/rust-cache-output.ll",
+      "output_blake3": "79cac3ba25e6fd9a7789aab68da4186a524eef469bcd286a0d768403aa4741a4"
+    },
+    {
+      "id": "T3.3",
+      "before": "final-cohort-2026-10-27/stdio-before-bug.json",
+      "after": "final-cohort-2026-10-27/stdio-after-runtime.json",
+      "observed": "Before: real daemon rejected oversized stdio readiness identity. After: started before request, real one-use ticket redemption and flushed accepted frames before ready/complete, rejected/malformed sessions failed without success frames, metadata never publishes readiness.",
+      "policy": "never",
+      "limit": "Readiness/authenticated fixture transport only, not independent cryptographic output-PathInfo or physical-store proof."
+    },
+    {
+      "id": "T3.5",
+      "capture": "final-cohort-2026-10-27/coordination-runtime.json",
+      "observed": "Ordinary and opt-in doctor human/JSON stdout byte-identical, separate typed stderr coordination report, classification coordination-state and evidence_eligible false.",
+      "limit": "This task does not close T4.3 authoritative receipt invariance."
+    },
+    {
+      "id": "T4.1",
+      "capture": "final-cohort-2026-10-27/controlled-exits-runtime.json",
+      "chronology": "final-cohort-2026-10-27/controlled-exits-chronology.json",
+      "observed": "Real fixture request acknowledgments, dependent withheld until predecessor ready, all 16 normal/abnormal before/after-ack cells; six component and two group restart cases actually relaunch owned children and report fresh started generations before new requests.",
+      "limit": "External owned-fixture supervisor only, not production automatic supervision."
+    },
+    {
+      "id": "T4.2",
+      "capture": "final-cohort-2026-10-27/controlled-exits-runtime.json",
+      "observed": "Actual early exits remain failed, blocked and retracted dependency names are reported, early dependent start rejected, unknown state and missing policy rejected without partial reports or persisted components.",
+      "proof_graph_limit": "Six queried proof declarations remain absent/blocked with null policies; this is not proof-shell execution or T3.4 completion."
+    }
+  ],
+  "focused_quality": {
+    "capture": "final-cohort-2026-10-27/focused-quality.json",
+    "pueue_task": 83,
+    "affected_package_format_exit": 0,
+    "root_strict_clippy_exit": 0,
+    "tests": [
+      {
+        "package": "crunch-service-readiness-core",
+        "passed": 23,
+        "capture": "final-cohort-2026-10-27/readiness-core-boundaries-and-transitions.stdout.log"
+      },
+      {
+        "package": "crunch-rustc-wrapper",
+        "passed": 48,
+        "capture": "final-cohort-2026-10-27/Rust-wrapper-real-response-and-invalid-frame-controls.stdout.log"
+      },
+      {
+        "package": "mantle",
+        "suite": "remote_stdio_cli",
+        "passed": 8,
+        "capture": "final-cohort-2026-10-27/remote-stdio-CLI-regressions.stdout.log"
+      },
+      {
+        "package": "mantle",
+        "filter": "remote_build::live_state::daemon::tests",
+        "passed": 20,
+        "capture": "final-cohort-2026-10-27/coordination-daemon-state-and-non-evidence-regressions.stdout.log"
+      }
+    ],
+    "limit": "Focused ordinary checks only, not full workspace or frozen G1/G2."
+  },
+  "fixture_preparation_failures": [
+    {
+      "pueue_task": 84,
+      "capture": "final-cohort-2026-10-27/rust-cache-v25-missing-compiler.json",
+      "observation": "Retained compiler store path unavailable; no daemon or request launched."
+    },
+    {
+      "pueue_task": 85,
+      "capture": "final-cohort-2026-10-27/rust-cache-v26-symlink-rejection.json",
+      "observation": "Aggregate compiler runtime directory rejected for escaping symlinks. Admission unchanged; final request instead used original component compiler bytes plus materialized same-cohort native sysroot."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": "T3.4",
+      "state": "open",
+      "missing": "Accepted stage-local protected/build-action reconciliation, verified stage outputs and current v2 receipt. Source-built I3-I5/V2 remain unaccepted; source/profile/cohort authority must be rebound and independently reviewed before sole-host Leviathan proof.",
+      "observed_negative": "final-cohort-2026-10-27/proof-input-admission.json",
+      "boundary": "Actual missing source-profile exit 1 proves only input rejection before proof; a declaration-only blocked graph is not stage execution."
+    },
+    {
+      "id": "T4.3",
+      "state": "partial-open",
+      "capture": "final-cohort-2026-10-27/evidence-separation-runtime.json",
+      "observed": "Actual doctor coordination state rejected at positive-controlled source and diagnostic portable-receipt validators; label flipping does not confer authority, content/digest corruption controls reject, diagnostic portable receipts byte-identical.",
+      "diagnostic_receipt_blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992",
+      "missing": "Neither builder consumed doctor output. A current admitted authoritative proof/action/receipt cohort or its supported integrated consumer is required for authoritative receipt invariance; no such positive control was available in the scoped source/captures.",
+      "boundary": "Diagnostic equality is not source-built/output/release evidence or T4.3 completion."
+    },
+    {
+      "id": "T4.4",
+      "state": "partial-open",
+      "missing": "Full required frozen G1/G2 route remains held for bounded owned-state observation authority and isolated tracked-source successor binding.",
+      "authority_record": "../../reconcile-main-api-lineages-2026-10-17/evidence/continuation-readiness-holds-2026-10-27.json",
+      "boundary": "No privileged observation/admission retry or full Nix gate launched. Focused/native checks cannot be relabeled frozen admission."
+    },
+    {
+      "id": "T4.5",
+      "state": "open",
+      "missing": "All remaining authored obligations, accepted final source/gates, and separately authorized ordinary lifecycle/Git-owner integration.",
+      "boundary": "No accepted-spec sync, archive, post-archive validation or successor publication."
+    }
+  ],
+  "capture_manifest": "final-cohort-2026-10-27/capture-manifest.json",
+  "capture_policy": "Only selected bounded records/captures retained, not entire stores, compiler/sysroot copies, credentials or proof trees. BLAKE3 source/destination equality checked for every retained capture.",
+  "non_claims": [
+    "Readiness rows are revocable coordination, not build or release evidence.",
+    "A real compiler request proves this bounded service path, not compiler correctness or a source-built fixed point.",
+    "External controlled restart fixtures do not implement a production supervisor.",
+    "Original historical failures remain failures; no frozen resource epoch, source identity or authority was reset.",
+    "No whole-change acceptance, archive, final-source approval, full G1/G2, release eligibility or successor publication."
+  ],
+  "native_verification": {
+    "capture": "final-cohort-2026-10-27/native-verification.json",
+    "pueue_task": 87,
+    "source_unchanged_during_checks": true,
+    "steps": [
+      {
+        "label": "readiness-library-strict-Clippy",
+        "argv": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-service-readiness-core",
+          "-p",
+          "crunch-rustc-wrapper",
+          "--all-targets",
+          "--no-deps",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/readiness-library-strict-Clippy.stdout.log",
+        "stderr": "final-cohort-2026-10-27/readiness-library-strict-Clippy.stderr.log"
+      },
+      {
+        "label": "readiness-scoped-diff-whitespace",
+        "argv": [
+          "git",
+          "diff",
+          "--check",
+          "--",
+          "src/main.rs",
+          "src/remote_build.rs",
+          "src/remote_build/live_state/daemon.rs",
+          "tests/remote_stdio_cli.rs",
+          "crates/crunch-service-readiness-core",
+          "crates/crunch-rustc-wrapper/src/lib.rs",
+          "docs/operator-workflows.md",
+          "adr/0091-version-long-lived-service-readiness-states-and-restart-policy.md",
+          ".cairn/changes/unify-long-lived-service-readiness"
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stdout.log",
+        "stderr": "final-cohort-2026-10-27/readiness-scoped-diff-whitespace.stderr.log"
+      },
+      {
+        "label": "Cairn-readiness-validate",
+        "argv": [
+          "cairn",
+          "validate",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/Cairn-readiness-validate.stdout.log",
+        "stderr": "final-cohort-2026-10-27/Cairn-readiness-validate.stderr.log"
+      },
+      {
+        "label": "Cairn-readiness-proposal",
+        "argv": [
+          "cairn",
+          "gate",
+          "proposal",
+          "unify-long-lived-service-readiness",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/Cairn-readiness-proposal.stdout.log",
+        "stderr": "final-cohort-2026-10-27/Cairn-readiness-proposal.stderr.log"
+      },
+      {
+        "label": "Cairn-readiness-design",
+        "argv": [
+          "cairn",
+          "gate",
+          "design",
+          "unify-long-lived-service-readiness",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/Cairn-readiness-design.stdout.log",
+        "stderr": "final-cohort-2026-10-27/Cairn-readiness-design.stderr.log"
+      },
+      {
+        "label": "Cairn-readiness-tasks",
+        "argv": [
+          "cairn",
+          "gate",
+          "tasks",
+          "unify-long-lived-service-readiness",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/Cairn-readiness-tasks.stdout.log",
+        "stderr": "final-cohort-2026-10-27/Cairn-readiness-tasks.stderr.log"
+      },
+      {
+        "label": "Tracey-readiness-coverage",
+        "argv": [
+          "cairn",
+          "traceability",
+          "coverage",
+          "--root",
+          "."
+        ],
+        "exit_code": 0,
+        "stdout": "final-cohort-2026-10-27/Tracey-readiness-coverage.stdout.log",
+        "stderr": "final-cohort-2026-10-27/Tracey-readiness-coverage.stderr.log"
+      }
+    ],
+    "traceability": "155/155 referenced (profile mantle-default)",
+    "boundary": "All selected commands exited 0; Cairn validation and proposal/design/tasks checks are structural observations, not proof truth or full-change acceptance. Gate-result/capture metadata is appended after checking; no approved whole final-source identity or frozen G1/G2 is claimed."
+  }
+}

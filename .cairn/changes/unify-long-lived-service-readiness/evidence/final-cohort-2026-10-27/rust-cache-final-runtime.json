@@ -1,0 +1,849 @@
+{
+  "schema": "mantle-rust-cache-service-readiness-observation-v1",
+  "runtime": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+  "started_at": "2026-10-27T11:57:13.770280-04:00",
+  "commands": [
+    {
+      "label": "compile-throwaway-public-core-sealer",
+      "argv": [
+        "rustc",
+        "--edition=2024",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-request-v23.rs",
+        "-o",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/seal-request",
+        "--extern",
+        "crunch_rust_cache_core=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libcrunch_rust_cache_core-13516ce6c9029c5a.rlib",
+        "--extern",
+        "serde_json=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/libserde_json-a43059364c8f6b8a.rlib",
+        "-L",
+        "dependency=/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/compile-throwaway-public-core-sealer.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/compile-throwaway-public-core-sealer.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "real-compiler-version",
+      "argv": [
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+        "--version",
+        "--verbose"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-version.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-version.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "dceecbb10f5fbab12cbe82ec06a2f392ce4f3ec538376ae47cb753dc39b0429b",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "real-compiler-runtime-closure",
+      "argv": [
+        "nix",
+        "path-info",
+        "--recursive",
+        "--json",
+        "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-runtime-closure.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-runtime-closure.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "e871980fd3099ef750bc86ea703320fb6a9fc92e7cc32dbb4bd38ad486247132",
+        "stderr": "423823066f9bb547871fc800f86a941905419d2c701584b96f14193a4795e9dd"
+      }
+    },
+    {
+      "label": "real-compiler-ELF-interpreter",
+      "argv": [
+        "readelf",
+        "--program-headers",
+        "--wide",
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-ELF-interpreter.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-compiler-ELF-interpreter.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "4447c6e28eeaede8aa4c1d53de0c6911b8d48430e3e8cf6071590e13d4714182",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "actual-compiler-loader-libraries",
+      "argv": [
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2",
+        "--list",
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/actual-compiler-loader-libraries.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/actual-compiler-loader-libraries.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "46265ca51dbc5c2ff6528c3c79e046790666207630aa92ab85c964b8de49c5bf",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-compiler",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-compiler.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-compiler.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "b0e2f18617a5e1a34dc1cd77035c60d40f700fd2a88f9c416745574af652150b",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-source",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/source.rs",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-source.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-source.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "ea2839e0d9054aea0d073c783728a6e34c9ecff202582e9334995de983b664c0",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-sysroot",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "directory",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/sysroot",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-sysroot.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-sysroot.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "8516f5c53c7cef3201dd6d099cda78fcc12316da87173ed9ce50a30ae2127467",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-0",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "directory",
+        "/nix/store/2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2/lib",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-0.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-0.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "ebba1acafd2c43cb827e4cdc0dff3fc569c2c01127f7c8728d910d5219f813d4",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-1",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.96.0-nightly",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-1.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-1.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "4d8bb3a827d453822850c23d3005477d0832ab9eaae3cadfb8b0c32b9f2143f8",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-2",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/lib/librustc_driver-b18915596020e2d8.so",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-2.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-2.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "fa6198e1244865d982b3d6e39adc09c577a2fa6dd241be2dbfa5e5d4ec6c1d1e",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-3",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc/lib/libgcc_s.so.1",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-3.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-3.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "6e23ad835887e6b6f270541077fbe7d1bcbe14c20ef58cfbfb536ddcc7cb7232",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-4",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-4.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-4.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "d27213c7ddc7e7625322645d34dc4cb13a529a2719e48290cf4e30a8ca9c5029",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-5",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libc.so.6",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-5.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-5.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "d0df5485ae1b2c1624bee083c0672ee381eb7b803a50bc87c5ab5c8a3e3d7114",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-6",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libdl.so.2",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-6.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-6.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "3a021392769d5617831bcb57271a3de75ad3722a3abee544d1ec99fddf666f1f",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-7",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libm.so.6",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-7.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-7.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "0f1137b6052812da55c21c7d4067521837d00011571b16e7fb3a1f1c4f82c5b3",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-8",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/libpthread.so.0",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-8.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-8.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "e0bef02950aa8b52487b87c70c8453a9004e66b76a1f9a593281ab5e33eae5a6",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "input-digest-runtime-9",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "hash-path",
+        "file",
+        "/nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/librt.so.1",
+        "8589934592"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-9.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/input-digest-runtime-9.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "f5360e2a4d5a7496d776ab5e2d8fa89f11af228264d87c11a715ca9079c6969f",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "seal-real-request",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/seal-request",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/canonical-input.json",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/manifest-input.json",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/request.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/seal-real-request.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/seal-real-request.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "295304a3b0354a455453ecc2175870c991083670cbc28c8573ee971bcb08cc26",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "publish-production-manifest",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest",
+        "publish",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/manifest-input.json",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/registry"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/publish-production-manifest.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/publish-production-manifest.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "3a0ca85f81d3420dfd68e34bd7ba9a2b4745a7422e37f6a2337210a78585a968",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "coordination-daemon",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/live-state",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr23-rust-live-1651261.sock"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "pid": 1655089,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/coordination-daemon.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/coordination-daemon.stderr",
+      "exit_code": 0
+    },
+    {
+      "label": "cache-malformed-frame",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-state",
+        "rust-cache",
+        "serve",
+        "--policy",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/daemon-policy.json",
+        "--receipt-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-receipts",
+        "--once"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "pid": 1655141,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-malformed-frame.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-malformed-frame.stderr",
+      "exit_code": 1
+    },
+    {
+      "label": "cache-real-rustc",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-state",
+        "rust-cache",
+        "serve",
+        "--policy",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/daemon-policy.json",
+        "--receipt-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-receipts"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "pid": 1655325,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-real-rustc.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-real-rustc.stderr",
+      "exit_code": 0
+    },
+    {
+      "label": "validate-production-response",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/seal-request",
+        "validate-response",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/real-response.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/validate-production-response.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/validate-production-response.stderr",
+      "exit_code": 0,
+      "streams_blake3": {
+        "stdout": "3992f9babfc10562322f0ee6e07ee7a69b210155313c324e08527247257f900c",
+        "stderr": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "cache-manual-relaunch",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/store",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-state",
+        "rust-cache",
+        "serve",
+        "--policy",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/daemon-policy.json",
+        "--receipt-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-receipts"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime",
+      "pid": 1697255,
+      "stdout": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-manual-relaunch.stdout",
+      "stderr": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/cache-manual-relaunch.stderr",
+      "exit_code": 1
+    }
+  ],
+  "queries": [
+    {
+      "label": "coordination-real-query",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "malformed-started-before-any-request",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "malformed-frame-failed-not-ready",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "valid-started-before-compiler-request",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655325-1793116639",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "ready-after-real-compiler-response",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655325-1793116639",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "normal-exit-after-ready-complete",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655325-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "manual-relaunch-fresh-started",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655325-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1697255-1793116704",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    },
+    {
+      "label": "normal-exit-before-ready-failed",
+      "report": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1655089",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655141-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1655325-1793116639",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "rust-cache-1697255-1793116704",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      }
+    }
+  ],
+  "assertions": {
+    "malformed_frame_cannot_acknowledge_ready": true,
+    "real_rustc_output_committed_before_success_response": true,
+    "started_not_ready_until_real_validated_response": true,
+    "ready_normal_exit_complete": true,
+    "fresh_identity_on_manual_restart": true,
+    "normal_exit_before_ready_failed_not_ready": true
+  },
+  "non_claims": [
+    "Real bounded daemon/compiler/coordination observations, not source-built proof or compiler correctness.",
+    "No frozen G1/G2 admission, lifecycle acceptance, archive or release.",
+    "No automatic-supervisor or four-restart-policy claim; the exercised producer declares never."
+  ],
+  "identities_before": {
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest": "d2f2a1f9efa3348df66dfbf3795fd272e2a4cfb45a3a0c096c93a53751c2f76d",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-request-v23.rs": "5de3c8fc7f6070d565e586bcdece83b61da031ee794509c9030f36f192999118",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v23.py": "2f20333d6b832e18a36ca7ce1fb0f393e6ce2f1463a150fb60c257691780d33c",
+    "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc": "c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8"
+  },
+  "sysroot_materialization": {
+    "source": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/lib/rustlib/x86_64-unknown-linux-gnu",
+    "destination": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/sysroot",
+    "symlinks_dereferenced": true,
+    "compiler_bytes_unchanged": true
+  },
+  "declared_restart_policy": "never",
+  "compiler_response": {
+    "schema": "mantle-rustc-wrapper-response-v1",
+    "request_ref": "mantle-rustc-request://blake3/6a99c19fa85aa7583875be964d29129bb302191945bef5ac7848fd718a6dc44b",
+    "disposition": "compiled",
+    "compiler_status": 0,
+    "artifact_commit_complete": true,
+    "receipt_ref": "mantle-rustc-receipt://blake3/abbd76e33ec89a086a505d49f2a9e91f90c5f675d982469b10a312471b2ae00a",
+    "reason_codes": [
+      "compiled"
+    ]
+  },
+  "output": {
+    "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v27/runtime/outputs/readiness.ll",
+    "blake3": "79cac3ba25e6fd9a7789aab68da4186a524eef469bcd286a0d768403aa4741a4",
+    "consumer_observation": "LLVM IR defines readiness_answer returning i32 42"
+  },
+  "identities_after": {
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-tools-v23/results/mantle-rustc-manifest": "d2f2a1f9efa3348df66dfbf3795fd272e2a4cfb45a3a0c096c93a53751c2f76d",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-request-v23.rs": "5de3c8fc7f6070d565e586bcdece83b61da031ee794509c9030f36f192999118",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-rust-cache-v23.py": "2f20333d6b832e18a36ca7ce1fb0f393e6ce2f1463a150fb60c257691780d33c",
+    "/nix/store/cw8flsxv0r5179brmlzpva2fdky92xgy-rustc-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/rustc": "c594714913333e2bfc35347d2c47067be7313c654a1325cf93065a2fc71da2d8"
+  },
+  "success": true,
+  "owned_processes_reaped": true,
+  "finished_at": "2026-10-27T11:58:25.033703-04:00"
+}

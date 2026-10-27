@@ -1,0 +1,1308 @@
+{
+  "baseline_query": {
+    "classification": "coordination-state",
+    "components": [
+      {
+        "blocked_by": [],
+        "generation": 1,
+        "id": "live-daemon-1362350",
+        "ready": true,
+        "restart_action": null,
+        "restart_policy": "never",
+        "states": [
+          "started",
+          "ready"
+        ]
+      }
+    ],
+    "evidence_eligible": false,
+    "schema": "mantle-service-readiness-v1"
+  },
+  "cases": {
+    "accepted": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "actual_daemon_ACKs_only": true,
+        "complete_response_before_ready_query": true,
+        "exact_protocol_stdout": true,
+        "no_ready_for_negative": false,
+        "restart_policy_never": true,
+        "started_not_ready_before_request": true,
+        "terminal_not_ready_after_disconnect": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "done_ns": 339647601291357,
+      "exit_code": 0,
+      "ident": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+      "input_bytes": 1063,
+      "input_description": "five framed JSON requests; bearer omitted",
+      "name": "accepted",
+      "publisher_disconnected_monotonic_ns": 339647848168001,
+      "request_sent_monotonic_ns": 339647549641002,
+      "response_frames": [
+        {
+          "auth": {
+            "accepted_capabilities": [
+              "delta",
+              "full"
+            ],
+            "builder_signing_keys": [
+              "readiness-v23-1"
+            ]
+          },
+          "kind": "auth-ok"
+        },
+        {
+          "kind": "missing-inputs",
+          "refs": [
+            "input-a"
+          ],
+          "request_id": "request-1"
+        },
+        {
+          "kind": "build-queued",
+          "request_id": "request-1",
+          "session_id": "request-1"
+        },
+        {
+          "kind": "build-started",
+          "request_id": "request-1"
+        },
+        {
+          "kind": "build-finished",
+          "result": {
+            "builder_signing_key_id": "readiness-v23-1",
+            "output_digest_blake3": "9471488b0fc8d3411e436639c5cab49b6099385b40606ef1c5abfffeda7c7ba1",
+            "outputs": [
+              {
+                "artifact_attestation_digest_blake3": "95fde4aa04ae1810b7cc322b244e41aae64655ca5091280af337d3f549b21327",
+                "content_digest_blake3": "2a3b4fea49193f60ba09ed5ede3b90b60bacbd84df50fd39a0b405f3031c0c7e",
+                "logical_path": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture",
+                "name": "out",
+                "path_info_signing_key_id": "readiness-v23-1",
+                "size_bytes": 64
+              }
+            ],
+            "request_id": "request-1",
+            "store_prefix": "/mantle/store"
+          }
+        },
+        {
+          "kind": "output-transfer-done",
+          "report": {
+            "fallback_reason": null,
+            "mode": "delta",
+            "mode_label": "delta",
+            "reused_bytes": 48,
+            "transferred_bytes": 16,
+            "verified_builder_key": "readiness-v23-1"
+          }
+        },
+        {
+          "kind": "done",
+          "request_id": "request-1"
+        }
+      ],
+      "stderr": "",
+      "stdout_blake3": "1649ba8a321710f28ecb4224e6e938ea2809f21424c7c7b2f8900073f90cddc5",
+      "stdout_bytes": 1133,
+      "stdout_sha256": "bc047af86ccb8e3139b12015bd88a24cf596c77ade486f2ba08d51a73d58c57c",
+      "transitions": [
+        {
+          "ack_forwarded_monotonic_ns": 339647443554450,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"generation\":1,\"states\":[\"started\"],\"exit\":null,\"request_acknowledged\":false,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339647443544792,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339647269611869,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "ack_forwarded_monotonic_ns": 339647746186316,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "before_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"generation\":1,\"states\":[\"started\",\"ready\"],\"exit\":null,\"request_acknowledged\":true,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339647746165297,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339647599336147,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "proof_completion": null,
+              "request_acknowledged": true,
+              "states": [
+                "started",
+                "ready"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "response_done_observed_monotonic_ns": 339647601291357
+        },
+        {
+          "ack_forwarded_monotonic_ns": 339647846945456,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "complete"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c\",\"generation\":1,\"states\":[\"complete\"],\"exit\":\"normal\",\"request_acknowledged\":true,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339647846934536,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339647747120530,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": "normal",
+              "generation": 1,
+              "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+              "proof_completion": null,
+              "request_acknowledged": true,
+              "states": [
+                "complete"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    },
+    "malformed": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "actual_daemon_ACKs_only": true,
+        "complete_response_before_ready_query": false,
+        "exact_protocol_stdout": true,
+        "no_ready_for_negative": true,
+        "restart_policy_never": true,
+        "started_not_ready_before_request": true,
+        "terminal_not_ready_after_disconnect": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "exit_code": 3,
+      "ident": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+      "input_bytes": 1,
+      "input_description": "one byte 00",
+      "name": "malformed",
+      "publisher_disconnected_monotonic_ns": 339648953057294,
+      "request_sent_monotonic_ns": 339648851232834,
+      "response_frames": [],
+      "stderr": "error: remote-frame-header-incomplete-or-unframed-stdout\n",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": [
+        {
+          "ack_forwarded_monotonic_ns": 339648751616810,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "complete"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "failed"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"generation\":1,\"states\":[\"started\"],\"exit\":null,\"request_acknowledged\":false,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339648751290547,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339648647556362,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "ack_forwarded_monotonic_ns": 339648951301908,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "failed"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "complete"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "failed"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5\",\"generation\":1,\"states\":[\"failed\"],\"exit\":\"abnormal\",\"request_acknowledged\":false,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339648951292030,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339648851734556,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": "abnormal",
+              "generation": 1,
+              "id": "remote-stdio-c7c2645b57bf1836a6ffaaad182574f9ad3264dd49cd86b5",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "failed"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    },
+    "unknown-ticket": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "failed"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "actual_daemon_ACKs_only": true,
+        "complete_response_before_ready_query": false,
+        "exact_protocol_stdout": true,
+        "no_ready_for_negative": true,
+        "restart_policy_never": true,
+        "started_not_ready_before_request": true,
+        "terminal_not_ready_after_disconnect": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-1362350",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+            "ready": false,
+            "restart_action": "none",
+            "restart_policy": "never",
+            "states": [
+              "complete"
+            ]
+          },
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "ready": false,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "exit_code": 3,
+      "ident": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+      "input_bytes": 1063,
+      "input_description": "five framed JSON requests; bearer omitted",
+      "name": "unknown-ticket",
+      "publisher_disconnected_monotonic_ns": 339648452104951,
+      "request_sent_monotonic_ns": 339648346590043,
+      "response_frames": [],
+      "stderr": "error: unknown-remote-ticket-ffffffffffffffffffffffffffffffff\n",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": [
+        {
+          "ack_forwarded_monotonic_ns": 339648246501221,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "complete"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+                "ready": false,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"generation\":1,\"states\":[\"started\"],\"exit\":null,\"request_acknowledged\":false,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339648246491283,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339648049388171,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        },
+        {
+          "ack_forwarded_monotonic_ns": 339648449783132,
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-1362350",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-d616c7a23122664e7bd0a8498ef628d5aff5e7aab273d02c",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "complete"
+                ]
+              },
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+                "ready": false,
+                "restart_action": "none",
+                "restart_policy": "never",
+                "states": [
+                  "failed"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "original_daemon_reply_wire": "{\"evidence_eligible\":false,\"generation\":1,\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"op\":\"ack\",\"schema\":\"mantle-service-readiness-v1\"}\n",
+          "original_request_wire": "{\"schema\":\"mantle-service-readiness-v1\",\"op\":\"publish\",\"component\":{\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"kind\":\"service\",\"depends_on\":[],\"user_states\":[],\"restart_policy\":\"never\",\"stage_requirements\":null},\"observation\":{\"id\":\"remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7\",\"generation\":1,\"states\":[\"failed\"],\"exit\":\"abnormal\",\"request_acknowledged\":false,\"proof_completion\":null}}\n",
+          "queried_monotonic_ns": 339648449773174,
+          "real_daemon_ack": {
+            "evidence_eligible": false,
+            "generation": 1,
+            "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+            "op": "ack",
+            "schema": "mantle-service-readiness-v1"
+          },
+          "received_monotonic_ns": 339648350484043,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": "abnormal",
+              "generation": 1,
+              "id": "remote-stdio-dc16177c6c200d7f030c58a8cda5c971b6d080ea27da37d7",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "failed"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "accept_thread_stopped": true,
+    "all_owned_processes_reaped": true,
+    "proxy_threads_stopped": true,
+    "socket_paths_removed": true
+  },
+  "commands": [
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle\n",
+      "stdout_bytes": 166
+    },
+    {
+      "argv": [
+        "openssl",
+        "genpkey",
+        "-algorithm",
+        "ED25519",
+        "-outform",
+        "DER"
+      ],
+      "exit_code": 0,
+      "secret_stdout_omitted": true,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "[private DER omitted]",
+      "stdout_bytes": 48
+    },
+    {
+      "argv": [
+        "openssl",
+        "pkey",
+        "-inform",
+        "DER",
+        "-pubout",
+        "-outform",
+        "DER"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdin": "private DER in memory; omitted",
+      "stdout": "302a300506032b6570032100eee25848ae1d9d5efd349d9bffe1955aed6e89c68e15f5a56f40946939f6ad8d",
+      "stdout_bytes": 44,
+      "stdout_encoding": "hex"
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--json",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "metadata-v23",
+        "--binding",
+        "metadata"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "{\n  \"diagnostic\": \"remote serve metadata is stable; stdio-once is a supported framed stdio binding; ssh-stdio reuses the same frame contract; production P2P listener dispatch remains gated\",\n  \"endpoint_id\": \"metadata-v23\",\n  \"frame_encoding\": \"u32be-length-prefixed-json\",\n  \"protocol\": \"mantle-remote-build/1\",\n  \"status\": \"metadata-only\",\n  \"supported_bindings\": [\n    \"loopback\",\n    \"stdio\",\n    \"ssh-stdio\",\n    \"p2p\"\n  ]\n}\n",
+      "stdout_bytes": 430
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--json",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/state",
+        "remote",
+        "ticket",
+        "create",
+        "--display-name",
+        "readiness-v23",
+        "--ttl-secs",
+        "3600",
+        "--uses",
+        "1",
+        "--max-build-time-secs",
+        "600",
+        "--max-upload-bytes",
+        "1000",
+        "--ticket-fd",
+        "7",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "{\n  \"ticket\": {\n    \"id\": \"94b41052f7d7c9635af31bf3d9c6fb34\",\n    \"display_name\": \"readiness-v23\",\n    \"verifier_key_id\": \"readiness-ticket-v23\",\n    \"created_unix_s\": 1793116075,\n    \"expires_unix_s\": 1793119675,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 600,\n    \"max_upload_bytes\": 1000,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n",
+      "stdout_bytes": 439
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/accepted-stdout.bin"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "1649ba8a321710f28ecb4224e6e938ea2809f21424c7c7b2f8900073f90cddc5  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/accepted-stdout.bin\n",
+      "stdout_bytes": 190
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 0,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/accepted-stdout.bin",
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "[exact framed stdout retained separately]",
+      "stdout_bytes": 1133
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/unknown-ticket-stdout.bin"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/unknown-ticket-stdout.bin\n",
+      "stdout_bytes": 196
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 3,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/unknown-ticket-stdout.bin",
+      "stderr": "error: unknown-remote-ticket-ffffffffffffffffffffffffffffffff\n",
+      "stderr_bytes": 62,
+      "stdout": "[exact framed stdout retained separately]",
+      "stdout_bytes": 0
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/malformed-stdout.bin"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/malformed-stdout.bin\n",
+      "stdout_bytes": 191
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 3,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/malformed-stdout.bin",
+      "stderr": "error: remote-frame-header-incomplete-or-unframed-stdout\n",
+      "stderr_bytes": 57,
+      "stdout": "[exact framed stdout retained separately]",
+      "stdout_bytes": 0
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24/daemon-state",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr23-as-1362084.sock"
+      ],
+      "exit_code": 0,
+      "stderr": "live build daemon listening on /tmp/mr23-as-1362084.sock\n",
+      "stderr_bytes": 57,
+      "stdout": "",
+      "stdout_bytes": 0
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle\n",
+      "stdout_bytes": 166
+    },
+    {
+      "argv": [
+        "b3sum",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-driver.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "d54598e267f9bfc47d1d0da5e12d7eb8127ec56b0c74333af40a91ece3b4e034  /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-driver.py\n",
+      "stdout_bytes": 176
+    }
+  ],
+  "driver_argv": [
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-driver.py",
+    "--mantle",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "--expected-blake3",
+    "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "--output",
+    "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/after-fix-v24"
+  ],
+  "driver_blake3": "d54598e267f9bfc47d1d0da5e12d7eb8127ec56b0c74333af40a91ece3b4e034",
+  "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+  "executable_blake3_after": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "executable_blake3_before": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "executable_unchanged": true,
+  "generated_credentials": {
+    "bearer_delivery": "anonymous inherited pipe; bearer not retained",
+    "private_directory_mode": "0o700",
+    "private_file_modes": {
+      "RESULT_SIGNING_KEY": "0o600",
+      "TICKET_VERIFIER_KEY": "0o600"
+    },
+    "result_signing_public_key": "readiness-v23-1:7uJYSK4dnV79NJ2b/+GVWu1uicaOFfWlb0CUaTn2rY0="
+  },
+  "limits": [
+    "Coordination reports are explicitly non-evidence-eligible; no lifecycle acceptance, full G1/G2, archive, release, or source-built proof.",
+    "Existing fixture executor only: no physical store execution or independent verification of a cryptographic result/PathInfo signature.",
+    "Real generated service credentials, bounded secret provider, signing-key identity validation, ticket creation, keyed verifier admission and durable redemption are exercised.",
+    "Readiness is not carried by live-build subscriptions. A transparent Unix proxy forwards original readiness publications and real daemon ACK bytes unchanged; ACK delivery is briefly delayed while querying transient daemon states. No ACK or service publication is synthesized.",
+    "Complete framed response bytes are read before the ready publication is forwarded and observed. This is response-emission/read ordering, not an independent syscall trace of the preceding stdout flush."
+  ],
+  "metadata": {
+    "after_query": {
+      "classification": "coordination-state",
+      "components": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-1362350",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ],
+      "evidence_eligible": false,
+      "schema": "mantle-service-readiness-v1"
+    },
+    "assertions": {
+      "coordination_unchanged": true,
+      "does_not_claim_ready": true,
+      "exited_normally_not_listening": true,
+      "no_readiness_connection": true
+    },
+    "json": {
+      "diagnostic": "remote serve metadata is stable; stdio-once is a supported framed stdio binding; ssh-stdio reuses the same frame contract; production P2P listener dispatch remains gated",
+      "endpoint_id": "metadata-v23",
+      "frame_encoding": "u32be-length-prefixed-json",
+      "protocol": "mantle-remote-build/1",
+      "status": "metadata-only",
+      "supported_bindings": [
+        "loopback",
+        "stdio",
+        "ssh-stdio",
+        "p2p"
+      ]
+    }
+  },
+  "proxy_connections": [
+    {
+      "case": "accepted",
+      "monotonic_ns": 339647269120016
+    },
+    {
+      "case": "unknown-ticket",
+      "monotonic_ns": 339648048178911
+    },
+    {
+      "case": "malformed",
+      "monotonic_ns": 339648646239219
+    }
+  ],
+  "proxy_errors": [],
+  "schema": "mantle-external-readiness-remote-stdio-after-fix-v23",
+  "status": "pass",
+  "supported_facts": [
+    "T3.3 metadata-only exits normally without readiness publisher or coordination change.",
+    "T3.3 actual stdio-once is observed started/not-ready with never before request bytes are sent.",
+    "T3.3 accepted real ticket is redeemed once and emits exact framed response before observed started+ready, then complete/normal; disconnected terminal row is not-ready with restart action none.",
+    "T3.3 unknown-ticket and malformed request controls emit zero stdout and transition started -> failed/abnormal without ready or request acknowledgement."
+  ],
+  "task": "T3.3",
+  "ticket_uses_after": 0,
+  "ticket_uses_before": 1
+}

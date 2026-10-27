@@ -1,0 +1,20 @@
+{
+  "schema": "mantle-rustc-wrapper-receipt-v1",
+  "receipt_ref": "mantle-rustc-receipt://blake3/abbd76e33ec89a086a505d49f2a9e91f90c5f675d982469b10a312471b2ae00a",
+  "request_ref": "mantle-rustc-request://blake3/6a99c19fa85aa7583875be964d29129bb302191945bef5ac7848fd718a6dc44b",
+  "manifest_ref": "mantle-rustc-manifest://blake3/6c5087c8b687dc7d34d6a1cdb91dd1ce5d5d83eb06505fd6290a84f185ad830a",
+  "policy_id": "readiness-real-rustc-v23",
+  "disposition": "compiled",
+  "bypass_class": null,
+  "action_ref": "mantle-rust-action://blake3/d6000e1266acd028b204c8b042f68dfbce5d61e569d2c49939dbb94383d25dc4",
+  "result_ref": null,
+  "artifact_digests_blake3": [
+    "79cac3ba25e6fd9a7789aab68da4186a524eef469bcd286a0d768403aa4741a4"
+  ],
+  "compiler_status": 0,
+  "compiler_executed": true,
+  "artifact_commit_complete": true,
+  "reason_codes": [
+    "compiled"
+  ]
+}

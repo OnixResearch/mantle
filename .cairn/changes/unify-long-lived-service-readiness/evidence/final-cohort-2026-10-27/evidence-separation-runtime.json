@@ -1,0 +1,1241 @@
+{
+  "schema": "mantle-readiness-evidence-separation-observation-v27",
+  "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+  "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+  "expected_cli_blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+  "commands": [
+    {
+      "label": "export-fixture-source",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "export",
+        "--source",
+        "local-path:portable-receipt-gallery:/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/examples/projects/portable-receipt-handoff/fixtures",
+        "--to",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/fixture-source-bundle.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819335,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.03275473095709458,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stdout",
+        "bytes": 499,
+        "blake3": "4f7f414db86be9db2eb45e6c47e052547a31448ed9faf6beb1de80a3cf60e0d1"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/export-fixture-source.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "positive-source-validator",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/fixture-source-bundle.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819457,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.019346450048033148,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stdout",
+        "bytes": 323,
+        "blake3": "4a0d9ea6c21d4e96770055f319110b99d478ca6f0442ece6c2d07b7c3462701f"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-source-validator.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "negative-source-actual-readiness",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819524,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.019203551986720413,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-actual-readiness.stderr",
+        "bytes": 225,
+        "blake3": "c669cef7c29f54abb833bfe657e971923add2f3c8df774855b7fbf6fcfd9ca74"
+      }
+    },
+    {
+      "label": "negative-receipt-actual-readiness",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819591,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.021922104991972446,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-actual-readiness.stderr",
+        "bytes": 226,
+        "blake3": "4c7df3f120295cad4e9b777ede6f4733416e8e90dc0b2f1aa5b631daf334b537"
+      }
+    },
+    {
+      "label": "negative-source-ordinary-doctor",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819658,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.020375991996843368,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-ordinary-doctor.stderr",
+        "bytes": 223,
+        "blake3": "dd29a7bdd8a336fdf6fdbdee5c267c0b70d7807c787f45527497d079ed8708aa"
+      }
+    },
+    {
+      "label": "negative-receipt-ordinary-doctor",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819754,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.01493839401518926,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-ordinary-doctor.stderr",
+        "bytes": 224,
+        "blake3": "4c161e45768a62fcdce8596dee4740cf8bee1329f8cbdc91605be3db0fddd9aa"
+      }
+    },
+    {
+      "label": "negative-source-optin-doctor",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819821,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.01447423198260367,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-optin-doctor.stderr",
+        "bytes": 220,
+        "blake3": "93451cc0774d2d8f47617c2ab3afb4d212ec72b156ff72c0874dec4ea764e591"
+      }
+    },
+    {
+      "label": "negative-receipt-optin-doctor",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819888,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.014122652995865792,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-optin-doctor.stderr",
+        "bytes": 221,
+        "blake3": "cf2f2e435cebcda527bd6ba67a475871df192a2b4069d1e4bb07275522c41d49"
+      }
+    },
+    {
+      "label": "negative-demo-readiness",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "nix-free-demo",
+        "validate",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1819955,
+      "exit_code": 1,
+      "reaped": true,
+      "elapsed_seconds": 0.01341547496849671,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stdout",
+        "bytes": 258,
+        "blake3": "c25ef6cbc8da5ed423f1bdb2281a548ec3fa33451a7f4e9f554277dba991a681"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-demo-readiness.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "consume-ordinary-doctor-at-source-intake",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869407,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.020349913043901324,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-ordinary-doctor-at-source-intake.stderr",
+        "bytes": 223,
+        "blake3": "dd29a7bdd8a336fdf6fdbdee5c267c0b70d7807c787f45527497d079ed8708aa"
+      }
+    },
+    {
+      "label": "build-ordinary-diagnostic-receipt",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "export",
+        "--record",
+        "source-ref:portable-receipt-gallery:blake3:05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b",
+        "--policy-hash",
+        "readiness-separation-diagnostic-v27",
+        "--to",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869477,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.019437309994827956,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stdout",
+        "bytes": 617,
+        "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-ordinary-diagnostic-receipt.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "positive-ordinary-receipt-structure-validator",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869594,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.018592845008242875,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stdout",
+        "bytes": 617,
+        "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-ordinary-receipt-structure-validator.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "consume-optin-doctor-at-source-intake",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869677,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.016682257992215455,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/consume-optin-doctor-at-source-intake.stderr",
+        "bytes": 220,
+        "blake3": "93451cc0774d2d8f47617c2ab3afb4d212ec72b156ff72c0874dec4ea764e591"
+      }
+    },
+    {
+      "label": "build-optin-diagnostic-receipt",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "export",
+        "--record",
+        "source-ref:portable-receipt-gallery:blake3:05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b",
+        "--policy-hash",
+        "readiness-separation-diagnostic-v27",
+        "--to",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869758,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.01709880999987945,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stdout",
+        "bytes": 617,
+        "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/build-optin-diagnostic-receipt.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "positive-optin-receipt-structure-validator",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1869886,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.017749492020811886,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stdout",
+        "bytes": 617,
+        "blake3": "1f5b733dfec3d6680564a877b5d61e3420c66afeb6047d29a4696f3f7e17bb93"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/positive-optin-receipt-structure-validator.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "negative-source-flipped-labels",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1870036,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.013717231980990618,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-flipped-labels.stderr",
+        "bytes": 232,
+        "blake3": "614d3cc67105973e1cbdfd93f10bcf13da4eaa6770765e2f78eb7e960b238c2f"
+      }
+    },
+    {
+      "label": "negative-receipt-flipped-labels",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1870106,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.017139066010713577,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-flipped-labels.stderr",
+        "bytes": 233,
+        "blake3": "f7aceed135efc5e231ce75df57988a0dd78c64ef0c9595ae39170e91c36fefe5"
+      }
+    },
+    {
+      "label": "negative-source-content-corruption",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "source",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-source-bundle.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1870188,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.027288298995699733,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-source-content-corruption.stderr",
+        "bytes": 102,
+        "blake3": "b0cb1e196d7df833566640c40a3b3acead97ad271b009b992c23bf075278bafc"
+      }
+    },
+    {
+      "label": "negative-receipt-content-corruption",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "verify",
+        "--from",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-diagnostic-receipt.json"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1870346,
+      "exit_code": 3,
+      "reaped": true,
+      "elapsed_seconds": 0.020624177996069193,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stdout",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/negative-receipt-content-corruption.stderr",
+        "bytes": 70,
+        "blake3": "bb018a7024bc4182fe1d30f8be494a7a14050d85ac9da6298a5fb46c77cd2309"
+      }
+    },
+    {
+      "label": "help-bootstrap-validate",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "bootstrap",
+        "validate",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1904159,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.018165231973398477,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stdout",
+        "bytes": 2353,
+        "blake3": "d05d3db4fb7ec387795e4b9ffbd2d940d66282d6cc1bfacfacfbe40aaaec1877"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-validate.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "help-bootstrap-trust-report",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "bootstrap",
+        "trust-report",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1904227,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.01772262097802013,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stdout",
+        "bytes": 1680,
+        "blake3": "0393fe6c8c01f22ba0ba7161e0d7baaedcadd4083e4916dfe90dbd7f9f7a4160"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-bootstrap-trust-report.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "help-self-build",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "self-build",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1904321,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.01716407301137224,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stdout",
+        "bytes": 5531,
+        "blake3": "db0619813f8065f2a65016c8793789909a8c5f71db655b5d40e25e53ab4772b6"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-self-build.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "label": "help-receipt-export",
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state",
+        "--store",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/store",
+        "--json",
+        "receipt",
+        "bundle",
+        "export",
+        "--help"
+      ],
+      "cwd": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree",
+      "environment_overrides": {
+        "HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/home",
+        "CRUNCH_CONFIG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/config",
+        "CRUNCH_LOG_DIR": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/logs",
+        "XDG_STATE_HOME": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/state"
+      },
+      "pid": 1904392,
+      "exit_code": 0,
+      "reaped": true,
+      "elapsed_seconds": 0.015360786987002939,
+      "bound_failure": null,
+      "stdout": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stdout",
+        "bytes": 2232,
+        "blake3": "ceb1c998bc673ec3905703c60d16f6da7f2a6d12fbb7498856865d5f18218daa"
+      },
+      "stderr": {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/captures/help-receipt-export.stderr",
+        "bytes": 0,
+        "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    }
+  ],
+  "claims": {
+    "actual_readiness_rejected_at_positive_controlled_source_evidence_intake": {
+      "observed": true,
+      "positive": "positive-source-validator",
+      "negative": "negative-source-actual-readiness",
+      "positive_scope": "actual fixture source/input availability and identity only",
+      "negative_scope": "schema/type rejection: missing format; no coordination label confers source evidence authority"
+    },
+    "actual_readiness_rejected_at_positive_controlled_portable_receipt_structure_intake": {
+      "observed": true,
+      "positive": "positive-ordinary-receipt-structure-validator",
+      "negative": "negative-receipt-actual-readiness",
+      "positive_scope": "Canonical diagnostic receipt structure only; evidence_complete=true for requested diagnostic strength, not strong action/output/source-built/release evidence.",
+      "observed_positive_report": {
+        "format": "mantle-build-receipt-bundle-v1",
+        "store_prefix": "/mantle/store",
+        "claim_strength": "diagnostic",
+        "evidence_complete": true,
+        "missing_evidence": [],
+        "output_identities": [],
+        "records": [
+          {
+            "kind": "source-ref",
+            "identity": "portable-receipt-gallery",
+            "digest": "blake3:05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b"
+          }
+        ],
+        "record_count": 1,
+        "bundle_blake3": "620504873fd85bce89e5a746a591a5ada93555ee80533dc1e75240dfe325c642",
+        "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+      }
+    },
+    "source_content_and_receipt_digest_validation_controls": {
+      "observed": true,
+      "commands": [
+        "negative-source-content-corruption",
+        "negative-receipt-content-corruption"
+      ]
+    },
+    "classification_flags_sufficient_for_evidence": false,
+    "receipt_equality": {
+      "observed": true,
+      "authority_scope": "diagnostic portable receipts only; see receipt_equality_observation"
+    },
+    "source_built_or_release_proof_acceptance_exercised": false,
+    "doctor_to_authoritative_receipt_invariance_observed": false,
+    "T4.3_complete": false
+  },
+  "gaps": [
+    {
+      "id": "authoritative-positive-control",
+      "missing": "A valid retained source-built fixed-point v2 proof bundle including plan, promoted receipt, bound action plan/events/journal/reconciliation, stage outputs and provider closure; or equivalent actual release proof bundle. None was present among scoped repo fixture/receipt discovery. Rust test builders require compilation, which is forbidden.",
+      "impact": "No positive-controlled source-built/release validator authority claim. No source-built proof launched."
+    },
+    {
+      "id": "doctor-consumption-operation",
+      "missing": "A public frozen-CLI operation accepting an existing crunch-doctor-report-v1 as input to the authoritative receipt builder/consumer. bootstrap validate collects doctor internally and proceeds to build; it does not accept captured doctor input or readiness-socket. Source-built receipt construction is internal to actual proof execution.",
+      "source_locations": [
+        "src/bootstrap_validate.rs:326-363",
+        "src/main.rs:1846-1882",
+        "src/source_built_fixed_point_receipt.rs:158-161,520-527"
+      ],
+      "impact": "Equal original doctor stdout plus diagnostic portable receipt equality cannot establish integrated authoritative receipt invariance."
+    }
+  ],
+  "cli_before": {
+    "blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "device": 44,
+    "inode": 27112073,
+    "size_bytes": 1866306272,
+    "mtime_ns": 1793115788348085433,
+    "mode": 33261
+  },
+  "captured_inputs": {
+    "ordinary-doctor.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json",
+      "bytes": 1038,
+      "blake3": "7d98b91f29a8d25b159c78f9cae9062996392de0897c6e43ca858d7620944efd"
+    },
+    "optin-doctor.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json",
+      "bytes": 1038,
+      "blake3": "7d98b91f29a8d25b159c78f9cae9062996392de0897c6e43ca858d7620944efd"
+    },
+    "actual-readiness.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json",
+      "bytes": 269,
+      "blake3": "a2d0059197a5937fe7ff364786104ef8b3212ed6c3ce9d53ddc6bbc6148214d8"
+    }
+  },
+  "historical_capture": {
+    "report": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/report.json",
+      "bytes": 33974,
+      "blake3": "2414f051153d8c8b75963fc1a1752095a1c769d9c573776f4811e9e3c0bb74e7"
+    },
+    "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+    "expected_executable_blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "ordinary_argv": [
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+      "--state-dir",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+      "--store",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+      "--json",
+      "doctor"
+    ],
+    "optin_argv": [
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-quality-v24/results/mantle",
+      "--state-dir",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/state",
+      "--store",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-coordination-v24/store",
+      "--json",
+      "doctor",
+      "--readiness-socket",
+      "/tmp/mr24-coord-1362085.sock"
+    ],
+    "ordinary_exit_code": 0,
+    "optin_exit_code": 0,
+    "stdout_byte_equal": true,
+    "readiness_is_unmodified_exact_stderr_bytes": true,
+    "status": "reused retained final CLI actual capture; no new doctor/service process launched"
+  },
+  "positive_control_provenance": {
+    "kind": "actual CLI source-bundle export of existing repository-owned deterministic fixture bytes; not a fabricated proof summary",
+    "fixture_directory": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/examples/projects/portable-receipt-handoff/fixtures",
+    "files": [
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/examples/projects/portable-receipt-handoff/fixtures/incomplete-semantic-graph.json",
+        "bytes": 847,
+        "blake3": "115932b26ee3c094e7e81c0c4beac488df84c3b82e9fdb8994cde32bc1cdef29"
+      },
+      {
+        "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/examples/projects/portable-receipt-handoff/fixtures/semantic-graph.json",
+        "bytes": 2090,
+        "blake3": "48fcde33809a3f0b5fb300b918351808bf75384b995b6763e5363443fca140c9"
+      }
+    ]
+  },
+  "source_bundle": {
+    "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/fixture-source-bundle.json",
+    "bytes": 7001,
+    "blake3": "ad378108bfc306a59e4b77a5e08aac68d5282b8849039444adf4b31c2efc7fbf"
+  },
+  "source_bundle_keys": [
+    "format",
+    "version",
+    "store_prefix",
+    "roots",
+    "records",
+    "manifest_blake3",
+    "non_claim"
+  ],
+  "cli_after": {
+    "blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "device": 44,
+    "inode": 27112073,
+    "size_bytes": 1866306272,
+    "mtime_ns": 1793115788348085433,
+    "mode": 33261
+  },
+  "cli_identity_invariant": true,
+  "cleanup": {
+    "started_services": [],
+    "all_finite_children_reaped": true,
+    "created_sockets": [],
+    "scratch_retained": true,
+    "other_work_removed": false
+  },
+  "continuation_cli_before": {
+    "blake3": "32832e46f5f843af2b539dc3660d23192692643fcce0120637c4ef27b3a8f7d6",
+    "device": 44,
+    "inode": 27112073,
+    "size_bytes": 1866306272,
+    "mtime_ns": 1793115788348085433,
+    "mode": 33261
+  },
+  "receipt_positive_control_scope": {
+    "kind": "product-generated diagnostic portable receipt naming independently source-validator-accepted exact repository fixture source bytes",
+    "record_spec": "source-ref:portable-receipt-gallery:blake3:05ca746480280968caf91ca6867e9ba4eb8071b6c5a20994c157651c6a1df25b",
+    "source_manifest_blake3": "2c5af0fbb203e6b3048fa1337bed9c6173cb5681080288deb58bc3c4624877c8",
+    "non_claims": [
+      "Not source-built fixed-point evidence.",
+      "Not build-success, output, release, signature, or strong-action correctness evidence.",
+      "Portable verify with no --output checks canonical receipt structure and completeness reporting, not source-state or output authority."
+    ]
+  },
+  "receipts": {
+    "ordinary": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json",
+      "bytes": 772,
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992"
+    },
+    "optin": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json",
+      "bytes": 772,
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992"
+    }
+  },
+  "mutation_controls": {
+    "labels-flipped-readiness.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json",
+      "bytes": 375,
+      "blake3": "ebc09e3e41bf329d9a30d043f03870531a8a8733ef32c7fc4d995fa936097b66"
+    },
+    "corrupt-source-bundle.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-source-bundle.json",
+      "bytes": 7001,
+      "blake3": "49a57d65ffe4b412984908073c93692c0d203f843b531efaedbdead68233af46"
+    },
+    "corrupt-diagnostic-receipt.json": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/corrupt-diagnostic-receipt.json",
+      "bytes": 772,
+      "blake3": "7ac76e23953d5e1d1baa81b38563ef753f773f794e337c1a05e40de71b204568"
+    }
+  },
+  "receipt_equality_observation": {
+    "byte_equal": true,
+    "ordinary": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-diagnostic-receipt.json",
+      "bytes": 772,
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992"
+    },
+    "optin": {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-diagnostic-receipt.json",
+      "bytes": 772,
+      "blake3": "6aee40995fde0ff8c01852a8706bbd525f3de876c7a919c9c1b298cdfb517992"
+    },
+    "builder_inputs_identical_except_output_destination": true,
+    "doctor_consumed_by_receipt_builder": false,
+    "scope": "Observed deterministic diagnostic receipt equality after separate ordinary/opt-in captured doctor intake attempts; NOT integrated doctor-to-proof receipt invariance."
+  },
+  "status": "reachable-narrow-observations-complete; T4.3-authoritative-receipt-boundary-remains-unexercised",
+  "driver_files": [
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/driver.py",
+      "bytes": 5872,
+      "blake3": "64e6b0539f99104abdc3afe0cf7cd9fae2013257690b6d1e778a2a423f5c331e"
+    },
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/continuation.py",
+      "bytes": 7010,
+      "blake3": "dc16d254858becbbc9b3169df5e7aa26ca0e2f8c50813c3358f6cb1c443188e6"
+    },
+    {
+      "path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/capture-boundary-help.py",
+      "bytes": 2258,
+      "blake3": "56d22dd26479dd5e69380e0e04659d10aa35263a5c46db52aa9b4e12462340fd"
+    }
+  ],
+  "runtime_envelope": {
+    "launcher": [
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-integration-payload-v17.py",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/driver.py"
+    ],
+    "continuation_launcher": [
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-integration-payload-v17.py",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/continuation.py"
+    ],
+    "per_command_timeout_seconds": 25,
+    "per_stream_bytes_limit": 1048576,
+    "new_product_compilation": false,
+    "builds_or_proofs_launched": false,
+    "repo_edits": false,
+    "help_launcher": [
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-integration-payload-v17.py",
+      "python3",
+      "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/capture-boundary-help.py"
+    ]
+  },
+  "positive_source_verdict": {
+    "manifest_blake3": "2c5af0fbb203e6b3048fa1337bed9c6173cb5681080288deb58bc3c4624877c8",
+    "ready_class": "ready",
+    "missing_records": [],
+    "stale_records": [],
+    "unsupported_records": [],
+    "untrusted_records": [],
+    "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+  },
+  "negative_verdicts": [
+    {
+      "label": "negative-source-actual-readiness",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing source bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json: missing field `format` at line 1 column 268\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-receipt-actual-readiness",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing receipt bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/actual-readiness.json: missing field `format` at line 1 column 268\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-source-ordinary-doctor",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing source bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json: missing field `format` at line 33 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-receipt-ordinary-doctor",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing receipt bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/ordinary-doctor.json: missing field `format` at line 33 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-source-optin-doctor",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing source bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json: missing field `format` at line 33 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-receipt-optin-doctor",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing receipt bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/optin-doctor.json: missing field `format` at line 33 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-demo-readiness",
+      "exit_code": 1,
+      "stdout": "{\n  \"schema\": \"mantle-nix-free-demo-cli-v1\",\n  \"profile\": \"unknown\",\n  \"verdict\": \"malformed\",\n  \"demo_claimable\": false,\n  \"diagnostics\": [\n    {\n      \"code\": \"malformed-summary\",\n      \"message\": \"missing field `profile` at line 1 column 268\"\n    }\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "label": "negative-source-flipped-labels",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing source bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json: missing field `format` at line 19 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-receipt-flipped-labels",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"parsing receipt bundle /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-evidence-separation-v27/labels-flipped-readiness.json: missing field `format` at line 19 column 1\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-source-content-corruption",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"source record portable-receipt-gallery content digest mismatch\",\"code\":3,\"kind\":\"internal\"}\n"
+    },
+    {
+      "label": "negative-receipt-content-corruption",
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "{\"error\":\"receipt bundle digest mismatch\",\"code\":3,\"kind\":\"internal\"}\n"
+    }
+  ],
+  "boundary_help_commands": [
+    "help-bootstrap-validate",
+    "help-bootstrap-trust-report",
+    "help-self-build",
+    "help-receipt-export"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "format": "mantle-build-receipt-bundle-v1",
+  "version": 1,
+  "store_prefix": "/mantle/store",
+  "claim_strength": "diagnostic",
+  "trust_snapshot": {
+    "policy_hash": "readiness-separation-diagnostic-v27",
+    "public_key_digests": [],
+    "revocation_ref": null,
+    "valid_after_unix_s": 0,
+    "valid_before_unix_s": 18446744073709551615
+  },
+  "records": [
+    {
+      "kind": "source-ref",
+      "identity": "portable-receipt-gallery",
+      "digest": "blake3:0000000000000000000000000000000000000000000000000000000000000000",
+      "metadata": {}
+    }
+  ],
+  "bundle_blake3": "620504873fd85bce89e5a746a591a5ada93555ee80533dc1e75240dfe325c642",
+  "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+}

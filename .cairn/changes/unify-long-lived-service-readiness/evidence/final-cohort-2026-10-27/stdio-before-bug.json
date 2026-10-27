@@ -1,0 +1,712 @@
+{
+  "baseline_query": {
+    "classification": "coordination-state",
+    "components": [
+      {
+        "blocked_by": [],
+        "generation": 1,
+        "id": "live-daemon-688221",
+        "ready": true,
+        "restart_action": null,
+        "restart_policy": "never",
+        "states": [
+          "started",
+          "ready"
+        ]
+      }
+    ],
+    "evidence_eligible": false,
+    "schema": "mantle-service-readiness-v1"
+  },
+  "bug": {
+    "observed_ids": {
+      "accepted": {
+        "daemon_reply_hex": "",
+        "id": "remote-stdio-688453-1793114782-59b3121ed56f2594b2b0dee7516d181516b007c7671a356c6c7bdd5b6e30ade8",
+        "utf8_bytes": 95
+      },
+      "malformed": {
+        "daemon_reply_hex": "",
+        "id": "remote-stdio-688732-1793114782-286302eabb9933b9e58f1fa98873f192799123a5ae2c6fd98bd88a869778dbec",
+        "utf8_bytes": 95
+      },
+      "unknown-ticket": {
+        "daemon_reply_hex": "",
+        "id": "remote-stdio-688622-1793114782-bd55c3f1b695da2201ab986b2caf16b4f572a0a7bd33a1b110d3cc5ba62be6a7",
+        "utf8_bytes": 95
+      }
+    },
+    "source_facts": [
+      "src/remote_build.rs:8127-8136 nonce is decimal Unix time plus hyphen plus full 64-character BLAKE3 hash.",
+      "src/remote_build.rs:14181-14188 prefixes remote-stdio-PID- and discards start_service error with .ok().",
+      "crates/crunch-service-readiness-core/src/lib.rs:39 sets MAX_LABEL_BYTES=64."
+    ],
+    "summary": "Actual CLI remote-stdio readiness component identity exceeds the core 64-byte label bound; the real daemon returns EOF and the CLI silently drops readiness."
+  },
+  "cases": {
+    "accepted": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "coordination_record_absent": true,
+        "exact_framed_stdout_no_extra_bytes": true,
+        "no_response_before_request": true,
+        "normal_cli_exit": true,
+        "ready_transition_NOT_proven": true,
+        "real_ticket_redeemed_once": true,
+        "started_attempt_before_request_sent": true,
+        "started_rejected_by_real_daemon": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "done_ns": 338353744324758,
+      "exit_code": 0,
+      "ident": "remote-stdio-688453-1793114782-59b3121ed56f2594b2b0dee7516d181516b007c7671a356c6c7bdd5b6e30ade8",
+      "input_bytes": 1063,
+      "input_description": "five real length-prefixed JSON fixture frames; bearer omitted from retained input",
+      "name": "accepted",
+      "publisher_disconnected_monotonic_ns": 338353629958208,
+      "request_sent_monotonic_ns": 338353729942476,
+      "response_frames": [
+        {
+          "auth": {
+            "accepted_capabilities": [
+              "delta",
+              "full"
+            ],
+            "builder_signing_keys": [
+              "readiness-v23-1"
+            ]
+          },
+          "kind": "auth-ok"
+        },
+        {
+          "kind": "missing-inputs",
+          "refs": [
+            "input-a"
+          ],
+          "request_id": "request-1"
+        },
+        {
+          "kind": "build-queued",
+          "request_id": "request-1",
+          "session_id": "request-1"
+        },
+        {
+          "kind": "build-started",
+          "request_id": "request-1"
+        },
+        {
+          "kind": "build-finished",
+          "result": {
+            "builder_signing_key_id": "readiness-v23-1",
+            "output_digest_blake3": "9471488b0fc8d3411e436639c5cab49b6099385b40606ef1c5abfffeda7c7ba1",
+            "outputs": [
+              {
+                "artifact_attestation_digest_blake3": "95fde4aa04ae1810b7cc322b244e41aae64655ca5091280af337d3f549b21327",
+                "content_digest_blake3": "2a3b4fea49193f60ba09ed5ede3b90b60bacbd84df50fd39a0b405f3031c0c7e",
+                "logical_path": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture",
+                "name": "out",
+                "path_info_signing_key_id": "readiness-v23-1",
+                "size_bytes": 64
+              }
+            ],
+            "request_id": "request-1",
+            "store_prefix": "/mantle/store"
+          }
+        },
+        {
+          "kind": "output-transfer-done",
+          "report": {
+            "fallback_reason": null,
+            "mode": "delta",
+            "mode_label": "delta",
+            "reused_bytes": 48,
+            "transferred_bytes": 16,
+            "verified_builder_key": "readiness-v23-1"
+          }
+        },
+        {
+          "kind": "done",
+          "request_id": "request-1"
+        }
+      ],
+      "stderr": "",
+      "stdout_blake3": "1649ba8a321710f28ecb4224e6e938ea2809f21424c7c7b2f8900073f90cddc5",
+      "stdout_bytes": 1133,
+      "stdout_sha256": "bc047af86ccb8e3139b12015bd88a24cf596c77ade486f2ba08d51a73d58c57c",
+      "transitions": [
+        {
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-688221",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "daemon_reply_hex": "",
+          "queried_monotonic_ns": 338353629879801,
+          "real_daemon_ack": null,
+          "received_monotonic_ns": 338353504506156,
+          "rejected_by_daemon_eof": true,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-688453-1793114782-59b3121ed56f2594b2b0dee7516d181516b007c7671a356c6c7bdd5b6e30ade8",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-688453-1793114782-59b3121ed56f2594b2b0dee7516d181516b007c7671a356c6c7bdd5b6e30ade8",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    },
+    "malformed": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "coordination_record_absent": true,
+        "no_ready_publish": true,
+        "no_success_stdout_frames": true,
+        "started_attempt_rejected_by_real_daemon": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "exit_code": 3,
+      "ident": "remote-stdio-688732-1793114782-286302eabb9933b9e58f1fa98873f192799123a5ae2c6fd98bd88a869778dbec",
+      "input_bytes": 1,
+      "input_description": "one byte 00, truncated length prefix",
+      "name": "malformed",
+      "publisher_disconnected_monotonic_ns": 338354230767658,
+      "request_sent_monotonic_ns": 338354330829192,
+      "response_frames": [],
+      "stderr": "error: remote-frame-header-incomplete-or-unframed-stdout\n",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": [
+        {
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-688221",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "daemon_reply_hex": "",
+          "queried_monotonic_ns": 338354230616033,
+          "real_daemon_ack": null,
+          "received_monotonic_ns": 338354072193593,
+          "rejected_by_daemon_eof": true,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-688732-1793114782-286302eabb9933b9e58f1fa98873f192799123a5ae2c6fd98bd88a869778dbec",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-688732-1793114782-286302eabb9933b9e58f1fa98873f192799123a5ae2c6fd98bd88a869778dbec",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    },
+    "unknown-ticket": {
+      "after_disconnect_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "assertions": {
+        "coordination_record_absent": true,
+        "no_ready_publish": true,
+        "no_success_stdout_frames": true,
+        "started_attempt_rejected_by_real_daemon": true
+      },
+      "before_request_query": {
+        "classification": "coordination-state",
+        "components": [
+          {
+            "blocked_by": [],
+            "generation": 1,
+            "id": "live-daemon-688221",
+            "ready": true,
+            "restart_action": null,
+            "restart_policy": "never",
+            "states": [
+              "started",
+              "ready"
+            ]
+          }
+        ],
+        "evidence_eligible": false,
+        "schema": "mantle-service-readiness-v1"
+      },
+      "exit_code": 3,
+      "ident": "remote-stdio-688622-1793114782-bd55c3f1b695da2201ab986b2caf16b4f572a0a7bd33a1b110d3cc5ba62be6a7",
+      "input_bytes": 1063,
+      "input_description": "same five frames with unknown ticket ID; bearer omitted",
+      "name": "unknown-ticket",
+      "publisher_disconnected_monotonic_ns": 338353930324531,
+      "request_sent_monotonic_ns": 338354030448301,
+      "response_frames": [],
+      "stderr": "error: unknown-remote-ticket-ffffffffffffffffffffffffffffffff\n",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transitions": [
+        {
+          "after_forward_query": {
+            "classification": "coordination-state",
+            "components": [
+              {
+                "blocked_by": [],
+                "generation": 1,
+                "id": "live-daemon-688221",
+                "ready": true,
+                "restart_action": null,
+                "restart_policy": "never",
+                "states": [
+                  "started",
+                  "ready"
+                ]
+              }
+            ],
+            "evidence_eligible": false,
+            "schema": "mantle-service-readiness-v1"
+          },
+          "daemon_reply_hex": "",
+          "queried_monotonic_ns": 338353930184608,
+          "real_daemon_ack": null,
+          "received_monotonic_ns": 338353798103852,
+          "rejected_by_daemon_eof": true,
+          "request": {
+            "component": {
+              "depends_on": [],
+              "id": "remote-stdio-688622-1793114782-bd55c3f1b695da2201ab986b2caf16b4f572a0a7bd33a1b110d3cc5ba62be6a7",
+              "kind": "service",
+              "restart_policy": "never",
+              "stage_requirements": null,
+              "user_states": []
+            },
+            "observation": {
+              "exit": null,
+              "generation": 1,
+              "id": "remote-stdio-688622-1793114782-bd55c3f1b695da2201ab986b2caf16b4f572a0a7bd33a1b110d3cc5ba62be6a7",
+              "proof_completion": null,
+              "request_acknowledged": false,
+              "states": [
+                "started"
+              ]
+            },
+            "op": "publish",
+            "schema": "mantle-service-readiness-v1"
+          }
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "all_owned_processes_reaped": true,
+    "proxy_threads_stopped": true,
+    "socket_paths_removed": true
+  },
+  "commands": [
+    {
+      "argv": [
+        "openssl",
+        "genpkey",
+        "-algorithm",
+        "ED25519",
+        "-outform",
+        "DER"
+      ],
+      "exit_code": 0,
+      "secret_stdout_omitted": true,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "[private DER omitted]",
+      "stdout_bytes": 48
+    },
+    {
+      "argv": [
+        "openssl",
+        "pkey",
+        "-inform",
+        "DER",
+        "-pubout",
+        "-outform",
+        "DER"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdin": "private DER in memory; omitted",
+      "stdout": "302a300506032b65700321009a43d792fda8bdc0a27fcb3e2c6acf7515462782df68a73b8adf957c3edfda71",
+      "stdout_encoding": "hex",
+      "stdout_bytes": 44
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--json",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "metadata-v23",
+        "--binding",
+        "metadata"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "{\n  \"diagnostic\": \"remote serve metadata is stable; stdio-once is a supported framed stdio binding; ssh-stdio reuses the same frame contract; production P2P listener dispatch remains gated\",\n  \"endpoint_id\": \"metadata-v23\",\n  \"frame_encoding\": \"u32be-length-prefixed-json\",\n  \"protocol\": \"mantle-remote-build/1\",\n  \"status\": \"metadata-only\",\n  \"supported_bindings\": [\n    \"loopback\",\n    \"stdio\",\n    \"ssh-stdio\",\n    \"p2p\"\n  ]\n}\n",
+      "stdout_bytes": 430
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--json",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/state",
+        "remote",
+        "ticket",
+        "create",
+        "--display-name",
+        "readiness-v23",
+        "--ttl-secs",
+        "3600",
+        "--uses",
+        "1",
+        "--max-build-time-secs",
+        "600",
+        "--max-upload-bytes",
+        "1000",
+        "--ticket-fd",
+        "7",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "{\n  \"ticket\": {\n    \"id\": \"244bcf728935a4a8f312e47c9bcf3d48\",\n    \"display_name\": \"readiness-v23\",\n    \"verifier_key_id\": \"readiness-ticket-v23\",\n    \"created_unix_s\": 1793114782,\n    \"expires_unix_s\": 1793118382,\n    \"uses_remaining\": 1,\n    \"max_build_time_secs\": 600,\n    \"max_upload_bytes\": 1000,\n    \"bound_client_endpoint\": null,\n    \"revoked\": false\n  },\n  \"delivery\": {\n    \"target\": \"caller-owned-fd\",\n    \"delivered\": true\n  }\n}\n",
+      "stdout_bytes": 439
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 0,
+      "protocol_stdout_bytes": 1133,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/accepted-stdout.bin",
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stdout": "[exact binary framed stdout retained separately]",
+      "stdout_bytes": 1133
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 3,
+      "protocol_stdout_bytes": 0,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/unknown-ticket-stdout.bin",
+      "stderr": "error: unknown-remote-ticket-ffffffffffffffffffffffffffffffff\n",
+      "stderr_bytes": 62,
+      "stdout": "[exact binary framed stdout retained separately]",
+      "stdout_bytes": 0
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/state",
+        "remote",
+        "serve",
+        "--endpoint-id",
+        "builder-1",
+        "--binding",
+        "stdio-once",
+        "--signing-key-id",
+        "readiness-v23-1",
+        "--secret-manifest",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/secretspec.toml"
+      ],
+      "exit_code": 3,
+      "protocol_stdout_bytes": 0,
+      "protocol_stdout_path": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/malformed-stdout.bin",
+      "stderr": "error: remote-frame-header-incomplete-or-unframed-stdout\n",
+      "stderr_bytes": 57,
+      "stdout": "[exact binary framed stdout retained separately]",
+      "stdout_bytes": 0
+    },
+    {
+      "argv": [
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+        "--state-dir",
+        "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/readiness-remote-stdio-v23/observed-frozen-bug/daemon-state",
+        "remote",
+        "live",
+        "serve",
+        "--socket",
+        "/tmp/mr23-rs-688019.sock"
+      ],
+      "exit_code": 0,
+      "stderr": "live build daemon listening on /tmp/mr23-rs-688019.sock\n",
+      "stderr_bytes": 56,
+      "stdout": "",
+      "stdout_bytes": 0
+    }
+  ],
+  "driver_blake3": "3f5070fb6c5adc1a72a8871aabe804188174427bfe99ced3fb437b2cd10475b6",
+  "executable": "/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/cargo-denial-frozen-v21/runtime/tools/mantle",
+  "executable_blake3_after": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+  "executable_blake3_before": "562cbbef61296953915d07f4785a453ea7e3bdea4d9acbebe9561d90f1039df5",
+  "executable_unchanged": true,
+  "generated_credentials": {
+    "bearer_delivery": "anonymous inherited pipe; never retained",
+    "private_directory_mode": "0o700",
+    "private_file_modes": {
+      "RESULT_SIGNING_KEY": "0o600",
+      "TICKET_VERIFIER_KEY": "0o600"
+    },
+    "result_signing_public_key": "readiness-v23-1:mkPXkv2ovcCif8s+LGrPdRVGJ4LfaKc7it+VfD7f2nE="
+  },
+  "limits": [
+    "Coordination state is explicitly non-evidence-eligible; no lifecycle approval, full G1/G2, archive, release, or source-built proof.",
+    "Accepted exchange uses the existing CLI fixture executor, not physical store execution or cryptographic output-PathInfo signature verification.",
+    "Generated Ed25519 credentials use the real provider and signing-key identity path; keyed ticket verification and durable redemption are real.",
+    "The readiness-only transparent proxy forwards original bytes to a real daemon, returning actual replies or EOF; no acknowledgements or publications are synthesized.",
+    "Frozen executable rejects its own oversized remote-stdio readiness identity; started/ready/complete coordination transitions and successful flush-to-ready ordering cannot be demonstrated."
+  ],
+  "metadata": {
+    "after_query": {
+      "classification": "coordination-state",
+      "components": [
+        {
+          "blocked_by": [],
+          "generation": 1,
+          "id": "live-daemon-688221",
+          "ready": true,
+          "restart_action": null,
+          "restart_policy": "never",
+          "states": [
+            "started",
+            "ready"
+          ]
+        }
+      ],
+      "evidence_eligible": false,
+      "schema": "mantle-service-readiness-v1"
+    },
+    "assertions": {
+      "coordination_unchanged": true,
+      "does_not_claim_ready": true,
+      "exited_normally_instead_of_listening": true,
+      "no_readiness_connection": true
+    },
+    "json": {
+      "diagnostic": "remote serve metadata is stable; stdio-once is a supported framed stdio binding; ssh-stdio reuses the same frame contract; production P2P listener dispatch remains gated",
+      "endpoint_id": "metadata-v23",
+      "frame_encoding": "u32be-length-prefixed-json",
+      "protocol": "mantle-remote-build/1",
+      "status": "metadata-only",
+      "supported_bindings": [
+        "loopback",
+        "stdio",
+        "ssh-stdio",
+        "p2p"
+      ]
+    }
+  },
+  "proxy_connections": [
+    {
+      "case": "accepted",
+      "time_monotonic_ns": 338353504053556
+    },
+    {
+      "case": "unknown-ticket",
+      "time_monotonic_ns": 338353797727104
+    },
+    {
+      "case": "malformed",
+      "time_monotonic_ns": 338354071766211
+    }
+  ],
+  "proxy_errors": [],
+  "schema": "mantle-external-readiness-remote-stdio-v23",
+  "status": "observed-product-bug",
+  "supported_facts": [
+    "T3.3 metadata-only exits 0, reports metadata-only, opens no readiness publisher and leaves daemon coordination unchanged.",
+    "T3.3 stdio-once attempts started with restart_policy=never before reading requests, but the real daemon rejects the publication with EOF.",
+    "T3.3 accepted real ticket is durably redeemed (1 to 0), emits exact framed auth/missing-inputs/build-finished/output-transfer-done/done response with the generated signing-key identity and exits normally.",
+    "T3.3 malformed and unknown-ticket requests exit nonzero with zero stdout bytes and no ready publication; no coordination record exists for any stdio case."
+  ],
+  "task": "T3.3",
+  "ticket_uses_after": 0,
+  "ticket_uses_before": 1,
+  "unsupported_facts": [
+    "Daemon-observed started state for actual stdio-once.",
+    "Ready only after admitted response flush.",
+    "Ready -> complete normal exit/retraction and terminal restart action none for actual stdio-once.",
+    "Physical signed store output or independent cryptographic verification of a result signature."
+  ]
+}
