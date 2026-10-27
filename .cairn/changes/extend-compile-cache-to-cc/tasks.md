@@ -1,9 +1,10 @@
 # Tasks: Extend the compile cache to C and C++ builders
 
-Source implementation and selected native runtime fixtures are present. Checked
-tasks identify delivered source and fixtures, not a representative bootstrap
-rebuild, protected-exec audit, performance result, or final gate. The retained
-`evidence/gates-2026-09-10.md` is proposal-stage evidence only.
+Source implementation and selected native cache/protected-inventory fixtures
+are present. Checked tasks identify delivered source and bounded fixtures, not
+a representative bootstrap rebuild, production protected-build integration,
+performance result, or final gate. `evidence/gates-2026-09-10.md` remains
+proposal-stage evidence only.
 
 The scoped native runtime retry passed with the retained immutable driver and
 daemon: 20 cache cases, real C/C++ compilation, FIFO-gated contention,
@@ -31,6 +32,20 @@ identity/timing, the cache-off fixed point, and an owner-admitted cold
 source-built cohort remain unaccepted. Compile-cache and proof-admission
 maintainers own these report/guard surfaces and their regression rails.
 
+The declared-driver continuation completes T2.2. The final frozen-subject run
+observes real protected C/C++ compilation, space-bearing argument forwarding
+matching the direct compiler's streams/status, and an identical-object cache
+hit without a compiler execution. Four controls deny the undeclared driver or
+compiler and their wrong-digest variants. Exact 1 MiB inventory input is
+accepted; oversized and malformed inputs fail before audit creation.
+`evidence/protected-driver-2026-10-27.json` retains the selected checks, raw
+audits/streams, source and executable identities, and failed predecessors.
+The inventoried BusyBox seed constructs the exact child environment with
+`env -i`; driver admission still rejects undeclared bindings such as bwrap's
+implicit `PWD`. Compile-cache and protected-exec maintainers own this rail.
+T3.1's production endpoint/inventory integration, T3.2/T4.2's representative
+chain and cache-off fixed point, and T4.3/T4.4's full gates/archive remain open.
+
 ## Phase 1: Baseline and contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current cache seam (`crunch-rust-cache`, `crunch-rustc-wrapper`, daemon, strict lanes), a timed uncached baseline of one representative bootstrap chain rebuild, and focused test output. r[mantle.cc_compile_cache.proof_exclusion]
@@ -40,7 +55,7 @@ maintainers own these report/guard surfaces and their regression rails.
 ## Phase 2: Core and driver
 
 - [x] [serial] T2.1 Implement pure key normalization, manifest comparison, and typed admission decisions in a new core module beside `crunch-rust-cache-core`. r[mantle.cc_compile_cache.content_keyed_identity]
-- [ ] [serial] T2.2 Implement the driver seam with forward-unchanged behavior for unclassifiable invocations and protected-inventory compatibility. r[mantle.cc_compile_cache.driver_boundary]
+- [x] [serial] T2.2 Implement the driver seam with forward-unchanged behavior for unclassifiable invocations and protected-inventory compatibility. r[mantle.cc_compile_cache.driver_boundary]
 - [x] [serial] T2.3 Extend the daemon with compile-object serving and depfile manifest storage. r[mantle.cc_compile_cache.content_keyed_identity]
 - [x] [parallel] T2.4 Add positive fixtures: identical-content hit, rebuilt-identical dependency hit, forward-unchanged receipt. r[mantle.cc_compile_cache.content_keyed_identity] r[mantle.cc_compile_cache.driver_boundary]
 - [x] [parallel] T2.5 Add negative fixtures: changed source, argument, tool, or manifest input misses; unknown-manifest failure replay refusal; daemon-unavailable degradation. r[mantle.cc_compile_cache.content_keyed_identity] r[mantle.cc_compile_cache.non_input_cache_boundary]

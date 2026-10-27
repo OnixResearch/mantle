@@ -8,6 +8,10 @@ FIFO-gated concurrency/fairness, saturated Unix backlogs and authority death
 during compilation. Link/preprocess probe caching is not supported;
 preprocessing in the contention fixture is forwarded unchanged, with slots only.
 Process-tree ownership is cooperative: descendants must retain their fresh PGID.
+With --protected-exec-runner and --sandbox-shell, also exercises declared
+driver/compiler inventory admission in a real bwrap sandbox, exact forwarding,
+cache reuse, and missing-entry/digest-mismatch denials. This is not bootstrap
+acceptance or a fixed-point proof.
 """
 import argparse
 import copy
@@ -49,11 +53,20 @@ def main():
     parser.add_argument("--work-dir", required=True, type=Path)
     parser.add_argument("--toolchain-root", action="append", type=Path, default=[],
                         help="Additional complete compiler/runtime input roots")
+    parser.add_argument("--protected-exec-runner",
+                        help="Prebuilt protected_cc_driver example; enables inventory controls")
+    parser.add_argument("--sandbox-shell",
+                        help="Explicit shell seed for the protected fixture inventory")
     args = parser.parse_args()
     driver = executable(args.driver, "driver")
     daemon_binary = executable(args.daemon, "daemon")
     compiler = executable(args.compiler, "compiler")
     cxx = executable(args.cxx, "cxx")
+    require(bool(args.protected_exec_runner) == bool(args.sandbox_shell),
+            "--protected-exec-runner and --sandbox-shell must be selected together")
+    protected_runner = (executable(args.protected_exec_runner, "protected runner")
+                        if args.protected_exec_runner else None)
+    sandbox_shell = executable(args.sandbox_shell, "sandbox shell") if args.sandbox_shell else None
     utilities = {}
     for name in ("b3sum", "bwrap", "ldd"):
         located = shutil.which(name)
@@ -115,6 +128,7 @@ def main():
             else:
                 shutil.copy2(assembler_path, destination)
             tool_files.add(assembler_path)
+        compiler_tools = set(tool_files)
         # Bind dynamic runtimes as content inputs too. Missing runtimes fail in
         # the real process; ldd's static-executable nonzero status is accepted
         # only when its diagnostic explicitly identifies a static executable.
@@ -298,6 +312,156 @@ def main():
         forward_receipt = json.loads(added.pop().read_text())
         require(forward_receipt["cache_disposition"] == "forward-unchanged", "unknown invocation did not record forward")
         evidence["forward_receipt"] = forward_receipt
+
+        if protected_runner is not None:
+            protected = {"status": "running", "allowed": [], "denied": [],
+                         "claim_class": "bounded-native-fixture", "proof_evidence": False,
+                         "non_claims": ["not-bootstrap-acceptance", "not-representative-chain-parity",
+                                        "not-fixed-point-proof"]}
+            evidence["protected_inventory"] = protected
+            entries = []
+            named_tools = [(utilities["bwrap"], "sandbox-entry", "sandbox-entry"),
+                           (sandbox_shell, "sandbox-shell", "sandbox-shell"),
+                           (driver, "cc-driver", "bootstrap-build-tool"),
+                           (compiler, "c-compiler", "bootstrap-toolchain-tool"),
+                           (cxx, "cxx-compiler", "bootstrap-toolchain-tool")]
+            declared = {path for path, _, _ in named_tools}
+            helpers = sorted((compiler_tools | {work / "tools" / "as"}) - declared)
+            named_tools.extend((path, f"compiler-helper-{index}", "bootstrap-toolchain-tool")
+                               for index, path in enumerate(helpers))
+            require(len({path for path, _, _ in named_tools}) == len(named_tools),
+                    "protected fixture requires distinct driver, compiler and sandbox seed paths")
+            for path, entry_id, role in named_tools:
+                version_argv = ([driver, "--policy", forward_policy_path, "--", "-dumpmachine"]
+                                if path == driver else [path, "--help" if path == sandbox_shell else "--version"])
+                version, _ = run("protected-version-" + entry_id, version_argv, process_env)
+                sample = (version.stdout + version.stderr)[:4096]
+                sample_path = work / f"protected-version-{entry_id}.bounded"
+                sample_path.write_bytes(sample)
+                entries.append({
+                    "schema_version": "host-tool-free-stage0-v1", "id": entry_id, "role": role,
+                    "phase": "protected", "executable_path": str(path),
+                    "digest": {"algorithm": "blake3", "hex": digest(path, "protected-" + entry_id)},
+                    "version_evidence": {"command": [str(arg) for arg in version_argv], "byte_limit": 4096,
+                                         "output_digest": {"algorithm": "blake3",
+                                                           "hex": digest(sample_path, "version-" + entry_id)},
+                                         "output_sample": sample.decode(), "exit_code": version.returncode},
+                    "provenance_category": "test-fixture", "provenance": "selected native compiler fixture",
+                    "allowed_reason": "declared compiler-driver inventory compatibility fixture",
+                    "owner": "mantle-compile-cache", "required": role in ("sandbox-entry", "sandbox-shell")})
+            inventory = {"executable_entries": entries, "source_entries": []}
+            inventory_path = work / "protected.inventory.json"
+            write_json(inventory_path, inventory)
+            entry_by_id = {entry["id"]: entry for entry in entries}
+            entry_by_path = {entry["executable_path"]: entry for entry in entries}
+            protected_policy = copy.deepcopy(off_policy)
+            protected_policy["slots_enabled"] = False
+            protected_policy_path = work / "protected.policy.json"
+            write_json(protected_policy_path, protected_policy)
+
+            def supervised(label, selected_inventory, invocation, success=True):
+                audit_path = work / f"{label}.audit.json"
+                sandbox = [utilities["bwrap"], "--die-with-parent", "--unshare-pid", "--new-session",
+                           "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev", "--proc", "/proc",
+                           "--bind", work, work, "--clearenv"]
+                # bwrap itself adds PWD after processing environment options.
+                # Construct the exact child environment with the declared seed,
+                # rather than ignoring an undeclared binding in driver policy.
+                child_environment = [f"{key}={value}" for key, value in process_env.items()]
+                before = set((work / "receipts").iterdir())
+                result, _ = run(label, [protected_runner, "--inventory", selected_inventory,
+                                       "--audit", audit_path, "--", *sandbox, "--", sandbox_shell,
+                                       "env", "-i", *child_environment, *invocation],
+                                process_env, success=success)
+                audit = json.loads(audit_path.read_text())
+                require(audit["schema"] == "mantle-protected-cc-driver-observation-v1" and
+                        audit["proof_evidence"] is False and audit["audit_error"] is None,
+                        f"{label}: invalid or incomplete protected observation")
+                require(audit["events"], f"{label}: no actual protected exec events")
+                for event in audit["events"]:
+                    require(event["phase"] == "protected", f"{label}: non-protected audit event")
+                    if event["policy_decision"] == "allowed":
+                        declared_entry = entry_by_path.get(event["executable_path"])
+                        require(declared_entry is not None and
+                                event["inventory_entry_id"] == declared_entry["id"] and
+                                event["digest_hex"] == declared_entry["digest"]["hex"],
+                                f"{label}: allowed exec lacks its exact declared path and digest")
+                added = set((work / "receipts").iterdir()) - before
+                receipts = [json.loads(path.read_text()) for path in sorted(added)]
+                row = {"label": label, "audit": str(audit_path), "observed": audit, "receipts": receipts}
+                protected["allowed" if success else "denied"].append(row)
+                return result, audit, receipts
+
+            for label, selected_compiler, selected_source, language, expected_object in (
+                    ("protected-c", compiler, source / "a.c", "c", off_path),
+                    ("protected-cpp", cxx, source / "a.cpp", "c++", cpp_plain)):
+                selected_policy = copy.deepcopy(protected_policy)
+                selected_policy["compiler"] = str(selected_compiler)
+                selected_path = work / f"{label}.policy.json"
+                write_json(selected_path, selected_policy)
+                output = work / "outputs" / f"{label}.o"
+                invocation = ["-x", language, "-c", str(selected_source), "-o", str(output),
+                              "-O2", "-g0", "-nostdinc", "-DOPTION_VALUE=3", f"-ffile-prefix-map={source}=src"]
+                if language == "c++":
+                    invocation.append("-nostdinc++")
+                _, audit, receipts = supervised(label, inventory_path,
+                                               [driver, "--policy", selected_path, "--", *invocation])
+                paths = {event["executable_path"] for event in audit["events"]}
+                require(all(event["policy_decision"] == "allowed" for event in audit["events"]),
+                        f"{label}: unexpected denied or fallback exec")
+                require({str(utilities["bwrap"]), str(driver), str(selected_compiler), str(work / "tools" / "as")} <= paths,
+                        f"{label}: real sandbox, driver, compiler and assembler executions were not observed")
+                require(len(receipts) == 1 and receipts[0]["cache_disposition"] == "cache-off",
+                        f"{label}: not an actual uncached compiler invocation")
+                require(output.read_bytes() == expected_object.read_bytes(), f"{label}: protected object bytes differ")
+
+            quoted_args = ["-E", "-nostdinc", "-DOPTION_VALUE=(3 + 4)", str(source / "a.c")]
+            quoted_direct, _ = run("protected-forward-direct", [compiler, *quoted_args], admitted_env)
+            forwarded, audit, receipts = supervised("protected-forward", inventory_path,
+                                                    [driver, "--policy", protected_policy_path, "--", *quoted_args])
+            require(all(event["policy_decision"] == "allowed" for event in audit["events"]),
+                    "protected forwarding left the declared inventory")
+            require((forwarded.returncode, forwarded.stdout, forwarded.stderr) ==
+                    (quoted_direct.returncode, quoted_direct.stdout, quoted_direct.stderr),
+                    "protected forwarding changed original compiler arguments or streams")
+            require(len(receipts) == 1 and receipts[0]["cache_disposition"] == "forward-unchanged",
+                    "protected unknown invocation was not recorded as a forward")
+
+            hit_output = work / "outputs" / "protected-hit.o"
+            _, audit, receipts = supervised("protected-hit", inventory_path,
+                [driver, "--policy", forward_policy_path, "--", "-x", "c", "-c", str(source / "a.c"),
+                 "-o", hit_output, "-O2", "-g0", "-nostdinc", "-DOPTION_VALUE=3", f"-ffile-prefix-map={source}=src"])
+            require(all(event["policy_decision"] == "allowed" for event in audit["events"]),
+                    "protected cache hit left the declared inventory")
+            require({event["executable_path"] for event in audit["events"]} ==
+                    {str(utilities["bwrap"]), str(sandbox_shell), str(driver)},
+                    "protected cache hit unexpectedly ran a compiler or unadmitted tool")
+            require(len(receipts) == 1 and receipts[0]["cache_disposition"] == "object-hit" and
+                    hit_output.read_bytes() == cold_path.read_bytes(), "protected cache hit failed byte identity")
+
+            for target_id in ("cc-driver", "c-compiler"):
+                for control in ("undeclared", "wrong-digest"):
+                    label = f"protected-{target_id}-{control}"
+                    negative = copy.deepcopy(inventory)
+                    if control == "undeclared":
+                        negative["executable_entries"] = [entry for entry in negative["executable_entries"]
+                                                          if entry["id"] != target_id]
+                    else:
+                        next(entry for entry in negative["executable_entries"]
+                             if entry["id"] == target_id)["digest"]["hex"] = "0" * 64
+                    negative_path = work / f"{label}.inventory.json"
+                    write_json(negative_path, negative)
+                    result, audit, _ = supervised(label, negative_path,
+                        [driver, "--policy", protected_policy_path, "--", *quoted_args], success=False)
+                    denied = [event for event in audit["events"] if event["policy_decision"] == "denied"]
+                    require(result.returncode != 0 and len(denied) == 1 and
+                            denied[0]["executable_path"] == entry_by_id[target_id]["executable_path"],
+                            f"{label}: expected the exact unadmitted execution to fail closed")
+                    require(("digest mismatch" if control == "wrong-digest" else "undeclared") in denied[0]["reason"],
+                            f"{label}: denied for an unrelated reason")
+                    require(all(event["policy_decision"] in ("allowed", "denied") for event in audit["events"]),
+                            f"{label}: supervisor used a fallback decision")
+            protected["status"] = "passed"
 
         # The real build sandbox has a private PID namespace. Its child PID
         # must not be mistaken for a host PID by the slot daemon.

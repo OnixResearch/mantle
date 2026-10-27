@@ -201,6 +201,10 @@ name = "benchmark_compare"
 path = "examples/benchmark_compare.rs"
 
 [[example]]
+name = "protected_cc_driver"
+path = "examples/protected_cc_driver.rs"
+
+[[example]]
 name = "picolibc_compare"
 path = "examples/picolibc_compare.rs"
 
