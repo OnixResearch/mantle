@@ -1,0 +1,6 @@
+# Planned validation commands; no execution is claimed by this file.
+nix develop -c cargo test -p mantle-wasm-consumer-verifier --test consumer_fixtures
+nix develop -c cargo check -p mantle-wasm-consumer-verifier --no-default-features
+nix develop -c cargo fmt --check -p mantle-wasm-consumer-verifier
+nix develop -c cargo clippy -p mantle-wasm-consumer-verifier --all-targets --no-deps -- -D warnings
+nix develop -c cargo test -p mantle --test wasm_component_cli production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence -- --exact

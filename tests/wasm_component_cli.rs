@@ -154,6 +154,27 @@ fn production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_ev
     assert!(!output.join("source").exists(), "work source must not enter the bounded publication");
     assert!(!output.join("target").exists(), "compiler scratch must not enter the bounded publication");
     crunch_wasm_component::verify_materialization_bundle_files(bundle).unwrap();
+    // r[verify mantle.wasm_source_closure_trees.pipeline]
+    let consumer = mantle_wasm_consumer_verifier::ConsumerRoot::open(Path::new("/")).unwrap();
+    let consumer_report = consumer.verify_bundle(bundle.clone()).unwrap();
+    assert_eq!(consumer_report.status, mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified);
+    assert!(
+        consumer_report
+            .members
+            .iter()
+            .all(|member| { member.status == Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched) })
+    );
+    let private_snapshot = tempfile::tempdir().unwrap();
+    let destination = mantle_wasm_consumer_verifier::ConsumerRoot::open(private_snapshot.path()).unwrap();
+    let copied = consumer.copy_source_closure(bundle, &destination).unwrap();
+    assert_eq!(copied.digest_blake3, bundle.source_closure.digest_blake3.to_string());
+    assert_eq!(copied.size_bytes, bundle.source_closure.size_bytes);
+    let copied_source = private_snapshot.path().join(bundle.source_closure.logical_path.trim_start_matches('/'));
+    let measured_copy =
+        crunch_wasm_component::copy_source_tree(&copied_source, &private_snapshot.path().join("source-remeasurement"))
+            .unwrap();
+    assert_eq!(measured_copy.digest_blake3, bundle.source_closure.digest_blake3);
+    assert_eq!(measured_copy.size_bytes, bundle.source_closure.size_bytes);
     crunch_wasm_component::verify_pipeline_execution_report_files(&report).unwrap();
     assert_required_tools_executed(&report);
     fs::write(output.join("component-attestation.json"), b"{}\n").unwrap();

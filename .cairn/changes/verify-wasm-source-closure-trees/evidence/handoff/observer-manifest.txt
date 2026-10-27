@@ -1,0 +1,13 @@
+[package]
+name = "molten-source-tree-producer-observer"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+crunch-wasm-component = { path = "/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-wasm-component" }
+crunch-wasm-component-core = { path = "/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-wasm-component-core" }
+mantle-wasm-consumer-verifier = { path = "/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier", features = ["std"] }
+assert_cmd = "2"
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"

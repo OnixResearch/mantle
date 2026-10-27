@@ -38,7 +38,7 @@
       flake = false;
     };
     boundedTreeSource = {
-      url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=cc9e0fb611e75bb2d7f662435d1918653c93ce07";
+      url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06";
       flake = false;
     };
     transactionalReconciliationSource = {
@@ -275,7 +275,7 @@
             && durablePublicationManifest.package.publish == false
           ) "Mantle durable-file-publication Cargo/Nix source identity, package, RID, or license drifted";
           true;
-        boundedTreeRevision = "cc9e0fb611e75bb2d7f662435d1918653c93ce07";
+        boundedTreeRevision = "250f3b25d0933c2fa106aa82d1cc17a496716f06";
         boundedTreeRid = "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX";
         boundedTreeRepository = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git";
         boundedTreePackageNames = [
@@ -285,10 +285,15 @@
         boundedTreeReleaseCoreManifest = builtins.fromTOML (
           builtins.readFile ./crates/crunch-release-core/Cargo.toml
         );
+        boundedTreeVerifierManifest = builtins.fromTOML (
+          builtins.readFile ./crates/mantle-wasm-consumer-verifier/Cargo.toml
+        );
         boundedTreeCargoDependencies = [
           cargoManifest.dependencies.bounded-tree-cap
           cargoManifest.dependencies.bounded-tree-core
           boundedTreeReleaseCoreManifest.dependencies.bounded-tree-core
+          boundedTreeVerifierManifest.dependencies.bounded-tree-cap
+          boundedTreeVerifierManifest.dependencies.bounded-tree-core
         ];
         boundedTreeLockPackages = builtins.filter (
           package: builtins.elem package.name boundedTreePackageNames

@@ -433,3 +433,353 @@ fn rebuild(request: crunch_wasm_component_core::MaterializationBundleRequest) ->
         .bundle
         .expect("fixture request rebuilds a bundle")
 }
+
+fn stream_boundary_bytes() -> Vec<u8> {
+    (0..65_537).map(|index| (index % 256) as u8).collect()
+}
+
+/// Build the closure with the real producer, without rewriting its identity.
+fn producer_tree_bundle(fixture: &FixtureRoot) -> MaterializationBundle {
+    use std::os::unix::ffi::OsStringExt;
+    let bundle = valid_bundle(fixture);
+    let input = fixture.dir.join("producer-input");
+    fs::create_dir_all(input.join("a-dir/nested/empty")).unwrap();
+    fs::create_dir_all(input.join("z-dir/empty")).unwrap();
+    fs::write(input.join("a-dir/nested/lib.rs"), b"pub fn component() {}\n").unwrap();
+    fs::write(input.join("a-dir.x"), stream_boundary_bytes()).unwrap();
+    fs::write(input.join("z-dir/other"), b"other").unwrap();
+    fs::write(input.join(std::ffi::OsString::from_vec(vec![b'z', 0xff])), b"native filename").unwrap();
+    let mut source = crunch_wasm_component::copy_source_tree(&input, &fixture.dir.join("members/source-tree"))
+        .expect("real producer copies nested/empty source tree");
+    source.logical_path = String::from("/members/source-tree");
+    let mut request = request_from_bundle(&bundle);
+    request.source_closure = source;
+    rebuild(request)
+}
+
+// r[verify mantle.wasm_source_closure_trees.identity]
+// r[verify mantle.wasm_source_closure_trees.copy]
+#[test]
+fn producer_tree_verifies_and_copies_exactly_with_empty_directories() {
+    use std::os::fd::AsRawFd;
+    let fixture = FixtureRoot::new("producer-tree");
+    let bundle = producer_tree_bundle(&fixture);
+    let report = fixture.root().verify_bundle(bundle.clone()).unwrap();
+    assert_eq!(report.status, ConsumerVerificationStatus::Verified);
+    assert!(report.members.iter().all(|member| member.status == Some(ConsumerMemberStatus::Matched)));
+    let destination = FixtureRoot::new("tree-copy");
+    let opened = fs::File::open(&destination.dir).unwrap();
+    let bridge = PathBuf::from(format!("/proc/self/fd/{}", opened.as_raw_fd()));
+    let target = ConsumerRoot::open(&bridge).unwrap();
+    let observation = fixture.root().copy_source_closure(&bundle, &target).unwrap();
+    assert_eq!(observation.role, "source-closure");
+    assert_eq!(observation.digest_blake3, bundle.source_closure.digest_blake3.to_string());
+    assert_eq!(observation.size_bytes, bundle.source_closure.size_bytes);
+    assert_eq!(observation.status, Some(ConsumerMemberStatus::Matched));
+    let copied = destination.dir.join("members/source-tree");
+    assert!(copied.join("a-dir/nested/empty").is_dir());
+    assert!(copied.join("z-dir/empty").is_dir());
+    assert_eq!(fs::read(copied.join("a-dir.x")).unwrap(), stream_boundary_bytes());
+    let remeasured = crunch_wasm_component::copy_source_tree(&copied, &destination.dir.join("remeasured")).unwrap();
+    assert_eq!(remeasured.digest_blake3, bundle.source_closure.digest_blake3);
+    assert_eq!(remeasured.size_bytes, bundle.source_closure.size_bytes);
+    assert!(matches!(
+        fixture.root().copy_source_closure(&bundle, &target),
+        Err(ShellError::DestinationUnavailable)
+    ));
+    assert_eq!(fs::read(copied.join("a-dir.x")).unwrap(), stream_boundary_bytes());
+}
+
+// r[verify mantle.wasm_source_closure_trees.identity]
+#[test]
+fn tree_bytes_name_empty_directory_and_size_drift_fail_closed() {
+    for drift in ["bytes", "tail-byte", "name", "empty-dir", "size", "declared-size"] {
+        let fixture = FixtureRoot::new(drift);
+        let mut bundle = producer_tree_bundle(&fixture);
+        let tree = fixture.dir.join("members/source-tree");
+        match drift {
+            "bytes" => fs::write(tree.join("z-dir/other"), b"OTHER").unwrap(),
+            "tail-byte" => {
+                let mut bytes = stream_boundary_bytes();
+                bytes[65_536] ^= 0xff;
+                fs::write(tree.join("a-dir.x"), bytes).unwrap();
+            }
+            "name" => fs::rename(tree.join("z-dir/other"), tree.join("z-dir/renamed")).unwrap(),
+            "empty-dir" => fs::remove_dir(tree.join("z-dir/empty")).unwrap(),
+            "size" => fs::write(tree.join("z-dir/other"), b"longer bytes").unwrap(),
+            "declared-size" => {
+                let mut request = request_from_bundle(&bundle);
+                request.source_closure.size_bytes += 1;
+                bundle = rebuild(request);
+            }
+            _ => unreachable!(),
+        }
+        let report = fixture.root().verify_bundle(bundle.clone()).unwrap();
+        assert_eq!(report.status, ConsumerVerificationStatus::Rejected, "{drift}");
+        let source = report.members.iter().find(|member| member.role == "source-closure").unwrap();
+        assert_eq!(source.status, Some(ConsumerMemberStatus::Mismatched), "{drift}");
+        let destination = FixtureRoot::new("rejected-copy");
+        assert!(
+            matches!(fixture.root().copy_source_closure(&bundle, &destination.root()), Err(ShellError::MemberMismatch)),
+            "{drift}"
+        );
+        assert!(!destination.dir.join("members/source-tree").exists());
+    }
+}
+
+// r[verify mantle.wasm_source_closure_trees.capabilities]
+#[test]
+fn tree_missing_symlink_fifo_and_socket_never_verify_or_copy() {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::symlink;
+    for substitution in ["missing", "leaf-link", "parent-link", "closure-link", "fifo", "socket"] {
+        let fixture = FixtureRoot::new(substitution);
+        let bundle = producer_tree_bundle(&fixture);
+        let tree = fixture.dir.join("members/source-tree");
+        let mut listener = None;
+        match substitution {
+            "missing" => fs::remove_dir_all(&tree).unwrap(),
+            "leaf-link" => {
+                fs::remove_file(tree.join("z-dir/other")).unwrap();
+                symlink(fixture.dir.join("producer-input/z-dir/other"), tree.join("z-dir/other")).unwrap();
+            }
+            "parent-link" => {
+                fs::rename(tree.join("z-dir"), fixture.dir.join("saved-z-dir")).unwrap();
+                symlink(fixture.dir.join("saved-z-dir"), tree.join("z-dir")).unwrap();
+            }
+            "closure-link" => {
+                fs::rename(&tree, fixture.dir.join("saved-tree")).unwrap();
+                symlink(fixture.dir.join("saved-tree"), &tree).unwrap();
+            }
+            "fifo" => {
+                fs::remove_file(tree.join("z-dir/other")).unwrap();
+                assert!(std::process::Command::new("mkfifo").arg(tree.join("z-dir/other")).status().unwrap().success());
+            }
+            "socket" => {
+                fs::remove_file(tree.join("z-dir/other")).unwrap();
+                let parent =
+                    cap_std::fs::Dir::open_ambient_dir(tree.join("z-dir"), cap_std::ambient_authority()).unwrap();
+                let socket_path = format!("/proc/self/fd/{}/other", parent.as_raw_fd());
+                listener = Some(std::os::unix::net::UnixListener::bind(socket_path).unwrap());
+            }
+            _ => unreachable!(),
+        }
+        let report = fixture.root().verify_bundle(bundle.clone()).unwrap();
+        assert_ne!(report.status, ConsumerVerificationStatus::Verified, "{substitution}");
+        assert_ne!(
+            report.members.iter().find(|member| member.role == "source-closure").unwrap().status,
+            Some(ConsumerMemberStatus::Matched)
+        );
+        let destination = FixtureRoot::new("unsupported-copy");
+        assert!(fixture.root().copy_source_closure(&bundle, &destination.root()).is_err(), "{substitution}");
+        assert!(!destination.dir.join("members/source-tree").exists());
+        drop(listener);
+    }
+}
+
+// r[verify mantle.wasm_source_closure_trees.capabilities]
+#[test]
+fn opened_roots_survive_ambient_retargeting_and_reject_symlink_parents() {
+    let fixture = FixtureRoot::new("root-retarget");
+    let bundle = producer_tree_bundle(&fixture);
+    let source = fixture.root();
+    let destination = FixtureRoot::new("root-retarget-target");
+    let target = destination.root();
+    let source_saved = fixture.dir.with_extension("opened");
+    let target_saved = destination.dir.with_extension("opened");
+    fs::rename(&fixture.dir, &source_saved).unwrap();
+    fs::rename(&destination.dir, &target_saved).unwrap();
+    std::os::unix::fs::symlink(&destination.dir, &fixture.dir).unwrap();
+    fs::create_dir(&destination.dir).unwrap();
+    assert_eq!(source.verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Verified);
+    source.copy_source_closure(&bundle, &target).unwrap();
+    assert!(target_saved.join("members/source-tree/z-dir/empty").is_dir());
+    assert!(!destination.dir.join("members").exists());
+    fs::remove_dir_all(&source_saved).unwrap();
+    fs::remove_dir_all(&target_saved).unwrap();
+
+    let fixture = FixtureRoot::new("symlink-parent");
+    let bundle = valid_bundle(&fixture);
+    fs::rename(fixture.dir.join("members"), fixture.dir.join("saved")).unwrap();
+    std::os::unix::fs::symlink("saved", fixture.dir.join("members")).unwrap();
+    assert_eq!(fixture.root().verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Blocked);
+    assert!(fixture.root().copy_source_closure(&bundle, &FixtureRoot::new("parent-link-copy").root()).is_err());
+}
+
+// r[verify mantle.wasm_source_closure_trees.bounds]
+#[test]
+fn trees_reject_entry_depth_and_byte_bound_overruns() {
+    for bound in ["entries", "depth", "file-bytes", "declared-bytes"] {
+        let fixture = FixtureRoot::new(bound);
+        let mut bundle = producer_tree_bundle(&fixture);
+        let tree = fixture.dir.join("members/source-tree");
+        match bound {
+            "entries" => {
+                fs::remove_dir_all(&tree).unwrap();
+                fs::create_dir(&tree).unwrap();
+                for index in 0..10_001 {
+                    fs::write(tree.join(format!("file-{index:05}")), b"").unwrap();
+                }
+            }
+            "depth" => {
+                let mut path = tree.clone();
+                for _ in 0..65 {
+                    path.push("d");
+                }
+                fs::create_dir_all(path).unwrap();
+            }
+            "file-bytes" => {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(tree.join("z-dir/other"))
+                    .unwrap()
+                    .set_len(536_870_913)
+                    .unwrap();
+            }
+            "declared-bytes" => {
+                let mut request = request_from_bundle(&bundle);
+                request.source_closure.size_bytes = 536_870_913;
+                bundle = rebuild(request);
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            fixture.root().verify_bundle(bundle.clone()).unwrap().status,
+            ConsumerVerificationStatus::Rejected,
+            "{bound}"
+        );
+        let destination = FixtureRoot::new("overbound-copy");
+        assert!(fixture.root().copy_source_closure(&bundle, &destination.root()).is_err(), "{bound}");
+        assert!(!destination.dir.join("members/source-tree").exists());
+    }
+}
+
+// r[verify mantle.wasm_source_closure_trees.compatibility]
+#[test]
+fn file_source_closure_copies_without_clobbering_and_checks_declared_length() {
+    let fixture = FixtureRoot::new("file-source-copy");
+    let bundle = valid_bundle(&fixture);
+    let destination = FixtureRoot::new("file-source-target");
+    fixture.root().copy_source_closure(&bundle, &destination.root()).unwrap();
+    let target = destination.dir.join("members/source-closure.json");
+    assert_eq!(fs::read(&target).unwrap(), member_bytes(4));
+    fs::write(&target, b"private existing content").unwrap();
+    assert!(matches!(
+        fixture.root().copy_source_closure(&bundle, &destination.root()),
+        Err(ShellError::DestinationUnavailable)
+    ));
+    assert_eq!(fs::read(&target).unwrap(), b"private existing content");
+    let mut request = request_from_bundle(&bundle);
+    request.source_closure = bundle.lock.clone();
+    request.source_closure.size_bytes += 1;
+    let conflict = rebuild(request);
+    assert!(matches!(fixture.root().verify_bundle(conflict.clone()), Err(ShellError::ConflictingMemberIdentity)));
+    assert!(matches!(
+        fixture.root().copy_source_closure(&conflict, &destination.root()),
+        Err(ShellError::ConflictingMemberIdentity)
+    ));
+}
+
+// r[verify mantle.wasm_source_closure_trees.bounds]
+#[test]
+fn producer_native_backslash_name_is_explicitly_unsupported_without_reframing() {
+    let fixture = FixtureRoot::new("unsupported-native-path");
+    let bundle = valid_bundle(&fixture);
+    let input = fixture.dir.join("native-input");
+    fs::create_dir(&input).unwrap();
+    fs::write(input.join("native\\name"), b"exact native bytes").unwrap();
+    let mut source = crunch_wasm_component::copy_source_tree(&input, &fixture.dir.join("members/native-tree")).unwrap();
+    source.logical_path = String::from("/members/native-tree");
+    let mut request = request_from_bundle(&bundle);
+    request.source_closure = source;
+    let bundle = rebuild(request);
+    assert_ne!(fixture.root().verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Verified);
+    let destination = FixtureRoot::new("unsupported-native-copy");
+    assert!(fixture.root().copy_source_closure(&bundle, &destination.root()).is_err());
+    assert!(!destination.dir.join("members/native-tree").exists());
+}
+
+// r[verify mantle.wasm_source_closure_trees.compatibility]
+#[test]
+fn directory_source_shared_with_file_role_is_not_admitted() {
+    let fixture = FixtureRoot::new("tree-file-role");
+    let bundle = producer_tree_bundle(&fixture);
+    let mut request = request_from_bundle(&bundle);
+    request.lock = bundle.source_closure.clone();
+    let bundle = rebuild(request);
+    assert_eq!(fixture.root().verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Blocked);
+    let destination = FixtureRoot::new("tree-file-role-target");
+    assert!(matches!(
+        fixture.root().copy_source_closure(&bundle, &destination.root()),
+        Err(ShellError::UnsupportedMember)
+    ));
+    assert!(!destination.dir.join("members/source-tree").exists());
+}
+
+// r[verify mantle.wasm_source_closure_trees.copy]
+#[test]
+fn source_copy_does_not_measure_unrelated_members_or_follow_destination_links() {
+    let fixture = FixtureRoot::new("source-only-copy");
+    let bundle = producer_tree_bundle(&fixture);
+    fs::remove_file(fixture.dir.join("members/final.wasm")).unwrap();
+    let destination = FixtureRoot::new("source-only-target");
+    fixture.root().copy_source_closure(&bundle, &destination.root()).unwrap();
+    assert!(destination.dir.join("members/source-tree/z-dir/empty").is_dir());
+    assert!(!destination.dir.join("members/final.wasm").exists());
+    assert_eq!(fixture.root().verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Blocked);
+
+    let linked_destination = FixtureRoot::new("linked-target");
+    fs::remove_dir(linked_destination.dir.join("members")).unwrap();
+    let outside = FixtureRoot::new("outside-target");
+    std::os::unix::fs::symlink(&outside.dir, linked_destination.dir.join("members")).unwrap();
+    assert!(fixture.root().copy_source_closure(&bundle, &linked_destination.root()).is_err());
+    assert!(!outside.dir.join("source-tree").exists());
+}
+
+// r[verify mantle.wasm_source_closure_trees.bounds]
+#[test]
+fn producer_depth_64_directory_with_depth_65_file_remains_admitted() {
+    let fixture = FixtureRoot::new("depth-boundary");
+    let bundle = valid_bundle(&fixture);
+    let input = fixture.dir.join("deep-input");
+    let mut deepest = input.clone();
+    for _ in 0..64 {
+        deepest.push("d");
+    }
+    fs::create_dir_all(&deepest).unwrap();
+    fs::write(deepest.join("file"), b"depth boundary").unwrap();
+    let mut source = crunch_wasm_component::copy_source_tree(&input, &fixture.dir.join("members/deep-tree")).unwrap();
+    source.logical_path = String::from("/members/deep-tree");
+    let mut request = request_from_bundle(&bundle);
+    request.source_closure = source;
+    let bundle = rebuild(request);
+    assert_eq!(fixture.root().verify_bundle(bundle.clone()).unwrap().status, ConsumerVerificationStatus::Verified);
+    let destination = FixtureRoot::new("deep-target");
+    fixture.root().copy_source_closure(&bundle, &destination.root()).unwrap();
+    let copied = destination.dir.join("members/deep-tree").join(deepest.strip_prefix(&input).unwrap()).join("file");
+    assert_eq!(fs::read(copied).unwrap(), b"depth boundary");
+}
+
+// r[verify mantle.wasm_source_closure_trees.compatibility]
+#[test]
+fn file_source_copy_rejects_content_length_and_missing_source() {
+    for drift in ["content", "length", "missing"] {
+        let fixture = FixtureRoot::new("file-copy-drift");
+        let bundle = valid_bundle(&fixture);
+        let source = fixture.dir.join("members/source-closure.json");
+        match drift {
+            "content" => fs::write(&source, member_bytes(99)).unwrap(),
+            "length" => fs::write(&source, b"short").unwrap(),
+            "missing" => fs::remove_file(&source).unwrap(),
+            _ => unreachable!(),
+        }
+        let destination = FixtureRoot::new("file-drift-target");
+        let result = fixture.root().copy_source_closure(&bundle, &destination.root());
+        if drift == "missing" {
+            assert!(matches!(result, Err(ShellError::MemberUnavailable)));
+        } else {
+            assert!(matches!(result, Err(ShellError::MemberMismatch)));
+        }
+        assert_eq!(fs::read(fixture.dir.join("members/wkg.lock")).unwrap(), member_bytes(5));
+    }
+}

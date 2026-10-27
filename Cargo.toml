@@ -299,8 +299,8 @@ artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.gi
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", default-features = false }
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "4c5c9e919b4573a7865559db2dc98a99c0c58144", default-features = false, features = ["durable-authority"] }
 valence-core = { git = "ssh://git@github.com/OnixResearch/valence.git", rev = "15e72b5a330b08139ac7c809ac31e7e87f825b22" }
-bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07" }
-bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07" }
+bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "250f3b25d0933c2fa106aa82d1cc17a496716f06" }
+bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "250f3b25d0933c2fa106aa82d1cc17a496716f06" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
@@ -351,6 +351,7 @@ crunch-gc-core = { path = "crates/crunch-gc-core" }
 crunch-hardware-simulation = { path = "crates/crunch-hardware-simulation" }
 crunch-kernelscript-core = { path = "crates/crunch-kernelscript-core" }
 crunch-wasm-component-core = { path = "crates/crunch-wasm-component-core" }
+mantle-wasm-consumer-verifier = { path = "crates/mantle-wasm-consumer-verifier" }
 crunch-store = { path = "crates/crunch-store", features = ["test-support"] }
 transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "606489b5f40298181214bb76bc3457b607f225d9" }
 pretty_assertions = "1.0"

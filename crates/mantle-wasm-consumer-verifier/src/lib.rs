@@ -26,11 +26,15 @@ pub mod facade;
 #[cfg(feature = "std")]
 pub mod shell;
 
+#[cfg(feature = "std")]
+mod source_tree;
+
 pub use contract::ConsumerLayer;
 pub use contract::ConsumerMemberObservation;
 pub use contract::ConsumerMemberStatus;
 pub use contract::ConsumerVerificationReport;
 pub use contract::ConsumerVerificationStatus;
+pub use crunch_wasm_component_core::MaterializationBundle;
 pub use facade::CONSUMER_REPORT_SCHEMA;
 pub use facade::CONSUMER_VERIFIER_NON_CLAIMS;
 pub use facade::verify_consumer_bundle;

@@ -1,0 +1,302 @@
+{
+  "schema": "mantle-wasm-component-pipeline-execution-report-v1",
+  "request_blake3": "0d42bee240a155af0326f897b784c28e97e35abadee085b6da27ba81e505a97a",
+  "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+  "stage_receipts": [
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "package-resolution",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wkg",
+      "program_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "args": [
+        "wit",
+        "fetch",
+        "--config",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml",
+        "--cache",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "--wit-dir",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/wit",
+        "--type",
+        "wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "bdf3aa4ffb646786da6789c4c7e6bb8ddab1618faef815a84ec90615fcc1bc73"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "binding-generation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+      "program_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+      "args": [
+        "rust",
+        "--world",
+        "actor",
+        "--generate-all",
+        "--out-dir",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/generated-bindings",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/wit"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "0c6f29b706e540b2f81cdb184c0f5dd86c464d132765181a7c055393c6808273",
+      "output_blake3": null,
+      "receipt_blake3": "ae0223be44c4caa68e1b12b349df2753dfff291008d3ca8c32822d5fe208aaae"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compilation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/cargo",
+      "program_blake3": "d8a9d6b2508ab7ab4229ef0e3b2a980d6a647c56f22948b6e6058666d262d3f0",
+      "args": [
+        "build",
+        "--locked",
+        "--offline",
+        "--release",
+        "--target",
+        "wasm32-wasip2",
+        "--package",
+        "mantle-wasm-production-fixture"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "CARGO_TARGET_WASM32_WASIP2_LINKER": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "RUSTFLAGS": "-C link-arg=--skip-wit-component",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [
+        {
+          "name": "rustc",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+          "digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b"
+        },
+        {
+          "name": "wasm-component-ld",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+          "digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f"
+        }
+      ],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "2389b2aa7c01d8a46fe1e0b4e0c9890160e6c663ae6cd3c3c1b473ea74de198a",
+      "output_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+      "receipt_blake3": "a168ae5d194faa76fc727f9dda2984b2642f56712a28ac2bbb739aaeaecb83c4"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compiled-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "4881b4ccf25b75881bcfee2238b0abb36c39155a41301dcb8478bea8f2e902e1"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-first",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wizer-first-core.wasm",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "receipt_blake3": "ab590437ca9a31828f1237296696a41bb8b54b3fea59b7e65eaf55aa9e8fa72e"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-repeated",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wizer-repeated-core.wasm",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "receipt_blake3": "a63e80c45d5dd13719a952e6855e9af0f6c97df8e9c027c23b74f6eeb0681414"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentization",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "new",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wizer-first-core.wasm",
+        "-o",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+      "receipt_blake3": "71b7c93f8b863064e16c847760feeea360dedfdfa35a459982971e86fe874fa0"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentized-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.fo5AuV/.tmp1slbpT/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "4fd6f13ce62e1adfea1701930252b88459fd2da288b2b3ff719f317af4fd7c57"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composition",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wac",
+      "program_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+      "args": [
+        "compose",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/source/.mantle/wasm-component/composition.wac",
+        "--dep",
+        "root:component=/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/componentized.wasm",
+        "--output",
+        "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/target",
+        "HOME": "/tmp/mst27/real-handoff/.mantle-wasm-component-work-3osuza/home",
+
+[Showing lines 1-300 of 1113. Use :301 to continue]

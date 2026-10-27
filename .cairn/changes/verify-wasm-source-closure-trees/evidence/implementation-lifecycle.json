@@ -1,0 +1,100 @@
+{
+  "records": [
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "implementation-validate.stdout",
+      "stderr": "implementation-validate.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "proposal",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "implementation-proposal.stdout",
+      "stderr": "implementation-proposal.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "design",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "implementation-design.stdout",
+      "stderr": "implementation-design.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "tasks",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "implementation-tasks.stdout",
+      "stderr": "implementation-tasks.stderr"
+    }
+  ],
+  "publication_completed": false,
+  "consumer_pin_completed": false
+}

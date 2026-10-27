@@ -1,18 +1,14 @@
-//! Standard-library file verifier over one explicit capability root.
+//! Standard-library verifier over one opened directory capability.
 //!
-//! The shell receives one opened root directory and the declared member
-//! logical paths of a bundle. It rejects absolute escapes, parent traversal,
-//! symlinks, non-regular files, oversized members, and drifted bytes. It
-//! performs no registry, store, network, or ambient path search.
+//! Only source-closure may be a bounded directory tree. Descendant resolution
+//! never follows symlinks; no registry, store, network, or ambient search runs.
 
-use std::fs;
-use std::io::Read;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::string::String;
 use std::string::ToString;
 use std::vec::Vec;
 
+use cap_std::fs::Dir;
 use crunch_wasm_component_core::MaterializationBundle;
 use crunch_wasm_component_core::StoreObject;
 
@@ -22,15 +18,8 @@ use crate::contract::ConsumerMemberStatus;
 use crate::contract::ConsumerVerificationReport;
 use crate::contract::ConsumerVerificationStatus;
 use crate::facade::declared_member_objects;
-use crate::facade::identity_from_bytes;
 use crate::facade::verify_consumer_bundle;
-
-/// Open flags: refuse to follow a symlink at the final path component.
-/// Linux `O_NOFOLLOW`; the consumer shell is a bounded Linux surface.
-const OPEN_FLAGS_NO_FOLLOW_READ_ONLY: i32 = 0o400000;
-
-/// Read bytes beyond the declared length of one member.
-const MEMBER_READ_HEADROOM_BYTES: u64 = 1;
+use crate::source_tree;
 
 /// Maximum bytes remeasured for one member.
 pub const MAX_MEMBER_BYTES: u64 = 1_073_741_824;
@@ -53,11 +42,23 @@ pub enum ShellError {
     InvalidMemberPath,
     /// One logical path is declared with conflicting member identities.
     ConflictingMemberIdentity,
+    /// Required bytes could not be opened through the capability.
+    MemberUnavailable,
+    /// A member was a symlink or unsupported filesystem node.
+    UnsupportedMember,
+    /// Observed identity, length, or source facts changed.
+    MemberMismatch,
+    /// A named count, depth, or byte bound was exceeded.
+    BoundExceeded,
+    /// Destination creation failed, including an existing target.
+    DestinationUnavailable,
+    /// Shared bounded-tree observation, planning, or copying failed.
+    Tree(bounded_tree_cap::ShellError),
 }
 
 /// Capability root for consumer member resolution.
 pub struct ConsumerRoot {
-    root: std::path::PathBuf,
+    root: Dir,
 }
 
 /// One required member and its declared facts.
@@ -79,16 +80,13 @@ enum Measurement {
 }
 
 impl ConsumerRoot {
-    /// Open an existing directory as the only member-resolution root.
+    /// Open the caller-supplied root once, including `/proc/self/fd` bridges.
+    /// Retargeting its ambient path later does not retarget this capability.
+    // r[impl mantle.wasm_source_closure_trees.capabilities]
     pub fn open(root: &Path) -> Result<Self, ShellError> {
-        let metadata = fs::metadata(root).map_err(|_| ShellError::RootNotDirectory)?;
-        if !metadata.is_dir() {
-            return Err(ShellError::RootNotDirectory);
-        }
-        debug_assert!(metadata.file_type().is_dir());
-        Ok(Self {
-            root: root.to_path_buf(),
-        })
+        let root =
+            Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(|_| ShellError::RootNotDirectory)?;
+        Ok(Self { root })
     }
 
     /// Verify a bundle structurally, then remeasure every required member.
@@ -96,6 +94,7 @@ impl ConsumerRoot {
     /// Structural rejection short-circuits before any filesystem access. A
     /// byte layer that cannot resolve required bytes reports `blocked`;
     /// drifted bytes report the drift blocker and `rejected`.
+    // r[impl mantle.wasm_source_closure_trees.pipeline]
     pub fn verify_bundle(&self, bundle: MaterializationBundle) -> Result<ConsumerVerificationReport, ShellError> {
         let mut structural_outcome = verify_consumer_bundle(bundle.clone());
         if structural_outcome.status != ConsumerVerificationStatus::Verified {
@@ -104,6 +103,66 @@ impl ConsumerRoot {
         let required = required_members(&bundle)?;
         self.run_byte_layer(&required, &mut structural_outcome);
         Ok(structural_outcome)
+    }
+
+    /// Copy only the declared source closure into a new matching logical path.
+    /// The caller owns private destination cleanup on failure. No durability,
+    /// publication authority, or atomic source snapshot is claimed.
+    /// This observation is not whole-bundle admission; use `verify_bundle`
+    /// separately for structural and complete member-report agreement.
+    // r[impl mantle.wasm_source_closure_trees.copy]
+    pub fn copy_source_closure(
+        &self,
+        bundle: &MaterializationBundle,
+        destination: &ConsumerRoot,
+    ) -> Result<ConsumerMemberObservation, ShellError> {
+        let required = required_members(bundle)?;
+        let object = &bundle.source_closure;
+        let relative = Path::new(relative_member_path(&object.logical_path)?);
+        let (parent, name) = source_tree::open_parent(&self.root, relative, false)?;
+        let metadata = parent.symlink_metadata(&name).map_err(|_| ShellError::MemberUnavailable)?;
+        if object.size_bytes > MAX_MEMBER_BYTES {
+            return Err(ShellError::BoundExceeded);
+        }
+        if metadata.is_dir() {
+            if required
+                .iter()
+                .any(|member| member.logical_path == object.logical_path && member.role != "source-closure")
+            {
+                return Err(ShellError::UnsupportedMember);
+            }
+            let source =
+                cap_fs_ext::DirExt::open_dir_nofollow(&parent, &name).map_err(|_| ShellError::MemberUnavailable)?;
+            if object.size_bytes > source_tree::MAX_TREE_BYTES {
+                return Err(ShellError::BoundExceeded);
+            }
+            let prepared = source_tree::prepare(&source)?;
+            ensure_identity(source_tree::measure(&source, &prepared)?, object)?;
+            let (target_parent, target_name) = source_tree::open_parent(&destination.root, relative, true)?;
+            target_parent.create_dir(&target_name).map_err(|_| ShellError::DestinationUnavailable)?;
+            let target = cap_fs_ext::DirExt::open_dir_nofollow(&target_parent, &target_name)
+                .map_err(|_| ShellError::DestinationUnavailable)?;
+            bounded_tree_cap::execute(&prepared, &target).map_err(ShellError::Tree)?;
+            if source_tree::prepare(&source)?.plan() != prepared.plan() {
+                return Err(ShellError::MemberMismatch);
+            }
+            let copied = source_tree::prepare(&target)?;
+            ensure_identity(source_tree::measure(&target, &copied)?, object)?;
+            source_tree::check_directory_binding(&parent, Path::new(&name), &source)?;
+        } else {
+            let mut source = source_tree::open_regular(&parent, Path::new(&name), object.size_bytes)?;
+            let (target_parent, target_name) = source_tree::open_parent(&destination.root, relative, true)?;
+            let mut target = source_tree::create_file(&target_parent, Path::new(&target_name))?;
+            let digest = source_tree::stream_file(&mut source, Some(&mut target), object.size_bytes, None)?;
+            ensure_identity((digest.to_hex().to_string(), object.size_bytes), object)?;
+            ensure_identity(self.measure_member(&object.logical_path, object.size_bytes, false)?, object)?;
+        }
+        Ok(ConsumerMemberObservation {
+            role: String::from("source-closure"),
+            digest_blake3: object.digest_blake3.to_string(),
+            size_bytes: object.size_bytes,
+            status: Some(ConsumerMemberStatus::Matched),
+        })
     }
 
     fn run_byte_layer(&self, required: &[RequiredMember], structural_outcome: &mut ConsumerVerificationReport) {
@@ -118,8 +177,17 @@ impl ConsumerRoot {
             if measured.iter().any(|(path, _)| *path == member.logical_path.as_str()) {
                 continue;
             }
-            let measurement = self.measure_path(&member.logical_path, member.size_bytes);
-            total_bytes += member.size_bytes;
+            let is_tree_allowed = required
+                .iter()
+                .filter(|candidate| candidate.logical_path == member.logical_path)
+                .all(|candidate| candidate.role == "source-closure");
+            let next_total = total_bytes.saturating_add(member.size_bytes);
+            let measurement = if next_total > MAX_TOTAL_REMEASURED_BYTES {
+                Measurement::LengthMismatch
+            } else {
+                self.measure_path(&member.logical_path, member.size_bytes, is_tree_allowed)
+            };
+            total_bytes = next_total;
             measured.push((member.logical_path.as_str(), measurement));
         }
         for member in required {
@@ -177,49 +245,50 @@ impl ConsumerRoot {
         };
     }
 
-    fn measure_path(&self, logical_path: &str, size_bytes: u64) -> Measurement {
-        let relative = match relative_member_path(logical_path) {
-            Ok(relative) => relative,
-            Err(_) => return Measurement::Missing,
-        };
-        let resolved = self.root.join(relative);
-        let metadata = match fs::symlink_metadata(&resolved) {
-            Ok(metadata) => metadata,
-            Err(_) => return Measurement::Missing,
-        };
-        if !metadata.is_file() {
-            return Measurement::Missing;
+    fn measure_path(&self, logical_path: &str, size_bytes: u64, is_tree_allowed: bool) -> Measurement {
+        match self.measure_member(logical_path, size_bytes, is_tree_allowed) {
+            Ok((identity, observed_bytes)) if observed_bytes == size_bytes => Measurement::Identity(identity),
+            Ok(_) | Err(ShellError::MemberMismatch | ShellError::BoundExceeded) => Measurement::LengthMismatch,
+            Err(ShellError::Tree(error)) => match error.kind() {
+                bounded_tree_cap::ShellErrorKind::LimitExceeded(_)
+                | bounded_tree_cap::ShellErrorKind::SourceChanged(_) => Measurement::LengthMismatch,
+                _ => Measurement::Missing,
+            },
+            Err(_) => Measurement::Missing,
         }
-        let opened = fs::OpenOptions::new().read(true).custom_flags(OPEN_FLAGS_NO_FOLLOW_READ_ONLY).open(&resolved);
-        let mut file = match opened {
-            Ok(file) => file,
-            Err(_) => return Measurement::Missing,
-        };
+    }
+
+    fn measure_member(
+        &self,
+        logical_path: &str,
+        size_bytes: u64,
+        is_tree_allowed: bool,
+    ) -> Result<(String, u64), ShellError> {
         if size_bytes > MAX_MEMBER_BYTES {
-            return Measurement::LengthMismatch;
+            return Err(ShellError::BoundExceeded);
         }
-        let mut bytes = Vec::new();
-        let read_limit_bytes = size_bytes.saturating_add(MEMBER_READ_HEADROOM_BYTES);
-        let mut handle = file.by_ref().take(read_limit_bytes);
-        if handle.read_to_end(&mut bytes).is_err() {
-            return Measurement::Missing;
+        let relative = Path::new(relative_member_path(logical_path)?);
+        let (parent, name) = source_tree::open_parent(&self.root, relative, false)?;
+        let metadata = parent.symlink_metadata(&name).map_err(|_| ShellError::MemberUnavailable)?;
+        if metadata.is_dir() && is_tree_allowed {
+            if size_bytes > source_tree::MAX_TREE_BYTES {
+                return Err(ShellError::BoundExceeded);
+            }
+            let source =
+                cap_fs_ext::DirExt::open_dir_nofollow(&parent, &name).map_err(|_| ShellError::MemberUnavailable)?;
+            let prepared = source_tree::prepare(&source)?;
+            let measured = source_tree::measure(&source, &prepared)?;
+            source_tree::check_directory_binding(&parent, Path::new(&name), &source)?;
+            return Ok(measured);
         }
-        if bytes.len() as u64 != size_bytes {
-            return Measurement::LengthMismatch;
-        }
-        Measurement::Identity(identity_from_bytes(&bytes).into_hex())
+        let mut file = source_tree::open_regular(&parent, Path::new(&name), size_bytes)?;
+        let digest = source_tree::stream_file(&mut file, None, size_bytes, None)?;
+        Ok((digest.to_hex().to_string(), size_bytes))
     }
 }
 
-/// Collect every declared store object as a required byte member.
-///
-/// Roles may share one logical path; the byte layer measures each unique
-/// path once and judges every declaring member against its own identity.
-/// Collect every declared store object as a required byte member.
-///
-/// Roles may share one logical path when they declare the same identity;
-/// a path declared with conflicting digests is member substitution and is
-/// rejected before any filesystem access.
+/// Roles may share a logical path only with identical digest AND length.
+// r[impl mantle.wasm_source_closure_trees.compatibility]
 fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember>, ShellError> {
     let declared = declared_member_objects(bundle);
     let mut members = Vec::with_capacity(declared.len());
@@ -233,7 +302,8 @@ fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember
         debug_assert!(!(*role).is_empty());
         let digest_hex = digest_blake3.to_string();
         let has_conflicting_identity = members.iter().any(|member: &RequiredMember| {
-            member.logical_path == logical_path.as_str() && member.digest_blake3 != digest_hex
+            member.logical_path == logical_path.as_str()
+                && (member.digest_blake3 != digest_hex || member.size_bytes != *size_bytes)
         });
         if has_conflicting_identity {
             return Err(ShellError::ConflictingMemberIdentity);
@@ -268,4 +338,11 @@ fn relative_member_path(logical_path: &str) -> Result<&str, ShellError> {
     }
     debug_assert!(!relative.starts_with('/') && !relative.ends_with('/'));
     Ok(relative)
+}
+
+fn ensure_identity((digest, size_bytes): (String, u64), object: &StoreObject) -> Result<(), ShellError> {
+    if digest != object.digest_blake3.to_string() || size_bytes != object.size_bytes {
+        return Err(ShellError::MemberMismatch);
+    }
+    Ok(())
 }

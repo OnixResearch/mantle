@@ -1,0 +1,175 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/verify-wasm-source-closure-trees/specs/wasm-component-consumer-verifier/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/verify-wasm-source-closure-trees/specs/wasm-component-consumer-verifier/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "verify-wasm-source-closure-trees",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/verify-wasm-source-closure-trees/specs/wasm-component-consumer-verifier/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "04045bd318bf929f158bef9677fa7d868c8be801727662ff568899c034b7195a",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "46dcca68fdccb74c815a9c78e3f005e0f316c24536e3198c0b1d011266beb436",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "debec0e3205539df489c08b6f2e083d1b8d84ce5fdc923bb79b304bb02c25e26",
+        "destination": ".cairn/specs/wasm-component-consumer-verifier/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "acb2030b4c31faab108d55db059b584afaeb2a968c3fd3b825c8c1b31746373e",
+        "operations": [
+          {
+            "block_hash": "59f8275c6905e55c901edba5a69c2a24688985eddc816922081dc5699de9a2e1",
+            "heading": "### Requirement: File verification uses an explicit capability root",
+            "kind": "modified",
+            "requirement_id": "mantle.wasm_consumer_verifier.file_shell"
+          },
+          {
+            "block_hash": "11635c5fec3f4db66272a2dfd91850f6ddd9a4330df3b0a552616de93e02510b",
+            "heading": "### Requirement: Source-tree measurement preserves producer v1 identity",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.identity"
+          },
+          {
+            "block_hash": "46a8787affac45099aa5f691ba63587dba5bc4100e46ecd69728660d19088e74",
+            "heading": "### Requirement: Member resolution retains no-follow directory capabilities",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.capabilities"
+          },
+          {
+            "block_hash": "babc210b84745440f8c9a7ae2d046530b61ea36a0a5796977288bea097ed9f4b",
+            "heading": "### Requirement: Source-only copying is capability rooted and create-new",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.copy"
+          },
+          {
+            "block_hash": "ad82426480ff1352cd66bb7a7df890dc63de2f9172bf076c41066cbf833c8fc7",
+            "heading": "### Requirement: Source-tree resources and supported paths are explicit",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.bounds"
+          },
+          {
+            "block_hash": "888653e93d87622f1e60ee4b07e81cac723e4cc29761244a07e6dd2c016691fd",
+            "heading": "### Requirement: Provider publication includes actual pipeline and consumer evidence",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.pipeline"
+          },
+          {
+            "block_hash": "351a8894a89d027e7457ff48b34fd9b038f737666f028b3cf877ba6de6f4fe93",
+            "heading": "### Requirement: Published file and report compatibility is retained",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.compatibility"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.wasm_consumer_verifier.file_shell",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.identity",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.capabilities",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.copy",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.bounds",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.pipeline",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_source_closure_trees.compatibility",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/verify-wasm-source-closure-trees/specs/wasm-component-consumer-verifier/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "acb2030b4c31faab108d55db059b584afaeb2a968c3fd3b825c8c1b31746373e",
+          "exists": true,
+          "path": "./.cairn/specs/wasm-component-consumer-verifier/spec.md"
+        }
+      ],
+      "manifest_hash": "3cbdfd61db3e403183d14003eca525afe5fd690b15731b9d2c9c51a27a1c02ee"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "46dcca68fdccb74c815a9c78e3f005e0f316c24536e3198c0b1d011266beb436",
+          "exists": true,
+          "path": "./.cairn/specs/wasm-component-consumer-verifier/spec.md"
+        }
+      ],
+      "manifest_hash": "3ade08a48de2204562dfe1e5cc455d5566363787e6fe2cf025c3076ff22bc252"
+    },
+    "kind": "sync",
+    "manifest_hash": "5dd9c9b6ff86dac1deebf2dfc786be63af65346f9d195c4dceaa5a421d925ef2"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "2277d54e3a7ba7a0d392df75768639d700b79282f15ebaa47db4b08862a5cf61",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "62df6b63338b7cdf46ffae8c858778c41bc125188da295ba38b7d1ebc4036427",
+  "reasons": [],
+  "receipt_hash": "47159bac2aab66607a441a5a96b1ed6efcde1acf1c5169a6ee6afceabe266b31",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -1,0 +1,122 @@
+{
+  "records": [
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "proposal",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "exit": 0,
+      "stdout": "native-proposal.stdout",
+      "stderr": "native-proposal.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "design",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "exit": 0,
+      "stdout": "native-design.stdout",
+      "stderr": "native-design.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "gate",
+        "tasks",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        "."
+      ],
+      "exit": 0,
+      "stdout": "native-tasks.stdout",
+      "stderr": "native-tasks.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "sync",
+        "verify-wasm-source-closure-trees",
+        "--root",
+        ".",
+        "--execute"
+      ],
+      "exit": 0,
+      "stdout": "native-sync.stdout",
+      "stderr": "native-sync.stderr"
+    },
+    {
+      "command": [
+        "nix",
+        "develop",
+        "--option",
+        "builders",
+        "",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2",
+        "-c",
+        "cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "exit": 0,
+      "stdout": "native-validation.stdout",
+      "stderr": "native-validation.stderr"
+    }
+  ],
+  "provider_execution_gate_completed": false,
+  "molten_intake_completed": false,
+  "implementation_publication": false,
+  "archive_executed": false,
+  "release_authority": false
+}

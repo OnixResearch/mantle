@@ -1,0 +1,28 @@
+// Disposable replay of retained, unchanged producer bytes through public APIs.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.len() != 3 { return Err("expected retained root, execution report, fresh copy root".into()); }
+    let report: crunch_wasm_component::PipelineExecutionReport = serde_json::from_slice(&std::fs::read(&args[1])?)?;
+    let bundle = report.materialization_bundle.ok_or("retained producer omitted bundle")?;
+    let root = mantle_wasm_consumer_verifier::ConsumerRoot::open(std::path::Path::new(&args[0]))
+        .map_err(|error| format!("retained root: {error:?}"))?;
+    let structural = mantle_wasm_consumer_verifier::verify_consumer_bundle(bundle.clone());
+    let complete = root.verify_bundle(bundle.clone()).map_err(|error| format!("retained verification: {error:?}"))?;
+    assert_eq!(structural.status, mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified);
+    assert_eq!(complete.status, mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified);
+    assert_eq!(complete.layers_completed, [mantle_wasm_consumer_verifier::ConsumerLayer::Structural, mantle_wasm_consumer_verifier::ConsumerLayer::Bytes]);
+    assert!(complete.members.iter().all(|member| member.status == Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched)));
+    std::fs::create_dir(&args[2])?;
+    let destination = mantle_wasm_consumer_verifier::ConsumerRoot::open(std::path::Path::new(&args[2]))
+        .map_err(|error| format!("copy root: {error:?}"))?;
+    let copied = root.copy_source_closure(&bundle, &destination).map_err(|error| format!("retained copy: {error:?}"))?;
+    assert_eq!(copied.status, Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched));
+    assert_eq!(copied.digest_blake3, bundle.source_closure.digest_blake3.to_string());
+    assert_eq!(copied.size_bytes, bundle.source_closure.size_bytes);
+    println!("retained_bundle_unchanged=true");
+    println!("consumer_status=Verified layers=Structural,Bytes members={}", complete.members.len());
+    println!("bundle_identity={}", complete.bundle_identity_blake3.as_deref().ok_or("missing identity")?);
+    println!("source_copy=Matched digest={} bytes={}", copied.digest_blake3, copied.size_bytes);
+    println!("runtime_adoption=false execution_admitted=false");
+    Ok(())
+}

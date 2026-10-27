@@ -1,0 +1,18 @@
+{
+  "runs": [
+    {
+      "task": "50",
+      "command": "env TMPDIR=/tmp/mst27 CARGO_TARGET_DIR=/dev/shm/mantle-source-observer-target-20261027 CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 nix develop --option builders '' --max-jobs 2 --cores 2 -c env CARGO_HOME=/home/brittonr/.cargo bash -c 'cargo build --locked --manifest-path /dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml && /dev/shm/mantle-source-observer-target-20261027/debug/retained /tmp/mst27/retained-handoff /dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/execution-report.json /tmp/mst27/retained-private-copy && MANTLE_WASM_COMPONENT_TOOLCHAIN=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1 /dev/shm/mantle-source-observer-target-20261027/debug/molten-source-tree-producer-observer --original-fixture blake3:2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32 /tmp/mst27/tree-intake-probe/producer-output'",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T17:20:10.945755443-04:00",
+          "start": "2026-10-27T17:20:10.952156682-04:00",
+          "end": "2026-10-27T17:20:18.941083679-04:00",
+          "result": "Success"
+        }
+      },
+      "output": "[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling molten-source-tree-producer-observer v0.0.0 (/dev/shm/aspen-mantle-tree-smoke-20261027/producer)\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `dev` profile [unoptimized] target(s) in 1.79s\nretained_bundle_unchanged=true\nconsumer_status=Verified layers=Structural,Bytes members=37\nbundle_identity=93a2e552582646f7c06a299296a33318fb0fbd1913471702a8ecd2efe939d19f\nsource_copy=Matched digest=e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa bytes=4145\nruntime_adoption=false execution_admitted=false\nproducer_status=succeeded\nproducer_blockers=[]\nconsumer_status=Verified layers=Structural,Bytes members=37\nsource_copy=Matched digest=e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa bytes=4145\nbundle_identity=53a0bbbca34663474b063aec4f6851eab37905eb7654a5421eb415d30a068704\nprofile_ref=blake3:2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32\n"
+    }
+  ]
+}

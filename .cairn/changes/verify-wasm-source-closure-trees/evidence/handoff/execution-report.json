@@ -1,0 +1,302 @@
+{
+  "schema": "mantle-wasm-component-pipeline-execution-report-v1",
+  "request_blake3": "06379db18259da99888b1efdd9c538111dc6c01d7e1b7ddf03bbcfd800f2c314",
+  "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+  "stage_receipts": [
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "package-resolution",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wkg",
+      "program_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "args": [
+        "wit",
+        "fetch",
+        "--config",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml",
+        "--cache",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "--wit-dir",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/wit",
+        "--type",
+        "wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "530a5f5cf8282290cd9c1d2495c83e6be0e19925587ba99434868d4167cb1ff7"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "binding-generation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+      "program_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+      "args": [
+        "rust",
+        "--world",
+        "app",
+        "--generate-all",
+        "--out-dir",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/generated-bindings",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/wit"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "1c52f0c6a51dc14b67674c300ee78a567e61f804f18bd21d4a13c82412e462bc",
+      "output_blake3": null,
+      "receipt_blake3": "d28f281f57e5027aa0cd697932d20b4485d56959a600e695e2fadf57e8324397"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compilation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/cargo",
+      "program_blake3": "d8a9d6b2508ab7ab4229ef0e3b2a980d6a647c56f22948b6e6058666d262d3f0",
+      "args": [
+        "build",
+        "--locked",
+        "--offline",
+        "--release",
+        "--target",
+        "wasm32-wasip2",
+        "--package",
+        "mantle-wasm-production-fixture"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "CARGO_TARGET_WASM32_WASIP2_LINKER": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "RUSTFLAGS": "-C link-arg=--skip-wit-component",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [
+        {
+          "name": "rustc",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+          "digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b"
+        },
+        {
+          "name": "wasm-component-ld",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+          "digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f"
+        }
+      ],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "6765840d69076da0157afec0f0b278de1d716bd65463ba114c649a19818093f8",
+      "output_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+      "receipt_blake3": "b14536041323273b4ecacfdc6b87accd7b32b9bfa1d27f99498e906a0625a66b"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compiled-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "bc5eba693233cfbfe9b4a2886a64a28efe91009f01a4e33606a4e42f125c97d3"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-first",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wizer-first-core.wasm",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "receipt_blake3": "2fd40500096b0ad05f104d7b0e899319a6b4cea09868fb65de6ec2b65edee878"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-repeated",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wizer-repeated-core.wasm",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "receipt_blake3": "ee929eede841317f6ebde7565d84dc6c35d65d89335127acd2548aef56e80bad"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentization",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "new",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wizer-first-core.wasm",
+        "-o",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+      "receipt_blake3": "b15d0dbfd3837a9ba59bc46b1d9f5bd83a7c90f0b46435ad214b2bc8e0fbf833"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentized-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.pF13XT/.tmpxEnXS6/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "4f53812ffa440605d0613692cb6c0e5d24b72802cc465e6836b96ad9297af090"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composition",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wac",
+      "program_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+      "args": [
+        "compose",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/source/.mantle/wasm-component/composition.wac",
+        "--dep",
+        "root:component=/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/componentized.wasm",
+        "--output",
+        "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/target",
+        "HOME": "/tmp/mst27/tree-intake-probe/.mantle-wasm-component-work-dDTbYo/home",
+
+[Showing lines 1-300 of 1589. Use :301 to continue]

@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "task": "48",
+      "command": "env TMPDIR=/tmp/mst27 CARGO_TARGET_DIR=/dev/shm/mantle-source-observer-target-20261027 CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 nix develop --option builders '' --max-jobs 2 --cores 2 -c env CARGO_HOME=/home/brittonr/.cargo bash -c 'cargo build --locked --manifest-path /dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml && MANTLE_WASM_COMPONENT_TOOLCHAIN=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1 /dev/shm/mantle-source-observer-target-20261027/debug/molten-source-tree-producer-observer /tmp/mst27/real-handoff/guest blake3:605a53191900ec2c8016cacc1e17c2338e9cda5423115dd5bb993e5082975910 /tmp/mst27/real-handoff/producer-output'",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T17:13:34.839924165-04:00",
+          "start": "2026-10-27T17:13:34.844248635-04:00",
+          "end": "2026-10-27T17:13:43.284627171-04:00",
+          "result": {
+            "Failed": 1
+          }
+        }
+      },
+      "output": "[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling molten-source-tree-producer-observer v0.0.0 (/dev/shm/aspen-mantle-tree-smoke-20261027/producer)\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `dev` profile [unoptimized] target(s) in 2.96s\nError: Io(\"reading checked wkg.lock metadata /tmp/mst27/nix-shell.yGQOu2/.tmpHF870o/source/wkg.lock: No such file or directory (os error 2)\")\n"
+    }
+  ]
+}

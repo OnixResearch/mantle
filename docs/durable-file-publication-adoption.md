@@ -198,3 +198,18 @@ also recorded in the sidecar. This repairs source admission and receipt
 freshness only. Historical gate failures remain failures; this remeasurement
 does not by itself establish a successful replacement full gate, fresh
 upstream fetch, bootstrap result or release eligibility.
+
+The 2026-10-27 Wasm source-closure verifier repair pins the published
+nonblocking Bounded Tree implementation and regenerates its dependency cohort.
+Direct BLAKE3 measurements refresh all four current workspace bindings:
+`Cargo.toml` is `51bac26a52efa61aa661a0cf4fce420755156038b6c0d90e54c452ddcc07a85c`,
+`Cargo.lock` is `44d2b9cd57fbf2cdd4ada7f7a360d0dd015da1f65956b410b8af3210b80c4abe`,
+`flake.nix` is `82756f706a8f7b79ca98023b04129f983df81e0ecf0edb914261f52eef4b7c95`,
+and `flake.lock` is `685db7856ff7920b2bd67b5c4868196feef703c903280176dc61a3596810b808`.
+The typed receipt and independent validator bind these measurements. Pinned
+Nickel regeneration produces JSON BLAKE3
+`85e36562bf737408e12918ec2e3e28fcb3000af3eb6d70bd85f6c96b2bb0ec40`,
+also recorded in the sidecar. This is source-binding maintenance, not a new
+durable-publication behavior, upstream validation or release-readiness claim;
+the original observed date, outcomes, source revision and non-claims remain
+unchanged.
