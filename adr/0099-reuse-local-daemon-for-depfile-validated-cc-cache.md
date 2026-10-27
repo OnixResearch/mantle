@@ -81,6 +81,14 @@ same-daemon slot lifecycle and sandbox boundary. Source implementation alone
 does not establish protected-exec parity, fixed-point acceptance or timing
 benefit; both Cairn changes retain their executable acceptance obligations.
 
+Proof producers record the excluded selection using their existing report
+surfaces: `compiler_cache_mode: excluded` in self-hosting and Cargo-free
+fixed-point reports, `compiler-cache=excluded` in deterministic receipt
+execution envelopes, and a cold source-built transcript. These observations
+do not add a new receipt type or confer admission authority. Existing typed
+deterministic and provider-stage receipt readers remain the boundary against
+cache-only rebuild citations; ordinary cache receipts remain advisory.
+
 ## Alternatives Considered
 
 - **Separate C/C++ daemon:** rejected because the existing daemon already owns

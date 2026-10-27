@@ -101,6 +101,7 @@ pub(crate) const REQUIRED_PERTURBATIONS: &[&str] = &[
     "env-noise",
 ];
 pub(crate) const NORMALIZATION_ENVELOPE: &[&str] = &[
+    "compiler-cache=excluded",
     "normalization:time",
     "normalization:timezone=UTC",
     "normalization:locale=C",

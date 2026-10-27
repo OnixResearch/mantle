@@ -1437,6 +1437,7 @@ fn deterministic_execution_envelope(sandbox_profile_identities: &[String]) -> Ve
     let mut envelope = reproducibility_environment_assumptions();
     envelope.push("sandbox=bwrap".to_string());
     envelope.push("network=none".to_string());
+    envelope.push("compiler-cache=excluded".to_string());
     envelope.extend(deterministic_normalization_envelope());
     for identity in sandbox_profile_identities {
         envelope.push(format!("sandbox-profile={identity}"));

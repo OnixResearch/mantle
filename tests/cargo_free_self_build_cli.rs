@@ -571,6 +571,42 @@ fn cargo_free_self_build_fails_if_ambient_cargo_is_invoked() {
     assert!(smoke_stderr.contains("not run: blocked before binary"));
 }
 
+// r[verify mantle.cc_compile_cache.proof_exclusion]
+#[test]
+fn cargo_free_fixed_point_rejects_inherited_cache_before_creating_attempt() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("proof-must-not-start");
+    for (name, value) in [
+        ("MANTLE_CC_CACHE_SOCKET", ""),
+        ("MANTLE_CC_CACHE_FUTURE", "secret-compiler-cache-test-value"),
+        ("MANTLE_COMPILE_BUILD_ID", ""),
+        ("MANTLE_COMPILE_FUTURE", "secret-compiler-cache-test-value"),
+    ] {
+        let output = mantle_cmd()
+            .current_dir(&root)
+            .args([
+                "self-build",
+                "--cargo-free",
+                "--fixed-point",
+                "--strict-hermetic",
+                "--rustc",
+            ])
+            .arg(dir.path().join("missing-rustc"))
+            .arg("--out")
+            .arg(&out_dir)
+            .env(name, value)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{name}");
+        assert!(stderr.contains("compiler-cache/scheduling"), "{name}: {stderr}");
+        assert!(stderr.contains(name), "{name}: {stderr}");
+        assert!(!stderr.contains("secret-compiler-cache-test-value"), "{stderr}");
+        assert!(!out_dir.exists(), "{name}: no proof attempt may be created");
+    }
+}
+
 #[test]
 fn cargo_free_fixed_point_builds_tiny_mantle_fixture() {
     let dir = TempDir::new().unwrap();

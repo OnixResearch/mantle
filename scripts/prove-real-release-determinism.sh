@@ -3,6 +3,8 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+source "$SCRIPT_DIR/compile-cache-proof-boundary.sh"
 readonly DEFAULT_OUTPUT_ROOT="$REPO_ROOT/target/release-evidence"
 readonly DEFAULT_SELF_HOSTING_ROOT="$REPO_ROOT/target/self-hosting-proof"
 readonly DEFAULT_PROOF_RUNS=2
@@ -217,6 +219,7 @@ main() {
     self_test_production_recipe
     exit 0
   fi
+  require_compile_cache_exclusion
   resolve_tools
   cd -- "$REPO_ROOT"
 

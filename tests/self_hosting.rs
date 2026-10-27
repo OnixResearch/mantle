@@ -159,6 +159,7 @@ struct OfflineProofSourceAuthority {
 #[derive(Debug, Serialize)]
 struct ProofBundleManifest {
     schema: &'static str,
+    compiler_cache_mode: &'static str,
     generated_unix_s: u64,
     repo_root: String,
     bundle_dir: String,
@@ -1683,6 +1684,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
+    out.push_str(&format!("compiler_cache_mode: {}\n", manifest.compiler_cache_mode));
     out.push_str(&format!("selected_provider_kind: {}\n", manifest.prerequisites.provider_kind));
     if let Some(admission) = &manifest.provider_admission {
         out.push_str(&format!("provider_admission: {}\n", admission.path));
@@ -1991,6 +1993,7 @@ fn write_proof_bundle(
 
     let manifest = ProofBundleManifest {
         schema: PROOF_BUNDLE_SCHEMA,
+        compiler_cache_mode: "excluded",
         generated_unix_s: now_unix_s(),
         repo_root: env!("CARGO_MANIFEST_DIR").to_string(),
         bundle_dir: bundle_dir.display().to_string(),
@@ -2583,10 +2586,15 @@ impl ProofScriptFixture {
         std::fs::write(repo_dir.join("Cargo.toml"), "[package]\nname='proof-fixture'\nversion='0.0.0'\n").unwrap();
         std::fs::write(docs_dir.join("bootstrap-stage0-inventory.md"), "# fixture inventory\n").unwrap();
 
-        let src_script = repo_root().join("scripts/prove-self-hosting.sh");
-        let dst_script = script_dir.join("prove-self-hosting.sh");
-        std::fs::copy(&src_script, &dst_script).unwrap();
-        chmod_executable(&dst_script);
+        for script in [
+            "prove-self-hosting.sh",
+            "prove-real-release-determinism.sh",
+            "compile-cache-proof-boundary.sh",
+        ] {
+            let dst_script = script_dir.join(script);
+            std::fs::copy(repo_root().join("scripts").join(script), &dst_script).unwrap();
+            chmod_executable(&dst_script);
+        }
 
         let cargo_body = r#"#!/bin/sh
 set -eu
@@ -2702,7 +2710,7 @@ done
         self.repo_dir.join(format!("{name}-proof-command-launched.txt"))
     }
 
-    fn base_command_in_cwd(&self, cwd: &Path) -> std::process::Command {
+    fn base_command_in_cwd(&self, cwd: &Path, script: &Path) -> std::process::Command {
         let host_path = std::env::var("PATH").unwrap_or_default();
         let fake_path = if host_path.is_empty() {
             self.tool_dir.display().to_string()
@@ -2712,7 +2720,7 @@ done
         let script_shell = test_script_shell();
         let mut command = std::process::Command::new(&script_shell);
         command
-            .arg(self.script_path())
+            .arg(script)
             .current_dir(cwd)
             .env("PATH", fake_path)
             .env("HOME", self.repo_dir.join("home"))
@@ -2738,7 +2746,7 @@ done
         extra_envs: &[(&str, String)],
     ) -> std::process::Output {
         let _lock = lock_proof_env();
-        let mut command = self.base_command_in_cwd(cwd);
+        let mut command = self.base_command_in_cwd(cwd, &self.script_path());
         for (key, value) in extra_envs {
             command.env(key, value);
         }
@@ -2852,6 +2860,63 @@ fn create_stage0_scrubbed_path_blocks_nix_binaries() {
     for tool in STAGE0_PROOF_TOOL_NAMES {
         assert!(find_executable_in_path_var(tool, scrubbed_path.as_os_str()).is_some());
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn proof_scripts_reject_inherited_compiler_runtime_before_starting_work() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt as _;
+
+    let fixture = ProofScriptFixture::new();
+    let sentinel = fixture.proof_launch_sentinel("compiler-runtime-boundary");
+    let keys = [
+        OsString::from("MANTLE_CC_CACHE_SOCKET"),
+        OsString::from("MANTLE_CC_CACHE_POLICY"),
+        OsString::from("MANTLE_CC_CACHE_FUTURE"),
+        OsString::from("MANTLE_COMPILE_BUILD_ID"),
+        OsString::from("MANTLE_COMPILE_SLOT_SOCKET"),
+        OsString::from("MANTLE_COMPILE_FUTURE"),
+        OsString::from("MANTLE_COMPILE_\nFUTURE"),
+        OsString::from_vec(b"MANTLE_CC_CACHE_\xff".to_vec()),
+    ];
+    for script in ["prove-self-hosting.sh", "prove-real-release-determinism.sh"] {
+        let script = fixture.repo_dir.join("scripts").join(script);
+        for key in &keys {
+            for value in ["", "cache-boundary-sensitive-value"] {
+                let _lock = lock_proof_env();
+                let output = fixture
+                    .base_command_in_cwd(&fixture.repo_dir, &script)
+                    .arg("--check")
+                    .env(key, value)
+                    .env("CRUNCH_TEST_PROOF_COMMAND_SENTINEL", &sentinel)
+                    .output()
+                    .unwrap();
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert_eq!(output.status.code(), Some(1), "{} {key:?}: {stderr}", script.display());
+                assert!(stderr.contains("compiler-cache-proof-inherited-runtime-binding"), "{key:?}: {stderr}");
+                assert!(!stderr.contains("cache-boundary-sensitive-value"), "binding values must not be logged");
+                assert!(!fixture.default_scratch_root().exists(), "refusal must precede scratch creation");
+                assert!(!sentinel.exists(), "refusal must precede a proof launch");
+                assert!(!fixture.repo_dir.join("target/release-evidence").exists());
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_cache_boundary_allows_unrelated_environment_names() {
+    let fixture = ProofScriptFixture::new();
+    let sentinel = fixture.proof_launch_sentinel("unrelated-compiler-runtime");
+    let output = fixture.run_args_with_envs(&["--check"], &[
+        ("MANTLE_CC_CACHED", "unrelated".into()),
+        ("MANTLE_COMPILER", "unrelated".into()),
+        ("OTHER_MANTLE_CC_CACHE_SOCKET", "unrelated".into()),
+        ("CRUNCH_TEST_PROOF_COMMAND_SENTINEL", sentinel.display().to_string()),
+    ]);
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!sentinel.exists(), "prerequisite checking must not launch a proof");
 }
 
 #[cfg(unix)]

@@ -3099,6 +3099,48 @@ fn release_verify_reports_required_deterministic_release_from_artifacts() {
     assert_eq!(stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"], evidence_digest);
 }
 
+// r[verify mantle.cc_compile_cache.proof_exclusion]
+#[test]
+fn release_verify_rejects_compiler_cache_receipts_as_deterministic_rebuild_evidence() {
+    use crunch_rust_cache_core::cc;
+
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, evidence_path, _, _) =
+        write_deterministic_verify_artifacts(&temp.path().join("cache-not-proof"), &manifest);
+    crunch()
+        .args(["release", "verify"])
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&evidence_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+
+    let cache_receipt = cc::Receipt {
+        schema: cc::RECEIPT_SCHEMA.into(),
+        disposition: cc::Disposition::Hit,
+        key: Some(sample_digest(1)),
+        bypass: None,
+        probe: false,
+    };
+    write_file(&proof_path, &serde_json::to_vec(&cache_receipt).unwrap());
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &proof_path, &evidence_path);
+    for external_override in [true, false] {
+        let mut command = crunch();
+        command.args(["release", "verify"]).arg(&bundle_dir).arg("--require-deterministic-release");
+        if external_override {
+            command
+                .arg("--deterministic-proof")
+                .arg(&proof_path)
+                .arg("--deterministic-sandbox-isolation-evidence")
+                .arg(&evidence_path);
+        }
+        command.assert().failure().stderr(predicate::str::contains("missing field"));
+    }
+}
+
 // r[verify mantle.release_provenance.deterministic_rebuild_admission.legacy]
 #[test]
 fn release_verify_keeps_legacy_path_bound_receipt_non_promoting() {
@@ -4121,6 +4163,43 @@ fn release_verify_required_provider_fixed_point_uses_bundled_proof() {
         .stdout(predicate::str::contains("provider fixed-point stage binary digest:"))
         .stdout(predicate::str::contains("provider fixed-point non-claim: not-release-reproducibility"))
         .stdout(predicate::str::contains("provider fixed-point non-claim: not-full-cargo-compatibility"));
+}
+
+// r[verify mantle.cc_compile_cache.proof_exclusion]
+#[test]
+fn release_verify_rejects_compiler_cache_receipts_as_provider_stage_execution() {
+    use crunch_rust_cache_core::cc;
+
+    let (temp, bundle_dir, _) = make_valid_bundle_with_provider();
+    let proof_dir = temp.path().join("provider-cache-not-proof");
+    write_provider_fixed_point_proof_bundle(&proof_dir, PROVIDER_FIXED_POINT_BINARY_BYTES);
+    crunch()
+        .args(["release", "verify"])
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .arg("--provider-fixed-point-proof")
+        .arg(&proof_dir)
+        .assert()
+        .success();
+
+    let receipt = cc::Receipt {
+        schema: cc::RECEIPT_SCHEMA.into(),
+        disposition: cc::Disposition::Compiled,
+        key: Some(sample_digest(1)),
+        bypass: None,
+        probe: false,
+    };
+    write_file(&proof_dir.join("stage1/receipt.json"), &serde_json::to_vec(&receipt).unwrap());
+    let output = crunch()
+        .args(["--json", "release", "verify"])
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .arg("--provider-fixed-point-proof")
+        .arg(&proof_dir)
+        .output()
+        .unwrap();
+    let result = assert_json_release_verify_rejection(output, "provider-fixed-point-proof", "stage1");
+    assert_eq!(result["provider_fixed_point_proof"]["valid"], false);
 }
 
 #[test]

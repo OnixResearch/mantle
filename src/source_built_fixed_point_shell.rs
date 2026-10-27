@@ -806,6 +806,12 @@ fn prepare_profile_attempt(
     if !preparing_programs {
         fs::create_dir(&transcripts_dir)
             .map_err(|error| proof_error(format!("creating transcripts {}: {error}", transcripts_dir.display())))?;
+        if !is_development_run(options) {
+            write_bytes_create_new(
+                &transcripts_dir.join("compiler-cache-mode.txt"),
+                b"compiler cache mode: excluded; cache receipts are not proof\n",
+            )?;
+        }
         crate::source_bundle::import_source_bundle(profile, &native_state_dir, true)?;
     }
     if options.dev_provider_cache.is_some() {

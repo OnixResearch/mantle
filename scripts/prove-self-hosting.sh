@@ -3,6 +3,8 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+source "$SCRIPT_DIR/compile-cache-proof-boundary.sh"
 readonly DEFAULT_TOOLCHAIN="nightly"
 readonly PROOF_COMMAND=(cargo test -p mantle --test self_hosting -- --ignored --nocapture)
 readonly MIN_PROOF_SCRATCH_FREE_KIB=4194304
@@ -834,6 +836,8 @@ main() {
     usage
     exit 0
   fi
+
+  require_compile_cache_exclusion
 
   require_linux
   require_repo_root

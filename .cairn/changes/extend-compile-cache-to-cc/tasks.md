@@ -14,6 +14,23 @@ This does not close protected-bootstrap integration or T3.2/T4.2's chain and
 cache-off fixed-point obligations. Repeat with `scripts/prove-cc-cache-slots.py`
 and fresh private roots; compile-cache maintainers own this rail.
 
+The 2026-10-27 proof-runner continuation closes an inherited-environment gap in
+`prove-self-hosting.sh` and `prove-real-release-determinism.sh`. Native checks
+reproduce cache bindings passing the original self-hosting preflight, then
+observe 32 refusals before attempt creation, clean/near-prefix preflight
+success, and cache-exclusion reporting after the fix. The real-release clean
+control still requires a content-bound toolchain archive; no release or
+self-hosting proof runs. Exact captures and earlier harness blockers are in
+`evidence/proof-exclusion-2026-10-27.json`. The strict receipt/transcript source
+continuation completes T3.3: direct Cargo-free admission rejects inherited
+authority before creating an attempt, proof reports persist the excluded mode,
+and public receipt consumers reject cache-only rebuild citations. Focused
+regressions and a native first-stage compile with an explicitly refused second
+build are bounded observations, not an admitted proof. Representative-chain
+identity/timing, the cache-off fixed point, and an owner-admitted cold
+source-built cohort remain unaccepted. Compile-cache and proof-admission
+maintainers own these report/guard surfaces and their regression rails.
+
 ## Phase 1: Baseline and contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current cache seam (`crunch-rust-cache`, `crunch-rustc-wrapper`, daemon, strict lanes), a timed uncached baseline of one representative bootstrap chain rebuild, and focused test output. r[mantle.cc_compile_cache.proof_exclusion]
@@ -32,7 +49,7 @@ and fresh private roots; compile-cache maintainers own this rail.
 
 - [ ] [serial] T3.1 Wire execution-time endpoint mapping into the build shell for protected bootstrap builds without derivation input changes. r[mantle.cc_compile_cache.non_input_cache_boundary]
 - [ ] [serial] T3.2 Prove byte-identical outputs with cache on and off on the representative chain rebuild, with disposition records. r[mantle.cc_compile_cache.non_input_cache_boundary]
-- [ ] [serial] T3.3 Extend strict evidence lanes to reject cache receipts as rebuild evidence and record cache mode in proof transcripts. r[mantle.cc_compile_cache.proof_exclusion]
+- [x] [serial] T3.3 Extend strict evidence lanes to reject cache receipts as rebuild evidence and record cache mode in proof transcripts. r[mantle.cc_compile_cache.proof_exclusion]
 - [x] [serial] T3.4 Implement bounded probe-result and failure caching with per-read dispositions. r[mantle.cc_compile_cache.probe_and_failure_cache]
 
 ## Phase 4: Verification

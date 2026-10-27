@@ -19,6 +19,7 @@ use crate::errors::RunError;
 
 const SCHEMA: &str = "mantle-cargo-free-self-build-v1";
 const FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
+const COMPILER_CACHE_MODE: &str = "excluded";
 const RECEIPT_FILE: &str = "receipt.json";
 const STDERR_FILE: &str = "stderr.txt";
 const STATUS_FILE: &str = "status.txt";
@@ -416,6 +417,7 @@ struct FixedPointStageArtifact {
 #[derive(Debug, Serialize)]
 struct FixedPointSummary {
     schema: &'static str,
+    compiler_cache_mode: &'static str,
     status: String,
     root: PathBuf,
     bundle_dir: PathBuf,
@@ -1402,6 +1404,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
 }
 
 fn execute_cargo_free_fixed_point(options: CargoFreeSelfBuildOptions<'_>) -> Result<FixedPointSummary, RunError> {
+    crate::source_built_fixed_point_shell::validate_cold_compiler_environment(env::vars_os().map(|(name, _)| name))?;
     let root = canonicalize_root(options.root)?;
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
@@ -2410,6 +2413,7 @@ fn fixed_point_summary_from_context(
     let non_claims = fixed_point_non_claims(context.toolchain_closure);
     FixedPointSummary {
         schema: FIXED_POINT_SCHEMA,
+        compiler_cache_mode: COMPILER_CACHE_MODE,
         status: status.to_string(),
         root: context.plan.root.clone(),
         bundle_dir: PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
@@ -2623,6 +2627,7 @@ fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool, bundl
         println!("stage2_binary_blake3: {digest}");
     }
     println!("hermeticity_mode: {}", summary.hermeticity_mode);
+    println!("compiler_cache_mode: {}", summary.compiler_cache_mode);
     println!("strict_proof_admission: {}", summary.proof_eligibility.admitted);
     if !summary.proof_eligibility.blocked_classes.is_empty() {
         println!("strict_proof_blocked_classes: {}", summary.proof_eligibility.blocked_classes.join(","));
@@ -3636,6 +3641,7 @@ fn write_fixed_point_preflight(
 ) -> Result<(), RunError> {
     let value = json!({
         "schema": plan.schema,
+        "compiler_cache_mode": COMPILER_CACHE_MODE,
         "root": plan.root,
         "bundle_dir": BUNDLE_ROOT_RELATIVE_PATH,
         "shared_execution_dir": bundle_local_path(&plan.bundle_dir, &plan.shared_execution_dir),

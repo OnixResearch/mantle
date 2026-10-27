@@ -26,6 +26,31 @@ Run the fast prerequisite check before starting expensive self-build proof work:
 ./scripts/prove-self-hosting.sh --check
 ```
 
+The self-hosting and real-release shell runners reject inherited
+`MANTLE_CC_CACHE_*` and `MANTLE_COMPILE_*` bindings before tool discovery,
+scratch creation, or release-output changes. Empty values are still bindings;
+remove them at the outer runner rather than setting them to empty strings.
+The guard reads raw NUL-delimited environment entries, including names Bash
+cannot import, and reports names without values. An admitted runner prints
+`compiler cache mode: excluded; cache receipts are not proof` to stderr.
+This records runner cache selection, not proof execution or successful rebuild
+evidence; subsequent prerequisites and receipt validation still apply.
+
+Direct Cargo-free fixed-point calls apply the cold-proof environment guard
+before preparing an output directory. Their `preflight.json`, `meta.json`,
+JSON summary, and human summary record `compiler_cache_mode: excluded`.
+Self-hosting bundles record that mode in `manifest.json` and `summary.txt`.
+Release and cold source-built deterministic receipts include
+`compiler-cache=excluded` in `normalized_execution_envelope`; cold source-built
+attempts also write `transcripts/compiler-cache-mode.txt`. Development attempts
+do not receive that cold-proof transcript.
+
+These fields describe cache selection, not proof authority. A cache receipt
+cannot replace a deterministic proof receipt or provider-stage execution
+receipt: the existing typed receipt, rebuild-authority, measured artifact, and
+strict eligibility checks still apply. Mode reporting on a blocked attempt is
+not a successful rebuild or an admitted proof.
+
 Use the checked-in guide drift checks after documentation, trust-model, or
 proof-surface edits:
 

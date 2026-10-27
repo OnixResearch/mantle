@@ -92,3 +92,32 @@ indefinitely. Read/publication/receipt failures remain advisory. The source
 fixtures in `scripts/prove-cc-cache-slots.py` must be executed separately;
 their presence does not establish bootstrap parity or strict proof acceptance.
 
+## Proof-runner cache exclusion
+
+`scripts/compile-cache-proof-boundary.sh` owns the common admission check for
+the self-hosting and real-release shell entrypoints. It rejects the complete
+`MANTLE_CC_CACHE_*` and `MANTLE_COMPILE_*` families before prerequisite lookup,
+scratch creation, or release-output changes, including empty values, future
+keys, and raw names that Bash cannot import. NUL framing preserves name
+boundaries; diagnostics quote names and never include binding values.
+
+Successful admission records the selected excluded mode in runner stderr.
+Direct Cargo-free fixed-point admission also rejects inherited cache/scheduling
+bindings through the existing cold-proof guard, before output preparation.
+The native before/after observations and retained failed harness attempts are
+in `evidence/proof-exclusion-2026-10-27.json`.
+
+Self-hosting manifests/summaries and Cargo-free preflight/final reports record
+`compiler_cache_mode: excluded`. Release and cold source-built deterministic
+receipts add `compiler-cache=excluded` to the existing execution envelope;
+cold source-built attempts also write `transcripts/compiler-cache-mode.txt`.
+Development attempts do not acquire that cold transcript. The mode is a
+diagnostic observation, never rebuild or admission authority.
+
+The existing deterministic and provider-stage receipt contracts already
+reject cache-only records. Public CLI regressions retain valid typed-schema
+fixtures, then replace only the rebuild citation with a compiler-cache receipt
+at external, bundled, and provider-stage intake boundaries. This is source and
+bounded diagnostic integration, not an executed cold source-built cohort or
+the representative uncached/cached proof acceptance required by T3.2/T4.2.
+
