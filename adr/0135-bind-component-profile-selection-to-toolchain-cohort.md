@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted — 2026-10-28. Implemented and exercised by `select-octet-component-profiles`.
 
 ## Context
 

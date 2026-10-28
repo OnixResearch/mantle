@@ -68,8 +68,25 @@ all completed. The repository-owned vendored-member exclusions were unchanged.
 Its following full Nix invocation evaluated all outputs, but failed during
 sandbox setup because the custom build root was below a private home directory:
 `getting attributes of path .../nix-builds/.../build: Permission denied`.
-The corrected run uses an owned build root below traversable `/var/tmp`; it
-does not change the home directory's permissions or repository sandbox policy.
+A subsequent owned root below `/var/tmp` was also rejected by Nix's ancestor
+security checks: neither the world-writable root nor its world-writable parent
+was admitted. All failed setup logs are retained separately. The final command
+removes the build-root override and uses the host's standard Nix policy;
+neither home permissions nor repository sandbox checks are weakened.
+
+The canonical full Nix invocation then exited 0 and printed **all checks passed**:
+
+```sh
+nix flake check --no-write-lock-file --option builders '' \
+  --max-jobs 1 --cores 2 -L
+```
+
+It executed the 26 native `x86_64-linux` checks, including Tiger Style, the
+packaged CLI, hermetic tests, Clippy, formatting, source admission and toolchain
+checks. Other systems were explicitly omitted by Nix and are not claimed.
+The exact final record is `cohort-final/nix-canonical-check.json`; the complete
+transcript is `cohort-final/nix-canonical.log` in the retained run directory.
+Native strict validation and proposal/design/tasks gates also returned `PASS`.
 
 ## Actual producer and complete consumer observation
 

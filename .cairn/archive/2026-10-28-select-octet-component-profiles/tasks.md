@@ -9,4 +9,4 @@
 ## Verification
 
 - [x] [serial] Exercise actual default and supported-world pipelines, preserving the default denial and new selected-profile success with complete consumer byte verification. r[mantle.wasm_component.profile_selection]
-- [ ] [serial] Execute changed-package, toolchain, quality and lifecycle gates and retain exact identities and evidence boundaries. r[mantle.wasm_component.profile_selection]
+- [x] [serial] Execute changed-package, toolchain, quality and lifecycle gates and retain exact identities and evidence boundaries. r[mantle.wasm_component.profile_selection]
