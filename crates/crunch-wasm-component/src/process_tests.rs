@@ -219,7 +219,11 @@ fn test_octet_identity() -> OctetRailIdentity {
         config_digest_blake3: identity.clone(),
         profile_id: OCTET_PROFILE_ID.to_string(),
         profile_identity_blake3: identity.clone(),
-        wasm_tools_cohort_identity_blake3: identity,
+        wasm_tools_cohort_identity_blake3: identity.clone(),
+        profiles: vec![crate::OctetProfileIdentity {
+            profile_id: OCTET_PROFILE_ID.to_string(),
+            profile_identity_blake3: identity,
+        }],
     }
 }
 

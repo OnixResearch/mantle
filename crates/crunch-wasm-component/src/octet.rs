@@ -121,6 +121,7 @@ pub(crate) fn run_octet_validation(
     debug_assert!(artifact.size_bytes > 0);
     let evidence_root = workspace.root.join("octet-final");
     let config_path = prepared.toolchain.octet_config_path()?;
+    let profile = prepared.octet_profile()?;
     let parent_identity = format!("mantle:{}", artifact.digest_blake3.clone().into_hex());
     let args = vec![
         "evidence".to_string(),
@@ -132,7 +133,7 @@ pub(crate) fn run_octet_validation(
         "--config".to_string(),
         config_path.display().to_string(),
         "--profile".to_string(),
-        prepared.toolchain.manifest.octet.profile_id.clone(),
+        profile.profile_id.clone(),
         "--parent-artifact".to_string(),
         parent_identity,
         "--artifact-dir".to_string(),
@@ -170,10 +171,11 @@ fn admit_completed_octet(
     artifact: &StoreObject,
     completed: CompletedOctetRun,
 ) -> Result<Option<OctetStageAdmission>, Error> {
+    let profile = prepared.octet_profile()?;
     let expected = OctetExpected {
         artifact,
-        profile_id: &prepared.toolchain.manifest.octet.profile_id,
-        profile_blake3: &prepared.toolchain.manifest.octet.profile_identity_blake3,
+        profile_id: &profile.profile_id,
+        profile_blake3: &profile.profile_identity_blake3,
         config_blake3: &prepared.toolchain.manifest.octet.config_digest_blake3,
         cohort_blake3: &prepared.toolchain.manifest.octet.wasm_tools_cohort_identity_blake3,
         report_blake3: &completed.published.receipt.digest_blake3,
@@ -192,7 +194,7 @@ fn admit_completed_octet(
             return Ok(None);
         }
     };
-    let evidence = octet_evidence(prepared, artifact, completed.published);
+    let evidence = octet_evidence(prepared, artifact, completed.published, &profile.profile_identity_blake3);
     state.add_octet_validation(evidence.clone())?;
     debug_assert_eq!(binding.decision, ValidationDecision::Pass);
     debug_assert_eq!(evidence.artifact.digest_blake3, binding.artifact_blake3);
@@ -216,7 +218,7 @@ fn push_octet_stage(
         StageEvidence::new(
             Some(receipt.clone()),
             Some(prepared.toolchain.tool_digest("cargo-octet")?),
-            Some(prepared.toolchain.manifest.octet.profile_identity_blake3.clone()),
+            Some(prepared.octet_profile()?.profile_identity_blake3.clone()),
             if is_admitted {
                 vec![BoundedComponentClaim::OctetReportBound]
             } else {
@@ -230,13 +232,14 @@ fn octet_evidence(
     prepared: &PreparedPipeline,
     artifact: &StoreObject,
     published: PublishedOctetEvidence,
+    profile_blake3: &Blake3Identity,
 ) -> OctetValidationEvidence {
     OctetValidationEvidence {
         stage_key: "octet-validation".to_string(),
         artifact: artifact.clone(),
         receipt: published.receipt,
         verification_report: published.verification,
-        profile_blake3: prepared.toolchain.manifest.octet.profile_identity_blake3.clone(),
+        profile_blake3: profile_blake3.clone(),
         cohort_blake3: prepared.toolchain.manifest.octet.wasm_tools_cohort_identity_blake3.clone(),
         source_repository: prepared.toolchain.manifest.octet.source_repository.clone(),
         source_revision: prepared.toolchain.manifest.octet.source_revision.clone(),

@@ -798,6 +798,28 @@ unshared. The pinned cohort includes the immutable Octet source revision,
 `cargo-octet` package, checked profile configuration and identity, and its
 wasm-tools cohort identity.
 
+The toolchain's required `octet.profiles` cohort contains the unchanged
+`portable-component-baseline` and separate `molten-component-baseline`.
+Set `manifest.validation_profiles.octet_artifact_profile_identity_blake3` to
+the exact intended entry from that immutable manifest before generating input
+receipts. The portable default remains import-free; the Molten profile admits
+only its declared Preserves carrier type import, bulk memory and padded
+`call_indirect` table immediates. It does not enable reference types, SIMD or all
+Wasm 2 features. Unknown identities and missing, duplicate or misbound cohort entries
+fail before pipeline execution; there is no implicit default or old-manifest
+fallback. The actual invocation, stage evidence, validation report and bundle
+all bind the selected identity. Runtime-profile identity remains independent.
+
+The reviewed Octet revision is
+`0e0e5dc8461b8b32c286de362c290b3f3ea2deee`; the portable identity is
+`e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd`,
+and the Molten identity is
+`24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846`.
+Changing the source, registry or profile cohort requires new toolchain and
+request identities and fresh producer evidence; roll those inputs back together,
+never rewrite a published bundle. See
+[ADR 0135](../adr/0135-bind-component-profile-selection-to-toolchain-cohort.md).
+
 Successful output includes validated compiled, composed, virtualized, and
 metadata-normalized portable bytes; exact Octet receipt/provenance/verification
 files; stage receipt objects; `materialization-bundle.json`;

@@ -165,19 +165,21 @@ fn validate_wizer_configuration(request: &ComponentPipelineRequest) -> Result<Op
 }
 
 fn validate_octet_profile(request: &ComponentPipelineRequest, toolchain: &VerifiedToolchain) -> Result<(), Error> {
-    if request.manifest.validation_profiles.octet_artifact_profile_identity_blake3
-        != toolchain.manifest.octet.profile_identity_blake3
-    {
-        return Err(Error::Invalid(
-            "declared Octet artifact profile identity drifts from the pinned Octet configuration".to_string(),
-        ));
-    }
-    debug_assert_eq!(toolchain.manifest.octet.profile_id, crate::OCTET_PROFILE_ID);
-    debug_assert_eq!(
-        request.manifest.validation_profiles.octet_artifact_profile_identity_blake3,
-        toolchain.manifest.octet.profile_identity_blake3
-    );
+    let expected = &request.manifest.validation_profiles.octet_artifact_profile_identity_blake3;
+    toolchain.manifest.octet.select_profile(expected).ok_or_else(|| {
+        Error::Invalid("declared Octet artifact profile identity is not in this toolchain cohort".to_string())
+    })?;
     Ok(())
+}
+
+impl PreparedPipeline {
+    /// The toolchain profile this request declares, resolved by identity.
+    pub(crate) fn octet_profile(&self) -> Result<&crate::model::OctetProfileIdentity, Error> {
+        let expected = &self.request.manifest.validation_profiles.octet_artifact_profile_identity_blake3;
+        self.toolchain.manifest.octet.select_profile(expected).ok_or_else(|| {
+            Error::Invalid("declared Octet artifact profile identity is not in this toolchain cohort".to_string())
+        })
+    }
 }
 
 fn validate_aot_configuration(request: &ComponentPipelineRequest) -> Result<Option<Blake3Identity>, Error> {

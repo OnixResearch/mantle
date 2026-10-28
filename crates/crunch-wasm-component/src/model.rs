@@ -17,12 +17,15 @@ pub const PIPELINE_REQUEST_SCHEMA: &str = "mantle-wasm-component-pipeline-reques
 pub const PIPELINE_EXECUTION_REPORT_SCHEMA: &str = "mantle-wasm-component-pipeline-execution-report-v1";
 pub const TOOLCHAIN_MANIFEST_SCHEMA: &str = "mantle-wasm-component-toolchain-v1";
 pub const OCTET_SOURCE_REPOSITORY: &str = "https://github.com/OnixResearch/octet";
-pub const OCTET_SOURCE_REVISION: &str = "86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
+pub const OCTET_SOURCE_REVISION: &str = "0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
 pub const OCTET_PACKAGE_NAME: &str = "cargo-octet";
 pub const OCTET_PACKAGE_VERSION: &str = "0.1.0";
 pub const OCTET_PROFILE_ID: &str = "portable-component-baseline";
-pub const OCTET_CONFIG_BLAKE3: &str = "f58715eb73f91d8a6fffd565cc3b030e7f1f8296ec8e91851155d1bb5e52bafd";
+pub const OCTET_MOLTEN_PROFILE_ID: &str = "molten-component-baseline";
+pub const OCTET_CONFIG_BLAKE3: &str = "48aabf8dc2ad189ebe051ddce48746a8f878fcbcebf506007c505085e9a8ed83";
 pub const OCTET_PROFILE_IDENTITY_BLAKE3: &str = "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd";
+pub const OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3: &str =
+    "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846";
 pub const OCTET_WASM_TOOLS_COHORT_BLAKE3: &str = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a";
 
 pub const REQUIRED_TOOL_NAMES: [&str; 12] = [
@@ -96,6 +99,22 @@ pub struct OctetRailIdentity {
     pub profile_id: String,
     pub profile_identity_blake3: Blake3Identity,
     pub wasm_tools_cohort_identity_blake3: Blake3Identity,
+    /// Exact selectable profiles in this toolchain cohort, including its default.
+    pub profiles: Vec<OctetProfileIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OctetProfileIdentity {
+    pub profile_id: String,
+    pub profile_identity_blake3: Blake3Identity,
+}
+
+// r[impl mantle.wasm_component.profile_selection]
+impl OctetRailIdentity {
+    /// Resolve one declared profile identity against this cohort without fallback.
+    pub fn select_profile(&self, expected: &Blake3Identity) -> Option<&OctetProfileIdentity> {
+        self.profiles.iter().find(|profile| &profile.profile_identity_blake3 == expected)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

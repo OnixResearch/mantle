@@ -16,6 +16,7 @@ use crate::OCTET_PACKAGE_VERSION;
 use crate::OCTET_PROFILE_ID;
 use crate::OCTET_SOURCE_REPOSITORY;
 use crate::OCTET_SOURCE_REVISION;
+use crate::OctetProfileIdentity;
 use crate::OctetRailIdentity;
 use crate::ToolLimits;
 use crate::ToolchainManifest;
@@ -27,8 +28,9 @@ const TEST_OUTPUT_BYTES: u64 = 128;
 fn cohort_identity_matches_sorted_compact_json_with_line_terminator() {
     let octet = test_octet_identity();
     let octet_digest = octet.config_digest_blake3.clone().into_hex();
+    let octet_revision = OCTET_SOURCE_REVISION;
     let canonical = format!(
-        "{{\"octet\":{{\"config_digest_blake3\":\"{octet_digest}\",\"config_path\":\"share/octet/profiles.json\",\"package_name\":\"cargo-octet\",\"package_version\":\"0.1.0\",\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\",\"source_repository\":\"https://github.com/OnixResearch/octet\",\"source_revision\":\"86ee46b3b9257b145d2dbeb6ce9d9897607db99c\",\"wasm_tools_cohort_identity_blake3\":\"{octet_digest}\"}},\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}}\n"
+        "{{\"octet\":{{\"config_digest_blake3\":\"{octet_digest}\",\"config_path\":\"share/octet/profiles.json\",\"package_name\":\"cargo-octet\",\"package_version\":\"0.1.0\",\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\",\"profiles\":[{{\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\"}}],\"source_repository\":\"https://github.com/OnixResearch/octet\",\"source_revision\":\"{octet_revision}\",\"wasm_tools_cohort_identity_blake3\":\"{octet_digest}\"}},\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}}\n"
     );
     let identity = Blake3Identity::from_slice(canonical.as_bytes());
     let manifest = ToolchainManifest {
@@ -47,6 +49,53 @@ fn cohort_identity_matches_sorted_compact_json_with_line_terminator() {
     assert!(verify_cohort_identity(&bytes, &tampered).is_err());
 }
 
+// r[verify mantle.wasm_component.profile_selection]
+#[test]
+fn profile_selection_uses_declared_identities_only() {
+    let mut identity = test_octet_identity();
+    let default_identity = identity.profile_identity_blake3.clone();
+    assert_eq!(identity.select_profile(&default_identity).expect("default profile").profile_id, OCTET_PROFILE_ID);
+    let alternative = Blake3Identity::parse("b".repeat(64)).expect("identity");
+    assert!(identity.select_profile(&alternative).is_none());
+    identity.profiles.push(OctetProfileIdentity {
+        profile_id: "molten-component-baseline".to_string(),
+        profile_identity_blake3: alternative.clone(),
+    });
+    assert_eq!(
+        identity.select_profile(&alternative).expect("declared profile").profile_id,
+        "molten-component-baseline"
+    );
+    identity.profiles.clear();
+    assert!(identity.select_profile(&default_identity).is_none());
+    assert!(identity.select_profile(&alternative).is_none());
+}
+
+// r[verify mantle.wasm_component.profile_selection]
+#[test]
+fn selectable_cohort_rejects_missing_duplicate_and_misbound_profiles() {
+    let mut octet = test_octet_identity();
+    assert!(super::verify_octet_profiles(&octet).is_err());
+    octet.profiles.push(OctetProfileIdentity {
+        profile_id: crate::OCTET_MOLTEN_PROFILE_ID.to_string(),
+        profile_identity_blake3: Blake3Identity::parse(crate::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3.to_string())
+            .unwrap(),
+    });
+    super::verify_octet_profiles(&octet).expect("both distinct declared profiles");
+    octet.profiles.swap(0, 1);
+    super::verify_octet_profiles(&octet).expect("profile order is not authority");
+    let mut invalid = octet.clone();
+    invalid.profiles[0].profile_identity_blake3 = invalid.profile_identity_blake3.clone();
+    assert!(super::verify_octet_profiles(&invalid).is_err());
+    let mut invalid = octet.clone();
+    invalid.profiles[0].profile_id = invalid.profile_id.clone();
+    assert!(super::verify_octet_profiles(&invalid).is_err());
+    let mut invalid = octet.clone();
+    invalid.profiles[1].profile_identity_blake3 = Blake3Identity::from_slice(b"wrong-default-profile");
+    assert!(super::verify_octet_profiles(&invalid).is_err());
+    octet.profiles.push(octet.profiles[0].clone());
+    assert!(super::verify_octet_profiles(&octet).is_err());
+}
+
 fn test_octet_identity() -> OctetRailIdentity {
     let identity = Blake3Identity::from_slice(b"test-octet-identity");
     OctetRailIdentity {
@@ -58,7 +107,11 @@ fn test_octet_identity() -> OctetRailIdentity {
         config_digest_blake3: identity.clone(),
         profile_id: OCTET_PROFILE_ID.to_string(),
         profile_identity_blake3: identity.clone(),
-        wasm_tools_cohort_identity_blake3: identity,
+        wasm_tools_cohort_identity_blake3: identity.clone(),
+        profiles: vec![OctetProfileIdentity {
+            profile_id: OCTET_PROFILE_ID.to_string(),
+            profile_identity_blake3: identity,
+        }],
     }
 }
 

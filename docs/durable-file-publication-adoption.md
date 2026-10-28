@@ -213,3 +213,15 @@ also recorded in the sidecar. This is source-binding maintenance, not a new
 durable-publication behavior, upstream validation or release-readiness claim;
 the original observed date, outcomes, source revision and non-claims remain
 unchanged.
+
+The 2026-10-28 Octet component-profile cohort update changes only the current
+Nix input bindings: `flake.nix` BLAKE3 is
+`a2edba2e7202bac75c170e8b5b63650338d6e4af18a796ce4d41cbda44c705d0`
+and `flake.lock` is
+`1c6ee995657d8d68d080a3d66e49ce8abba7db994d486bea06125b9f14eedfbe`.
+Cargo bindings remain unchanged. Pinned Nickel 1.17.0 regenerates the receipt
+with BLAKE3 `b2037139b4450ddbff7131b836c845074b5a729fa5a86bd1a527b125eb41a4bf`,
+also recorded in its sidecar. This is current source-binding maintenance, not
+new durable-publication behavior or a replay of historical adoption evidence.
+The reviewed publication revision, original date and claim boundaries remain
+unchanged.

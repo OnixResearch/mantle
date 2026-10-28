@@ -193,12 +193,38 @@ fn verify_octet_identity(root: &Path, manifest: &ToolchainManifest) -> Result<()
     if octet.wasm_tools_cohort_identity_blake3 != expected_cohort {
         return Err(octet_identity_drift());
     }
+    verify_octet_profiles(octet)?;
     let config_path = root.join(&octet.config_path);
     if hash_file_bounded(&config_path)? != octet.config_digest_blake3 {
         return Err(Error::Invalid("Octet Wasm artifact profile configuration digest drifted".to_string()));
     }
     debug_assert_eq!(octet.source_revision.len(), OCTET_SOURCE_REVISION.len());
     debug_assert_eq!(octet.profile_id, OCTET_PROFILE_ID);
+    Ok(())
+}
+
+// r[impl mantle.wasm_component.profile_selection]
+fn verify_octet_profiles(octet: &crate::model::OctetRailIdentity) -> Result<(), Error> {
+    let [first, second] = octet.profiles.as_slice() else {
+        return Err(Error::Invalid("Octet toolchain must declare both pinned artifact profiles".to_string()));
+    };
+    let expected_molten =
+        pinned_identity(crate::model::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3, OctetPinnedRole::Profile)?;
+    let is_default = |profile: &crate::model::OctetProfileIdentity| {
+        profile.profile_id == octet.profile_id && profile.profile_identity_blake3 == octet.profile_identity_blake3
+    };
+    let is_molten = |profile: &crate::model::OctetProfileIdentity| {
+        profile.profile_id == crate::model::OCTET_MOLTEN_PROFILE_ID
+            && profile.profile_identity_blake3 == expected_molten
+    };
+    if !((is_default(first) && is_molten(second)) || (is_default(second) && is_molten(first))) {
+        return Err(Error::Invalid("Octet toolchain artifact profile names or default identity drifted".to_string()));
+    }
+    if first.profile_identity_blake3 == second.profile_identity_blake3 {
+        return Err(Error::Invalid("Octet toolchain declares duplicate artifact profile identities".to_string()));
+    }
+    debug_assert_ne!(first.profile_id, second.profile_id);
+    debug_assert_ne!(first.profile_identity_blake3, second.profile_identity_blake3);
     Ok(())
 }
 

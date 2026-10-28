@@ -45,7 +45,7 @@
       url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9";
       flake = false;
     };
-    octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
+    octet.url = "github:OnixResearch/octet/0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
     cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
@@ -664,11 +664,15 @@
             '';
 
         wasiVirtVersion = "0.2.0";
-        octetSourceRevision = "86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
+        octetSourceRevision = "0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
         octetSourceRepository = "https://github.com/OnixResearch/octet";
         octetPackageName = "cargo-octet";
         octetPackageVersion = "0.1.0";
         octetProfileId = "portable-component-baseline";
+        octetProfileIds = [
+          octetProfileId
+          "molten-component-baseline"
+        ];
         octetPackage = octet.packages.${system}.cargo-octet;
         octetProfileConfig = "${octet}/standards/wasm-artifact/generated/profiles.json";
         wasiVirt = pkgs.rustPlatform.buildRustPackage {
@@ -768,23 +772,35 @@
                 octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
                 "$out/bin/wasm-tools" parse "${octet}/standards/wasm-artifact/fixtures/positive/component.wat" \
                   -o "$TMPDIR/octet-positive-component.wasm"
-                "$out/bin/cargo-octet" evidence collect \
-                  --rail wasm-artifact \
-                  --input "$TMPDIR/octet-positive-component.wasm" \
-                  --config "$octet_config" \
-                  --profile "${octetProfileId}" \
-                  --artifact-dir "$TMPDIR/octet-profile-evidence" \
-                  --output-format json > "$TMPDIR/octet-profile-run.json"
-                "$out/bin/cargo-octet" artifact verify \
-                  --artifact-dir "$TMPDIR/octet-profile-evidence" \
-                  --output-format json > "$TMPDIR/octet-profile-verify.json"
-                ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
-                  "$TMPDIR/octet-profile-verify.json" > /dev/null
-                octet_profile_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.profile_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-                octet_cohort_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.cohort_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-                octet_registry_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.registry_identity | sub("^b3:"; "")' "$TMPDIR/octet-profile-evidence/evidence-rail-receipt.json")"
-                test "$octet_registry_identity" = "$octet_config_digest"
-                test "$octet_cohort_identity" = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a"
+                octet_profiles="$TMPDIR/octet-profiles.jsonl"
+                : > "$octet_profiles"
+                for profile_id in ${pkgs.lib.escapeShellArgs octetProfileIds}; do
+                  artifact_dir="$TMPDIR/octet-$profile_id-evidence"
+                  "$out/bin/cargo-octet" evidence collect \
+                    --rail wasm-artifact \
+                    --input "$TMPDIR/octet-positive-component.wasm" \
+                    --config "$octet_config" \
+                    --profile "$profile_id" \
+                    --artifact-dir "$artifact_dir" \
+                    --output-format json > "$TMPDIR/octet-$profile_id-run.json"
+                  "$out/bin/cargo-octet" artifact verify \
+                    --artifact-dir "$artifact_dir" \
+                    --output-format json > "$TMPDIR/octet-$profile_id-verify.json"
+                  ${pkgs.jq}/bin/jq --exit-status '.status == "valid" and (.diagnostics | length) == 0' \
+                    "$TMPDIR/octet-$profile_id-verify.json" > /dev/null
+                  octet_profile_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.profile_identity | sub("^b3:"; "")' "$artifact_dir/evidence-rail-receipt.json")"
+                  octet_cohort_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.cohort_identity | sub("^b3:"; "")' "$artifact_dir/evidence-rail-receipt.json")"
+                  octet_registry_identity="$(${pkgs.jq}/bin/jq --raw-output '.wasm_artifact.registry_identity | sub("^b3:"; "")' "$artifact_dir/evidence-rail-receipt.json")"
+                  test "$octet_registry_identity" = "$octet_config_digest"
+                  test "$octet_cohort_identity" = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a"
+                  ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
+                    --arg profileId "$profile_id" \
+                    --arg profileIdentity "$octet_profile_identity" \
+                    '{profile_id: $profileId, profile_identity_blake3: $profileIdentity}' >> "$octet_profiles"
+                done
+                octet_profile_identity="$(${pkgs.jq}/bin/jq --raw-output --slurp \
+                  --arg profileId "${octetProfileId}" \
+                  '.[] | select(.profile_id == $profileId) | .profile_identity_blake3' "$octet_profiles")"
                 ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
                   --arg sourceRepository "${octetSourceRepository}" \
                   --arg sourceRevision "${octetSourceRevision}" \
@@ -795,6 +811,7 @@
                   --arg profileId "${octetProfileId}" \
                   --arg profileIdentity "$octet_profile_identity" \
                   --arg cohortIdentity "$octet_cohort_identity" \
+                  --slurpfile profiles "$octet_profiles" \
                   '{
                     source_repository: $sourceRepository,
                     source_revision: $sourceRevision,
@@ -804,6 +821,7 @@
                     config_digest_blake3: $configDigest,
                     profile_id: $profileId,
                     profile_identity_blake3: $profileIdentity,
+                    profiles: $profiles,
                     wasm_tools_cohort_identity_blake3: $cohortIdentity
                   }' > "$TMPDIR/octet.json"
 
@@ -872,6 +890,10 @@
                     and (.octet.profile_id == "${octetProfileId}")
                     and (.octet.config_digest_blake3 | test("^[0-9a-f]{64}$"))
                     and (.octet.profile_identity_blake3 | test("^[0-9a-f]{64}$"))
+                    and (.octet.profiles | type == "array")
+                    and ([.octet.profiles[].profile_id] | sort == (${builtins.toJSON octetProfileIds} | sort))
+                    and ([.octet.profiles[].profile_identity_blake3 | test("^[0-9a-f]{64}$")] | all)
+                    and ([.octet.profiles[] | select(.profile_id == "${octetProfileId}") | .profile_identity_blake3] == [.octet.profile_identity_blake3])
                     and (.octet.wasm_tools_cohort_identity_blake3 == "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a")
                   and (.cohort_identity_blake3 | test("^[0-9a-f]{64}$"))' \
                 "$manifest" > /dev/null

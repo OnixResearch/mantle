@@ -57,7 +57,7 @@ pub(crate) fn materialize_bundle(
         source_closure: inputs.source,
         lock: inputs.lock,
         final_portable: options.final_portable.clone(),
-        expected_octet_profile_blake3: prepared.toolchain.manifest.octet.profile_identity_blake3.clone(),
+        expected_octet_profile_blake3: prepared.octet_profile()?.profile_identity_blake3.clone(),
         expected_runtime_profile_blake3: prepared
             .request
             .manifest

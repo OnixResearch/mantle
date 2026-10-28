@@ -256,7 +256,7 @@ fn admit_and_materialize(
         build_validation: portable.build_validation,
         octet_validation: Some(octet.binding),
         octet_required: true,
-        expected_octet_profile_blake3: prepared.toolchain.manifest.octet.profile_identity_blake3.clone(),
+        expected_octet_profile_blake3: prepared.octet_profile()?.profile_identity_blake3.clone(),
         expected_octet_cohort_blake3: prepared.toolchain.manifest.octet.wasm_tools_cohort_identity_blake3.clone(),
     });
     let Some(admission) = admission_decision.admission else {
