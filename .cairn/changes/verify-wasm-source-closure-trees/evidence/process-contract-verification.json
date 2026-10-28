@@ -1,0 +1,252 @@
+{
+  "runs": [
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "crates/crunch-wasm-component/src/process_tests.rs",
+        "tests/evaluator_budget_cli.rs",
+        "crates/crunch-eval-budget-core/src/lib.rs"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "crunch-wasm-component",
+        "--lib",
+        "--",
+        "--test-threads",
+        "1"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "\nrunning 15 tests\ntest files::tests::source_and_package_reads_reject_file_replaced_by_symlink ... ok\ntest materialization::tests::consumer_rehashes_every_materialized_file_and_directory ... ok\ntest octet::tests::exact_octet_receipt_is_bound_without_reinterpreting_findings ... ok\ntest octet::tests::mismatched_or_non_pass_octet_receipt_is_denied ... ok\ntest process_tests::offline_tool_emits_bound_success_receipt ... ok\ntest process_tests::offline_tool_preserves_failed_child_diagnostic_before_output_hashing ... ok\ntest process_tests::offline_tool_rejects_fast_oversized_output_after_child_exit ... ok\ntest process_tests::offline_tool_rejects_symlink_cwd_and_argument_environment_bounds ... ok\ntest process_tests::offline_tool_rejects_symlink_output_and_parent_escape ... ok\ntest process_tests::offline_tool_terminates_on_output_limit_and_keeps_bounded_receipt ... ok\ntest process_tests::offline_tool_timeout_kills_descendant_process_group ... ok\ntest reporting::tests::publication_never_replaces_existing_directory_or_symlink ... ok\ntest toolchain::tests::cohort_identity_matches_sorted_compact_json_with_line_terminator ... ok\ntest toolchain::tests::toolchain_manifest_rejects_symlink_and_oversize_before_parsing ... ok\ntest toolchain::tests::version_probe_terminates_hang_and_output_flood ... ok\n\ntest result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s\n\n",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling rustix v1.1.4\n   Compiling linux-raw-sys v0.12.1\n   Compiling once_cell v1.21.4\n   Compiling tempfile v3.27.0\n   Compiling crunch-wasm-component v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-wasm-component)\n    Finished `test` profile [unoptimized] target(s) in 3.60s\n     Running unittests src/lib.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/crunch_wasm_component-be8b06deaa7b2595)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "crunch-eval-budget-core",
+        "--lib"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "\nrunning 9 tests\ntest tests::diagnostics_truncate_on_item_byte_and_utf8_boundaries ... ok\ntest tests::framing_rejects_oversize_incomplete_and_trailing_data ... ok\ntest tests::bounded_protocol_and_identity_properties_hold_across_fixture_matrix ... ok\ntest tests::policy_and_request_identity_are_deterministic ... ok\ntest tests::strict_support_and_policy_limits_fail_closed ... ok\ntest tests::reports_keep_metric_roles_and_non_claims_explicit ... ok\ntest tests::terminal_classification_gives_cancellation_and_teardown_precedence ... ok\ntest tests::request_rejects_oversize_duplicates_and_identity_drift ... ok\ntest tests::worker_response_validation_accepts_bound_facts_and_rejects_drift ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling blake3 v1.8.5\n   Compiling serde_core v1.0.228\n   Compiling constant_time_eq v0.4.2\n   Compiling serde v1.0.228\n   Compiling crunch-eval-budget-core v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-eval-budget-core)\n    Finished `test` profile [unoptimized] target(s) in 3.05s\n     Running unittests src/lib.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/crunch_eval_budget_core-4b790e76d6758b80)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "mantle",
+        "--test",
+        "evaluator_budget_cli",
+        "--",
+        "--test-threads",
+        "1"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "\nrunning 13 tests\ntest cancellation_is_terminal_and_reaps_a_late_worker ... ok\ntest deadline_is_terminal_and_worker_is_reaped ... ok\ntest discovered_root_limit_fails_with_its_stable_class ... ok\ntest hidden_worker_is_not_listed_in_public_help ... ok\ntest invalid_policy_fixtures_fail_before_report_publication ... ok\ntest observe_only_keeps_in_process_path_and_marks_operation_scoped_metrics_unavailable ... ok\ntest process_fixtures_bound_stderr_and_make_late_results_terminal ... ok\ntest process_fixtures_classify_crash_signal_protocol_overflow_and_memory ... ok\ntest selected_and_all_root_requests_report_honest_force_counts ... ok\ntest simulated_reap_failure_blocks_a_clean_terminal_claim ... ok\ntest strict_worker_confines_imports_to_admitted_roots ... ok\ntest strict_worker_matches_existing_eval_and_reports_supported_resources ... ok\ntest worker_preserves_declared_imports_and_bounded_evaluator_errors ... ok\n\ntest result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s\n\n",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling crunch-eval-budget-core v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-eval-budget-core)\n   Compiling mantle v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027)\n    Finished `test` profile [unoptimized] target(s) in 2m 02s\n     Running tests/evaluator_budget_cli.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/evaluator_budget_cli-97cea38d880884f4)\n"
+    },
+    {
+      "command": [
+        "/dev/shm/aspen-runtime-target-20261026/debug/mantle",
+        "eval",
+        "fixtures/evaluation-budget/positive-evaluation.ncl",
+        "--budget-policy",
+        "fixtures/evaluation-budget/policy-cpu-limit.json",
+        "--budget-report",
+        "/tmp/mst27/nix-shell.hXru9O/cpu-contract-_0d2qsd6/report.json"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "fixture": "cpu-exhaustion",
+      "exit": 2,
+      "stdout": "",
+      "stderr": "error: evaluation failed\nevaluation-budget-terminal:CpuLimit\n",
+      "report": {
+        "schema": "mantle-evaluation-budget-report-v1",
+        "request_ref": "evaluation-request-blake3:ebdcdd857459ebd9d98a5ebc90ef1769af6f925daf9522fb2a47a8a2a4134f8c",
+        "policy_ref": "evaluation-policy-blake3:ede1419ad82ef0418216354ee64a803bfbc322880aba4173ebef03a432726d1c",
+        "mode": "enforce",
+        "terminal_disposition": "cpu-limit",
+        "metrics": [
+          {
+            "name": "source_bytes",
+            "unit": "bytes",
+            "role": "admitted-input",
+            "status": "observed",
+            "value": 37,
+            "mechanism": "request-envelope",
+            "reason": null
+          },
+          {
+            "name": "import_roots",
+            "unit": "count",
+            "role": "admitted-input",
+            "status": "observed",
+            "value": 2,
+            "mechanism": "request-envelope",
+            "reason": null
+          },
+          {
+            "name": "admitted_import_entries",
+            "unit": "count",
+            "role": "admitted-input-upper-bound-not-imported-module-count",
+            "status": "observed",
+            "value": 48,
+            "mechanism": "bounded-import-root-walk",
+            "reason": null
+          },
+          {
+            "name": "selected_roots",
+            "unit": "count",
+            "role": "public-api-request",
+            "status": "observed",
+            "value": 0,
+            "mechanism": "request-envelope",
+            "reason": null
+          },
+          {
+            "name": "explicit_top_level_root_force_count",
+            "unit": "count",
+            "role": "public-api-request-not-nickel-thunk-count",
+            "status": "observed",
+            "value": 0,
+            "mechanism": "request-envelope",
+            "reason": null
+          },
+          {
+            "name": "actual_nonselected_evaluation_count",
+            "unit": "count",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "nickel-does-not-expose-this-observation"
+          },
+          {
+            "name": "wall_time",
+            "unit": "milliseconds",
+            "role": "observation-and-deadline",
+            "status": "enforced",
+            "value": 1856,
+            "mechanism": "owned-worker-parent-deadline",
+            "reason": null
+          },
+          {
+            "name": "cpu_time_limit",
+            "unit": "milliseconds",
+            "role": "enforcement-policy",
+            "status": "enforced",
+            "value": 1000,
+            "mechanism": "rlimit-cpu",
+            "reason": null
+          },
+          {
+            "name": "import_filesystem_confinement",
+            "unit": "boolean",
+            "role": "enforcement-policy",
+            "status": "enforced",
+            "value": 1,
+            "mechanism": "landlock-read-file-and-read-dir",
+            "reason": null
+          },
+          {
+            "name": "address_space_limit",
+            "unit": "bytes",
+            "role": "enforcement-policy",
+            "status": "enforced",
+            "value": 8589934592,
+            "mechanism": "rlimit-as-not-rss",
+            "reason": null
+          },
+          {
+            "name": "imported_modules",
+            "unit": "count",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "nickel-does-not-expose-imported-module-count"
+          },
+          {
+            "name": "discovered_roots",
+            "unit": "count",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "whole-value-evaluation-does-not-run-root-discovery"
+          },
+          {
+            "name": "evaluated_selected_roots",
+            "unit": "count",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "worker-ended-without-evaluator-observations"
+          },
+          {
+            "name": "diagnostics",
+            "unit": "count",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "worker-ended-without-evaluator-observations"
+          },
+          {
+            "name": "cpu_time",
+            "unit": "milliseconds",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "worker-ended-without-a-valid-response"
+          },
+          {
+            "name": "peak_rss",
+            "unit": "bytes",
+            "role": "observation",
+            "status": "unavailable",
+            "value": null,
+            "mechanism": "unavailable",
+            "reason": "worker-ended-without-a-valid-response"
+          }
+        ],
+        "evaluator": null,
+        "teardown": {
+          "cancellation_requested": false,
+          "deadline_exceeded": false,
+          "terminate_sent": false,
+          "kill_sent": false,
+          "reaped": true,
+          "response_present": false,
+          "stderr_bytes": 0,
+          "stderr_truncated": false
+        },
+        "error_class": "evaluation-budget-frame-header-incomplete",
+        "bounded_stderr": "",
+        "non_claim": "evaluation-budget-compliance-does-not-prove-evaluator-correctness-reproducibility-build-correctness-or-release"
+      }
+    }
+  ]
+}

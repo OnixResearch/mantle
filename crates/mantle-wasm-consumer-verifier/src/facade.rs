@@ -34,7 +34,7 @@ pub const CONSUMER_VERIFIER_NON_CLAIMS: [&str; 6] = [
 ];
 
 /// Fixed member-count bound for one declared bundle member list.
-const MAX_DECLARED_MEMBERS: usize = 8_192;
+pub(crate) const MAX_DECLARED_MEMBERS: usize = 8_192;
 
 /// Estimated member count for initial reservation.
 const DECLARED_MEMBERS_RESERVATION: usize = 16;

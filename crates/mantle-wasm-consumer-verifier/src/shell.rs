@@ -290,6 +290,19 @@ impl ConsumerRoot {
 /// Roles may share a logical path only with identical digest AND length.
 // r[impl mantle.wasm_source_closure_trees.compatibility]
 fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember>, ShellError> {
+    // This helper may run without structural admission. Bound the infallible
+    // public collector before it allocates or asserts on caller declarations.
+    let minimum_count = 3_usize
+        .saturating_add(bundle.wit_inputs.len())
+        .saturating_add(bundle.package_inputs.len())
+        .saturating_add(bundle.stage_receipts.len());
+    if minimum_count > crate::facade::MAX_DECLARED_MEMBERS {
+        return Err(ShellError::BoundExceeded);
+    }
+    let artifact_count = bundle.stage_receipts.iter().filter(|receipt| receipt.artifact.is_some()).count();
+    if minimum_count.saturating_add(artifact_count) > crate::facade::MAX_DECLARED_MEMBERS {
+        return Err(ShellError::BoundExceeded);
+    }
     let declared = declared_member_objects(bundle);
     let mut members = Vec::with_capacity(declared.len());
     for (role, object) in &declared {

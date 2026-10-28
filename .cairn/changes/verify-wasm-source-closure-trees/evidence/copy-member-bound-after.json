@@ -1,0 +1,133 @@
+{
+  "runs": [
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "crates/mantle-wasm-consumer-verifier/src/facade.rs",
+        "crates/mantle-wasm-consumer-verifier/src/shell.rs",
+        "crates/mantle-wasm-consumer-verifier/tests/consumer_fixtures.rs"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {},
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "mantle-wasm-consumer-verifier",
+        "--test",
+        "consumer_fixtures"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {},
+      "exit": 0,
+      "stdout": "\nrunning 27 tests\ntest negative_drifted_member_bytes_reject ... ok\ntest negative_conflicting_member_identity_is_rejected ... ok\ntest negative_directory_member_blocks ... ok\ntest facade_parity_matches_implementation_over_structural_corpus ... ok\ntest negative_symlink_member_blocks ... ok\ntest negative_declared_oversize_member_rejects_as_drift ... ok\ntest negative_missing_member_blocks ... ok\ntest positive_complete_bundle_verifies_through_both_layers ... ok\ntest negative_parent_traversal_is_rejected_by_the_shell ... ok\ntest negative_missing_stage_kind_rejects_before_bytes ... ok\ntest positive_shared_member_path_satisfies_both_roles ... ok\ntest kamacite_frozen_fixture_passes_structural_layer ... ok\ntest rejected_bundle_reports_carry_no_byte_layer_claims ... ok\ntest file_source_closure_copies_without_clobbering_and_checks_declared_length ... ok\ntest directory_source_shared_with_file_role_is_not_admitted ... ok\ntest report_leaks_no_member_paths_and_binds_fixed_non_claims ... ok\ntest second_consumer_world_and_member_graph_passes ... ok\ntest file_source_copy_rejects_content_length_and_missing_source ... ok\ntest producer_native_backslash_name_is_explicitly_unsupported_without_reframing ... ok\ntest opened_roots_survive_ambient_retargeting_and_reject_symlink_parents ... ok\ntest producer_tree_verifies_and_copies_exactly_with_empty_directories ... ok\ntest source_copy_does_not_measure_unrelated_members_or_follow_destination_links ... ok\ntest tree_missing_symlink_fifo_and_socket_never_verify_or_copy ... ok\ntest tree_bytes_name_empty_directory_and_size_drift_fail_closed ... ok\ntest producer_depth_64_directory_with_depth_65_file_remains_admitted ... ok\ntest trees_reject_entry_depth_and_byte_bound_overruns ... ok\ntest source_copy_accepts_member_limit_and_rejects_one_more_before_copy ... ok\n\ntest result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s\n\n",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n    Finished `test` profile [unoptimized] target(s) in 0.75s\n     Running tests/consumer_fixtures.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/consumer_fixtures-ec3fa5ef507263ba)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "-p",
+        "mantle-wasm-consumer-verifier",
+        "--no-default-features"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {},
+      "exit": 0,
+      "stdout": "",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n    Checking mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n    Finished `dev` profile [unoptimized] target(s) in 0.33s\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "mantle-wasm-consumer-verifier",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {},
+      "exit": 0,
+      "stdout": "",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n    Checking mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n    Finished `dev` profile [unoptimized] target(s) in 0.59s\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "crunch-wasm-component",
+        "-p",
+        "crunch-eval-budget-core",
+        "-p",
+        "mantle-wasm-consumer-verifier"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {},
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "/dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml",
+        "--bin",
+        "copy_bound",
+        "--",
+        "/tmp/mst27/retained-handoff",
+        "/dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/execution-report.json",
+        "/tmp/mst27/copy-member-api-uejao_sj/observation"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {
+        "CARGO_TARGET_DIR": "/dev/shm/mantle-source-observer-target-20261027",
+        "CARGO_HOME": "/home/brittonr/.cargo"
+      },
+      "exit": 0,
+      "stdout": "unchanged_producer_source=Matched digest=e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa bytes=4145\noversized_declarations=BoundExceeded destination_unchanged=true\nscope=source-copy-api-only production_bundle_admission=false execution_admitted=false\n",
+      "stderr": "[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling molten-source-tree-producer-observer v0.0.0 (/dev/shm/aspen-mantle-tree-smoke-20261027/producer)\n    Finished `dev` profile [unoptimized] target(s) in 1.88s\n     Running `/dev/shm/mantle-source-observer-target-20261027/debug/copy_bound /tmp/mst27/retained-handoff /dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/execution-report.json /tmp/mst27/copy-member-api-uejao_sj/observation`\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "mantle",
+        "--test",
+        "wasm_component_cli",
+        "production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence",
+        "--",
+        "--exact"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "environment_overrides": {
+        "MANTLE_WASM_COMPONENT_TOOLCHAIN": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1"
+      },
+      "exit": 0,
+      "stdout": "\nrunning 1 test\ntest production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 52.83s\n\n",
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n   Compiling mantle v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027)\n    Finished `test` profile [unoptimized] target(s) in 0.90s\n     Running tests/wasm_component_cli.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/wasm_component_cli-cef650d189066998)\n"
+    }
+  ]
+}

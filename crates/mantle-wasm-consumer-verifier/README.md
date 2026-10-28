@@ -33,6 +33,9 @@ without importing Mantle build, store, scheduler, release, or CLI authority.
   must clean its private destination on any error. This is a source-member
   observation, not whole-bundle structural admission or agreement: separately
   run `verify_bundle` and require the complete expected member report.
+  At most 8,192 declared member roles are admitted. Oversized declarations
+  return `ShellError::BoundExceeded` before collection or destination changes,
+  including when this source-only helper runs without structural admission.
 - The report (`mantle-wasm-consumer-verification-report-v1`) binds schemas,
   bundle and runtime-profile identities, member roles and BLAKE3 values,
   completed layers, ordered blockers, one status (`verified`, `blocked`,

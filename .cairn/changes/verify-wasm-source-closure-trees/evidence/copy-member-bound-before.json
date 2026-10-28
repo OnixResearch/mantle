@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "task": "54",
+      "command": "env TMPDIR=/tmp/mst27 CARGO_TARGET_DIR=/dev/shm/aspen-runtime-target-20261026 CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 nix develop --option builders '' --max-jobs 2 --cores 2 -c cargo test --locked -p mantle-wasm-consumer-verifier --test consumer_fixtures source_copy_accepts_member_limit_and_rejects_one_more_before_copy -- --exact",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T19:37:31.503785161-04:00",
+          "start": "2026-10-27T19:37:31.506042409-04:00",
+          "end": "2026-10-27T19:37:54.569920077-04:00",
+          "result": {
+            "Failed": 101
+          }
+        }
+      },
+      "output": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle-wasm-consumer-verifier v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/mantle-wasm-consumer-verifier)\n    Finished `test` profile [unoptimized] target(s) in 0.69s\n     Running tests/consumer_fixtures.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/consumer_fixtures-ec3fa5ef507263ba)\n\nrunning 1 test\ntest source_copy_accepts_member_limit_and_rejects_one_more_before_copy ... FAILED\n\nfailures:\n\n---- source_copy_accepts_member_limit_and_rejects_one_more_before_copy stdout ----\n\nthread 'source_copy_accepts_member_limit_and_rejects_one_more_before_copy' (2361870) panicked at crates/mantle-wasm-consumer-verifier/src/facade.rs:88:9:\ndeclared member bound exceeded\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    source_copy_accepts_member_limit_and_rejects_one_more_before_copy\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.39s\n\nerror: test failed, to rerun pass `-p mantle-wasm-consumer-verifier --test consumer_fixtures`\n"
+    }
+  ]
+}

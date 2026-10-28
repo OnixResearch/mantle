@@ -1053,6 +1053,15 @@ mod tests {
             }),
             TerminalDisposition::IncompleteTeardown
         );
+        let mut expired = base.clone();
+        expired.deadline_exceeded = true;
+        assert_eq!(
+            classify_terminal(&TerminalFacts {
+                teardown: expired,
+                exit_kind: WorkerExitKind::CpuLimitSignal,
+            }),
+            TerminalDisposition::Timeout
+        );
         assert_eq!(
             classify_terminal(&TerminalFacts {
                 teardown: base,

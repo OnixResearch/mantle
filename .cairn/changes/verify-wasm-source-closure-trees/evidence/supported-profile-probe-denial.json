@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/dev/shm/aspen-mantle-tree-smoke-20261027/intake",
+    "/tmp/mst27/tree-intake-probe/producer-output/materialization-bundle.json",
+    "/tmp/mst27/tree-intake-probe/private-stages",
+    "/tmp/mst27/tree-intake-probe/producer-output/artifacts/normalized.wasm",
+    "/tmp/mst27/tree-intake-probe/producer-output/inputs/source"
+  ],
+  "exit": 1,
+  "stdout": "",
+  "stderr": "Error: \"genuine producer intake: Denial { blockers: [\\\"published Mantle bundle runtime profile differs from the admitted Molten profile\\\"], class: ComponentAdmissionDenial }\"\n",
+  "supported_product_profile": true,
+  "probe_bundle_rejected": true,
+  "private_stage_removed": true,
+  "execution_admitted": false
+}

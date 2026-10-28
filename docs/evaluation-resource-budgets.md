@@ -57,6 +57,12 @@ The parent drains bounded stdout and stderr concurrently. A deadline or cancella
 
 A timeout or cancellation is terminal. A late successful response cannot replace that result.
 
+An observed parent deadline also takes precedence over a worker CPU-limit signal.
+Host scheduling determines which limit is observed first; a smaller CPU budget
+does not guarantee a `cpu-limit` result before the wall deadline. Deterministic
+classification tests supply explicit teardown and exit facts rather than pinning
+the winner of competing host clocks.
+
 ## Benchmark comparison
 
 Benchmark bundles now contain a resource cohort. The cohort binds the host class, target, evaluator, toolchain, policy, fixture set, repeat count, warm state, and measurement support.

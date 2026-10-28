@@ -1,0 +1,13 @@
+{
+  "root": "/dev/shm/mantle-wasm-source-trees-20261027",
+  "documents": [
+    "crates/mantle-wasm-consumer-verifier/README.md",
+    "examples/projects/wasm-component-hello/README.md",
+    "docs/bounded-tree-adoption.md",
+    "docs/durable-file-publication-adoption.md",
+    ".cairn/changes/verify-wasm-source-closure-trees/tasks.md",
+    ".cairn/changes/verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md"
+  ],
+  "checked_local_links": 18,
+  "errors": []
+}

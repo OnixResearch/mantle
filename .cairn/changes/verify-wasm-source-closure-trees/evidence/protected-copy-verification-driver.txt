@@ -1,0 +1,28 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path.cwd()
+records = []
+
+def run(command, overrides=None):
+    environment = os.environ.copy()
+    environment.update(overrides or {})
+    result = subprocess.run(command, cwd=root, env=environment, text=True, capture_output=True)
+    records.append({'command': command, 'cwd': str(root), 'environment_overrides': overrides or {}, 'exit': result.returncode, 'stdout': result.stdout, 'stderr': result.stderr})
+    (root / '.cairn/changes/verify-wasm-source-closure-trees/evidence/copy-protected-arithmetic.json').write_text(json.dumps({'runs': records}, indent=2) + '\n')
+    print('exit=', result.returncode, 'command=', command, flush=True)
+    for line in result.stdout.splitlines():
+        if 'test result:' in line or '=Matched' in line or '=BoundExceeded' in line or 'scope=' in line:
+            print(line, flush=True)
+    if result.returncode:
+        print(result.stdout, result.stderr, flush=True)
+        raise SystemExit(result.returncode)
+
+run(['cargo', 'test', '--locked', '-p', 'mantle-wasm-consumer-verifier', '--test', 'consumer_fixtures'])
+run(['cargo', 'fmt', '--check', '-p', 'mantle-wasm-consumer-verifier'])
+with tempfile.TemporaryDirectory(prefix='protected-copy-api-', dir='/tmp/mst27') as temporary:
+    run(['cargo', 'run', '--locked', '--manifest-path', '/dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml', '--bin', 'protected_bound', '--', '/tmp/mst27/retained-handoff', '/dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/execution-report.json', str(Path(temporary) / 'observation')], {'CARGO_TARGET_DIR': '/dev/shm/mantle-source-observer-target-20261027', 'CARGO_HOME': '/home/brittonr/.cargo'})
+print('Final protected-arithmetic verifier and actual copy API passed.', flush=True)

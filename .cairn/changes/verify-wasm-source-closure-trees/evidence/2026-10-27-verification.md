@@ -208,3 +208,155 @@ issues. These are structural lifecycle observations, not evidence of runtime
 adoption, publication, consumer pinning or arbitrary implementation correctness.
 The implementation commit precedes archive; final publication/pinning and
 post-archive validation are separately recorded closeout operations.
+
+Implementation commit: `4a1d1eec63f01814affc34d79636e628a037af72`.
+The [actual supported-profile refusal](supported-profile-probe-denial.json)
+also confirms that the fresh demo/probe bundle is denied by the unchanged
+supported Molten profile, with its private lease removed. Probe success is not
+silently promoted into supported production intake.
+
+## Ordinary workspace gate: operator-contract drift
+
+The [short-TMPDIR workspace execution](provider-workspace-tests.json) ended
+with Cargo exit 101 in `operator_diagnostics`: **29 passed, one failed**.
+`terminal_report_output_failure_is_a_cli_error_not_a_panic` could not reach its
+output-failure scenario because catalog admission returned
+`operator command contract: flag-drift: build`. Earlier suites in this run are
+recorded in the transcript; the complete workspace gate did not pass.
+
+Direct execution of the actual CLI's `raw-descriptors` mode identified the
+existing `build --remote-resource-requirements` flag. Its Clap definition and
+remote-demand implementation already exist, but the typed operator inventory
+and generated command surfaces omitted it. The correction declares that
+existing flag in `config/operator-surfaces.ncl`; it does not weaken catalog
+equality, change CLI admission, remove the output-failure regression or alter
+the remote-demand implementation. Regeneration and corrected gate execution
+remain separate observations until their command results are captured.
+
+The [corrected execution](operator-policy-maintenance.json) passed pinned
+Nickel typechecking/export, both CLI builds, actual descriptor/catalog/reference/
+workflow generation, and the existing operator-contract checker (**211 commands**).
+The unchanged `operator_diagnostics` suite then reported **30 passed, zero failed
+or ignored** (5.51 seconds), including all five real `/dev/full` output-failure
+modes. Generated JSON and references come from the typed source and actual CLI,
+not hand-edited exports. The [initial detached launch](operator-policy-launch-attempt.json)
+failed before execution because an empty Nix option value was not shell-escaped;
+the corrected launch preserved that argument. This focused passing result does
+not relabel the earlier workspace run as passing or close the broader Nix gate.
+
+The isolated inventory correction was committed as `12577437` after that
+focused proof. The older full Nix run was deliberately stopped after its inputs
+were superseded; `provider-nix-invariants-gate.json` records `Killed`, not success.
+Replacement executions use the corrected typed/generated inputs: the full
+ordinary workspace selection with `--no-fail-fast` (no test exclusions added)
+and the unchanged full Nix check. Their completion remains unclaimed until
+`provider-final-corrected-gates.json` records the executed results.
+
+## Complete workspace selection: host-dependent test oracles
+
+The [corrected no-fail-fast execution](provider-workspace-final-corrected.json)
+reached all selected targets and reported **10,079 passing test executions, two
+failures and 212 ignored cases** across 218 target result rows. These are this
+command's execution counts, not a distinct-test inventory or a passing gate.
+The 26 source-tree verifier cases still passed. The failures were:
+
+- `crunch-wasm-component::process_tests::offline_tool_timeout_kills_descendant_process_group`:
+  its immediate `/proc` liveness assertion reported a surviving descendant after
+  the failed tool invocation returned.
+- `mantle --test evaluator_budget_cli::cpu_exhaustion_reaches_the_enforced_cpu_terminal_class`:
+  the actual report was `timeout`, not the asserted `cpu-limit`.
+
+The supervision implementation is unchanged. The descendant regression retains
+its original 250 ms tool limit, five-second return bound and 30-second child
+holding inherited output pipes; it checks that the descendant fixture started
+and that timeout returns with its drains closed. The incidental immediate
+`/proc`-state assertion and its two PID helpers were removed, not delayed or
+re-pinned.
+
+The ambient CPU-versus-wall winner test was deleted rather than lengthening its
+five-second wall budget or accepting a list of outcomes. Existing pure-core CPU
+classification coverage now also supplies an explicit expired deadline plus a
+CPU-limit signal and requires `Timeout`; without that deadline it still requires
+`CpuLimit`. Linux CPU enforcement, policy fixtures and the worker remain
+unchanged. The governing evaluator documentation states this existing precedence.
+The [focused execution and actual worker observation](process-contract-verification.json)
+passed all 15 process cases, nine budget-core cases and 13 evaluator CLI cases.
+The separate real CPU-exhaustion worker reported `cpu-limit`, `reaped=true`,
+`deadline_exceeded=false`, without parent termination or kill. This is one
+observed host execution, not a guarantee that CPU always precedes the deadline.
+
+## Source-copy declaration bound: reproduced and repaired
+
+Direct boundary review found that source-only copying called the existing
+infallible member collector without first applying its 8,192-role bound.
+The [before execution](copy-member-bound-before.json) ran a new exact-limit /
+one-over-limit regression and failed with `declared member bound exceeded`
+at `facade.rs:88`, rather than returning a typed error.
+
+`required_members` now admits the base roles, WIT/package inputs and receipt
+roles before counting optional receipt artifacts. Both checks share the existing
+facade bound, and run before collecting members or touching the destination.
+The public collector and whole-bundle structural contract are unchanged.
+
+The [after execution](copy-member-bound-after.json) passed all **27 verifier
+fixtures**, no-std checking, strict changed-package Clippy and the separate
+formatting checks required for changed packages outside the ordinary selection.
+The unchanged actual production CLI/pipeline regression also passed (52.83 s).
+
+A separate native observer copied the unchanged retained producer source with
+digest `e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa`
+and 4,145 content bytes, then returned `BoundExceeded` for deliberately oversized
+in-memory declarations with an unchanged empty destination. This is source-copy
+API evidence, not a fabricated positive production bundle or execution admission.
+
+The superseded ordinary/Nix attempts are retained as `Killed` in
+`provider-process-contract-final-gates.json`; they are not passing gates.
+Replacement broad checks must use this repaired implementation.
+
+The [first broad Nix result for that guard](provider-bounded-nix-gate.json)
+failed Tiger Style's protected-arithmetic rule on its unsigned remaining-budget
+subtraction. The preceding check already prevented underflow, but the source
+policy requires explicit protected arithmetic. The guard now compares a
+saturating total; boundary-fixture subtraction is checked. No lint allowance,
+policy exception or boundary change was introduced.
+
+The [final focused execution](copy-protected-arithmetic.json) again passed all
+27 verifier cases, formatting, and the separate actual source-copy API smoke
+with identical retained source identity and typed over-limit refusal. The
+six touched provider documents resolved all 25 local link/anchor targets.
+The ordinary gate superseded by the arithmetic edit remains `Killed` in
+`provider-bounded-quality-gate.json`. Final broad outcomes are recorded separately
+in `provider-protected-quality-gate.json` and `provider-protected-nix-gate.json`;
+launching them does not establish success.
+
+## Completed ordinary quality gate
+
+The [final canonical quality execution](provider-protected-quality-gate.json)
+completed successfully: GCC 4.0 configure-bridge self-test, registered first-party
+formatting, strict workspace Clippy with only the canonical vendored exclusions,
+and serialized workspace library/integration tests. The command reported
+**10,082 passing test executions, zero failures and 212 ignored cases** across
+219 result rows. These are execution counts, not a distinct-test inventory.
+Changed out-of-selection package formatting and actual source-copy/pipeline
+observations are recorded above.
+
+## Completed full Nix check
+
+The [final full flake execution](provider-protected-nix-gate.json) returned
+success and `all checks passed!` on `x86_64-linux`. The main release-profile
+Nextest leg ran **6,763 tests: 6,763 passed, 202 skipped**, producing
+`/nix/store/bcj77jpzskprymdhcp7dkml1q6k13a6l-mantle-nextest-0.1.0`.
+Other included formatting, Clippy, Tiger Style and specialized checks are
+retained in the same complete command transcript. Counts overlap the ordinary
+gate and are not summed into a distinct-test claim.
+
+Nix explicitly omitted incompatible `aarch64-darwin`, `aarch64-linux` and
+`x86_64-darwin` systems. No all-systems or downstream adoption result is claimed.
+Native final lifecycle validation, archive/publication and the immutable Molten
+consumer pin remain separately recorded closeout operations.
+
+The [final native lifecycle execution](final-lifecycle.json) returned
+`valid=true`, empty issues and `PASS` for proposal/design/tasks, after the
+completed ordinary and Nix checks. Final document checking resolved 31 local
+link/anchor targets without errors. The fetched `origin/main` is an ancestor
+of the implementation branch; no upstream merge was required.

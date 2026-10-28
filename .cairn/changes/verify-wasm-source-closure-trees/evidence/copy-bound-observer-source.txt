@@ -1,0 +1,32 @@
+// Disposable API smoke: unchanged retained producer copy, then oversized declarations.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.len() != 3 { return Err("expected retained root, execution report, fresh smoke root".into()); }
+    let report: crunch_wasm_component::PipelineExecutionReport = serde_json::from_slice(&std::fs::read(&args[1])?)?;
+    let mut bundle = report.materialization_bundle.ok_or("retained producer omitted bundle")?;
+    let input = mantle_wasm_consumer_verifier::ConsumerRoot::open(std::path::Path::new(&args[0]))
+        .map_err(|error| format!("input capability: {error:?}"))?;
+    let smoke = std::path::Path::new(&args[2]);
+    std::fs::create_dir(smoke)?;
+    let accepted = smoke.join("accepted");
+    let rejected = smoke.join("rejected");
+    std::fs::create_dir(&accepted)?;
+    std::fs::create_dir(&rejected)?;
+    let accepted_root = mantle_wasm_consumer_verifier::ConsumerRoot::open(&accepted)
+        .map_err(|error| format!("accepted capability: {error:?}"))?;
+    let observed = input.copy_source_closure(&bundle, &accepted_root)
+        .map_err(|error| format!("unchanged source copy: {error:?}"))?;
+    assert_eq!(observed.status, Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched));
+    assert_eq!(observed.digest_blake3, bundle.source_closure.digest_blake3.to_string());
+    assert_eq!(observed.size_bytes, bundle.source_closure.size_bytes);
+    println!("unchanged_producer_source=Matched digest={} bytes={}", observed.digest_blake3, observed.size_bytes);
+    let wit = bundle.wit_inputs.first().ok_or("retained bundle omitted WIT")?.clone();
+    bundle.wit_inputs.resize(8_192, wit);
+    let rejected_root = mantle_wasm_consumer_verifier::ConsumerRoot::open(&rejected)
+        .map_err(|error| format!("rejected capability: {error:?}"))?;
+    assert!(matches!(input.copy_source_closure(&bundle, &rejected_root), Err(mantle_wasm_consumer_verifier::ShellError::BoundExceeded)));
+    assert!(std::fs::read_dir(&rejected)?.next().is_none());
+    println!("oversized_declarations=BoundExceeded destination_unchanged=true");
+    println!("scope=source-copy-api-only production_bundle_admission=false execution_admitted=false");
+    Ok(())
+}

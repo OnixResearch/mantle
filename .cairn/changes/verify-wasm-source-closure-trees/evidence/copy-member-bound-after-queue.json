@@ -1,0 +1,18 @@
+{
+  "runs": [
+    {
+      "task": "55",
+      "command": "env TMPDIR=/tmp/mst27 CARGO_TARGET_DIR=/dev/shm/aspen-runtime-target-20261026 CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 nix develop --option builders '' --max-jobs 2 --cores 2 -c python3 /dev/shm/aspen-mantle-tree-smoke-20261027/verify_copy_bound.py",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T19:39:19.335643041-04:00",
+          "start": "2026-10-27T19:39:19.337976322-04:00",
+          "end": "2026-10-27T19:40:35.707605600-04:00",
+          "result": "Success"
+        }
+      },
+      "output": "exit= 0 command= ['rustfmt', '--edition', '2024', '--config', 'skip_children=true', 'crates/mantle-wasm-consumer-verifier/src/facade.rs', 'crates/mantle-wasm-consumer-verifier/src/shell.rs', 'crates/mantle-wasm-consumer-verifier/tests/consumer_fixtures.rs']\nexit= 0 command= ['cargo', 'test', '--locked', '-p', 'mantle-wasm-consumer-verifier', '--test', 'consumer_fixtures']\ntest result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s\nexit= 0 command= ['cargo', 'check', '--locked', '-p', 'mantle-wasm-consumer-verifier', '--no-default-features']\nexit= 0 command= ['cargo', 'clippy', '--locked', '-p', 'mantle-wasm-consumer-verifier', '--all-targets', '--no-deps', '--', '-D', 'warnings']\nexit= 0 command= ['cargo', 'fmt', '--check', '-p', 'crunch-wasm-component', '-p', 'crunch-eval-budget-core', '-p', 'mantle-wasm-consumer-verifier']\nexit= 0 command= ['cargo', 'run', '--locked', '--manifest-path', '/dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml', '--bin', 'copy_bound', '--', '/tmp/mst27/retained-handoff', '/dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/execution-report.json', '/tmp/mst27/copy-member-api-uejao_sj/observation']\nunchanged_producer_source=Matched digest=e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa bytes=4145\noversized_declarations=BoundExceeded destination_unchanged=true\nscope=source-copy-api-only production_bundle_admission=false execution_admitted=false\nexit= 0 command= ['cargo', 'test', '--locked', '-p', 'mantle', '--test', 'wasm_component_cli', 'production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence', '--', '--exact']\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 52.83s\nCopy-bound regression, unchanged actual source copy and real pipeline passed.\n"
+    }
+  ]
+}

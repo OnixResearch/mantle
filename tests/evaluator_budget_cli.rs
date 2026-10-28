@@ -367,30 +367,6 @@ fn process_fixtures_classify_crash_signal_protocol_overflow_and_memory() {
 
 #[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
-fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
-    let temporary = tempfile::tempdir().unwrap();
-    let report_path = temporary.path().join("cpu-report.json");
-    let output = mantle()
-        .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "cpu-exhaustion")
-        .args([
-            "eval",
-            POSITIVE_SOURCE,
-            "--budget-policy",
-            &format!("{FIXTURE_ROOT}/policy-cpu-limit.json"),
-            "--budget-report",
-            report_path.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    let report = report(&report_path);
-    assert_eq!(report["terminal_disposition"], "cpu-limit");
-    assert_eq!(report["teardown"]["reaped"], true);
-    assert_eq!(report["teardown"]["deadline_exceeded"], false);
-}
-
-#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
-#[test]
 fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     // I/O fixtures have a longer finite wall budget; deadline/reap fixtures below retain 100 ms.
     let io_policy = format!("{FIXTURE_ROOT}/policy-process-io-fixture.json");

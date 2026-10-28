@@ -1,0 +1,126 @@
+{
+  "runs": [
+    {
+      "command": [
+        "nickel",
+        "typecheck",
+        "config/operator-surfaces.ncl"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/operator-surfaces.ncl"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "generated": "config/operator-surfaces.json",
+      "output_bytes": 248612
+    },
+    {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "mantle",
+        "--bin",
+        "mantle",
+        "--bin",
+        "crunch"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling crunch-store v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-store)\n   Compiling crunch-rust-cache v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-rust-cache)\n   Compiling crunch-rustc-wrapper v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-rustc-wrapper)\n   Compiling crunch-delta v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-delta)\n   Compiling crunch-build v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-build)\n   Compiling crunch-nix-gateway v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-nix-gateway)\n   Compiling crunch-pipeline v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027/crates/crunch-pipeline)\n   Compiling mantle v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027)\n    Finished `dev` profile [unoptimized] target(s) in 3m 24s\n",
+      "stdout": ""
+    },
+    {
+      "command": [
+        "/dev/shm/aspen-runtime-target-20261026/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "raw-descriptors"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "generated": "config/operator-command-descriptors.json",
+      "output_bytes": 114791
+    },
+    {
+      "command": [
+        "/dev/shm/aspen-runtime-target-20261026/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "catalog"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "generated": "config/operator-command-catalog.json",
+      "output_bytes": 374908
+    },
+    {
+      "command": [
+        "/dev/shm/aspen-runtime-target-20261026/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "reference"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "generated": "docs/generated/operator-command-reference.md",
+      "output_bytes": 49202
+    },
+    {
+      "command": [
+        "/dev/shm/aspen-runtime-target-20261026/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "workflow"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "generated": "docs/generated/canonical-operator-workflow.md",
+      "output_bytes": 770
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/check-operator-command-contract.sh"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "",
+      "stdout": "operator command contract generator self-test: PASS\noperator command contract: PASS (commands=211)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "mantle",
+        "--test",
+        "operator_diagnostics",
+        "--",
+        "--test-threads",
+        "1"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stderr": "warning: /dev/shm/mantle-wasm-source-trees-20261027/Cargo.toml: file `/dev/shm/mantle-wasm-source-trees-20261027/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/dev/shm/mantle-wasm-source-trees-20261027)\n    Finished `test` profile [unoptimized] target(s) in 1m 51s\n     Running tests/operator_diagnostics.rs (/dev/shm/aspen-runtime-target-20261026/debug/deps/operator_diagnostics-0148b4fade8bb642)\n",
+      "stdout": "\nrunning 30 tests\ntest build_human_failure_reports_log_persistence_failure_without_saved_log_path ... ok\ntest build_human_failure_summary_matches_json_facts ... ok\ntest build_json_failure_envelope_includes_saved_log_path ... ok\ntest build_json_preflight_failure_omits_saved_log_path ... ok\ntest build_json_success_reports_log_persistence_failure_without_fake_log_file ... ok\ntest build_plan_json_reports_action_schema ... ok\ntest build_plan_reports_build_for_uncached_root ... ok\ntest build_plan_reports_cached_after_fetchurl_build ... ok\ntest build_plan_reports_preflight_error_for_missing_store_dir ... ok\ntest build_without_plan_still_executes_fetchurl ... ok\ntest doctor_default_profile_is_build_and_does_not_mutate_paths ... ok\ntest doctor_explicit_self_build_profile_checks_nightly_visibility ... ok\ntest doctor_failure_names_missing_prerequisite_and_profile ... ok\ntest doctor_json_failure_reports_missing_prerequisite ... ok\ntest doctor_json_output_reports_selected_profile ... ok\ntest empty_log_directory_environment_rejects_before_log_or_transcript_effects ... ok\ntest empty_selected_state_environment_rejects_artifact_import_before_any_write ... ok\ntest empty_state_environment_rejects_bootstrap_validate_before_evidence_write ... ok\ntest explicit_state_dir_overrides_empty_environment_and_preserves_relative_path ... ok\ntest operator_contract_exports_sorted_public_clap_paths ... ok\ntest refactor_apply_reports_only_the_verified_renamed_content ... ok\ntest refactor_inspection_adapter_fault_cannot_emit_a_success_plan ... ok\ntest relative_selected_state_environment_rejects_artifact_import_without_cwd_writes ... ok\ntest selected_crunch_state_dir_ignores_empty_lower_priority_fallbacks ... ok\ntest selected_log_directory_and_relative_state_override_preserve_log_output ... ok\ntest selected_non_utf8_log_environment_keeps_its_exact_path ... ok\ntest selected_non_utf8_state_environment_keeps_its_exact_path ... ok\ntest selected_xdg_and_home_fallbacks_store_artifacts_outside_working_directory ... ok\ntest terminal_report_output_failure_is_a_cli_error_not_a_panic ... ok\ntest unset_home_retains_tmp_state_fallback_without_creating_cwd_state ... ok\n\ntest result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.51s\n\n"
+    }
+  ]
+}

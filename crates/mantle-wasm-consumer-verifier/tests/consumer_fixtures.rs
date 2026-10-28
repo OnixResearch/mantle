@@ -783,3 +783,31 @@ fn file_source_copy_rejects_content_length_and_missing_source() {
         assert_eq!(fs::read(fixture.dir.join("members/wkg.lock")).unwrap(), member_bytes(5));
     }
 }
+
+// r[verify mantle.wasm_source_closure_trees.bounds]
+#[test]
+fn source_copy_accepts_member_limit_and_rejects_one_more_before_copy() {
+    const MEMBER_LIMIT: usize = 8_192;
+    let fixture = FixtureRoot::new("copy-member-limit");
+    let mut bundle = valid_bundle(&fixture);
+    let fixed_members = mantle_wasm_consumer_verifier::facade::declared_member_objects(&bundle)
+        .len()
+        .checked_sub(bundle.wit_inputs.len())
+        .expect("fixture includes its WIT inputs");
+    let wit = bundle.wit_inputs[0].clone();
+    // This API copies source only; full structural admission is separate.
+    let wit_count = MEMBER_LIMIT.checked_sub(fixed_members).expect("fixture fits the member limit");
+    bundle.wit_inputs.resize(wit_count, wit.clone());
+    let accepted = FixtureRoot::new("copy-member-limit-accepted");
+    let observation = fixture.root().copy_source_closure(&bundle, &accepted.root()).unwrap();
+    assert_eq!(observation.status, Some(ConsumerMemberStatus::Matched));
+    assert_eq!(fs::read(accepted.dir.join("members/source-closure.json")).unwrap(), member_bytes(4));
+
+    bundle.wit_inputs.push(wit);
+    let rejected = FixtureRoot::new("copy-member-limit-rejected");
+    assert!(matches!(
+        fixture.root().copy_source_closure(&bundle, &rejected.root()),
+        Err(ShellError::BoundExceeded)
+    ));
+    assert!(!rejected.dir.join("members/source-closure.json").exists());
+}

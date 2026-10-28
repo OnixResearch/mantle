@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "task": "47",
+      "command": "env TMPDIR=/tmp/mst27 CARGO_TARGET_DIR=/dev/shm/aspen-runtime-target-20261026 CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 nix develop --option builders  --max-jobs 2 --cores 2 -c python3 /dev/shm/aspen-mantle-tree-smoke-20261027/repair_operator_policy.py",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T17:49:44.588000395-04:00",
+          "start": "2026-10-27T17:49:44.593860678-04:00",
+          "end": "2026-10-27T17:49:44.744780851-04:00",
+          "result": {
+            "Failed": 1
+          }
+        }
+      },
+      "output": "error: getting status of \"/dev/shm/mantle-wasm-source-trees-20261027/2\": No such file or directory\n"
+    }
+  ]
+}
