@@ -1,0 +1,13 @@
+{
+  "root": "/dev/shm/mantle-wasm-source-trees-20261027",
+  "documents": [
+    "crates/mantle-wasm-consumer-verifier/README.md",
+    "docs/evaluation-resource-budgets.md",
+    "examples/projects/wasm-component-hello/README.md",
+    ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/design.md",
+    ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md",
+    ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md"
+  ],
+  "checked_local_links": 33,
+  "errors": []
+}

@@ -1,0 +1,18 @@
+{
+  "runs": [
+    {
+      "task": "60",
+      "command": "git commit -m 'fix(wasm-verifier): bound direct source-copy declarations' -m 'Return typed count-bound failures before collection, retain exact-limit regression and native copy proof, replace host-timing test oracles with deterministic contracts, and record passing ordinary and Nix gates.'",
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-27T21:25:53.528334178-04:00",
+          "start": "2026-10-27T21:25:53.532232787-04:00",
+          "end": "2026-10-27T21:25:53.691960797-04:00",
+          "result": "Success"
+        }
+      },
+      "output": "[cairn/verify-wasm-source-trees-20261027 75ad2bf7] fix(wasm-verifier): bound direct source-copy declarations\n 36 files changed, 1291 insertions(+), 46 deletions(-)\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-bound-observer-source.txt\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-bound-verification-driver.txt\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-member-bound-after-queue.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-member-bound-after.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-member-bound-before.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-protected-arithmetic-queue.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/copy-protected-arithmetic.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/document-links.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/final-lifecycle.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/operator-policy-launch-attempt.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/operator-policy-maintenance.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/process-contract-verification.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/protected-copy-verification-driver.txt\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-bounded-nix-gate.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-bounded-quality-gate.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-document-links.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-final-corrected-gates.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-nix-final-corrected.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-nix-invariants-gate.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-process-contract-final-gates.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-protected-nix-gate.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-protected-quality-gate.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-quality-final.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-workspace-final-corrected.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/provider-workspace-tests.json\n create mode 100644 .cairn/changes/verify-wasm-source-closure-trees/evidence/supported-profile-probe-denial.json\n"
+    }
+  ]
+}

@@ -360,3 +360,13 @@ The [final native lifecycle execution](final-lifecycle.json) returned
 completed ordinary and Nix checks. Final document checking resolved 31 local
 link/anchor targets without errors. The fetched `origin/main` is an ancestor
 of the implementation branch; no upstream merge was required.
+
+## Native sync and archive
+
+After implementation closeout commit `75ad2bf7`, the [captured native lifecycle
+commands](archive-lifecycle.json) executed sync and archive without blockers,
+then validated the repository with `valid=true` and empty findings/issues.
+The CLI selected `.cairn/archive/1970-01-01-verify-wasm-source-closure-trees`;
+this record retains that actual path rather than inventing a date prefix.
+The accepted delta is synchronized. Remote publication and Molten's immutable
+consumer pin are later, separately observed operations.
