@@ -4,9 +4,9 @@
 
 The existing Rust unit cache seam has an opt-in C/C++ compiler-driver mode.
 The cache stays a machine-local performance device; proofs stay cache-off.
-The core, driver, daemon/store path and executable fixtures are implemented;
-representative bootstrap and production protected-build integration remain open.
-Source delivery and proposal gates are not runtime or producer acceptance.
+The core, driver, daemon/store path, executable fixtures, and bounded production
+protected-build integration are implemented and exercised. Representative-chain
+and cache-off fixed-point acceptance remain open; selected fixtures cannot replace them.
 
 ## Current behavior
 
@@ -14,10 +14,11 @@ Source delivery and proposal gates are not runtime or producer acceptance.
 records in the existing local store. `crunch-rustc-wrapper::cc` admits only
 classified compile-mode operations with complete bounded identities, forwards
 unknown operations unchanged, and uses the existing daemon for optional reuse.
-`crunch-build::compile_driver` maps only an explicitly selected runtime socket
-after derivation conversion; it neither installs a compiler nor admits a
-protected executable inventory. StageX/GCC-chain integration, byte parity,
-timing and uncached fixed-point proof still require captured execution.
+`crunch-build::compile_driver` maps an explicitly selected runtime socket after
+derivation conversion. Its optional protected runtime selects an external
+inventory/runner and validates materialized executable bytes before the existing
+supervisor launches the sandbox. StageX/GCC-chain byte parity, timing and
+uncached fixed-point proof still require separate captured execution.
 
 The external reference implements the C-side shape: a driver that is `cc` on
 PATH, content-masked keys, depfile-learned manifests, cached failures and
@@ -123,11 +124,11 @@ the representative uncached/cached proof acceptance required by T3.2/T4.2.
 
 ## Declared-driver inventory fixture
 
-`examples/protected_cc_driver.rs` reuses `ProtectedExecPolicy` and the existing
+`mantle-protected-build-runner` reuses `ProtectedExecPolicy` and the existing
 seccomp supervisor; it does not implement a second authorization mechanism.
-The runner claims a fresh audit file, installs the irreversible filter, waits
-for the real command and audit quiescence, and records the observed decisions.
-Its observation is explicitly fixture-only and cannot admit a proof.
+The runner validates the inventory, claims a fresh audit file, installs the
+irreversible filter, waits for the real command and audit quiescence, and records
+the observed decisions. Its observation cannot admit a proof.
 
 Select `--protected-exec-runner` and `--sandbox-shell` together in
 `scripts/prove-cc-cache-slots.py`. The script generates an inventory from
@@ -142,14 +143,14 @@ repository development shell:
 
 ```sh
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-cargo build --locked -p mantle --example protected_cc_driver
+cargo build --locked -p mantle --bin mantle-protected-build-runner
 cargo build --locked -p crunch-rustc-wrapper --bin mantle-cc-driver --bin mantle-rust-cache-daemon
 python3 scripts/prove-cc-cache-slots.py \
   --driver "$CARGO_TARGET_DIR/debug/mantle-cc-driver" \
   --daemon "$CARGO_TARGET_DIR/debug/mantle-rust-cache-daemon" \
   --compiler "$NATIVE_CC" --cxx "$NATIVE_CXX" \
   --work-dir "$ARTIFACTS" \
-  --protected-exec-runner "$CARGO_TARGET_DIR/debug/examples/protected_cc_driver" \
+  --protected-exec-runner "$CARGO_TARGET_DIR/debug/mantle-protected-build-runner" \
   --sandbox-shell "$SNIX_BUILD_SANDBOX_SHELL"
 ```
 
@@ -162,9 +163,9 @@ its expected digest must deny that exact execution, with no fallback decision.
 
 Compile-cache and protected-exec maintainers own this executable boundary rail.
 The fixture does not install a driver into a production bootstrap recipe,
-prove derivation-identity parity, establish representative-chain timings, or
-replace the cache-off fixed-point obligation. T3.1/T3.2/T4.2 retain those
-separate acceptance requirements.
+establish representative-chain timings, or replace the cache-off fixed-point
+obligation. The separate production build-shell rail exercises runtime endpoint
+mapping and protected materialized paths; T3.2/T4.2 retain chain acceptance.
 
 The inventoried static BusyBox seed's `env -i` constructs the exact declared
 compiler environment after entering the sandbox. Bubblewrap adds `PWD` even
@@ -172,4 +173,35 @@ after `--clearenv`/`--unsetenv PWD`; silently ignoring that binding would weaken
 driver admission. The fixture instead leaves environment admission unchanged
 and observes the seed execution in the protected audit.
 
+
+## Protected production build-shell mapping
+
+The explicit runtime's optional `protected_exec` selects an external runner,
+inventory, and audit directory. The local sandbox command factory runs only
+after its input provider has populated or mounted the host input directory.
+Its input guard remains alive through supervision and command completion.
+The ordinary executor is unchanged when no command factory is selected.
+
+The runner validates the source inventory, checks canonical input containment
+and exact BLAKE3 executable bytes, then validates the effective materialized
+inventory before installing the existing supervisor. Source/effective digests
+and path mappings remain explicit in `mantle-protected-build-observation-v1`.
+
+The supervisor retains each file opened through the tracee's root and hashes
+that descriptor with the existing bounded reader. Its reported pathname remains
+an exact inventory/audit name, not a host-namespace reopen request. The regression
+pairs guest-byte admission with refusal of different host bytes at the same
+pathname; diagnostics also record the retained file's digest without granting
+inventory authority. No atomic exec binding or filesystem-isolation claim follows.
+
+Audits are kept outside the physical store export tree; logical output overlap
+is also refused before runtime files are written. No serialized derivation or
+build-request field carries the socket, inventory, audits, or command factory.
+
+`scripts/prove-cc-cache-build-shell.py` consumes a passed native driver fixture
+and invokes real `mantle build` against fresh per-case state. It retains actual
+driver dispositions from build logs, protected decisions, object identities,
+and logical derivation/output paths. Its selected seed-compiler scenario is
+not T3.2/T4.2 representative-chain or fixed-point acceptance. The operator guide
+is `docs/protected-cc-build-runtime.md`; ADR 0137 records the mechanism boundary.
 

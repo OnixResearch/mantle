@@ -1721,10 +1721,15 @@ fn is_executable_metadata(_metadata: &fs::Metadata) -> bool {
     false
 }
 
+/// Hash one file selected by path using the bounded open-file reader.
+pub fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
+    let file = fs::File::open(path).map_err(|err| io_error(path, err))?;
+    blake3_open_file_hex(path, file)
+}
+
 /// Hash the bytes observed through one open file, rejecting a size change during
 /// the read. The digest is not signature, provenance, or stable-path authority.
-pub fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
-    let mut file = fs::File::open(path).map_err(|err| io_error(path, err))?;
+pub(crate) fn blake3_open_file_hex(path: &Path, mut file: fs::File) -> Result<String, Stage0InventoryGenerationError> {
     let expected_bytes = file.metadata().map_err(|err| io_error(path, err))?.len();
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];

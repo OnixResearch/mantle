@@ -90,7 +90,7 @@ pub use capability::ActionResultPort;
 pub use capability::BuildServiceStore;
 pub use capability::BuildStore;
 pub use capability::BuilderStoreParts;
-pub use capability::LocalRuntimeSockets;
+pub use capability::LocalBuildRuntime;
 pub use capability::OutputLookup;
 pub use capability::PipelineStoreParts;
 pub use capability::RootRegistry;

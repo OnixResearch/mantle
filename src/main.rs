@@ -147,8 +147,7 @@ mod project_resolve;
 mod project_retention_fact;
 mod proof_clock_seccomp;
 use mantle::protected_exec;
-#[allow(dead_code)]
-mod protected_exec_seccomp;
+use mantle::protected_exec_seccomp;
 mod provider_output_publication;
 #[allow(dead_code)]
 mod realization_routing;

@@ -256,9 +256,13 @@ impl WatchStartGate {
         })
     }
 
+    pub(crate) fn block_arguments(&self) -> [OsString; 2] {
+        let fd = self.reader.as_ref().expect("gate reader is configured before spawn").as_raw_fd();
+        ["--block-fd".into(), fd.to_string().into()]
+    }
+
     pub(crate) fn configure(&self, command: &mut Command) {
         let fd = self.reader.as_ref().expect("gate reader is configured before spawn").as_raw_fd();
-        command.arg("--block-fd").arg(fd.to_string());
         // SAFETY: pre_exec runs in the forked child immediately before exec.
         // fcntl is async-signal-safe and touches only this already-open fd.
         unsafe {

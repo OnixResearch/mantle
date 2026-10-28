@@ -1,0 +1,199 @@
+diff --git a/vendor/snix-build/src/buildservice/bwrap.rs b/vendor/snix-build/src/buildservice/bwrap.rs
+--- a/vendor/snix-build/src/buildservice/bwrap.rs
++++ b/vendor/snix-build/src/buildservice/bwrap.rs
+@@ -2,6 +2,7 @@
+ use std::io::ErrorKind;
+ use std::path::Path;
+ use std::path::PathBuf;
++use std::sync::Arc;
+ 
+ use async_trait::async_trait;
+ use bstr::BStr;
+@@ -29,6 +30,7 @@
+ use crate::buildservice::BuildRequest;
+ use crate::buildservice::BuildResult;
+ use crate::bwrap::Bwrap;
++use crate::bwrap::BwrapCommandFactory;
+ #[cfg(test)]
+ use crate::bwrap::watch_cancel::WatchFault;
+ use crate::sandbox::SandboxMount;
+@@ -361,6 +363,8 @@
+     compile_socket: Option<PathBuf>,
+     /// Optional diagnostic transport; never part of derivation or cache identity.
+     rust_wait_socket: Option<PathBuf>,
++    /// Execution-only launcher policy, applied after input population.
++    command_factory: Option<Arc<dyn BwrapCommandFactory>>,
+ 
+     // semaphore to track number of concurrently running builds.
+     // this is necessary, as otherwise we very quickly run out of open file handles.
+@@ -381,6 +385,7 @@
+             failure_workspace_root: None,
+             compile_socket: None,
+             rust_wait_socket: None,
++            command_factory: None,
+             concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+             #[cfg(test)]
+             watch_fault: None,
+@@ -415,6 +420,13 @@
+         rust_wait_socket_mount(&host_socket)?;
+         self.rust_wait_socket = Some(host_socket);
+         Ok(self)
++    }
++
++    /// Opt in to a command factory without changing serialized build requests.
++    /// The callback runs only after this sandbox's inputs are available.
++    pub fn with_command_factory(mut self, command_factory: Arc<dyn BwrapCommandFactory>) -> Self {
++        self.command_factory = Some(command_factory);
++        self
+     }
+ 
+     pub fn with_failure_workspace_root(mut self, failure_workspace_root: PathBuf) -> Self {
+@@ -529,6 +541,10 @@
+             .build();
+ 
+         let sandbox = Bwrap::initialize(spec)?;
++        let sandbox = match &self.command_factory {
++            Some(factory) => sandbox.with_command_factory(Arc::clone(factory)),
++            None => sandbox,
++        };
+         #[cfg(test)]
+         let sandbox = sandbox.with_test_watch_fault(self.watch_fault);
+         let outcome = match cancellation.as_ref() {
+diff --git a/vendor/snix-build/src/bwrap/mod.rs b/vendor/snix-build/src/bwrap/mod.rs
+--- a/vendor/snix-build/src/bwrap/mod.rs
++++ b/vendor/snix-build/src/bwrap/mod.rs
+@@ -1,3 +1,4 @@
++use std::ffi::OsStr;
+ use std::ffi::OsString;
+ use std::fs;
+ use std::io::ErrorKind;
+@@ -6,6 +7,7 @@
+ use std::path::PathBuf;
+ use std::process::Output;
+ use std::process::Stdio;
++use std::sync::Arc;
+ 
+ use tokio::process::Command;
+ use tokio::sync::watch;
+@@ -17,6 +19,27 @@
+ 
+ const BWRAP_PROGRAM: &str = "bwrap";
+ const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
++
++/// Complete execution-only invocation, available after inputs are populated.
++/// All paths are host paths except `inputs_dir`, which is the relative guest
++/// input directory supplied by [`InputsProvider::inputs_dir`].
++pub struct BwrapInvocation<'a> {
++    pub program: &'a OsStr,
++    pub args: &'a [OsString],
++    pub host_workdir: &'a Path,
++    pub host_inputs_dir: &'a Path,
++    pub inputs_dir: &'a Path,
++}
++
++/// Optionally wrap the sandbox launcher without changing build identity.
++///
++/// The factory must return an unspawned command containing the complete
++/// invocation (including its arguments). The executor then applies its stdin,
++/// umask and watch supervision policy; it does not append these arguments again.
++/// Input mounts remain alive throughout this callback and command execution.
++pub trait BwrapCommandFactory: Send + Sync {
++    fn command(&self, invocation: BwrapInvocation<'_>) -> std::io::Result<Command>;
++}
+ 
+ const COMMON_BWRAP_ARGS: &[&str] = &[
+     "--unshare-uts",
+@@ -197,6 +220,7 @@
+     host_workdir: PathBuf,
+     args: Vec<OsString>,
+     inputs_provider: InputsProvider,
++    command_factory: Option<Arc<dyn BwrapCommandFactory>>,
+     #[cfg(test)]
+     watch_fault: Option<watch_cancel::WatchFault>,
+ }
+@@ -319,6 +343,11 @@
+ 
+ 
+ impl Bwrap {
++    pub(crate) fn with_command_factory(mut self, command_factory: Arc<dyn BwrapCommandFactory>) -> Self {
++        self.command_factory = Some(command_factory);
++        self
++    }
++
+     #[cfg(test)]
+     pub(crate) fn with_test_watch_fault(mut self, fault: Option<watch_cancel::WatchFault>) -> Self {
+         self.watch_fault = fault;
+@@ -355,19 +384,40 @@
+         if cancellation.is_some() {
+             watch_cancel::require_pidfd_support()?;
+         }
+-        let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
++        // The input guard mutably borrows its provider. Only an opted-in
++        // callback needs a copy of the guest path while that guard is alive.
++        let factory = self.command_factory.as_ref().map(|factory| {
++            (factory, self.inputs_provider.inputs_dir().to_path_buf())
++        });
++        let host_inputs_dir = self.host_workdir.join("host_inputs_dir");
++        let _guard = self.inputs_provider.provide_inputs(&host_inputs_dir)?;
+ 
+         let program = bwrap_program();
+         let gate = cancellation.as_ref().map(|_| watch_cancel::WatchStartGate::new()).transpose()?;
++        if let Some(gate) = &gate {
++            self.args.splice(0..0, gate.block_arguments());
++        }
+-        let mut command = Command::new(&program);
++        #[cfg(test)]
++        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
++            self.args.insert(0, "--invalid-bwrap-watch-early-exit".into());
++        }
++        let mut command = match factory {
++            Some((factory, inputs_dir)) => factory.command(BwrapInvocation {
++                program: &program,
++                args: &self.args,
++                host_workdir: &self.host_workdir,
++                host_inputs_dir: &host_inputs_dir,
++                inputs_dir: &inputs_dir,
++            })?,
++            None => {
++                let mut command = Command::new(&program);
++                command.args(&self.args);
++                command
++            }
++        };
+         if let Some(gate) = &gate {
+             gate.configure(&mut command);
+         }
+-        #[cfg(test)]
+-        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
+-            command.arg("--invalid-bwrap-watch-early-exit");
+-        }
+-        command.args(self.args);
+         command.stdin(Stdio::null());
+         set_sandbox_umask(&mut command);
+         let output = match (cancellation, gate, lease) {
+@@ -515,6 +565,7 @@
+             host_workdir: spec.host_workdir().into(),
+             args,
+             inputs_provider: spec.into(),
++            command_factory: None,
+             #[cfg(test)]
+             watch_fault: None,
+         })
+diff --git a/vendor/snix-build/src/bwrap/watch_cancel.rs b/vendor/snix-build/src/bwrap/watch_cancel.rs
+--- a/vendor/snix-build/src/bwrap/watch_cancel.rs
++++ b/vendor/snix-build/src/bwrap/watch_cancel.rs
+@@ -256,9 +256,13 @@
+         })
+     }
+ 
++    pub(crate) fn block_arguments(&self) -> [OsString; 2] {
++        let fd = self.reader.as_ref().expect("gate reader is configured before spawn").as_raw_fd();
++        ["--block-fd".into(), fd.to_string().into()]
++    }
++
+     pub(crate) fn configure(&self, command: &mut Command) {
+         let fd = self.reader.as_ref().expect("gate reader is configured before spawn").as_raw_fd();
+-        command.arg("--block-fd").arg(fd.to_string());
+         // SAFETY: pre_exec runs in the forked child immediately before exec.
+         // fcntl is async-signal-safe and touches only this already-open fd.
+         unsafe {

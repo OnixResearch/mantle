@@ -31,7 +31,7 @@ mod linux {
     use crate::protected_exec::ProtectedExecError;
     use crate::protected_exec::ProtectedExecPolicy;
     use crate::protected_exec::ProtectedSeccompAuditEvent;
-    use crate::protected_exec::blake3_file_hex;
+    use crate::protected_exec::blake3_open_file_hex;
 
     const AUDIT_ARCH_X86_64: u32 = 0xC000_003E;
     const AUDIT_ARCH_AARCH64: u32 = 0xC000_00B7;
@@ -535,6 +535,7 @@ mod linux {
     struct ExecTarget {
         tracee_path: PathBuf,
         resolved_host_path: PathBuf,
+        file: File,
     }
 
     fn classify_diagnostic_notification(
@@ -581,7 +582,7 @@ mod linux {
                 inventory_entry_id: None,
             });
         }
-        let digest_hex = match blake3_file_hex(&target.resolved_host_path) {
+        let digest_hex = match blake3_open_file_hex(&target.resolved_host_path, target.file) {
             Ok(digest) => digest,
             Err(err) => {
                 return denied_event(DeniedEventInput {
@@ -651,7 +652,7 @@ mod linux {
             target.resolved_host_path.is_absolute(),
             "resolved host path must be absolute after target resolution"
         );
-        let digest_hex = match blake3_file_hex(&target.resolved_host_path) {
+        let digest_hex = match blake3_open_file_hex(&target.resolved_host_path, target.file) {
             Ok(digest) => digest,
             Err(err) => {
                 return denied_event(DeniedEventInput {
@@ -746,13 +747,14 @@ mod linux {
         if !tracee_path.is_absolute() {
             return Err((tracee_path, "relative exec path cannot be resolved safely".to_string()));
         }
-        let resolved_host_path = resolve_tracee_exec_path(listener_fd, notif.pid, notif.id, &tracee_path)
+        let (resolved_host_path, file) = resolve_tracee_exec_path(listener_fd, notif.pid, notif.id, &tracee_path)
             .map_err(|err| (tracee_path.clone(), err))?;
         assert!(tracee_path.is_absolute());
         assert!(resolved_host_path.is_absolute());
         Ok(ExecTarget {
             tracee_path,
             resolved_host_path,
+            file,
         })
     }
 
@@ -794,7 +796,12 @@ mod linux {
         signed_long == at_fdcwd || signed_int == at_fdcwd
     }
 
-    fn resolve_tracee_exec_path(listener_fd: RawFd, pid: u32, id: u64, tracee_path: &Path) -> Result<PathBuf, String> {
+    fn resolve_tracee_exec_path(
+        listener_fd: RawFd,
+        pid: u32,
+        id: u64,
+        tracee_path: &Path,
+    ) -> Result<(PathBuf, File), String> {
         if !tracee_path.is_absolute() {
             return Err("relative exec path cannot be resolved safely".to_string());
         }
@@ -810,7 +817,9 @@ mod linux {
         if !resolved_host_path.is_absolute() {
             return Err(format!("resolved tracee exec path is not absolute: {}", resolved_host_path.display()));
         }
-        Ok(resolved_host_path)
+        // A namespace-local name may not exist, or may name different bytes,
+        // in the supervisor. Keep the opened tracee file for bounded hashing.
+        Ok((resolved_host_path, file))
     }
 
     fn proc_root_exec_path(pid: u32, tracee_path: &Path) -> Result<PathBuf, String> {
@@ -941,6 +950,7 @@ mod linux {
         use crate::protected_exec::DigestSpec;
         use crate::protected_exec::ExecutableSeedEntry;
         use crate::protected_exec::Stage0Inventory;
+        use crate::protected_exec::blake3_file_hex;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const DEEP_LEAF_PATH_VAR: &str = "CRUNCH_TEST_SECCOMP_DEEP_LEAF_PATH";
@@ -1021,6 +1031,35 @@ mod linux {
 
             assert!(relative.contains("relative exec path"), "reason: {relative}");
             assert!(parent.contains("parent component"), "reason: {parent}");
+        }
+
+        #[test]
+        fn tracee_file_identity_wins_over_same_host_path_for_policy_and_diagnostics() {
+            let temp = tempfile::tempdir().unwrap();
+            let guest_file = temp.path().join("guest-executable");
+            let guest_bytes = b"distinct namespace executable bytes";
+            std::fs::write(&guest_file, guest_bytes).unwrap();
+            let guest_digest = blake3::hash(guest_bytes).to_hex().to_string();
+            let host_path = std::env::current_exe().unwrap();
+            let host_digest = blake3_file_hex(&host_path).unwrap();
+            assert_ne!(guest_digest, host_digest);
+            let target = || ExecTarget {
+                tracee_path: host_path.clone(),
+                resolved_host_path: host_path.clone(),
+                file: File::open(&guest_file).unwrap(),
+            };
+            let admitted =
+                classify_path(&current_exe_policy(guest_digest.clone()), std::process::id(), "execve", target());
+            assert!(admitted.allowed);
+            assert_eq!(admitted.audit_event.digest_hex, guest_digest);
+            let refused = classify_path(&current_exe_policy(host_digest), std::process::id(), "execve", target());
+            assert!(!refused.allowed);
+            assert_eq!(refused.audit_event.digest_hex, guest_digest);
+            let diagnostic =
+                classify_diagnostic_path(&BTreeSet::from([host_path.clone()]), std::process::id(), "execve", target());
+            assert_eq!(diagnostic.audit_event.digest_hex, guest_digest);
+            assert_eq!(diagnostic.audit_event.phase, PHASE_DIAGNOSTIC);
+            assert!(diagnostic.audit_event.inventory_entry_id.is_none());
         }
 
         #[test]

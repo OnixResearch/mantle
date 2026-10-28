@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use bstr::BStr;
@@ -29,6 +30,7 @@ use crate::buildservice::BuildOutput;
 use crate::buildservice::BuildRequest;
 use crate::buildservice::BuildResult;
 use crate::bwrap::Bwrap;
+use crate::bwrap::BwrapCommandFactory;
 #[cfg(test)]
 use crate::bwrap::watch_cancel::WatchFault;
 use crate::sandbox::SandboxMount;
@@ -361,6 +363,8 @@ pub struct BubblewrapBuildService<BS, DS> {
     compile_socket: Option<PathBuf>,
     /// Optional diagnostic transport; never part of derivation or cache identity.
     rust_wait_socket: Option<PathBuf>,
+    /// Execution-only launcher policy, applied after input population.
+    command_factory: Option<Arc<dyn BwrapCommandFactory>>,
 
     // semaphore to track number of concurrently running builds.
     // this is necessary, as otherwise we very quickly run out of open file handles.
@@ -381,6 +385,7 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
             failure_workspace_root: None,
             compile_socket: None,
             rust_wait_socket: None,
+            command_factory: None,
             concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
             #[cfg(test)]
             watch_fault: None,
@@ -415,6 +420,13 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
         rust_wait_socket_mount(&host_socket)?;
         self.rust_wait_socket = Some(host_socket);
         Ok(self)
+    }
+
+    /// Opt in to a command factory without changing serialized build requests.
+    /// The callback runs only after this sandbox's inputs are available.
+    pub fn with_command_factory(mut self, command_factory: Arc<dyn BwrapCommandFactory>) -> Self {
+        self.command_factory = Some(command_factory);
+        self
     }
 
     pub fn with_failure_workspace_root(mut self, failure_workspace_root: PathBuf) -> Self {
@@ -529,6 +541,10 @@ where
             .build();
 
         let sandbox = Bwrap::initialize(spec)?;
+        let sandbox = match &self.command_factory {
+            Some(factory) => sandbox.with_command_factory(Arc::clone(factory)),
+            None => sandbox,
+        };
         #[cfg(test)]
         let sandbox = sandbox.with_test_watch_fault(self.watch_fault);
         let outcome = match cancellation.as_ref() {

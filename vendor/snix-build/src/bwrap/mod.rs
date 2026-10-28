@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
@@ -6,6 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use std::process::Stdio;
+use std::sync::Arc;
 
 use tokio::process::Command;
 use tokio::sync::watch;
@@ -17,6 +19,27 @@ pub(crate) mod watch_cancel;
 
 const BWRAP_PROGRAM: &str = "bwrap";
 const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
+
+/// Complete execution-only invocation, available after inputs are populated.
+/// All paths are host paths except `inputs_dir`, which is the relative guest
+/// input directory supplied by [`InputsProvider::inputs_dir`].
+pub struct BwrapInvocation<'a> {
+    pub program: &'a OsStr,
+    pub args: &'a [OsString],
+    pub host_workdir: &'a Path,
+    pub host_inputs_dir: &'a Path,
+    pub inputs_dir: &'a Path,
+}
+
+/// Optionally wrap the sandbox launcher without changing build identity.
+///
+/// The factory must return an unspawned command containing the complete
+/// invocation (including its arguments). The executor then applies its stdin,
+/// umask and watch supervision policy; it does not append these arguments again.
+/// Input mounts remain alive throughout this callback and command execution.
+pub trait BwrapCommandFactory: Send + Sync {
+    fn command(&self, invocation: BwrapInvocation<'_>) -> std::io::Result<Command>;
+}
 
 const COMMON_BWRAP_ARGS: &[&str] = &[
     "--unshare-uts",
@@ -197,6 +220,7 @@ pub struct Bwrap {
     host_workdir: PathBuf,
     args: Vec<OsString>,
     inputs_provider: InputsProvider,
+    command_factory: Option<Arc<dyn BwrapCommandFactory>>,
     #[cfg(test)]
     watch_fault: Option<watch_cancel::WatchFault>,
 }
@@ -319,6 +343,11 @@ fn append_prevalidated_mount_args<'a>(
 
 
 impl Bwrap {
+    pub(crate) fn with_command_factory(mut self, command_factory: Arc<dyn BwrapCommandFactory>) -> Self {
+        self.command_factory = Some(command_factory);
+        self
+    }
+
     #[cfg(test)]
     pub(crate) fn with_test_watch_fault(mut self, fault: Option<watch_cancel::WatchFault>) -> Self {
         self.watch_fault = fault;
@@ -355,19 +384,40 @@ impl Bwrap {
         if cancellation.is_some() {
             watch_cancel::require_pidfd_support()?;
         }
-        let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
+        // The input guard mutably borrows its provider. Only an opted-in
+        // callback needs a copy of the guest path while that guard is alive.
+        let factory = self.command_factory.as_ref().map(|factory| {
+            (factory, self.inputs_provider.inputs_dir().to_path_buf())
+        });
+        let host_inputs_dir = self.host_workdir.join("host_inputs_dir");
+        let _guard = self.inputs_provider.provide_inputs(&host_inputs_dir)?;
 
         let program = bwrap_program();
         let gate = cancellation.as_ref().map(|_| watch_cancel::WatchStartGate::new()).transpose()?;
-        let mut command = Command::new(&program);
         if let Some(gate) = &gate {
-            gate.configure(&mut command);
+            self.args.splice(0..0, gate.block_arguments());
         }
         #[cfg(test)]
         if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
-            command.arg("--invalid-bwrap-watch-early-exit");
+            self.args.insert(0, "--invalid-bwrap-watch-early-exit".into());
         }
-        command.args(self.args);
+        let mut command = match factory {
+            Some((factory, inputs_dir)) => factory.command(BwrapInvocation {
+                program: &program,
+                args: &self.args,
+                host_workdir: &self.host_workdir,
+                host_inputs_dir: &host_inputs_dir,
+                inputs_dir: &inputs_dir,
+            })?,
+            None => {
+                let mut command = Command::new(&program);
+                command.args(&self.args);
+                command
+            }
+        };
+        if let Some(gate) = &gate {
+            gate.configure(&mut command);
+        }
         command.stdin(Stdio::null());
         set_sandbox_umask(&mut command);
         let output = match (cancellation, gate, lease) {
@@ -515,6 +565,7 @@ impl Bwrap {
             host_workdir: spec.host_workdir().into(),
             args,
             inputs_provider: spec.into(),
+            command_factory: None,
             #[cfg(test)]
             watch_fault: None,
         })

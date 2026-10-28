@@ -864,6 +864,12 @@ fn create_pipeline_builder_with_source_policy(
     store: crunch_store::StoreHandle,
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    if let Some(protected) = config.compile_driver_runtime.as_ref().and_then(|runtime| runtime.protected_exec.as_ref())
+    {
+        protected
+            .validate_output_directory(&config.output_dir)
+            .map_err(|error| Error::Build(error.to_string()))?;
+    }
     let runtime = config.compile_driver_runtime.clone();
     let wait_runtime = config.rust_wait_runtime.clone();
     let runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
@@ -880,11 +886,12 @@ fn create_pipeline_builder_with_source_policy(
             }
             let store = build_service_store.clone();
             let factory = move |socket: Option<PathBuf>| {
-                let local = store.bubblewrap_build_service_with_runtime_sockets(
+                let local = store.bubblewrap_build_service_with_runtime(
                     std::env::temp_dir().join("crunch-builds-local"),
-                    crunch_store::LocalRuntimeSockets {
-                        compile_cache: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
-                        rust_waits: socket,
+                    crunch_store::LocalBuildRuntime {
+                        compile_cache_socket: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
+                        rust_wait_socket: socket,
+                        command_factory: runtime.as_ref().and_then(|runtime| runtime.command_factory()),
                     },
                 )?;
                 CompileDriverBuildService::new(local, runtime.clone())
@@ -901,9 +908,13 @@ fn create_pipeline_builder_with_source_policy(
                 .map_err(|error| Error::Build(error.to_string()))?;
             runtime.validate().map_err(|error| Error::Build(error.to_string()))?;
             let local = build_service_store
-                .bubblewrap_build_service_with_compile_socket(
+                .bubblewrap_build_service_with_runtime(
                     std::env::temp_dir().join("crunch-builds-local"),
-                    runtime.host_socket.clone(),
+                    crunch_store::LocalBuildRuntime {
+                        compile_cache_socket: Some(runtime.host_socket.clone()),
+                        rust_wait_socket: None,
+                        command_factory: runtime.command_factory(),
+                    },
                 )
                 .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
             return CompileDriverBuildService::new(local, Some(runtime))

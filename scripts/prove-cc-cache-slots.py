@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--toolchain-root", action="append", type=Path, default=[],
                         help="Additional complete compiler/runtime input roots")
     parser.add_argument("--protected-exec-runner",
-                        help="Prebuilt protected_cc_driver example; enables inventory controls")
+                        help="Prebuilt mantle-protected-build-runner; enables inventory controls")
     parser.add_argument("--sandbox-shell",
                         help="Explicit shell seed for the protected fixture inventory")
     args = parser.parse_args()
@@ -374,8 +374,11 @@ def main():
                                        "env", "-i", *child_environment, *invocation],
                                 process_env, success=success)
                 audit = json.loads(audit_path.read_text())
-                require(audit["schema"] == "mantle-protected-cc-driver-observation-v1" and
-                        audit["proof_evidence"] is False and audit["audit_error"] is None,
+                require(audit["schema"] == "mantle-protected-build-observation-v1" and
+                        audit["claim_class"] == "execution-only-performance-observation" and
+                        audit["proof_evidence"] is False and audit["audit_error"] is None and
+                        audit["source_inventory_digest_blake3"] == audit["inventory_digest_blake3"] and
+                        audit["materialized_aliases"] == [],
                         f"{label}: invalid or incomplete protected observation")
                 require(audit["events"], f"{label}: no actual protected exec events")
                 for event in audit["events"]:

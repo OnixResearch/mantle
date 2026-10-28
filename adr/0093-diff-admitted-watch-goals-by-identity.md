@@ -104,10 +104,19 @@ denial. The full three-patch postimage BLAKE3 is
 `82c4b973eb0e0aca2b60edbf29d96704f8d6c580f3b5c851a05b886f038d4491`.
 Unlike the compile endpoint, an explicitly configured diagnostic endpoint
 does not degrade when missing; the default `None` remains unchanged.
-The importer permits cutover only from the exact pinned source or either
-recorded watch-only/compile-socket postimage, preserving rollback to the
-admitted preimage. These are source provenance facts, not socket-mount or
-watch acceptance.
+The fourth `patches/snix-build-command-factory.patch` changes those same two
+Rust files and `src/bwrap/watch_cancel.rs`. It adds an optional execution-only
+command factory, invoked after inputs are populated while their guard remains
+alive. The factory receives the complete Bubblewrap invocation and host/guest
+input paths. The executor prefixes `--block-fd` before the guest command, then
+configures descriptor inheritance on the selected launcher; stdin, umask,
+cancellation and process supervision remain executor-owned. The full four-patch
+postimage BLAKE3 is
+`77df2195fe99d5e9707685dfac1abac8af5b11f6384a6208beb66b32d92ccc58`.
+The importer permits cutover only from the exact pinned source or a recorded
+watch-only, compile-socket or rust-wait-socket postimage, preserving rollback
+to the admitted preimage. These are Mantle-local source provenance facts,
+not protected-execution, socket-mount or watch acceptance.
 
 The execution opt-in is `mantle build --compile-driver-runtime <PATH>`.
 Its bounded `mantle-compile-driver-runtime-v1` JSON names `host_socket`,

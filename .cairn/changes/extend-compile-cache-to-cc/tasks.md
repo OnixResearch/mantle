@@ -43,8 +43,27 @@ audits/streams, source and executable identities, and failed predecessors.
 The inventoried BusyBox seed constructs the exact child environment with
 `env -i`; driver admission still rejects undeclared bindings such as bwrap's
 implicit `PWD`. Compile-cache and protected-exec maintainers own this rail.
-T3.1's production endpoint/inventory integration, T3.2/T4.2's representative
-chain and cache-off fixed point, and T4.3/T4.4's full gates/archive remain open.
+
+The T3.1 continuation passes the production endpoint/inventory seam. Pueue 124
+observes seven real `mantle build` cases over the frozen binaries: plain and
+protected cold builds, an object hit that executes no compiler or helper, an
+absent-daemon fallback, and undeclared-driver, wrong-compiler-digest, and
+output-overlapping-audit refusals. Cold, warm, absent-daemon, and plain runs
+retain one derivation key, logical output path, object BLAKE3, object mode, and
+recipe identity. Every protected case records `proof_evidence: false`.
+
+The predecessor run exposed a supervisor defect: it opened the guest
+executable through `/proc/<pid>/root`, discarded the handle, then hashed the
+reported pathname in the supervisor namespace. A guest-only driver therefore
+failed with ENOENT. The supervisor now hashes the retained file for policy and
+diagnostic reads; the regression pairs guest-byte admission with refusal of
+different host bytes at the same pathname. Binaries share the library
+supervisor instead of compiling a second private copy. Exact captures, frozen
+artifact identities, and failed predecessors are in
+`evidence/protected-build-shell-2026-10-27.json`.
+
+This closes T3.1 only. T3.2/T4.2's representative chain and cache-off fixed
+point, T4.3's full Nix-check execution, and T4.4's specs/archive remain open.
 
 ## Phase 1: Baseline and contract
 
@@ -62,7 +81,7 @@ chain and cache-off fixed point, and T4.3/T4.4's full gates/archive remain open.
 
 ## Phase 3: Build integration and proof lanes
 
-- [ ] [serial] T3.1 Wire execution-time endpoint mapping into the build shell for protected bootstrap builds without derivation input changes. r[mantle.cc_compile_cache.non_input_cache_boundary]
+- [x] [serial] T3.1 Wire execution-time endpoint mapping into the build shell for protected bootstrap builds without derivation input changes. r[mantle.cc_compile_cache.non_input_cache_boundary]
 - [ ] [serial] T3.2 Prove byte-identical outputs with cache on and off on the representative chain rebuild, with disposition records. r[mantle.cc_compile_cache.non_input_cache_boundary]
 - [x] [serial] T3.3 Extend strict evidence lanes to reject cache receipts as rebuild evidence and record cache mode in proof transcripts. r[mantle.cc_compile_cache.proof_exclusion]
 - [x] [serial] T3.4 Implement bounded probe-result and failure caching with per-read dispositions. r[mantle.cc_compile_cache.probe_and_failure_cache]

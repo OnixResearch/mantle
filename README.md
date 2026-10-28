@@ -736,6 +736,11 @@ checks. See [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-valida
 [`docs/shared-rust-unit-cache.md`](docs/shared-rust-unit-cache.md), and the
 [Rust compiler cache daemon guide](rust-cache/daemon/README.md).
 
+The [protected C/C++ build-runtime guide](docs/protected-cc-build-runtime.md)
+describes the explicit local daemon socket, materialized executable admission,
+and production build-shell rail. Runtime observations stay outside derivation
+identity and cannot admit rebuild proofs.
+
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
 The [Nix derivation compatibility guide](docs/nix-derivation-compatibility-boundary.md)

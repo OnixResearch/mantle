@@ -774,18 +774,6 @@ let Example = {
       skip_reason = "",
     },
     {
-      id = "protected-cc-driver",
-      path = "examples/protected_cc_driver.rs",
-      title = "Protected C and C++ compiler driver",
-      summary = "Runs the declared compiler driver under the existing protected-exec supervisor and records exact inventory decisions; fixture observations are not bootstrap or rebuild proof.",
-      lane = "advanced-bootstrap",
-      kind = "rust-example",
-      support_tier = "heavy",
-      requirements = { network = false, generated_seed = false, linux_bwrap = true, heavyweight = true, benchmark = false },
-      validation_rails = ["cargo-example", "inspect-output", "negative-build", "non-claim-doc"],
-      skip_reason = "native fixture requires prebuilt driver/daemon binaries, GCC-compatible C/C++ compilers, an explicit shell seed, and Linux seccomp/bubblewrap",
-    },
-    {
       id = "benchmark-eval-smoke",
       path = "examples/benchmark_eval_smoke.rs",
       title = "Evaluation benchmark smoke",

@@ -6,7 +6,7 @@ mechanism are unknown. The unmodified source is a pinned Mantle commit/tree;
 tracked patch files are applied in order, then the exact result is checked.
 Requires a full-history Mantle clone with the pinned commit available plus
 the repo dev shell's b3sum (BLAKE3 v1.8.7). Explicit sync accepts only the
-pinned unmodified source or either recorded watch/compile postimage in an existing
+pinned unmodified source or any recorded watch/compile/rust-wait predecessor in an existing
 full-history checkout; it stages and verifies the entire postimage before
 atomic file replaces.
 No fetch, network access, or repository writes are implicit.
@@ -25,11 +25,17 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_REV = "da00f58425740adea559ef926c9dfa97b2cb8240"
 SOURCE_TREE = "a0979715301705e77c8567cb1bea054dc996000c"
 SOURCE_PREFIX = PurePosixPath("vendor/snix-build")
-PATCHES = ["patches/snix-build-watch-pidfd.patch", "patches/snix-build-compile-socket.patch", "patches/snix-build-rust-wait-socket.patch"]
+PATCHES = [
+    "patches/snix-build-watch-pidfd.patch",
+    "patches/snix-build-compile-socket.patch",
+    "patches/snix-build-rust-wait-socket.patch",
+    "patches/snix-build-command-factory.patch",
+]
 # BLAKE3 over sorted (relative path, mode, byte length, bytes) entries.
 WATCH_POSTIMAGE_BLAKE3 = "c6c6578b808adf15551e55f733f7702d3ec59899f22599f58e7a4a48a1a4a897"
 COMPILE_POSTIMAGE_BLAKE3 = "bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645"
-POSTIMAGE_BLAKE3 = "82c4b973eb0e0aca2b60edbf29d96704f8d6c580f3b5c851a05b886f038d4491"
+RUST_WAIT_POSTIMAGE_BLAKE3 = "82c4b973eb0e0aca2b60edbf29d96704f8d6c580f3b5c851a05b886f038d4491"
+POSTIMAGE_BLAKE3 = "77df2195fe99d5e9707685dfac1abac8af5b11f6384a6208beb66b32d92ccc58"
 PATCHED_FILES = frozenset({
     "Cargo.toml",
     "src/buildservice/bwrap.rs",
@@ -244,13 +250,14 @@ def main():
         unpack_source(archive, reconstructed)
         pristine = contents(reconstructed)
         previous = []
-        for patch, predecessor_digest in zip(PATCHES[:2], (WATCH_POSTIMAGE_BLAKE3, COMPILE_POSTIMAGE_BLAKE3)):
+        predecessor_digests = (WATCH_POSTIMAGE_BLAKE3, COMPILE_POSTIMAGE_BLAKE3, RUST_WAIT_POSTIMAGE_BLAKE3)
+        for patch, predecessor_digest in zip(PATCHES[:3], predecessor_digests):
             apply_patches(reconstructed, [patch])
             predecessor = contents(reconstructed)
             if manifest_digest(predecessor) != predecessor_digest:
                 raise ValueError("local fork predecessor no longer matches recorded postimage")
             previous.append(predecessor)
-        apply_patches(reconstructed, PATCHES[2:])
+        apply_patches(reconstructed, PATCHES[3:])
         expected = contents(reconstructed)
         digest = manifest_digest(expected)
         if POSTIMAGE_BLAKE3 and digest != POSTIMAGE_BLAKE3:

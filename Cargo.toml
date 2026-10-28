@@ -200,9 +200,9 @@ path = "tools/generate_portable_platform_profiles.rs"
 name = "benchmark_compare"
 path = "examples/benchmark_compare.rs"
 
-[[example]]
-name = "protected_cc_driver"
-path = "examples/protected_cc_driver.rs"
+[[bin]]
+name = "mantle-protected-build-runner"
+path = "src/bin/mantle-protected-build-runner.rs"
 
 [[example]]
 name = "picolibc_compare"

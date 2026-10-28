@@ -1215,10 +1215,11 @@ impl StoreAdmin<'_> {
     }
 }
 
-/// Local execution-only mounts. These never enter a serialized build request.
-pub struct LocalRuntimeSockets {
-    pub compile_cache: Option<PathBuf>,
-    pub rust_waits: Option<PathBuf>,
+/// Local execution-only bindings. These never enter a serialized build request.
+pub struct LocalBuildRuntime {
+    pub compile_cache_socket: Option<PathBuf>,
+    pub rust_wait_socket: Option<PathBuf>,
+    pub command_factory: Option<Arc<dyn snix_build::bwrap::BwrapCommandFactory>>,
 }
 
 impl BuildServiceStore {
@@ -1248,36 +1249,25 @@ impl BuildServiceStore {
         }
     }
 
-    /// Local execution-only socket mapping. Does not expose store services or
-    /// turn runtime policy into a derivation/store identity input.
-    pub fn bubblewrap_build_service_with_compile_socket(
+    /// Local runtime mappings and supervision, outside derivation/store identity.
+    pub fn bubblewrap_build_service_with_runtime(
         &self,
         work_directory: PathBuf,
-        host_socket: PathBuf,
-    ) -> std::io::Result<impl snix_build::buildservice::BuildService + use<>> {
-        snix_build::buildservice::BubblewrapBuildService::new(
-            work_directory,
-            self.blob_service.clone(),
-            self.directory_service.clone(),
-        )
-        .with_compile_socket(host_socket)
-    }
-
-    pub fn bubblewrap_build_service_with_runtime_sockets(
-        &self,
-        work_directory: PathBuf,
-        sockets: LocalRuntimeSockets,
+        runtime: LocalBuildRuntime,
     ) -> std::io::Result<impl snix_build::buildservice::BuildService + use<>> {
         let mut service = snix_build::buildservice::BubblewrapBuildService::new(
             work_directory,
             self.blob_service.clone(),
             self.directory_service.clone(),
         );
-        if let Some(socket) = sockets.compile_cache {
+        if let Some(socket) = runtime.compile_cache_socket {
             service = service.with_compile_socket(socket)?;
         }
-        if let Some(socket) = sockets.rust_waits {
+        if let Some(socket) = runtime.rust_wait_socket {
             service = service.with_rust_wait_socket(socket)?;
+        }
+        if let Some(factory) = runtime.command_factory {
+            service = service.with_command_factory(factory);
         }
         Ok(service)
     }
