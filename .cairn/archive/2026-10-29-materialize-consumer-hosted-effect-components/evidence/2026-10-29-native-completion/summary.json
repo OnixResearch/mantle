@@ -1,0 +1,101 @@
+{
+  "schema": "mantle-native-hosted-effects-completion-v1",
+  "implementation_completion_revision": "9b733fb1b72ff6193edf830515d233b17bb87d9c",
+  "producer_revision_consumed_by_real_hosts": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+  "separately_owned_observation": "../2026-10-29-operated-consumers.json",
+  "separately_owned_receipts": "../2026-10-29-operated-consumers.zip",
+  "native_lifecycle_transcript": "../lifecycle-runner.md",
+  "retained": [
+    {
+      "file": "operated-completion-fetch-main.json",
+      "bytes": 640,
+      "blake3": "88f9679db38a9ce36b1be080c2f6a54e14aa0c1f724fb8888cb68e359c4de0ed"
+    },
+    {
+      "file": "operated-completion-fetch-main.log",
+      "bytes": 86,
+      "blake3": "8e0f6881f063a19f57237b7f3f7fa275dfa9407952cf64c49457ad7ae49e1bb3"
+    },
+    {
+      "file": "operated-completion-mainline-preflight.json",
+      "bytes": 687,
+      "blake3": "b6905fae6afe26722c62d264fafc8c1b65935f8c185b76c08c32ede98090b4f2"
+    },
+    {
+      "file": "operated-completion-mainline-preflight.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "operated-completion-stage.json",
+      "bytes": 1157,
+      "blake3": "6b8d6680b636fc1843e8bfbd15bdce7bb6ae839334c7f073f4945481c6e0a2ba"
+    },
+    {
+      "file": "operated-completion-stage.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "operated-completion-commit.json",
+      "bytes": 686,
+      "blake3": "fdeda4dfaa1e7701e8570ab2443df234561a6b5d453633a50fc7785fb5ad9ef3"
+    },
+    {
+      "file": "operated-completion-commit.log",
+      "bytes": 548,
+      "blake3": "f3a9a53ac975f49b2f6f04b41d5661c05cd99696b477fda7fbf7410e0bb94601"
+    },
+    {
+      "file": "operated-completion-revision.json",
+      "bytes": 626,
+      "blake3": "fa5a379f7b766438dcaaf97c407b5d5cb2660445d05a50867bc72574888f3bdc"
+    },
+    {
+      "file": "operated-completion-revision.log",
+      "bytes": 41,
+      "blake3": "5c62be4eb95cc517300461886c0f24b78b72384b74af9535f6f28a17ab33a841"
+    },
+    {
+      "file": "final-native-review-completeness.json",
+      "bytes": 795,
+      "blake3": "68ac2e995295190d81c544beae095d0f62cd1c44e5d2c36a8448e5571ff007e4"
+    },
+    {
+      "file": "final-native-review-completeness.log",
+      "bytes": 28629,
+      "blake3": "f8aa43bc2e541a47e68c1f7d954d1d01f2b238f168f55f6d069483fa69cae467"
+    },
+    {
+      "file": "native-lifecycle-execute.json",
+      "bytes": 1003,
+      "blake3": "c914823d14ab41d023cb1a40276aa9e82f40bf2ff111b5b2729269ce40be739d"
+    },
+    {
+      "file": "native-lifecycle-execute.log",
+      "bytes": 3078,
+      "blake3": "f85110be4a5f15e493a56324792bd89e40ae65c8b8a30264fd02f0f1ab69c37f"
+    },
+    {
+      "file": "postarchive-native-strict-validate.json",
+      "bytes": 728,
+      "blake3": "a954ad7b22203636054b37d3375261251e33260349e90b956971e5e9f57b1b20"
+    },
+    {
+      "file": "postarchive-native-strict-validate.log",
+      "bytes": 88451,
+      "blake3": "078811dcce309730e068b1ec1aeb6628c38c64b84b2f57e7aef9d4b62e67f848"
+    },
+    {
+      "file": "operated-completion-close-lifecycle.json",
+      "bytes": 701,
+      "blake3": "2addf682b2857ad54001f33ace98b14bdce14731720faf8cebdde8cd53bc7dc0"
+    },
+    {
+      "file": "operated-completion-close-lifecycle.log",
+      "bytes": 260,
+      "blake3": "0997d81542007e94190a0fe55db408eeaea12393afc42e7dd8d18c645c2c82ec"
+    }
+  ],
+  "scope": "Evidence/prose closure only. No source build/test/lint gates rerun; earlier passing producer gates remain retained. No new Molten source-gate verdict, default cutover, full parity, or release claim."
+}

@@ -1,0 +1,5 @@
+[cairn/effect-components-native-20261028 9b733fb1] wasm-component: record immutable operated consumer acceptance
+ 7 files changed, 126 insertions(+), 6 deletions(-)
+ create mode 100644 .cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers-snapshot.json
+ create mode 100644 .cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers.json
+ create mode 100644 .cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers.zip

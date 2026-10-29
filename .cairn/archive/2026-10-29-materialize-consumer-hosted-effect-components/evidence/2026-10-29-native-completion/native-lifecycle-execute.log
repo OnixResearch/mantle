@@ -1,0 +1,22 @@
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 100 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 133 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 291 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 691 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 40 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 22 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 328 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 317 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:5000' for 60 seconds
+error: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+wrote lifecycle evidence: ./.cairn/archive/2026-10-29-materialize-consumer-hosted-effect-components/evidence/lifecycle-runner.md
