@@ -12,7 +12,7 @@
 ## Integration acceptance
 
 - [x] [serial] Publish reviewed checker and repin its actual immutable revision/catalog identities. r[mantle.wasm_component.effects_cohort] Published Octet `abb6082062251944a40093a274df3d35331fa168`; coherent generated lock and realized cohort verified.
-- [x] [serial] Generate final toolchain cohort, fixture bindings, and bounded production artifacts. r[mantle.wasm_component.effect_fixtures] Both genuine CLI bundles passed report and complete Structural+Bytes/source-copy verification.
+- [x] [serial] Generate final toolchain cohort, fixture bindings, and bounded production artifacts. r[mantle.wasm_component.effect_fixtures] Both genuine fixed-memory CLI bundles passed report and complete Structural+Bytes/source-copy verification; actual compiled memories declare 32 initial/maximum pages and adapter tables declare 1 initial/maximum element. Earlier growable-declaration bundles remain retained counterexamples.
 - [x] [serial] Run source tests, standalone regression, exact effect pipeline, complete Structural+Bytes verification, and strict Cairn validation. r[mantle.wasm_component.standalone_empty_closure] Focused crate and real pinned-toolchain CLI checks passed; repository-wide shipping gates remain separately required before implementation publication.
 - [ ] [serial] Record separately owned real Molten actor and system-extension observations before consumer activation, retaining bounded execution receipts. r[mantle.wasm_component.consumer_host_requirement]
 

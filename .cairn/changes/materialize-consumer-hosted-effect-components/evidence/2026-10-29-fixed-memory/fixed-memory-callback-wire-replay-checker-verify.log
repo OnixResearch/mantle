@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "artifact_dir": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-octet-replay",
+  "output_format": "evidence-rail",
+  "status": "valid",
+  "artifacts": [
+    {
+      "artifact": "evidence-rail-receipt.json",
+      "source_id": "octet.artifact.wasm-tools",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "7584c4eb4e457795cb10a4f0496bd24d6b4b2ce59c7fcecfacf4e89b8613ac65",
+      "checked_scope": "."
+    },
+    {
+      "artifact": "summary.txt",
+      "source_id": "octet.runner.artifact-bundle",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "manual_review_required",
+      "blake3": "7598759fd89902bfbda72ab4deee81b9ab7483769dcb58cccb0fe0cefef5b731",
+      "checked_scope": ".",
+      "manual_action": "review optional evidence rail summary and receipt before using this artifact"
+    },
+    {
+      "artifact": "wasm-artifact.bin",
+      "source_id": "octet.artifact.wasm-input",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+      "checked_scope": "."
+    }
+  ],
+  "diagnostics": []
+}

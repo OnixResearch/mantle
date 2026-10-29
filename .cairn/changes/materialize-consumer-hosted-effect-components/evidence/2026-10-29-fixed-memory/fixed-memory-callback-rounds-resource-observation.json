@@ -1,0 +1,23 @@
+{
+  "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+  "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/artifacts/normalized.wasm",
+  "declarations": [
+    {
+      "kind": "memory",
+      "initial": 32,
+      "maximum": 32
+    },
+    {
+      "kind": "table",
+      "initial": 1,
+      "maximum": 1
+    },
+    {
+      "kind": "table",
+      "initial": 1,
+      "maximum": 1
+    }
+  ],
+  "growth_instructions": [],
+  "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+}

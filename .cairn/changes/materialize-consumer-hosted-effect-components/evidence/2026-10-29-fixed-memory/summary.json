@@ -1,0 +1,3930 @@
+{
+  "schema": "mantle-hosted-effects-fixed-memory-production-observation-v1",
+  "counterexample": "Actual consumer using published 8d1f700 passed complete Structural+Bytes verification and denied the original source-owned memory21/no-max declaration under the unchanged fixed-memory runtime profile. The original bundles and failed run remain untouched.",
+  "latest_preserved_callback_observation": "callback-group",
+  "final_callback_status": "Preserved callback-group passed every static producer/checker stage and actual initial admitted request execution advanced beyond prior fuel exhaustion. The separately operated run then failed the publication-boundary regression: failed publication adopted semantic state. This is not full lifecycle completion or final extension acceptance; native integration task remains open. Group source remains frozen and no rebuild is inferred.",
+  "callback_source_snapshot_boundary": "Callback-wire preparation copied the authoritative source at task49 starting 2026-10-29 01:22:11-0400. Later owner-reported formatting is distinct from this preserved source closure; successful compilation was not repeated merely for formatting.",
+  "bounded_callback_source_snapshot_boundary": "The distinct callback-bounded snapshot was copied after the explicit authoritative semantic freeze, in task labelled mantle-callback-bounded-genuine-materialization-20261029 starting 2026-10-29 01:48:19-0400. It does not replace any earlier source/artifact observation.",
+  "reuse_callback_source_snapshot_boundary": "The distinct callback-reuse snapshot was copied after explicit authoritative semantic freeze, in task labelled mantle-callback-reuse-genuine-materialization-20261029 starting 2026-10-29 02:08:00-0400. Earlier source/artifact/failed-runtime observations remain preserved.",
+  "projection_callback_source_snapshot_boundary": "The distinct callback-projection snapshot was copied after authoritative semantic freeze, in task labelled mantle-callback-projection-genuine-materialization-20261029 starting 2026-10-29 02:30:24-0400. Required src/invocation.rs was recursively copied, included in the measured closure, and compared byte-for-byte against frozen authoritative source. Every earlier snapshot and failed diagnostic remains preserved.",
+  "bitmap_callback_source_snapshot_boundary": "The distinct callback-bitmap snapshot was copied after explicit authoritative bitmap semantic freeze, in task labelled mantle-callback-bitmap-genuine-materialization-20261029 starting 2026-10-29 02:36:57-0400. Later consumer-owned source-policy repairs are not part of these measured bytes. Earlier snapshots and failed runtime diagnostics remain preserved.",
+  "rounds_callback_source_snapshot_boundary": "The distinct callback-rounds snapshot was copied after explicit authoritative semantic freeze covering compile-time BLAKE3 round schedules and consumer-owned source-policy repairs, in task labelled mantle-callback-rounds-genuine-materialization-20261029 starting 2026-10-29 02:40:46-0400. Earlier bitmap and other snapshots and all failed runtime diagnostics remain preserved.",
+  "packed_callback_source_snapshot_boundary": "The distinct callback-packed snapshot was copied after explicit authoritative bounded codec semantic freeze, in task labelled mantle-callback-packed-genuine-materialization-20261029 starting 2026-10-29 02:46:22-0400. Every prior source snapshot, bundle and failed actual runtime observation remains preserved.",
+  "scalar_callback_source_snapshot_boundary": "The distinct callback-scalar snapshot was copied after explicit authoritative BLAKE3 scalar-state semantic freeze, in task labelled mantle-callback-scalar-genuine-materialization-20261029 starting 2026-10-29 02:49:56-0400. Every earlier source snapshot, bundle, actual fuel denial and explicitly non-admitted diagnostic accounting remains preserved.",
+  "resize_callback_source_snapshot_boundary": "The distinct callback-resize snapshot was copied after explicit authoritative allocator in-place resize semantic freeze, in task labelled mantle-callback-resize-genuine-materialization-20261029 starting 2026-10-29 02:54:01-0400. Every earlier source snapshot, bundle, actual fuel denial and explicitly non-admitted diagnostic accounting remains preserved.",
+  "word_callback_source_snapshot_boundary": "The distinct callback-word snapshot was copied after explicit authoritative bounded unaligned word-codec semantic freeze, in task labelled mantle-callback-word-genuine-materialization-20261029 starting 2026-10-29 03:05:13-0400. Every earlier genuine source snapshot, bundle, actual denial and explicitly non-admitted accounting remains preserved. The separate phase-marker source copy was never used for this production bundle.",
+  "table_callback_source_snapshot_boundary": "The distinct callback-table snapshot was copied after explicit authoritative formatted table-encoder/grouped-decoder semantic freeze, in task labelled mantle-callback-table-genuine-materialization-20261029 starting 2026-10-29 03:14:10-0400. New src/packed.rs was included in the recursively measured complete source closure and independently compared byte-for-byte against the frozen authoritative member. Every prior genuine snapshot and failed actual runtime observation remains preserved.",
+  "group_callback_source_snapshot_boundary": "The distinct callback-group snapshot was copied after explicit authoritative formatted four-ASCII grouped-encoding semantic freeze, in task labelled mantle-callback-group-genuine-materialization-20261029 starting 2026-10-29 03:19:16-0400. Exact src/packed.rs and invocation.rs agreement supplements recursively measured complete source closure. Every earlier genuine snapshot and actual failed runtime observation remains preserved.",
+  "prepublication_diagnostic_boundary": "Main separately operated exact fresh content-bound artifacts through unchanged published verifier 8d1f700 before source/config correction publication. Actor completed its bounded scenarios; extension initialization remained denied in this retained attempt. These diagnostic records are not official final-cohort acceptance and do not complete the consumer integration task.",
+  "callback_wire_diagnostic_boundary": "The next separately operated callback-wire diagnostic passed initialization/start but its admitted request callback failed. Exact original command, output, admission inputs and emitted bytes remain retained under prepublication-callback-wire-diagnostic. No extension integration, runtime authority, release or archive completion is implied.",
+  "callback_fuel_diagnostic_boundary": "Main retained actual canonical denial receipt 45ad39d412759daaa01d2ba0119e776bbd7428ca34cd09d3be3327e4629ed38a reporting unchanged fuel_limit=100000 and fuel-exhausted, with no host effects or publications. Receipt-bearing diagnostic bytes remain under prepublication-callback-fuel-diagnostic; no budget/profile change or success inference is made.",
+  "callback_bounded_diagnostic_boundary": "The separately operated bounded callback still exhausted the unchanged 100000 fuel before host effects. Actual complete runtime denial receipts are retained under prepublication-callback-bounded-diagnostic. Recorded compilation was --release with source-owned opt-level=s and lto=true, not a debug build. No successful extension execution, runtime authority, budget/profile change or archive eligibility is inferred.",
+  "callback_reuse_diagnostic_boundary": "The separately operated callback-reuse still exhausted unchanged 100000 fuel before any host effect. Exact receipt-bearing diagnostic bytes remain under prepublication-callback-reuse-diagnostic; no policy, build recipe or runtime-profile relaxation and no extension-completion inference is made.",
+  "callback_projection_diagnostic_boundary": "The separately operated projection callback exhausted unchanged 100000 fuel before the first host effect, with empty effects/publications. Exact receipt-bearing diagnostic bytes remain under prepublication-callback-projection-diagnostic; no completion or policy/profile/build-recipe relaxation is inferred.",
+  "callback_bitmap_diagnostic_boundary": "Unlike earlier pre-effect denials, the separately operated bitmap callback reached its first actual host effect and canonical recording, then exhausted unchanged 100000 fuel while producing callback output. Exact complete diagnostic bytes remain under prepublication-callback-bitmap-diagnostic. This is not successful callback completion or final extension acceptance.",
+  "callback_rounds_diagnostic_boundary": "The separately operated rounds callback still exhausted unchanged product fuel100000 after its first actual host effect. Exact complete diagnostic bytes remain under prepublication-callback-rounds-diagnostic. Main separately used an out-of-policy fuel1000000 accounting binary to measure costs; that measurement is not admitted product execution, successful integration, or evidence permitting a budget/profile change.",
+  "callback_packed_diagnostic_boundary": "The separately operated packed callback still exhausted unchanged product fuel100000 after its actual host effect. Complete denied-run bytes remain under prepublication-callback-packed-diagnostic. Separately scoped out-of-policy-accounting/packed-diagnostic-phase-fuel.json measures before_host63103 and total154170, output5635 bytes, using the diagnostic higher budget only; its exit0 is expressly not admitted product execution or completion.",
+  "callback_scalar_diagnostic_boundary": "The separately operated scalar callback still exhausted unchanged product fuel100000 after its actual host effect. Complete actual denied-run bytes remain under prepublication-callback-scalar-diagnostic. Separate out-of-policy-accounting/scalar-diagnostic-phase-fuel.json measures before_host63103 and total150712, output5635 bytes, only under the diagnostic higher budget; neither exit0 nor guest_ok=true is admitted product execution or completion.",
+  "callback_resize_diagnostic_boundary": "The separately operated resize callback still exhausted unchanged product fuel100000 after its actual host effect. Complete actual denied-run bytes remain under prepublication-callback-resize-diagnostic. Separate out-of-policy-accounting/resize-diagnostic-phase-fuel.json measures before_host63103 and total149688 only under a diagnostic higher budget; this is not product admission. Additional extra-hostcall phase instrumentation is isolated outside all required product callback labels and never represents a product bundle.",
+  "callback_word_diagnostic_boundary": "The separately operated word callback still exhausted unchanged product fuel100000 after its actual host effect. Complete denied-run bytes remain under prepublication-callback-word-diagnostic. Separate out-of-policy-accounting/word-diagnostic-phase-fuel.json measures prehost68805 and total147827 solely with the diagnostic observer higher budget, not admitted product execution or completion.",
+  "callback_table_diagnostic_boundary": "The separately operated table callback was still actually denied by unchanged product fuel100000. Complete denied-run bytes remain under prepublication-callback-table-diagnostic. Separate out-of-policy-accounting/table-diagnostic-phase-fuel.json measures prehost37999 and total105949 solely under the diagnostic higher budget; being close to the boundary is not admitted execution or completion.",
+  "callback_group_diagnostic_boundary": "Main separately operated the unchanged group artifact with product fuel100000. The first admitted request executed, then the actual smoke run reported extension-smoke failed: failed publication adopted semantic state. Complete commands, reports, original short failure log, admitted request/response and replay receipts remain under prepublication-callback-group-diagnostic. Source-versus-regression root cause remains consumer-owned; neither completion nor task closure/archive is inferred.",
+  "observed_producer": {
+    "immutable_path": "/nix/store/45qrlyn0sbgilmp0ljkjhz9l2hs5ywc3-mantle-fixed-memory-observed-producer",
+    "blake3": "1e2ca789a2d4d1c196b296cecd0c28525149b66f9e3d985da3ad0d0541c364c4",
+    "source_revision": "8d1f700f78c26ed3423793e6ad36d91a6b4c8de7",
+    "boundary": "Producer code is unchanged; genuine fixture compiler configuration is the source correction published after these observations."
+  },
+  "source_correction": "Source-owned Cargo target rustflags pass the pinned admitted linker --initial-memory=2097152 and --max-memory=2097152. Generated bindings, Wasm and bundles were never patched.",
+  "observations": {
+    "neutral": {
+      "bundle_identity_blake3": "d5424befe8d17db629d4fdfe723115f5f34a12628cc6711bba392fe7ba56320e",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "d5424befe8d17db629d4fdfe723115f5f34a12628cc6711bba392fe7ba56320e",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "d7573b50cc5e5cee221e9f4aa49b772f42289484dffb1989ca68b8f81b8c5fc8",
+            "role": "source-closure",
+            "size_bytes": 14726,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+            "role": "final-portable",
+            "size_bytes": 6124,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "63153e96d108eef51832bac89ae5e038f27392daba3d52ae9f03c2a2ef5fa03d",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f7d7442f81227658b23219e693123e0e93eeb98219ebecc3692824a43b104778",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "34f5fcd9bb22c9f75f9b565a368ab0ab0121cad07e8d38328af0d81e81c28e67",
+            "role": "stage-receipt",
+            "size_bytes": 654,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f91ab7d72adc6678e1aa9e13cfb683341f1695a66547fc52ea1ef1917e3499b5",
+            "role": "stage-receipt",
+            "size_bytes": 732,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6b9a5d5be77f38be76fc45c081f0fb2e63c9f5c512fe0a28f57a59a9a34e3338",
+            "role": "stage-artifact",
+            "size_bytes": 6386,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "538c82d358bac93df3de2f1d265729efc15e62ab21a0d97f3a7eaeafcf6a3b62",
+            "role": "stage-receipt",
+            "size_bytes": 747,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6b9a5d5be77f38be76fc45c081f0fb2e63c9f5c512fe0a28f57a59a9a34e3338",
+            "role": "stage-artifact",
+            "size_bytes": 6386,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f3b1af92a713dce25c07b9f2f6a30c235e619a539126dde495222efb0df4b759",
+            "role": "stage-receipt",
+            "size_bytes": 747,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d9b880201a24e482701245378925d2cb6d4b80985cd1cbb54cac24bec6cfcee",
+            "role": "stage-artifact",
+            "size_bytes": 6609,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8fba7e4c9c25e528f5cfb544c90eb813bd94470ffd56b72fd212aa33be0d1517",
+            "role": "stage-receipt",
+            "size_bytes": 732,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d9b880201a24e482701245378925d2cb6d4b80985cd1cbb54cac24bec6cfcee",
+            "role": "stage-artifact",
+            "size_bytes": 6609,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "36ec39eef573bf97168bc8b53383412ec0bc024936460995d3c357df35aee5ce",
+            "role": "stage-receipt",
+            "size_bytes": 732,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+            "role": "stage-artifact",
+            "size_bytes": 6124,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "293e60241cd1e852118c5732a655aab968a268a4bc4fe64f4bea49f23cbf9dca",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+            "role": "stage-artifact",
+            "size_bytes": 6124,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "da6649a68d211d33e30e2a05534370c09c2df09f54d6b830a9a19fff6b013507",
+            "role": "stage-receipt",
+            "size_bytes": 819,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6e6a167014a4401b49f8f0df6e766e93fae10068e66cef19612d5156c64db6d9",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c515394d891898d16187b27319cf9cbf1440636f41e7018d607401a06232e2ac",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "96756f457e4e3093aae6006e0551a43cb9b855ca955975bfac394ae7afbe3f29",
+            "role": "stage-receipt",
+            "size_bytes": 749,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+            "role": "stage-artifact",
+            "size_bytes": 6124,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ae0f8370532a3579174e58d64acd85968b84982925a0d0330188d4ed78cafbff",
+            "role": "stage-receipt",
+            "size_bytes": 750,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d9b880201a24e482701245378925d2cb6d4b80985cd1cbb54cac24bec6cfcee",
+            "role": "stage-artifact",
+            "size_bytes": 6609,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f4501660bf459ead60d26ce79dc7055fa1664852e26a7a2f001b79a6b542d558",
+            "role": "stage-receipt",
+            "size_bytes": 753,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d9b880201a24e482701245378925d2cb6d4b80985cd1cbb54cac24bec6cfcee",
+            "role": "stage-artifact",
+            "size_bytes": 6609,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b41b617412da7c9770792328a7034c803ab298c943aee55288a5ab19ef9dcd18",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/artifacts/normalized.wasm",
+        "size_bytes": 6124
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "248d4181403c626ed406cf322a685662dcdcb838b460f1526fb2f3ef8ade0c6c",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "d7573b50cc5e5cee221e9f4aa49b772f42289484dffb1989ca68b8f81b8c5fc8",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/inputs/source",
+        "size_bytes": 14726
+      },
+      "source_copy": {
+        "digest_blake3": "d7573b50cc5e5cee221e9f4aa49b772f42289484dffb1989ca68b8f81b8c5fc8",
+        "role": "source-closure",
+        "size_bytes": 14726,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback": {
+      "bundle_identity_blake3": "99553fe5b6d78ee26553131753f93ab635d13d4e59def97faecfe02616fc2dae",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "99553fe5b6d78ee26553131753f93ab635d13d4e59def97faecfe02616fc2dae",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "2ae4fa76d2864e19f7ddf0924897ce0d070f62d53b75db867853911fd6d302e3",
+            "role": "source-closure",
+            "size_bytes": 23492,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+            "role": "final-portable",
+            "size_bytes": 19908,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e25d1d2fea25dff84539aeb5a012a360cd70f283bd6a6372b751165c20b8e6e4",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b0066549e5e67d4ad2c4b00ba454309dc583bae43900617d28d50336fe042d8d",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6d5506a0bf0944a06454cdd1934c217e6f0a9ca5a66e7672089d675b7fb1113e",
+            "role": "stage-receipt",
+            "size_bytes": 655,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a074d1b92c15cdaa18933b8578b49da981662dfd28e6ccc728e3243f60b5cbe7",
+            "role": "stage-receipt",
+            "size_bytes": 734,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a8ad86ccdd135df0ebf9b4fb284b06334bd9200771ee5730ca1104231850fc6b",
+            "role": "stage-artifact",
+            "size_bytes": 20169,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c57390643c6d09ec8da3422b7c3297253124a6ac199dc272e2d7b3156c162c42",
+            "role": "stage-receipt",
+            "size_bytes": 749,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a8ad86ccdd135df0ebf9b4fb284b06334bd9200771ee5730ca1104231850fc6b",
+            "role": "stage-artifact",
+            "size_bytes": 20169,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a821b2d6964ecc2e53785da111b5848d6fa1188c847b06942300f3756d95c380",
+            "role": "stage-receipt",
+            "size_bytes": 749,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "df33b8fcf2389815bc68d389c134c8c335a6c760331273a33156991d74110cbf",
+            "role": "stage-artifact",
+            "size_bytes": 20393,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fe9766a418883f89aad0421bbc412cd9561bbed8573df688c7b5b1d5709c41b4",
+            "role": "stage-receipt",
+            "size_bytes": 734,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "df33b8fcf2389815bc68d389c134c8c335a6c760331273a33156991d74110cbf",
+            "role": "stage-artifact",
+            "size_bytes": 20393,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b472ccb79b8f03a0270257276860ab841ccbc906b462a7bf05e9560591be0fea",
+            "role": "stage-receipt",
+            "size_bytes": 734,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+            "role": "stage-artifact",
+            "size_bytes": 19908,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "cf0f089e1b80af54fa38cd255cf257d8ccf06ac305d9a8b9d1d1bb84a6d9b5a8",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+            "role": "stage-artifact",
+            "size_bytes": 19908,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5306fe0e453efb26874aae42ede6e32d12ad324a855e8c5ab272d79547033e6f",
+            "role": "stage-receipt",
+            "size_bytes": 820,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "d00f5f72088b8f86931a36536cb9d4c7ace4aff440f5367b35a56c934ae8cec6",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "87a88a639651ba44897e58907a37094dc6afeb85cac1ec4bc12dc8f2d29f9fd0",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "95274d10d12aaedc7591de5fd0749ba90262125de2623ad15921686d653a847c",
+            "role": "stage-receipt",
+            "size_bytes": 751,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+            "role": "stage-artifact",
+            "size_bytes": 19908,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "d6f978853ee35fa05edbe615ee3296bdde996afa280ce65553e9b00a8e3c7cfa",
+            "role": "stage-receipt",
+            "size_bytes": 752,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "df33b8fcf2389815bc68d389c134c8c335a6c760331273a33156991d74110cbf",
+            "role": "stage-artifact",
+            "size_bytes": 20393,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "043c4edd878eeadc65de5f94653edc6df2f5d0f12da4f7419ae50fd5e0c809be",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "df33b8fcf2389815bc68d389c134c8c335a6c760331273a33156991d74110cbf",
+            "role": "stage-artifact",
+            "size_bytes": 20393,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "28e9d5f85c3f26fb46efbed30ec9d8bfe53085a967c39f25e1e41ca84877acf5",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/artifacts/normalized.wasm",
+        "size_bytes": 19908
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "b30c9fda2dc7908d6b19fcb56ff64d048e52534c8c1be5ba8cdc93b7f48e9655",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "2ae4fa76d2864e19f7ddf0924897ce0d070f62d53b75db867853911fd6d302e3",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/inputs/source",
+        "size_bytes": 23492
+      },
+      "source_copy": {
+        "digest_blake3": "2ae4fa76d2864e19f7ddf0924897ce0d070f62d53b75db867853911fd6d302e3",
+        "role": "source-closure",
+        "size_bytes": 23492,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-wire": {
+      "bundle_identity_blake3": "d7f11d09a6cffd0589d0cdc041ced9d9ec7f312e528ad77c7d8c3a54b72fbb6d",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "d7f11d09a6cffd0589d0cdc041ced9d9ec7f312e528ad77c7d8c3a54b72fbb6d",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "2928db8d2b1b5b110294ffedeafab7531b4935269f7684e3c2a4e762788b93fd",
+            "role": "source-closure",
+            "size_bytes": 25108,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+            "role": "final-portable",
+            "size_bytes": 21135,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9e70e63ec6ff3647b73af1de3e082fd7adfde995a418a4f9de9d6ca32356c0a8",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "977a3db6362544d85ffda8577f636673a4c9b8e5fdf1fa5bc6514788390aa689",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3a1a262eff7efdbff1b31531fe9abd1f5edb6c305907271bf89af0c76bfc9ac0",
+            "role": "stage-receipt",
+            "size_bytes": 660,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1d4c97b91dc0d0beb69ef3dae665bbb707397007636e41287b74034c05450873",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4ec0e328527bdde881b12305410acee25295b629330413784bb2c392f7d3f76e",
+            "role": "stage-artifact",
+            "size_bytes": 21396,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "868bcc099e19e806e0cbd97d49d1634f638d43b15b39fe4e3bb7031bb152a3b0",
+            "role": "stage-receipt",
+            "size_bytes": 754,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4ec0e328527bdde881b12305410acee25295b629330413784bb2c392f7d3f76e",
+            "role": "stage-artifact",
+            "size_bytes": 21396,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b7b493628e15fe79a6cdb9c5c673b29b319497b731c77bbc83f920558ae9b55f",
+            "role": "stage-receipt",
+            "size_bytes": 754,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+            "role": "stage-artifact",
+            "size_bytes": 21620,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6bb836205b2ae08afee2b97c6d4320a831c6f468ed98e5a9ba53d8e02c5f636f",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+            "role": "stage-artifact",
+            "size_bytes": 21620,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "55b152ea2654f4462459bd0be63e63736305d1344a476c73ff550d65e2950ea5",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+            "role": "stage-artifact",
+            "size_bytes": 21135,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c4138010a013481ef598489ee987ec2fdd32fca5981b3d8903a0a82e793c281b",
+            "role": "stage-receipt",
+            "size_bytes": 763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+            "role": "stage-artifact",
+            "size_bytes": 21135,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "12405df6ba64d190a8bfe3a179faa0367246030a58bc06f86e51565eefca9fcf",
+            "role": "stage-receipt",
+            "size_bytes": 825,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "06ec5d4c649c4008ddb617b1d9f9493a71d393b525c2475659f6e9334f1217c0",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8ef87d1b69f48dcf71de035c4534513ad1090122376a01f4abf02afbb3e40ba2",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "022ab7223031cbf112d3a5c8b166366a33f38296be804ebbe11f1692276efd53",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+            "role": "stage-artifact",
+            "size_bytes": 21135,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8e986ff1a973bc65b062ae8c20bad317294ea44f2ba7362fe07e5e1bf8b3a49a",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+            "role": "stage-artifact",
+            "size_bytes": 21620,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b31efee7726e3d38f995a3e2e933a2ac0adf5c8665a8c902bca69d6adba3a4dc",
+            "role": "stage-receipt",
+            "size_bytes": 760,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+            "role": "stage-artifact",
+            "size_bytes": 21620,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f07f6b03d4f2393c4e8ef2f8eeb04cf74ee49b7721d75ad5881ea6838375d7d1",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle/artifacts/normalized.wasm",
+        "size_bytes": 21135
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "ab1b2a013af7c0b85e227bdd135ee6d78b934b534a3d97b13a626f36d8b9cbe3",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "2928db8d2b1b5b110294ffedeafab7531b4935269f7684e3c2a4e762788b93fd",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle/inputs/source",
+        "size_bytes": 25108
+      },
+      "source_copy": {
+        "digest_blake3": "2928db8d2b1b5b110294ffedeafab7531b4935269f7684e3c2a4e762788b93fd",
+        "role": "source-closure",
+        "size_bytes": 25108,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-bounded": {
+      "bundle_identity_blake3": "610309f16c61c4f6c024e3fbb2d281169022466795e73b8daa3e341e6c8d9a45",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "610309f16c61c4f6c024e3fbb2d281169022466795e73b8daa3e341e6c8d9a45",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "90485770216d9692827130ab85adf1af6bb05218a966d645c1ecdd6202d9bd12",
+            "role": "source-closure",
+            "size_bytes": 26505,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c88e46109b2fd8283d37c074ae3b877d8739bc3cfe81fd8122226280964e5c8f",
+            "role": "final-portable",
+            "size_bytes": 20967,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8858c32ff33268bec241173a4b21cfbbe8c058d2c72ddd1efa03cdd9de90bce9",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "35f8d8219e1df57ea2607d240d4b8e5d0307e703f5caab0fdd73769136a4a0e2",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "008dc73c20552abc5d2264ceee3b1d1718aa135d3b1b9ad5ab6b1f6307e8ae62",
+            "role": "stage-receipt",
+            "size_bytes": 663,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1c3db67c45435bab078eef99b7e28646f179af65cb38a32fa5803696591bae5a",
+            "role": "stage-receipt",
+            "size_bytes": 742,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f4a0675a1ee08ef0ed889db81cb243d3da639caf6a6c2794697c57f35c1797c0",
+            "role": "stage-artifact",
+            "size_bytes": 21228,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "38a168058da45d9c69792b263c956343c515107c9add2573adbe1c1cbd891358",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f4a0675a1ee08ef0ed889db81cb243d3da639caf6a6c2794697c57f35c1797c0",
+            "role": "stage-artifact",
+            "size_bytes": 21228,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "399caf76407615474a6b5c3310ad163713a9dd0eeba327d4639bcccbc70ae3ac",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ea30ed6a356c7a35a3dae7f522f2d17c65bc9e5c24afa1852217d747e8aa39d3",
+            "role": "stage-artifact",
+            "size_bytes": 21452,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3e43198cce5fbb75ef89cf08f3646058a44057e2af6609fa79bf65afebc0c010",
+            "role": "stage-receipt",
+            "size_bytes": 742,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ea30ed6a356c7a35a3dae7f522f2d17c65bc9e5c24afa1852217d747e8aa39d3",
+            "role": "stage-artifact",
+            "size_bytes": 21452,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "86b044f58591c9507f3d5638553dccf304d305e67d9948368d0f6c55ae066852",
+            "role": "stage-receipt",
+            "size_bytes": 742,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c88e46109b2fd8283d37c074ae3b877d8739bc3cfe81fd8122226280964e5c8f",
+            "role": "stage-artifact",
+            "size_bytes": 20967,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "abb69cb7ca43624bea12b8adde6d6463e85b2a32ce7c95bf1471e7f267355f06",
+            "role": "stage-receipt",
+            "size_bytes": 766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c88e46109b2fd8283d37c074ae3b877d8739bc3cfe81fd8122226280964e5c8f",
+            "role": "stage-artifact",
+            "size_bytes": 20967,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dbe7f7beb9518f3859730b8c557889cba34ec9e9c6ae57da8e141bc2b7aa46f2",
+            "role": "stage-receipt",
+            "size_bytes": 828,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "7cdb5bb08dd3c016acbe01ba5704aab9b3c269fd1f2dcd56d93f181216b5746c",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f73047e0b94e34158e8f637860bc69455cccde95446b89721150af136a914417",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5fbea80e352d839f3d273d5e6838e4602aab0c49cd8d7e01dfb9e8771489d425",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c88e46109b2fd8283d37c074ae3b877d8739bc3cfe81fd8122226280964e5c8f",
+            "role": "stage-artifact",
+            "size_bytes": 20967,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a43701f92039fc3e425e7a94b9432280f3dc474cb6a7bb56b70af3f6a46711f7",
+            "role": "stage-receipt",
+            "size_bytes": 760,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ea30ed6a356c7a35a3dae7f522f2d17c65bc9e5c24afa1852217d747e8aa39d3",
+            "role": "stage-artifact",
+            "size_bytes": 21452,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "90231ec0a8e043c2d45a699231449dcf0a430cf4a6427507ac415db9e830c44c",
+            "role": "stage-receipt",
+            "size_bytes": 763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ea30ed6a356c7a35a3dae7f522f2d17c65bc9e5c24afa1852217d747e8aa39d3",
+            "role": "stage-artifact",
+            "size_bytes": 21452,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dee17fbddb869cd136ff391d1c1b17ae59ae00c9aa60040964b5e0e04895be97",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "c88e46109b2fd8283d37c074ae3b877d8739bc3cfe81fd8122226280964e5c8f",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bounded-bundle/artifacts/normalized.wasm",
+        "size_bytes": 20967
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bounded-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "5a8ca15870732566b2a7c9da34f3bc4c98ee4015cddedd0bf39f2bae8072cf44",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "90485770216d9692827130ab85adf1af6bb05218a966d645c1ecdd6202d9bd12",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bounded-bundle/inputs/source",
+        "size_bytes": 26505
+      },
+      "source_copy": {
+        "digest_blake3": "90485770216d9692827130ab85adf1af6bb05218a966d645c1ecdd6202d9bd12",
+        "role": "source-closure",
+        "size_bytes": 26505,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bounded-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-reuse": {
+      "bundle_identity_blake3": "1128375fa3e118e4e98b237fdd0cd45ed4ec8dcedc09f7221ba5507e9eae98d8",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "1128375fa3e118e4e98b237fdd0cd45ed4ec8dcedc09f7221ba5507e9eae98d8",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "b93da492c8e7e9dcc6c596d8d0ed72d5c7571ebf23f9316e7fe0b9c46cd59c5b",
+            "role": "source-closure",
+            "size_bytes": 27304,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c1249c6e8fbf9f77e5d41e099f38d498293a3fc031ac9ca5df217e19029d2a67",
+            "role": "final-portable",
+            "size_bytes": 20229,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4a026304f9d5997d4654f57ae132d544f05fd45ef551a17f578af62aef0f50d1",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dce4ce6f3590d2bb7c7359624770c64b950f7ce7bbfb19a4b86f0635a717e079",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b5cd35e149163604c77be9aa1f03375963d542ecf3c613fb03b53ddb45ab7f1e",
+            "role": "stage-receipt",
+            "size_bytes": 661,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "788b7e83d22b232952a7a0e17fdffc33f7f75f44d1082bc817b9b173869e97ee",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8cb8d24d601cdc2c5649216801acc9cc98139f12ceac3debf030465d1b03d355",
+            "role": "stage-artifact",
+            "size_bytes": 20490,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fc51bc3c72b41d3eae65524163f0cf74314c28a622af5f87ef79d1f083e3473c",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8cb8d24d601cdc2c5649216801acc9cc98139f12ceac3debf030465d1b03d355",
+            "role": "stage-artifact",
+            "size_bytes": 20490,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "28d31398dd4aac093fce6f687a94e1b67022a88fc2b6239bd50b11657213084b",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6c2e2d33e3a7e781d73d8c2630aedb72c4efc18e094a1436c7103641b927e246",
+            "role": "stage-artifact",
+            "size_bytes": 20714,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "64bf259a715e76ae485e5710c9e469ee916890bf475d7df81a9d46ff7250ab21",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6c2e2d33e3a7e781d73d8c2630aedb72c4efc18e094a1436c7103641b927e246",
+            "role": "stage-artifact",
+            "size_bytes": 20714,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "518aa7ebb7b825eb02a187b2ab66cc1107177094523f4b0098dda9f78e7e8b9d",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c1249c6e8fbf9f77e5d41e099f38d498293a3fc031ac9ca5df217e19029d2a67",
+            "role": "stage-artifact",
+            "size_bytes": 20229,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c501614a5e7ad4258cae375459a6778b56d6e9d5331473777d0c80040950623d",
+            "role": "stage-receipt",
+            "size_bytes": 764,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c1249c6e8fbf9f77e5d41e099f38d498293a3fc031ac9ca5df217e19029d2a67",
+            "role": "stage-artifact",
+            "size_bytes": 20229,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dd1ba15b64b4edb85f78452761eac38f288650eb48e751f8775b0aef83ad98f7",
+            "role": "stage-receipt",
+            "size_bytes": 826,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "565c791debe0954e6561792c020bb97216063f0b623ddd1d5ec3030efcba9032",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "21c40947d35e0856bfc91b43b86761e5e5cb7f3a182b2377d02ce7c3a0313226",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "589a13cf6ddd01965ba3febfc04e79e4bc24a504138baa77462fcb8f12f53252",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c1249c6e8fbf9f77e5d41e099f38d498293a3fc031ac9ca5df217e19029d2a67",
+            "role": "stage-artifact",
+            "size_bytes": 20229,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c0a34e1801981b631d601d1d7c0fb91de9027c1c5084a6ec764fcd0738d92fb7",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6c2e2d33e3a7e781d73d8c2630aedb72c4efc18e094a1436c7103641b927e246",
+            "role": "stage-artifact",
+            "size_bytes": 20714,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9b40122f757189bbff502cf21c74dd11014284521828f01de8c0fa7a1ff725bf",
+            "role": "stage-receipt",
+            "size_bytes": 761,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6c2e2d33e3a7e781d73d8c2630aedb72c4efc18e094a1436c7103641b927e246",
+            "role": "stage-artifact",
+            "size_bytes": 20714,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0c59051e181d505fbf3e080126c98dbd5785af3551584a5b32c32b8dd50328c2",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "c1249c6e8fbf9f77e5d41e099f38d498293a3fc031ac9ca5df217e19029d2a67",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/artifacts/normalized.wasm",
+        "size_bytes": 20229
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "6c79b59faf2355ad73416806424b576b732b1e7b5079e0a68bbb0cb28b46dcf5",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "b93da492c8e7e9dcc6c596d8d0ed72d5c7571ebf23f9316e7fe0b9c46cd59c5b",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/inputs/source",
+        "size_bytes": 27304
+      },
+      "source_copy": {
+        "digest_blake3": "b93da492c8e7e9dcc6c596d8d0ed72d5c7571ebf23f9316e7fe0b9c46cd59c5b",
+        "role": "source-closure",
+        "size_bytes": 27304,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-projection": {
+      "bundle_identity_blake3": "abaccbf6ce351f51c1800dcce445bbd7213ffd32d218def66a7c1fbf0d741c2a",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "abaccbf6ce351f51c1800dcce445bbd7213ffd32d218def66a7c1fbf0d741c2a",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "bdcc6a9c9a742592079c9d50f1efca903058c46b2fa9c62cb4e824ff1d2580f9",
+            "role": "source-closure",
+            "size_bytes": 28589,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "22365b339ced8f7f59b4496c63b475adefeefa5941d9f6ce3d9c20d4d8569c7f",
+            "role": "final-portable",
+            "size_bytes": 19586,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9f1667a312ec9c952c047a75a3cbc961d4348912ac73d9320d309bb2edafd2e1",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "09a8803dd9363599d6848cac156ab04ed500aa7d4fc8ade7da1c16aa24b891e3",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3dc5231897c8b23feeaefa2e1d8d8f8c703211503282786e52ef0fc81b246a6c",
+            "role": "stage-receipt",
+            "size_bytes": 666,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a937d8d42ab1118426b23aed1933291e908590193145400eee5cd59ef3aec998",
+            "role": "stage-receipt",
+            "size_bytes": 745,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3def004fe3916d9d8107f3a0b54aa5c92f8719daf5d14872576925fcad620b98",
+            "role": "stage-artifact",
+            "size_bytes": 19847,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "00f4f13f4dfc0fa1c63854e3dfa8e57f6842e56fcb2f60ff793986dac2bf3dff",
+            "role": "stage-receipt",
+            "size_bytes": 760,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3def004fe3916d9d8107f3a0b54aa5c92f8719daf5d14872576925fcad620b98",
+            "role": "stage-artifact",
+            "size_bytes": 19847,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "04d015007ac2a6993b1fd06c5ea830df1ae92ce2e76e0f4f4dfafc40c184eaed",
+            "role": "stage-receipt",
+            "size_bytes": 760,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "769e0eb3ce645a22cab9bd9ed3c67eed374a476611b05a246b7113b3c67b359e",
+            "role": "stage-artifact",
+            "size_bytes": 20071,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b72c0b5daeb50a6882533dd31666431911d6f6800ed7df622bf56460a37d7bbe",
+            "role": "stage-receipt",
+            "size_bytes": 745,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "769e0eb3ce645a22cab9bd9ed3c67eed374a476611b05a246b7113b3c67b359e",
+            "role": "stage-artifact",
+            "size_bytes": 20071,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9cc171e5c5206735159518d617343ea28caea7026cb07ad24e25e51dfa0b0d0e",
+            "role": "stage-receipt",
+            "size_bytes": 745,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "22365b339ced8f7f59b4496c63b475adefeefa5941d9f6ce3d9c20d4d8569c7f",
+            "role": "stage-artifact",
+            "size_bytes": 19586,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c91c586386e18abf297f4ef281da0697ca909c1514f575da9862a8d68e7d3185",
+            "role": "stage-receipt",
+            "size_bytes": 769,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "22365b339ced8f7f59b4496c63b475adefeefa5941d9f6ce3d9c20d4d8569c7f",
+            "role": "stage-artifact",
+            "size_bytes": 19586,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1757b80d3f609e4941b54992170e13c23ab6c9229111ef23600bad8183e42b2d",
+            "role": "stage-receipt",
+            "size_bytes": 831,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c6d3eb4f463797654d07fe3b9711905adb4b9dccd354a8c43d8b38c79729c299",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "cdae5474d2976a4871e73da564357179d6246861167e3e6617cbbad2fc5dc8ff",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9f6641b711b7dedfd34badda1004e839fe650985b17192db5b0ee20baf1efe0a",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "22365b339ced8f7f59b4496c63b475adefeefa5941d9f6ce3d9c20d4d8569c7f",
+            "role": "stage-artifact",
+            "size_bytes": 19586,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "800fbb4ac6213376ee9202f9807d3e1003c06c2158ee5e2511797aeb67b092d4",
+            "role": "stage-receipt",
+            "size_bytes": 763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "769e0eb3ce645a22cab9bd9ed3c67eed374a476611b05a246b7113b3c67b359e",
+            "role": "stage-artifact",
+            "size_bytes": 20071,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "506d70a65ad490624d427e7446e76feeccad166251ac13ded169485b27cb353b",
+            "role": "stage-receipt",
+            "size_bytes": 766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "769e0eb3ce645a22cab9bd9ed3c67eed374a476611b05a246b7113b3c67b359e",
+            "role": "stage-artifact",
+            "size_bytes": 20071,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c381c82a4406f2f146253968fd4f4f2155e6360d3cdbfcff810540aab573373c",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "22365b339ced8f7f59b4496c63b475adefeefa5941d9f6ce3d9c20d4d8569c7f",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-projection-bundle/artifacts/normalized.wasm",
+        "size_bytes": 19586
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-projection-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "7ba8b2e67046bae72a2866bea733660013318aa61ef4dbb4af2a6cff1d636699",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "bdcc6a9c9a742592079c9d50f1efca903058c46b2fa9c62cb4e824ff1d2580f9",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-projection-bundle/inputs/source",
+        "size_bytes": 28589
+      },
+      "source_copy": {
+        "digest_blake3": "bdcc6a9c9a742592079c9d50f1efca903058c46b2fa9c62cb4e824ff1d2580f9",
+        "role": "source-closure",
+        "size_bytes": 28589,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-projection-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-bitmap": {
+      "bundle_identity_blake3": "78067d98e0847c1d902db7bac4c52ebf7e9557232a8c2bfe2c96480575a32494",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "78067d98e0847c1d902db7bac4c52ebf7e9557232a8c2bfe2c96480575a32494",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "a10c21acc6e5ba7271c9ae39cec7b7e4235fe19ee88cfa311b2d065bd48448d0",
+            "role": "source-closure",
+            "size_bytes": 29316,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1b359652ab21a0620f234e72f796bf7ed04ce88e6884a143ca69d15fdb866fb0",
+            "role": "final-portable",
+            "size_bytes": 19803,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c82c7e9595a1043f0a13870c8c716ae6bc695b9bd1adbcfce16b51d5915bf996",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5cf7d15c21bf021cb0ff5f538f6664c341f858e1d8f4c0e52fce9e01a9dfac8c",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dc7e30551d88389f7d498f84b972972593430c0addc4fa9686b6f11183d59b67",
+            "role": "stage-receipt",
+            "size_bytes": 662,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "423c9d4741a7d894afc15e77f4b7262b95f44569ce43b7c8b6d82af6d4fca983",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3f4dbee0d321f20bdacb5066b8d1c8a17a9307d88cb3e8c7bdc06f6266d2cd1f",
+            "role": "stage-artifact",
+            "size_bytes": 20064,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e158732c9764bb0718353b9470ed6d19b924df9da25c07724c63ee652386a393",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3f4dbee0d321f20bdacb5066b8d1c8a17a9307d88cb3e8c7bdc06f6266d2cd1f",
+            "role": "stage-artifact",
+            "size_bytes": 20064,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b41a879921cce9f05cc6a0fe7a039794c2c2d1d7076c3569b0c8e5bbf94bf7f6",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "24a7e39d9478a7e90a483f6dc0a01c60b104a73a1b67f7a705be2db3fcfa2c92",
+            "role": "stage-artifact",
+            "size_bytes": 20288,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "73424ee69a8ecd4459e7502d26d6b2fe9c2aaf81abab747c8c66e670dbc291ec",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "24a7e39d9478a7e90a483f6dc0a01c60b104a73a1b67f7a705be2db3fcfa2c92",
+            "role": "stage-artifact",
+            "size_bytes": 20288,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6ede6ef4f55e941f190c0fc9073a291ebe81eee220ba8de5425fe589a9d679c3",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1b359652ab21a0620f234e72f796bf7ed04ce88e6884a143ca69d15fdb866fb0",
+            "role": "stage-artifact",
+            "size_bytes": 19803,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "69e4ab90fe8e4b321d08087eeca5b34cf21643d7269a2077c1c5ff11ccf0d5a4",
+            "role": "stage-receipt",
+            "size_bytes": 765,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1b359652ab21a0620f234e72f796bf7ed04ce88e6884a143ca69d15fdb866fb0",
+            "role": "stage-artifact",
+            "size_bytes": 19803,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "96b86dc668fc3f59e0b8b1c43a9aa69403c8c15e5ac344322fa24f111c96ac51",
+            "role": "stage-receipt",
+            "size_bytes": 827,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f2753309893f57526576bff32078b0914956e7c56c892180f35ac2d8398aa330",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6d1b37d5375022ff3589f0b7274017e83aec7f13f29bc11bf486fa2e0246c421",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "936c4ed8a24feaadb503042d19ff6204dd98ed9bf0c7eacf6b8b7335353f17b4",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1b359652ab21a0620f234e72f796bf7ed04ce88e6884a143ca69d15fdb866fb0",
+            "role": "stage-artifact",
+            "size_bytes": 19803,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "543e52af6157697e3927252b27fd635cf1238b04cf0a6ee721402698db91c9a4",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "24a7e39d9478a7e90a483f6dc0a01c60b104a73a1b67f7a705be2db3fcfa2c92",
+            "role": "stage-artifact",
+            "size_bytes": 20288,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "57ec91be1be1711c8856ffadaccb3dd1e66157b2a0e6e175d083955a33466cf1",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "24a7e39d9478a7e90a483f6dc0a01c60b104a73a1b67f7a705be2db3fcfa2c92",
+            "role": "stage-artifact",
+            "size_bytes": 20288,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fc8197da32980c93e422ea2f4234665fc33b82966c572e40f54ab388650ae278",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "1b359652ab21a0620f234e72f796bf7ed04ce88e6884a143ca69d15fdb866fb0",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bitmap-bundle/artifacts/normalized.wasm",
+        "size_bytes": 19803
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bitmap-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "4d3d205b35e0672670b642e4302523edb54a4aada9d844c505344925f285cb9e",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "a10c21acc6e5ba7271c9ae39cec7b7e4235fe19ee88cfa311b2d065bd48448d0",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bitmap-bundle/inputs/source",
+        "size_bytes": 29316
+      },
+      "source_copy": {
+        "digest_blake3": "a10c21acc6e5ba7271c9ae39cec7b7e4235fe19ee88cfa311b2d065bd48448d0",
+        "role": "source-closure",
+        "size_bytes": 29316,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bitmap-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-rounds": {
+      "bundle_identity_blake3": "041216a876fb2e1f35ec3482b213829c2e0c39ed83407d417cf8b73d44412df5",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "041216a876fb2e1f35ec3482b213829c2e0c39ed83407d417cf8b73d44412df5",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "6362adc1baa24324a665e5be1322c3e0d6a58318519ebc9e2ae54a569f6ff413",
+            "role": "source-closure",
+            "size_bytes": 29864,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a7b7fd9b3a1c009f2125702a6750dd39bddb7d6f5674ce2f5a398a5fe6e3a138",
+            "role": "final-portable",
+            "size_bytes": 22281,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "70b0e8aaa4da4a17c96a353c37f7855eddcacf3f38682d8c33162ce333d2aad1",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c1201481c7cd2cf36bb142e487249ba2534e769abe99448f38cd7d9ff0fe13a6",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "7bf95ec34f500d1fe20a0d1ad197b2660b9c8a93aa5e34ff8efb3c7b6d071883",
+            "role": "stage-receipt",
+            "size_bytes": 662,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2f5837b372286fe3bf43875201b196ef520931db32af7493b4038ecbf6b91418",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb68999cd0e4922f2e6577d8e79d323fbfe5d82031e5a5f4d3b5f76c180ad1e8",
+            "role": "stage-artifact",
+            "size_bytes": 22542,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1b45babf5244a5a0af78f7e5d25a19e6eb08b7027a8df1ba44326b9206498d49",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb68999cd0e4922f2e6577d8e79d323fbfe5d82031e5a5f4d3b5f76c180ad1e8",
+            "role": "stage-artifact",
+            "size_bytes": 22542,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d2d1672ae622924f48ae38e28f91b6e7e4946979ed0b1f6b88af625cf454677",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "51fe98c122443fd645fe4f4411c5f330b626f9013fe79d2794adb9b5d601064b",
+            "role": "stage-artifact",
+            "size_bytes": 22766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "07b18756577b00a9879e6bb19ae229a27c0b6b25b5c2874a5b36efbcc1f8ed22",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "51fe98c122443fd645fe4f4411c5f330b626f9013fe79d2794adb9b5d601064b",
+            "role": "stage-artifact",
+            "size_bytes": 22766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3545ecd608f8ceb0606ac29cf5300eaf7867acae790b670e307dda31070319db",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a7b7fd9b3a1c009f2125702a6750dd39bddb7d6f5674ce2f5a398a5fe6e3a138",
+            "role": "stage-artifact",
+            "size_bytes": 22281,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "118342d0e4d9911b6fc9684033bc7431e262f4c45d4d0f3bae2f56b208f92540",
+            "role": "stage-receipt",
+            "size_bytes": 765,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a7b7fd9b3a1c009f2125702a6750dd39bddb7d6f5674ce2f5a398a5fe6e3a138",
+            "role": "stage-artifact",
+            "size_bytes": 22281,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "7765fd05682d1ebe0c7b52d6a8b11770bf15bc4fb63e0363a56cfc61336378b2",
+            "role": "stage-receipt",
+            "size_bytes": 827,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4be27a6e70077015b8070ed48814701e8677d87f855af3e82499031790b9124c",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8c350740857f307acc541fd4e87742bca2d13157ecd188958d86d8104dda14df",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "969d2f79582ce6ac9667868603bd17a34de0d3a2f8220b613f87dd73e91e856c",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a7b7fd9b3a1c009f2125702a6750dd39bddb7d6f5674ce2f5a398a5fe6e3a138",
+            "role": "stage-artifact",
+            "size_bytes": 22281,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "38de78fda7def1de4a7b3d278273dd6dbb3927d76b45127350909042e2d981c2",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "51fe98c122443fd645fe4f4411c5f330b626f9013fe79d2794adb9b5d601064b",
+            "role": "stage-artifact",
+            "size_bytes": 22766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fbb4b31fe2c49a1a2fa256bbad311832fbfdbb85a538036f13789b54c358e081",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "51fe98c122443fd645fe4f4411c5f330b626f9013fe79d2794adb9b5d601064b",
+            "role": "stage-artifact",
+            "size_bytes": 22766,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8da7d45baea9aa5ef663990dd4b3dde0756f8a66eab87a5fa6c94cb054da4389",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "a7b7fd9b3a1c009f2125702a6750dd39bddb7d6f5674ce2f5a398a5fe6e3a138",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/artifacts/normalized.wasm",
+        "size_bytes": 22281
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "372f419e3102df70fdd5ca90949663f63fb04498c5317e4afb47aba545fa8f28",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "6362adc1baa24324a665e5be1322c3e0d6a58318519ebc9e2ae54a569f6ff413",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/inputs/source",
+        "size_bytes": 29864
+      },
+      "source_copy": {
+        "digest_blake3": "6362adc1baa24324a665e5be1322c3e0d6a58318519ebc9e2ae54a569f6ff413",
+        "role": "source-closure",
+        "size_bytes": 29864,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-packed": {
+      "bundle_identity_blake3": "133f4a9705ed31d233e24f5b64ac0e6822f2d8c3a13b05c4a31761cde4d4859f",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "133f4a9705ed31d233e24f5b64ac0e6822f2d8c3a13b05c4a31761cde4d4859f",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "a785a4dd5c9c8e07dba866c46a2ab32fc01ed240c2097b5ef627e5e31383d16a",
+            "role": "source-closure",
+            "size_bytes": 30920,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "77ce3511afd97fb7d2651bfabe9caad455fd4ed1878744a0bad51e9a824d165e",
+            "role": "final-portable",
+            "size_bytes": 21919,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "05ebd4f6c434631103e380c261c5a0bdcdfbc97bed24b862cee46c04eebae4a8",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "98aca02c0aaa85d2f4216d08dde65489bbd32dfd81c5fcccf1ebcb0c7f438820",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "afa6ac854686f0654364fc4160d700a7db6d3a41ad47a318e01c1a3b33328f5d",
+            "role": "stage-receipt",
+            "size_bytes": 662,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a4dab878591344bdc84c059c0868e39b09cc3ef50acb9a564fad431283498125",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "822b0d52eb61b3e31e6c03aef23b604b11972076bdf96772a5d53eb4261b7e20",
+            "role": "stage-artifact",
+            "size_bytes": 22180,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "76700c08de0e379bf49dea4e2bc61cf550e75e2e015205f79319125d50c09c84",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "822b0d52eb61b3e31e6c03aef23b604b11972076bdf96772a5d53eb4261b7e20",
+            "role": "stage-artifact",
+            "size_bytes": 22180,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "acfb3358cdbffa29d7efd9a7c5ac2258f66c380b88da70e764889be84d56d684",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3442af02a7727d4dbf464927a64d58c9721507ce46f3d9a130b0e467c529d89a",
+            "role": "stage-artifact",
+            "size_bytes": 22404,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1da87e8882a09cdade845eecae42cc25d742e8758ce003980dd6714ecc66272c",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3442af02a7727d4dbf464927a64d58c9721507ce46f3d9a130b0e467c529d89a",
+            "role": "stage-artifact",
+            "size_bytes": 22404,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fa9d0223ecb8bd7d1dc193b0eaec43be4135f002becb312b2d593430a633cafb",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "77ce3511afd97fb7d2651bfabe9caad455fd4ed1878744a0bad51e9a824d165e",
+            "role": "stage-artifact",
+            "size_bytes": 21919,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c42f59a787d4f04d2402c524fcf301eb9288d113749fb2a242a412d0bf106cc4",
+            "role": "stage-receipt",
+            "size_bytes": 765,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "77ce3511afd97fb7d2651bfabe9caad455fd4ed1878744a0bad51e9a824d165e",
+            "role": "stage-artifact",
+            "size_bytes": 21919,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "409442dc6a9e1b82479cba1a7f6da120d85b247330ad1652dafb92adf33ae5f0",
+            "role": "stage-receipt",
+            "size_bytes": 827,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "342b23bb0b60f56ada75cf49f759ecd109f01afa4203513be873af6315ec5a40",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "62a74ee29d66ac8e91cfca4ad9b5dcb5e5d87f8c176931016e1b9ec99d7b8dab",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4ae1ed4f793dc892e3deb693fe2210e7fc79c97e5e93fdc2e9ab3817310c83c8",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "77ce3511afd97fb7d2651bfabe9caad455fd4ed1878744a0bad51e9a824d165e",
+            "role": "stage-artifact",
+            "size_bytes": 21919,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e387ced2246fe431f4b28faaf75bbe46f763cc455cc4366194fabe5187bb733a",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3442af02a7727d4dbf464927a64d58c9721507ce46f3d9a130b0e467c529d89a",
+            "role": "stage-artifact",
+            "size_bytes": 22404,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "664da5ee4737e4664479070d2bc8a827b08a1537d2477390de7ab202dda54efc",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3442af02a7727d4dbf464927a64d58c9721507ce46f3d9a130b0e467c529d89a",
+            "role": "stage-artifact",
+            "size_bytes": 22404,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3d24624a7ea2f6fdcc910c342156cf070f3406a3b2630e654788726c1592b296",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "77ce3511afd97fb7d2651bfabe9caad455fd4ed1878744a0bad51e9a824d165e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-packed-bundle/artifacts/normalized.wasm",
+        "size_bytes": 21919
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-packed-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "4728d9d6e415cc27786227dfa99db5c0a1312a00dec019fbb39b53536927effb",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "a785a4dd5c9c8e07dba866c46a2ab32fc01ed240c2097b5ef627e5e31383d16a",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-packed-bundle/inputs/source",
+        "size_bytes": 30920
+      },
+      "source_copy": {
+        "digest_blake3": "a785a4dd5c9c8e07dba866c46a2ab32fc01ed240c2097b5ef627e5e31383d16a",
+        "role": "source-closure",
+        "size_bytes": 30920,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-packed-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-scalar": {
+      "bundle_identity_blake3": "ea9e7685b79fae7e07d83c33d844af25dfc7d04d3ed4b6882e80db7516872b8a",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "ea9e7685b79fae7e07d83c33d844af25dfc7d04d3ed4b6882e80db7516872b8a",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "dbb9343d5d67b5eccf6e764e0f0426332fbf9593a803dc0223120fadb8eea7f7",
+            "role": "source-closure",
+            "size_bytes": 31195,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b365cb5735427148b08191730d4f2f75be90c75e13f048a074dcdf584b494835",
+            "role": "final-portable",
+            "size_bytes": 21801,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8054faae465201b1f0d8bbba99cf266b85f4571436cc485c943014de6ae54d72",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1535161981234cf16800149296e324ca7e07fee85637709d87897cf3cfb12aac",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "569e05121c0ed301ce7fe97c9e45d6f72ec8d05f154c054fa22130268fb4ee4c",
+            "role": "stage-receipt",
+            "size_bytes": 662,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6090b33c1b5fddbf8d552afa0e41a8185ed7b1843eac8bd754e0082ab5738582",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fc860bff776be5c50b312d8e961355a35a12f323f2b253add67f73e6923bcb3c",
+            "role": "stage-artifact",
+            "size_bytes": 22062,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "7fb3bc6b48f7bc3484dd36ffd2b54f76e4f09942c34a289ce051fd3ad64c4ff8",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fc860bff776be5c50b312d8e961355a35a12f323f2b253add67f73e6923bcb3c",
+            "role": "stage-artifact",
+            "size_bytes": 22062,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dfaa7104158010c717acd9afe94ad111b55898e3479c2e3ff7f941856d25aace",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fddd255d16c530bf03a7a452439c5621275a1fb7d164db15689424186f9b1320",
+            "role": "stage-artifact",
+            "size_bytes": 22286,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2a8a8c37ccd7634b28df34a90098687e85ef7247f4f23c2c8032a9e29a9e2174",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fddd255d16c530bf03a7a452439c5621275a1fb7d164db15689424186f9b1320",
+            "role": "stage-artifact",
+            "size_bytes": 22286,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e5418ab9267280486b8f0ba8ee418fc1f7cf736e4d70b994c6acc3854b5292e5",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b365cb5735427148b08191730d4f2f75be90c75e13f048a074dcdf584b494835",
+            "role": "stage-artifact",
+            "size_bytes": 21801,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "314e1f04da79b6a0da515ced999d1d269c84873d1174cb02865e12826f26176b",
+            "role": "stage-receipt",
+            "size_bytes": 765,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b365cb5735427148b08191730d4f2f75be90c75e13f048a074dcdf584b494835",
+            "role": "stage-artifact",
+            "size_bytes": 21801,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2649713df072fb5f048b002f3645a0994619bff84ab57f585d6c617d8f00203c",
+            "role": "stage-receipt",
+            "size_bytes": 827,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c8cc44c8b8974cb5d5c6db21da1d1d701c90773a7b2ce6c942b749ce0febcf0b",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "cf31b8ac676d41682d0161c72b9f720f4ca7f2707237377a1a7c9e5f817b2bd5",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5d5c6b6b4d6ad23906b3e81a862bd6126ecc01b68b92b10de1a69b77183edf3f",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b365cb5735427148b08191730d4f2f75be90c75e13f048a074dcdf584b494835",
+            "role": "stage-artifact",
+            "size_bytes": 21801,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dc68b2ce1b2a4f7f7ba32607e11153fe587852ed37645e18dd77a9748328a7eb",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fddd255d16c530bf03a7a452439c5621275a1fb7d164db15689424186f9b1320",
+            "role": "stage-artifact",
+            "size_bytes": 22286,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4064d42c228a7fa8408353b8e32bbce587935f81afbecde29cd013d142080122",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fddd255d16c530bf03a7a452439c5621275a1fb7d164db15689424186f9b1320",
+            "role": "stage-artifact",
+            "size_bytes": 22286,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "4a6cffbb7ff76ffc84a9edaf923568cad90c42730313775f6d4fc117206f8598",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "b365cb5735427148b08191730d4f2f75be90c75e13f048a074dcdf584b494835",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/artifacts/normalized.wasm",
+        "size_bytes": 21801
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "ef43e33dbbc02a9f16fa3b49548cb1df13de8d84fa96384115424aa332d8ba92",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "dbb9343d5d67b5eccf6e764e0f0426332fbf9593a803dc0223120fadb8eea7f7",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/inputs/source",
+        "size_bytes": 31195
+      },
+      "source_copy": {
+        "digest_blake3": "dbb9343d5d67b5eccf6e764e0f0426332fbf9593a803dc0223120fadb8eea7f7",
+        "role": "source-closure",
+        "size_bytes": 31195,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-resize": {
+      "bundle_identity_blake3": "14c909b8c114d728c9b5b52fac84ca714d4963bbceb3c38e502898fd12f67cff",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "14c909b8c114d728c9b5b52fac84ca714d4963bbceb3c38e502898fd12f67cff",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "7467a81c5c3795a1eddbe558598274f15cf9cbab2b13491c78c589518cc2b2cf",
+            "role": "source-closure",
+            "size_bytes": 32882,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "16d5487b3705371209395cccf2c565e4e65cbb46cec1bdb984eada1a528a0666",
+            "role": "final-portable",
+            "size_bytes": 22079,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e328045ae3321b9245bba6980bad4439e22523747449f9f33e1a8a356c48952b",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5928d569e392773f2d80184546907347a11d5ba1b42279b8b76f768c199276da",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "83932345e6af76a42eb8e0cf33e1ca80fd88e504927ac998adff60c591e65934",
+            "role": "stage-receipt",
+            "size_bytes": 662,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1faddfa441dd192aee24951678f17cb91679a453f4cbe0103cf397a822f8797d",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "34d9dcbcc82e60c1542707624efee9f7f924199a6975f33a8f781470f0026a1d",
+            "role": "stage-artifact",
+            "size_bytes": 22340,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3e9a5bd0e7ad76fb48443686f20b9ed5152d728c3bc0aa8c2017394e3cf4a3b5",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "34d9dcbcc82e60c1542707624efee9f7f924199a6975f33a8f781470f0026a1d",
+            "role": "stage-artifact",
+            "size_bytes": 22340,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1f01ffd7bbd3f3f57a098208fac310bf9069038b9994c675da60aeb83530d159",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "60ce422a05b0029a54d2b45b5162c69d8b61000a74c465df14856dbe27844479",
+            "role": "stage-artifact",
+            "size_bytes": 22564,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "38d0bb84a43caf9a215a7f7a935891c7985c88fa8c4cc83de2cebc973fb93543",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "60ce422a05b0029a54d2b45b5162c69d8b61000a74c465df14856dbe27844479",
+            "role": "stage-artifact",
+            "size_bytes": 22564,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ae5633643321714ac10e40043a40e597e9b294c431ae037a9bd25ca02e746a6f",
+            "role": "stage-receipt",
+            "size_bytes": 741,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "16d5487b3705371209395cccf2c565e4e65cbb46cec1bdb984eada1a528a0666",
+            "role": "stage-artifact",
+            "size_bytes": 22079,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b919f33e31f81a45816181fe0f1f84524a3e7c37599de054d82b0407406251ed",
+            "role": "stage-receipt",
+            "size_bytes": 765,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "16d5487b3705371209395cccf2c565e4e65cbb46cec1bdb984eada1a528a0666",
+            "role": "stage-artifact",
+            "size_bytes": 22079,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6ea183f9af8e6e0025929636be697be8a8816605d0ce60fcbdf29bb15216df65",
+            "role": "stage-receipt",
+            "size_bytes": 827,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e4683076b9ae08bcb966fcb200582bfd35bd163374192c830282375a4bf63337",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2084c6e223c199bc7432a30afd2d439d509f406fbea006322f13afcc9dd5600d",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fea038e6d5297a05423ac4816743099cad65389aa7f0ef89afa10987385d8b3f",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "16d5487b3705371209395cccf2c565e4e65cbb46cec1bdb984eada1a528a0666",
+            "role": "stage-artifact",
+            "size_bytes": 22079,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "7675aa9cabc26d2128084c17dc492dc6e1ac08707df6415013181a8a30a2525d",
+            "role": "stage-receipt",
+            "size_bytes": 759,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "60ce422a05b0029a54d2b45b5162c69d8b61000a74c465df14856dbe27844479",
+            "role": "stage-artifact",
+            "size_bytes": 22564,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c65fbf421b63affacbe8076e4c00e5a317606dfcfdef9893609fa2871eb30932",
+            "role": "stage-receipt",
+            "size_bytes": 762,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "60ce422a05b0029a54d2b45b5162c69d8b61000a74c465df14856dbe27844479",
+            "role": "stage-artifact",
+            "size_bytes": 22564,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "19b84226dd2513cadf49722791c88cb7985129cc6eed5ab114404639d1131233",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "16d5487b3705371209395cccf2c565e4e65cbb46cec1bdb984eada1a528a0666",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-bundle/artifacts/normalized.wasm",
+        "size_bytes": 22079
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "66e286e2ced33730c2b84cc454f88a044b3f979f8bf39e13c8f25fb25bf1be08",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "7467a81c5c3795a1eddbe558598274f15cf9cbab2b13491c78c589518cc2b2cf",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-bundle/inputs/source",
+        "size_bytes": 32882
+      },
+      "source_copy": {
+        "digest_blake3": "7467a81c5c3795a1eddbe558598274f15cf9cbab2b13491c78c589518cc2b2cf",
+        "role": "source-closure",
+        "size_bytes": 32882,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-word": {
+      "bundle_identity_blake3": "342b48abdc90ab6f596ef051e36e9f9f1eadffa2101781bc1c5c5008c5c53aea",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "342b48abdc90ab6f596ef051e36e9f9f1eadffa2101781bc1c5c5008c5c53aea",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "5fd4abf7f5b9c6c68f3465a22f6b79b81800a9691be56849b2a59de23d785256",
+            "role": "source-closure",
+            "size_bytes": 33497,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0a39519a76e7db48896864f6bf6afe58ab338ef2ae74c082065e4b5d7b486984",
+            "role": "final-portable",
+            "size_bytes": 22278,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "07ba983439b185d826ce2426aad5b8b9ae58a3323aa30af653a6f2f00a2717f2",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "55d457fd86e977bd40cfe29cbd5868137e2c535cca2e22962e2c1aa91dac18cc",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2cdcec3fb349ead897fb347136f73c7e8d1083ccac49646dacedfea2afadcf16",
+            "role": "stage-receipt",
+            "size_bytes": 660,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "bb43785f8588414c5e019c323141c3a26ec1231cd8f9b65ea6c05112724682e1",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "adc5ba136d51f6c7aaa3db6f76e2af5f7023aa94c07db383651212abab625ec0",
+            "role": "stage-artifact",
+            "size_bytes": 22539,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "6904333e98765619747e55f26caa9958b59e1e044cf93b7ef2ad5236e3971cd2",
+            "role": "stage-receipt",
+            "size_bytes": 754,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "adc5ba136d51f6c7aaa3db6f76e2af5f7023aa94c07db383651212abab625ec0",
+            "role": "stage-artifact",
+            "size_bytes": 22539,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0eaf8101cb947a12637b4eda51ad4778930449ba397fb8f8281e203ea7943feb",
+            "role": "stage-receipt",
+            "size_bytes": 754,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "42d50043fe337f997ab7ede6a667260fa4ff829d3e6c7f3662d6237ba099ec56",
+            "role": "stage-artifact",
+            "size_bytes": 22763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "198f96ad47b682ba7f7651520f0878ffe48c2759b028f215a199905cde143830",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "42d50043fe337f997ab7ede6a667260fa4ff829d3e6c7f3662d6237ba099ec56",
+            "role": "stage-artifact",
+            "size_bytes": 22763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "d1d283911e67de7a409f22b5ae76a8e85e127e1e75b6ddc2510ed004c75b4a24",
+            "role": "stage-receipt",
+            "size_bytes": 739,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0a39519a76e7db48896864f6bf6afe58ab338ef2ae74c082065e4b5d7b486984",
+            "role": "stage-artifact",
+            "size_bytes": 22278,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fe31fac869d1f133cb927829d4c440534e0cf6dd53e2a5d09601567e2ef8bbc7",
+            "role": "stage-receipt",
+            "size_bytes": 763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0a39519a76e7db48896864f6bf6afe58ab338ef2ae74c082065e4b5d7b486984",
+            "role": "stage-artifact",
+            "size_bytes": 22278,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a718624efa7e2c2052ab8dc8ddb1a74a8538db6c5111b0ebe85ad61e7749657d",
+            "role": "stage-receipt",
+            "size_bytes": 825,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "2d83981fcef68d0f33f756aa9ba7aacf3f15f63f2e8fb9ec29cdb04a0def3eaf",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "860a6a47e7a65ddd926f905fbaf7445ef7177259ef05078f64e26544b09c126b",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f1dcdc1c24c7dfa3cc0420154b05401fb449f08d22504e97245ebbb01eaccb6f",
+            "role": "stage-receipt",
+            "size_bytes": 756,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0a39519a76e7db48896864f6bf6afe58ab338ef2ae74c082065e4b5d7b486984",
+            "role": "stage-artifact",
+            "size_bytes": 22278,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8d9042da5bd17ed48e4982f7f4c0efa3b74ce6b5817b6eb2f504e11603378dde",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "42d50043fe337f997ab7ede6a667260fa4ff829d3e6c7f3662d6237ba099ec56",
+            "role": "stage-artifact",
+            "size_bytes": 22763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "538e3d575a726bbc66e57483ed5a5a0704c9cb1d11d1cabcf99768e1191ab735",
+            "role": "stage-receipt",
+            "size_bytes": 760,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "42d50043fe337f997ab7ede6a667260fa4ff829d3e6c7f3662d6237ba099ec56",
+            "role": "stage-artifact",
+            "size_bytes": 22763,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "66981d2b36bfef18847060423f3b67edf8adc456236af6ef684b4231f045dfba",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "0a39519a76e7db48896864f6bf6afe58ab338ef2ae74c082065e4b5d7b486984",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/artifacts/normalized.wasm",
+        "size_bytes": 22278
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "7a6b0cd0f8058996165631e60b0ef6000af61b9343df0e22fd14a83fbdca953c",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "5fd4abf7f5b9c6c68f3465a22f6b79b81800a9691be56849b2a59de23d785256",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/inputs/source",
+        "size_bytes": 33497
+      },
+      "source_copy": {
+        "digest_blake3": "5fd4abf7f5b9c6c68f3465a22f6b79b81800a9691be56849b2a59de23d785256",
+        "role": "source-closure",
+        "size_bytes": 33497,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-table": {
+      "bundle_identity_blake3": "47d0e9b93204e582eb1f5faee93b493adfffe34ed2c41a2ba2dbf5de2687e503",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "47d0e9b93204e582eb1f5faee93b493adfffe34ed2c41a2ba2dbf5de2687e503",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "700922e02e953dd9ce8c6aff81a1e66d7e5cf397683098feb605faf3ea0dd7c3",
+            "role": "source-closure",
+            "size_bytes": 35195,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be",
+            "role": "final-portable",
+            "size_bytes": 24670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f1cd501de1e32e8feee3d7a4d8a733502231ffaf550f14c1e56d3892037ccbeb",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5d48043c8873e5e925442f60d66223bd7d39dd72090d01bfdd61ee1bbf805e23",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "988415c637e1126e6b3bd79a2b8465323af0df322f33af1495001fef76033b0b",
+            "role": "stage-receipt",
+            "size_bytes": 661,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "22c96994958f747d399fd23ea5bb73ca28fb7c0e9f059aa710e3e7c5d805e713",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ce0072b4c88fbf2fcd87dba9e0f83f12c8795873bf7e6741382c8d059cd62d21",
+            "role": "stage-artifact",
+            "size_bytes": 24931,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "802cec458f26fff240da04c6e77b2ae21f44752fe1f004030b38fa6fa58b210f",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "ce0072b4c88fbf2fcd87dba9e0f83f12c8795873bf7e6741382c8d059cd62d21",
+            "role": "stage-artifact",
+            "size_bytes": 24931,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "61e2d3d7ddce80ac0516bdcc665f28179abcfecdd7cd0cf14c8f6f5c20da9e1c",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1aa81ce9c0ab4fd4d1703c548502dcea0e4878e43b6834344681b38853323290",
+            "role": "stage-artifact",
+            "size_bytes": 25155,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3bb3b892c70ea910bceb1dda226cb12452d50fedc58e55a6d5ee65da7e7bda3f",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1aa81ce9c0ab4fd4d1703c548502dcea0e4878e43b6834344681b38853323290",
+            "role": "stage-artifact",
+            "size_bytes": 25155,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5534cc2f6d9eb7cc327a949d1c8feeacd12e8d228a7b6379b736718bbe66cb94",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be",
+            "role": "stage-artifact",
+            "size_bytes": 24670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "53c80d8c376f79227f603d21ba4098af070c423d34157d65413615f6ceab8fd6",
+            "role": "stage-receipt",
+            "size_bytes": 764,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be",
+            "role": "stage-artifact",
+            "size_bytes": 24670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "d422776aabc96c2779fe33ddc85fd67d21899adfe12b07048195ceb7b55d50ee",
+            "role": "stage-receipt",
+            "size_bytes": 826,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9c80b0f95e33ab2b0ebf1947e7836cf099d55e430be608fdb9512e69c3e8d75b",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fbd53a9cf2a39c9ad5544fa93e59c556d6a3852a516103b58840ca87bed3240c",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "3930d17fd62d18f556c0444efd585aa596bc42759432cc1645921bd066410f49",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be",
+            "role": "stage-artifact",
+            "size_bytes": 24670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5e676bca30552109b7c82746eae5e2dfac3ccd1f2ffc38f77dbb72326be56104",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1aa81ce9c0ab4fd4d1703c548502dcea0e4878e43b6834344681b38853323290",
+            "role": "stage-artifact",
+            "size_bytes": 25155,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a8190e3146007fab95f7e79f8feb14494e69232bd26235a423e66c42da412668",
+            "role": "stage-receipt",
+            "size_bytes": 761,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "1aa81ce9c0ab4fd4d1703c548502dcea0e4878e43b6834344681b38853323290",
+            "role": "stage-artifact",
+            "size_bytes": 25155,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "dcf8bb7364d493f921f2a825625f23a909e706e7a2f1fed4427d60fe2b3afc3b",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-table-bundle/artifacts/normalized.wasm",
+        "size_bytes": 24670
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-table-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "2d599f5c4ff5d9c49eb57d5152bd503e443f4a5419e47124b9a7906c8870e7f4",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "700922e02e953dd9ce8c6aff81a1e66d7e5cf397683098feb605faf3ea0dd7c3",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-table-bundle/inputs/source",
+        "size_bytes": 35195
+      },
+      "source_copy": {
+        "digest_blake3": "700922e02e953dd9ce8c6aff81a1e66d7e5cf397683098feb605faf3ea0dd7c3",
+        "role": "source-closure",
+        "size_bytes": 35195,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-table-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    },
+    "callback-group": {
+      "bundle_identity_blake3": "ac76d2414b7f11458ed805efed5aec23aff9dbc7187d452af35c9f6cecc8f4fd",
+      "cohort_blake3": "703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306",
+      "consumer_report": {
+        "blockers": [],
+        "bundle_identity_blake3": "ac76d2414b7f11458ed805efed5aec23aff9dbc7187d452af35c9f6cecc8f4fd",
+        "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+        "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+        "layers_completed": [
+          "structural",
+          "bytes"
+        ],
+        "members": [
+          {
+            "digest_blake3": "30c481f89e36ffb5566ae14a9f493e83e735d0bfdc94c9211d19ed91987afd09",
+            "role": "source-closure",
+            "size_bytes": 36581,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "lock",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+            "role": "final-portable",
+            "size_bytes": 24816,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+            "role": "wit-input",
+            "size_bytes": 670,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "31c0acec9ea8c8ea2b2bedfd05aba52347b9be79fef584d06ee17240483d4ff1",
+            "role": "stage-receipt",
+            "size_bytes": 470,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "95b27994d9bc083eb6636040bcbc25c78495491fcbba7969eeaaf9b49f68d13c",
+            "role": "stage-receipt",
+            "size_bytes": 526,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "49091c245c7354377baa64cf50c820c51d5f56adb2134eaef1ed12292047a02b",
+            "role": "stage-receipt",
+            "size_bytes": 661,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+            "role": "stage-artifact",
+            "size_bytes": 107,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "b0480265e4576ad500eb4078b4aa25a59c87e0f9d629d23db4f46b86504fb11f",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f4db90988b405e9b0bc157720e110943e35d64c1c0f280b2feff8b917b30076f",
+            "role": "stage-artifact",
+            "size_bytes": 25077,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "acf3c0e71ba38c88df8fab4b9b6f98a0122f086248edb98f86f3ac8ccbfc0392",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "f4db90988b405e9b0bc157720e110943e35d64c1c0f280b2feff8b917b30076f",
+            "role": "stage-artifact",
+            "size_bytes": 25077,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "184660825e1d045a97d8c8238352a440309f5665f181d7315973796355d04fdf",
+            "role": "stage-receipt",
+            "size_bytes": 755,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "082541b11435e5cac2786b23f5f65ef336f7178cbe2248a9d43fa3f34e6238c4",
+            "role": "stage-artifact",
+            "size_bytes": 25301,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "0602d5217853610bd830d1c5bc8b95076f91124c4af01d7b60103fc4a5616176",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "082541b11435e5cac2786b23f5f65ef336f7178cbe2248a9d43fa3f34e6238c4",
+            "role": "stage-artifact",
+            "size_bytes": 25301,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "fe8c2614759eaed613b6eb0bd09a0cf664d1897224963b9aa7031fd3f064dcae",
+            "role": "stage-receipt",
+            "size_bytes": 740,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+            "role": "stage-artifact",
+            "size_bytes": 24816,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "37c28c93db3ee4345cc7a91411923fdd40d2e732f4c3b6a1ed439aee89901189",
+            "role": "stage-receipt",
+            "size_bytes": 764,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+            "role": "stage-artifact",
+            "size_bytes": 24816,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "00d5964062164a8567bd9d65712808f522e8bbd78a212993aac3f1e61f44cdfc",
+            "role": "stage-receipt",
+            "size_bytes": 826,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "14cf5a5fc2759449bea64098664a59a6316222eb9d3d33f2cbf8af3f93130c6e",
+            "role": "stage-artifact",
+            "size_bytes": 5048,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a31c357d49cb70fed72fc7e2ddf94d81cf31554edf52987abd0cc9aa6b3a4645",
+            "role": "stage-receipt",
+            "size_bytes": 588,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "a400048084e6d526b99a4c3ca2ffa651a12dd593b51ac1edc2f544d8049f3266",
+            "role": "stage-receipt",
+            "size_bytes": 757,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+            "role": "stage-artifact",
+            "size_bytes": 24816,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "61e6bdeeb1f4864145c53925a20fe22809f0e10ea27d37138c227a7b2cf308cd",
+            "role": "stage-receipt",
+            "size_bytes": 758,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "082541b11435e5cac2786b23f5f65ef336f7178cbe2248a9d43fa3f34e6238c4",
+            "role": "stage-artifact",
+            "size_bytes": 25301,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "8c1c96ecb51830c4a03a130824274e665bead49d63c6c2253cd63e09963d398f",
+            "role": "stage-receipt",
+            "size_bytes": 761,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "082541b11435e5cac2786b23f5f65ef336f7178cbe2248a9d43fa3f34e6238c4",
+            "role": "stage-artifact",
+            "size_bytes": 25301,
+            "status": "matched"
+          },
+          {
+            "digest_blake3": "e798bd646d0138c50bfb3ad9ae2d28a73fdf44b990eef7f5b307579f4835d9ba",
+            "role": "stage-receipt",
+            "size_bytes": 474,
+            "status": "matched"
+          }
+        ],
+        "non_claims": [
+          "not-runtime-authority",
+          "not-release-eligibility",
+          "not-source-trust",
+          "not-compiler-correctness",
+          "not-component-behavior",
+          "not-runtime-isolation"
+        ],
+        "schema": "mantle-wasm-consumer-verification-report-v1",
+        "status": "verified"
+      },
+      "execution_report_verified": true,
+      "expected_octet_profile_blake3": "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+      "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+      "final_portable": {
+        "digest_blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-bundle/artifacts/normalized.wasm",
+        "size_bytes": 24816
+      },
+      "lock": {
+        "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-bundle/artifacts/wkg.lock",
+        "size_bytes": 107
+      },
+      "non_claim": "No consumer runtime invocation, host authority, release eligibility or downstream execution is asserted by this static observer",
+      "report_blake3": "e57693aa290261baee9e8facfeed24e5500836034bf2771fb3f84a0f9606594b",
+      "runtime_validation": {
+        "mode": "consumer-host-required",
+        "required_imports": [
+          "effect-request"
+        ],
+        "wit_package": "molten:component-effects",
+        "wit_world": "actor-effects"
+      },
+      "source_closure": {
+        "digest_blake3": "30c481f89e36ffb5566ae14a9f493e83e735d0bfdc94c9211d19ed91987afd09",
+        "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-bundle/inputs/source",
+        "size_bytes": 36581
+      },
+      "source_copy": {
+        "digest_blake3": "30c481f89e36ffb5566ae14a9f493e83e735d0bfdc94c9211d19ed91987afd09",
+        "role": "source-closure",
+        "size_bytes": 36581,
+        "status": "matched"
+      },
+      "wit_inputs": [
+        {
+          "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+          "logical_path": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-bundle/inputs/selected-world.wit",
+          "size_bytes": 670
+        }
+      ]
+    }
+  },
+  "compiled_resource_observations": {
+    "neutral": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/fixtures/wasm-component-effects",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-wire": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-bounded": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bounded-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-reuse": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-projection": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-projection-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-bitmap": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bitmap-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-rounds": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-rounds-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-packed": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-packed-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-scalar": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-resize": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-word": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-table": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-table-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    },
+    "callback-group": {
+      "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension",
+      "artifact": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-bundle/artifacts/normalized.wasm",
+      "declarations": [
+        {
+          "kind": "memory",
+          "initial": 32,
+          "maximum": 32
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        },
+        {
+          "kind": "table",
+          "initial": 1,
+          "maximum": 1
+        }
+      ],
+      "growth_instructions": [],
+      "claim_boundary": "Observed compiled core declarations only; actual consumer admission/execution is separately required."
+    }
+  },
+  "required_command_records": [
+    "fixed-memory-focused-crates",
+    "fixed-memory-consumer-no-std",
+    "fixed-memory-cli-regression",
+    "fixed-memory-review-completeness",
+    "fixed-memory-native-strict-validate",
+    "fixed-memory-native-nix-checks",
+    "fixed-memory-producer-binary-identity",
+    "fixed-memory-producer-immutable-store",
+    "fixed-memory-producer-immutable-identity",
+    "fixed-memory-callback-projection-invocation-source-equality",
+    "fixed-memory-callback-bitmap-invocation-source-equality",
+    "fixed-memory-callback-rounds-invocation-source-equality",
+    "fixed-memory-callback-packed-invocation-source-equality",
+    "fixed-memory-callback-scalar-invocation-source-equality",
+    "fixed-memory-callback-resize-invocation-source-equality",
+    "fixed-memory-callback-word-invocation-source-equality",
+    "fixed-memory-callback-table-invocation-source-equality",
+    "fixed-memory-callback-table-packed-source-equality",
+    "fixed-memory-callback-group-invocation-source-equality",
+    "fixed-memory-callback-group-packed-source-equality",
+    "fixed-memory-neutral-prepare",
+    "fixed-memory-neutral-cli-build",
+    "fixed-memory-neutral-verify",
+    "fixed-memory-neutral-wasm-print",
+    "fixed-memory-neutral-replay-checker-collect",
+    "fixed-memory-neutral-replay-checker-verify",
+    "fixed-memory-callback-prepare",
+    "fixed-memory-callback-cli-build",
+    "fixed-memory-callback-verify",
+    "fixed-memory-callback-wasm-print",
+    "fixed-memory-callback-replay-checker-collect",
+    "fixed-memory-callback-replay-checker-verify",
+    "fixed-memory-callback-wire-prepare",
+    "fixed-memory-callback-wire-cli-build",
+    "fixed-memory-callback-wire-verify",
+    "fixed-memory-callback-wire-wasm-print",
+    "fixed-memory-callback-wire-replay-checker-collect",
+    "fixed-memory-callback-wire-replay-checker-verify",
+    "fixed-memory-callback-bounded-prepare",
+    "fixed-memory-callback-bounded-cli-build",
+    "fixed-memory-callback-bounded-verify",
+    "fixed-memory-callback-bounded-wasm-print",
+    "fixed-memory-callback-bounded-replay-checker-collect",
+    "fixed-memory-callback-bounded-replay-checker-verify",
+    "fixed-memory-callback-reuse-prepare",
+    "fixed-memory-callback-reuse-cli-build",
+    "fixed-memory-callback-reuse-verify",
+    "fixed-memory-callback-reuse-wasm-print",
+    "fixed-memory-callback-reuse-replay-checker-collect",
+    "fixed-memory-callback-reuse-replay-checker-verify",
+    "fixed-memory-callback-projection-prepare",
+    "fixed-memory-callback-projection-cli-build",
+    "fixed-memory-callback-projection-verify",
+    "fixed-memory-callback-projection-wasm-print",
+    "fixed-memory-callback-projection-replay-checker-collect",
+    "fixed-memory-callback-projection-replay-checker-verify",
+    "fixed-memory-callback-bitmap-prepare",
+    "fixed-memory-callback-bitmap-cli-build",
+    "fixed-memory-callback-bitmap-verify",
+    "fixed-memory-callback-bitmap-wasm-print",
+    "fixed-memory-callback-bitmap-replay-checker-collect",
+    "fixed-memory-callback-bitmap-replay-checker-verify",
+    "fixed-memory-callback-rounds-prepare",
+    "fixed-memory-callback-rounds-cli-build",
+    "fixed-memory-callback-rounds-verify",
+    "fixed-memory-callback-rounds-wasm-print",
+    "fixed-memory-callback-rounds-replay-checker-collect",
+    "fixed-memory-callback-rounds-replay-checker-verify",
+    "fixed-memory-callback-packed-prepare",
+    "fixed-memory-callback-packed-cli-build",
+    "fixed-memory-callback-packed-verify",
+    "fixed-memory-callback-packed-wasm-print",
+    "fixed-memory-callback-packed-replay-checker-collect",
+    "fixed-memory-callback-packed-replay-checker-verify",
+    "fixed-memory-callback-scalar-prepare",
+    "fixed-memory-callback-scalar-cli-build",
+    "fixed-memory-callback-scalar-verify",
+    "fixed-memory-callback-scalar-wasm-print",
+    "fixed-memory-callback-scalar-replay-checker-collect",
+    "fixed-memory-callback-scalar-replay-checker-verify",
+    "fixed-memory-callback-resize-prepare",
+    "fixed-memory-callback-resize-cli-build",
+    "fixed-memory-callback-resize-verify",
+    "fixed-memory-callback-resize-wasm-print",
+    "fixed-memory-callback-resize-replay-checker-collect",
+    "fixed-memory-callback-resize-replay-checker-verify",
+    "fixed-memory-callback-word-prepare",
+    "fixed-memory-callback-word-cli-build",
+    "fixed-memory-callback-word-verify",
+    "fixed-memory-callback-word-wasm-print",
+    "fixed-memory-callback-word-replay-checker-collect",
+    "fixed-memory-callback-word-replay-checker-verify",
+    "fixed-memory-callback-table-prepare",
+    "fixed-memory-callback-table-cli-build",
+    "fixed-memory-callback-table-verify",
+    "fixed-memory-callback-table-wasm-print",
+    "fixed-memory-callback-table-replay-checker-collect",
+    "fixed-memory-callback-table-replay-checker-verify",
+    "fixed-memory-callback-group-prepare",
+    "fixed-memory-callback-group-cli-build",
+    "fixed-memory-callback-group-verify",
+    "fixed-memory-callback-group-wasm-print",
+    "fixed-memory-callback-group-replay-checker-collect",
+    "fixed-memory-callback-group-replay-checker-verify"
+  ],
+  "claim_boundary": "Actual producer materialization, report/Structural+Bytes/source-copy verification and compiled fixed-resource observations only. Fresh separately owned actual consumer invocation remains required; no runtime-authority, execution or release claim."
+}

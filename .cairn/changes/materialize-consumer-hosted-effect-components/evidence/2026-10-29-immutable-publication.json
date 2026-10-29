@@ -1,0 +1,25 @@
+{
+  "schema": "mantle-hosted-effects-immutable-publication-observation-v1",
+  "implementation_revision": "8d1f700f78c26ed3423793e6ad36d91a6b4c8de7",
+  "remote": "origin",
+  "published_ref": "refs/heads/main",
+  "publication_mode": "normal-fast-forward-push",
+  "remote_revision_verified": true,
+  "ordinary_immutable_fetch": {
+    "reference": "github:OnixResearch/mantle/8d1f700f78c26ed3423793e6ad36d91a6b4c8de7",
+    "resolved_revision": "8d1f700f78c26ed3423793e6ad36d91a6b4c8de7",
+    "source_path": "/nix/store/c7mli0aqx03y4jfkk5k4898n6m8lgwx6-source",
+    "nar_hash": "sha256-4WWQ5J52skGvujzVmwDImGi+0B0s7cKnAW90WlfO7ag="
+  },
+  "source_command_records": [
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/implementation-resumed-commit.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/implementation-resumed-revision.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/implementation-resumed-push-main.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/implementation-resumed-remote-verification.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/published-immutable-source-metadata.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/observed-producer-immutable-store-verify.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/publication-first-scope-guard-history.json"
+  ],
+  "historical_publication_guard": "Initial scope guard refused an obsolete staged ADR0133 addition whose working-tree file had already been moved to ADR0136. The owned obsolete index entry was removed, failed guard evidence retained, and fresh publication command records independently passed. No producer gate was rerun or waived.",
+  "claim_boundary": "Observed immutable producer source publication and fetch only. This is not a consumer execution receipt, runtime-authority approval, release approval, or full-adoption claim."
+}

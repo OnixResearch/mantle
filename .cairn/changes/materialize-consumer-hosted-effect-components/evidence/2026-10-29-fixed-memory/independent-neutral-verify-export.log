@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "artifact_dir": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-octet-replay",
+  "output_format": "evidence-rail",
+  "status": "valid",
+  "artifacts": [
+    {
+      "artifact": "evidence-rail-receipt.json",
+      "source_id": "octet.artifact.wasm-tools",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f",
+      "checked_scope": "."
+    },
+    {
+      "artifact": "summary.txt",
+      "source_id": "octet.runner.artifact-bundle",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "manual_review_required",
+      "blake3": "ff6fe50ea5874f98c5948ebf05c16732e99ae65cf7effe3140bfb2b20be4dee3",
+      "checked_scope": ".",
+      "manual_action": "review optional evidence rail summary and receipt before using this artifact"
+    },
+    {
+      "artifact": "wasm-artifact.bin",
+      "source_id": "octet.artifact.wasm-input",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+      "checked_scope": "."
+    }
+  ],
+  "diagnostics": []
+}

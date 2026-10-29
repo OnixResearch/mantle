@@ -1,0 +1,52 @@
+{
+  "schema": "valence.stack-provenance-sidecar.v1",
+  "claim_scope": "identity-linkage-sidecar",
+  "binary_hash": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+  "octet_export_artifact_dir": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-octet-replay",
+  "chain": {
+    "schema": "valence.provenance-chain.v1",
+    "links": [
+      {
+        "source_id": "octet.artifact.wasm-input",
+        "function_object_id": "wasm-artifact.bin",
+        "requirement_ids": [],
+        "artifact_hash": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189",
+        "binary_hash": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189"
+      },
+      {
+        "source_id": "octet.artifact.wasm-tools",
+        "function_object_id": "evidence-rail-receipt.json",
+        "requirement_ids": [],
+        "artifact_hash": "ba240fc20f4ebd9b8d07f7beebf83a410d670781d7592ef6b5a5667001425b8d",
+        "binary_hash": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189"
+      },
+      {
+        "source_id": "octet.runner.artifact-bundle",
+        "function_object_id": "summary.txt",
+        "requirement_ids": [],
+        "artifact_hash": "4b4eb66e0b780db849631d425f931ae1bf1949ed52f11bff56d282e72092d551",
+        "binary_hash": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189"
+      }
+    ],
+    "boundary": "provenance chain proves identity and linkage only; it does not prove behavioral correctness, semantic equivalence, or that the binary satisfies the requirement"
+  },
+  "parent_artifacts": [
+    {
+      "artifact": "evidence-rail-receipt.json",
+      "blake3": "ba240fc20f4ebd9b8d07f7beebf83a410d670781d7592ef6b5a5667001425b8d"
+    },
+    {
+      "artifact": "summary.txt",
+      "blake3": "4b4eb66e0b780db849631d425f931ae1bf1949ed52f11bff56d282e72092d551"
+    },
+    {
+      "artifact": "wasm-artifact.bin",
+      "blake3": "b99435241a0d5827fc6903c81b9b78419396336e7d1655fb41e16488b3089189"
+    }
+  ],
+  "diagnostics": [],
+  "non_claims": [
+    "stack provenance proves identity and linkage only; it does not prove behavioral correctness, semantic equivalence, whole-program safety, or requirement satisfaction",
+    "provenance chain proves identity and linkage only; it does not prove behavioral correctness, semantic equivalence, or that the binary satisfies the requirement"
+  ]
+}

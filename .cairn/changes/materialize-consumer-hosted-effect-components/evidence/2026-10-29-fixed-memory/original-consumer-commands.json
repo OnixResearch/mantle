@@ -1,0 +1,16 @@
+[
+  {
+    "consumer": "actor",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/actor-hosted-effects-smoke",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/neutral-bundle-closed/materialization-bundle.json",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/actor",
+      "/home/brittonr/.cache/valence-policy-check-20261028/verification-pinned/neutral-sidecar.json",
+      "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/8d1f700/.cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-28-production/production-tasks-gate.log",
+      "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/docs/wasm-component-runtime/generated/host-policy.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 1,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/actor.log"
+  }
+]

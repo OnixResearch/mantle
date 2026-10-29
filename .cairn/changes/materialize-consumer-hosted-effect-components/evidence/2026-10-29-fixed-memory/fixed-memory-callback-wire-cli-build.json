@@ -1,0 +1,28 @@
+{
+  "name": "fixed-memory-callback-wire-cli-build",
+  "command": [
+    "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/mantle",
+    "--json",
+    "--store",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-store",
+    "--state-dir",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-state",
+    "wasm-component",
+    "build",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-fixture/request.ncl",
+    "--out",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-bundle"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "KACHE_DISABLE": "1",
+    "TMPDIR": "/tmp/mhe28"
+  },
+  "exit_code": 0,
+  "log": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wire-cli-build.log"
+}

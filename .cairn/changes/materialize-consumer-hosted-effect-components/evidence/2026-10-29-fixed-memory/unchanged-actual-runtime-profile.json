@@ -1,0 +1,74 @@
+{
+  "profile_id": "molten.wasm.component.effects.v1",
+  "evidence_scope": "production",
+  "runtime_strategy": "portable-component",
+  "toolchain": {
+    "wasmtime": "45.0.0",
+    "wasm_tools": "1.240.0",
+    "wasmparser": "0.240.0",
+    "wit_bindgen": "0.46.0",
+    "wasmtime_wasi": "45.0.0",
+    "wasi_package": "0.2.6"
+  },
+  "wit": {
+    "package": "molten:component-effects@1.0.0",
+    "world": "actor-effects",
+    "source_ref": "blake3:9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2"
+  },
+  "features": {
+    "component_model": true,
+    "multi_value": true,
+    "bulk_memory": true,
+    "reference_types": true,
+    "simd": true,
+    "relaxed_simd": false,
+    "threads": false,
+    "tail_call": false,
+    "multi_memory": false,
+    "exceptions": false,
+    "gc": false,
+    "memory64": false,
+    "extended_const": false,
+    "function_references": false,
+    "custom_page_sizes": false,
+    "wide_arithmetic": false,
+    "component_async": false
+  },
+  "determinism": {
+    "fuel_interruption": true,
+    "nan_canonicalization": true,
+    "relaxed_simd_deterministic": true,
+    "memory_growth": "fixed",
+    "table_growth": "fixed",
+    "host_inputs": "recorded-effects-only"
+  },
+  "resources": {
+    "fuel": 100000,
+    "max_component_bytes": 4194304,
+    "max_wit_bytes": 65536,
+    "max_memory_bytes": 16777216,
+    "max_table_elements": 1024,
+    "max_instances": 16,
+    "max_memories": 4,
+    "max_tables": 4,
+    "max_stack_bytes": 524288,
+    "max_hostcall_bytes": 65536,
+    "max_result_bytes": 65536,
+    "max_concurrency": 1,
+    "max_imports": 128,
+    "max_exports": 128
+  },
+  "slicing": null,
+  "allowed_imports": [
+    "effect-request"
+  ],
+  "allowed_wasi_interfaces": [],
+  "non_claims": [
+    "not-behavioral-correctness",
+    "not-semantic-equivalence",
+    "not-authority",
+    "not-release-eligibility",
+    "not-whole-system-safety",
+    "not-build-trust-transfer"
+  ]
+}

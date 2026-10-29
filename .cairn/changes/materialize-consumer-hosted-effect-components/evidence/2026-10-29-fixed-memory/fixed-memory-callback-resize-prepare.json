@@ -1,0 +1,23 @@
+{
+  "name": "fixed-memory-callback-resize-prepare",
+  "command": [
+    "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/examples/prepare_effect_fixture",
+    "/nix/store/rxkdd20n7c510z6n0jd4s4f15zf75lfb-mantle-wasm-component-toolchain-v1",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-fixture",
+    "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/wit/molten-component-effects/runtime.wit",
+    "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+    "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "KACHE_DISABLE": "1",
+    "TMPDIR": "/tmp/mhe28"
+  },
+  "exit_code": 0,
+  "log": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-resize-prepare.log"
+}

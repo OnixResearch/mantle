@@ -1,0 +1,343 @@
+{
+  "schema_version": "octet-valence-provenance-export/v1",
+  "artifact_dir": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-octet-replay",
+  "verification_status": "valid",
+  "artifacts": [
+    {
+      "artifact": "evidence-rail-receipt.json",
+      "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f"
+    },
+    {
+      "artifact": "summary.txt",
+      "blake3": "ff6fe50ea5874f98c5948ebf05c16732e99ae65cf7effe3140bfb2b20be4dee3"
+    },
+    {
+      "artifact": "wasm-artifact.bin",
+      "blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a"
+    }
+  ],
+  "provenance_records": [
+    {
+      "source_id": "octet.artifact.wasm-input",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "artifact": "wasm-artifact.bin",
+      "blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+      "checked_scope": ".",
+      "receipt": {
+        "schema_version": "octet-valence-replayable-receipt/v1",
+        "producer_id": "octet.artifact.wasm-input",
+        "checker_id": "cargo-octet",
+        "tool_identity": "cargo-octet@0.1.0",
+        "policy_or_checker_version": "cargo-octet@0.1.0",
+        "normalized_invocation": [
+          "cargo-octet"
+        ],
+        "input_artifacts": [],
+        "output_artifacts": [
+          {
+            "artifact": "wasm-artifact.bin",
+            "blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a"
+          }
+        ],
+        "parent_artifacts": [],
+        "status": "valid",
+        "non_claims": [
+          "Octet export preserves artifact identity, provenance linkage, and evidence tiers; it does not prove whole-program correctness",
+          "Valence consumes this export for stack traceability; Mantle bundles only the final sidecar opaquely",
+          "Octet Valence exports are adapter inputs, not release eligibility, Mantle bundle inclusion, or verifier soundness claims"
+        ]
+      },
+      "typed_edges": [
+        {
+          "edge_kind": "records_policy_receipt",
+          "source_artifact": "wasm-artifact.bin",
+          "target_artifact": "octet.artifact.wasm-input"
+        },
+        {
+          "edge_kind": "feeds_valence_adapter",
+          "source_artifact": "wasm-artifact.bin",
+          "target_artifact": "valence.stack-provenance.adapter-input"
+        }
+      ]
+    },
+    {
+      "source_id": "octet.artifact.wasm-tools",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "artifact": "evidence-rail-receipt.json",
+      "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f",
+      "checked_scope": ".",
+      "receipt": {
+        "schema_version": "octet-valence-replayable-receipt/v1",
+        "producer_id": "octet.artifact.wasm-tools",
+        "checker_id": "cargo-octet",
+        "tool_identity": "cargo-octet@0.1.0",
+        "policy_or_checker_version": "cargo-octet@0.1.0",
+        "normalized_invocation": [
+          "cargo",
+          "octet",
+          "evidence",
+          "collect",
+          "--rail",
+          "wasm-artifact"
+        ],
+        "input_artifacts": [
+          {
+            "artifact": "wasm-artifact.bin",
+            "blake3": "94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a"
+          }
+        ],
+        "output_artifacts": [
+          {
+            "artifact": "evidence-rail-receipt.json",
+            "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f"
+          }
+        ],
+        "parent_artifacts": [
+          "wasm-artifact.bin"
+        ],
+        "status": "passed",
+        "wasm_artifact": {
+          "profile_id": "molten-component-effects-v1",
+          "profile_identity": "b3:a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e",
+          "registry_identity": "b3:09f1fbb7ce4d9da085b3f1325dbd5e8ae1c17bde2755caf79c1d2850e67b116a",
+          "cohort_id": "wasm-tools-0.253.0",
+          "cohort_identity": "b3:c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+          "exact_artifact_identity": "b3:94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+          "interface_identity": "b3:c9aa45f2949775537a9b0bda51d3ab3f78a6abbf4c858c67f7a03dbaaad3d1b7",
+          "exact_identity_role": "exact-bytes",
+          "interface_identity_role": "normalized-interface-non-equivalence",
+          "input_artifact": "wasm-artifact.bin",
+          "handoff_role": "mantle-exact-byte",
+          "handoff_parent_identities": [
+            "mantle:94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a"
+          ],
+          "verification_role": "recorded_only",
+          "facts": {
+            "artifact_kind": "component",
+            "proposals": [
+              "component-model"
+            ],
+            "imports": [
+              {
+                "namespace": "component",
+                "name": "effect-request",
+                "kind": "Func(list<u8>)->result<list<u8>,string>"
+              },
+              {
+                "namespace": "component",
+                "name": "preserves-payload",
+                "kind": "Type(list<u8>)"
+              }
+            ],
+            "bound_imports": [
+              {
+                "namespace": "scope[1]::component",
+                "name": "effect-request",
+                "kind": "Func(3)"
+              },
+              {
+                "namespace": "scope[1]::component",
+                "name": "preserves-payload",
+                "kind": "Type(Eq(0))"
+              },
+              {
+                "namespace": "scope[2]::$root",
+                "name": "effect-request",
+                "kind": "Func(0)"
+              },
+              {
+                "namespace": "scope[4]::",
+                "name": "$imports",
+                "kind": "Table(TableType { element_type: funcref, table64: false, initial: 1, maximum: Some(1), shared: false })"
+              },
+              {
+                "namespace": "scope[4]::",
+                "name": "0",
+                "kind": "Func(0)"
+              }
+            ],
+            "exports": [
+              {
+                "namespace": "component",
+                "name": "invoke",
+                "kind": "Func(list<u8>)->result<list<u8>,string>"
+              }
+            ],
+            "worlds": [],
+            "memory_count": 1,
+            "table_count": 1,
+            "function_count": 24,
+            "memories": [
+              {
+                "initial_pages": 32,
+                "maximum_pages": 32,
+                "memory64": false,
+                "shared": false,
+                "page_size_log2": 16
+              }
+            ],
+            "tables": [
+              {
+                "initial_elements": 1,
+                "maximum_elements": 1,
+                "table64": false,
+                "shared": false,
+                "element_type": "funcref"
+              }
+            ],
+            "max_function_parameter_words": 4,
+            "max_local_words_per_function": 12,
+            "memory_grow_count": 0,
+            "has_start": false,
+            "custom_sections": [
+              "scope[2]::name",
+              "scope[3]::name",
+              "scope[4]::name"
+            ],
+            "producer_sections": 0
+          },
+          "findings": [],
+          "sarif": {
+            "runs": [
+              {
+                "results": [],
+                "tool": {
+                  "driver": {
+                    "name": "cargo-octet-wasm-artifact"
+                  }
+                }
+              }
+            ],
+            "version": "2.1.0"
+          }
+        },
+        "non_claims": [
+          "Wasm artifact evidence records bounded static facts and does not prove execution correctness",
+          "Matching normalized interfaces do not prove semantic equivalence or identify one implementation",
+          "Static validation does not prove sandbox effectiveness, capability authority, provenance truth, release eligibility, or whole-system safety",
+          "Producer metadata is recorded input and is not provenance truth"
+        ]
+      },
+      "typed_edges": [
+        {
+          "edge_kind": "records_policy_receipt",
+          "source_artifact": "evidence-rail-receipt.json",
+          "target_artifact": "octet.artifact.wasm-tools"
+        },
+        {
+          "edge_kind": "derives_from_parent_artifact",
+          "source_artifact": "evidence-rail-receipt.json",
+          "target_artifact": "wasm-artifact.bin"
+        },
+        {
+          "edge_kind": "feeds_valence_adapter",
+          "source_artifact": "evidence-rail-receipt.json",
+          "target_artifact": "valence.stack-provenance.adapter-input"
+        }
+      ],
+      "parent_artifacts": [
+        "wasm-artifact.bin"
+      ]
+    },
+    {
+      "source_id": "octet.runner.artifact-bundle",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "manual_review_required",
+      "artifact": "summary.txt",
+      "blake3": "ff6fe50ea5874f98c5948ebf05c16732e99ae65cf7effe3140bfb2b20be4dee3",
+      "checked_scope": ".",
+      "receipt": {
+        "schema_version": "octet-valence-replayable-receipt/v1",
+        "producer_id": "octet.runner.artifact-bundle",
+        "checker_id": "cargo-octet",
+        "tool_identity": "cargo-octet@0.1.0",
+        "policy_or_checker_version": "cargo-octet@0.1.0",
+        "normalized_invocation": [
+          "cargo-octet"
+        ],
+        "input_artifacts": [
+          {
+            "artifact": "evidence-rail-receipt.json",
+            "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f"
+          }
+        ],
+        "output_artifacts": [
+          {
+            "artifact": "summary.txt",
+            "blake3": "ff6fe50ea5874f98c5948ebf05c16732e99ae65cf7effe3140bfb2b20be4dee3"
+          }
+        ],
+        "parent_artifacts": [
+          "evidence-rail-receipt.json"
+        ],
+        "status": "manual_review_required",
+        "non_claims": [
+          "Octet export preserves artifact identity, provenance linkage, and evidence tiers; it does not prove whole-program correctness",
+          "Valence consumes this export for stack traceability; Mantle bundles only the final sidecar opaquely",
+          "Octet Valence exports are adapter inputs, not release eligibility, Mantle bundle inclusion, or verifier soundness claims"
+        ]
+      },
+      "typed_edges": [
+        {
+          "edge_kind": "derives_from_parent_artifact",
+          "source_artifact": "summary.txt",
+          "target_artifact": "evidence-rail-receipt.json"
+        },
+        {
+          "edge_kind": "feeds_valence_adapter",
+          "source_artifact": "summary.txt",
+          "target_artifact": "valence.stack-provenance.adapter-input"
+        }
+      ],
+      "human_action": "review optional evidence rail summary and receipt before using this artifact",
+      "parent_artifacts": [
+        "evidence-rail-receipt.json"
+      ]
+    }
+  ],
+  "typed_edges": [
+    {
+      "edge_kind": "derives_from_parent_artifact",
+      "source_artifact": "evidence-rail-receipt.json",
+      "target_artifact": "wasm-artifact.bin"
+    },
+    {
+      "edge_kind": "derives_from_parent_artifact",
+      "source_artifact": "summary.txt",
+      "target_artifact": "evidence-rail-receipt.json"
+    },
+    {
+      "edge_kind": "feeds_valence_adapter",
+      "source_artifact": "evidence-rail-receipt.json",
+      "target_artifact": "valence.stack-provenance.adapter-input"
+    },
+    {
+      "edge_kind": "feeds_valence_adapter",
+      "source_artifact": "summary.txt",
+      "target_artifact": "valence.stack-provenance.adapter-input"
+    },
+    {
+      "edge_kind": "feeds_valence_adapter",
+      "source_artifact": "wasm-artifact.bin",
+      "target_artifact": "valence.stack-provenance.adapter-input"
+    },
+    {
+      "edge_kind": "records_policy_receipt",
+      "source_artifact": "evidence-rail-receipt.json",
+      "target_artifact": "octet.artifact.wasm-tools"
+    },
+    {
+      "edge_kind": "records_policy_receipt",
+      "source_artifact": "wasm-artifact.bin",
+      "target_artifact": "octet.artifact.wasm-input"
+    }
+  ],
+  "diagnostics": [],
+  "non_claims": [
+    "Octet export preserves artifact identity, provenance linkage, and evidence tiers; it does not prove whole-program correctness",
+    "Valence consumes this export for stack traceability; Mantle bundles only the final sidecar opaquely",
+    "Octet Valence exports are adapter inputs, not release eligibility, Mantle bundle inclusion, or verifier soundness claims"
+  ]
+}

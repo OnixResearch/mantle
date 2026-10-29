@@ -1,0 +1,68 @@
+verified Structural+Bytes bundle=blake3:d5424befe8d17db629d4fdfe723115f5f34a12628cc6711bba392fe7ba56320e component=blake3:94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a wit=blake3:9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2 profile=blake3:046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab memories=1 tables=2 instances=6 memory-bytes=2097152 table-elements=1 imports=["effect-request"] exports=["invoke"]
+current-evidence kind=current-valence-sidecar source=/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-sidecar.json measured=blake3:8b68a0e876327124d2e40253e29f4eb12b5528e9ebbfca22972d32f8cd4b6ffe
+current-evidence kind=current-cairn-acceptance source=/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/8d1f700/.cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-28-production/production-tasks-gate.log measured=blake3:da53eb762dbe73e8ef639fcc5dceeeea94394423081266b8a04327e8e779e033
+wrong-install-bundle-binding install=deny class=component-admission-denial blockers=["component admission envelope is stale or bound to another bundle"]
+wrong-install-runtime-profile install=deny class=component-admission-denial blockers=["published Mantle source was measured for another Molten profile"]
+wrong-install-measured-facts install=deny class=component-admission-denial blockers=["component instance count differs from admitted materialization facts"]
+wrong-install-import-manifest install=deny class=component-admission-denial blockers=["component import manifest imports do not match the declared WIT world", "observed component imports drift from the declared manifest imports"]
+wrong-install-missing-current-grant install=deny class=component-admission-denial blockers=["component import effect-request requires exactly one authority grant"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+pure-return stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+pure-return stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+pure-return stage=execution decision=pass class=None receipt=blake3:cd12cd038b7f2be309c3ce77302a5b602b169453a191e8c65f4fda7a0311e1e0 diagnostics=[]
+wrong-requested-legacy-profile stage=denial decision=deny class=Some("component-admission-denial") receipt=blake3:7f674ae05877c1f2f6b1e0de500cda58515b117442cf9ee473d3008d7f6a8936 diagnostics=["component-admission-denial"]
+wrong-requested-sliced-profile stage=denial decision=deny class=Some("profile-denial") receipt=blake3:d8ee5b2325ff93f12bc137896dcd249145670bd79c00df408ba208ede5e9c3aa diagnostics=["profile-denial"]
+wrong-turn-missing-current-grant stage=denial decision=deny class=Some("component-admission-denial") receipt=blake3:7f674ae05877c1f2f6b1e0de500cda58515b117442cf9ee473d3008d7f6a8936 diagnostics=["component-admission-denial"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+signed-admitted-effect stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+signed-admitted-effect stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+signed-admitted-effect stage=execution decision=pass class=None receipt=blake3:c808ffca0c2d21bdf551b7be6aeeae2bbd8a4ee86ae111dcaa364331c89092a4 diagnostics=[]
+signed-admitted-effect decision=pass protected-blob-materializations=1 output=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+mismatched-outer-guest-grant stage=inspection decision=pass class=None receipt=blake3:9a20469628f9eb2147841c2de412666b23478010e1806c35ea2a50b9a5d8d685 diagnostics=[]
+mismatched-outer-guest-grant stage=instantiation decision=pass class=None receipt=blake3:ff7a512881f22564da63a3cdd127705fe089f1a3397afbbc7ef1f1028acf3625 diagnostics=[]
+mismatched-outer-guest-grant stage=denial decision=deny class=Some("component-trap") receipt=blake3:5e3241246509242094ac3165581aa45c9dd4f5293275ed78d4c6776a13da93ee diagnostics=["component-trap"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+expired-current-authority-effect stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+expired-current-authority-effect stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+expired-current-authority-effect stage=execution decision=pass class=None receipt=blake3:7b29e18c20a912c02fde6c33fc595771e828d2224fdd4d28ff8883024bb22980 diagnostics=[]
+expired-current-authority effect-decision=deny actor-execution=pass protected-blob-materializations=0
+offline-exact-replay stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+offline-exact-replay stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+offline-exact-replay stage=execution decision=pass class=None receipt=blake3:c808ffca0c2d21bdf551b7be6aeeae2bbd8a4ee86ae111dcaa364331c89092a4 diagnostics=[]
+offline-exact-replay canonical-receipts=equal live-store-additional-reads=0
+offline-altered-response stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+offline-altered-response stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+offline-altered-response stage=denial decision=deny class=Some("component-trap") receipt=blake3:e8c620e4f5eefed64c8e1cc8ea4e399be2e60c570aea73127e4823c68ba393dc diagnostics=["component-trap"]
+offline-altered-response offline-replay=deny no-live-services=true
+offline-altered-effect-log stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+offline-altered-effect-log stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+offline-altered-effect-log stage=denial decision=deny class=Some("component-trap") receipt=blake3:e8c620e4f5eefed64c8e1cc8ea4e399be2e60c570aea73127e4823c68ba393dc diagnostics=["component-trap"]
+offline-altered-effect-log offline-replay=deny no-live-services=true
+offline-trailing-boundary stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+offline-trailing-boundary stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+offline-trailing-boundary stage=execution decision=pass class=None receipt=blake3:c808ffca0c2d21bdf551b7be6aeeae2bbd8a4ee86ae111dcaa364331c89092a4 diagnostics=[]
+offline-trailing-boundary stage=denial decision=deny class=Some("component-admission-denial") receipt=blake3:ec3a578282a428842dc2db494dbc8f1e71a6c28a31eeda1c9dd58511f64647d7 diagnostics=["component-admission-denial"]
+offline-trailing-boundary offline-replay=deny no-live-services=true
+offline-missing-boundary stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+offline-missing-boundary stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+offline-missing-boundary stage=denial decision=deny class=Some("component-trap") receipt=blake3:e8c620e4f5eefed64c8e1cc8ea4e399be2e60c570aea73127e4823c68ba393dc diagnostics=["component-trap"]
+offline-missing-boundary offline-replay=deny no-live-services=true
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+actual-guest-trap stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+actual-guest-trap stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+actual-guest-trap stage=denial decision=deny class=Some("component-trap") receipt=blake3:0aff1303db0ced575eb3d1916990cdc52302b28c75b5427586f8144bd293c7ac diagnostics=["component-trap"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+actual-malformed-result stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+actual-malformed-result stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+actual-malformed-result stage=denial decision=deny class=Some("invalid-preserves-payload") receipt=blake3:e5dbc12b77e526daa77539f2cb1a3b4b7fa610b9c8580d00c0afe342c95408bf diagnostics=["invalid-preserves-payload"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+actual-fuel-exhaustion stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+actual-fuel-exhaustion stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+actual-fuel-exhaustion stage=denial decision=deny class=Some("fuel-exhausted") receipt=blake3:e0c4e2ea574dc382cc63d8737619176f7358022513d843cdbebaaedb80a73ef9 diagnostics=["fuel-exhausted"]
+actual-value-publication value=blake3:514994117eac6f3e6fa85b03c7e9744ebebb871dd45fb066676bfa2d44c9cc16 receipt=blake3:22e362e807d0090a8d92ad569753d95937820ca904e28d148311ef64e6102bc5 bytes=138
+actual-operated-deadline-after-host-latency stage=inspection decision=pass class=None receipt=blake3:2a526902939cd939b1939a66a721acf38b7c1354765f13e5307a2ba4a15ddfbf diagnostics=[]
+actual-operated-deadline-after-host-latency stage=instantiation decision=pass class=None receipt=blake3:d167efeeed9fd4dee917a7b2a9e7eb417d8ae5b97b63834b60933fcfbb1ba8ca diagnostics=[]
+actual-operated-deadline-after-host-latency stage=denial decision=deny class=Some("deadline-exceeded") receipt=blake3:85c59412318ef56a3ec78c46ebaa8c868e59ca7ed4b38b545f66e1fffb07d2c2 diagnostics=["deadline-exceeded"]
+operated-deadline protected-read=1 completed-host-effect=1 elapsed-ms=2041 synchronous-host-interruption=false unchanged-profile=blake3:046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab unchanged-fuel=100000
+ACTOR_SMOKE_COMPLETE output=/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/actor

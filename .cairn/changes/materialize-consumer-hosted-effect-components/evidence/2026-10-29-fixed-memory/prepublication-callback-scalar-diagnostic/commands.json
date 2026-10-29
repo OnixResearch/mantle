@@ -1,0 +1,15 @@
+[
+  {
+    "consumer": "extension",
+    "scope": "Bounded local diagnostic through unchanged published 8d1f700 verifier; producer source correction publication is separate",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/examples/extension-request-diagnostic",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/materialization-bundle.json",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-scalar-cohort/extension",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-scalar-cohort/extension-admission.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 1,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-scalar-cohort/extension.log"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/home/brittonr/.cache/aspen-phase-accounting-20261029/debug/guest-phase-accounting",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-word-bundle/artifacts/normalized.wasm",
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-word-cohort/extension/diagnostic-callback-3-envelope.preserves",
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-word-cohort/extension/values/20c2181ac7703576c9a695bc6096bb9100e3b4621ebc902986addea5d45f3552.preserves"
+  ],
+  "exit": 0,
+  "stdout": "phase=real_host_request fuel_spent=68805\nafter_invoke fuel_spent=147827 output_bytes=5635\nafter_post_return fuel_spent=147827 guest_ok=true\n",
+  "stderr": "",
+  "scope": "Out-of-policy diagnostic accounting only, not product admission or completion"
+}

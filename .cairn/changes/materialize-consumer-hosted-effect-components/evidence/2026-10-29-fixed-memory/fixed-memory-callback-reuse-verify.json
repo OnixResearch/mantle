@@ -1,0 +1,21 @@
+{
+  "name": "fixed-memory-callback-reuse-verify",
+  "command": [
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/verify-producer",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-bundle/execution-report.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-observation.json",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-source-copy"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "KACHE_DISABLE": "1",
+    "TMPDIR": "/tmp/mhe28"
+  },
+  "exit_code": 0,
+  "log": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-reuse-verify.log"
+}

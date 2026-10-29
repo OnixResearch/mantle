@@ -1,0 +1,1 @@
+report verified; Structural+Bytes=Verified; bundle=47d0e9b93204e582eb1f5faee93b493adfffe34ed2c41a2ba2dbf5de2687e503; artifact=eb11c5070dfd63b2460b7bc3a96d43ab15100eabe8e479c0cc76a96a5c65e8be; host=ConsumerHostRequired { wit_package: "molten:component-effects", wit_world: "actor-effects", required_imports: ["effect-request"] }

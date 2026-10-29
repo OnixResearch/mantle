@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-fuel-accounting",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-scalar-bundle/artifacts/normalized.wasm",
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-scalar-cohort/extension/diagnostic-callback-3-envelope.preserves",
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-callback-scalar-cohort/extension/values/26486057bd0c85cdd92381220bdce42677c0cf3a28d2f3fc0b39563cd6c35877.preserves"
+  ],
+  "exit": 0,
+  "stdout": "before_host fuel_spent=63103\nafter_invoke fuel_spent=150712 output_bytes=5635\nafter_post_return fuel_spent=150712 guest_ok=true\n",
+  "stderr": "",
+  "scope": "Out-of-policy diagnostic accounting only, not product admission or completion"
+}

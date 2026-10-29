@@ -1,0 +1,20 @@
+{
+  "schema": "mantle-wasm-consumer-verification-report-v1",
+  "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+  "bundle_identity_blake3": "d7f11d09a6cffd0589d0cdc041ced9d9ec7f312e528ad77c7d8c3a54b72fbb6d",
+  "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "members": [],
+  "layers_completed": [
+    "structural"
+  ],
+  "blockers": [],
+  "status": "verified",
+  "non_claims": [
+    "not-runtime-authority",
+    "not-release-eligibility",
+    "not-source-trust",
+    "not-compiler-correctness",
+    "not-component-behavior",
+    "not-runtime-isolation"
+  ]
+}

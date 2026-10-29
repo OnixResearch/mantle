@@ -98,10 +98,16 @@ rejected as byte drift; never repair that by rewriting a produced bundle.
 
 The neutral guest's checked release profile uses size optimization and LTO.
 Its checked `.cargo/config.toml` disables the unsupported `sign-ext` target
-feature for `wasm32-wasip2`; product-owned callback sources declare their own
-equivalent compiler cohort. These genuine compiler inputs are part of the
-remeasured source closure. They do not relax the closed checker profile or
-rewrite generated bindings or produced Wasm to manufacture admission.
+feature for `wasm32-wasip2` and passes the admitted linker's
+`--initial-memory=2097152` and `--max-memory=2097152` options. The resulting
+linear memory has exactly 32 fixed 64-KiB pages. Molten's unchanged hosted
+profile requires equal initial and maximum memory/table bounds; an absent
+maximum is not a fixed-memory declaration even when the guest never grows it.
+Generated adapter tables must independently retain equal initial and maximum
+bounds. Product-owned callback sources declare their own equivalent compiler
+cohort. These genuine compiler inputs are part of the remeasured source closure.
+They do not relax the closed checker/runtime profiles or rewrite generated
+bindings or produced Wasm to manufacture admission.
 
 ## Immutable checker cohort
 

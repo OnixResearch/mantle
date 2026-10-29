@@ -1,0 +1,3225 @@
+{
+  "claim_boundary": "Actual producer materialization, report/Structural+Bytes/source-copy verification and compiled fixed-resource observations only. Fresh separately owned actual consumer invocation remains required; no runtime-authority, execution or release claim.",
+  "files": [
+    {
+      "file": "fixed-memory-callback-bitmap-cli-build.json",
+      "bytes": 1191,
+      "blake3": "38e23999389b9333269f53323cf86ab41ac7a3bf6fc145e056aa93b9eec86fc4"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-cli-build.log",
+      "bytes": 54267,
+      "blake3": "8294b72b317b8446c5b8df29a9074b7860dc1379121de5ee538333d28b35611e"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-invocation-source-equality.json",
+      "bytes": 918,
+      "blake3": "7bd62cfbe00219a9eeda8afd0c47fb3f66b8c7fa9930efb33c802020b56d3824"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-observation.json",
+      "bytes": 8831,
+      "blake3": "3b8b4839443011785fe60d934df19fccf6471eeca907e531ec84a89ae46d8f9a"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-prepare.json",
+      "bytes": 1210,
+      "blake3": "ad3639b59315936a216ad247e9802b251a7a3eb3ff2980468b261f63f86a001c"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-prepare.log",
+      "bytes": 102,
+      "blake3": "07f4dd34215688bc7569376d4b32eea3ad19aa3b18a59a77229c4cd4f41c0b30"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-replay-checker-collect.json",
+      "bytes": 1401,
+      "blake3": "f1df6e64cdb31d221fa177f7ed149c07b59e67cf188f575ad33175d1ba846bfe"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "a7c3a4779f759f56baaa9e3c1ba4150fa6196ea5ace55a009a8da637cd26ba8c"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-replay-checker-verify.json",
+      "bytes": 921,
+      "blake3": "8df287f968c8d5786402cf9fe5897a6620ecddf89c7d62021d2644e1c0323708"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-replay-checker-verify.log",
+      "bytes": 1215,
+      "blake3": "b1c3d958dd8e5f10e3aa5b87e3bd3cd59a9711936a83a4e558268f765ab60c57"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-resource-observation.json",
+      "bytes": 660,
+      "blake3": "6de435ff0168fdd21c56b3c4c6ca35f8c69fa33895486e5ddc900dbfcea798dd"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-verify.json",
+      "bytes": 1001,
+      "blake3": "034d3276c8be769c199afae5204ecffba24918e88b043e7230255cea4ddc4cef"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-verify.log",
+      "bytes": 328,
+      "blake3": "faff29fa361a8829b4a9ae02ff5b085c639f6e40787a4b0e488adf1b73202482"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-wasm-print.json",
+      "bytes": 844,
+      "blake3": "e518b2ff105adff329a77bfe754030a817893e4e2abd9594a1d8078e07808d6f"
+    },
+    {
+      "file": "fixed-memory-callback-bitmap-wasm-print.log",
+      "bytes": 234033,
+      "blake3": "d833b0ad14085710e2b62f5d9d9487056b17042f7d2ffb549e6014bd9b964c25"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-cli-build.json",
+      "bytes": 1197,
+      "blake3": "8d307e84cab37567543756a2edd44db6d1c2032902df5a86167011c0045a547a"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-cli-build.log",
+      "bytes": 54342,
+      "blake3": "c10d866112de012fa8384e8cd07a5e9257a3c712c31ac5077c9da4669cf44d88"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-observation.json",
+      "bytes": 8835,
+      "blake3": "41500321e1c2df6088ccda26977b2215c3b578f03746e42d6a9082c95a8bdc4e"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-prepare.json",
+      "bytes": 1213,
+      "blake3": "85e2112b5dca3923264f612b4415fabe36aa2edb03b63442592e9e94940df819"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-prepare.log",
+      "bytes": 103,
+      "blake3": "a0f9af1c8cfe33b6386e8e6dfeaa56eb3c2b7e8485d1c9d808cc534db390e1b8"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-replay-checker-collect.json",
+      "bytes": 1405,
+      "blake3": "c251d16ed97ffd8c639dd4918e047ac145de64b0d5fba7bc16453a4d2c6308ba"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "f05bbb69477a006da1cd22ddcf775f6a5beaaf446249890fe93f33929a25517e"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-replay-checker-verify.json",
+      "bytes": 924,
+      "blake3": "073be9b93a9165590d258bde6b22cb4e368b78e019c1b3181201aeca01960d1d"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-replay-checker-verify.log",
+      "bytes": 1216,
+      "blake3": "0851364fa37e9558fe05363cdfdb15d8f5001c365d38c5656510ddd16fe09fe9"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-resource-observation.json",
+      "bytes": 661,
+      "blake3": "a48e695c41d18f876d7827493ac82266c6e95231eaa009fc8b31c635d3214641"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-verify.json",
+      "bytes": 1006,
+      "blake3": "ece25a0f21a9971ef9406ed172f7e58afdf48f8bee2e8f14105ebb7ddf70e1f9"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-verify.log",
+      "bytes": 328,
+      "blake3": "3d80ca7848cbfc15b634a961c2f234d27a108dfa3b846bf41f25ed284f20e7c6"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-wasm-print.json",
+      "bytes": 847,
+      "blake3": "e53cf76f9a085bcfb9baa0143e98e572c398ac84c3e69193f75908296cb6b46a"
+    },
+    {
+      "file": "fixed-memory-callback-bounded-wasm-print.log",
+      "bytes": 235731,
+      "blake3": "ef024c5c483e1f604228e1eddbff120907276feb17178712d395c6fa0fd97f15"
+    },
+    {
+      "file": "fixed-memory-callback-cli-build.json",
+      "bytes": 1149,
+      "blake3": "185f562c53162e76e157033404d657a8049c5b0c9015454d4f97d306b5a8a15f"
+    },
+    {
+      "file": "fixed-memory-callback-cli-build.log",
+      "bytes": 53742,
+      "blake3": "182f9c6f68e7e9cb5f1eb0c33a59ebd3d887053ef7b43e59bf7455169ee66b7d"
+    },
+    {
+      "file": "fixed-memory-callback-group-cli-build.json",
+      "bytes": 1185,
+      "blake3": "615a730f144d477c095762e78bdd0ab7837f86cfa4e8aca69aee1f8a56c95460"
+    },
+    {
+      "file": "fixed-memory-callback-group-cli-build.log",
+      "bytes": 54192,
+      "blake3": "9ae22289b9425fb5756558a3ea3c401dc425496fcdb517aa3a2e7a42b9dfecf1"
+    },
+    {
+      "file": "fixed-memory-callback-group-invocation-source-equality.json",
+      "bytes": 915,
+      "blake3": "d5e35276a3d33045a39df11d4b5e84b98bfce06cc932f12037314ae848735684"
+    },
+    {
+      "file": "fixed-memory-callback-group-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-group-observation.json",
+      "bytes": 8827,
+      "blake3": "29326334d7fdadc3637967f795c625ed694ba981be1f25279b767980951fc381"
+    },
+    {
+      "file": "fixed-memory-callback-group-packed-source-equality.json",
+      "bytes": 899,
+      "blake3": "774487bf5283ea863957f1292603a6feb374ecc89c08f53d28caf5968ba8d1b7"
+    },
+    {
+      "file": "fixed-memory-callback-group-packed-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-group-prepare.json",
+      "bytes": 1207,
+      "blake3": "d7474df3c0d8e71a36c173af449c033503af77b87e4c354cc6d024fc17ad4df5"
+    },
+    {
+      "file": "fixed-memory-callback-group-prepare.log",
+      "bytes": 101,
+      "blake3": "1cbec38599932835e716c9059184aaaf1e4063bd7dc0706771a4fadf9f0ca03b"
+    },
+    {
+      "file": "fixed-memory-callback-group-replay-checker-collect.json",
+      "bytes": 1397,
+      "blake3": "f6ed840a5df47cc30b14d709db8caf68142c893fa26e7451c6461c282a81f33f"
+    },
+    {
+      "file": "fixed-memory-callback-group-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "fb04c940d651dc822da9a344a35c224204b9133df72f20dfeae0ed625f2bfac4"
+    },
+    {
+      "file": "fixed-memory-callback-group-replay-checker-verify.json",
+      "bytes": 918,
+      "blake3": "d935c8009176097f8c9f66ce0314f8709e4acdcf8e2722f15baa41ebb792cd61"
+    },
+    {
+      "file": "fixed-memory-callback-group-replay-checker-verify.log",
+      "bytes": 1214,
+      "blake3": "5128dd7aaebecec8f07df0e2f8fadf05ac8813b672218295b9809074f4fb5743"
+    },
+    {
+      "file": "fixed-memory-callback-group-resource-observation.json",
+      "bytes": 659,
+      "blake3": "b45e0003cb28517c56a015dfc46c1e73e9ffdc501014b1f0538936735e0e25c1"
+    },
+    {
+      "file": "fixed-memory-callback-group-verify.json",
+      "bytes": 996,
+      "blake3": "da4f0af0c9eaf731a6b32c4d177392229fcbd3ae31ac2a291a6f5968f0508a04"
+    },
+    {
+      "file": "fixed-memory-callback-group-verify.log",
+      "bytes": 328,
+      "blake3": "13b46e956248ddcc1e07d1b330d43e6c9ff3fab00d23e545ba693918fc4ad2f6"
+    },
+    {
+      "file": "fixed-memory-callback-group-wasm-print.json",
+      "bytes": 841,
+      "blake3": "030d4353a7ea2f263cc5969f4212283f3325b981c0e2e3058e32cec2d2ba9738"
+    },
+    {
+      "file": "fixed-memory-callback-group-wasm-print.log",
+      "bytes": 274613,
+      "blake3": "e09bee68a315d847dfe9e010ba19be3d88c25818079a24b124f1cbce259ac4f0"
+    },
+    {
+      "file": "fixed-memory-callback-observation.json",
+      "bytes": 8803,
+      "blake3": "e7bbfb75144ec9ef7711a75040b7318912e22e9de074089d504d74026633e847"
+    },
+    {
+      "file": "fixed-memory-callback-packed-cli-build.json",
+      "bytes": 1191,
+      "blake3": "cfbea572ef7f9fc70423c14898cc8ce333f2d279dd78718750ad97b49e391b00"
+    },
+    {
+      "file": "fixed-memory-callback-packed-cli-build.log",
+      "bytes": 54267,
+      "blake3": "b4b53cbe1bfabab59c33138782e8c8466bdaa39f838f7266ada275905c2656c1"
+    },
+    {
+      "file": "fixed-memory-callback-packed-invocation-source-equality.json",
+      "bytes": 918,
+      "blake3": "6332c24a9573fd6ea7a0dfe2d64e052825927e4083ae6ea4b873fccdd86b0360"
+    },
+    {
+      "file": "fixed-memory-callback-packed-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-packed-observation.json",
+      "bytes": 8831,
+      "blake3": "80423a84c7755d4f72135345f47f4f684841468291b2465a884196c53f5a001e"
+    },
+    {
+      "file": "fixed-memory-callback-packed-prepare.json",
+      "bytes": 1210,
+      "blake3": "21e1df8ae47e1a0948e80a942457b58cf5fbfb6ee918c9827d87df8bcc883c7f"
+    },
+    {
+      "file": "fixed-memory-callback-packed-prepare.log",
+      "bytes": 102,
+      "blake3": "68c3adac36fd1e2070826f5f8e7e11331ea26346cd4405a7aa41a1b831ccb5c8"
+    },
+    {
+      "file": "fixed-memory-callback-packed-replay-checker-collect.json",
+      "bytes": 1401,
+      "blake3": "1c0f105112880d2725735428c5ffcc9a29b581510be9c9cddf3717d2ad917ba4"
+    },
+    {
+      "file": "fixed-memory-callback-packed-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "adce261f5e4faee7e321636867d7d30a0ea5c55646f10eb4ef4bbe0a22f14059"
+    },
+    {
+      "file": "fixed-memory-callback-packed-replay-checker-verify.json",
+      "bytes": 921,
+      "blake3": "881e97d461f82609ad20f3936b2b52305857bce85b31467ba48bd9ac2707f506"
+    },
+    {
+      "file": "fixed-memory-callback-packed-replay-checker-verify.log",
+      "bytes": 1215,
+      "blake3": "b7d2df68e5c533f75585620494201bd051b7b3d724935d6311340d349db09e3d"
+    },
+    {
+      "file": "fixed-memory-callback-packed-resource-observation.json",
+      "bytes": 660,
+      "blake3": "c87d9143463f223e346f3e0ccd82da87469eb894bc015d99daaefde22a41a5a9"
+    },
+    {
+      "file": "fixed-memory-callback-packed-verify.json",
+      "bytes": 1001,
+      "blake3": "b6f91066ed1a1fb0c0880a991fc96f25ecfb427c3aa7513b6b0da56c05083844"
+    },
+    {
+      "file": "fixed-memory-callback-packed-verify.log",
+      "bytes": 328,
+      "blake3": "b292febf6988441c258baa141adc3d3e40bc73360365e90e36cc3ed445b68d80"
+    },
+    {
+      "file": "fixed-memory-callback-packed-wasm-print.json",
+      "bytes": 844,
+      "blake3": "64df198b3f6ebfc7c873a0c562b37fad323845019a85a693f2271e5aa11bac8d"
+    },
+    {
+      "file": "fixed-memory-callback-packed-wasm-print.log",
+      "bytes": 255492,
+      "blake3": "cd8774bff56129c3537e22d0454f096494d357e3790d83aa7cdeceb04ba07eb9"
+    },
+    {
+      "file": "fixed-memory-callback-prepare.json",
+      "bytes": 1189,
+      "blake3": "650bb9635de86e6dca2b276d190ba7d27f6faa91f81511f2853d2fb5fb9e66f3"
+    },
+    {
+      "file": "fixed-memory-callback-prepare.log",
+      "bytes": 95,
+      "blake3": "f0f3bcef7fb713bd6c406a47465697c4e864c575dbadc3568c9de573251f8020"
+    },
+    {
+      "file": "fixed-memory-callback-projection-cli-build.json",
+      "bytes": 1215,
+      "blake3": "d504a99a4ff0a775afc4aa52a17691d17c56074783ab0c09dc3f1934d54a4e43"
+    },
+    {
+      "file": "fixed-memory-callback-projection-cli-build.log",
+      "bytes": 54567,
+      "blake3": "d93fc67dcb73c4643d747790cf748305e9fbd561dc4d7594b00c6b4cf366e0db"
+    },
+    {
+      "file": "fixed-memory-callback-projection-invocation-source-equality.json",
+      "bytes": 930,
+      "blake3": "6dda0d672f4f9a1e0dd457161c58ed879fd7c5412df50f2f14925e12364679de"
+    },
+    {
+      "file": "fixed-memory-callback-projection-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-projection-observation.json",
+      "bytes": 8847,
+      "blake3": "72daae33ba6b4c783346bd8966f6ae6af9c84c0d9fad27ccd26412a627b1a363"
+    },
+    {
+      "file": "fixed-memory-callback-projection-prepare.json",
+      "bytes": 1222,
+      "blake3": "9dc0250b3006999995a2642fa3d3719726b17e4323fed0b7389d04282de1ae7e"
+    },
+    {
+      "file": "fixed-memory-callback-projection-prepare.log",
+      "bytes": 106,
+      "blake3": "6faeff8aeaf03f735b7349e53c4c198fec4b13f4e62e45bd47f27baf85f6bec8"
+    },
+    {
+      "file": "fixed-memory-callback-projection-replay-checker-collect.json",
+      "bytes": 1417,
+      "blake3": "b0b593fe9c2cca5bc496c8d0aa148540d3af745ac0c90425f17d8c862ddd7444"
+    },
+    {
+      "file": "fixed-memory-callback-projection-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "f0ffb6f9e64588669fca03d199afb0795ccec7bac1f22cefd690072a328a3faa"
+    },
+    {
+      "file": "fixed-memory-callback-projection-replay-checker-verify.json",
+      "bytes": 933,
+      "blake3": "1fcb6a419b7efc61fe4f5842e7b877834f0129efc7afb86f16fab4245bf6deb0"
+    },
+    {
+      "file": "fixed-memory-callback-projection-replay-checker-verify.log",
+      "bytes": 1219,
+      "blake3": "04cf12a8fbaf4873fe4e0da0d7bae4046795213454ce3f7caaa94c7e91c4078c"
+    },
+    {
+      "file": "fixed-memory-callback-projection-resource-observation.json",
+      "bytes": 664,
+      "blake3": "8fc9c9f6c7ec1485f5cd177d9588de261cc36e58a5a1f737292ede8725f063ae"
+    },
+    {
+      "file": "fixed-memory-callback-projection-verify.json",
+      "bytes": 1021,
+      "blake3": "7057300cdfad42c3a3718f061594847c098b3483638991b01b4dee5f2f63d603"
+    },
+    {
+      "file": "fixed-memory-callback-projection-verify.log",
+      "bytes": 328,
+      "blake3": "db1afa8945fc47e6fb6b1aa27fcc56b7d45a45409a8d722c4ffa6be93e15e4c5"
+    },
+    {
+      "file": "fixed-memory-callback-projection-wasm-print.json",
+      "bytes": 856,
+      "blake3": "d72714eac820cf8bbfeb173f16403e2a38cbccc60c3b904c2a9b8eb0ee67a52d"
+    },
+    {
+      "file": "fixed-memory-callback-projection-wasm-print.log",
+      "bytes": 232930,
+      "blake3": "a20aeb0716e3e50525b78acc2d17a1ad5e36109aafcbacff33d374058a0d914a"
+    },
+    {
+      "file": "fixed-memory-callback-replay-checker-collect.json",
+      "bytes": 1373,
+      "blake3": "a083175a87ee873a1dd2ddc307b6844f16ec8214ecccca524cc8512429b72b6a"
+    },
+    {
+      "file": "fixed-memory-callback-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "ba240fc20f4ebd9b8d07f7beebf83a410d670781d7592ef6b5a5667001425b8d"
+    },
+    {
+      "file": "fixed-memory-callback-replay-checker-verify.json",
+      "bytes": 900,
+      "blake3": "bc34feab27d5b67ad4982e82e874e2e126d20df272347fff80eb786361adc9f7"
+    },
+    {
+      "file": "fixed-memory-callback-replay-checker-verify.log",
+      "bytes": 1208,
+      "blake3": "f2f15cdeec2e4cd7174aaa3deab4811b0d5bb2b07e1c515c4fbd6ff2cc2b3462"
+    },
+    {
+      "file": "fixed-memory-callback-resize-cli-build.json",
+      "bytes": 1191,
+      "blake3": "144f3c9f93094fd2bda02ba52cb865f89d2a2d72f457c96a71497332d3b43491"
+    },
+    {
+      "file": "fixed-memory-callback-resize-cli-build.log",
+      "bytes": 54267,
+      "blake3": "b3f386ce3910b0f282b25540994a497e2d9327cdb57f6fe91ba068ccbc2138dc"
+    },
+    {
+      "file": "fixed-memory-callback-resize-invocation-source-equality.json",
+      "bytes": 918,
+      "blake3": "cf3b5520422e672aaa62073b9cf0a67d5254b932052a0266c9f931cc9323da6c"
+    },
+    {
+      "file": "fixed-memory-callback-resize-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-resize-observation.json",
+      "bytes": 8831,
+      "blake3": "384b1aaf21957cf562d6fab32d0501074c0ca2906548bbcfbf34b408b41dd78c"
+    },
+    {
+      "file": "fixed-memory-callback-resize-prepare.json",
+      "bytes": 1210,
+      "blake3": "55c92e3686b01cccd09b5849176322f421cdfc58ddd2e665a4d89bdd862c38e9"
+    },
+    {
+      "file": "fixed-memory-callback-resize-prepare.log",
+      "bytes": 102,
+      "blake3": "76fd1f29ffaa15aa6fac9758476e579053df83760aabd8443e8ca3402734c6b3"
+    },
+    {
+      "file": "fixed-memory-callback-resize-replay-checker-collect.json",
+      "bytes": 1401,
+      "blake3": "7e21ffbefd63909e45d95ddb28a650a40395ff8ccda8c8039252a63fe78d4423"
+    },
+    {
+      "file": "fixed-memory-callback-resize-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "8ea1e04de1baed77f174a9f52590966b991bd94c9bc15dd8b10879555e1348b8"
+    },
+    {
+      "file": "fixed-memory-callback-resize-replay-checker-verify.json",
+      "bytes": 921,
+      "blake3": "722311a2388ceb133cc18f585a9c4bc144deb1f46b6d1a545d09b6f7c894730e"
+    },
+    {
+      "file": "fixed-memory-callback-resize-replay-checker-verify.log",
+      "bytes": 1215,
+      "blake3": "5ba5948405a418cbab016ea51fdc6dbb325da37c15c8a4351be863e858ac7a71"
+    },
+    {
+      "file": "fixed-memory-callback-resize-resource-observation.json",
+      "bytes": 660,
+      "blake3": "563dfcd3b6e6c61aef89badaba8dd2802c86ed668547028a0e3a3359801e9976"
+    },
+    {
+      "file": "fixed-memory-callback-resize-verify.json",
+      "bytes": 1001,
+      "blake3": "d7ae875296d4cfd2a22e43de3f2476a0bcabdeb40d111007c12b2737668af25b"
+    },
+    {
+      "file": "fixed-memory-callback-resize-verify.log",
+      "bytes": 328,
+      "blake3": "40e558a67952c0d6998c384201efbe71c262970d3219819c1f83bda7855aaf97"
+    },
+    {
+      "file": "fixed-memory-callback-resize-wasm-print.json",
+      "bytes": 844,
+      "blake3": "0c417876a207ccb82101e8cc50824992b7cbc35efa01eb446f72b6f8a5ba1491"
+    },
+    {
+      "file": "fixed-memory-callback-resize-wasm-print.log",
+      "bytes": 258186,
+      "blake3": "6f62f89c937f41c2a6aed6ed894fe57c0ca34cb19d59c02857b2a606069f8781"
+    },
+    {
+      "file": "fixed-memory-callback-resource-observation.json",
+      "bytes": 653,
+      "blake3": "6a1ca56cbc422194249d1d84415b10937834b8be5a852d3d2c1953af07172219"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-cli-build.json",
+      "bytes": 1185,
+      "blake3": "ceda3ca698fd0d608a3f3da0de554cf2d5333e6bbb8646bdfaa7f11a87cb53f5"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-cli-build.log",
+      "bytes": 54192,
+      "blake3": "d896d4f53990668fa8166dbff99275bd8ac6cff6c2f034002691dabab4510b6e"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-observation.json",
+      "bytes": 8827,
+      "blake3": "de6cca1f5c5b372a940aa2290594b9a7953ba200e24f80171e6cf62ce7fc0d1e"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-prepare.json",
+      "bytes": 1207,
+      "blake3": "76effdb6591b48bd311989a8d9970c7874a75aeb7805663ec3661a3bce016733"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-prepare.log",
+      "bytes": 101,
+      "blake3": "e4e897f4132036d1b36fd65e792e4578a979d4509915c33fe7fe61b0bc353f8e"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-replay-checker-collect.json",
+      "bytes": 1397,
+      "blake3": "8179ed9ef1b0fa6ad6a0dd1696228ff312314fb25ab9897910fe8313be74e8ca"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "2e32ba60492a558952ba41df6261163c382508ff28a184feb00e4fb4f9603d69"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-replay-checker-verify.json",
+      "bytes": 918,
+      "blake3": "7b0054177a0bb7bf0cccfa88b146c19eb64d8b2283927cd051f8dcbd8e09c1c5"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-replay-checker-verify.log",
+      "bytes": 1214,
+      "blake3": "ff4919f9b7600b16f80e4564d9b739adc28957596ffe6b58af1f26dce1566125"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-resource-observation.json",
+      "bytes": 659,
+      "blake3": "806b203fc6770c5ab017299db8b106d6c3c6144b2d143b3aab0b075a57ed3a7c"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-verify.json",
+      "bytes": 996,
+      "blake3": "e0ed631c05f566b6078afd6b5a3e88dd9155378a58d1a798fb2e57c425a0d95e"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-verify.log",
+      "bytes": 328,
+      "blake3": "7059bd9f93dc98a1f882119b9b61c6c5cfd365c25361f05017d39ed27530af9e"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-wasm-print.json",
+      "bytes": 841,
+      "blake3": "f53fe6ff5c80e5dddb4141b0abc3fe65966d86c2b5c8111e6476b54e7fae8263"
+    },
+    {
+      "file": "fixed-memory-callback-reuse-wasm-print.log",
+      "bytes": 243547,
+      "blake3": "d50aea71a78c9cf87812a6fff1343d32d43e67fc272427fad679a1085e4613b3"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-cli-build.json",
+      "bytes": 1191,
+      "blake3": "6ced1fb66c8c3a656e873f4974a289621a74cfb81e20fb49c75886241ec0d4c0"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-cli-build.log",
+      "bytes": 54267,
+      "blake3": "f8c48a658a523b8d7c79b3f57b597a1787317110e7dd418556223ba65aa0e981"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-invocation-source-equality.json",
+      "bytes": 918,
+      "blake3": "f9fa296b6beb8a755f4f6f0294e85816c73988dfd4fad476156601b692859c44"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-observation.json",
+      "bytes": 8831,
+      "blake3": "6adb472d8c5a759aefb318f378702300a39f065b6bbe7c6cd23296b2b9876e99"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-prepare.json",
+      "bytes": 1210,
+      "blake3": "c04a950a7ce54d4d9b9cfe690b430aa334b621edb4aab13f2d3cadb85e260aed"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-prepare.log",
+      "bytes": 102,
+      "blake3": "edbf16d4df9aea0760ef6facea62f64cf9c0479fa457756462ff561e0f3fee57"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-replay-checker-collect.json",
+      "bytes": 1401,
+      "blake3": "0bb24500e8ea026b46770e8a44e4e90e58467f00b32ec56090085993b85a9ac0"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "9dd1f9d363b1f4f31fecb2e703778576ab6042466daead32e3f55f120250b589"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-replay-checker-verify.json",
+      "bytes": 921,
+      "blake3": "c35b84fa8f3b818e9a9f27bdec047ffe460ab22722c011c83e341caf90463de1"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-replay-checker-verify.log",
+      "bytes": 1215,
+      "blake3": "72f609377b64c77bbe50776e81526a35b4450c310ce3c91e71eceb9591c890b8"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-resource-observation.json",
+      "bytes": 660,
+      "blake3": "cb6b00e5d4e5ce2ca15b6283dfd3992a539ee9b6b1a0afc4e1c9f7e6ca1d0d7e"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-verify.json",
+      "bytes": 1001,
+      "blake3": "906eeae65b00efef913bdfc4b594606d296fb55f787791ff0664d89cfdc86b59"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-verify.log",
+      "bytes": 328,
+      "blake3": "bc324d4ea70acbbf51861a8b1c5f72d4bb49a19d43f8efffadb9b9b9e1a18596"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-wasm-print.json",
+      "bytes": 844,
+      "blake3": "5b3f0de14d02a47e26c395d1c523ac248e87e1d4610d04ba9217b9ef354c8217"
+    },
+    {
+      "file": "fixed-memory-callback-rounds-wasm-print.log",
+      "bytes": 263556,
+      "blake3": "f60e0c895a5393d45c34a4583394ccd02523708ad62b63cfad8351db8d1f964c"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-cli-build.json",
+      "bytes": 1191,
+      "blake3": "578969fb44705115cb911aa799e0096fea3962834b48d1a1342601f9d4fa447a"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-cli-build.log",
+      "bytes": 54267,
+      "blake3": "0dc0d2ed6ac734ca7cd144935e20ef4da23273c760d34a2c50ae17211115662f"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-invocation-source-equality.json",
+      "bytes": 918,
+      "blake3": "26ca00476a2151320efd061a689001057c90bc0af42806abed38b88e89de96fc"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-observation.json",
+      "bytes": 8831,
+      "blake3": "03d20a87dcb40ab2607fa0c64e26df4f8e0eb3611581f1e7cfa406460d84ece5"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-prepare.json",
+      "bytes": 1210,
+      "blake3": "f936e6417c0f4cd30ec21b39622dd09caf4939ebc99ff07668df7a20e08fb647"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-prepare.log",
+      "bytes": 102,
+      "blake3": "4df36eea9eab02246f3c1ac7653f6ecada6fe6b2bf67464c7130ebb7900f35aa"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-replay-checker-collect.json",
+      "bytes": 1401,
+      "blake3": "0972c29751b8ddebb5c05b68cbfa730de9931398af8fe4d306129156c549c82e"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "ddd7c6a34ba8966a72aa358e7ede87251166ec724a33c2cb026d52f1d857f79a"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-replay-checker-verify.json",
+      "bytes": 921,
+      "blake3": "2b516fad20efd8b564a2b1f8d780aa2603969dd97e717933930e7a84b6ee05c7"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-replay-checker-verify.log",
+      "bytes": 1215,
+      "blake3": "0a50121784a1618a7686f916a851997f974e68e6260d0dcae49ff077069dcf0e"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-resource-observation.json",
+      "bytes": 660,
+      "blake3": "4dd964406dd2d978ea39e58186f81acfe26d276bfbd4873cb9345caf00df79d2"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-verify.json",
+      "bytes": 1001,
+      "blake3": "9d568123cde4192ca4876e118e74fb631b06a3e29573359a3376b4bf9928df5f"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-verify.log",
+      "bytes": 328,
+      "blake3": "a226673fff4cc7441f4634b3a9165dcea3a969d2fcae2f721799ebfd8a32d50b"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-wasm-print.json",
+      "bytes": 844,
+      "blake3": "0ad260b6ee878c63f0f0d992d36804c820db096147bf49436ac861aa37fba76d"
+    },
+    {
+      "file": "fixed-memory-callback-scalar-wasm-print.log",
+      "bytes": 254386,
+      "blake3": "3e4ff63b7a542fc0c1795193c8567cf60a4ee00bc6d48f334826e476b4f81f23"
+    },
+    {
+      "file": "fixed-memory-callback-table-cli-build.json",
+      "bytes": 1185,
+      "blake3": "5df4b2fc7d3192fc1dc4bafbc3fb2eecd03f80ad7ce9fc9d25898583e3cda3f7"
+    },
+    {
+      "file": "fixed-memory-callback-table-cli-build.log",
+      "bytes": 54192,
+      "blake3": "173fd635428a1215d01ef4f8a08421205bfcf293ef3bd237244465e92961b1f4"
+    },
+    {
+      "file": "fixed-memory-callback-table-invocation-source-equality.json",
+      "bytes": 915,
+      "blake3": "86c3848f1e9e2107c99fd8ffa98949613af442e8aa203a4ac2b93e218d4a2e6d"
+    },
+    {
+      "file": "fixed-memory-callback-table-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-table-observation.json",
+      "bytes": 8827,
+      "blake3": "0a6f074ff21768d6dc6e77f9dc57a754335dc756889a319fa5f113591fd95de0"
+    },
+    {
+      "file": "fixed-memory-callback-table-packed-source-equality.json",
+      "bytes": 899,
+      "blake3": "c6a4385039214a59deeea1e356b6ba89272f0c7d66e0a913b243d639eb455ff6"
+    },
+    {
+      "file": "fixed-memory-callback-table-packed-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-table-prepare.json",
+      "bytes": 1207,
+      "blake3": "03036f2e6a49f8cc5d651e14998424fc52cb51ad43f0e214bc4a240b8f70c02a"
+    },
+    {
+      "file": "fixed-memory-callback-table-prepare.log",
+      "bytes": 101,
+      "blake3": "c74c974dde7003d3a7547f72c740ac20bc7ba0ef9b560a762fa70bab704b2820"
+    },
+    {
+      "file": "fixed-memory-callback-table-replay-checker-collect.json",
+      "bytes": 1397,
+      "blake3": "30da8f3c447f442fda693aa51a1320cb8df816679535213c697f98fbb0d608a2"
+    },
+    {
+      "file": "fixed-memory-callback-table-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "1ee47f0a0a98a56ba9534b878d1464a6541deee0df93d4bd8cfb3851ecf18e55"
+    },
+    {
+      "file": "fixed-memory-callback-table-replay-checker-verify.json",
+      "bytes": 918,
+      "blake3": "b0517c47e4f5fc3c0927b92447ae9cf404610f705a0e1462a021b195e5a8469c"
+    },
+    {
+      "file": "fixed-memory-callback-table-replay-checker-verify.log",
+      "bytes": 1214,
+      "blake3": "91391a89d94fb0ef4f8567c8e97478de6e8ee87f186a665a24dbd25f54878f40"
+    },
+    {
+      "file": "fixed-memory-callback-table-resource-observation.json",
+      "bytes": 659,
+      "blake3": "a19093d1b7d56660d4b4aeb464261945cb93f09c34ae63c9f8e82770a92821f2"
+    },
+    {
+      "file": "fixed-memory-callback-table-verify.json",
+      "bytes": 996,
+      "blake3": "339d7929acb31f2adb6217fb802458c67269db5514fb62b7262111d40bc68b41"
+    },
+    {
+      "file": "fixed-memory-callback-table-verify.log",
+      "bytes": 328,
+      "blake3": "aec1bb67486e906a593e51989a3a10149a65b3a59ba7b0916146e9420edea16b"
+    },
+    {
+      "file": "fixed-memory-callback-table-wasm-print.json",
+      "bytes": 841,
+      "blake3": "a4660152be7a86cc9f357100ae1ef26305ce95685b86955413194f643fee3f2a"
+    },
+    {
+      "file": "fixed-memory-callback-table-wasm-print.log",
+      "bytes": 272494,
+      "blake3": "1785344368b96346f6888e8c94b6f6482f3dea399ea93bdfd7547b542b6ab022"
+    },
+    {
+      "file": "fixed-memory-callback-verify.json",
+      "bytes": 966,
+      "blake3": "f1bde2f2d219ca82376e238b988a95dead8523efccdcf010d64304ee6e8c0037"
+    },
+    {
+      "file": "fixed-memory-callback-verify.log",
+      "bytes": 328,
+      "blake3": "5e77ecf54e272033c92cff8ac03cf98e221b081b8e80936a90c838fc6ab00ec5"
+    },
+    {
+      "file": "fixed-memory-callback-wasm-print.json",
+      "bytes": 823,
+      "blake3": "a0f75c6d5c13c8852e1e04c7af0683b6a8794f7173604dba8ff1a57e9411d772"
+    },
+    {
+      "file": "fixed-memory-callback-wasm-print.log",
+      "bytes": 218842,
+      "blake3": "9a4ca1f835e04835e621e1fac8d7ca6d75786213061acc1998568b92c6f0d063"
+    },
+    {
+      "file": "fixed-memory-callback-wire-cli-build.json",
+      "bytes": 1179,
+      "blake3": "eaf3a49a3da6e3c9a9bfd24f66341b2af4c92939a02514d2693cb8fde49adc2c"
+    },
+    {
+      "file": "fixed-memory-callback-wire-cli-build.log",
+      "bytes": 54117,
+      "blake3": "e90c214f113713eb171c5df9f1b75b47cc40e2394606ebb7f1453603993a4430"
+    },
+    {
+      "file": "fixed-memory-callback-wire-observation.json",
+      "bytes": 8823,
+      "blake3": "8eb48db3d1e852c058e2c0f845a33eb52f0d44ad1341a1b63b3e144b86d37bbd"
+    },
+    {
+      "file": "fixed-memory-callback-wire-prepare.json",
+      "bytes": 1204,
+      "blake3": "8da9fa9b6178d91850dabd1976eb79322a4c2e39daef18e170c7e82cfe550780"
+    },
+    {
+      "file": "fixed-memory-callback-wire-prepare.log",
+      "bytes": 100,
+      "blake3": "1f58abc772eda76593dadfe9f2f35c8f4268f94d56b2064b0d1f74a972727d30"
+    },
+    {
+      "file": "fixed-memory-callback-wire-replay-checker-collect.json",
+      "bytes": 1393,
+      "blake3": "ae151df33d25501870f78aa0e393cba3582ee9664010299cc653855ab0e17d38"
+    },
+    {
+      "file": "fixed-memory-callback-wire-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "7584c4eb4e457795cb10a4f0496bd24d6b4b2ce59c7fcecfacf4e89b8613ac65"
+    },
+    {
+      "file": "fixed-memory-callback-wire-replay-checker-verify.json",
+      "bytes": 915,
+      "blake3": "0459d626a32f6d4063b1d164ad23e216faa9a8604fa29753c08c2fd0c32d6d1f"
+    },
+    {
+      "file": "fixed-memory-callback-wire-replay-checker-verify.log",
+      "bytes": 1213,
+      "blake3": "753ab2ac2dab61562a1eee30eed01c9371722ce123cd682bca9f1ad6221166b3"
+    },
+    {
+      "file": "fixed-memory-callback-wire-resource-observation.json",
+      "bytes": 658,
+      "blake3": "79fd0a00197f540668d63006926bf6cd6d062712060533b5d5d8cb8ca39a68d5"
+    },
+    {
+      "file": "fixed-memory-callback-wire-verify.json",
+      "bytes": 991,
+      "blake3": "e97aeebc899682c30cd317ad450d46abe4b669c4eb7db3de3b2f35c1db52de39"
+    },
+    {
+      "file": "fixed-memory-callback-wire-verify.log",
+      "bytes": 328,
+      "blake3": "06e8ee7c1cbdf6249d315936e2c7b20f8eeedb46cab804f002d5ef952b2f53a5"
+    },
+    {
+      "file": "fixed-memory-callback-wire-wasm-print.json",
+      "bytes": 838,
+      "blake3": "1da280673889ff930126af6a69b547540b3ab7165bf96183da5eefdc507d1d9e"
+    },
+    {
+      "file": "fixed-memory-callback-wire-wasm-print.log",
+      "bytes": 244272,
+      "blake3": "61c6f1be3ed46b6e2c884b8ae1e2e6fc5de5c979f62846001f2b7cf8729138ef"
+    },
+    {
+      "file": "fixed-memory-callback-word-cli-build.json",
+      "bytes": 1179,
+      "blake3": "643f1d2efc00acfdd844d62c862932e45dc7213bbf54a5fac81e520b89d12075"
+    },
+    {
+      "file": "fixed-memory-callback-word-cli-build.log",
+      "bytes": 54117,
+      "blake3": "b4bd950a62d138c92646829bf0f8792af91f07a89192fea9013fbd71e09fa644"
+    },
+    {
+      "file": "fixed-memory-callback-word-invocation-source-equality.json",
+      "bytes": 912,
+      "blake3": "59c9431747f60484324703dbe3c50daa958bd0f81b1955e0bebddf2cb6456b91"
+    },
+    {
+      "file": "fixed-memory-callback-word-invocation-source-equality.log",
+      "bytes": 0,
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "file": "fixed-memory-callback-word-observation.json",
+      "bytes": 8823,
+      "blake3": "580569ed841299e22146ec2e6f695b3915e45b09f51e0b03591cfa1c9796ed91"
+    },
+    {
+      "file": "fixed-memory-callback-word-prepare.json",
+      "bytes": 1204,
+      "blake3": "dc4c6bc15f9f6cc5005a20875b2496bb98d53920ec86f2c79a506b2487eaa221"
+    },
+    {
+      "file": "fixed-memory-callback-word-prepare.log",
+      "bytes": 100,
+      "blake3": "4ba207e79637df8ac3797afced8aa9da400c17239140329e65e83479752754e5"
+    },
+    {
+      "file": "fixed-memory-callback-word-replay-checker-collect.json",
+      "bytes": 1393,
+      "blake3": "75e296b55f0e683b8f3f8152562db7c54b7d1fa15f6ee3daf391200d690a40d6"
+    },
+    {
+      "file": "fixed-memory-callback-word-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "b0d076d8c8b3e1b69000bfd730b8a5b7a557bb4c70d5a1126fa0a69931cf7c50"
+    },
+    {
+      "file": "fixed-memory-callback-word-replay-checker-verify.json",
+      "bytes": 915,
+      "blake3": "9807668290baf4ed216d636fe924a4d34c6ebce24c5be9a44bac78beef011ceb"
+    },
+    {
+      "file": "fixed-memory-callback-word-replay-checker-verify.log",
+      "bytes": 1213,
+      "blake3": "0a2607dc81f083ef04bd67d7cdceb34ac3a843866afaf79a69815b96d7624a08"
+    },
+    {
+      "file": "fixed-memory-callback-word-resource-observation.json",
+      "bytes": 658,
+      "blake3": "7b950b254fa2cb394f47b9edd150aa67eb3c4b6fb5dc1564ebdfd77927c1a52b"
+    },
+    {
+      "file": "fixed-memory-callback-word-verify.json",
+      "bytes": 991,
+      "blake3": "99de65f6b014a844d506e0923015be3ea55596cc2f839d6445ed96b74b742625"
+    },
+    {
+      "file": "fixed-memory-callback-word-verify.log",
+      "bytes": 328,
+      "blake3": "7985e24ca12edf48c8c583e38ac5ef3906696eb04a720acb2452fa23267c5f13"
+    },
+    {
+      "file": "fixed-memory-callback-word-wasm-print.json",
+      "bytes": 838,
+      "blake3": "5403666f2016dd9ef91e05f2ae4165e3121df288eb9556a59eb83f69d23020c9"
+    },
+    {
+      "file": "fixed-memory-callback-word-wasm-print.log",
+      "bytes": 263578,
+      "blake3": "7cbb9d471a08ada8b876598c3b45f63a5918159bbd899c9933408eb7aa67e96a"
+    },
+    {
+      "file": "fixed-memory-cli-regression.json",
+      "bytes": 785,
+      "blake3": "59d78d377f1ecfca9d06de1149970fa11a082173f22e6d8f838a6071e9638907"
+    },
+    {
+      "file": "fixed-memory-cli-regression.log",
+      "bytes": 2716,
+      "blake3": "978f6ab135f0452be744c68c08d73672dc3d9c9c782fc111fdc9ebafb962b664"
+    },
+    {
+      "file": "fixed-memory-consumer-no-std.json",
+      "bytes": 766,
+      "blake3": "3dd048ed596852e283d67882c608315359c3139473c5969f6e54c624a70ad231"
+    },
+    {
+      "file": "fixed-memory-consumer-no-std.log",
+      "bytes": 4502,
+      "blake3": "b10bf078b4d6e01b4ad1a202b529eb485cafca35b299f8044f43bc2cce8a9380"
+    },
+    {
+      "file": "fixed-memory-counterexample-callback-print.json",
+      "bytes": 836,
+      "blake3": "3085cdc647fb54e5309bbea0eb874a5ca2145f97413daa3cd729244191be06e9"
+    },
+    {
+      "file": "fixed-memory-counterexample-callback-print.log",
+      "bytes": 218839,
+      "blake3": "263f52187400b3e4a482d0b9cf7e424f27c110067550967e4d065eb1f35e6a86"
+    },
+    {
+      "file": "fixed-memory-counterexample-neutral-print.json",
+      "bytes": 834,
+      "blake3": "165d1aded4cc762d54655bce7eb102bb91f44f2b0a6b3550de94b448957cade6"
+    },
+    {
+      "file": "fixed-memory-counterexample-neutral-print.log",
+      "bytes": 59197,
+      "blake3": "ceb9601618cacb7a08446917fb17b5b3cbff4f0635b50db8f307f199744446d8"
+    },
+    {
+      "file": "fixed-memory-focused-crates.json",
+      "bytes": 838,
+      "blake3": "25720f0f7db33947a23b0c8a4ac27ff1bfc089a6104cb437517bf5a961e96a4d"
+    },
+    {
+      "file": "fixed-memory-focused-crates.log",
+      "bytes": 11571,
+      "blake3": "b3d68725ca9bb3d8cac37d2733af3b11dab14cc9721c3fe1a95d00551caf60ba"
+    },
+    {
+      "file": "fixed-memory-native-nix-checks.json",
+      "bytes": 809,
+      "blake3": "9b4715314473f70928753e336ced6dafa6fee6ade53056812aa2be40e4dec1a4"
+    },
+    {
+      "file": "fixed-memory-native-nix-checks.log",
+      "bytes": 2558873,
+      "blake3": "bebaadc74a2ee4d7f5be7c0bd97859ab2d32ab28b445efc50b5e39f823b03629"
+    },
+    {
+      "file": "fixed-memory-native-strict-validate.json",
+      "bytes": 730,
+      "blake3": "522f1d0dee377e2b546f17af05d3f6cacfa66dfbd8d5c5b829ed334d5c750136"
+    },
+    {
+      "file": "fixed-memory-native-strict-validate.log",
+      "bytes": 89451,
+      "blake3": "ef72028c46cbe52729c3b82c6afdb5ed4cb9f7a542c32f22a2a5af8b744b9179"
+    },
+    {
+      "file": "fixed-memory-neutral-cli-build.json",
+      "bytes": 1143,
+      "blake3": "08840d2ef485df4224903c381f863334e702176edf64cc11c392c32d3470a475"
+    },
+    {
+      "file": "fixed-memory-neutral-cli-build.log",
+      "bytes": 53616,
+      "blake3": "e203dbb0a53a0262a13b324d51964093c73062b9c37af2dbc8527d2599897926"
+    },
+    {
+      "file": "fixed-memory-neutral-observation.json",
+      "bytes": 8788,
+      "blake3": "75b22ba462cbbe5067ceeb67e19a058c01f4405dbd2bfff75a467f85d07c3592"
+    },
+    {
+      "file": "fixed-memory-neutral-prepare.json",
+      "bytes": 1188,
+      "blake3": "4ed3ca97745d64b28eaed02869bed77776cc23b2f4240761e8ed41b0fd72d82a"
+    },
+    {
+      "file": "fixed-memory-neutral-prepare.log",
+      "bytes": 94,
+      "blake3": "04be012b999fdd8c8e0de0ec92fec1cfa3673039bae70cfe4c000957c2053dd6"
+    },
+    {
+      "file": "fixed-memory-neutral-replay-checker-collect.json",
+      "bytes": 1369,
+      "blake3": "ea9808310f1f63f7b1bb6e5f17c4b8f1dc466ea18060721d5c601c678ba3d1d0"
+    },
+    {
+      "file": "fixed-memory-neutral-replay-checker-collect.log",
+      "bytes": 5048,
+      "blake3": "05d9e789cb719eabec66369b17ec14e6f6c23f2b890b6d31d226ec79188f9e7f"
+    },
+    {
+      "file": "fixed-memory-neutral-replay-checker-verify.json",
+      "bytes": 897,
+      "blake3": "f22ffb71db9cd1209228551ed4726973418c2d78defd8bd7109d5be289601591"
+    },
+    {
+      "file": "fixed-memory-neutral-replay-checker-verify.log",
+      "bytes": 1207,
+      "blake3": "7fabbdf41f1a372b2af60be57d5bd4634e0013b68fca94faac12c22a0cc309b4"
+    },
+    {
+      "file": "fixed-memory-neutral-resource-observation.json",
+      "bytes": 654,
+      "blake3": "1e63925a4ed43e80c360913e5314845ffac8b9f8fb359f5902b37edfac97d4b1"
+    },
+    {
+      "file": "fixed-memory-neutral-verify.json",
+      "bytes": 961,
+      "blake3": "7ae8be0d4e34b4a56a10749c866404c6629bf833499acee061cd207bc115ca8b"
+    },
+    {
+      "file": "fixed-memory-neutral-verify.log",
+      "bytes": 328,
+      "blake3": "2e6cd06b1687a5b935544b3bc692a710d967f8661cbc7082ccd103dd8124a62a"
+    },
+    {
+      "file": "fixed-memory-neutral-wasm-print.json",
+      "bytes": 820,
+      "blake3": "716c91a7bf3a4556d6c132f428ac09e9b5a9206aac944b0ed058a53b63ef55f9"
+    },
+    {
+      "file": "fixed-memory-neutral-wasm-print.log",
+      "bytes": 59200,
+      "blake3": "9eec0991ba2b6f52b23bc88354571f5804ecd6c7f83586cfd4ca3876bc2f2fa6"
+    },
+    {
+      "file": "fixed-memory-producer-binary-identity.json",
+      "bytes": 729,
+      "blake3": "f82905a26949e6c756d4bac3d9e75953b6054647d8fdc00b1d9c6c42673a6232"
+    },
+    {
+      "file": "fixed-memory-producer-binary-identity.log",
+      "bytes": 65,
+      "blake3": "28989eae67b0b3d257302023d7ce620e8b16013099df7457e870c9bcaa1ff45e"
+    },
+    {
+      "file": "fixed-memory-producer-immutable-identity.json",
+      "bytes": 730,
+      "blake3": "c5adedc2cd9f3194ee35457aebf8e0195abf3c76d5715a0c8e515cc2029511af"
+    },
+    {
+      "file": "fixed-memory-producer-immutable-identity.log",
+      "bytes": 65,
+      "blake3": "28989eae67b0b3d257302023d7ce620e8b16013099df7457e870c9bcaa1ff45e"
+    },
+    {
+      "file": "fixed-memory-producer-immutable-store.json",
+      "bytes": 797,
+      "blake3": "aa70eb365237f60b76fc4835702ef375fa421602f8c02dd12891c65c30114d56"
+    },
+    {
+      "file": "fixed-memory-producer-immutable-store.log",
+      "bytes": 82,
+      "blake3": "4385122fbdf9bbe3568c05112c2afdcf761bc4e7bb7bb9aa0cee3526bb376e70"
+    },
+    {
+      "file": "fixed-memory-review-completeness.json",
+      "bytes": 795,
+      "blake3": "e03e00a22120f0f9fd8e1f718a4375518b7a788b0e2be8a8c156beb511f7523a"
+    },
+    {
+      "file": "fixed-memory-review-completeness.log",
+      "bytes": 26286,
+      "blake3": "073bd75165f9aeb6490d0be6d1ca694b6e7b3dc77f7ce91185b46436492e92ca"
+    },
+    {
+      "file": "original-consumer-commands.json",
+      "bytes": 1011,
+      "blake3": "20477424b5d6627393297edaa141f83f6c43c4c023c36e674c3177ab7c455e06"
+    },
+    {
+      "file": "original-consumer-actor.log",
+      "bytes": 79,
+      "blake3": "50dbebc06167c853a1bf928860859c101fe1f28ee8615ef1d7574bfdc32a0313"
+    },
+    {
+      "file": "original-consumer-structural-bytes-report.json",
+      "bytes": 6242,
+      "blake3": "0fae814d479bcf775dd4355babe4dbf1a671efbaf4b2c59d242f641988aed259"
+    },
+    {
+      "file": "unchanged-actual-runtime-profile.json",
+      "bytes": 1923,
+      "blake3": "9a38ada0d2b66a04b216f10504cb0d9493306ffbe76eef8e8012ee4c985e739f"
+    },
+    {
+      "file": "independent-callback-actual-valence-adapter.log",
+      "bytes": 268,
+      "blake3": "685b0bb845ccd06867ff773f73104fce5506a2f168258e9fdb2c1b3d09464dcb"
+    },
+    {
+      "file": "independent-callback-octet-export.json",
+      "bytes": 12591,
+      "blake3": "de15cea6b4b590954de4f43c04d334c487f30a2472ab5db08e8680ecaa6bb34d"
+    },
+    {
+      "file": "independent-callback-sidecar.json",
+      "bytes": 2387,
+      "blake3": "518aca2b8f30c366cef8e8fba6f194705a9549914a559ad7a0a04a71d9b4b3ea"
+    },
+    {
+      "file": "independent-callback-verify-export.log",
+      "bytes": 1208,
+      "blake3": "f2f15cdeec2e4cd7174aaa3deab4811b0d5bb2b07e1c515c4fbd6ff2cc2b3462"
+    },
+    {
+      "file": "independent-commands.json",
+      "bytes": 3076,
+      "blake3": "15ed76cc711f9a3cfdb7a27309db9ea623a722ab003700434a0af32dd6abdbd7"
+    },
+    {
+      "file": "independent-neutral-actual-valence-adapter.log",
+      "bytes": 267,
+      "blake3": "7e0ff3b4d4b628d836a62d3c2930207b8661679bad9a7592ed2561fb2acd888c"
+    },
+    {
+      "file": "independent-neutral-octet-export.json",
+      "bytes": 12590,
+      "blake3": "ec800891f30559ba4e819a4ba420c1fff3791762e482fc85f1c9e2d3450ffb9e"
+    },
+    {
+      "file": "independent-neutral-sidecar.json",
+      "bytes": 2386,
+      "blake3": "8b68a0e876327124d2e40253e29f4eb12b5528e9ebbfca22972d32f8cd4b6ffe"
+    },
+    {
+      "file": "independent-neutral-verify-export.log",
+      "bytes": 1207,
+      "blake3": "7fabbdf41f1a372b2af60be57d5bd4634e0013b68fca94faac12c22a0cc309b4"
+    },
+    {
+      "file": "prepublication-diagnostic-commands.json",
+      "bytes": 1741,
+      "blake3": "37b697d4e4d2f5043201f08f69a8354e35492800e18b820b1cdbb749607fc154"
+    },
+    {
+      "file": "prepublication-diagnostic-actor.log",
+      "bytes": 11843,
+      "blake3": "c53957f4c71ed5786e22bc52180f75344ad9af25ecb19e7709acf906355d968e"
+    },
+    {
+      "file": "prepublication-diagnostic-extension.log",
+      "bytes": 258,
+      "blake3": "fc69ca4edf4e6f8cd0d1be120779b74ce65634cbc0d2c37e91e009dba62140d6"
+    },
+    {
+      "file": "prepublication-diagnostic-extension-admission.json",
+      "bytes": 799,
+      "blake3": "fa9e66251de76058630816bff1cfa87ab25dc2d73b207b5710978ceb659b2c75"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/commands.json",
+      "bytes": 865,
+      "blake3": "d6998459bb24adac86f8335b224248f92c150156f2b8fcf4b566f975fbc7871b"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "a4f0064ca84860ebf261b2b58448c17d158da57e539728778e6c636ff803b8a3"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "33ab874f21a987ef45aa89943da0d81d375fd38c965433acad6dc29a6b7357c4"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "6a2c39f673b40538aeaf8f24937560783cb3fff1b89e496840c735072317efd0"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "48f39263c1ec1bb5022ce6321d1376f8059d5546139fa52c7bc415fd0c4cdca6"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "13f0f358a6350faf5c055687dbc5c7b5fb13f4d4716690ec11c80495a7ccbfa7"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "8b1ad55586e149d4469c78b1f5dac5409b0e5a6f5ff5077faed29223dfd2bb1d"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "aab641d2157a1931630ffe17bea8ee5b9db95905d965d488cb916ef4d4b1484b"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "4c1ef722e8cb69e77c212a9bd02c396decef0738ed524992d31071c1adbfdd73"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/values/1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196.preserves",
+      "bytes": 1010,
+      "blake3": "1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension/values/c2a1659626148b376437a5e657ac07cc5ff7393a5952a5dc3ab626d673ec52d8.preserves",
+      "bytes": 173,
+      "blake3": "c2a1659626148b376437a5e657ac07cc5ff7393a5952a5dc3ab626d673ec52d8"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension-admission.json",
+      "bytes": 817,
+      "blake3": "46c5a62818cd4dc7544a2c65e74cecfc0e2927c4ad19779aee58259a7b3db118"
+    },
+    {
+      "file": "prepublication-callback-wire-diagnostic/extension.log",
+      "bytes": 256,
+      "blake3": "41c47ea4bd292287423ce7ae16edadbc56a2aa56a910eefffc22aef8f4de7bf9"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/commands.json",
+      "bytes": 908,
+      "blake3": "3dd432a4ebbd52f5b334768bc4d7fd090a290d393c329a110ed717b00310bd9d"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "a4f0064ca84860ebf261b2b58448c17d158da57e539728778e6c636ff803b8a3"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "113be345c757c8063d5f97eb437419ed55f18ddc391fbd129981851d4d99cfc9"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9486914696b78553dedea03a324754339b25bb19454bc03d13fef8ebe6875031"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d0850e728be077a471c534a9b94aeaff1aca2b9855567f1c9423916ede03e9ce"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "728f3223ac664fabe7983b959b67a10d2030b203a8ed11cfb0b7cbb9e8c17743"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "1f36289a8e21b152b057d158b4d1749bb84925b0c775f30dc7e66e4f9b67e57b"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9486914696b78553dedea03a324754339b25bb19454bc03d13fef8ebe6875031"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d0850e728be077a471c534a9b94aeaff1aca2b9855567f1c9423916ede03e9ce"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3684,
+      "blake3": "dedcccd42a4303e26a24969438cd7f44292576c5865c95c57d4619bfd24554f0"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "1d7075f56f85f528bed2d855abfe08aeda97cda01dc175900bbf08b14e6c2c37"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9486914696b78553dedea03a324754339b25bb19454bc03d13fef8ebe6875031"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d0850e728be077a471c534a9b94aeaff1aca2b9855567f1c9423916ede03e9ce"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "45ad39d412759daaa01d2ba0119e776bbd7428ca34cd09d3be3327e4629ed38a"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "33ab874f21a987ef45aa89943da0d81d375fd38c965433acad6dc29a6b7357c4"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "6a2c39f673b40538aeaf8f24937560783cb3fff1b89e496840c735072317efd0"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "48f39263c1ec1bb5022ce6321d1376f8059d5546139fa52c7bc415fd0c4cdca6"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "13f0f358a6350faf5c055687dbc5c7b5fb13f4d4716690ec11c80495a7ccbfa7"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "8b1ad55586e149d4469c78b1f5dac5409b0e5a6f5ff5077faed29223dfd2bb1d"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "aab641d2157a1931630ffe17bea8ee5b9db95905d965d488cb916ef4d4b1484b"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "4c1ef722e8cb69e77c212a9bd02c396decef0738ed524992d31071c1adbfdd73"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/values/1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196.preserves",
+      "bytes": 1010,
+      "blake3": "1a0009a618dfb282ff461e578834bf9cf80adff0e8829134754c122a5efa5196"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension/values/c2a1659626148b376437a5e657ac07cc5ff7393a5952a5dc3ab626d673ec52d8.preserves",
+      "bytes": 173,
+      "blake3": "c2a1659626148b376437a5e657ac07cc5ff7393a5952a5dc3ab626d673ec52d8"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension-admission.json",
+      "bytes": 817,
+      "blake3": "46c5a62818cd4dc7544a2c65e74cecfc0e2927c4ad19779aee58259a7b3db118"
+    },
+    {
+      "file": "prepublication-callback-fuel-diagnostic/extension.log",
+      "bytes": 239508,
+      "blake3": "216a5a7d0f48666bef212d57cd7a3f152363a1a17fefb7fa1a7a35b39d8850f2"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/commands.json",
+      "bytes": 884,
+      "blake3": "1307cef2d5f7d9572c195b8a5be45a89d2a288f5007a9e486e8f9c922374fa19"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "f08e2191f6b331bdaa5a4f33fb784c80a6e5d0d4812c582b3a4b3bbc38aafb8d"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "e65b0bdb4b1fcc15e4ea30f0d9e195b5521997b44fefa5295df441f38d0ea2ec"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "f4f590a3649ebec604f20490da592c3d34f168abe0f4fc461991208b33767cf0"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "7ce6433840f911ed8230d1a2562f90ddd66475b0dc171ad3522cdb5dd5d453ca"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "f549f0ef9b1ff7101cf2e3f77fb5f547081293e4529eed7ca6bfb9ed0fa0ceaf"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "b23af9fb5bb8dda95822b6b43c0247f77bd6482e4a007836387b6c93468e455d"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "d4ef4ea14f656c09d07a7cfec37b69fe80e27c324b5ad8e180741c499267e04e"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "7ce6433840f911ed8230d1a2562f90ddd66475b0dc171ad3522cdb5dd5d453ca"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "f549f0ef9b1ff7101cf2e3f77fb5f547081293e4529eed7ca6bfb9ed0fa0ceaf"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "fa50d909ab465a1aeb9ec7ed6482ad858d878dc9906d4e71b499e3cd31c3004c"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "5844d948e2a2f6b650c3db9d1e1628248ae4cf12ef48a2645d9b022c526efda2"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "7ce6433840f911ed8230d1a2562f90ddd66475b0dc171ad3522cdb5dd5d453ca"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "f549f0ef9b1ff7101cf2e3f77fb5f547081293e4529eed7ca6bfb9ed0fa0ceaf"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "83d52e6ee79c1587e5ccd3d7c2f3895b895a082c81346db507dee795187ed5e9"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "4ba7572b57bb93224fba0b0f9cc8b69dab47775b4c7014e04a9e64bebc6dc256"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "72e9db8c1c0cc3fb0d43cb56e6e5786e223f017d5e3ddaea4b8befd70d02d93c"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "a67d08912bac3ad94cef26ec016cbc903e1710c9fd9b3809a92b167750428f89"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "32f88f39024b8a1e18cf01a4e4ac92f2448ca5639e4f944e5ad402c8aa852dcd"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "33365becafdf1bb58e03cb02564f964f5a9a6854bdac2d8fff0f97e68338012b"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "10a8f3b3af9d365f538d3bec5fcb41312dcc81a3929b591df09aadb194451f13"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "db448608409eb69dc8637f083df91e3db3db52500c06bab92b719a85f5df95fa"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/values/8af642a3ca5868c1227d692ff387094de776201585707baa0ccaaa118a8d865d.preserves",
+      "bytes": 173,
+      "blake3": "8af642a3ca5868c1227d692ff387094de776201585707baa0ccaaa118a8d865d"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension/values/e65b0bdb4b1fcc15e4ea30f0d9e195b5521997b44fefa5295df441f38d0ea2ec.preserves",
+      "bytes": 1010,
+      "blake3": "e65b0bdb4b1fcc15e4ea30f0d9e195b5521997b44fefa5295df441f38d0ea2ec"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension-admission.json",
+      "bytes": 823,
+      "blake3": "f7da66cc4b607790f2aba1396383b658eeaf9e0eecfe1fb8e81441cf4fbf7799"
+    },
+    {
+      "file": "prepublication-callback-bounded-diagnostic/extension.log",
+      "bytes": 239485,
+      "blake3": "0b8b7ad5cfad931e77cecd8142c39e020f26ef38a7be55e3ded18490660c08c6"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/commands.json",
+      "bytes": 876,
+      "blake3": "880264d31bc51566f3e32a0fcd4f800591b5ab61b9c5d3e7c67c33a98b34a5ae"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "06e0710400358642c9f57235ec95e944340bb50de71c053774f40779bfb4fbc5"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "776d3096117f9f100ba53b23142803f50fea8c8e610bb88326bbd9d25e4151a2"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "cd0f1d707052340b857309d298d1a4be694d47a6862b249ce5933493559e726b"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ce4c4fb07d4947950886569a66d3fe269a1192dcc06ef06d282ff09e5a4b536e"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "efc161f074209e9c19476120f7213c93449c65b2698b744734e09664152b8f90"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "7f89e7790715ee0faa7819cccfab7d9a4142ad0def6815691d4c34e80295b7ff"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "6081f2984cd8c0e9a20d8dc99275466ffe740709c279c06f85defdc199b35eea"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ce4c4fb07d4947950886569a66d3fe269a1192dcc06ef06d282ff09e5a4b536e"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "efc161f074209e9c19476120f7213c93449c65b2698b744734e09664152b8f90"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "ae0c0d5fee1cb8c2e1dbf6a3b6052306ef9638806c83be810b1a459f2b10f2be"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "e88019ca665a7db200e88f7b34ef79da1992c7431cf4acf4fc6ff2c78ac1178a"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ce4c4fb07d4947950886569a66d3fe269a1192dcc06ef06d282ff09e5a4b536e"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "efc161f074209e9c19476120f7213c93449c65b2698b744734e09664152b8f90"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "7f2d6d9e98f9e0bba7bc73834cc479a3863c391858cc177637626718cb4d96d3"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "664822528a9effa865cfb59d4fb61f90ad463cdace65daf3a7504920b2270ce6"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "d85f650041fb8039b04309204f448160ab7e95a9023bcbfc914d843553d50da3"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "d52fce54f9275b95dfd4d7e99105ee95671fbad4603ce7e5973e38fbbb15a195"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "5ba06ea3de56f189bc6e1c2b74503bf42a0dca90bcb50b1e45fd2b0e100936fb"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "bc6782d9db6fbbe4f50b17e75aa6e4e94a7551e0171c038a0f330d266dc37d1b"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "940f1c60974fdba5de57172523817a724e1eb6eb34647ee9f61f5aaae47baaf3"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "4a3b332e501caeb3dc080d6af25c54abc439fff7b5a926c54f4eca77448b5671"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/values/776d3096117f9f100ba53b23142803f50fea8c8e610bb88326bbd9d25e4151a2.preserves",
+      "bytes": 1010,
+      "blake3": "776d3096117f9f100ba53b23142803f50fea8c8e610bb88326bbd9d25e4151a2"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension/values/afa01b93f66f17212807d8dcfe339c7faba847f4f2c290e7073a60b59bcf9b9a.preserves",
+      "bytes": 173,
+      "blake3": "afa01b93f66f17212807d8dcfe339c7faba847f4f2c290e7073a60b59bcf9b9a"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension-admission.json",
+      "bytes": 819,
+      "blake3": "442171dc6cb86fe40180248412821af3b127c63e66cad7e38c81f885824067be"
+    },
+    {
+      "file": "prepublication-callback-reuse-diagnostic/extension.log",
+      "bytes": 239532,
+      "blake3": "8d7575e135898f89c4b349f6fd00e7590201bf2085680659a74842a1bd442b15"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/commands.json",
+      "bytes": 896,
+      "blake3": "65a8b20155132018051384ba2e1e912282ecd0d4b0963b23546603524172dcc9"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "9359b37b7d737a50d4969dc1557706d2a34c731615f85cb44ebe5091bee9bf56"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "6186ff013db6e2a73c8e9d7e2c392d79591c89eaf34093837014e70a82ee202e"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "43d79072d9584a1d362d1c00780ee7bd94cd427f7d4527d4e0d94461229c326a"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "381fccb01bfbc9243a451192475bc9a0aa4ca41dff517ef571c1bf27938c14a8"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "b4fe5c0c03322b942d4f85c861d72f02b1dc72521512580e8433dfdee3781cbd"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "f488c42d9155c6fb58af79c6c8941df2b0996f9af929acca97ec80e73aa91f07"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "e5b6c05940ececc8966825ea38ce96784babf912bbf00b55165cad0a14f71a65"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "381fccb01bfbc9243a451192475bc9a0aa4ca41dff517ef571c1bf27938c14a8"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "b4fe5c0c03322b942d4f85c861d72f02b1dc72521512580e8433dfdee3781cbd"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "b4bc11659516ba539691fbd7e56f917ef77bc24dba6f366f9a148fda7f426f90"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "73dc56d45da332eda8fb7017976d6fc03d302208995a8fc09edde0c0ab76bbdc"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "381fccb01bfbc9243a451192475bc9a0aa4ca41dff517ef571c1bf27938c14a8"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "b4fe5c0c03322b942d4f85c861d72f02b1dc72521512580e8433dfdee3781cbd"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "aef69f7eb565d31fde06bf9c69bdc2b094e7a49a4d02fcef9aba72d71ec1efe7"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "d9bc97cc9c605f59e5b5df8c234cd680516230fb1bcf4de21cee91c2a4a39ccd"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "68f8c0e6fa65f2487c765345f71ef8eae6aa0425578d63638d871f162ef5842f"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "4a56abd9df96d8bb5ab4f71f62c8ca3356a5366534046fe60a17a8bec1424c64"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "8f5648bedbfa58de17d89040762e4e460a7fb76e77e7b5a281243a302d9597f4"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "1567ee59ee5bb9b38d213a57b90796319c7480d1d4ea92664036a9f24beb9e39"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "511deff95e3ce2925b217b191924ea57f48ae4d6cecc61d4250dad940364fddd"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "a186f524fab653d4ad47658b425abd26ce503b3b7d0ff3fccf881a4663d674c0"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/values/46526621d04e2f103c3985c4cf6a43a5f26244ecbf75eb053a35790af6f65158.preserves",
+      "bytes": 173,
+      "blake3": "46526621d04e2f103c3985c4cf6a43a5f26244ecbf75eb053a35790af6f65158"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/values/6186ff013db6e2a73c8e9d7e2c392d79591c89eaf34093837014e70a82ee202e.preserves",
+      "bytes": 1010,
+      "blake3": "6186ff013db6e2a73c8e9d7e2c392d79591c89eaf34093837014e70a82ee202e"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension-admission.json",
+      "bytes": 829,
+      "blake3": "ac2103c5d8cb28c6c39a08364a92b3e241b8ababf3d4b8dc8eb29e127ac6cb1b"
+    },
+    {
+      "file": "prepublication-callback-projection-diagnostic/extension.log",
+      "bytes": 239549,
+      "blake3": "bf5be2423f36f258b0fee8a7ea2b07681da0bec2bbdf4a0d140640baab6c2aa8"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/commands.json",
+      "bytes": 880,
+      "blake3": "68c2f4a8dfc2c5941beb87667d258b51d2e40347191dcde27bb20c160cc9c3cc"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "3085c2bf5d079074b880a7dba9740a2eab0be89bf94ed38060b0330bb4a6f0d8"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "198a21a6f135fb58dfa5a9b8b1b186767260bfe95141e01a8cb017392bf8a8e4"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "ec98f1807dca1d3498169038ee6e11867bd58c1dd89c7163afa25bfb65f74deb"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ba1a38f8bb857d2297ab019ed21329047acd9a880a548f0871ffac427c81da2f"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "893c426e844576f149731ff0134d9199a4a34f9a2de2a63e7a5f6d4591617547"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "07c746416685f6767a93250af36efdc0cafcd38efef76f6bb7baf95dc86d7b57"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "b0d5ea6a9df6009b857b5e76aa13557106a6434ce64890e78dddf4a95586a05b"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ba1a38f8bb857d2297ab019ed21329047acd9a880a548f0871ffac427c81da2f"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "893c426e844576f149731ff0134d9199a4a34f9a2de2a63e7a5f6d4591617547"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "f46442962b1a26c391b012adf006a2cb7857022fe1fda53a9517b4f1aa3170f8"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "f8a9b9c4d45ade7c3b71e2764a67f4cefed341d0367e4de5790bdc95c1918a24"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "ba1a38f8bb857d2297ab019ed21329047acd9a880a548f0871ffac427c81da2f"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "893c426e844576f149731ff0134d9199a4a34f9a2de2a63e7a5f6d4591617547"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "a93df0b5629b40a2ef3b89bfc7038f2218a6c8140abb32106c090ba762902c7b"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "013ceeddacda1c1540b545f77562440b4b95b43688f20510b8026960f63ee151"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "828299f38fecbb20c7ae40554c202e791341f6c522c604d4f4a3d7ed4ee76fe9"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "0826ada26556cf3b86f8f024d697a059970ba97199819e3bcaf546b93ec06ef5"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "af80d973c836ff0b8709c12e8f1f2cdbb60cac87308cfc81680fc3fe27775099"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "db0a48be8decf956f991888c44312a31ef3e5a704398f80e96e702f1a188ab76"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "b3a1ae6244f8095096e597fa44aa5d9c83f490ee68f0b7ec3a11feaea5c65571"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "188036c0006e8ce638adcd587481797a3a5455068cbfefbb9da937b31f9f806f"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/07efa93554c0945ea4a70964a308dd3ad987be6e3612927dfebe8334661347e3.preserves",
+      "bytes": 173,
+      "blake3": "07efa93554c0945ea4a70964a308dd3ad987be6e3612927dfebe8334661347e3"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/14b9a2b0e25697cccb226cf17ff12f418f15214357da48e7985281eb45e85391.preserves",
+      "bytes": 643,
+      "blake3": "14b9a2b0e25697cccb226cf17ff12f418f15214357da48e7985281eb45e85391"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/198a21a6f135fb58dfa5a9b8b1b186767260bfe95141e01a8cb017392bf8a8e4.preserves",
+      "bytes": 1010,
+      "blake3": "198a21a6f135fb58dfa5a9b8b1b186767260bfe95141e01a8cb017392bf8a8e4"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/439ec9f4de6fc0c647cd28bc0a3a6bb8ef915dd28e6ed7ddbf6a0b6d8ae59d50.preserves",
+      "bytes": 566,
+      "blake3": "439ec9f4de6fc0c647cd28bc0a3a6bb8ef915dd28e6ed7ddbf6a0b6d8ae59d50"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/4ea792871c115d43e722ed408516de1e685f6fa086a0aeb31f3d37b975a822bf.preserves",
+      "bytes": 865,
+      "blake3": "4ea792871c115d43e722ed408516de1e685f6fa086a0aeb31f3d37b975a822bf"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension/values/efcaa0daa4d78f968fc9dc2df155738283708d9739e0a654b8c97cb5d6db532a.preserves",
+      "bytes": 650,
+      "blake3": "efcaa0daa4d78f968fc9dc2df155738283708d9739e0a654b8c97cb5d6db532a"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension-admission.json",
+      "bytes": 821,
+      "blake3": "01cacd654532c9220bcd321bb565edd6442bc847c5868bb2098dfb850c0e44fb"
+    },
+    {
+      "file": "prepublication-callback-bitmap-diagnostic/extension.log",
+      "bytes": 296431,
+      "blake3": "973d9e9525c52670df92632accc7d87a869922149b325705c8b39f32c70dc8b5"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/commands.json",
+      "bytes": 880,
+      "blake3": "0e76fa7ec1212ed822418ce49a21cacdfb39d6abc9acae2869cea501bcf49d48"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "48757fdffc150650c3b49ae278fa9346e28da5d8b9ba90e4a45b869bab1586eb"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "4be823c83d4faad685a8b370f76ab4dd2b97b5ac39389f5cdfa04f91c55b48ba"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "eb80a8d47a6f85a6627115ee2b05e39180bf519f891620be2879e786ed820ea1"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "603b1cd2e2f975fe5a97d473646fade608ee733785d6388a262ed2dab7160a9f"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "8920c5deb9f8daf0faa9768743d72f2755f4403f3d653ca8ce826b64d2fc4481"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "cfaa1f06af83ffde75aff6dce86288b50ccb70b60230f46367aff5a402a9d018"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "3f7fc278a366ecaeaaac543b5b1b7865c70ec603f9b980e88d70395ee7bc0672"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "603b1cd2e2f975fe5a97d473646fade608ee733785d6388a262ed2dab7160a9f"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "8920c5deb9f8daf0faa9768743d72f2755f4403f3d653ca8ce826b64d2fc4481"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "6b31eed06d8914e245291ab6da02762154f33e383824c6d8ad0a57c6cba20e44"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "a4346b136ebb73d6df8e8e17bdd8259567617b59a28f7386181437fd8d2d4901"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "603b1cd2e2f975fe5a97d473646fade608ee733785d6388a262ed2dab7160a9f"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "8920c5deb9f8daf0faa9768743d72f2755f4403f3d653ca8ce826b64d2fc4481"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "33379151fed9c00febd12dfc845362fdf63824b6a98eda1d88484b95dcfb3df8"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "5f47905b0b0485780c3e064544d760d51bdfdf99d8ea0f1f206c50dae5cd50d9"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "9d420ed4348035092965ead40d8c70ee46a779d720d1a43bad031d1e2e2c6987"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "3dacffbff064ff3c2f92ff124043a26ca8961c3677956a38ad690080313201e6"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "8cd1df4fef030e4e24a5845bcf4d1fb105ab7601261eab76a32517e2a856d2e2"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "7c60f44c6da264c21599404862204a2348550d14e28cc37b546eeb9e445b715e"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "c06b32f57324945149890259010eec888cf5de76925852a3740beca5d850d549"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "62d000c4058caed74652ecf0846a50d3f49089b6a7ecaa47f2f9aac076cf6c00"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/2b7b5ff030eb8f7bec039c51ebde50a547fd87122b8a78aee8260c6fc81a264f.preserves",
+      "bytes": 643,
+      "blake3": "2b7b5ff030eb8f7bec039c51ebde50a547fd87122b8a78aee8260c6fc81a264f"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/4be823c83d4faad685a8b370f76ab4dd2b97b5ac39389f5cdfa04f91c55b48ba.preserves",
+      "bytes": 1010,
+      "blake3": "4be823c83d4faad685a8b370f76ab4dd2b97b5ac39389f5cdfa04f91c55b48ba"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/522ab3f23f3b86ff6f3363b77701328ddbbde16d670483a5443d05f91864a3a1.preserves",
+      "bytes": 865,
+      "blake3": "522ab3f23f3b86ff6f3363b77701328ddbbde16d670483a5443d05f91864a3a1"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/b662e35fbb92c6326534e6ce9074d882817fec20439bbdfe93c29efd808294b5.preserves",
+      "bytes": 650,
+      "blake3": "b662e35fbb92c6326534e6ce9074d882817fec20439bbdfe93c29efd808294b5"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/d2de404dddb4ee30ee7033c70eebf50de7ffd66c228f6f3a9f2c54538dc2f82f.preserves",
+      "bytes": 173,
+      "blake3": "d2de404dddb4ee30ee7033c70eebf50de7ffd66c228f6f3a9f2c54538dc2f82f"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension/values/d456f79581a1dd1b534f2f2514cc1ab55c1d2bb097ea0ead27402d7b0adda0e5.preserves",
+      "bytes": 566,
+      "blake3": "d456f79581a1dd1b534f2f2514cc1ab55c1d2bb097ea0ead27402d7b0adda0e5"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension-admission.json",
+      "bytes": 821,
+      "blake3": "25d51a491a7993ce0b5712cf24eedf557286b2f2a162ca75bef010a6785cfa41"
+    },
+    {
+      "file": "prepublication-callback-rounds-diagnostic/extension.log",
+      "bytes": 296491,
+      "blake3": "f600541dda61ce352488916738825a9869324bdc2b53cf511a2bb166cecf7464"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/commands.json",
+      "bytes": 880,
+      "blake3": "0cdcaefe956fadae31e5fca12156bb1c8f68c92f4e40950dcd58aed8950ef0ab"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "86164452a625a88d1ef91048d267da9decf5ad0ac630c36cc4bfc2aa7b91366a"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "3b218b77a7d2409067a03510b3e9e5d7513ddf9e68bf0f236357bdfc90966a82"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "959e4ad19418dad37df99271e5569525e3a00d7de33f19c7f15118147c39cddb"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "85335a0f73ec61088cea93b821edd3bf52271aa41da8015639d340dcb82d0a78"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a09222ea34ce1b0d8be81dacc8611cd979ab9a9865b7d791bdcb5704ad324bb7"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "c0d33673b63ba23706f173ee07ace3b4f212adc771660d11653eeb36cd8f95fc"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "bf7e54f8d470f50d8b1e8fd3b30958348ae5a59b9f6f9d8aca749d59e6333342"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "85335a0f73ec61088cea93b821edd3bf52271aa41da8015639d340dcb82d0a78"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a09222ea34ce1b0d8be81dacc8611cd979ab9a9865b7d791bdcb5704ad324bb7"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "fa073aab1a50061e78b91d30cf95dde0e2879e9497e350322adf2b672f32d8db"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "019ffad6d945cb49c3cde30713ba8087e05a8031b41cc7355063674146731f33"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "85335a0f73ec61088cea93b821edd3bf52271aa41da8015639d340dcb82d0a78"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a09222ea34ce1b0d8be81dacc8611cd979ab9a9865b7d791bdcb5704ad324bb7"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "bce9cbd8f54684ea782efae4d1d7771ed7f415007a19e4521da56c12ffe97d61"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "88e6cab0b3a60b69cd3408e28329630645263948222be2bde866d9b6ebbd08ce"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "af1b46c3c8e5448055dba4ba703f34b5f361e3cce5e0199bed9b6db3608d0ec0"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "388ee3deb60b127d1b8063b93b53e01dcfa6fcee92422f08dfe6cc9ab50a8ff7"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "2ef98431c1afabb647374e7dbbbafc804d55a9751808cc560a6e2df55e7add6f"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "4a54237efea7499984f92d4b453c04fecee5b49416b1cee19ba7fd29a247abc0"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "39640818f5567cf2d37280c7f3b56054345ff63f9893e89ef33cd98fbf20703a"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "2cf58c1f9f09775026a5fdb1ebb183bdff3e756a067d21cf2e8a536dfeba383e"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/05fd02f0abe4359b7530b5b83665088ad5a578ebb5d6b114bce96fe33622a2f1.preserves",
+      "bytes": 173,
+      "blake3": "05fd02f0abe4359b7530b5b83665088ad5a578ebb5d6b114bce96fe33622a2f1"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/3b218b77a7d2409067a03510b3e9e5d7513ddf9e68bf0f236357bdfc90966a82.preserves",
+      "bytes": 1010,
+      "blake3": "3b218b77a7d2409067a03510b3e9e5d7513ddf9e68bf0f236357bdfc90966a82"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/76f9eabd793de0ac7474546e21ce23d5dc841c24a8689963bf3598639c2337fa.preserves",
+      "bytes": 643,
+      "blake3": "76f9eabd793de0ac7474546e21ce23d5dc841c24a8689963bf3598639c2337fa"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/84b9c9427fefe7e4a29db0d365ef902140547e90ea53d2783438190566467de5.preserves",
+      "bytes": 566,
+      "blake3": "84b9c9427fefe7e4a29db0d365ef902140547e90ea53d2783438190566467de5"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/9d2aa4a60d321c29fe2545cbbbe9a10673119b4b982c222b55ae85d9ca9e82b8.preserves",
+      "bytes": 865,
+      "blake3": "9d2aa4a60d321c29fe2545cbbbe9a10673119b4b982c222b55ae85d9ca9e82b8"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension/values/d79559447e3a7ad598f6924f3bd1b161c3b657cc72cdce35981c506ebdf299db.preserves",
+      "bytes": 650,
+      "blake3": "d79559447e3a7ad598f6924f3bd1b161c3b657cc72cdce35981c506ebdf299db"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension-admission.json",
+      "bytes": 821,
+      "blake3": "08a0c4282c36ad338a683494362aeb5e765b46fd6765e5d8a55ba1052997d1ed"
+    },
+    {
+      "file": "prepublication-callback-packed-diagnostic/extension.log",
+      "bytes": 296509,
+      "blake3": "32d43dfbf80d1ee46839279e8a7fe2d16ab878e97fc397986350c51b8ea428e5"
+    },
+    {
+      "file": "out-of-policy-accounting/packed-diagnostic-phase-fuel.json",
+      "bytes": 822,
+      "blake3": "03b6650be01d8d448b11eb7f79b3035e02a94f9144e28b8f1669b089197e0a7f"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/commands.json",
+      "bytes": 880,
+      "blake3": "40ff63edb2d1e60cfb013b42517869cb605c85fb46c0f34cfdcfc895d649b050"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "12a4f123e012c8bc4ffbd570a0b08c0a86ce108dc51ee2765d15e172ea6b779a"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "d9e8b055ee442d989022d557e03c59b43814ac1dd0ffc0f4ddc6d2e378583c13"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "3f5db7ad9f0dd3962f1da598965e508367e6dfd788dafd7a11db6da3add8087d"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9594f4e695454d3636e2140a415d99fca3b374649b4e85a2717bed629c308a5b"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "15e59e9aa453e28277a47092f0981c72ccd455eb7f604ece5c8f5b34443855e1"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "09a1568098cdf2777d61b08430c0c0bdb891d34806fe9b1742863bb50a5584b1"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "ff2dfb2c49278bc74d8aed641555e72aff4823b79785f349b9a66591b0f90173"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9594f4e695454d3636e2140a415d99fca3b374649b4e85a2717bed629c308a5b"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "15e59e9aa453e28277a47092f0981c72ccd455eb7f604ece5c8f5b34443855e1"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "6a984be423c2a2694cf3c74438f8fd2d6396568f4eabd4c19c8957cf826f6942"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "4b946ce716b4e8022550ba7f82db8a2d39a5c98853a2cfa9b9bd9a1dd26a9853"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "9594f4e695454d3636e2140a415d99fca3b374649b4e85a2717bed629c308a5b"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "15e59e9aa453e28277a47092f0981c72ccd455eb7f604ece5c8f5b34443855e1"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "a91222cdfbbb4afde3f53e36e2d9dcca6baf3bc510b726612ffc21e92f0285b3"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "ecd78104dc3bc973f9e360e2cd60e1b0e787fa90abe53b832532a1a55c66d5a3"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "0e0d0b8acbf720146be6ac30d73bee0c2d3586ded91d17680f82e8db7bd4e72f"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "7989742d8d546b3f61c4be569dbc7321ecbfb55dab42555a48c673623c851af2"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "3bc1448fd2bdf843e3364ca3516be8653c8e91b3eead9ce3d9d70aa3dc4733c3"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "73e2f04939a23ed172c6c14715e0ba2df3318d89fa22cfbb93b7ae7d89446978"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "9bd6d7ed46a26cc10d4787c4789a81166e6d1f3a589f491536121162a624309d"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "1ed7149dd25f207d81c04f0d69af2d72640979ad9036ba1a9035e0398d880dd7"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/26486057bd0c85cdd92381220bdce42677c0cf3a28d2f3fc0b39563cd6c35877.preserves",
+      "bytes": 865,
+      "blake3": "26486057bd0c85cdd92381220bdce42677c0cf3a28d2f3fc0b39563cd6c35877"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/3ed2fe7801029b3ebfeb844be03af6e525890ca3ee0c587e0096b07410009984.preserves",
+      "bytes": 566,
+      "blake3": "3ed2fe7801029b3ebfeb844be03af6e525890ca3ee0c587e0096b07410009984"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/67062a95ae77029ba40fc421164c6dd7bb982ebbd9c7e02ca25f673a8984055d.preserves",
+      "bytes": 643,
+      "blake3": "67062a95ae77029ba40fc421164c6dd7bb982ebbd9c7e02ca25f673a8984055d"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/9e4614b2130b929780c696fa66e5dfaec5911d7c2b76422268d26ffe0a286625.preserves",
+      "bytes": 173,
+      "blake3": "9e4614b2130b929780c696fa66e5dfaec5911d7c2b76422268d26ffe0a286625"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/c9fa282cc8e6fa3ac443f8d69ff952cc3efddec696dde091724114aed8bb00cb.preserves",
+      "bytes": 650,
+      "blake3": "c9fa282cc8e6fa3ac443f8d69ff952cc3efddec696dde091724114aed8bb00cb"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension/values/d9e8b055ee442d989022d557e03c59b43814ac1dd0ffc0f4ddc6d2e378583c13.preserves",
+      "bytes": 1010,
+      "blake3": "d9e8b055ee442d989022d557e03c59b43814ac1dd0ffc0f4ddc6d2e378583c13"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension-admission.json",
+      "bytes": 821,
+      "blake3": "05cdbaf85ad7709541da767158924064b32d3809e04e95b3e7f6bc756eae5c29"
+    },
+    {
+      "file": "prepublication-callback-scalar-diagnostic/extension.log",
+      "bytes": 296415,
+      "blake3": "0277cc5e1a87fc270e521dda7ad0e7abf56ef8be6c9f1bc1740864d3bdfdaad7"
+    },
+    {
+      "file": "out-of-policy-accounting/scalar-diagnostic-phase-fuel.json",
+      "bytes": 818,
+      "blake3": "34e8f8abaa3a0ff26d0189f120784ef9a919b8c4966c9d001731dddd1c8ea85f"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/commands.json",
+      "bytes": 880,
+      "blake3": "6a48f9e85ad11508b59e3c3c10c6c8de9dda7cf052aee94cacd6aadf901848ed"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "23a8176cdaaa930c5f1c13dfecf28e97e15b4187b20c00b8cb9a02f78b69c953"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "e560bbf5f00ed257268cd18cac060b5acbef83672fcb8aba3b336b427dc6072a"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "892a54ac5d4deb786de5b6de49bf542cc944a101ad23a7563d9a8fca69291af2"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "1f9a3e5e21289749746ea9e0c0b58955e2bdc12e41dd990ca27fe13c30109897"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d27a23e6d8be3586287aca839883d5a271763e73d7810954f8c966f28abc8c06"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "f7e24e96c405931efccee538aa98ba0710620f6fc592867956b72ec60e4be73e"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "5bdd8ff82b2fd207865c5d9d8c421c842fe9d3a7da5d10671f93f5c85ec492c0"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "1f9a3e5e21289749746ea9e0c0b58955e2bdc12e41dd990ca27fe13c30109897"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d27a23e6d8be3586287aca839883d5a271763e73d7810954f8c966f28abc8c06"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "4f0b06d49a7967ce2bcf8316968e3365fcdc3be4c2ab778c4711cef608ef8e1a"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "356bb98bd6a3d90eb0a2532db812964136dd7bf27f5596b9bf3ba7a3f3185f7d"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "1f9a3e5e21289749746ea9e0c0b58955e2bdc12e41dd990ca27fe13c30109897"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "d27a23e6d8be3586287aca839883d5a271763e73d7810954f8c966f28abc8c06"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "4a14cde00958bd60ff5bb83365d19e729c8c7c760f3f2c7ec1a4f916a8ba9a69"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "77c28f8c5cb340ea64815504865fd38dcc5bb84744e3cad52762ae30815b8c9c"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "94695fc277aadc5bf47892659e3cbb27c0abf2f4728f56b1d35efd453d671600"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "b321ff48e1fed7471386e2c4dd481e49a04537517187d7ed812e14648a50aadb"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "8281139510ea4f2480511ca6d00111fd4c58034d1182b20f3cc04fbfc4901833"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "86da64e3aae5ad50c70f841b275b2b6525ea77e202a9f4079b8896d83d89abae"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "64e597219d8cb79c802ab761ba249bde963121248e5368ab1aab732fc6d8fd85"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "a2ab29cbc15a848648fe207074eeb17ed41d255df2242bf52c7b9df18d04d15f"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/3931162b30767b40dd42a413aeda658d98d5415131a3478a3b4ed0f8c4a098ec.preserves",
+      "bytes": 643,
+      "blake3": "3931162b30767b40dd42a413aeda658d98d5415131a3478a3b4ed0f8c4a098ec"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/62298a4a013b965919bea9bbd8bc6e4b3d88575a9d25de0d6317ba1f86fba955.preserves",
+      "bytes": 865,
+      "blake3": "62298a4a013b965919bea9bbd8bc6e4b3d88575a9d25de0d6317ba1f86fba955"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/7d3e4a0139de8eea5bdad26a31fbc688b3f38bba82509f30fba76bb719174a10.preserves",
+      "bytes": 566,
+      "blake3": "7d3e4a0139de8eea5bdad26a31fbc688b3f38bba82509f30fba76bb719174a10"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/c95660b3d7fb2e934b06ce6bf96b680ed761410c40b9fef894b6f44109241746.preserves",
+      "bytes": 173,
+      "blake3": "c95660b3d7fb2e934b06ce6bf96b680ed761410c40b9fef894b6f44109241746"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/d52571993386c97099632e82cec2b0af276657ad905de7bc27a7a6d35e91e862.preserves",
+      "bytes": 650,
+      "blake3": "d52571993386c97099632e82cec2b0af276657ad905de7bc27a7a6d35e91e862"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension/values/e560bbf5f00ed257268cd18cac060b5acbef83672fcb8aba3b336b427dc6072a.preserves",
+      "bytes": 1010,
+      "blake3": "e560bbf5f00ed257268cd18cac060b5acbef83672fcb8aba3b336b427dc6072a"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension-admission.json",
+      "bytes": 821,
+      "blake3": "5bec60f4c595a9ed97190f09df5005249c6659e65c807c58a33df5480ddbcdd2"
+    },
+    {
+      "file": "prepublication-callback-resize-diagnostic/extension.log",
+      "bytes": 296455,
+      "blake3": "dff035a6ccbab4d6895baa817960da5e98c0dc0db68d28991bfbb39c7da4e42c"
+    },
+    {
+      "file": "out-of-policy-accounting/resize-diagnostic-phase-fuel.json",
+      "bytes": 818,
+      "blake3": "11b739f6582483bd8a120a593ea5759e3fbc9e0275da66616caa6cab9d79b851"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/commands.json",
+      "bytes": 872,
+      "blake3": "a34dc9d081108243271c8922bed29c9d5239e3b3fe7c6dd65e9d9a596565b5ea"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "21760a8f390e462c5d47941b7348254d8fe0ad7cf565b62128459f0ad79fea89"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "d1d797b5dbaf804acae12d026d725bb2f67c1216240bea4110d5a1b1bda0b26b"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "fd57c59d0efce5a28a4045eb1d25206d55670aef1d725f62e017e216b989dd43"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "6799563bcffb1978a274dfd40a9ff3a1ebd3df96e106d681d0ced6f1c0d9bea9"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a813928c9fbe25f0266bf50e35f7cfac33f3c72fac072a2b0d3ad52b9be4da2a"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "0942a6fec5a9b98d04573bd395291213ccb6c771660d238ba946af4a3b7c422f"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "bb4b2d894e77eb8fd28d405a303c0b3f5f1f6ac9f853175d04ec2de230f3c3e9"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "6799563bcffb1978a274dfd40a9ff3a1ebd3df96e106d681d0ced6f1c0d9bea9"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a813928c9fbe25f0266bf50e35f7cfac33f3c72fac072a2b0d3ad52b9be4da2a"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "e451a04935b4b12cc1f4dec6ee532677ad11cb4da369b67643497089398a96af"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "0ac9a06d1113edfaba61c5caf3482721ec9bc897074441bb76c142679f23d846"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "6799563bcffb1978a274dfd40a9ff3a1ebd3df96e106d681d0ced6f1c0d9bea9"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "a813928c9fbe25f0266bf50e35f7cfac33f3c72fac072a2b0d3ad52b9be4da2a"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "29df734d94dc1683cb5ba11c74210d22d9d4e922e8e6ab62d20f02fa7180fc48"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "87387513ba4ebd1e6bb45c8ba749bfd1fe55c47ebd58b9ccbae63909521fa3bd"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "33dae231103920efa75e685aacbd9781aeca8f2791fc1f20343affb063d8416b"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "2bab8f1b153d7f41937f4621869cc7f8c778b989a6b6cbf70c0635d5f181beff"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "f0b49dd997fc9da104cd4335969f5dd48d2cca799a56adc4909d44954a05a913"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "c5065f6aee7e244ad0c0f4d4baae00bf892f45201496c54c9fd1848227fada3d"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "9a381cdca15937ccf18f81d06deb39988a8cc4bf15d5716622ab5e2c189376aa"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "c10f88069ddd2ae4c15f967492c032e6a95fe1515e896740f134ce40efb7e265"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/1d94c18656bda0c80bc7b891730730c761b70e3669a1a416c7f860d6b7403913.preserves",
+      "bytes": 566,
+      "blake3": "1d94c18656bda0c80bc7b891730730c761b70e3669a1a416c7f860d6b7403913"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/20c2181ac7703576c9a695bc6096bb9100e3b4621ebc902986addea5d45f3552.preserves",
+      "bytes": 865,
+      "blake3": "20c2181ac7703576c9a695bc6096bb9100e3b4621ebc902986addea5d45f3552"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/d020e4fd45b785de956918d38498cdce325a3fe58ba0067889df57664f436616.preserves",
+      "bytes": 650,
+      "blake3": "d020e4fd45b785de956918d38498cdce325a3fe58ba0067889df57664f436616"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/d1d797b5dbaf804acae12d026d725bb2f67c1216240bea4110d5a1b1bda0b26b.preserves",
+      "bytes": 1010,
+      "blake3": "d1d797b5dbaf804acae12d026d725bb2f67c1216240bea4110d5a1b1bda0b26b"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/e6a6adb6577f914a8b827a7b623eae43a30475560a045d1eb7489dfe20077f31.preserves",
+      "bytes": 173,
+      "blake3": "e6a6adb6577f914a8b827a7b623eae43a30475560a045d1eb7489dfe20077f31"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension/values/f52ab2dfbff1338b130f832e9760ff507e5d25a6b8c9fad907e4cdded58a5fcf.preserves",
+      "bytes": 643,
+      "blake3": "f52ab2dfbff1338b130f832e9760ff507e5d25a6b8c9fad907e4cdded58a5fcf"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension-admission.json",
+      "bytes": 817,
+      "blake3": "91ae397c0cdb25d6e1d8051bf3bd3183e2399f334007c481ba02e566e3d25986"
+    },
+    {
+      "file": "prepublication-callback-word-diagnostic/extension.log",
+      "bytes": 296460,
+      "blake3": "a05aad0dd853e75863b7908e4dfe135af89b30c0a281c9aefc8851beeb977bac"
+    },
+    {
+      "file": "out-of-policy-accounting/word-diagnostic-phase-fuel.json",
+      "bytes": 833,
+      "blake3": "4dbc87ddd92a352c5052a649a6a85e573a16c19e808624e60f775cb24140bec7"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/commands.json",
+      "bytes": 876,
+      "blake3": "e15860f93852c33cb78e64f2548d92825e7d5cfdeecdcb30b437ac6af21f5517"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "a61a390bd58ff6bf72be6bcf930fe9223caa4ad06cae13b41e3f62e6d0a9e5c8"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "8df78116078a06b384e79605bcc85815f2dc71152406b7c2cd84c62c35a78f79"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-1-envelope.preserves",
+      "bytes": 711,
+      "blake3": "581fb2f90f3d5abf6c00e4cdce56e54d4c0e440fb5e2b233757318cd3cac9d9e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-1-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "a8d4f530881d459bccfb1e4c4e3c99dc40c7b5d45410c968d484676cad4a9d8e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-1-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "74a564093d3b3479152166394be03bae964eab48f64a9145cadae65dd5d3dc2c"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-1-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "b5177d0bdedf3c96b92ec2f0f2fbd639b2b3c2394ecfb2b433856354d9ba963e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-2-envelope.preserves",
+      "bytes": 908,
+      "blake3": "b8acd18aa194964d29ab4d64aad408adebc98a538297c97de6b98f3fb388e099"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-2-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "a8d4f530881d459bccfb1e4c4e3c99dc40c7b5d45410c968d484676cad4a9d8e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-2-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "74a564093d3b3479152166394be03bae964eab48f64a9145cadae65dd5d3dc2c"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-2-runtime-2.preserves",
+      "bytes": 3686,
+      "blake3": "85ce91f8312d9731e81fb9318e450181c9ac0991b3bdef9e0b2def9e688e3e80"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-3-envelope.preserves",
+      "bytes": 4113,
+      "blake3": "d01fa1fc01c4da28c5bd5145867222c79568e9325ae4f74109f9c76eda4e1b03"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-3-runtime-0.preserves",
+      "bytes": 3452,
+      "blake3": "a8d4f530881d459bccfb1e4c4e3c99dc40c7b5d45410c968d484676cad4a9d8e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-3-runtime-1.preserves",
+      "bytes": 3528,
+      "blake3": "74a564093d3b3479152166394be03bae964eab48f64a9145cadae65dd5d3dc2c"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/diagnostic-callback-3-runtime-2.preserves",
+      "bytes": 3634,
+      "blake3": "f49fcc08664a1ab9d07736a575f0bf7c612b747a8164b9ac0845e40f44bcbad6"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "ed91c77e76c754eeb838c5a66c66ff981349202bbb550933ed9bf508c27cf641"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "3f9e9666894fd6444ac1f802e5a7ea0a2467c4316c73ff78c9f7f3d4c6437720"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "fc8eb6ccacbe1f5c8188b13cced4b68e1927e355384cc71ba025e89e95b0eea8"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "166e584f8ce0db6417e1834759dcd5a5982db5b413dd67aeccf0136f95934cb8"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "130d8734a3674f03ade9380c260330c54a22c8eec55f8d235ff8afd56dbe301b"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "8ea1b1d34cf1f9d00fb130d053b37bf6eab8f91f5d1653ae3891438791bfc9ec"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "c2f2de60a45495c8c4d314c2bfdc27d6681cf5c4a91896fcab7ae05a47094092"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/1b75105e520f9b474ffb3c1e12197f5698a01fd5c3368cd3afa391c86fbb5078.preserves",
+      "bytes": 650,
+      "blake3": "1b75105e520f9b474ffb3c1e12197f5698a01fd5c3368cd3afa391c86fbb5078"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/20f43f55e436be9b53d9c6c9f886ae5e5a39caef71b9f575eb4ce864be022b89.preserves",
+      "bytes": 643,
+      "blake3": "20f43f55e436be9b53d9c6c9f886ae5e5a39caef71b9f575eb4ce864be022b89"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/68ba1cbbda975c5901fee59c46cc46e341411ac65af7afaa52810fd149e0c35e.preserves",
+      "bytes": 865,
+      "blake3": "68ba1cbbda975c5901fee59c46cc46e341411ac65af7afaa52810fd149e0c35e"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/89c9f6cecffabb0124d0552bfc2f6c72e23285de5716c3c7c102a5dc2cd6ade4.preserves",
+      "bytes": 566,
+      "blake3": "89c9f6cecffabb0124d0552bfc2f6c72e23285de5716c3c7c102a5dc2cd6ade4"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/8df78116078a06b384e79605bcc85815f2dc71152406b7c2cd84c62c35a78f79.preserves",
+      "bytes": 1010,
+      "blake3": "8df78116078a06b384e79605bcc85815f2dc71152406b7c2cd84c62c35a78f79"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension/values/e5c39c1ef4d3d8c1c7b20ff5ab002db7daa93d4a1560ab5b9af0ab755d105653.preserves",
+      "bytes": 173,
+      "blake3": "e5c39c1ef4d3d8c1c7b20ff5ab002db7daa93d4a1560ab5b9af0ab755d105653"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension-admission.json",
+      "bytes": 819,
+      "blake3": "a772e8e459abbef3f02d1c7fabec52398c9f1d676eebe7b79166f95ae3fc9d7b"
+    },
+    {
+      "file": "prepublication-callback-table-diagnostic/extension.log",
+      "bytes": 296416,
+      "blake3": "f9c1e567c99e25544e8f5d801112a9aebad9266d132b0d9c67914799736e0225"
+    },
+    {
+      "file": "out-of-policy-accounting/table-diagnostic-phase-fuel.json",
+      "bytes": 836,
+      "blake3": "d1c6a0bc3daf2ec75f4bba1e620bd385122029a492949f687542b5747f2dbb4b"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/commands.json",
+      "bytes": 876,
+      "blake3": "06b3b5c43d9fedbce9b01e1244e65c9cd1ab218eb3b2da2332254590095ede2b"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/admission-linkage.preserves",
+      "bytes": 528,
+      "blake3": "c32b75dfa833e78d983494b07a2081fe761a53bf1288dd2a249d655ce24db73e"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/admitted-callback.preserves",
+      "bytes": 915,
+      "blake3": "1c22da12e09aad5e67adab95d65ac04ec7b7418d0ab2c28eddc8016f34a22bb2"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/admitted-request.preserves",
+      "bytes": 1010,
+      "blake3": "5bbc674002a7f6d00441e21967328256585f18808675c19f63253de2910101cf"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/admitted-response.preserves",
+      "bytes": 865,
+      "blake3": "9e1112da71ab862c30cc227e2a1dd0bb2940d64f68077259f51a0bcfc3b05cd8"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/effect-manifest.preserves",
+      "bytes": 947,
+      "blake3": "f523e35877c77159cc47afbd35c6e03435a5f9f4ac2aab49fde9515171f6f7af"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-false-receipt-0.preserves",
+      "bytes": 3452,
+      "blake3": "6c3cb2e5ba2dfcae91eceb24739e13e3998890ea5c1f01a328d9974f0e5c8a66"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-false-receipt-1.preserves",
+      "bytes": 3528,
+      "blake3": "bfa876312230c4343f2086ac6c962a844fd368ec8101f0bbd4b791fb1dd857f3"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-false-receipt-2.preserves",
+      "bytes": 3684,
+      "blake3": "758008560408395328515c74f967be12728f0e7aa502c62ee46c8697b9b2faee"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-true-receipt-0.preserves",
+      "bytes": 3452,
+      "blake3": "6c3cb2e5ba2dfcae91eceb24739e13e3998890ea5c1f01a328d9974f0e5c8a66"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-true-receipt-1.preserves",
+      "bytes": 3528,
+      "blake3": "bfa876312230c4343f2086ac6c962a844fd368ec8101f0bbd4b791fb1dd857f3"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-true-receipt-2.preserves",
+      "bytes": 3684,
+      "blake3": "758008560408395328515c74f967be12728f0e7aa502c62ee46c8697b9b2faee"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/extension-replay-trailing-true-receipt-3.preserves",
+      "bytes": 3664,
+      "blake3": "2486e3966134a66f4fec1fab28c70467cfb085174a0b6aa0bd8c1b46c7d30350"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/handler-profile.preserves",
+      "bytes": 647,
+      "blake3": "ce4af97c437a0c9f46c6d68ab1aeccbd401e25f72a0328b5a230fa2bc23579c2"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/import-manifest.preserves",
+      "bytes": 235,
+      "blake3": "785e17c026bc657bd1572cf7dc5583283c229cf01acd2a6b1a49ba4b1b5a12ad"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/installed-manifest.preserves",
+      "bytes": 1957,
+      "blake3": "4a5c799efaafb6aaf05488b867f3d10e74e0c4ac4213effa69ad476b1948fe72"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/mantle-byte-verification.json",
+      "bytes": 6252,
+      "blake3": "8e46c6f4b2a2963b4c86ea944a6270528db5be3e5b70a0edb306ac884b1e5121"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/mantle-member-observations.json",
+      "bytes": 5245,
+      "blake3": "538c42cd0cf866f7c78ef3138b7d85d9ac649ceeb7198ac04c16786f2c74eda5"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/mantle-structural.json",
+      "bytes": 634,
+      "blake3": "14155318b89d78d895d7f3e6eed11c96932461dc9dd1a56a85c4bbe8a2624511"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/measured-facts.preserves",
+      "bytes": 384,
+      "blake3": "27d1320c04653428665a4cd10916889e867bce12baae52a3f020844924e3d202"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/338879d8829e7c3bd032370140bbb2f2baac214fd42e79a5cd78599def0867b6.preserves",
+      "bytes": 566,
+      "blake3": "338879d8829e7c3bd032370140bbb2f2baac214fd42e79a5cd78599def0867b6"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/3a0d7a24eeaa22dcf5691aac493b5f7396a91957b134262e95170274b791c074.preserves",
+      "bytes": 1011,
+      "blake3": "3a0d7a24eeaa22dcf5691aac493b5f7396a91957b134262e95170274b791c074"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/5bbc674002a7f6d00441e21967328256585f18808675c19f63253de2910101cf.preserves",
+      "bytes": 1010,
+      "blake3": "5bbc674002a7f6d00441e21967328256585f18808675c19f63253de2910101cf"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965.preserves",
+      "bytes": 32,
+      "blake3": "9b8e62603a1c57e4afb7dce1595347cb23ac64bf7911dbcf577599262df22965"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/9e1112da71ab862c30cc227e2a1dd0bb2940d64f68077259f51a0bcfc3b05cd8.preserves",
+      "bytes": 865,
+      "blake3": "9e1112da71ab862c30cc227e2a1dd0bb2940d64f68077259f51a0bcfc3b05cd8"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/c243609fcd010edbfb91cdd8cf53c2db530d2f1a0e0360d456e06ef61b42e7e4.preserves",
+      "bytes": 173,
+      "blake3": "c243609fcd010edbfb91cdd8cf53c2db530d2f1a0e0360d456e06ef61b42e7e4"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/c7f8d3828f046b2113987936a10d75aea233c14b314d4ae729cc1d96fe7053bf.preserves",
+      "bytes": 643,
+      "blake3": "c7f8d3828f046b2113987936a10d75aea233c14b314d4ae729cc1d96fe7053bf"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension/values/cd723f44f363dd55d596c04dd87df77e533465d92eff78beec98e199d5b1169d.preserves",
+      "bytes": 650,
+      "blake3": "cd723f44f363dd55d596c04dd87df77e533465d92eff78beec98e199d5b1169d"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension-admission.json",
+      "bytes": 819,
+      "blake3": "9c59b71f5383d1f413bd49e194200633ac3c4c60b007788e171e9b3c7f05528b"
+    },
+    {
+      "file": "prepublication-callback-group-diagnostic/extension.log",
+      "bytes": 66,
+      "blake3": "26013b522c2e15db31da0b790e08c54a6177fd9c2d84fd9c44a95172ad13bb68"
+    }
+  ]
+}

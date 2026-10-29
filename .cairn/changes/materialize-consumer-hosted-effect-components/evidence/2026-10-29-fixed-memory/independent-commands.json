@@ -1,0 +1,66 @@
+[
+  {
+    "subject": "neutral",
+    "operation": "verify-export",
+    "command": [
+      "/nix/store/rxkdd20n7c510z6n0jd4s4f15zf75lfb-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "artifact",
+      "verify",
+      "--artifact-dir",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-octet-replay",
+      "--emit-valence-provenance",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-octet-export.json",
+      "--output-format",
+      "json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-verify-export.log"
+  },
+  {
+    "subject": "neutral",
+    "operation": "actual-valence-adapter",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/hosted-effects-evidence-helper",
+      "sidecar",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-octet-export.json",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/artifacts/normalized.wasm",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-sidecar.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-actual-valence-adapter.log"
+  },
+  {
+    "subject": "callback",
+    "operation": "verify-export",
+    "command": [
+      "/nix/store/rxkdd20n7c510z6n0jd4s4f15zf75lfb-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "artifact",
+      "verify",
+      "--artifact-dir",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-octet-replay",
+      "--emit-valence-provenance",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/callback-octet-export.json",
+      "--output-format",
+      "json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/callback-verify-export.log"
+  },
+  {
+    "subject": "callback",
+    "operation": "actual-valence-adapter",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/hosted-effects-evidence-helper",
+      "sidecar",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/callback-octet-export.json",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/artifacts/normalized.wasm",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/callback-sidecar.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/callback-actual-valence-adapter.log"
+  }
+]

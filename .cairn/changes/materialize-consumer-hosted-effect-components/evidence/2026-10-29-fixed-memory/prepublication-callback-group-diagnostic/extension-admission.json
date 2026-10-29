@@ -1,0 +1,14 @@
+{
+  "valence_evidence_paths": [
+    "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-callback-group-sidecar/callback-group-sidecar.json"
+  ],
+  "cairn_evidence_paths": [
+    "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/8d1f700/.cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-28-production/production-tasks-gate.log"
+  ],
+  "issuer_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "holder_seed_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+  "verification_unix_seconds": 200,
+  "not_before_unix_seconds": 100,
+  "expires_unix_seconds": 300,
+  "host_policy_path": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/docs/wasm-component-runtime/generated/host-policy.json"
+}

@@ -1,0 +1,202 @@
+{
+  "schema": "mantle-wasm-consumer-verification-report-v1",
+  "bundle_schema": "mantle-wasm-component-materialization-bundle-v1",
+  "bundle_identity_blake3": "d7f11d09a6cffd0589d0cdc041ced9d9ec7f312e528ad77c7d8c3a54b72fbb6d",
+  "expected_runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "members": [
+    {
+      "role": "source-closure",
+      "digest_blake3": "2928db8d2b1b5b110294ffedeafab7531b4935269f7684e3c2a4e762788b93fd",
+      "size_bytes": 25108,
+      "status": "matched"
+    },
+    {
+      "role": "lock",
+      "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+      "size_bytes": 107,
+      "status": "matched"
+    },
+    {
+      "role": "final-portable",
+      "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+      "size_bytes": 21135,
+      "status": "matched"
+    },
+    {
+      "role": "wit-input",
+      "digest_blake3": "9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+      "size_bytes": 670,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "9e70e63ec6ff3647b73af1de3e082fd7adfde995a418a4f9de9d6ca32356c0a8",
+      "size_bytes": 470,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "977a3db6362544d85ffda8577f636673a4c9b8e5fdf1fa5bc6514788390aa689",
+      "size_bytes": 526,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "3a1a262eff7efdbff1b31531fe9abd1f5edb6c305907271bf89af0c76bfc9ac0",
+      "size_bytes": 660,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "5a76a4d15c98c725f0bdef430069cef3a7ba5622ce2aa33a81112887b8c3e37e",
+      "size_bytes": 107,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "1d4c97b91dc0d0beb69ef3dae665bbb707397007636e41287b74034c05450873",
+      "size_bytes": 739,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "4ec0e328527bdde881b12305410acee25295b629330413784bb2c392f7d3f76e",
+      "size_bytes": 21396,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "868bcc099e19e806e0cbd97d49d1634f638d43b15b39fe4e3bb7031bb152a3b0",
+      "size_bytes": 754,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "4ec0e328527bdde881b12305410acee25295b629330413784bb2c392f7d3f76e",
+      "size_bytes": 21396,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "b7b493628e15fe79a6cdb9c5c673b29b319497b731c77bbc83f920558ae9b55f",
+      "size_bytes": 754,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+      "size_bytes": 21620,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "6bb836205b2ae08afee2b97c6d4320a831c6f468ed98e5a9ba53d8e02c5f636f",
+      "size_bytes": 739,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+      "size_bytes": 21620,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "55b152ea2654f4462459bd0be63e63736305d1344a476c73ff550d65e2950ea5",
+      "size_bytes": 739,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+      "size_bytes": 21135,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "c4138010a013481ef598489ee987ec2fdd32fca5981b3d8903a0a82e793c281b",
+      "size_bytes": 763,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+      "size_bytes": 21135,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "12405df6ba64d190a8bfe3a179faa0367246030a58bc06f86e51565eefca9fcf",
+      "size_bytes": 825,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "06ec5d4c649c4008ddb617b1d9f9493a71d393b525c2475659f6e9334f1217c0",
+      "size_bytes": 5048,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "8ef87d1b69f48dcf71de035c4534513ad1090122376a01f4abf02afbb3e40ba2",
+      "size_bytes": 588,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "022ab7223031cbf112d3a5c8b166366a33f38296be804ebbe11f1692276efd53",
+      "size_bytes": 756,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "1ac957b578a8c725d1ddd2c3a5d21696be3a7f631dc112365d0f8cb556c243aa",
+      "size_bytes": 21135,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "8e986ff1a973bc65b062ae8c20bad317294ea44f2ba7362fe07e5e1bf8b3a49a",
+      "size_bytes": 757,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+      "size_bytes": 21620,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "b31efee7726e3d38f995a3e2e933a2ac0adf5c8665a8c902bca69d6adba3a4dc",
+      "size_bytes": 760,
+      "status": "matched"
+    },
+    {
+      "role": "stage-artifact",
+      "digest_blake3": "107cb557423a4f38eb22fb5a6d826ff86e524a645cff496cbadc6ce0b6959013",
+      "size_bytes": 21620,
+      "status": "matched"
+    },
+    {
+      "role": "stage-receipt",
+      "digest_blake3": "f07f6b03d4f2393c4e8ef2f8eeb04cf74ee49b7721d75ad5881ea6838375d7d1",
+      "size_bytes": 474,
+      "status": "matched"
+    }
+  ],
+  "layers_completed": [
+    "structural",
+    "bytes"
+  ],
+  "blockers": [],
+  "status": "verified",
+  "non_claims": [
+    "not-runtime-authority",
+    "not-release-eligibility",
+    "not-source-trust",
+    "not-compiler-correctness",
+    "not-component-behavior",
+    "not-runtime-isolation"
+  ]
+}

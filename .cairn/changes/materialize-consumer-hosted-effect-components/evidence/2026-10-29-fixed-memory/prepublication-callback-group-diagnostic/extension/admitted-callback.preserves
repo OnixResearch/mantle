@@ -1,0 +1,4 @@
+´³$system-extension-callback-receipt-v1±#molten.system-extension.callback.v1´³manifest-ref±Gblake3:4a5c799efaafb6aaf05488b867f3d10e74e0c4ac4213effa69ad476b1948fe72„´³extension-id±%molten.smoke.hosted-effects.extension„´³
+service-id±#molten.smoke.hosted-effects.service„´³callback±request„´³
+generation°„´³sequence°„´³	event-ref±Gblake3:7d9584a17c3811415c960e2b06a568872f4758f049cd777b2d55bbcc181fc15a„´³execution-binding-ref±Gblake3:23e7a28200a89bae0f4e7b3e13c24ac1ed13414e9ff65765bc0d2d484cfb2ab0„´³decision±	succeeded„´³output-refsµ±Gblake3:9e1112da71ab862c30cc227e2a1dd0bb2940d64f68077259f51a0bcfc3b05cd8„„´³effect-refsµ„„´³	state-ref´³some±Gblake3:9e1112da71ab862c30cc227e2a1dd0bb2940d64f68077259f51a0bcfc3b05cd8„„´³checkpoint-ref´³none„„´³
+diagnostic´³none„„´³checksµ±real-callback-execution-bound±typed-effects-only±per-event-evidence-profile±)success-is-not-semantic-correctness-proof„„„

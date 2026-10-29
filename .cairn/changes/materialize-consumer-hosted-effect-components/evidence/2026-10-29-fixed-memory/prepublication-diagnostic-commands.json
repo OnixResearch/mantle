@@ -1,0 +1,28 @@
+[
+  {
+    "consumer": "actor",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/actor-hosted-effects-smoke",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/materialization-bundle.json",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/actor",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-sidecar.json",
+      "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/8d1f700/.cairn/changes/materialize-consumer-hosted-effect-components/evidence/2026-10-28-production/production-tasks-gate.log",
+      "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/docs/wasm-component-runtime/generated/host-policy.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/actor.log"
+  },
+  {
+    "consumer": "extension",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/extension-hosted-effects-smoke",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-bundle/materialization-bundle.json",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/extension",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/extension-admission.json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 1,
+    "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-fixed-memory-cohort/extension.log"
+  }
+]

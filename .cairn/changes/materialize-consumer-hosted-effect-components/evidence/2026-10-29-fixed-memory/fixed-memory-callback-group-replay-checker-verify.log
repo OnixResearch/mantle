@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "artifact_dir": "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-group-octet-replay",
+  "output_format": "evidence-rail",
+  "status": "valid",
+  "artifacts": [
+    {
+      "artifact": "evidence-rail-receipt.json",
+      "source_id": "octet.artifact.wasm-tools",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "fb04c940d651dc822da9a344a35c224204b9133df72f20dfeae0ed625f2bfac4",
+      "checked_scope": "."
+    },
+    {
+      "artifact": "summary.txt",
+      "source_id": "octet.runner.artifact-bundle",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "manual_review_required",
+      "blake3": "0c5ac9e6722b3ec84bbae87a50a7160536ae5e0ffc393271a2d82d33d1da191e",
+      "checked_scope": ".",
+      "manual_action": "review optional evidence rail summary and receipt before using this artifact"
+    },
+    {
+      "artifact": "wasm-artifact.bin",
+      "source_id": "octet.artifact.wasm-input",
+      "checker_id": "cargo-octet",
+      "evidence_tier": "policy_check",
+      "blake3": "c239a546cf8d7982ff3d6352c40b82c0a5ddf278584cdcfd7084010e3165389d",
+      "checked_scope": "."
+    }
+  ],
+  "diagnostics": []
+}
