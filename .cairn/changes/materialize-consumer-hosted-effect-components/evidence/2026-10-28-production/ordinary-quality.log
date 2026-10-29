@@ -1,0 +1,156 @@
+[1/4] bounded GCC 4.0 configure bridge
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+[2/4] rustfmt
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p crunch-cmake-core -p crunch-cmake -p crunch-esp-idf-core -p crunch-esp-idf -p crunch-fpga-core -p crunch-fpga -p crunch-gpu-core -p crunch-gpu -p crunch-model-conversion-core -p crunch-model-conversion -p crunch-pnpm-core -p crunch-pnpm -p crunch-python-core -p crunch-python -p crunch-test-core -p crunch-test-app -p crunch-test -p crunch-verification-bridge-core -p crunch-verification-bridge -p crunch-zephyr-core -p crunch-zephyr -p mantle-cargo-build-bundle-core -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core
+[3/4] clippy
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-rust-plan-core)
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-attestation-core)
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/nix-compat)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/nix-compat-derive)
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-attestation)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/snix-castore)
+    Checking snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/snix-tracing)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/vendor/snix-build)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-nar)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-action-result-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-composition-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-gc-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-repair-core)
+    Checking mantle-rust-differential-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-rust-differential-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-rust-cache-core)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-store)
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-remote-core)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-glue)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-eval)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-build)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-spacewasm-core)
+    Checking mantle-causal-trace-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-causal-trace-core)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-source-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-delta-core)
+    Checking crunch-test-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-test-core)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-rust-cache)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-rustc-wrapper)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-delta)
+    Checking crunch-test-app v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-test-app)
+    Checking crunch-nix-gateway-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-nix-gateway-core)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-project-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-evaluation-stream-core)
+    Checking crunch-watch-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-watch-core)
+    Checking crunch-test v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-test)
+    Checking mantle-application-contract v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-application-contract)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-build-contract)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-shell-core)
+    Checking mantle-lock-vendor-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-lock-vendor-core)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-project)
+    Checking mantle-rust-plan-app v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-rust-plan-app)
+    Checking mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-cargo-build-bundle-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-hardware-simulation-core)
+    Checking crunch-android-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-android-core)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-shell)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-release-core)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-nix-gateway)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-pipeline)
+    Checking crunch-remote-app v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-remote-app)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantlepkgs-core)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-bootstrap-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-eval-budget-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-portable-client-core)
+    Checking crunch-service-readiness-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-service-readiness-core)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-hardware-simulation)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-kernelscript-core)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028)
+    Checking mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-wasm-consumer-verifier)
+    Checking crunch-cmake-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-cmake-core)
+    Checking crunch-cmake v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-cmake)
+    Checking mantle-cargo-unit-plan v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-cargo-unit-plan)
+    Checking crunch-gpu-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-gpu-core)
+    Checking crunch-pnpm-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-pnpm-core)
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-verification-bridge-core)
+    Checking crunch-esp-idf-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-esp-idf-core)
+    Checking crunch-zephyr-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-zephyr-core)
+    Checking crunch-android v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-android)
+    Checking crunch-fpga-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-fpga-core)
+    Checking crunch-model-conversion-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-model-conversion-core)
+    Checking crunch-esp-idf v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-esp-idf)
+    Checking crunch-verification-bridge v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-verification-bridge)
+    Checking crunch-gpu v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-gpu)
+    Checking crunch-model-conversion v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-model-conversion)
+    Checking crunch-fpga v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-fpga)
+    Checking crunch-zephyr v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-zephyr)
+    Checking crunch-pnpm v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-pnpm)
+    Checking crunch-kernelscript-adapter v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-kernelscript-adapter)
+    Checking mantle-rust-differential v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-rust-differential)
+    Checking crunch-spacewasm v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-spacewasm)
+    Checking crunch-python-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-python-core)
+    Checking crunch-python v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-python)
+error[E0061]: this function takes 2 arguments but 3 arguments were supplied
+   --> tests/wasm_component_cli.rs:240:5
+    |
+240 |     assert_preflight_rejected(&output, &evidence, "consumer-host runtime policy must match exact WIT/import inputs");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^                     ----------------------------------------------------------------- unexpected argument #3 of type `&'static str`
+    |
+note: function defined here
+   --> tests/wasm_component_cli.rs:336:4
+    |
+336 | fn assert_preflight_rejected(output: &std::process::Output, evidence: &Path) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+help: remove the extra argument
+    |
+240 -     assert_preflight_rejected(&output, &evidence, "consumer-host runtime policy must match exact WIT/import inputs");
+240 +     assert_preflight_rejected(&output, &evidence);
+    |
+
+error[E0061]: this function takes 2 arguments but 3 arguments were supplied
+   --> tests/wasm_component_cli.rs:243:5
+    |
+243 |     assert_preflight_rejected(&output, &evidence, "cannot declare standalone invocation or stdout");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^                     ------------------------------------------------ unexpected argument #3 of type `&'static str`
+    |
+note: function defined here
+   --> tests/wasm_component_cli.rs:336:4
+    |
+336 | fn assert_preflight_rejected(output: &std::process::Output, evidence: &Path) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+help: remove the extra argument
+    |
+243 -     assert_preflight_rejected(&output, &evidence, "cannot declare standalone invocation or stdout");
+243 +     assert_preflight_rejected(&output, &evidence);
+    |
+
+error[E0061]: this function takes 2 arguments but 3 arguments were supplied
+   --> tests/wasm_component_cli.rs:246:5
+    |
+246 |     assert_preflight_rejected(&output, &evidence, "cannot declare standalone invocation or stdout");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^                     ------------------------------------------------ unexpected argument #3 of type `&'static str`
+    |
+note: function defined here
+   --> tests/wasm_component_cli.rs:336:4
+    |
+336 | fn assert_preflight_rejected(output: &std::process::Output, evidence: &Path) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+help: remove the extra argument
+    |
+246 -     assert_preflight_rejected(&output, &evidence, "cannot declare standalone invocation or stdout");
+246 +     assert_preflight_rejected(&output, &evidence);
+    |
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `mantle` (test "wasm_component_cli") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

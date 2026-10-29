@@ -1,0 +1,27 @@
+{
+  "name": "published-proposal-gate",
+  "command": [
+    "nix",
+    "develop",
+    "--builders",
+    "",
+    "-c",
+    "cairn",
+    "gate",
+    "proposal",
+    "materialize-consumer-hosted-effect-components",
+    "--root",
+    "."
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "TMPDIR": "/tmp/mantle-hosted-effects-20261028"
+  },
+  "exit_code": 0,
+  "log": "/home/brittonr/.cache/mantle-hosted-effects-20261028/published-proposal-gate.log"
+}

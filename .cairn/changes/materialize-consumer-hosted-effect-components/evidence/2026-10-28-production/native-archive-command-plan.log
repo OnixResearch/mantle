@@ -1,0 +1,13 @@
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+cairn lifecycle evidence dry-run: materialize-consumer-hosted-effect-components
+cairn: cairn
+archive date: 2026-10-28
+explicit commands: 1
+archive path: .cairn/archive/2026-10-28-materialize-consumer-hosted-effect-components
+- cairn validate --root . --strict

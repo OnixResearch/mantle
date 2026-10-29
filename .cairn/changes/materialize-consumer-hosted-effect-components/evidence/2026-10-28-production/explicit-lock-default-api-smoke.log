@@ -1,0 +1,22 @@
+     Locking 31 packages to latest Rust 1.96.0-nightly compatible versions
+      Adding toml v0.8.23 (available: v0.9.12+spec-1.1.0)
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling serde_json v1.0.149
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+   Compiling mantle-empty-lock-source-smoke v0.0.0 (/home/brittonr/.cache/mantle-hosted-effects-20261028/explicit-lock-smoke)
+    Finished `dev` profile [unoptimized] target(s) in 4.93s
+     Running `/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/mantle-empty-lock-source-smoke /home/brittonr/.cache/mantle-hosted-effects-20261028/neutral-bundle-closed/artifacts/wkg.lock`
+Actual owner lock and omitted-package wire input both deserialize to exact version-1 empty closure; source acquisition still separately binds all original lock bytes. input=/home/brittonr/.cache/mantle-hosted-effects-20261028/neutral-bundle-closed/artifacts/wkg.lock

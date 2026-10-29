@@ -1,0 +1,7 @@
+{
+  "command": ["nix", "develop", "--builders", "", "-c", "cairn", "--help"],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "exit_code": 1,
+  "observed_output": "building '/nix/store/5q81d3hb0jpa7y0z3n5cnpj063aqm646-mantle-wasm-component-toolchain-v1.drv'...\nerror: Cannot build '/nix/store/5q81d3hb0jpa7y0z3n5cnpj063aqm646-mantle-wasm-component-toolchain-v1.drv'.\nReason: builder failed with exit code 1.\nOutput paths: /nix/store/nzsxrvm4g98y22c0wqia6ymz56w2w1h3-mantle-wasm-component-toolchain-v1\nerror: failed to read from `/nix/store/zgkcka5hvjhrv69wnfnbj82aa4srx08q-source/standards/wasm-artifact/fixtures/positive/component-effects.wat`\nCaused by: No such file or directory (os error 2)\nerror: Cannot build '/nix/store/p1agi7vzwkh7aanyqrgpcy3f5hwrwp10-nix-shell-env.drv'. Reason: 1 dependency failed.",
+  "claim_boundary": "No lifecycle command executed: the unchanged old immutable checker pin lacks the new effects seed required by the settled producer source. Await actual checker publication; do not bypass the shell or install a sibling source override."
+}

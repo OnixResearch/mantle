@@ -1,0 +1,78 @@
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling serde_core v1.0.228
+   Compiling constant_time_eq v0.4.2
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling memchr v2.8.0
+   Compiling blake3 v1.8.5
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+    Finished `test` profile [unoptimized] target(s) in 6.89s
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/crunch_wasm_component_core-19f87d20e48ea0ad)
+
+running 38 tests
+test tests::composition_rejects_cycles_and_non_local_artifacts ... ok
+test tests::cohort_member_change_invalidates_identity ... ok
+test tests::composition_rejects_missing_dependency_and_wrong_world ... ok
+test tests::cross_target_or_tampered_aot_receipt_is_denied ... ok
+test tests::exact_aot_receipt_is_admitted_as_trusted_native ... ok
+test tests::digest_roles_reject_sha256_in_mantle_identity_position ... ok
+test tests::digest_roles_preserve_external_sha_and_mantle_blake3 ... ok
+test tests::deterministic_wizer_outputs_are_admitted ... ok
+test tests::exact_local_composition_graph_is_identified ... ok
+test tests::portable_admission_binds_same_bytes_to_both_validation_layers ... ok
+test tests::component_attestation_and_release_binding_follow_verified_stage_graph ... ok
+test tests::materialization_bundle_stage_kind_rejects_post_materialization_authority ... ok
+test tests::duplicate_or_unlocked_materializations_are_denied ... ok
+test tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke ... ok
+test tests::generated_inputs_bind_content_and_owner_receipts ... ok
+test tests::portable_admission_rejects_octet_report_for_different_bytes ... ok
+test tests::checked_lock_produces_deterministic_source_acquisition_plan ... ok
+test tests::materialization_bundle_rejects_missing_stage_and_stale_identity ... ok
+test tests::materialization_bundle_is_canonical_and_reverifiable ... ok
+test tests::dependency_free_source_plan_still_binds_lock_and_denies_invented_packages ... ok
+test tests::generated_plan_rejects_mixed_source_ownership ... ok
+test tests::component_evidence_rejects_swapped_bundle_object_and_stale_report_identity ... ok
+test tests::forged_generated_plan_integrity_fails_closed ... ok
+test tests::manifest_rejects_wizer_compile_environment_and_componentization_drift ... ok
+test tests::report_claim_enum_rejects_runtime_authority_overclaim ... ok
+test tests::remaining_imports_must_match_post_composition_inspection ... ok
+test tests::report_rejects_unknown_or_circular_parent_and_missing_non_claims ... ok
+test tests::manifest_rejects_non_exact_packages_and_missing_non_claims ... ok
+test tests::manifest_rejects_unmapped_registry_and_incomplete_optional_stages ... ok
+test tests::report_dto_binds_ordered_stage_graph_and_bounded_claims ... ok
+test tests::virtualization_rejects_defaults_and_unreviewed_passthrough ... ok
+test tests::virtualization_starts_deny_all_and_binds_virtual_inputs ... ok
+test tests::stale_generated_bytes_or_owner_receipt_fail_closed ... ok
+test tests::registry_drift_and_missing_materialization_are_denied ... ok
+test tests::wizer_drift_and_ambient_state_are_denied ... ok
+test tests::unexpected_or_duplicate_observed_inputs_fail_closed ... ok
+test tests::stale_lock_bytes_fail_before_source_acquisition ... ok
+test tests::valid_manifest_and_cohort_have_stable_blake3_identities ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

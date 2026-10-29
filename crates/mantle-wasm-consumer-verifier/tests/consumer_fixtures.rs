@@ -129,6 +129,7 @@ fn valid_bundle(fixture: &FixtureRoot) -> MaterializationBundle {
         final_portable: fixture.object("/members/final.wasm", 6),
         expected_octet_profile_blake3: Blake3Identity::from_slice(&member_bytes(7)),
         expected_runtime_profile_blake3: Blake3Identity::from_slice(&member_bytes(8)),
+        runtime_validation: crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke,
         stage_receipts: stage_receipt(fixture, 40),
         wizer: None,
         aot: None,
@@ -370,6 +371,7 @@ fn second_consumer_world_and_member_graph_passes() {
         final_portable: final_portable.clone(),
         expected_octet_profile_blake3: Blake3Identity::from_slice(&member_bytes(39)),
         expected_runtime_profile_blake3: Blake3Identity::from_slice(&member_bytes(41)),
+        runtime_validation: crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke,
         stage_receipts: {
             let mut receipts = stage_receipt(&fixture, 60);
             let artifact_receipt = fixture.object("/graphs/second/receipt-aot.json", 80);
@@ -421,6 +423,7 @@ fn request_from_bundle(bundle: &MaterializationBundle) -> crunch_wasm_component_
         final_portable: bundle.final_portable.clone(),
         expected_octet_profile_blake3: bundle.expected_octet_profile_blake3.clone(),
         expected_runtime_profile_blake3: bundle.expected_runtime_profile_blake3.clone(),
+        runtime_validation: bundle.runtime_validation.clone(),
         stage_receipts: bundle.stage_receipts.clone(),
         wizer: bundle.wizer.clone(),
         aot: bundle.aot.clone(),

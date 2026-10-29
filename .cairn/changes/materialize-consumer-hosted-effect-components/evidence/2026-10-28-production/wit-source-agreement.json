@@ -1,0 +1,7 @@
+{
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "command": "cmp fixtures/wasm-component-effects/wit/runtime.wit /home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/wit/molten-component-effects/runtime.wit && cmp fixtures/wasm-component-effects/wit/runtime.wit /home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension/wit/runtime.wit && printf 'neutral and callback WIT inputs match authoritative Molten bytes\\n'",
+  "exit_code": 0,
+  "stdout": "neutral and callback WIT inputs match authoritative Molten bytes\n",
+  "claim_boundary": "Source prerequisite comparison only; no generation, pipeline, artifact admission, or runtime invocation is claimed. Preparation rechecks authoritative WIT bytes when producing each actual guest closure."
+}

@@ -45,7 +45,7 @@
       url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9";
       flake = false;
     };
-    octet.url = "github:OnixResearch/octet/0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
+    octet.url = "github:OnixResearch/octet/abb6082062251944a40093a274df3d35331fa168";
     cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
@@ -519,6 +519,7 @@
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/mantle-build-contract}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/lock-vendor-two-crate}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/wasm-component-effects}/" pathString
             || builtins.elem pathString catalogExamplePaths
             || pathString == toString ./examples/catalog.ncl
             || pathString == toString ./examples/README.md
@@ -664,7 +665,7 @@
             '';
 
         wasiVirtVersion = "0.2.0";
-        octetSourceRevision = "0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
+        octetSourceRevision = "abb6082062251944a40093a274df3d35331fa168";
         octetSourceRepository = "https://github.com/OnixResearch/octet";
         octetPackageName = "cargo-octet";
         octetPackageVersion = "0.1.0";
@@ -672,6 +673,7 @@
         octetProfileIds = [
           octetProfileId
           "molten-component-baseline"
+          "molten-component-effects-v1"
         ];
         octetPackage = octet.packages.${system}.cargo-octet;
         octetProfileConfig = "${octet}/standards/wasm-artifact/generated/profiles.json";
@@ -770,11 +772,17 @@
 
                 octet_config="$out/share/mantle/octet/wasm-artifact-profiles.json"
                 octet_config_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$octet_config")"
-                "$out/bin/wasm-tools" parse "${octet}/standards/wasm-artifact/fixtures/positive/component.wat" \
-                  -o "$TMPDIR/octet-positive-component.wasm"
                 octet_profiles="$TMPDIR/octet-profiles.jsonl"
                 : > "$octet_profiles"
                 for profile_id in ${pkgs.lib.escapeShellArgs octetProfileIds}; do
+                  case "$profile_id" in
+                    portable-component-baseline|molten-component-baseline)
+                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component.wat" ;;
+                    molten-component-effects-v1)
+                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component-effects.wat" ;;
+                    *) echo "unknown Octet component profile: $profile_id" >&2; exit 1 ;;
+                  esac
+                  "$out/bin/wasm-tools" parse "$seed" -o "$TMPDIR/octet-positive-component.wasm"
                   artifact_dir="$TMPDIR/octet-$profile_id-evidence"
                   "$out/bin/cargo-octet" evidence collect \
                     --rail wasm-artifact \

@@ -236,6 +236,26 @@ fn lock_request() -> LockValidationRequest {
     }
 }
 
+#[test]
+fn dependency_free_source_plan_still_binds_lock_and_denies_invented_packages() {
+    let mut request = lock_request();
+    request.manifest.package_resolution.requirements.clear();
+    request.facts.registry_config_blake3 =
+        registry_config_identity(request.manifest.package_resolution.clone()).unwrap();
+    request.facts.lock = serde_json::from_str(r#"{"version":1}"#).unwrap();
+    request.facts.materializations.clear();
+    request.lock_bytes = b"version = 1\n".to_vec();
+    request.facts.lock_bytes_blake3 = Blake3Identity::from_slice(&request.lock_bytes);
+    let result = plan_source_acquisition(request.clone());
+    assert!(result.blockers.is_empty());
+    assert!(result.plan.unwrap().requests.is_empty());
+    let mut drift = request.clone();
+    drift.lock_bytes.push(b' ');
+    assert!(plan_source_acquisition(drift).plan.is_none(), "empty does not mean unbound lock bytes");
+    request.facts.materializations = lock_request().facts.materializations;
+    assert!(plan_source_acquisition(request).plan.is_none(), "empty lock cannot admit invented packages");
+}
+
 fn portable_admission() -> PortableAdmission {
     let artifact = object("component.wasm", '3');
     bind_portable_admission(PortableAdmissionRequest {
@@ -882,6 +902,7 @@ fn materialization_bundle_request() -> MaterializationBundleRequest {
         final_portable: final_portable.clone(),
         expected_octet_profile_blake3: blake3('f'),
         expected_runtime_profile_blake3: blake3('0'),
+        runtime_validation: crate::RuntimeValidation::StandaloneSmoke,
         stage_receipts: required_bundle_receipts(&final_portable),
         wizer: None,
         aot: None,
@@ -899,6 +920,51 @@ fn materialization_bundle_is_canonical_and_reverifiable() {
     assert_eq!(first.schema, MATERIALIZATION_BUNDLE_SCHEMA);
     assert_eq!(verified.bundle, Some(first));
     assert!(verified.blockers.is_empty());
+}
+
+// r[verify mantle.wasm_component.consumer_host_requirement]
+#[test]
+fn consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke() {
+    let mut request = materialization_bundle_request();
+    request.runtime_validation = crate::RuntimeValidation::ConsumerHostRequired {
+        wit_package: String::from("test:effects"),
+        wit_world: String::from("actor"),
+        required_imports: vec![String::from("effect-request")],
+    };
+    assert!(build_materialization_bundle(request.clone()).bundle.is_none());
+    let mut receipt = request
+        .stage_receipts
+        .iter()
+        .find(|receipt| receipt.kind == ComponentStageKind::BuildValidation)
+        .unwrap()
+        .clone();
+    receipt.stage_key = String::from("consumer-host-runtime-required");
+    receipt.receipt = object("consumer-host-runtime-required.json", 'a');
+    receipt.receipt_blake3 = receipt.receipt.digest_blake3.clone();
+    request.stage_receipts.push(receipt);
+    let bundle = build_materialization_bundle(request.clone())
+        .bundle
+        .expect("static materialization with explicit host requirement");
+    assert_eq!(verify_materialization_bundle(bundle.clone()).bundle, Some(bundle.clone()));
+    let mut changed = bundle.clone();
+    changed.runtime_validation = crate::RuntimeValidation::StandaloneSmoke;
+    assert!(verify_materialization_bundle(changed).bundle.is_none(), "runtime ownership is identity-bound");
+    let mut invalid = request.clone();
+    invalid.stage_receipts.last_mut().unwrap().artifact = Some(object("other.wasm", '1'));
+    assert!(build_materialization_bundle(invalid).bundle.is_none());
+    let mut invalid = request.clone();
+    if let crate::RuntimeValidation::ConsumerHostRequired { required_imports, .. } = &mut invalid.runtime_validation {
+        required_imports.push(required_imports[0].clone());
+    }
+    let invalid = build_materialization_bundle(invalid);
+    assert!(invalid.blockers.iter().any(|blocker| blocker.code == "invalid-consumer-host-requirement"));
+    let mut smoke = request.stage_receipts.last().unwrap().clone();
+    smoke.stage_key = String::from("runtime-smoke");
+    smoke.receipt = object("runtime-smoke.json", 'b');
+    smoke.receipt_blake3 = smoke.receipt.digest_blake3.clone();
+    request.stage_receipts.push(smoke);
+    let invalid = build_materialization_bundle(request);
+    assert!(invalid.blockers.iter().any(|blocker| blocker.code == "invalid-consumer-host-requirement"));
 }
 
 #[test]

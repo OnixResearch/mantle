@@ -415,15 +415,15 @@ pub(crate) fn run_virtualization_stage(
     composed_path: &Path,
 ) -> Result<Option<(PathBuf, StoreObject)>, Error> {
     let plan = validated_virtualization_plan(prepared)?;
-    let output = workspace.root.join("virtualized.wasm");
     let Some(input_imports) =
         read_component_imports(prepared, workspace, state, "virtualization-input-inspection", composed_path)?
     else {
         return Ok(None);
     };
-    if input_imports.is_empty() {
-        return copy_import_free_virtualization(workspace, state, plan, composed_path, output);
+    if input_imports.iter().all(|name| !name.starts_with("wasi:") && !name.starts_with("wasi_")) {
+        return copy_non_wasi_virtualization(workspace, state, plan, input_imports, composed_path);
     }
+    let output = workspace.root.join("virtualized.wasm");
     let args = virtualization_args(&plan, composed_path, &output)?;
     let run = invoke(prepared, workspace, StageInvocation {
         stage_key: "virtualization",
@@ -469,27 +469,29 @@ pub(crate) fn run_virtualization_stage(
     Ok(Some((output, object)))
 }
 
-fn copy_import_free_virtualization(
+fn copy_non_wasi_virtualization(
     workspace: &StageWorkspace,
     state: &mut ExecutionState,
     plan: VirtualizationPlan,
+    observed_imports: Vec<String>,
     composed_path: &Path,
-    output: PathBuf,
 ) -> Result<Option<(PathBuf, StoreObject)>, Error> {
-    let validation = validate_remaining_imports(plan.clone(), Vec::new());
+    let output = workspace.root.join("virtualized.wasm");
+    let plan_identity = plan.identity_blake3.clone();
+    let validation = validate_remaining_imports(plan, observed_imports);
     if !validation.matches_plan {
         for blocker in validation.blockers {
             state.block(&blocker.code, "virtualization", blocker.message);
         }
         return Ok(None);
     }
-    copy_regular_file_new(composed_path, &output, "import-free virtualization output")?;
+    copy_regular_file_new(composed_path, &output, "non-WASI virtualization output")?;
     let object = measure_artifact(&output, "virtualized.wasm", workspace)?;
     state.push_stage(
         "virtualization",
         ComponentStageKind::Virtualization,
         ComponentStageStatus::Succeeded,
-        StageEvidence::new(Some(object.clone()), None, Some(plan.identity_blake3), vec![
+        StageEvidence::new(Some(object.clone()), None, Some(plan_identity), vec![
             BoundedComponentClaim::DenyAllVirtualizationPlanned,
         ]),
     )?;
@@ -653,19 +655,32 @@ fn read_component_imports(
     }
     let wit = String::from_utf8(run.stdout)
         .map_err(|error| Error::Tool(format!("wasm-tools WIT inspection was not UTF-8: {error}")))?;
-    let observed_interfaces = wit.lines().filter_map(parse_import_line).collect();
+    let observed_interfaces =
+        wit.lines().filter_map(|line| parse_import_line(line).transpose()).collect::<Result<Vec<_>, _>>()?;
     debug_assert!(stage_key.starts_with("virtualization-"));
     debug_assert!(component.is_absolute());
     Ok(Some(observed_interfaces))
 }
 
-fn parse_import_line(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    let value = trimmed.strip_prefix("import ")?.strip_suffix(';')?;
-    if value.is_empty() || value.contains(char::is_whitespace) {
-        return None;
+fn parse_import_line(line: &str) -> Result<Option<String>, Error> {
+    let Some(value) = line.trim().strip_prefix("import ") else {
+        return Ok(None);
+    };
+    // wasm-tools renders root functions/named instances as `name: type` and
+    // qualified interface imports as `namespace:package/interface@version;`.
+    let name = if let Some((name, _)) = value.split_once(": ") {
+        name
+    } else {
+        value
+            .strip_suffix(';')
+            .ok_or_else(|| Error::Invalid("unrecognized wasm-tools WIT import syntax".to_string()))?
+    };
+    if name.is_empty() || name.contains(char::is_whitespace) {
+        return Err(Error::Invalid("invalid wasm-tools WIT import name".to_string()));
     }
-    Some(value.to_string())
+    debug_assert!(!name.is_empty());
+    debug_assert!(!name.contains(char::is_whitespace));
+    Ok(Some(name.to_string()))
 }
 
 fn virtualization_args(plan: &VirtualizationPlan, input: &Path, output: &Path) -> Result<Vec<String>, Error> {
@@ -780,7 +795,7 @@ fn verify_wkg_outputs(
             return Ok(false);
         }
     }
-    debug_assert!(!prepared.request.package_materializations.is_empty());
+    debug_assert_eq!(prepared.source_plan.requests.len(), prepared.request.package_materializations.len());
     debug_assert!(state.blockers.is_empty());
     Ok(true)
 }
@@ -930,5 +945,28 @@ fn stderr_summary(stderr: &[u8]) -> String {
         "tool exited unsuccessfully without stderr".to_string()
     } else {
         summary
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_import_line;
+
+    #[test]
+    fn remaining_host_surface_includes_root_functions_and_named_instances() {
+        assert_eq!(
+            parse_import_line("  import effect-request: func(request: list<u8>) -> result<list<u8>, string>;")
+                .unwrap()
+                .as_deref(),
+            Some("effect-request")
+        );
+        assert_eq!(
+            parse_import_line("import wasi:cli/stdout@0.2.3;").unwrap().as_deref(),
+            Some("wasi:cli/stdout@0.2.3")
+        );
+        assert_eq!(parse_import_line("import named-port: interface {").unwrap().as_deref(), Some("named-port"));
+        assert!(parse_import_line("import ambiguous declaration;").is_err());
+        assert!(parse_import_line("import missing-terminator").is_err());
+        assert_eq!(parse_import_line("type preserves-payload = list<u8>;").unwrap(), None);
     }
 }

@@ -1,0 +1,2 @@
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'

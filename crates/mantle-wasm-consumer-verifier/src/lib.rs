@@ -35,6 +35,7 @@ pub use contract::ConsumerMemberStatus;
 pub use contract::ConsumerVerificationReport;
 pub use contract::ConsumerVerificationStatus;
 pub use crunch_wasm_component_core::MaterializationBundle;
+pub use crunch_wasm_component_core::RuntimeValidation;
 pub use facade::CONSUMER_REPORT_SCHEMA;
 pub use facade::CONSUMER_VERIFIER_NON_CLAIMS;
 pub use facade::verify_consumer_bundle;

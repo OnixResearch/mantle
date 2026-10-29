@@ -71,16 +71,24 @@ fn profile_selection_uses_declared_identities_only() {
 }
 
 // r[verify mantle.wasm_component.profile_selection]
+// r[verify mantle.wasm_component.effects_cohort]
 #[test]
 fn selectable_cohort_rejects_missing_duplicate_and_misbound_profiles() {
     let mut octet = test_octet_identity();
+    octet.profile_identity_blake3 = Blake3Identity::parse(crate::OCTET_PROFILE_IDENTITY_BLAKE3.to_string()).unwrap();
+    octet.profiles[0].profile_identity_blake3 = octet.profile_identity_blake3.clone();
     assert!(super::verify_octet_profiles(&octet).is_err());
     octet.profiles.push(OctetProfileIdentity {
         profile_id: crate::OCTET_MOLTEN_PROFILE_ID.to_string(),
         profile_identity_blake3: Blake3Identity::parse(crate::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3.to_string())
             .unwrap(),
     });
-    super::verify_octet_profiles(&octet).expect("both distinct declared profiles");
+    assert!(super::verify_octet_profiles(&octet).is_err(), "effects profile is required in the closed cohort");
+    octet.profiles.push(OctetProfileIdentity {
+        profile_id: crate::OCTET_MOLTEN_EFFECTS_PROFILE_ID.to_string(),
+        profile_identity_blake3: Blake3Identity::parse(crate::OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3.to_string())
+            .unwrap(),
+    });
     octet.profiles.swap(0, 1);
     super::verify_octet_profiles(&octet).expect("profile order is not authority");
     let mut invalid = octet.clone();
@@ -92,6 +100,20 @@ fn selectable_cohort_rejects_missing_duplicate_and_misbound_profiles() {
     let mut invalid = octet.clone();
     invalid.profiles[1].profile_identity_blake3 = Blake3Identity::from_slice(b"wrong-default-profile");
     assert!(super::verify_octet_profiles(&invalid).is_err());
+    let mut invalid = octet.clone();
+    invalid.profiles[2].profile_id = "unreviewed-effects-profile".to_string();
+    assert!(super::verify_octet_profiles(&invalid).is_err());
+    let mut invalid = octet.clone();
+    invalid.profiles[2].profile_identity_blake3 = invalid.profiles[0].profile_identity_blake3.clone();
+    assert!(super::verify_octet_profiles(&invalid).is_err());
+    let mut invalid = octet.clone();
+    let molten_identity = invalid.profiles[0].profile_identity_blake3.clone();
+    invalid.profiles[0].profile_identity_blake3 = invalid.profiles[2].profile_identity_blake3.clone();
+    invalid.profiles[2].profile_identity_blake3 = molten_identity;
+    assert!(
+        super::verify_octet_profiles(&invalid).is_err(),
+        "distinct valid digests must still bind exact profile names"
+    );
     octet.profiles.push(octet.profiles[0].clone());
     assert!(super::verify_octet_profiles(&octet).is_err());
 }

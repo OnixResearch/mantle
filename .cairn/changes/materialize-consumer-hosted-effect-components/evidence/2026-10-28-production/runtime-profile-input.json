@@ -1,0 +1,8 @@
+{
+  "runtime_profile_ref": "blake3:046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "runtime_profile_blake3": "046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "authority": "Main reports actual product effect_profile() helper execution; final consumer will independently remeasure after its rebuild",
+  "reported_command": "target/debug/examples/hosted-effects-evidence-helper profile",
+  "source": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "claim_boundary": "Input identity supplied by the runtime owner, not a producer execution or runtime-authority claim"
+}

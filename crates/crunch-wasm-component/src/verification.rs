@@ -30,10 +30,42 @@ pub fn verify_pipeline_execution_report_files(report: &PipelineExecutionReport) 
         .as_ref()
         .ok_or_else(|| Error::Invalid("successful component report omitted its materialization bundle".to_string()))?;
     verify_materialization_bundle_files(bundle)?;
+    verify_runtime_requirement(report, bundle)?;
     verify_wizer_receipt_bindings(report, bundle)?;
     verify_evidence_sidecars(report, bundle)?;
     debug_assert_eq!(report.final_status, "succeeded");
     debug_assert!(report.blockers.is_empty());
+    Ok(())
+}
+
+fn verify_runtime_requirement(report: &PipelineExecutionReport, bundle: &MaterializationBundle) -> Result<(), Error> {
+    if bundle.runtime_validation.is_standalone_smoke() {
+        return Ok(());
+    }
+    let nodes = &report
+        .component_report
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("missing component graph".to_string()))?
+        .nodes;
+    let requirement = nodes.iter().find(|node| node.stage_key == "consumer-host-runtime-required");
+    let is_bound = requirement.is_some_and(|node| {
+        node.status == crunch_wasm_component_core::ComponentStageStatus::NotRun
+            && node
+                .artifact
+                .as_ref()
+                .is_some_and(|artifact| artifact.digest_blake3 == bundle.final_portable.digest_blake3)
+            && node.profile_identity_blake3.as_ref() == Some(&bundle.expected_runtime_profile_blake3)
+            && node.tool_identity_blake3.is_none()
+            && node.claims.is_empty()
+    });
+    if !is_bound
+        || nodes.iter().any(|node| node.stage_key == "runtime-smoke")
+        || report.stage_receipts.iter().any(|receipt| receipt.stage_key == "runtime-smoke")
+    {
+        return Err(Error::Invalid("consumer-host materialization must bind an unexecuted exact-artifact runtime requirement, never a producer smoke claim".to_string()));
+    }
+    debug_assert!(is_bound);
+    debug_assert!(requirement.is_some_and(|node| node.claims.is_empty()));
     Ok(())
 }
 

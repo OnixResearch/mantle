@@ -37,6 +37,45 @@ const REQUIRED_STAGE_KINDS: [ComponentStageKind; 8] = [
     ComponentStageKind::OctetValidation,
 ];
 
+// r[impl mantle.wasm_component.consumer_host_requirement]
+/// Producer execution policy, not consumer execution evidence.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum RuntimeValidation {
+    #[default]
+    StandaloneSmoke,
+    ConsumerHostRequired {
+        wit_package: String,
+        wit_world: String,
+        required_imports: Vec<String>,
+    },
+}
+
+impl RuntimeValidation {
+    pub fn is_standalone_smoke(&self) -> bool {
+        matches!(self, Self::StandaloneSmoke)
+    }
+
+    pub fn is_well_formed(&self) -> bool {
+        let Self::ConsumerHostRequired {
+            wit_package,
+            wit_world,
+            required_imports,
+        } = self
+        else {
+            return true;
+        };
+        !wit_package.is_empty()
+            && wit_package.len() <= 256
+            && !wit_world.is_empty()
+            && wit_world.len() <= 256
+            && !required_imports.is_empty()
+            && required_imports.len() <= 256
+            && required_imports.iter().all(|name| !name.is_empty() && name.len() <= 4096)
+            && required_imports.iter().enumerate().all(|(index, name)| !required_imports[..index].contains(name))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StageReceiptReference {
     pub stage_key: String,
@@ -58,6 +97,8 @@ pub struct MaterializationBundleRequest {
     pub final_portable: StoreObject,
     pub expected_octet_profile_blake3: Blake3Identity,
     pub expected_runtime_profile_blake3: Blake3Identity,
+    #[serde(default, skip_serializing_if = "RuntimeValidation::is_standalone_smoke")]
+    pub runtime_validation: RuntimeValidation,
     pub stage_receipts: Vec<StageReceiptReference>,
     pub wizer: Option<TransformAdmission>,
     pub aot: Option<AotAdmission>,
@@ -77,6 +118,8 @@ pub struct MaterializationBundle {
     pub final_portable: StoreObject,
     pub expected_octet_profile_blake3: Blake3Identity,
     pub expected_runtime_profile_blake3: Blake3Identity,
+    #[serde(default, skip_serializing_if = "RuntimeValidation::is_standalone_smoke")]
+    pub runtime_validation: RuntimeValidation,
     pub stage_receipts: Vec<StageReceiptReference>,
     pub wizer: Option<TransformAdmission>,
     pub aot: Option<AotAdmission>,
@@ -103,6 +146,8 @@ struct MaterializationBundleIdentityInput {
     final_portable: StoreObject,
     expected_octet_profile_blake3: Blake3Identity,
     expected_runtime_profile_blake3: Blake3Identity,
+    #[serde(skip_serializing_if = "RuntimeValidation::is_standalone_smoke")]
+    runtime_validation: RuntimeValidation,
     stage_receipts: Vec<StageReceiptReference>,
     wizer: Option<TransformAdmission>,
     aot: Option<AotAdmission>,
@@ -213,8 +258,28 @@ fn validate_request(request: &MaterializationBundleRequest, blockers: &mut Vec<C
     validate_stage_receipts(request, blockers);
     validate_non_claims(&request.non_claims, blockers);
     validate_optional_outputs(request, blockers);
+    validate_runtime_requirement(request, blockers);
     debug_assert!(blockers.iter().all(|item| !item.code.is_empty()));
     debug_assert!(blockers.iter().all(|item| !item.message.is_empty()));
+}
+
+fn validate_runtime_requirement(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
+    if request.runtime_validation.is_standalone_smoke() {
+        return;
+    }
+    let blocker_count_before = blockers.len();
+    let is_invalid = !request.runtime_validation.is_well_formed();
+    let requirement =
+        request.stage_receipts.iter().find(|receipt| receipt.stage_key == "consumer-host-runtime-required");
+    let is_bound = requirement.is_some_and(|receipt| {
+        receipt.kind == ComponentStageKind::BuildValidation
+            && receipt.artifact.as_ref() == Some(&request.final_portable)
+    });
+    if is_invalid || !is_bound || request.stage_receipts.iter().any(|receipt| receipt.stage_key == "runtime-smoke") {
+        blockers.push(blocker("invalid-consumer-host-requirement", "runtime-validation", "consumer-host policy requires a closed host surface and exact final-artifact requirement receipt, never a producer runtime-smoke receipt"));
+    }
+    debug_assert!(blockers.len() >= blocker_count_before);
+    debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
 }
 
 fn validate_bounds(request: &MaterializationBundleRequest, blockers: &mut Vec<ComponentBlocker>) {
@@ -408,6 +473,7 @@ fn identity_input(request: &MaterializationBundleRequest) -> MaterializationBund
         final_portable: request.final_portable.clone(),
         expected_octet_profile_blake3: request.expected_octet_profile_blake3.clone(),
         expected_runtime_profile_blake3: request.expected_runtime_profile_blake3.clone(),
+        runtime_validation: request.runtime_validation.clone(),
         stage_receipts: request.stage_receipts.clone(),
         wizer: request.wizer.clone(),
         aot: request.aot.clone(),
@@ -428,6 +494,7 @@ fn bundle_from_request(request: MaterializationBundleRequest, identity: Blake3Id
         final_portable: request.final_portable,
         expected_octet_profile_blake3: request.expected_octet_profile_blake3,
         expected_runtime_profile_blake3: request.expected_runtime_profile_blake3,
+        runtime_validation: request.runtime_validation,
         stage_receipts: request.stage_receipts,
         wizer: request.wizer,
         aot: request.aot,
@@ -448,6 +515,7 @@ fn request_from_bundle(bundle: MaterializationBundle) -> MaterializationBundleRe
         final_portable: bundle.final_portable,
         expected_octet_profile_blake3: bundle.expected_octet_profile_blake3,
         expected_runtime_profile_blake3: bundle.expected_runtime_profile_blake3,
+        runtime_validation: bundle.runtime_validation,
         stage_receipts: bundle.stage_receipts,
         wizer: bundle.wizer,
         aot: bundle.aot,

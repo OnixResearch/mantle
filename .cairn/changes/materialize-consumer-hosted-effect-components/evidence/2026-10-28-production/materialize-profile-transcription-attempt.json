@@ -1,0 +1,8 @@
+{
+  "pueue_task": 33,
+  "command": ["python3", "/home/brittonr/.cache/mantle-hosted-effects-20261028/materialize_guests.py", "046921e828525584ec883c92b141e224b05d88dfab519af725c2d664500cdab"],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "exit_code": 1,
+  "stdout": "expected exact bare runtime-profile BLAKE3\n",
+  "resolution": "The command transcription omitted a zero and was rejected before any tool, source preparation, or producer execution. The next invocation reads the actual owner-supplied digest directly from runtime-profile-input.json; no product pin is weakened or invented."
+}

@@ -147,6 +147,7 @@ pub fn registry_config_identity(config: PackageResolution) -> Result<Blake3Ident
     canonical_identity((config.default_registry, config.registries))
 }
 
+// r[impl mantle.wasm_component.standalone_empty_closure]
 pub fn validate_lock(request: LockValidationRequest) -> LockValidation {
     let lock_identity = Blake3Identity::from_bytes(request.lock_bytes.clone());
     let mut blockers = validate_manifest(request.manifest.clone()).blockers;
@@ -194,7 +195,7 @@ pub fn plan_source_acquisition(request: LockValidationRequest) -> SourcePlanResu
             };
         }
     };
-    debug_assert!(!requests.is_empty());
+    debug_assert_eq!(requests.len(), request.facts.materializations.len());
     debug_assert!(is_count_within_bound(requests.len(), MAX_LOCK_PACKAGES));
     SourcePlanResult {
         plan: Some(SourceAcquisitionPlan {

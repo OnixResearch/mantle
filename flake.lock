@@ -1739,17 +1739,17 @@
         "valence": "valence"
       },
       "locked": {
-        "lastModified": 1793201296,
-        "narHash": "sha256-FJotkjuCP7RtkJEFaJ+wH3cB9LqoLxLRGBw+aKIHrxM=",
+        "lastModified": 1793230102,
+        "narHash": "sha256-uzarvW+jBY4/K2gw6cdV7BLQQfjkrw8Yauneb9NXUpU=",
         "owner": "OnixResearch",
         "repo": "octet",
-        "rev": "0e0e5dc8461b8b32c286de362c290b3f3ea2deee",
+        "rev": "abb6082062251944a40093a274df3d35331fa168",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "octet",
-        "rev": "0e0e5dc8461b8b32c286de362c290b3f3ea2deee",
+        "rev": "abb6082062251944a40093a274df3d35331fa168",
         "type": "github"
       }
     },

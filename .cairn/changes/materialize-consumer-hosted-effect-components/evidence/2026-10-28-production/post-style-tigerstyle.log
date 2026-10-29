@@ -1,0 +1,77 @@
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5002 milliseconds; retrying in 48 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 126 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 220 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 234 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 87 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 156 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 4 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 279 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:5000' for 60 seconds
+error: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling rustix v1.1.4
+   Compiling serde_core v1.0.228
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Checking linux-raw-sys v0.12.1
+    Checking bitflags v2.11.0
+   Compiling serde v1.0.228
+   Compiling version_check v0.9.5
+    Checking once_cell v1.21.4
+   Compiling io-lifetimes v3.0.1
+   Compiling io-lifetimes v2.0.4
+   Compiling generic-array v0.14.7
+   Compiling io-extras v0.19.0
+   Compiling blake3 v1.8.5
+   Compiling cap-primitives v4.0.2
+    Checking typenum v1.20.1
+    Checking fs-set-times v0.20.3
+    Checking rustix-linux-procfs v0.1.1
+    Checking ipnet v2.12.0
+   Compiling cap-std v4.0.2
+   Compiling serde_json v1.0.149
+    Checking constant_time_eq v0.4.2
+   Compiling libc v0.2.186
+    Checking ambient-authority v0.0.2
+    Checking maybe-owned v0.3.4
+    Checking memchr v2.8.0
+   Compiling getrandom v0.4.2
+    Checking equivalent v1.0.2
+   Compiling cap-fs-ext v4.0.2
+    Checking hashbrown v0.16.1
+    Checking indexmap v2.13.1
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking toml_write v0.1.2
+    Checking winnow v0.7.15
+    Checking digest v0.10.7
+    Checking toml_edit v0.22.27
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking cpufeatures v0.2.17
+    Checking fastrand v2.4.1
+    Checking sha2 v0.10.9
+    Checking tempfile v3.27.0
+    Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking toml v0.8.23
+    Checking mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-wasm-consumer-verifier)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component)
+    Finished `dev` profile [unoptimized] target(s) in 25.86s

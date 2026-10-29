@@ -1,0 +1,14 @@
+[package]
+name = "mantle-wasm-effect-fixture"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true

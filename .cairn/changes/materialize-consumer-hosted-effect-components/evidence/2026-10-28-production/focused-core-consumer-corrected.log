@@ -1,0 +1,103 @@
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Finished `test` profile [unoptimized] target(s) in 5.31s
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/crunch_wasm_component_core-185bc12bf09306d0)
+
+running 38 tests
+test tests::composition_rejects_missing_dependency_and_wrong_world ... ok
+test tests::composition_rejects_cycles_and_non_local_artifacts ... ok
+test tests::cohort_member_change_invalidates_identity ... ok
+test tests::digest_roles_preserve_external_sha_and_mantle_blake3 ... ok
+test tests::digest_roles_reject_sha256_in_mantle_identity_position ... ok
+test tests::cross_target_or_tampered_aot_receipt_is_denied ... ok
+test tests::deterministic_wizer_outputs_are_admitted ... ok
+test tests::component_attestation_and_release_binding_follow_verified_stage_graph ... ok
+test tests::exact_aot_receipt_is_admitted_as_trusted_native ... ok
+test tests::exact_local_composition_graph_is_identified ... ok
+test tests::generated_plan_rejects_mixed_source_ownership ... ok
+test tests::forged_generated_plan_integrity_fails_closed ... ok
+test tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke ... ok
+test tests::generated_inputs_bind_content_and_owner_receipts ... ok
+test tests::manifest_rejects_non_exact_packages_and_missing_non_claims ... ok
+test tests::portable_admission_rejects_octet_report_for_different_bytes ... ok
+test tests::checked_lock_produces_deterministic_source_acquisition_plan ... ok
+test tests::materialization_bundle_stage_kind_rejects_post_materialization_authority ... ok
+test tests::duplicate_or_unlocked_materializations_are_denied ... ok
+test tests::component_evidence_rejects_swapped_bundle_object_and_stale_report_identity ... ok
+test tests::report_claim_enum_rejects_runtime_authority_overclaim ... ok
+test tests::portable_admission_binds_same_bytes_to_both_validation_layers ... ok
+test tests::report_rejects_unknown_or_circular_parent_and_missing_non_claims ... ok
+test tests::report_dto_binds_ordered_stage_graph_and_bounded_claims ... ok
+test tests::materialization_bundle_rejects_missing_stage_and_stale_identity ... ok
+test tests::remaining_imports_must_match_post_composition_inspection ... ok
+test tests::registry_drift_and_missing_materialization_are_denied ... ok
+test tests::manifest_rejects_wizer_compile_environment_and_componentization_drift ... ok
+test tests::dependency_free_source_plan_still_binds_lock_and_denies_invented_packages ... ok
+test tests::materialization_bundle_is_canonical_and_reverifiable ... ok
+test tests::manifest_rejects_unmapped_registry_and_incomplete_optional_stages ... ok
+test tests::stale_generated_bytes_or_owner_receipt_fail_closed ... ok
+test tests::stale_lock_bytes_fail_before_source_acquisition ... ok
+test tests::virtualization_rejects_defaults_and_unreviewed_passthrough ... ok
+test tests::virtualization_starts_deny_all_and_binds_virtual_inputs ... ok
+test tests::wizer_drift_and_ambient_state_are_denied ... ok
+test tests::unexpected_or_duplicate_observed_inputs_fail_closed ... ok
+test tests::valid_manifest_and_cohort_have_stable_blake3_identities ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/mantle_wasm_consumer_verifier-b00eb35bef9a1607)
+
+running 1 test
+test facade::tests::non_claims_are_fixed_and_complete ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/consumer_fixtures.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/consumer_fixtures-9ea30b48193b2693)
+
+running 27 tests
+test kamacite_frozen_fixture_passes_structural_layer ... ok
+test positive_shared_member_path_satisfies_both_roles ... ok
+test negative_drifted_member_bytes_reject ... ok
+test facade_parity_matches_implementation_over_structural_corpus ... ok
+test report_leaks_no_member_paths_and_binds_fixed_non_claims ... ok
+test negative_missing_stage_kind_rejects_before_bytes ... ok
+test file_source_closure_copies_without_clobbering_and_checks_declared_length ... ok
+test rejected_bundle_reports_carry_no_byte_layer_claims ... ok
+test negative_symlink_member_blocks ... ok
+test negative_parent_traversal_is_rejected_by_the_shell ... ok
+test negative_directory_member_blocks ... ok
+test second_consumer_world_and_member_graph_passes ... ok
+test negative_conflicting_member_identity_is_rejected ... ok
+test negative_declared_oversize_member_rejects_as_drift ... ok
+test negative_missing_member_blocks ... ok
+test producer_native_backslash_name_is_explicitly_unsupported_without_reframing ... ok
+test positive_complete_bundle_verifies_through_both_layers ... ok
+test directory_source_shared_with_file_role_is_not_admitted ... ok
+test file_source_copy_rejects_content_length_and_missing_source ... ok
+test source_copy_does_not_measure_unrelated_members_or_follow_destination_links ... ok
+test producer_tree_verifies_and_copies_exactly_with_empty_directories ... ok
+test opened_roots_survive_ambient_retargeting_and_reject_symlink_parents ... ok
+test tree_missing_symlink_fifo_and_socket_never_verify_or_copy ... ok
+test tree_bytes_name_empty_directory_and_size_drift_fail_closed ... ok
+test producer_depth_64_directory_with_depth_65_file_remains_admitted ... ok
+test source_copy_accepts_member_limit_and_rejects_one_more_before_copy ... ok
+test trees_reject_entry_depth_and_byte_bound_overruns ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+

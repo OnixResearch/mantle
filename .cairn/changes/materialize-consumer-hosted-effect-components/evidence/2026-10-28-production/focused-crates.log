@@ -1,0 +1,127 @@
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling rustix v1.1.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.5
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling getrandom v0.4.2
+   Compiling fs-set-times v0.20.3
+   Compiling crypto-common v0.1.7
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling winnow v0.7.15
+   Compiling cap-primitives v4.0.2
+   Compiling digest v0.10.7
+   Compiling toml_edit v0.22.27
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component-core)
+   Compiling tempfile v3.27.0
+   Compiling sha2 v0.10.9
+   Compiling toml v0.8.23
+   Compiling cap-std v4.0.2
+   Compiling cap-fs-ext v4.0.2
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/crunch-wasm-component)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/crates/mantle-wasm-consumer-verifier)
+    Finished `test` profile [unoptimized] target(s) in 34.52s
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/crunch_wasm_component-692b2af308ed484c)
+
+running 18 tests
+test octet::tests::exact_octet_receipt_is_bound_without_reinterpreting_findings ... ok
+test octet::tests::mismatched_or_non_pass_octet_receipt_is_denied ... ok
+test stages::tests::remaining_host_surface_includes_root_functions_and_named_instances ... ok
+test toolchain::tests::profile_selection_uses_declared_identities_only ... ok
+test toolchain::tests::selectable_cohort_rejects_missing_duplicate_and_misbound_profiles ... ok
+test toolchain::tests::cohort_identity_matches_sorted_compact_json_with_line_terminator ... ok
+test files::tests::source_and_package_reads_reject_file_replaced_by_symlink ... ok
+test reporting::tests::publication_never_replaces_existing_directory_or_symlink ... ok
+test toolchain::tests::toolchain_manifest_rejects_symlink_and_oversize_before_parsing ... ok
+test process_tests::offline_tool_rejects_symlink_cwd_and_argument_environment_bounds ... ok
+test materialization::tests::consumer_rehashes_every_materialized_file_and_directory ... ok
+test process_tests::offline_tool_rejects_fast_oversized_output_after_child_exit ... ok
+test process_tests::offline_tool_preserves_failed_child_diagnostic_before_output_hashing ... ok
+test process_tests::offline_tool_emits_bound_success_receipt ... ok
+test process_tests::offline_tool_terminates_on_output_limit_and_keeps_bounded_receipt ... ok
+test process_tests::offline_tool_rejects_symlink_output_and_parent_escape ... ok
+test toolchain::tests::version_probe_terminates_hang_and_output_flood ... ok
+test process_tests::offline_tool_timeout_kills_descendant_process_group ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running unittests examples/prepare_effect_fixture.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/examples/prepare_effect_fixture-bda12053c2104fb2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/crunch_wasm_component_core-185bc12bf09306d0)
+
+running 38 tests
+test tests::cohort_member_change_invalidates_identity ... ok
+test tests::composition_rejects_cycles_and_non_local_artifacts ... ok
+test tests::composition_rejects_missing_dependency_and_wrong_world ... ok
+test tests::component_attestation_and_release_binding_follow_verified_stage_graph ... ok
+test tests::deterministic_wizer_outputs_are_admitted ... ok
+test tests::digest_roles_reject_sha256_in_mantle_identity_position ... ok
+test tests::checked_lock_produces_deterministic_source_acquisition_plan ... ok
+test tests::component_evidence_rejects_swapped_bundle_object_and_stale_report_identity ... ok
+test tests::digest_roles_preserve_external_sha_and_mantle_blake3 ... ok
+test tests::exact_aot_receipt_is_admitted_as_trusted_native ... ok
+test tests::exact_local_composition_graph_is_identified ... ok
+test tests::generated_plan_rejects_mixed_source_ownership ... ok
+test tests::generated_inputs_bind_content_and_owner_receipts ... ok
+test tests::forged_generated_plan_integrity_fails_closed ... ok
+test tests::manifest_rejects_unmapped_registry_and_incomplete_optional_stages ... ok
+test tests::manifest_rejects_non_exact_packages_and_missing_non_claims ... ok
+test tests::cross_target_or_tampered_aot_receipt_is_denied ... ok
+test tests::duplicate_or_unlocked_materializations_are_denied ... ok
+test tests::manifest_rejects_wizer_compile_environment_and_componentization_drift ... ok
+test tests::portable_admission_binds_same_bytes_to_both_validation_layers ... ok
+test tests::materialization_bundle_stage_kind_rejects_post_materialization_authority ... ok
+test tests::portable_admission_rejects_octet_report_for_different_bytes ... ok
+test tests::report_claim_enum_rejects_runtime_authority_overclaim ... ok
+test tests::report_rejects_unknown_or_circular_parent_and_missing_non_claims ... ok
+test tests::report_dto_binds_ordered_stage_graph_and_bounded_claims ... ok
+test tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke ... FAILED
+test tests::materialization_bundle_rejects_missing_stage_and_stale_identity ... ok
+test tests::virtualization_rejects_defaults_and_unreviewed_passthrough ... ok
+test tests::remaining_imports_must_match_post_composition_inspection ... ok
+test tests::wizer_drift_and_ambient_state_are_denied ... ok
+test tests::virtualization_starts_deny_all_and_binds_virtual_inputs ... ok
+test tests::stale_generated_bytes_or_owner_receipt_fail_closed ... ok
+test tests::dependency_free_source_plan_still_binds_lock_and_denies_invented_packages ... ok
+test tests::unexpected_or_duplicate_observed_inputs_fail_closed ... ok
+test tests::stale_lock_bytes_fail_before_source_acquisition ... ok
+test tests::registry_drift_and_missing_materialization_are_denied ... ok
+test tests::materialization_bundle_is_canonical_and_reverifiable ... ok
+test tests::valid_manifest_and_cohort_have_stable_blake3_identities ... ok
+
+failures:
+
+---- tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke stdout ----
+
+thread 'tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke' (1682389) panicked at crates/crunch-wasm-component-core/src/tests.rs:947:10:
+static materialization with explicit host requirement
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::consumer_host_requirement_binds_final_artifact_and_cannot_claim_producer_smoke
+
+test result: FAILED. 37 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p crunch-wasm-component-core --lib`

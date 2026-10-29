@@ -1,0 +1,935 @@
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/kkq1xv2gb5z7jchbav2fhipbmxgfy3c6-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/kkq1xv2gb5z7jchbav2fhipbmxgfy3c6-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.cargo-unit-compiler...
+derivation evaluated to /nix/store/2lyknizz9gv9rbdv5isz56xm60z0f8bx-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/a529lq9rrbbrck6j9wmx48pal6261s3m-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/f4iv66n0rj4apgfz05m12fdyla24p6j9-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/dpzcn4w3giqp1w4whh93wh81w1bams8i-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/wk669d5zhdbja8mq8fxbmr1f3fsgy52m-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/yzmxlv7z4jn70v4rlqadrwxzg5vr7pcy-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/j5a59n2q5kwdl53ffnim6wxsmz6c60zf-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/bvp6rsbwn81ajmdsjf8xi4bmczqj8kg5-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.android-apk-adapter...
+derivation evaluated to /nix/store/hln0hcqqsdr3fsn8jyp7bdirgpxm8klv-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/26w8m83cl7a23gh17cpy7idbjldwwm1y-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/vcqiy1j4007mrm3l6zjgvc4vl0m7c47c-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/s9g8w3vp0g80c47h8gdmavsf5si9v4n8-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/4347iz202pnzpjsfal7lw51s1gz3mlxv-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/0cdzy2hpxawj87n1qx6is3pm95396c8p-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/pzds39qv8fa0yld0cv3ngvqipgib2anw-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/7sp1xxf031b23v3fs6xzqfcs0rmkjfkv-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/pnbnpfs2rmj4igcllaayi2j3a84m55hf-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/z0905302alm0c7mmqcchaa7gcndg49m3-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/4d4ra4lmmbsmmfza3janqikniixqhslf-mantle-tigerstyle-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/kkq1xv2gb5z7jchbav2fhipbmxgfy3c6-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/f4iv66n0rj4apgfz05m12fdyla24p6j9-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/dpzcn4w3giqp1w4whh93wh81w1bams8i-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/wk669d5zhdbja8mq8fxbmr1f3fsgy52m-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/yzmxlv7z4jn70v4rlqadrwxzg5vr7pcy-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/56q4165fqm5lbkb1qwm2ia0hl1x1slah-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/7sp1xxf031b23v3fs6xzqfcs0rmkjfkv-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.casita-crunch-store-check...
+derivation evaluated to /nix/store/v3z9nfm95a18h3l04jnxqjbihwd0x416-mantle-casita-crunch-store-check-0.1.0.drv
+checking derivation checks.x86_64-linux.casita-vendor-closure...
+derivation evaluated to /nix/store/wn8gzw1a45rh2i0rks03i7j44zw0mlcc-vendor-cargo-deps.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/1bqaqy3fqfsxpx4glj8f2g9qnbw0gbmk-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/irrvawqrdm7mp1gs39li72cdc7y5d2sx-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/07glqigd4hbkvqmws7d6yax3vy800zjz-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/8vh0cq4bc1gchji7fa2rglf3fazx4rwv-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/hy6as1b6gcylh0ni6l89nq83qpgwlavv-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/hh6zqq9sjp3hdx54nkaim2y2mjg9719q-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/4sr6vmmjzd4k2szlj9a1iplmlsykakis-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/lr9fs3x62j6lv2xrm60vbw32aac4ck7l-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/z3cwpac86pdhm4pimzqj87bd1yhgmm52-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/bprw2x1plk4n3ifgli6whjgippycz5xa-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/nx1lv7w955mjyrhsbh3bx7x2mhfng83j-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/2a93ikbimlgsppj5z95r352fklfk5l7d-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/a11an7a2hbag38s8apyq8xsxmi722s47-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/j5gwzyyzhybqr9kqz57424mkclskn3iv-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/ni3yp2skj9ifkqj9blpmyg545v747nx1-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/z51h9mg7zbxbd5mrmp63dxlbdc5qsm1q-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/djzdh2s4cjcmwk2y8gqhfcr4j7814xhx-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/wxwk5bdqmx296a6vmsjfg1bj3iz35qbi-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/65x9j9l1s2hn33rkh3rnvczbg26wzbyi-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/vvc2wsjfml1lnm00cgkywqg9sk90y84f-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/mrn244xm4dz68p9a4jdfmgz7zpzr9p41-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/cmrrqmdpz8b7i51cxyllr2d1a03cmya1-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/5jvnwdy5y3fak7lv95p1q4cj12vngfz9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/6f7wx4g4bq4z0m3c9k61v7c98677cdk1-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-capture-failures...
+derivation evaluated to /nix/store/wybr2x508g29g28h93bp62b46jnmpsc7-mantle-spacewasm-capture-failure-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/jvkbhx62msi1g91bky2igydr8xvbsmwp-mantle-spacewasm-reference-negative-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-repeatability...
+derivation evaluated to /nix/store/3b8d55iczvn7nqnwygr0nygrrki773qy-mantle-spacewasm-reference-repeatability.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-run-archive...
+derivation evaluated to /nix/store/rjzn5p40pw4z1h0a66a963mq91f6cjxa-mantle-spacewasm-run-archive-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/q1dfk0jgbhff2bsbwb101gkl89ndhyp7-nix-shell.drv
+running 29 flake checks...
+building '/nix/store/34v45395sx242k101qp6g2h6wha44d5s-Cargo.toml.drv'...
+Cargo.toml> 
+building '/nix/store/4sr6vmmjzd4k2szlj9a1iplmlsykakis-mantle-store-retention-policy.drv'...
+building '/nix/store/4d4ra4lmmbsmmfza3janqikniixqhslf-mantle-tigerstyle-check.drv'...
+mantle-tigerstyle-check> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-tigerstyle-check>   * `bin` target `crunch`
+mantle-tigerstyle-check>   * `bin` target `mantle`
+mantle-tigerstyle-check>    Compiling proc-macro2 v1.0.106
+mantle-tigerstyle-check>    Compiling quote v1.0.45
+mantle-tigerstyle-check>    Compiling unicode-ident v1.0.24
+mantle-tigerstyle-check>     Checking cfg-if v1.0.4
+mantle-tigerstyle-check>    Compiling serde_core v1.0.228
+mantle-tigerstyle-check>    Compiling libc v0.2.186
+mantle-tigerstyle-check>    Compiling serde v1.0.228
+mantle-tigerstyle-check>     Checking memchr v2.8.0
+mantle-tigerstyle-check>    Compiling shlex v1.3.0
+mantle-tigerstyle-check>    Compiling find-msvc-tools v0.1.9
+mantle-tigerstyle-check>    Compiling version_check v0.9.5
+mantle-tigerstyle-check>    Compiling crossbeam-utils v0.8.21
+mantle-tigerstyle-check>     Checking itoa v1.0.18
+mantle-tigerstyle-check>     Checking smallvec v1.15.1
+mantle-tigerstyle-check>     Checking typenum v1.20.1
+mantle-tigerstyle-check>     Checking subtle v2.6.1
+mantle-tigerstyle-check>    Compiling parking_lot_core v0.9.12
+mantle-tigerstyle-check>     Checking once_cell v1.21.4
+mantle-tigerstyle-check>     Checking bitflags v2.11.0
+mantle-tigerstyle-check>     Checking regex-syntax v0.8.10
+mantle-tigerstyle-check>     Checking scopeguard v1.2.0
+mantle-tigerstyle-check>     Checking const-oid v0.9.6
+mantle-tigerstyle-check>    Compiling crossbeam-epoch v0.9.20
+mantle-tigerstyle-check>     Checking arrayvec v0.7.6
+mantle-tigerstyle-check>    Compiling zmij v1.0.21
+mantle-tigerstyle-check>    Compiling serde_json v1.0.149
+mantle-tigerstyle-check>    Compiling thiserror v2.0.18
+mantle-tigerstyle-check>    Compiling rayon-core v1.13.0
+mantle-tigerstyle-check>     Checking cpufeatures v0.3.0
+mantle-tigerstyle-check>     Checking equivalent v1.0.2
+mantle-tigerstyle-check>     Checking allocator-api2 v0.2.21
+mantle-tigerstyle-check>     Checking constant_time_eq v0.4.2
+mantle-tigerstyle-check>     Checking lock_api v0.4.14
+mantle-tigerstyle-check>     Checking cpufeatures v0.2.17
+mantle-tigerstyle-check>     Checking arrayref v0.3.9
+mantle-tigerstyle-check>     Checking stable_deref_trait v1.2.1
+mantle-tigerstyle-check>     Checking fastrand v2.4.1
+mantle-tigerstyle-check>     Checking foldhash v0.2.0
+mantle-tigerstyle-check>    Compiling rustix v1.1.4
+mantle-tigerstyle-check>     Checking linux-raw-sys v0.12.1
+mantle-tigerstyle-check>     Checking log v0.4.29
+mantle-tigerstyle-check>     Checking pin-project-lite v0.2.17
+mantle-tigerstyle-check>    Compiling crc32fast v1.5.0
+mantle-tigerstyle-check>    Compiling generic-array v0.14.7
+mantle-tigerstyle-check>     Checking futures-core v0.3.32
+mantle-tigerstyle-check>     Checking same-file v1.0.6
+mantle-tigerstyle-check>    Compiling autocfg v1.5.0
+mantle-tigerstyle-check>     Checking tinyvec_macros v0.1.1
+mantle-tigerstyle-check>     Checking byteorder v1.5.0
+mantle-tigerstyle-check>     Checking gix-trace v0.1.18
+mantle-tigerstyle-check>     Checking hashbrown v0.16.1
+mantle-tigerstyle-check>    Compiling pkg-config v0.3.32
+mantle-tigerstyle-check>     Checking rand_core v0.10.0
+mantle-tigerstyle-check>    Compiling getrandom v0.4.2
+mantle-tigerstyle-check>    Compiling rustversion v1.0.22
+mantle-tigerstyle-check>     Checking tinyvec v1.11.0
+mantle-tigerstyle-check>     Checking walkdir v2.5.0
+mantle-tigerstyle-check>     Checking aho-corasick v1.1.4
+mantle-tigerstyle-check>     Checking human_format v1.2.1
+mantle-tigerstyle-check>    Compiling libm v0.2.16
+mantle-tigerstyle-check>     Checking bytesize v2.3.1
+mantle-tigerstyle-check>     Checking futures-io v0.3.32
+mantle-tigerstyle-check>     Checking winnow v0.7.15
+mantle-tigerstyle-check>     Checking zlib-rs v0.6.3
+mantle-tigerstyle-check>     Checking futures-sink v0.3.32
+mantle-tigerstyle-check>     Checking slab v0.4.12
+mantle-tigerstyle-check>     Checking futures-task v0.3.32
+mantle-tigerstyle-check>     Checking tracing-core v0.1.36
+mantle-tigerstyle-check>     Checking writeable v0.6.3
+mantle-tigerstyle-check>    Compiling heapless v0.8.0
+mantle-tigerstyle-check>    Compiling semver v1.0.28
+mantle-tigerstyle-check>     Checking base64ct v1.8.3
+mantle-tigerstyle-check>     Checking hash32 v0.3.1
+mantle-tigerstyle-check>     Checking litemap v0.8.2
+mantle-tigerstyle-check>     Checking futures-channel v0.3.32
+mantle-tigerstyle-check>     Checking unicode-width v0.2.2
+mantle-tigerstyle-check>     Checking utf8_iter v1.0.4
+mantle-tigerstyle-check>     Checking base64 v0.22.1
+mantle-tigerstyle-check>     Checking jiff v0.2.23
+mantle-tigerstyle-check>    Compiling icu_normalizer_data v2.2.0
+mantle-tigerstyle-check>    Compiling icu_properties_data v2.2.0
+mantle-tigerstyle-check>     Checking crossbeam-channel v0.5.15
+mantle-tigerstyle-check>     Checking write16 v1.0.0
+mantle-tigerstyle-check>     Checking pem-rfc7468 v0.7.0
+mantle-tigerstyle-check>    Compiling rustc_version v0.4.1
+mantle-tigerstyle-check>    Compiling dunce v1.0.5
+mantle-tigerstyle-check>    Compiling fs_extra v1.3.0
+mantle-tigerstyle-check>     Checking percent-encoding v2.3.2
+mantle-tigerstyle-check>     Checking utf16_iter v1.0.5
+mantle-tigerstyle-check>    Compiling num-traits v0.2.19
+mantle-tigerstyle-check>     Checking fnv v1.0.7
+mantle-tigerstyle-check>     Checking ryu v1.0.23
+mantle-tigerstyle-check>     Checking unicode-normalization v0.1.25
+mantle-tigerstyle-check>     Checking either v1.15.0
+mantle-tigerstyle-check>    Compiling cfg_aliases v0.2.1
+mantle-tigerstyle-check>    Compiling aws-lc-rs v1.18.1
+mantle-tigerstyle-check>     Checking crossbeam-deque v0.8.6
+mantle-tigerstyle-check>     Checking spin v0.9.9
+mantle-tigerstyle-check>     Checking simd-adler32 v0.3.9
+mantle-tigerstyle-check>     Checking adler2 v2.0.1
+mantle-tigerstyle-check>    Compiling unicode-xid v0.2.6
+mantle-tigerstyle-check>    Compiling zerocopy v0.8.48
+mantle-tigerstyle-check>     Checking encoding_rs v0.8.35
+mantle-tigerstyle-check>    Compiling heck v0.5.0
+mantle-tigerstyle-check>     Checking lazy_static v1.5.0
+mantle-tigerstyle-check>    Compiling httparse v1.10.1
+mantle-tigerstyle-check>     Checking untrusted v0.9.0
+mantle-tigerstyle-check>     Checking miniz_oxide v0.8.9
+mantle-tigerstyle-check>     Checking foldhash v0.1.5
+mantle-tigerstyle-check>     Checking ipnet v2.12.0
+mantle-tigerstyle-check>    Compiling rustls v0.23.46
+mantle-tigerstyle-check>    Compiling ident_case v1.0.1
+mantle-tigerstyle-check>    Compiling syn v2.0.117
+mantle-tigerstyle-check>    Compiling syn v3.0.3
+mantle-tigerstyle-check>    Compiling anyhow v1.0.102
+mantle-tigerstyle-check>    Compiling strsim v0.11.1
+mantle-tigerstyle-check>     Checking hashbrown v0.15.5
+mantle-tigerstyle-check>    Compiling getrandom v0.3.4
+mantle-tigerstyle-check>     Checking thread_local v1.1.9
+mantle-tigerstyle-check>     Checking form_urlencoded v1.2.2
+mantle-tigerstyle-check>    Compiling signal-hook v0.4.4
+mantle-tigerstyle-check>     Checking tower-service v0.3.3
+mantle-tigerstyle-check>     Checking atomic-waker v1.1.2
+mantle-tigerstyle-check>     Checking try-lock v0.2.5
+mantle-tigerstyle-check>    Compiling itertools v0.14.0
+mantle-tigerstyle-check>    Compiling curve25519-dalek v4.1.3
+mantle-tigerstyle-check>     Checking hashbrown v0.14.5
+mantle-tigerstyle-check>     Checking nonempty v0.12.0
+mantle-tigerstyle-check>     Checking static_assertions v1.1.0
+mantle-tigerstyle-check>     Checking want v0.3.1
+mantle-tigerstyle-check>     Checking faster-hex v0.10.0
+mantle-tigerstyle-check>     Checking sync_wrapper v1.0.2
+mantle-tigerstyle-check>     Checking tower-layer v0.3.3
+mantle-tigerstyle-check>     Checking data-encoding v2.10.0
+mantle-tigerstyle-check>    Compiling object v0.37.3
+mantle-tigerstyle-check>     Checking openssl-probe v0.2.1
+mantle-tigerstyle-check>     Checking sharded-slab v0.1.7
+mantle-tigerstyle-check>     Checking tracing-log v0.2.0
+mantle-tigerstyle-check>     Checking nu-ansi-term v0.50.3
+mantle-tigerstyle-check>     Checking gimli v0.32.3
+mantle-tigerstyle-check>     Checking iri-string v0.7.12
+mantle-tigerstyle-check>     Checking colorchoice v1.0.5
+mantle-tigerstyle-check>     Checking mime v0.3.17
+mantle-tigerstyle-check>     Checking rustc-demangle v0.1.28
+mantle-tigerstyle-check>    Compiling jobserver v0.1.34
+mantle-tigerstyle-check>    Compiling indexmap v2.13.1
+mantle-tigerstyle-check>    Compiling unicode-segmentation v1.13.2
+mantle-tigerstyle-check>     Checking arc-swap v1.9.1
+mantle-tigerstyle-check>    Compiling syn v1.0.109
+mantle-tigerstyle-check>    Compiling owo-colors v4.3.0
+mantle-tigerstyle-check>     Checking iana-time-zone v0.1.65
+mantle-tigerstyle-check>     Checking utf8parse v0.2.2
+mantle-tigerstyle-check>     Checking is_ci v1.2.0
+mantle-tigerstyle-check>    Compiling glob v0.3.3
+mantle-tigerstyle-check>     Checking unicode-linebreak v0.1.5
+mantle-tigerstyle-check>     Checking unicode-bom v2.0.3
+mantle-tigerstyle-check>     Checking anstyle-parse v1.0.0
+mantle-tigerstyle-check>     Checking supports-color v3.0.2
+mantle-tigerstyle-check>    Compiling proc-macro-error-attr v0.4.12
+mantle-tigerstyle-check>    Compiling cc v1.2.59
+mantle-tigerstyle-check>     Checking regex-automata v0.4.14
+mantle-tigerstyle-check>     Checking rustc-hash v2.1.2
+mantle-tigerstyle-check>    Compiling icu_locale_data v2.2.0
+mantle-tigerstyle-check>    Compiling rustix v0.38.44
+mantle-tigerstyle-check>     Checking anstyle-query v1.1.5
+mantle-tigerstyle-check>    Compiling portable-atomic v1.13.1
+mantle-tigerstyle-check>     Checking textwrap v0.16.2
+mantle-tigerstyle-check>     Checking unicode-width v0.1.14
+mantle-tigerstyle-check>     Checking bumpalo v3.20.2
+mantle-tigerstyle-check>     Checking supports-unicode v3.0.0
+mantle-tigerstyle-check>     Checking anstyle v1.0.14
+mantle-tigerstyle-check>     Checking is_terminal_polyfill v1.70.2
+mantle-tigerstyle-check>    Compiling convert_case v0.10.0
+mantle-tigerstyle-check>    Compiling prettyplease v0.2.37
+mantle-tigerstyle-check>     Checking supports-hyperlinks v3.2.0
+mantle-tigerstyle-check>     Checking sha1_smol v1.0.1
+mantle-tigerstyle-check>     Checking getrandom v0.2.17
+mantle-tigerstyle-check>     Checking errno v0.3.14
+mantle-tigerstyle-check>     Checking mio v1.2.0
+mantle-tigerstyle-check>     Checking socket2 v0.6.3
+mantle-tigerstyle-check>     Checking memmap2 v0.9.10
+mantle-tigerstyle-check>     Checking signal-hook-registry v1.4.8
+mantle-tigerstyle-check>     Checking rand_core v0.6.4
+mantle-tigerstyle-check>     Checking parking_lot v0.12.5
+mantle-tigerstyle-check>     Checking dashmap v6.1.0
+mantle-tigerstyle-check>     Checking filetime v0.2.27
+mantle-tigerstyle-check>    Compiling clang-sys v1.9.1
+mantle-tigerstyle-check>     Checking rand_core v0.9.5
+mantle-tigerstyle-check>     Checking anstream v1.0.0
+mantle-tigerstyle-check>     Checking kstring v2.0.2
+mantle-tigerstyle-check>    Compiling memoffset v0.9.1
+mantle-tigerstyle-check>     Checking prodash v31.0.0
+mantle-tigerstyle-check>    Compiling proc-macro-error v0.4.12
+mantle-tigerstyle-check>     Checking uuid v1.23.0
+mantle-tigerstyle-check>    Compiling proc-macro-hack v0.5.20+deprecated
+mantle-tigerstyle-check>    Compiling winnow v1.0.1
+mantle-tigerstyle-check>     Checking opaque-debug v0.3.1
+mantle-tigerstyle-check>     Checking clap_lex v1.1.0
+mantle-tigerstyle-check>     Checking parking v2.2.1
+mantle-tigerstyle-check>    Compiling cmake v0.1.58
+mantle-tigerstyle-check>    Compiling io-lifetimes v2.0.4
+mantle-tigerstyle-check>    Compiling minimal-lexical v0.2.1
+mantle-tigerstyle-check>    Compiling icu_collator_data v2.2.0
+mantle-tigerstyle-check>     Checking shell-words v1.1.1
+mantle-tigerstyle-check>    Compiling linux-raw-sys v0.4.15
+mantle-tigerstyle-check>    Compiling io-lifetimes v3.0.1
+mantle-tigerstyle-check>     Checking num-integer v0.1.46
+mantle-tigerstyle-check>     Checking futures-lite v2.6.1
+mantle-tigerstyle-check>     Checking clap_builder v4.6.0
+mantle-tigerstyle-check>    Compiling branches v0.4.6
+mantle-tigerstyle-check>    Compiling crc32c v0.6.8
+mantle-tigerstyle-check>    Compiling nom v7.1.3
+mantle-tigerstyle-check>    Compiling libloading v0.8.9
+mantle-tigerstyle-check>    Compiling bigdecimal v0.4.11
+mantle-tigerstyle-check>    Compiling uncased v0.9.10
+mantle-tigerstyle-check>    Compiling bindgen v0.69.5
+mantle-tigerstyle-check>    Compiling zstd-safe v7.2.4
+mantle-tigerstyle-check>    Compiling io-extras v0.19.0
+mantle-tigerstyle-check>    Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>    Compiling toml_datetime v1.1.1+spec-1.1.0
+mantle-tigerstyle-check>    Compiling io-uring v0.7.15
+mantle-tigerstyle-check>    Compiling home v0.5.12
+mantle-tigerstyle-check>     Checking num-bigint v0.4.8
+mantle-tigerstyle-check>    Compiling itertools v0.12.1
+mantle-tigerstyle-check>    Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>    Compiling nix v0.31.3
+mantle-tigerstyle-check>    Compiling memoffset v0.6.5
+mantle-tigerstyle-check>     Checking vte v0.15.0
+mantle-tigerstyle-check>    Compiling typeid v1.0.3
+mantle-tigerstyle-check>    Compiling blake3 v1.8.5
+mantle-tigerstyle-check>    Compiling aws-lc-sys v0.45.0
+mantle-tigerstyle-check>    Compiling ring v0.17.14
+mantle-tigerstyle-check>    Compiling zstd-sys v2.0.16+zstd.1.5.7
+mantle-tigerstyle-check>    Compiling simsimd v6.5.16
+mantle-tigerstyle-check>    Compiling libmimalloc-sys v0.1.44
+mantle-tigerstyle-check>    Compiling aegis v0.9.8
+mantle-tigerstyle-check>     Checking addr2line v0.25.1
+mantle-tigerstyle-check>    Compiling lzma-sys v0.1.20
+mantle-tigerstyle-check>    Compiling bzip2-sys v0.1.13+1.0.8
+mantle-tigerstyle-check>    Compiling cap-primitives v4.0.2
+mantle-tigerstyle-check>    Compiling bytemuck_derive v1.12.1
+mantle-tigerstyle-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+mantle-tigerstyle-check>     Checking regex v1.12.3
+mantle-tigerstyle-check>     Checking matchers v0.2.0
+mantle-tigerstyle-check>     Checking softaes v0.1.7
+mantle-tigerstyle-check>    Compiling lazycell v1.3.0
+mantle-tigerstyle-check>    Compiling rustc-hash v1.1.0
+mantle-tigerstyle-check>     Checking siphasher v1.0.2
+mantle-tigerstyle-check>     Checking powerfmt v0.2.0
+mantle-tigerstyle-check>     Checking vt100 v0.16.2
+mantle-tigerstyle-check>     Checking fastbloom v0.14.1
+mantle-tigerstyle-check>     Checking intrusive-collections v0.9.7
+mantle-tigerstyle-check>     Checking deranged v0.5.8
+mantle-tigerstyle-check>     Checking console v0.16.3
+mantle-tigerstyle-check>    Compiling toml_edit v0.25.10+spec-1.1.0
+mantle-tigerstyle-check>     Checking rapidhash v4.5.1
+mantle-tigerstyle-check>     Checking flate2 v1.1.9
+mantle-tigerstyle-check>    Compiling n0-future v0.3.2
+mantle-tigerstyle-check>    Compiling which v4.4.2
+mantle-tigerstyle-check>    Compiling cexpr v0.6.0
+mantle-tigerstyle-check>     Checking chacha20 v0.10.0
+mantle-tigerstyle-check>     Checking maybe-owned v0.3.4
+mantle-tigerstyle-check>    Compiling cap-std v4.0.2
+mantle-tigerstyle-check>     Checking hex v0.4.3
+mantle-tigerstyle-check>     Checking bitflags v1.3.2
+mantle-tigerstyle-check>    Compiling erased-serde v0.4.10
+mantle-tigerstyle-check>     Checking allocator-api2 v0.4.0
+mantle-tigerstyle-check>     Checking ambient-authority v0.0.2
+mantle-tigerstyle-check>     Checking unit-prefix v0.5.2
+mantle-tigerstyle-check>    Compiling thiserror v1.0.69
+mantle-tigerstyle-check>    Compiling pastey v0.2.3
+mantle-tigerstyle-check>     Checking genawaiter-macro v0.99.1
+mantle-tigerstyle-check>     Checking cordyceps v0.3.4
+mantle-tigerstyle-check>     Checking spin v0.10.0
+mantle-tigerstyle-check>     Checking num-conv v0.2.1
+mantle-tigerstyle-check>     Checking time-core v0.1.8
+mantle-tigerstyle-check>    Compiling syn-mid v0.5.4
+mantle-tigerstyle-check>    Compiling proc-macro-crate v3.5.0
+mantle-tigerstyle-check>     Checking fallible-iterator v0.3.0
+mantle-tigerstyle-check>     Checking cfg_block v0.1.1
+mantle-tigerstyle-check>     Checking simdutf8 v0.1.5
+mantle-tigerstyle-check>     Checking diatomic-waker v0.2.3
+mantle-tigerstyle-check>     Checking indicatif v0.18.4
+mantle-tigerstyle-check>     Checking rand v0.10.1
+mantle-tigerstyle-check>    Compiling synstructure v0.13.2
+mantle-tigerstyle-check>    Compiling darling_core v0.23.0
+mantle-tigerstyle-check>     Checking bytemuck v1.25.0
+mantle-tigerstyle-check>    Compiling darling_core v0.20.11
+mantle-tigerstyle-check>     Checking futures-buffered v0.2.13
+mantle-tigerstyle-check>    Compiling block-buffer v0.10.4
+mantle-tigerstyle-check>    Compiling crypto-common v0.1.7
+mantle-tigerstyle-check>     Checking gix-sec v0.13.2
+mantle-tigerstyle-check>     Checking time v0.3.47
+mantle-tigerstyle-check>     Checking hybrid-array v0.4.13
+mantle-tigerstyle-check>     Checking pack1 v1.1.0
+mantle-tigerstyle-check>     Checking roaring v0.11.4
+mantle-tigerstyle-check>     Checking mimalloc v0.1.48
+mantle-tigerstyle-check>     Checking itertools v0.15.0
+mantle-tigerstyle-check>     Checking env_filter v2.0.0
+mantle-tigerstyle-check>     Checking nibble_vec v0.1.0
+mantle-tigerstyle-check>     Checking humantime v2.3.0
+mantle-tigerstyle-check>     Checking symlink v0.1.0
+mantle-tigerstyle-check>     Checking endian-type v0.1.2
+mantle-tigerstyle-check>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-tigerstyle-check>    Compiling redb v3.1.3
+mantle-tigerstyle-check>     Checking matchit v0.8.4
+mantle-tigerstyle-check>    Compiling cap-fs-ext v4.0.2
+mantle-tigerstyle-check>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-tigerstyle-check>    Compiling ref-cast v1.0.25
+mantle-tigerstyle-check>     Checking radix_trie v0.2.1
+mantle-tigerstyle-check>     Checking backtrace v0.3.76
+mantle-tigerstyle-check>    Compiling phf_shared v0.11.3
+mantle-tigerstyle-check>     Checking env_logger v0.11.11
+mantle-tigerstyle-check>    Compiling digest v0.10.7
+mantle-tigerstyle-check>     Checking nix v0.24.3
+mantle-tigerstyle-check>     Checking ppv-lite86 v0.2.21
+mantle-tigerstyle-check>     Checking vmm-sys-util v0.11.2
+mantle-tigerstyle-check>     Checking caps v0.5.6
+mantle-tigerstyle-check>     Checking vm-memory v0.10.0
+mantle-tigerstyle-check>     Checking num_cpus v1.17.0
+mantle-tigerstyle-check>     Checking mio v0.8.11
+mantle-tigerstyle-check>    Compiling proc-macro-error-attr2 v2.0.0
+mantle-tigerstyle-check>     Checking nom v8.0.0
+mantle-tigerstyle-check>    Compiling keccak v0.1.6
+mantle-tigerstyle-check>     Checking fixedbitset v0.4.2
+mantle-tigerstyle-check>    Compiling term v1.2.1
+mantle-tigerstyle-check>    Compiling fixedbitset v0.5.7
+mantle-tigerstyle-check>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-tigerstyle-check>    Compiling bit-vec v0.8.0
+mantle-tigerstyle-check>     Checking rand_chacha v0.9.0
+mantle-tigerstyle-check>     Checking bzip2 v0.5.2
+mantle-tigerstyle-check>    Compiling new_debug_unreachable v1.0.6
+mantle-tigerstyle-check>     Checking backtrace-ext v0.2.1
+mantle-tigerstyle-check>    Compiling precomputed-hash v0.1.1
+mantle-tigerstyle-check>    Compiling heck v0.4.1
+mantle-tigerstyle-check>    Compiling petgraph v0.7.1
+mantle-tigerstyle-check>    Compiling string_cache v0.8.9
+mantle-tigerstyle-check>    Compiling sha3 v0.10.8
+mantle-tigerstyle-check>     Checking petgraph v0.6.5
+mantle-tigerstyle-check>    Compiling ascii-canvas v4.0.0
+mantle-tigerstyle-check>    Compiling bit-set v0.8.0
+mantle-tigerstyle-check>     Checking rand v0.9.3
+mantle-tigerstyle-check>     Checking threadpool v1.8.1
+mantle-tigerstyle-check>     Checking crypto-common v0.2.2
+mantle-tigerstyle-check>     Checking block-buffer v0.12.1
+mantle-tigerstyle-check>     Checking safe_arch v0.7.4
+mantle-tigerstyle-check>     Checking tempfile v3.27.0
+mantle-tigerstyle-check>     Checking terminal_size v0.4.4
+mantle-tigerstyle-check>     Checking xattr v1.6.1
+mantle-tigerstyle-check>     Checking polling v3.11.0
+mantle-tigerstyle-check>     Checking fs-set-times v0.20.3
+mantle-tigerstyle-check>     Checking rustix-linux-procfs v0.1.1
+mantle-tigerstyle-check>    Compiling proc-macro-error2 v2.0.1
+mantle-tigerstyle-check>     Checking safe_arch v1.2.0
+mantle-tigerstyle-check>    Compiling lalrpop-util v0.22.2
+mantle-tigerstyle-check>     Checking serde_bytes v0.11.19
+mantle-tigerstyle-check>    Compiling ena v0.14.4
+mantle-tigerstyle-check>    Compiling nix v0.29.0
+mantle-tigerstyle-check>     Checking inplace-vec-builder v0.1.1
+mantle-tigerstyle-check>    Compiling pico-args v0.5.0
+mantle-tigerstyle-check>     Checking const-oid v0.10.2
+mantle-tigerstyle-check>     Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+mantle-tigerstyle-check>    Compiling malachite-nz v0.9.2
+mantle-tigerstyle-check>     Checking binary-merge v0.1.2
+mantle-tigerstyle-check>     Checking tar v0.4.45
+mantle-tigerstyle-check>     Checking rand_chacha v0.3.1
+mantle-tigerstyle-check>     Checking ff v0.13.1
+mantle-tigerstyle-check>     Checking wide v0.7.33
+mantle-tigerstyle-check>     Checking rand_xoshiro v0.7.0
+mantle-tigerstyle-check>     Checking digest v0.11.3
+mantle-tigerstyle-check>     Checking twox-hash v2.1.2
+mantle-tigerstyle-check>     Checking wide v1.7.0
+mantle-tigerstyle-check>     Checking toml_datetime v0.7.5+spec-1.1.0
+mantle-tigerstyle-check>     Checking positioned-io v0.3.5
+mantle-tigerstyle-check>    Compiling proc-macro2-diagnostics v0.10.1
+mantle-tigerstyle-check>     Checking self_cell v1.3.0
+mantle-tigerstyle-check>     Checking toml_writer v1.1.1+spec-1.1.0
+mantle-tigerstyle-check>     Checking base16ct v0.2.0
+mantle-tigerstyle-check>     Checking archery v1.2.3
+mantle-tigerstyle-check>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle-tigerstyle-check>     Checking imbl-sized-chunks v0.2.0
+mantle-tigerstyle-check>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-tigerstyle-check>     Checking md-5 v0.11.0
+mantle-tigerstyle-check>    Compiling genawaiter-proc-macro v0.99.1
+mantle-tigerstyle-check>     Checking rand v0.8.6
+mantle-tigerstyle-check>    Compiling serde_derive v1.0.228
+mantle-tigerstyle-check>    Compiling zeroize_derive v1.5.0
+mantle-tigerstyle-check>    Compiling thiserror-impl v2.0.18
+mantle-tigerstyle-check>    Compiling tokio-macros v2.7.0
+mantle-tigerstyle-check>    Compiling zerofrom-derive v0.1.7
+mantle-tigerstyle-check>    Compiling yoke-derive v0.8.2
+mantle-tigerstyle-check>    Compiling zerovec-derive v0.11.3
+mantle-tigerstyle-check>    Compiling displaydoc v0.2.5
+mantle-tigerstyle-check>    Compiling futures-macro v0.3.32
+mantle-tigerstyle-check>    Compiling tracing-attributes v0.1.31
+mantle-tigerstyle-check>    Compiling curve25519-dalek-derive v0.1.1
+mantle-tigerstyle-check>    Compiling miette-derive v7.6.0
+mantle-tigerstyle-check>    Compiling strum_macros v0.26.4
+mantle-tigerstyle-check>    Compiling derive_more-impl v2.1.1
+mantle-tigerstyle-check>    Compiling pin-project-internal v1.1.11
+mantle-tigerstyle-check>    Compiling async-trait v0.1.89
+mantle-tigerstyle-check>    Compiling clap_derive v4.6.0
+mantle-tigerstyle-check>    Compiling turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>    Compiling darling_macro v0.23.0
+mantle-tigerstyle-check>    Compiling async-stream-impl v0.3.6
+mantle-tigerstyle-check>     Checking zeroize v1.9.0
+mantle-tigerstyle-check>    Compiling aristo-macros v0.4.1
+mantle-tigerstyle-check>     Checking genawaiter v0.99.1
+mantle-tigerstyle-check>     Checking der v0.7.10
+mantle-tigerstyle-check>     Checking rustls-pki-types v1.14.0
+mantle-tigerstyle-check>    Compiling darling_macro v0.20.11
+mantle-tigerstyle-check>    Compiling thiserror-impl v1.0.69
+mantle-tigerstyle-check>    Compiling num_enum_derive v0.7.6
+mantle-tigerstyle-check>     Checking futures-util v0.3.32
+mantle-tigerstyle-check>    Compiling prost-derive v0.14.3
+mantle-tigerstyle-check>     Checking rustls-native-certs v0.8.3
+mantle-tigerstyle-check>    Compiling darling v0.23.0
+mantle-tigerstyle-check>     Checking async-stream v0.3.6
+mantle-tigerstyle-check>    Compiling n0-error-macros v0.1.3
+mantle-tigerstyle-check>     Checking aristo v0.4.1
+mantle-tigerstyle-check>    Compiling serde_with_macros v3.18.0
+mantle-tigerstyle-check>    Compiling spez v0.1.2
+mantle-tigerstyle-check>     Checking pin-project v1.1.11
+mantle-tigerstyle-check>     Checking inout v0.1.4
+mantle-tigerstyle-check>    Compiling darling v0.20.11
+mantle-tigerstyle-check>     Checking universal-hash v0.5.1
+mantle-tigerstyle-check>     Checking aead v0.5.2
+mantle-tigerstyle-check>    Compiling derive_builder_core v0.20.2
+mantle-tigerstyle-check>     Checking cipher v0.4.4
+mantle-tigerstyle-check>     Checking cobs v0.3.0
+mantle-tigerstyle-check>     Checking polyval v0.6.2
+mantle-tigerstyle-check>     Checking miette v7.6.0
+mantle-tigerstyle-check>    Compiling irpc-derive v0.10.0
+mantle-tigerstyle-check>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-tigerstyle-check>    Compiling turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>    Compiling ref-cast-impl v1.0.25
+mantle-tigerstyle-check>     Checking zerofrom v0.1.7
+mantle-tigerstyle-check>     Checking sha1 v0.10.6
+mantle-tigerstyle-check>     Checking sha2 v0.10.9
+mantle-tigerstyle-check>     Checking signature v2.2.0
+mantle-tigerstyle-check>     Checking spki v0.7.3
+mantle-tigerstyle-check>     Checking yoke v0.8.2
+mantle-tigerstyle-check>     Checking ghash v0.5.1
+mantle-tigerstyle-check>     Checking ctr v0.9.2
+mantle-tigerstyle-check>     Checking sha1-checked v0.10.0
+mantle-tigerstyle-check>     Checking aes v0.8.4
+mantle-tigerstyle-check>     Checking pkcs8 v0.10.2
+mantle-tigerstyle-check>     Checking tracing v0.1.44
+mantle-tigerstyle-check>     Checking zerovec v0.11.6
+mantle-tigerstyle-check>     Checking zerotrie v0.2.4
+mantle-tigerstyle-check>     Checking ed25519 v2.2.3
+mantle-tigerstyle-check>     Checking md-5 v0.10.6
+mantle-tigerstyle-check>     Checking tracing-subscriber v0.3.23
+mantle-tigerstyle-check>     Checking hmac v0.12.1
+mantle-tigerstyle-check>     Checking strum v0.26.3
+mantle-tigerstyle-check>    Compiling auto_impl v1.3.0
+mantle-tigerstyle-check>     Checking num_enum v0.7.6
+mantle-tigerstyle-check>     Checking malachite-base v0.9.2
+mantle-tigerstyle-check>    Compiling lalrpop v0.22.2
+mantle-tigerstyle-check>    Compiling typed-builder-macro v0.22.0
+mantle-tigerstyle-check>    Compiling getset v0.1.6
+mantle-tigerstyle-check>     Checking hkdf v0.12.4
+mantle-tigerstyle-check>     Checking range-collections v0.4.6
+mantle-tigerstyle-check>    Compiling derive_builder_macro v0.20.2
+mantle-tigerstyle-check>     Checking derive_more v2.1.1
+mantle-tigerstyle-check>     Checking sec1 v0.7.3
+mantle-tigerstyle-check>     Checking nix-archive v0.1.0
+mantle-tigerstyle-check>     Checking aes-gcm v0.10.3
+mantle-tigerstyle-check>     Checking nix-archive v0.6.0
+mantle-tigerstyle-check>     Checking crypto-bigint v0.5.5
+mantle-tigerstyle-check>     Checking n0-error v0.1.3
+mantle-tigerstyle-check>     Checking imbl v7.0.2
+mantle-tigerstyle-check>     Checking serde_with v3.18.0
+mantle-tigerstyle-check>     Checking group v0.13.0
+mantle-tigerstyle-check>     Checking fs4 v1.1.0
+mantle-tigerstyle-check>     Checking lru v0.16.4
+mantle-tigerstyle-check>     Checking clap v4.6.0
+mantle-tigerstyle-check>     Checking count-write v0.1.0
+mantle-tigerstyle-check>    Compiling yansi v1.0.1
+mantle-tigerstyle-check>    Compiling logos-codegen v0.16.1
+mantle-tigerstyle-check>     Checking clap-verbosity-flag v3.0.4
+mantle-tigerstyle-check>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-tigerstyle-check>     Checking derive_builder v0.20.2
+mantle-tigerstyle-check>     Checking turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>     Checking ed25519-dalek v2.2.0
+mantle-tigerstyle-check>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-tigerstyle-check>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-tigerstyle-check>     Checking serde_spanned v1.1.1
+mantle-tigerstyle-check>     Checking fs2 v0.4.3
+mantle-tigerstyle-check>     Checking tinystr v0.8.3
+mantle-tigerstyle-check>     Checking potential_utf v0.1.5
+mantle-tigerstyle-check>     Checking imara-diff v0.2.0
+mantle-tigerstyle-check>     Checking imara-diff v0.1.8
+mantle-tigerstyle-check>     Checking termcolor v1.4.1
+mantle-tigerstyle-check>     Checking bitmaps v3.2.1
+mantle-tigerstyle-check>     Checking toml v0.9.12+spec-1.1.0
+mantle-tigerstyle-check>     Checking icu_collections v2.2.0
+mantle-tigerstyle-check>     Checking icu_locale_core v2.2.0
+mantle-tigerstyle-check>     Checking rfc6979 v0.4.0
+mantle-tigerstyle-check>     Checking hashlink v0.10.0
+mantle-tigerstyle-check>    Compiling verus_syn v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking clru v0.6.3
+mantle-tigerstyle-check>    Compiling indexmap v1.9.3
+mantle-tigerstyle-check>     Checking uluru v3.1.0
+mantle-tigerstyle-check>     Checking tracing-indicatif v0.3.14
+mantle-tigerstyle-check>     Checking tracing-appender v0.2.5
+mantle-tigerstyle-check>    Compiling signal-hook v0.3.18
+mantle-tigerstyle-check>     Checking imbl-sized-chunks v0.1.3
+mantle-tigerstyle-check>     Checking typed-arena v2.0.2
+mantle-tigerstyle-check>    Compiling paste v1.0.15
+mantle-tigerstyle-check>     Checking arrayvec v0.5.2
+mantle-tigerstyle-check>    Compiling ouroboros_macro v0.18.5
+mantle-tigerstyle-check>    Compiling verus_prettyplease v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking arraydeque v0.5.1
+mantle-tigerstyle-check>     Checking aliasable v0.1.3
+mantle-tigerstyle-check>     Checking unsafe-libyaml v0.2.11
+mantle-tigerstyle-check>     Checking toml_edit v0.24.1+spec-1.1.0
+mantle-tigerstyle-check>    Compiling maybe-async v0.2.10
+mantle-tigerstyle-check>     Checking io-close v0.3.7
+mantle-tigerstyle-check>     Checking elliptic-curve v0.13.8
+mantle-tigerstyle-check>     Checking pretty v0.12.5
+mantle-tigerstyle-check>     Checking vte v0.14.1
+mantle-tigerstyle-check>    Compiling num-bigint-dig v0.8.6
+mantle-tigerstyle-check>     Checking saphyr-parser v0.0.6
+mantle-tigerstyle-check>     Checking futures-executor v0.3.32
+mantle-tigerstyle-check>     Checking bytes v1.11.1
+mantle-tigerstyle-check>     Checking bstr v1.12.1
+mantle-tigerstyle-check>     Checking chrono v0.4.44
+mantle-tigerstyle-check>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+mantle-tigerstyle-check>     Checking serde_urlencoded v0.7.1
+mantle-tigerstyle-check>     Checking quick-xml v0.40.1
+mantle-tigerstyle-check>     Checking futures v0.3.32
+mantle-tigerstyle-check>     Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+mantle-tigerstyle-check>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-tigerstyle-check>     Checking serde_tagged v0.3.0
+mantle-tigerstyle-check>     Checking serde_qs v0.12.0
+mantle-tigerstyle-check>     Checking postcard v1.1.3
+mantle-tigerstyle-check>     Checking oci-spec v0.7.1
+mantle-tigerstyle-check>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-tigerstyle-check>     Checking codespan-reporting v0.13.1
+mantle-tigerstyle-check>     Checking typed-builder v0.22.0
+mantle-tigerstyle-check>     Checking icu_provider v2.2.0
+mantle-tigerstyle-check>     Checking ecdsa v0.16.9
+mantle-tigerstyle-check>     Checking gix-validate v0.11.0
+mantle-tigerstyle-check>     Checking gix-utils v0.3.1
+mantle-tigerstyle-check>     Checking gix-error v0.2.1
+mantle-tigerstyle-check>     Checking gix-packetline v0.21.2
+mantle-tigerstyle-check>     Checking tokio v1.51.0
+mantle-tigerstyle-check>     Checking http v1.4.0
+mantle-tigerstyle-check>    Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+mantle-tigerstyle-check>     Checking gix-path v0.11.2
+mantle-tigerstyle-check>     Checking prost v0.14.3
+mantle-tigerstyle-check>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle-tigerstyle-check>     Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+mantle-tigerstyle-check>     Checking gix-date v0.15.1
+mantle-tigerstyle-check>     Checking gix-chunk v0.7.0
+mantle-tigerstyle-check>     Checking gix-quote v0.7.0
+mantle-tigerstyle-check>     Checking gix-bitmap v0.3.0
+mantle-tigerstyle-check>     Checking codespan v0.13.1
+mantle-tigerstyle-check>     Checking icu_normalizer v2.2.0
+mantle-tigerstyle-check>     Checking icu_properties v2.2.0
+mantle-tigerstyle-check>     Checking icu_locale v2.2.0
+mantle-tigerstyle-check>     Checking gix-features v0.46.2
+mantle-tigerstyle-check>     Checking gix-command v0.8.0
+mantle-tigerstyle-check>     Checking gix-config-value v0.17.1
+mantle-tigerstyle-check>     Checking gix-url v0.35.2
+mantle-tigerstyle-check>     Checking gix-actor v0.40.0
+mantle-tigerstyle-check>     Checking serde_yaml v0.9.34+deprecated
+mantle-tigerstyle-check>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle-tigerstyle-check>     Checking nickel-lang-vector v0.2.0
+mantle-tigerstyle-check>    Compiling logos-derive v0.16.1
+mantle-tigerstyle-check>    Compiling hashbrown v0.12.3
+mantle-tigerstyle-check>     Checking gix-prompt v0.14.1
+mantle-tigerstyle-check>     Checking gix-hash v0.23.0
+mantle-tigerstyle-check>     Checking gix-fs v0.19.2
+mantle-tigerstyle-check>     Checking gix-glob v0.24.0
+mantle-tigerstyle-check>     Checking simple-counter v0.1.0
+mantle-tigerstyle-check>     Checking crc-catalog v2.4.0
+mantle-tigerstyle-check>     Checking gix-mailmap v0.32.0
+mantle-tigerstyle-check>     Checking gix-hashtable v0.13.0
+mantle-tigerstyle-check>     Checking gix-commitgraph v0.35.0
+mantle-tigerstyle-check>     Checking gix-tempfile v21.0.2
+mantle-tigerstyle-check>     Checking gix-credentials v0.37.1
+mantle-tigerstyle-check>     Checking crc v3.4.0
+mantle-tigerstyle-check>     Checking gix-object v0.58.0
+mantle-tigerstyle-check>     Checking http-body v1.0.1
+mantle-tigerstyle-check>     Checking ureq-proto v0.6.0
+mantle-tigerstyle-check>     Checking strip-ansi-escapes v0.2.1
+mantle-tigerstyle-check>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-tigerstyle-check>     Checking http-body-util v0.1.3
+mantle-tigerstyle-check>     Checking gix-lock v21.0.2
+mantle-tigerstyle-check>     Checking ouroboros v0.18.5
+mantle-tigerstyle-check>     Checking crunch-cmake-core v0.1.0 (/build/source/crates/crunch-cmake-core)
+mantle-tigerstyle-check>     Checking gix-attributes v0.31.0
+mantle-tigerstyle-check>     Checking gix-ignore v0.19.1
+mantle-tigerstyle-check>     Checking sha-1 v0.10.1
+mantle-tigerstyle-check>     Checking webpki-roots v1.0.10
+mantle-tigerstyle-check>     Checking logos v0.16.1
+mantle-tigerstyle-check>     Checking num-iter v0.1.46
+mantle-tigerstyle-check>     Checking json_scanner v0.1.0
+mantle-tigerstyle-check>    Compiling redb v2.6.4
+mantle-tigerstyle-check>     Checking utf8-zero v0.8.1
+mantle-tigerstyle-check>    Compiling indoc v2.0.7
+mantle-tigerstyle-check>     Checking gix-shallow v0.10.0
+mantle-tigerstyle-check>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-tigerstyle-check>    Compiling linkme-impl v0.3.37
+mantle-tigerstyle-check>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-tigerstyle-check>    Compiling litrs v1.0.0
+mantle-tigerstyle-check>    Compiling vstd v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking idna_adapter v1.2.1
+mantle-tigerstyle-check>     Checking icu_collator v2.2.1
+mantle-tigerstyle-check>     Checking signal-hook-mio v0.2.5
+mantle-tigerstyle-check>     Checking lzma-rs v0.3.0
+mantle-tigerstyle-check>     Checking idna v1.1.0
+mantle-tigerstyle-check>     Checking primeorder v0.13.6
+mantle-tigerstyle-check>     Checking mantle-causal-trace-core v0.1.0 (/build/source/crates/mantle-causal-trace-core)
+mantle-tigerstyle-check>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+mantle-tigerstyle-check>     Checking gix-pathspec v0.16.1
+mantle-tigerstyle-check>     Checking pkcs1 v0.7.5
+mantle-tigerstyle-check>     Checking gethostname v0.5.0
+mantle-tigerstyle-check>     Checking ruzstd v0.9.1
+mantle-tigerstyle-check>     Checking bzip2-rs v0.1.2
+mantle-tigerstyle-check>    Compiling linkme v0.3.37
+mantle-tigerstyle-check>     Checking url v2.5.8
+mantle-tigerstyle-check>     Checking verus_builtin v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+mantle-tigerstyle-check>     Checking replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+mantle-tigerstyle-check>     Checking serde_spanned v0.6.9
+mantle-tigerstyle-check>     Checking toml_datetime v0.6.11
+mantle-tigerstyle-check>    Compiling snafu-derive v0.8.9
+mantle-tigerstyle-check>     Checking gix-revwalk v0.29.0
+mantle-tigerstyle-check>     Checking gix-ref v0.61.0
+mantle-tigerstyle-check>     Checking gix-filter v0.28.0
+mantle-tigerstyle-check>     Checking gix-pack v0.68.0
+mantle-tigerstyle-check>     Checking fuzzy-matcher v0.3.7
+mantle-tigerstyle-check>     Checking hashbrown v0.17.1
+mantle-tigerstyle-check>     Checking bs58 v0.5.1
+mantle-tigerstyle-check>     Checking gix-traverse v0.55.0
+mantle-tigerstyle-check>     Checking gix-revision v0.43.0
+mantle-tigerstyle-check>     Checking gix-negotiate v0.29.0
+mantle-tigerstyle-check>     Checking dyn-clone v1.0.20
+mantle-tigerstyle-check>     Checking toml_write v0.1.2
+mantle-tigerstyle-check>     Checking mantle-rust-differential-core v0.1.0 (/build/source/crates/mantle-rust-differential-core)
+mantle-tigerstyle-check>     Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+mantle-tigerstyle-check>     Checking crunch-cmake v0.1.0 (/build/source/crates/crunch-cmake)
+mantle-tigerstyle-check>     Checking p256 v0.13.2
+mantle-tigerstyle-check>     Checking p384 v0.13.1
+mantle-tigerstyle-check>     Checking toml_edit v0.22.27
+mantle-tigerstyle-check>    Compiling document-features v0.2.12
+mantle-tigerstyle-check>     Checking k256 v0.13.4
+mantle-tigerstyle-check>     Checking gix-index v0.49.0
+mantle-tigerstyle-check>     Checking gix-worktree-stream v0.30.0
+mantle-tigerstyle-check>     Checking rsa v0.9.10
+mantle-tigerstyle-check>     Checking gix-discover v0.49.0
+mantle-tigerstyle-check>     Checking gix-config v0.54.0
+mantle-tigerstyle-check>     Checking gix-refspec v0.39.0
+mantle-tigerstyle-check>     Checking secrecy v0.10.3
+mantle-tigerstyle-check>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+mantle-tigerstyle-check>     Checking iddqd v0.4.6
+mantle-tigerstyle-check>     Checking revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+mantle-tigerstyle-check>     Checking gix-archive v0.30.0
+mantle-tigerstyle-check>     Checking ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+mantle-tigerstyle-check>     Checking etcetera v0.11.0
+mantle-tigerstyle-check>     Checking detect-coding-agent v0.1.0
+mantle-tigerstyle-check>     Checking colored v3.1.1
+mantle-tigerstyle-check>     Checking dotenvy v0.15.7
+mantle-tigerstyle-check>     Checking gix-odb v0.78.0
+mantle-tigerstyle-check>     Checking ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+mantle-tigerstyle-check>     Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+mantle-tigerstyle-check>     Checking jsonwebtoken v11.0.0
+mantle-tigerstyle-check>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+mantle-tigerstyle-check>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-tigerstyle-check>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+mantle-tigerstyle-check>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+mantle-tigerstyle-check>     Checking crunch-watch-core v0.1.0 (/build/source/crates/crunch-watch-core)
+mantle-tigerstyle-check>     Checking crunch-test-core v0.1.0 (/build/source/crates/crunch-test-core)
+mantle-tigerstyle-check>     Checking crunch-nix-gateway-core v0.1.0 (/build/source/crates/crunch-nix-gateway-core)
+mantle-tigerstyle-check>     Checking crossterm v0.29.0
+mantle-tigerstyle-check>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-tigerstyle-check>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle-tigerstyle-check>     Checking crunch-pnpm-core v0.1.0 (/build/source/crates/crunch-pnpm-core)
+mantle-tigerstyle-check>     Checking mantle-application-contract v0.1.0 (/build/source/crates/mantle-application-contract)
+mantle-tigerstyle-check>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-tigerstyle-check>     Checking gix-worktree v0.50.0
+mantle-tigerstyle-check>     Checking mantle-rust-plan-app v0.1.0 (/build/source/crates/mantle-rust-plan-app)
+mantle-tigerstyle-check>     Checking mantle-cargo-build-bundle-core v0.1.0 (/build/source/crates/mantle-cargo-build-bundle-core)
+mantle-tigerstyle-check>     Checking gix-submodule v0.28.0
+mantle-tigerstyle-check>     Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+mantle-tigerstyle-check>     Checking crunch-zephyr-core v0.1.0 (/build/source/crates/crunch-zephyr-core)
+mantle-tigerstyle-check>     Checking crunch-gpu-core v0.1.0 (/build/source/crates/crunch-gpu-core)
+mantle-tigerstyle-check>     Checking gix-diff v0.61.0
+mantle-tigerstyle-check>     Checking gix-dir v0.23.0
+mantle-tigerstyle-check>     Checking gix-worktree-state v0.28.0
+mantle-tigerstyle-check>     Checking crunch-test-app v0.1.0 (/build/source/crates/crunch-test-app)
+mantle-tigerstyle-check>     Checking crunch-fpga-core v0.1.0 (/build/source/crates/crunch-fpga-core)
+mantle-tigerstyle-check>     Checking crunch-android-core v0.1.0 (/build/source/crates/crunch-android-core)
+mantle-tigerstyle-check>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+mantle-tigerstyle-check>     Checking crunch-verification-bridge-core v0.1.0 (/build/source/crates/crunch-verification-bridge-core)
+mantle-tigerstyle-check>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-tigerstyle-check>     Checking crunch-test v0.1.0 (/build/source/crates/crunch-test)
+mantle-tigerstyle-check>     Checking crunch-model-conversion-core v0.1.0 (/build/source/crates/crunch-model-conversion-core)
+mantle-tigerstyle-check>     Checking crunch-esp-idf-core v0.1.0 (/build/source/crates/crunch-esp-idf-core)
+mantle-tigerstyle-check>     Checking inquire v0.9.4
+mantle-tigerstyle-check>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-tigerstyle-check>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle-tigerstyle-check>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+mantle-tigerstyle-check>     Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+mantle-tigerstyle-check>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle-tigerstyle-check>     Checking nix-derivation v0.1.0
+mantle-tigerstyle-check>     Checking toml v0.8.23
+mantle-tigerstyle-check>     Checking chapter-tgz v0.1.0
+mantle-tigerstyle-check>     Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+mantle-tigerstyle-check>     Checking mantle-lock-vendor-core v0.1.0 (/build/source/crates/mantle-lock-vendor-core)
+mantle-tigerstyle-check>     Checking crunch-service-readiness-core v0.1.0 (/build/source/crates/crunch-service-readiness-core)
+mantle-tigerstyle-check>     Checking gix-status v0.28.0
+mantle-tigerstyle-check>     Checking gix-blame v0.11.0
+mantle-tigerstyle-check>     Checking crunch-model-conversion v0.1.0 (/build/source/crates/crunch-model-conversion)
+mantle-tigerstyle-check>     Checking crunch-verification-bridge v0.1.0 (/build/source/crates/crunch-verification-bridge)
+mantle-tigerstyle-check>     Checking crunch-esp-idf v0.1.0 (/build/source/crates/crunch-esp-idf)
+mantle-tigerstyle-check>     Checking crunch-zephyr v0.1.0 (/build/source/crates/crunch-zephyr)
+mantle-tigerstyle-check>     Checking crunch-gpu v0.1.0 (/build/source/crates/crunch-gpu)
+mantle-tigerstyle-check>     Checking xz2 v0.1.7
+mantle-tigerstyle-check>     Checking crunch-pnpm v0.1.0 (/build/source/crates/crunch-pnpm)
+mantle-tigerstyle-check>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+mantle-tigerstyle-check>     Checking crunch-python-core v0.1.0 (/build/source/crates/crunch-python-core)
+mantle-tigerstyle-check>     Checking snafu v0.8.9
+mantle-tigerstyle-check>     Checking mantle-cargo-unit-plan v0.1.0 (/build/source/crates/mantle-cargo-unit-plan)
+mantle-tigerstyle-check>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+mantle-tigerstyle-check>     Checking crunch-remote-app v0.1.0 (/build/source/crates/crunch-remote-app)
+mantle-tigerstyle-check>     Checking crunch-fpga v0.1.0 (/build/source/crates/crunch-fpga)
+mantle-tigerstyle-check>    Compiling verus_state_machines_macros v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking tokio-util v0.7.18
+mantle-tigerstyle-check>     Checking tower v0.5.3
+mantle-tigerstyle-check>     Checking iroh-io v0.6.2
+mantle-tigerstyle-check>    Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+mantle-tigerstyle-check>     Checking secretspec v0.17.0
+mantle-tigerstyle-check>     Checking zstd v0.13.3
+mantle-tigerstyle-check>     Checking bao-tree v0.16.1
+mantle-tigerstyle-check> error: implicit default on external type — construct with explicit values
+mantle-tigerstyle-check>    --> crates/crunch-wasm-component-core/src/model.rs:294:5
+mantle-tigerstyle-check>     |
+mantle-tigerstyle-check> 294 | /     #[serde(default)]
+mantle-tigerstyle-check> 295 | |     pub packages: Vec<WkgLockPackage>,
+mantle-tigerstyle-check>     | |_____________________________________^
+mantle-tigerstyle-check>     |
+mantle-tigerstyle-check>     = help: Tiger Style (Explicit Defaults): construct foreign-crate values explicitly instead of relying on `Default` Example: let client = reqwest::ClientBuilder::new();
+mantle-tigerstyle-check>     = note: see Tiger Style guide: Explicit Defaults
+mantle-tigerstyle-check>     = note: `-D tigerstyle::explicit-defaults` implied by `-D explicit-defaults`
+mantle-tigerstyle-check>     = help: to override `-D explicit-defaults` add `#[allow(tigerstyle::explicit_defaults)]`
+mantle-tigerstyle-check> 
+mantle-tigerstyle-check>     Checking async-compression v0.4.19
+mantle-tigerstyle-check>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+mantle-tigerstyle-check>    Compiling nickel-lang-parser v0.3.0
+mantle-tigerstyle-check>     Checking tower-http v0.6.8
+mantle-tigerstyle-check>    Compiling nickel-lang-core v0.18.0
+mantle-tigerstyle-check>     Checking h2 v0.4.16
+mantle-tigerstyle-check> error: could not compile `crunch-wasm-component-core` (lib) due to 1 previous error
+mantle-tigerstyle-check> warning: build failed, waiting for other jobs to finish...
+error: failed to build attribute 'checks.x86_64-linux.tigerstyle', build of '/nix/store/4d4ra4lmmbsmmfza3janqikniixqhslf-mantle-tigerstyle-check.drv^*' failed: Cannot build '/nix/store/4d4ra4lmmbsmmfza3janqikniixqhslf-mantle-tigerstyle-check.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/85x21xjlkf4idblgd9ldf78s2n12vxdf-mantle-tigerstyle-check
+       Last 25 log lines:
+       >     Checking iroh-io v0.6.2
+       >    Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+       >     Checking secretspec v0.17.0
+       >     Checking zstd v0.13.3
+       >     Checking bao-tree v0.16.1
+       > error: implicit default on external type — construct with explicit values
+       >    --> crates/crunch-wasm-component-core/src/model.rs:294:5
+       >     |
+       > 294 | /     #[serde(default)]
+       > 295 | |     pub packages: Vec<WkgLockPackage>,
+       >     | |_____________________________________^
+       >     |
+       >     = help: Tiger Style (Explicit Defaults): construct foreign-crate values explicitly instead of relying on `Default` Example: let client = reqwest::ClientBuilder::new();
+       >     = note: see Tiger Style guide: Explicit Defaults
+       >     = note: `-D tigerstyle::explicit-defaults` implied by `-D explicit-defaults`
+       >     = help: to override `-D explicit-defaults` add `#[allow(tigerstyle::explicit_defaults)]`
+       >
+       >     Checking async-compression v0.4.19
+       >     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+       >    Compiling nickel-lang-parser v0.3.0
+       >     Checking tower-http v0.6.8
+       >    Compiling nickel-lang-core v0.18.0
+       >     Checking h2 v0.4.16
+       > error: could not compile `crunch-wasm-component-core` (lib) due to 1 previous error
+       > warning: build failed, waiting for other jobs to finish...
+       For full logs, run:
+         nix log /nix/store/4d4ra4lmmbsmmfza3janqikniixqhslf-mantle-tigerstyle-check.drv

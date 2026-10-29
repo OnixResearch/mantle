@@ -291,7 +291,12 @@ pub struct ComponentManifest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WkgLock {
     pub version: u32,
+    #[serde(default = "empty_lock_packages")]
     pub packages: Vec<WkgLockPackage>,
+}
+
+fn empty_lock_packages() -> Vec<WkgLockPackage> {
+    Vec::new()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -627,6 +627,11 @@ source of truth for prerequisites, support tiers, and validation rails.
 Advanced cache, imported-tool, remote-build, OCI, release, WebAssembly, bootstrap,
 and benchmark examples are indexed in [`examples/README.md`](examples/README.md).
 
+Application-hosted component production and the exact effect-world fixture are
+documented in [`docs/wasm-component-effects.md`](docs/wasm-component-effects.md).
+Consumer-host-required materialization preserves static verification without
+claiming that Mantle operated the application's host or executed its component.
+
 ## Architecture
 
 ```text

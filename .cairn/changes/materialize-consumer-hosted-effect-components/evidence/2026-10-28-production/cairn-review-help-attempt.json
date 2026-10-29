@@ -1,0 +1,8 @@
+{
+  "command": ["/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn", "review", "--help"],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "error: unknown review subcommand: --help\n",
+  "resolution": "Read top-level cairn --help, then operated the documented review completeness command successfully; no policy change or alternate lifecycle implementation."
+}

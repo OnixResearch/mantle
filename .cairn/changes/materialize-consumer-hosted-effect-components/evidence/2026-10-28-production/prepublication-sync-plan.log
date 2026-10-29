@@ -1,0 +1,119 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/materialize-consumer-hosted-effect-components/specs/wasm-component-effects/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/materialize-consumer-hosted-effect-components/specs/wasm-component-effects/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "materialize-consumer-hosted-effect-components",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/materialize-consumer-hosted-effect-components/specs/wasm-component-effects/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "10f8df7b22b0517a887da5d90d34d63483ddec8af8a3009d25013a7274a7f17e",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "442675d83e54b3a4a83f70fbcd5881b7f7a5014714e21df12322e8458b686107",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "0ceb6b253ba2103002e9cfdff4b38b3b1d74ed4deae78d04e894a48d51dee50a",
+        "destination": ".cairn/specs/wasm-component-effects/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "511d90cbb8a246112ce23f26299a828bfc40489e618fc428bf5810792f6dd02b",
+        "operations": [
+          {
+            "block_hash": "60aaabb3be61fac5dc20fa5c75701eaae9ad12825a1ae4343f65bca0a2b04c4e",
+            "heading": "### Requirement: Closed static effects cohort",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.effects_cohort"
+          },
+          {
+            "block_hash": "0678027e87009f5daf41ae8d84ecdadff840ed8098377657bad93296a455a6c2",
+            "heading": "### Requirement: Consumer-owned runtime validation",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.consumer_host_requirement"
+          },
+          {
+            "block_hash": "c9d77de656245a1a1140e2a4fab721bbbbe14ae85387b016e4d1a0701b30ee38",
+            "heading": "### Requirement: Genuine deterministic producer fixtures",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.effect_fixtures"
+          },
+          {
+            "block_hash": "ec100d548916dd5fbe73959e98aa8cc46609a2908cbca3c23197ba33bcc9f3aa",
+            "heading": "### Requirement: Standalone and empty-closure integrity",
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.standalone_empty_closure"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.effects_cohort",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.consumer_host_requirement",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.effect_fixtures",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.wasm_component.standalone_empty_closure",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/materialize-consumer-hosted-effect-components/specs/wasm-component-effects/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "90c2885b5b6d9fd9d1baccc5e1700f5963d9a98d40befb3c9f14c46b263f4f5a",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "b186602440b91a8de63ed8deba3b82d05b89984b533e67be777fb5ed55a4887f",
+  "reasons": [],
+  "receipt_hash": "0b748d296795d8200c0427b6112cf06c53a3193c3016ee628fd16108ac73e01b",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

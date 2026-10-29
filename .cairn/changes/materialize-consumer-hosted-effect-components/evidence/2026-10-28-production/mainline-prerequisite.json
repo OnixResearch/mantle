@@ -1,0 +1,7 @@
+{
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "command": "git ls-remote origin refs/heads/main && git rev-parse HEAD && git branch --list main",
+  "exit_code": 0,
+  "stdout": "e1827a8cc1cacf2810aa2314dc8971177832a8f0\trefs/heads/main\ne1827a8cc1cacf2810aa2314dc8971177832a8f0\n+ main\n",
+  "claim_boundary": "Read-only publication prerequisite before implementation; not a push or a future remote-state claim. Local main belongs to another worktree and will not be reset or rewritten. Publication uses an explicit normal fast-forward HEAD:refs/heads/main push."
+}

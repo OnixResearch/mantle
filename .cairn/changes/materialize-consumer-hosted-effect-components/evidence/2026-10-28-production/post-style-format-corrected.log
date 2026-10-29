@@ -1,0 +1,14 @@
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 58 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 78 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 175 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 111 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 39 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 17 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 252 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 408 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:5000' for 60 seconds
+error: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'

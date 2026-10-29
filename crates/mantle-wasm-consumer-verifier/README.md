@@ -13,7 +13,11 @@ without importing Mantle build, store, scheduler, release, or CLI authority.
   runs the structural layer over in-memory bundle data. Every structural and
   canonical-identity decision delegates to `crunch-wasm-component-core`; this
   facade never duplicates decision logic.
-- `MaterializationBundle` is re-exported directly from the pure core.
+- `MaterializationBundle` and its `RuntimeValidation` policy are re-exported
+  directly from the pure core. `consumer-host-required` is an identity-bound
+  requirement, not an execution receipt: consumers must fulfill the exact WIT
+  package/world/import surface with their real host before activation. A verified
+  bundle or a producer `not-run` graph node does not fulfill that requirement.
 - `ConsumerRoot::open(&Path)` opens and retains one directory capability,
   including caller-provided `/proc/self/fd/<fd>` bridges. Explicit root opens
   may follow the caller's root; replacing that ambient path later does not

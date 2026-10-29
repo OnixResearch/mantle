@@ -115,11 +115,36 @@ fn execute_available_pipeline(
         add_not_run_bundle(state)?;
         return Ok(());
     };
-    if !run_runtime_smoke(prepared, workspace, state, &portable.stage.path, &portable.stage.object)? {
+    if !run_runtime_validation(prepared, workspace, state, &portable.stage)? {
         add_not_run_bundle(state)?;
         return Ok(());
     }
     admit_and_materialize(prepared, workspace, state, portable, wizer.admission)
+}
+
+fn run_runtime_validation(
+    prepared: &PreparedPipeline,
+    workspace: &StageWorkspace,
+    state: &mut ExecutionState,
+    artifact: &StageArtifact,
+) -> Result<bool, Error> {
+    debug_assert!(workspace.root.is_absolute());
+    debug_assert!(artifact.path.is_absolute());
+    if prepared.request.runtime_validation.is_standalone_smoke() {
+        return run_runtime_smoke(prepared, workspace, state, &artifact.path, &artifact.object);
+    }
+    state.push_stage(
+        "consumer-host-runtime-required",
+        ComponentStageKind::BuildValidation,
+        ComponentStageStatus::NotRun,
+        StageEvidence::new(
+            Some(artifact.object.clone()),
+            None,
+            Some(prepared.request.manifest.validation_profiles.expected_runtime_profile_identity_blake3.clone()),
+            Vec::new(),
+        ),
+    )?;
+    Ok(true)
 }
 
 fn compile_and_validate(

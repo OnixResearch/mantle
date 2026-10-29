@@ -230,6 +230,21 @@ fn production_cli_fails_closed_on_identity_interface_composition_and_runtime_dri
     let (output, evidence) = fixture.run(&octet_profile_drift, "octet-profile-drift");
     assert_preflight_rejected(&output, &evidence);
 
+    let mut hosted = fixture.request.clone();
+    hosted.runtime_validation = crunch_wasm_component_core::RuntimeValidation::ConsumerHostRequired {
+        wit_package: hosted.manifest.wit.package.clone(),
+        wit_world: hosted.manifest.wit.world.clone(),
+        required_imports: vec!["effect-request".to_string()],
+    };
+    let (output, evidence) = fixture.run(&hosted, "host-surface-drift");
+    assert_preflight_rejected(&output, &evidence);
+    hosted.manifest.virtualization.expected_remaining_imports = vec!["effect-request".to_string()];
+    let (output, evidence) = fixture.run(&hosted, "contradictory-host-runtime-invoke");
+    assert_preflight_rejected(&output, &evidence);
+    hosted.runtime_invoke = None;
+    let (output, evidence) = fixture.run(&hosted, "contradictory-host-runtime-stdout");
+    assert_preflight_rejected(&output, &evidence);
+
     let mut package_drift = fixture.request.clone();
     package_drift.package_materializations[0].object.digest_blake3 = Blake3Identity::from_slice(b"tampered-package");
     let (output, evidence) = fixture.run(&package_drift, "package-drift");
@@ -582,6 +597,7 @@ fn request(
             source: CompositionDependencySource::CompiledComponent,
         }],
         package_resolution_network: false,
+        runtime_validation: crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke,
         runtime_invoke: Some("run()".to_string()),
         expected_runtime_stdout: EXPECTED_STDOUT.to_string(),
         aot_target: "x86_64-unknown-linux-gnu".to_string(),
@@ -636,7 +652,12 @@ fn source_object(source: &Path, root: &Path) -> StoreObject {
 }
 
 fn write_pipeline_request_expression(path: &Path, request: &ComponentPipelineRequest) {
-    let request_json = serde_json::to_string(request).unwrap();
+    let mut value = serde_json::to_value(request).unwrap();
+    // Legacy standalone callers omit this field; hosted requests must carry it.
+    if matches!(request.runtime_validation, crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke) {
+        value.as_object_mut().unwrap().remove("runtime_validation");
+    }
+    let request_json = serde_json::to_string(&value).unwrap();
     let nickel_string = serde_json::to_string(&request_json).unwrap();
     fs::write(path, format!("std.deserialize 'Json {nickel_string}\n")).unwrap();
 }

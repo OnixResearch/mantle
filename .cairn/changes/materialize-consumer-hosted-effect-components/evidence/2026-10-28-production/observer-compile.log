@@ -1,0 +1,59 @@
+error[E0277]: `?` couldn't convert the error: `ShellError: std::error::Error` is not satisfied
+  --> /home/brittonr/.cache/mantle-hosted-effects-20261028/verify_producer.rs:17:50
+   |
+ 5 | fn main() -> Result<(), Box<dyn std::error::Error>> {
+   |              -------------------------------------- required `ShellError: std::error::Error` because of this
+...
+17 |     let root = ConsumerRoot::open(Path::new("/"))?;
+   |                ----------------------------------^ the trait `std::error::Error` is not implemented for `ShellError`
+   |                |
+   |                this has type `Result<_, ShellError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = note: required for `Box<dyn std::error::Error>` to implement `From<ShellError>`
+
+error[E0277]: `?` couldn't convert the error: `ShellError: std::error::Error` is not satisfied
+  --> /home/brittonr/.cache/mantle-hosted-effects-20261028/verify_producer.rs:18:54
+   |
+ 5 | fn main() -> Result<(), Box<dyn std::error::Error>> {
+   |              -------------------------------------- required `ShellError: std::error::Error` because of this
+...
+18 |     let observed = root.verify_bundle(bundle.clone())?;
+   |                         -----------------------------^ the trait `std::error::Error` is not implemented for `ShellError`
+   |                         |
+   |                         this has type `Result<_, ShellError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = note: required for `Box<dyn std::error::Error>` to implement `From<ShellError>`
+
+error[E0277]: `?` couldn't convert the error: `ShellError: std::error::Error` is not satisfied
+  --> /home/brittonr/.cache/mantle-hosted-effects-20261028/verify_producer.rs:24:60
+   |
+ 5 | fn main() -> Result<(), Box<dyn std::error::Error>> {
+   |              -------------------------------------- required `ShellError: std::error::Error` because of this
+...
+24 |     let copy_root = ConsumerRoot::open(Path::new(&args[2]))?;
+   |                     ---------------------------------------^ the trait `std::error::Error` is not implemented for `ShellError`
+   |                     |
+   |                     this has type `Result<_, ShellError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = note: required for `Box<dyn std::error::Error>` to implement `From<ShellError>`
+
+error[E0277]: `?` couldn't convert the error: `ShellError: std::error::Error` is not satisfied
+  --> /home/brittonr/.cache/mantle-hosted-effects-20261028/verify_producer.rs:25:62
+   |
+ 5 | fn main() -> Result<(), Box<dyn std::error::Error>> {
+   |              -------------------------------------- required `ShellError: std::error::Error` because of this
+...
+25 |     let copied = root.copy_source_closure(bundle, &copy_root)?;
+   |                       ---------------------------------------^ the trait `std::error::Error` is not implemented for `ShellError`
+   |                       |
+   |                       this has type `Result<_, ShellError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = note: required for `Box<dyn std::error::Error>` to implement `From<ShellError>`
+
+error: aborting due to 4 previous errors
+
+For more information about this error, try `rustc --explain E0277`.

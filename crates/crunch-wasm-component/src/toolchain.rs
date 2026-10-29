@@ -202,29 +202,48 @@ fn verify_octet_identity(root: &Path, manifest: &ToolchainManifest) -> Result<()
     debug_assert_eq!(octet.profile_id, OCTET_PROFILE_ID);
     Ok(())
 }
-
 // r[impl mantle.wasm_component.profile_selection]
+// r[impl mantle.wasm_component.effects_cohort]
 fn verify_octet_profiles(octet: &crate::model::OctetRailIdentity) -> Result<(), Error> {
-    let [first, second] = octet.profiles.as_slice() else {
-        return Err(Error::Invalid("Octet toolchain must declare both pinned artifact profiles".to_string()));
-    };
-    let expected_molten =
-        pinned_identity(crate::model::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3, OctetPinnedRole::Profile)?;
-    let is_default = |profile: &crate::model::OctetProfileIdentity| {
+    let expected = [
+        OCTET_PROFILE_ID,
+        crate::model::OCTET_MOLTEN_PROFILE_ID,
+        crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_ID,
+    ];
+    if octet.profiles.len() != expected.len() {
+        return Err(Error::Invalid(
+            "Octet toolchain must declare exactly the three pinned artifact profiles".to_string(),
+        ));
+    }
+    for (index, profile) in octet.profiles.iter().enumerate() {
+        if !expected.contains(&profile.profile_id.as_str()) {
+            return Err(Error::Invalid("Octet toolchain declares an unknown artifact profile".to_string()));
+        }
+        let expected_identity = match profile.profile_id.as_str() {
+            OCTET_PROFILE_ID => OCTET_PROFILE_IDENTITY_BLAKE3,
+            crate::model::OCTET_MOLTEN_PROFILE_ID => crate::model::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3,
+            crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_ID => crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3,
+            _ => return Err(octet_identity_drift()),
+        };
+        if profile.profile_identity_blake3 != pinned_identity(expected_identity, OctetPinnedRole::Profile)? {
+            return Err(Error::Invalid("Octet selectable artifact profile identity drifted".to_string()));
+        }
+        if octet.profiles[..index].iter().any(|previous| {
+            previous.profile_id == profile.profile_id
+                || previous.profile_identity_blake3 == profile.profile_identity_blake3
+        }) {
+            return Err(Error::Invalid(
+                "Octet toolchain declares duplicate artifact profiles or identities".to_string(),
+            ));
+        }
+    }
+    if !octet.profiles.iter().any(|profile| {
         profile.profile_id == octet.profile_id && profile.profile_identity_blake3 == octet.profile_identity_blake3
-    };
-    let is_molten = |profile: &crate::model::OctetProfileIdentity| {
-        profile.profile_id == crate::model::OCTET_MOLTEN_PROFILE_ID
-            && profile.profile_identity_blake3 == expected_molten
-    };
-    if !((is_default(first) && is_molten(second)) || (is_default(second) && is_molten(first))) {
-        return Err(Error::Invalid("Octet toolchain artifact profile names or default identity drifted".to_string()));
+    }) {
+        return Err(Error::Invalid("Octet toolchain default artifact profile identity drifted".to_string()));
     }
-    if first.profile_identity_blake3 == second.profile_identity_blake3 {
-        return Err(Error::Invalid("Octet toolchain declares duplicate artifact profile identities".to_string()));
-    }
-    debug_assert_ne!(first.profile_id, second.profile_id);
-    debug_assert_ne!(first.profile_identity_blake3, second.profile_identity_blake3);
+    debug_assert_eq!(octet.profiles.len(), expected.len());
+    debug_assert!(expected.iter().all(|name| octet.profiles.iter().any(|profile| profile.profile_id == *name)));
     Ok(())
 }
 

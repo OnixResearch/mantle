@@ -1,0 +1,5 @@
+unpacking 'github:OnixResearch/octet/abb6082062251944a40093a274df3d35331fa168' into the Git cache...
+warning: updating lock file "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/flake.lock":
+• Updated input 'octet':
+    'github:OnixResearch/octet/0e0e5dc?narHash=sha256-FJotkjuCP7RtkJEFaJ%2BwH3cB9LqoLxLRGBw%2BaKIHrxM%3D' (2026-10-28)
+  → 'github:OnixResearch/octet/abb6082?narHash=sha256-uzarvW%2BjBY4/K2gw6cdV7BLQQfjkrw8Yauneb9NXUpU%3D' (2026-10-28)

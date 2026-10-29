@@ -64,6 +64,7 @@ pub(crate) fn materialize_bundle(
             .validation_profiles
             .expected_runtime_profile_identity_blake3
             .clone(),
+        runtime_validation: prepared.request.runtime_validation.clone(),
         stage_receipts,
         wizer: options.wizer,
         aot: options.aot,
@@ -438,6 +439,7 @@ mod tests {
             final_portable,
             expected_octet_profile_blake3: Blake3Identity::from_slice(b"octet-profile"),
             expected_runtime_profile_blake3: Blake3Identity::from_slice(b"runtime-profile"),
+            runtime_validation: crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke,
             stage_receipts: receipts,
             wizer: None,
             aot: None,

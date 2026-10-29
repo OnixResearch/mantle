@@ -1,0 +1,4 @@
+# Actual focused, toolchain, producer, consumer-byte, and repository commands are
+# retained with exact exit statuses in the integration evidence transcript.
+# Execute this list from the repository-pinned Nix development shell.
+cairn validate --root . --strict

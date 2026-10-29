@@ -52,6 +52,7 @@ pub use bundle::MATERIALIZATION_BUNDLE_SCHEMA;
 pub use bundle::MaterializationBundle;
 pub use bundle::MaterializationBundleRequest;
 pub use bundle::MaterializationBundleResult;
+pub use bundle::RuntimeValidation;
 pub use bundle::StageReceiptReference;
 pub use bundle::build_materialization_bundle;
 pub use bundle::verify_materialization_bundle;

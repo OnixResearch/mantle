@@ -1,0 +1,27 @@
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Finished `dev` profile [unoptimized] target(s) in 0.37s
+     Running `/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/examples/prepare_effect_fixture /nix/store/rxkdd20n7c510z6n0jd4s4f15zf75lfb-mantle-wasm-component-toolchain-v1 /home/brittonr/.cache/mantle-hosted-effects-20261028/callback-fixture-local /home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/wit/molten-component-effects/runtime.wit 046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab /home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/examples/component-extension`
+/home/brittonr/.cache/mantle-hosted-effects-20261028/callback-fixture-local/request.ncl

@@ -1,0 +1,26 @@
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 77 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5002 milliseconds; retrying in 102 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 305 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 498 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5003 milliseconds
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5002 milliseconds; retrying in 53 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5002 milliseconds; retrying in 93 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 332 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 519 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:5000' for 60 seconds
+error: unable to download 'http://100.100.103.95:5000/hhccdmpa2bhqbagn2zgmgrwjbcdinn55.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'
+Diff in /home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028/tests/wasm_component_cli.rs:654:
+ fn write_pipeline_request_expression(path: &Path, request: &ComponentPipelineRequest) {
+     let mut value = serde_json::to_value(request).unwrap();
+     // Legacy standalone callers omit this field; hosted requests must carry it.
+-    if matches!(
+-        request.runtime_validation,
+-        crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke
+-    ) {
++    if matches!(request.runtime_validation, crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke) {
+         value.as_object_mut().unwrap().remove("runtime_validation");
+     }
+     let request_json = serde_json::to_string(&value).unwrap();

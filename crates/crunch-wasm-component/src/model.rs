@@ -17,15 +17,18 @@ pub const PIPELINE_REQUEST_SCHEMA: &str = "mantle-wasm-component-pipeline-reques
 pub const PIPELINE_EXECUTION_REPORT_SCHEMA: &str = "mantle-wasm-component-pipeline-execution-report-v1";
 pub const TOOLCHAIN_MANIFEST_SCHEMA: &str = "mantle-wasm-component-toolchain-v1";
 pub const OCTET_SOURCE_REPOSITORY: &str = "https://github.com/OnixResearch/octet";
-pub const OCTET_SOURCE_REVISION: &str = "0e0e5dc8461b8b32c286de362c290b3f3ea2deee";
+pub const OCTET_SOURCE_REVISION: &str = "abb6082062251944a40093a274df3d35331fa168";
 pub const OCTET_PACKAGE_NAME: &str = "cargo-octet";
 pub const OCTET_PACKAGE_VERSION: &str = "0.1.0";
 pub const OCTET_PROFILE_ID: &str = "portable-component-baseline";
 pub const OCTET_MOLTEN_PROFILE_ID: &str = "molten-component-baseline";
-pub const OCTET_CONFIG_BLAKE3: &str = "48aabf8dc2ad189ebe051ddce48746a8f878fcbcebf506007c505085e9a8ed83";
+pub const OCTET_MOLTEN_EFFECTS_PROFILE_ID: &str = "molten-component-effects-v1";
+pub const OCTET_CONFIG_BLAKE3: &str = "09f1fbb7ce4d9da085b3f1325dbd5e8ae1c17bde2755caf79c1d2850e67b116a";
 pub const OCTET_PROFILE_IDENTITY_BLAKE3: &str = "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd";
 pub const OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3: &str =
     "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846";
+pub const OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3: &str =
+    "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e";
 pub const OCTET_WASM_TOOLS_COHORT_BLAKE3: &str = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a";
 
 pub const REQUIRED_TOOL_NAMES: [&str; 12] = [
@@ -56,11 +59,17 @@ pub struct ComponentPipelineRequest {
     pub cargo_core_module_relative_path: Option<String>,
     pub composition_dependencies: Vec<CompositionDependency>,
     pub package_resolution_network: bool,
+    #[serde(default = "standalone_runtime_validation")]
+    pub runtime_validation: crunch_wasm_component_core::RuntimeValidation,
     pub runtime_invoke: Option<String>,
     pub expected_runtime_stdout: String,
     pub aot_target: String,
     pub aot_cpu_features: Vec<String>,
     pub aot_configuration_args: Vec<String>,
+}
+
+fn standalone_runtime_validation() -> crunch_wasm_component_core::RuntimeValidation {
+    crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

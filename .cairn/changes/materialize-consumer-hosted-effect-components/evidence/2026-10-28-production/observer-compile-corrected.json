@@ -1,0 +1,34 @@
+{
+  "name": "observer-compile-corrected",
+  "command": [
+    "nix",
+    "develop",
+    "--builders",
+    "",
+    "-c",
+    "rustc",
+    "--edition=2024",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/verify_producer.rs",
+    "-L",
+    "dependency=/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps",
+    "--extern",
+    "crunch_wasm_component=/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/libcrunch_wasm_component-1f1bee500ed29a08.rlib",
+    "--extern",
+    "mantle_wasm_consumer_verifier=/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/libmantle_wasm_consumer_verifier-060c818e2cb711ce.rlib",
+    "--extern",
+    "serde_json=/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target/debug/deps/libserde_json-8e04cb5e3df8e66d.rlib",
+    "-o",
+    "/home/brittonr/.cache/mantle-hosted-effects-20261028/verify-producer"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/mantle-effects-native-20261028",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/final-quality-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "TMPDIR": "/tmp/mantle-hosted-effects-20261028"
+  },
+  "exit_code": 0,
+  "log": "/home/brittonr/.cache/mantle-hosted-effects-20261028/observer-compile-corrected.log"
+}

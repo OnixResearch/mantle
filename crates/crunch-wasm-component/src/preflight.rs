@@ -83,7 +83,7 @@ pub(crate) fn prepare_pipeline(request: ComponentPipelineRequest) -> Result<Prep
         lock_bytes: lock_bytes.clone(),
     });
     let source_plan = source_result.plan.ok_or_else(|| core_blockers("wkg.lock", &source_result.blockers))?;
-    debug_assert!(!source_plan.requests.is_empty());
+    debug_assert_eq!(source_plan.requests.len(), request.package_materializations.len());
     debug_assert!(!generated_plan.inputs.is_empty());
     Ok(PreparedPipeline {
         request,
@@ -103,6 +103,7 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
     if request.schema != PIPELINE_REQUEST_SCHEMA {
         return Err(Error::Invalid(format!("unsupported pipeline request schema `{}`", request.schema)));
     }
+    validate_runtime_policy(request)?;
     if request.package_resolution_network {
         return Err(Error::Blocked(
             "OCI package resolution is not admitted by the current local-only production shell".to_string(),
@@ -138,6 +139,27 @@ fn validate_request_shape(request: &ComponentPipelineRequest) -> Result<(), Erro
     debug_assert!(source_root.is_absolute());
     debug_assert!(!request.wit_relative_path.is_empty());
     debug_assert!(request.runtime_invoke.as_ref().is_none_or(|invoke| !invoke.starts_with('-')));
+    Ok(())
+}
+
+pub(crate) fn validate_runtime_policy(request: &ComponentPipelineRequest) -> Result<(), Error> {
+    let crunch_wasm_component_core::RuntimeValidation::ConsumerHostRequired {
+        wit_package,
+        wit_world,
+        required_imports,
+    } = &request.runtime_validation
+    else {
+        return Ok(());
+    };
+    let is_policy_matched = wit_package == &request.manifest.wit.package
+        && wit_world == &request.manifest.wit.world
+        && required_imports == &request.manifest.virtualization.expected_remaining_imports;
+    let has_standalone_settings = request.runtime_invoke.is_some() || !request.expected_runtime_stdout.is_empty();
+    if !is_policy_matched || !request.runtime_validation.is_well_formed() || has_standalone_settings {
+        return Err(Error::Invalid("consumer-host runtime policy must match exact WIT/import inputs and cannot declare standalone invocation or stdout".to_string()));
+    }
+    debug_assert!(request.runtime_invoke.is_none());
+    debug_assert_eq!(required_imports, &request.manifest.virtualization.expected_remaining_imports);
     Ok(())
 }
 
