@@ -2,9 +2,11 @@
 
 ## Status
 
-Proposed; the checker publication, immutable pin update, production generation,
-and operated Molten consumer proof are integration gates, not implied by source
-preparation. See `.cairn/changes/materialize-consumer-hosted-effect-components/`.
+Accepted, 2026-10-29. Published checker and producer pins, genuine production,
+and separately owned real Molten actor/installed-extension observations fulfill
+the bounded integration gates. See
+`.cairn/archive/2026-10-29-materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers.json`.
+This is not default consumer cutover, full local/shared parity, or release authority.
 
 ## Context
 

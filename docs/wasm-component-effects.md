@@ -121,6 +121,45 @@ toolchain cohort is
 `703be19cf0bab382e10a65790c39540a45c5ab89262070ef9036c1ee35f5f306`.
 This identifies the producer/checker tools, not downstream host execution.
 
+## Bounded operated integration, 2026-10-29
+
+The Molten owner repinned Cargo and Nix to published Mantle
+`dd2bebab894688d07e7a29c75c1437f4ecc120df`, regenerated the dependency plans,
+rebuilt the real consumers, and operated both the actor and manifest-installed
+extension through those immutable binaries. Both commands exited 0 under the
+unchanged runtime profile
+`046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab`,
+fuel limit 100,000, fixed 32-page memory, exact WIT, and release recipe.
+
+The final callback-wide artifact is
+`79d2fc52b87c6cfda3dd1a3f6fa1ed65aae819d6a505a13602878704fdae9e68`;
+its complete source closure is
+`e32a6f9684504787ccd7db7629138f8794a4352eff48bd63a4724c642dc7ded6`.
+Its genuine report, complete Structural+Bytes/source-copy verification, and
+pinned checker collection/verification bind those bytes. The separately owned
+extension lifecycle report is
+`3d5092be7b06fade8717ce3d135863832c5bac1fd6e235033512fc945a9a94bf`.
+
+The native change retains a byte-identical bounded owner snapshot in
+[`2026-10-29-operated-consumers.json`](../.cairn/archive/2026-10-29-materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers.json)
+and its adjacent ZIP: 635,114 bytes, 440 members, BLAKE3
+`10df497f5fe223675d601dfa840e9216fc0cc69eb7f9bf8e1e080589d563bec0`.
+The measured copy manifest records provenance and ownership. Earlier failed
+memory, fuel, restart and publication-boundary attempts remain historical
+evidence, not final successes; higher-budget/extra-marker diagnostics never
+establish admitted product execution.
+
+The actor observed bounded success and denial/trap/malformed/fuel/deadline and
+replay cases. The extension completed initialization/start, admitted and denied
+requests, stale/replay denials, publication certainty preserving pre-existing
+initialized state, checkpoint, failed request, restart/recover with refreshed
+authority, health/drain/shutdown, and canonical readback. These are separately
+owned observations, not a claim that Mantle's static report executed a host.
+They do not close Molten's full adoption/default cutover, full local/shared
+parity, durable nonce-store choice, crash durability, host isolation, or release
+eligibility. No new consumer source-gate verdict is inferred by this producer
+evidence-only closure.
+
 ## Production commands
 
 Run long toolchain builds/proofs detached through Pueue, following

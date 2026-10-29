@@ -1,0 +1,27 @@
+{
+  "schema": "mantle-separately-owned-operated-consumer-snapshot-v1",
+  "source_observation": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json",
+  "retained": [
+    {
+      "file": "2026-10-29-operated-consumers.json",
+      "bytes": 3674,
+      "blake3": "f2d1297d5d7576a53d509265b6c668cbad08003d3fd23bb7c98611069624024f"
+    },
+    {
+      "file": "2026-10-29-operated-consumers.zip",
+      "bytes": 635114,
+      "blake3": "10df497f5fe223675d601dfa840e9216fc0cc69eb7f9bf8e1e080589d563bec0"
+    }
+  ],
+  "archive_members": 440,
+  "mantle_revision_consumed": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+  "extension_report_ref": "blake3:3d5092be7b06fade8717ce3d135863832c5bac1fd6e235033512fc945a9a94bf",
+  "runtime_profile_ref": "blake3:046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "fuel_limit": 100000,
+  "ownership": "Molten owner operated both real consumers; Mantle records a byte-identical bounded snapshot, not a rerun or an independent source-gate claim.",
+  "non_claims": [
+    "No default shared-runtime cutover, full local/shared parity, durable nonce-store selection, crash durability, synchronous host interruption, host isolation, whole-system correctness or release eligibility.",
+    "Strict Cairn validation and linked logs provide bounded evidence linkage, not permission; actual host authority uses current policy and signed UCAN/holder admission."
+  ],
+  "historical_boundary": "Earlier preserved fuel, publication-regression and memory-declaration failures are unchanged historical observations, not the final operated result."
+}

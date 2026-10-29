@@ -133,4 +133,4 @@ compatibility surface, crate name, or historical decision.
 | [0133](0133-keep-resume-bundles-under-explicit-dev-cache-authority.md) | Keep resume bundles under explicit development cache authority | Proposed |
 | [0134](0134-separate-cargo-oracle-roots-from-compiler-execution.md) | Separate Cargo oracle roots from compiler execution capabilities | Proposed |
 | [0135](0135-bind-component-profile-selection-to-toolchain-cohort.md) | Bind component artifact profile selection to the exact toolchain cohort | Proposed |
-| [0136](0136-materialize-consumer-hosted-effect-components.md) | Materialize consumer-hosted effect-world components | Proposed |
+| [0136](0136-materialize-consumer-hosted-effect-components.md) | Materialize consumer-hosted effect-world components | Accepted |
