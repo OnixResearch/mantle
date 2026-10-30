@@ -138,6 +138,8 @@ pub fn admits(caveats: &[CaveatDocument], original: &str, site_policy: &(dyn Fn(
 
 const LEGACY_DELEGATION: &str = "legacy-bearer-not-delegated";
 const UCAN_DELEGATION: &str = "holder-attenuated-ucan";
+/// A verified UCAN whose selected capability carries no caveats restricts nothing.
+const UCAN_UNRESTRICTED: &str = "ucan-unrestricted";
 const STATUS_NO_CAVEATS: &str = "no-caveats";
 const STATUS_FILTER_CHAIN: &str = "bounded-filter-chain";
 const STATUS_DENIES_ALL: &str = "denies-everything";
@@ -217,7 +219,11 @@ impl EffectiveCaveatChain {
         debug_assert!(described.len() <= caveat::MAX_CHAIN);
         debug_assert_eq!(described.len(), caveats.len());
         Self {
-            delegation: UCAN_DELEGATION,
+            delegation: if caveats.is_empty() {
+                UCAN_UNRESTRICTED
+            } else {
+                UCAN_DELEGATION
+            },
             status,
             caveat_count,
             chain_blake3: chain_digest(caveats),

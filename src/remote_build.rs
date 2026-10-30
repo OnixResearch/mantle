@@ -12030,6 +12030,7 @@ pub fn run_loopback_remote_session(
 ) -> Result<RemoteLoopbackSessionReport, String> {
     validate_loopback_participants(builder, client)?;
     let accepted = expect_accepted_hello(&client.hello, builder)?;
+    refuse_presentation_on_non_enforcing_path(&client.auth)?;
     expect_authorized_ticket(ticket, &client.auth, fixture_service_auth_facts(ticket))?;
     validate_concrete_request(&client.request, ticket)?;
     validate_input_manifest(&client.input_manifest, &client.request)?;
@@ -12206,6 +12207,7 @@ fn take_auth(
     let RemoteFrame::AuthTicket { auth } = frame else {
         return Err("expected-auth-ticket-frame".to_string());
     };
+    refuse_presentation_on_non_enforcing_path(auth)?;
     expect_authorized_ticket(ticket, auth, service_facts)
 }
 
@@ -13556,9 +13558,10 @@ fn commit_remote_ticket_admission_for_state(
     )
     .map_err(remote_application_error)?;
     validate_concrete_request(request, ticket)?;
-    admit_attenuated_presentation_before_redemption(attenuation, auth, request, server_now_unix_s)?;
+    let admitted_chain =
+        admit_attenuated_presentation_before_redemption(attenuation, auth, request, server_now_unix_s)?;
     let max_upload_bytes = ticket.max_upload_bytes;
-    redeem_and_commit_ticket_state(&mut state, &auth.ticket_id, &mut |candidate| {
+    let redeemed = redeem_and_commit_ticket_state(&mut state, &auth.ticket_id, &mut |candidate| {
         let mut persistence = ProductionTicketPersistencePort {
             state_dir: credential_state_dir,
             request_id: &request.request_id,
@@ -13567,7 +13570,20 @@ fn commit_remote_ticket_admission_for_state(
         };
         crunch_remote_app::persist_attempt(session, &mut persistence, &request.request_id)
             .map_err(|_| "remote-ticket-state-commit-failed".to_string())
-    })?;
+    });
+    if let Err(error) = redeemed {
+        if admitted_chain.is_some() {
+            tracing::warn!(
+                target: "mantle::remote::attenuation",
+                reason = "redemption-failed-after-verified-grant-nonce-consumed",
+                "attenuated admission aborted"
+            );
+        }
+        return Err(error);
+    }
+    if let Some(chain) = admitted_chain.as_ref() {
+        log_attenuated_admission(chain);
+    }
     Ok(CommittedRemoteTicketAdmission {
         server_now_unix_s,
         max_upload_bytes,
@@ -13576,28 +13592,61 @@ fn commit_remote_ticket_admission_for_state(
 
 /// A presented holder-attenuated grant must verify against this exact request
 /// with the receiver's own clock and authority before the ticket is redeemed.
-/// Legacy bearer admission (no presentation) is untouched. A denial returns one
-/// constant string: no job, path, caveat or reason reaches the sender.
+/// Legacy bearer admission (no presentation) is untouched: attenuation is
+/// advisory, not enforcing. A denial returns one constant string to the sender
+/// (no job, path, caveat or reason) and logs a reason code locally at warn. A
+/// verified grant has consumed its holder nonce even if redemption then fails.
 // r[impl mantle.authority_attenuation.attenuated_remote_grant]
 fn admit_attenuated_presentation_before_redemption(
     attenuation: Option<&attenuated_admission::AttenuationAdmission<'_>>,
     auth: &TicketAuthRequest,
     request: &ConcreteBuildRequest,
     server_now_unix_s: u64,
-) -> Result<(), String> {
+) -> Result<Option<authority_caveats::EffectiveCaveatChain>, String> {
     let Some(presentation) = auth.attenuated_grant.as_ref() else {
-        return Ok(());
+        return Ok(None);
     };
-    let denied = || attenuated_admission::ATTENUATED_GRANT_DENIED.to_string();
-    let attenuation = attenuation.ok_or_else(denied)?;
-    let chain = attenuated_admission::admit_presented_grant(attenuation, presentation, request, server_now_unix_s)
-        .map_err(|_| denied())?;
-    // Local log only; the report is redacted and never sent to the sender.
-    if let Ok(report) = serde_json::to_string(&chain) {
-        tracing::info!(target: "mantle::remote::attenuation", effective_caveat_chain = %report, "attenuated grant admitted");
+    let outcome = match attenuation {
+        Some(attenuation) => {
+            attenuated_admission::admit_presented_grant(attenuation, presentation, request, server_now_unix_s)
+        }
+        None => Err(attenuated_admission::DenialReason::NoOperatorAuthority),
+    };
+    match outcome {
+        Ok(chain) => Ok(Some(chain)),
+        Err(reason) => {
+            // Local only. Never include the request id, caveats or paths.
+            tracing::warn!(target: "mantle::remote::attenuation", reason = reason.code(), "attenuated grant denied");
+            Err(attenuated_admission::ATTENUATED_GRANT_DENIED.to_string())
+        }
     }
-    debug_assert!(chain.caveat_count <= u32::try_from(crunch_remote_core::caveat::MAX_CHAIN).unwrap_or(u32::MAX));
-    Ok(())
+}
+
+/// A presented grant must never be silently ignored by an admission path that
+/// cannot enforce it (fixture executor, loopback, frame-level admission).
+fn refuse_presentation_on_non_enforcing_path(auth: &TicketAuthRequest) -> Result<(), String> {
+    if auth.attenuated_grant.is_none() {
+        return Ok(());
+    }
+    tracing::warn!(
+        target: "mantle::remote::attenuation",
+        reason = attenuated_admission::DenialReason::UnenforcedPath.code(),
+        "attenuated grant denied"
+    );
+    Err(attenuated_admission::ATTENUATED_GRANT_DENIED.to_string())
+}
+
+/// Audit line for an admitted grant, emitted only after the ticket redemption
+/// committed. The report is redacted and local.
+fn log_attenuated_admission(chain: &authority_caveats::EffectiveCaveatChain) {
+    if let Ok(report) = serde_json::to_string(chain) {
+        tracing::info!(
+            target: "mantle::remote::attenuation",
+            effective_caveat_chain = %report,
+            "attenuated grant admitted"
+        );
+    }
+    debug_assert!(chain.caveats.len() <= crunch_remote_core::caveat::MAX_CHAIN);
 }
 
 fn read_remote_server_trace_context(

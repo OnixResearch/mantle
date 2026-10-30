@@ -1,5 +1,11 @@
 //! Store reads restricted to a receiver-owned logical-path view.
 //!
+//! Implemented, not accepted: no production code constructs a view yet (the
+//! CLI has no grant input and no adapter turns a UCAN/filter chain into a
+//! `LogicalPathView`), and a view admits exact paths only. An admitted
+//! PathInfo still carries its references and deriver, which name paths outside
+//! the view.
+//!
 //! A restricted view gates one exact normalized logical store path BEFORE any
 //! PathInfo or remote lookup. It exposes no enumeration: a broad listing under
 //! a restricted view is denied by construction, because filtering an

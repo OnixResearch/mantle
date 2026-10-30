@@ -167,6 +167,13 @@ impl GatewayVerifier {
         })
     }
 
+    /// Parse and admit the current snapshot (version, window, policy hash, keys,
+    /// roots, proofs) without verifying any token. Used to fail a receiver start
+    /// closed on a provisioned but unusable authority file.
+    pub fn check_loadable(&self, now: u64) -> Result<(), Error> {
+        self.load(now).map(|_| ())
+    }
+
     fn load(&self, now: u64) -> Result<Loaded, Error> {
         let bytes = private_read(&self.config.authority_file)?;
         let digest = *blake3::hash(&bytes).as_bytes();
@@ -354,6 +361,8 @@ impl GatewayVerifier {
     /// Redacted effective caveat chain of the verified session's selected
     /// capability, chosen by the same canonical containment as admission. This
     /// is an observation for reviewers and local logs, never authority.
+    /// Called by remote admission and tests only; the gateway/project sites do not
+    /// emit it, and it checks expiry but not revocation.
     // r[impl mantle.authority_attenuation.composition_order]
     pub fn effective_caveat_chain(
         &self,
