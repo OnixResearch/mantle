@@ -70,6 +70,9 @@ const REALIZE_COMMAND: &str = "realize";
 const AUDIT_COMMAND: &str = "audit";
 const PREPARE_SOURCES_COMMAND: &str = "prepare-sources";
 const PRODUCE_NIX_COMMAND: &str = "produce-nix";
+/// The one planned write of every producer: both artifacts published into the selected output
+/// directory.
+const PRODUCER_ARTIFACTS_EFFECT: &str = "foreign-producer-artifacts";
 const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
 const PRODUCE_BACKEND_COMMAND: &str = "produce-backend";
 const ACCEPTED_VERDICT: &str = "accepted";
@@ -586,7 +589,10 @@ fn foreign_read_limit(action: &ForeignImportAction) -> Result<Option<u32>, RunEr
             .and_then(|count| count.checked_add(u32::from(cache_closure_policy.is_some())))
             .ok_or_else(|| RunError::Internal("foreign realization read count overflow".to_string()))?,
         ForeignImportAction::Audit { .. } => 5,
-        _ => return Ok(None),
+        // A producer reads its closure inputs as one logical phase and publishes both artifacts into one directory.
+        ForeignImportAction::ProduceAterm { .. }
+        | ForeignImportAction::ProduceBackend { .. }
+        | ForeignImportAction::ProduceNix { .. } => 1,
     };
     if read_limit > MAX_FOREIGN_READ_CALLS {
         return Err(RunError::Internal("foreign input read count exceeds limit".to_string()));
@@ -626,7 +632,11 @@ fn foreign_effect_outputs(action: &ForeignImportAction) -> Option<(Vec<(&'static
             (vec![("foreign-realization-receipt", receipt_out.as_path())], true)
         }
         ForeignImportAction::Audit { out, .. } => (vec![("foreign-audit-receipt", out.as_path())], true),
-        _ => return None,
+        ForeignImportAction::ProduceAterm { out_dir, .. }
+        | ForeignImportAction::ProduceBackend { out_dir, .. }
+        | ForeignImportAction::ProduceNix { out_dir, .. } => {
+            (vec![(PRODUCER_ARTIFACTS_EFFECT, out_dir.as_path())], false)
+        }
     };
     Some(outputs)
 }
@@ -1171,22 +1181,25 @@ pub(crate) fn cmd_foreign_import_with_observation(
             cache_trust_scope,
             unsupported_metadata_classes,
             out_dir,
-        } => run_produce_aterm(AtermProducerRequest {
-            source_prefix: &source_prefix,
-            drv_file_specs: &drv_files,
-            drv_dir: drv_dir.as_deref(),
-            root_derivation: &root_derivation,
-            producer_kind: &producer_kind,
-            package: &package,
-            system: &system,
-            producer_identity: &producer_identity,
-            producer_revision: &producer_revision,
-            cache_urls: &cache_urls,
-            cache_trust_scope: &cache_trust_scope,
-            unsupported_metadata_classes: &unsupported_metadata_classes,
-            out_dir: &out_dir,
-            json,
-        }),
+        } => run_produce_aterm(
+            AtermProducerRequest {
+                source_prefix: &source_prefix,
+                drv_file_specs: &drv_files,
+                drv_dir: drv_dir.as_deref(),
+                root_derivation: &root_derivation,
+                producer_kind: &producer_kind,
+                package: &package,
+                system: &system,
+                producer_identity: &producer_identity,
+                producer_revision: &producer_revision,
+                cache_urls: &cache_urls,
+                cache_trust_scope: &cache_trust_scope,
+                unsupported_metadata_classes: &unsupported_metadata_classes,
+                out_dir: &out_dir,
+                json,
+            },
+            effect_plan.as_ref().expect("foreign producer effect plan"),
+        ),
         ForeignImportAction::ProduceBackend {
             backend,
             backend_binary,
@@ -1203,24 +1216,27 @@ pub(crate) fn cmd_foreign_import_with_observation(
             output_bytes_max,
             drv_file_count_max,
             out_dir,
-        } => run_produce_backend(BackendProducerCliRequest {
-            backend: &backend,
-            backend_binary: &backend_binary,
-            backend_version: &backend_version,
-            file: file.as_deref(),
-            expr: expr.as_deref(),
-            attribute: attribute.as_deref(),
-            eval_args: &eval_args,
-            package: &package,
-            system: &system,
-            work_dir: &work_dir,
-            wall_time_ms_max,
-            memory_bytes_max,
-            output_bytes_max,
-            drv_file_count_max,
-            out_dir: &out_dir,
-            json,
-        }),
+        } => run_produce_backend(
+            BackendProducerCliRequest {
+                backend: &backend,
+                backend_binary: &backend_binary,
+                backend_version: &backend_version,
+                file: file.as_deref(),
+                expr: expr.as_deref(),
+                attribute: attribute.as_deref(),
+                eval_args: &eval_args,
+                package: &package,
+                system: &system,
+                work_dir: &work_dir,
+                wall_time_ms_max,
+                memory_bytes_max,
+                output_bytes_max,
+                drv_file_count_max,
+                out_dir: &out_dir,
+                json,
+            },
+            effect_plan.as_ref().expect("foreign producer effect plan"),
+        ),
         ForeignImportAction::ProduceNix {
             derivation_json,
             drv_files,
@@ -1234,21 +1250,24 @@ pub(crate) fn cmd_foreign_import_with_observation(
             cache_trust_scope,
             unsupported_metadata_classes,
             out_dir,
-        } => run_produce_nix(NixProducerRequest {
-            derivation_json_path: derivation_json.as_deref(),
-            drv_file_specs: &drv_files,
-            drv_dir: drv_dir.as_deref(),
-            root_derivation: &root_derivation,
-            package: &package,
-            system: &system,
-            producer_identity: &producer_identity,
-            producer_revision: &producer_revision,
-            cache_urls: &cache_urls,
-            cache_trust_scope: &cache_trust_scope,
-            unsupported_metadata_classes: &unsupported_metadata_classes,
-            out_dir: &out_dir,
-            json,
-        }),
+        } => run_produce_nix(
+            NixProducerRequest {
+                derivation_json_path: derivation_json.as_deref(),
+                drv_file_specs: &drv_files,
+                drv_dir: drv_dir.as_deref(),
+                root_derivation: &root_derivation,
+                package: &package,
+                system: &system,
+                producer_identity: &producer_identity,
+                producer_revision: &producer_revision,
+                cache_urls: &cache_urls,
+                cache_trust_scope: &cache_trust_scope,
+                unsupported_metadata_classes: &unsupported_metadata_classes,
+                out_dir: &out_dir,
+                json,
+            },
+            effect_plan.as_ref().expect("foreign producer effect plan"),
+        ),
     }
 }
 
@@ -2062,7 +2081,10 @@ fn read_required_foreign_json_with_limit<T: DeserializeOwned>(
     }
 }
 
-fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
+fn run_produce_nix(
+    request: NixProducerRequest<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+) -> Result<(), RunError> {
     assert!(!PRODUCE_NIX_COMMAND.is_empty(), "Nix producer command identity must not be empty");
     assert_ne!(NIXPKGS_GRAPH_FILE, NIXPKGS_INDEX_FILE, "Nix producer artifact names must differ");
     let closure = match read_nix_producer_closure(
@@ -2072,7 +2094,7 @@ fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
         request.root_derivation,
     )? {
         Ok(closure) => closure,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_producer_report(plan, report, request.json, false, None),
     };
     let config = NixProducerConfig {
         package_name: request.package.to_string(),
@@ -2092,7 +2114,15 @@ fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
     };
     let artifacts = match lower_nix_derivation_json_closure(&closure, &config) {
         Ok(artifacts) => artifacts,
-        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), request.json),
+        Err(diagnostic) => {
+            return emit_producer_report(
+                plan,
+                rejected_report(PRODUCE_NIX_COMMAND, diagnostic),
+                request.json,
+                true,
+                None,
+            );
+        }
     };
     fs::create_dir_all(request.out_dir).map_err(|error| {
         RunError::Internal(format!("creating foreign import artifact directory {}: {error}", request.out_dir.display()))
@@ -2101,19 +2131,41 @@ fn run_produce_nix(request: NixProducerRequest<'_>) -> Result<(), RunError> {
     let index_path = request.out_dir.join(NIXPKGS_INDEX_FILE);
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
-    emit_report(producer_report(PRODUCE_NIX_COMMAND, &graph_path, &index_path), request.json)
+    let published = ProducerArtifacts {
+        out_dir: request.out_dir,
+        graph: &graph_path,
+        index: &index_path,
+    };
+    emit_producer_report(
+        plan,
+        producer_report(PRODUCE_NIX_COMMAND, &graph_path, &index_path),
+        request.json,
+        true,
+        Some(published),
+    )
 }
 
-fn run_produce_aterm(request: AtermProducerRequest<'_>) -> Result<(), RunError> {
+fn run_produce_aterm(
+    request: AtermProducerRequest<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+) -> Result<(), RunError> {
     assert!(!PRODUCE_ATERM_COMMAND.is_empty(), "ATerm producer command identity must not be empty");
     assert_ne!(ATERM_GRAPH_FILE, ATERM_INDEX_FILE, "ATerm producer artifact names must differ");
     let inputs = match read_aterm_producer_inputs(request.source_prefix, request.drv_file_specs, request.drv_dir)? {
         Ok(inputs) => inputs,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_producer_report(plan, report, request.json, false, None),
     };
     let closure = match parse_prefix_aware_aterm_bundle(request.source_prefix, &inputs) {
         Ok(closure) => closure,
-        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_ATERM_COMMAND, diagnostic), request.json),
+        Err(diagnostic) => {
+            return emit_producer_report(
+                plan,
+                rejected_report(PRODUCE_ATERM_COMMAND, diagnostic),
+                request.json,
+                true,
+                None,
+            );
+        }
     };
     let config = AtermProducerConfig {
         source_prefix: request.source_prefix.to_string(),
@@ -2128,7 +2180,15 @@ fn run_produce_aterm(request: AtermProducerRequest<'_>) -> Result<(), RunError> 
     };
     let artifacts = match lower_prefix_aware_aterm_closure(&closure, &config) {
         Ok(artifacts) => artifacts,
-        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_ATERM_COMMAND, diagnostic), request.json),
+        Err(diagnostic) => {
+            return emit_producer_report(
+                plan,
+                rejected_report(PRODUCE_ATERM_COMMAND, diagnostic),
+                request.json,
+                true,
+                None,
+            );
+        }
     };
     fs::create_dir_all(request.out_dir).map_err(|error| {
         RunError::Internal(format!("creating foreign import artifact directory {}: {error}", request.out_dir.display()))
@@ -2137,7 +2197,18 @@ fn run_produce_aterm(request: AtermProducerRequest<'_>) -> Result<(), RunError> 
     let index_path = request.out_dir.join(ATERM_INDEX_FILE);
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
-    emit_report(producer_report(PRODUCE_ATERM_COMMAND, &graph_path, &index_path), request.json)
+    let published = ProducerArtifacts {
+        out_dir: request.out_dir,
+        graph: &graph_path,
+        index: &index_path,
+    };
+    emit_producer_report(
+        plan,
+        producer_report(PRODUCE_ATERM_COMMAND, &graph_path, &index_path),
+        request.json,
+        true,
+        Some(published),
+    )
 }
 
 fn backend_contract_request(
@@ -2232,12 +2303,15 @@ fn lower_backend_closure(
     Ok(Ok((graph_path, index_path)))
 }
 
-fn run_produce_backend(request: BackendProducerCliRequest<'_>) -> Result<(), RunError> {
+fn run_produce_backend(
+    request: BackendProducerCliRequest<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+) -> Result<(), RunError> {
     assert!(!PRODUCE_BACKEND_COMMAND.is_empty(), "backend producer command identity must not be empty");
     assert!(request.backend_binary.is_absolute(), "backend binary path must be absolute");
     let contract_request = match backend_contract_request(&request) {
         Ok(contract_request) => contract_request,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_producer_report(plan, report, request.json, false, None),
     };
     let run_config = BackendRunConfig {
         binary_path: request.backend_binary.to_path_buf(),
@@ -2248,17 +2322,86 @@ fn run_produce_backend(request: BackendProducerCliRequest<'_>) -> Result<(), Run
     let success = match run_backend(&contract_request, &run_config) {
         Ok(success) => success,
         Err(error) => {
-            return emit_report(
+            return emit_producer_report(
+                plan,
                 rejected_report(PRODUCE_BACKEND_COMMAND, diagnostic(error.class.as_str(), None, &error.detail)),
                 request.json,
+                false,
+                None,
             );
         }
     };
     let (graph_path, index_path) = match lower_backend_closure(&request, contract_request.backend, &success)? {
         Ok(paths) => paths,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_producer_report(plan, report, request.json, true, None),
     };
-    emit_report(producer_report(PRODUCE_BACKEND_COMMAND, &graph_path, &index_path), request.json)
+    let published = ProducerArtifacts {
+        out_dir: request.out_dir,
+        graph: &graph_path,
+        index: &index_path,
+    };
+    emit_producer_report(
+        plan,
+        producer_report(PRODUCE_BACKEND_COMMAND, &graph_path, &index_path),
+        request.json,
+        true,
+        Some(published),
+    )
+}
+
+/// The two artifacts one producer publishes into its output directory.
+struct ProducerArtifacts<'a> {
+    out_dir: &'a Path,
+    graph: &'a Path,
+    index: &'a Path,
+}
+
+impl ProducerArtifacts<'_> {
+    /// A published artifact is observed, not assumed: both files must read back as non-empty
+    /// regular files.
+    fn reads_back(&self) -> bool {
+        debug_assert_ne!(self.graph, self.index, "a producer publishes two distinct artifacts");
+        debug_assert!(self.graph.starts_with(self.out_dir) && self.index.starts_with(self.out_dir));
+        [self.graph, self.index]
+            .iter()
+            .all(|path| fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file() && meta.len() > 0))
+    }
+}
+
+// r[impl application_architecture.effect_observation_boundary]
+/// Classify the producer's actual effects: the closure read, and for an accepted report the
+/// artifacts that read back as published. An accepted report whose artifacts are absent is a
+/// contradiction, never a success.
+fn classify_producer_effects(
+    plan: &mantle_application_contract::EffectPlan,
+    accepted: bool,
+    read_ok: bool,
+    published: Option<ProducerArtifacts<'_>>,
+) -> Result<(), RunError> {
+    debug_assert!(plan.effects.iter().any(|effect| effect.effect_id.0 == PRODUCER_ARTIFACTS_EFFECT));
+    debug_assert!(read_ok || published.is_none(), "an unread closure cannot have published artifacts");
+    if accepted && !read_ok {
+        return Err(RunError::Internal("foreign producer reported success for an unreadable closure".to_string()));
+    }
+    let written: Vec<(&str, &Path)> = published
+        .filter(ProducerArtifacts::reads_back)
+        .map(|artifacts| (PRODUCER_ARTIFACTS_EFFECT, artifacts.out_dir))
+        .into_iter()
+        .collect();
+    foreign_finish_effects(plan, read_ok, 1, None, &written, !accepted)
+}
+
+/// Classify before the terminal report is emitted; the report, its stream and the exit class stay
+/// the producer's own.
+fn emit_producer_report(
+    plan: &mantle_application_contract::EffectPlan,
+    report: ForeignImportCliReport,
+    json: bool,
+    read_ok: bool,
+    published: Option<ProducerArtifacts<'_>>,
+) -> Result<(), RunError> {
+    classify_producer_effects(plan, report.accepted, read_ok, published)?;
+    emit_report(report, json)
 }
 
 fn producer_cache_hints(cache_urls: &[String], trust_scope: &str) -> Vec<CacheHint> {
@@ -3110,6 +3253,73 @@ mod tests {
             ),
             _ => panic!("unknown foreign callback scenario: {case}"),
         }
+    }
+
+    fn producer_plan(out_dir: &Path) -> mantle_application_contract::EffectPlan {
+        let out = out_dir.display().to_string();
+        let specs = [
+            mantle_application_contract::EffectSpec {
+                effect_id: "foreign-input-read",
+                kind: mantle_application_contract::EffectKind::ReadFiles,
+                limit: mantle_application_contract::EffectMeasure::Calls(1),
+                expected_output: mantle_application_contract::ExpectedOutput::None,
+            },
+            mantle_application_contract::EffectSpec {
+                effect_id: PRODUCER_ARTIFACTS_EFFECT,
+                kind: mantle_application_contract::EffectKind::WriteFiles,
+                limit: mantle_application_contract::EffectMeasure::Calls(1),
+                expected_output: mantle_application_contract::ExpectedOutput::Identity(&out),
+            },
+        ];
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &specs)
+            .unwrap()
+    }
+
+    fn write_artifacts(out_dir: &Path, graph_bytes: &[u8]) -> (PathBuf, PathBuf) {
+        let graph = out_dir.join("graph.json");
+        let index = out_dir.join("index.json");
+        fs::write(&graph, graph_bytes).unwrap();
+        fs::write(&index, b"{}").unwrap();
+        (graph, index)
+    }
+
+    // r[verify application_architecture.effect_observation_boundary]
+    #[test]
+    fn an_accepted_producer_report_requires_both_artifacts_to_read_back() {
+        let root = tempfile::tempdir().unwrap();
+        let plan = producer_plan(root.path());
+        let (graph, index) = write_artifacts(root.path(), b"{\"nodes\":[]}");
+        let published = || ProducerArtifacts {
+            out_dir: root.path(),
+            graph: &graph,
+            index: &index,
+        };
+        classify_producer_effects(&plan, true, true, Some(published())).expect("both artifacts read back");
+        // The adapter claims success but one artifact vanished or is empty: the observation contradicts it.
+        fs::write(&graph, b"").unwrap();
+        assert!(matches!(
+            classify_producer_effects(&plan, true, true, Some(published())),
+            Err(RunError::Internal(_))
+        ));
+        fs::remove_file(&graph).unwrap();
+        assert!(matches!(
+            classify_producer_effects(&plan, true, true, Some(published())),
+            Err(RunError::Internal(_))
+        ));
+        // No publication at all is also not a success.
+        assert!(matches!(classify_producer_effects(&plan, true, true, None), Err(RunError::Internal(_))));
+    }
+
+    // r[verify application_architecture.effect_observation_boundary]
+    #[test]
+    fn a_rejected_producer_report_is_consistent_only_when_nothing_was_published() {
+        let root = tempfile::tempdir().unwrap();
+        let plan = producer_plan(root.path());
+        // A domain rejection after a clean read, and an unreadable input, are both expected failures.
+        classify_producer_effects(&plan, false, true, None).expect("rejection after a read");
+        classify_producer_effects(&plan, false, false, None).expect("rejection of an unreadable input");
+        // An unreadable input cannot have produced a success report.
+        assert!(matches!(classify_producer_effects(&plan, true, false, None), Err(RunError::Internal(_))));
     }
 
     #[test]
