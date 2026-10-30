@@ -1,0 +1,3 @@
+# Behavioral and ordinary-quality execution is recorded in evidence/retrospective-waiver-2026-10-30.md and the earlier verification receipts.
+# Run this command list from the repository's pinned Nix shell.
+cairn validate --root . --strict

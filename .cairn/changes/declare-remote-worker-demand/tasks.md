@@ -47,7 +47,8 @@ recorded runtime scope, not reliable delivery or whole-change acceptance.
 
 - [x] [parallel] T4.1 Add positive fixtures: one unmet demand per requirement, retraction on placement, retraction on cancellation, deduplication across placement rounds, and resolution after a supervisor-registered worker. r[build_scheduling.declared_worker_demand]
 - [x] [parallel] T4.2 Add negative fixtures: no demand fact creates a lease, reservation, or placement; demand does not change placement order; demand count bound fails closed. r[build_scheduling.demand_without_capacity_inference]
-- [ ] [serial] T4.3 Run the demand, retraction, deduplication, and no-inference rails before and after the change. Preserve exact results. r[build_scheduling.demand_without_capacity_inference]
+- [x] [serial] T4.3 Run the demand, retraction, deduplication, and no-inference rails before and after the change. Preserve exact results. r[build_scheduling.demand_without_capacity_inference]
+  - Accepted 2026-10-30 under the operator-authorized waiver of the before side (the historical coordinator has no demand capability and no identical-vector comparison exists); the demand, retraction, deduplication and no-inference rails were re-run on the current tree, including the real-daemon rail, and passed. See `evidence/retrospective-waiver-2026-10-30.md`. No historical pass is claimed.
 - [x] [serial] T4.4 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[build_scheduling.declared_worker_demand]
 - [ ] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[build_scheduling.demand_without_capacity_inference]
 

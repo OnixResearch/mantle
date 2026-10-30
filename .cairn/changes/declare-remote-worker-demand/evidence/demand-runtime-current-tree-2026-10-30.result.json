@@ -1,0 +1,172 @@
+{
+  "absent_build_demand": {
+    "blocker_reason": "resource-memory-unavailable",
+    "job_id": "14be721b7bdc7a68997ec9ad744f7bdfa16ae5d26db938cb3926654b3afc768c",
+    "policy_id": "mantle-lazy-priority-v1",
+    "requirement": {
+      "accelerators": [],
+      "cpu_units": 1,
+      "memory_bytes": 67108864,
+      "named_tokens": [],
+      "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+      "scratch_bytes": 268435456,
+      "semantic_accelerator_classes": []
+    },
+    "requirement_id_blake3": "d23d86c565164b791baf2fc8f69e582fb596cf744c3405b3b22334e781104c18"
+  },
+  "absent_plan_demand": {
+    "blocker_reason": "resource-memory-unavailable",
+    "job_id": "14be721b7bdc7a68997ec9ad744f7bdfa16ae5d26db938cb3926654b3afc768c",
+    "policy_id": "mantle-lazy-priority-v1",
+    "requirement": {
+      "accelerators": [],
+      "cpu_units": 1,
+      "memory_bytes": 67108864,
+      "named_tokens": [],
+      "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+      "scratch_bytes": 268435456,
+      "semantic_accelerator_classes": []
+    },
+    "requirement_id_blake3": "d23d86c565164b791baf2fc8f69e582fb596cf744c3405b3b22334e781104c18"
+  },
+  "admitted_memory_bytes": 33554432,
+  "binary": {
+    "blake3": "dc5cd6cf60debdc060da5a932351c9aac92f5b075d012505919d420eb6506cc3",
+    "path": "/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/mantle"
+  },
+  "declared_memory_bytes": 67108864,
+  "driver_blake3": "e891432267bcf87e413c4eed964736597bb9a9bf31d96e6cdb93e1894bc832f8",
+  "fixture_blake3": "140894f1315059a903bffbebe0120efc122c2145e3fdb70830a9a218e21898b8",
+  "jobs": 0,
+  "live_socket": "/tmp/m-gw-3Do376/live.sock",
+  "non_claims": [
+    "no capacity inference",
+    "no supervisor provisioning",
+    "blocked work did not execute",
+    "repeat fail-fast request lifetimes are not repeated pending placement rounds"
+  ],
+  "present_build_demand": {
+    "blocker_reason": "resource-memory-unavailable",
+    "job_id": "14be721b7bdc7a68997ec9ad744f7bdfa16ae5d26db938cb3926654b3afc768c",
+    "policy_id": "mantle-lazy-priority-v1",
+    "requirement": {
+      "accelerators": [],
+      "cpu_units": 1,
+      "memory_bytes": 67108864,
+      "named_tokens": [],
+      "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+      "scratch_bytes": 268435456,
+      "semantic_accelerator_classes": []
+    },
+    "requirement_id_blake3": "d23d86c565164b791baf2fc8f69e582fb596cf744c3405b3b22334e781104c18"
+  },
+  "present_plan_demand": {
+    "blocker_reason": "resource-memory-unavailable",
+    "job_id": "14be721b7bdc7a68997ec9ad744f7bdfa16ae5d26db938cb3926654b3afc768c",
+    "policy_id": "mantle-lazy-priority-v1",
+    "requirement": {
+      "accelerators": [],
+      "cpu_units": 1,
+      "memory_bytes": 67108864,
+      "named_tokens": [],
+      "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+      "scratch_bytes": 268435456,
+      "semantic_accelerator_classes": []
+    },
+    "requirement_id_blake3": "d23d86c565164b791baf2fc8f69e582fb596cf744c3405b3b22334e781104c18"
+  },
+  "resource_leases": 0,
+  "rounds": [
+    {
+      "events": [
+        {
+          "fact": {
+            "schema": "mantle-live-build-fact-v1",
+            "value": {
+              "demand": {
+                "blocker_reason": "resource-memory-unavailable",
+                "job_id": "bc1d1bef259a248affdaa1a633c374ea0050df64601223ced832ae7945d8680a",
+                "policy_id": "mantle-lazy-priority-v1",
+                "requirement": {
+                  "accelerators": [],
+                  "cpu_units": 1,
+                  "memory_bytes": 67108864,
+                  "named_tokens": [],
+                  "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+                  "scratch_bytes": 268435456,
+                  "semantic_accelerator_classes": []
+                },
+                "requirement_id_blake3": "768d2ede3fd67b2067fd94fd4c0c1db4e2a8e65a93da33b9a452577c1cada242"
+              },
+              "kind": "worker-demand"
+            }
+          },
+          "fact_id": "fd0d34f2cfc467d4e92f4cc13563b89ab898df5f691d1d6d735e00aab53aba03",
+          "op": "publish",
+          "owner_run_id": "remote-988151-1793360122-3500c0f1c5b6aa1a935f43f4360bbc2206d2313fc7ec997bd07ccd4fd206db85",
+          "schema": "mantle-live-build-protocol-v1"
+        },
+        {
+          "fact_id": "fd0d34f2cfc467d4e92f4cc13563b89ab898df5f691d1d6d735e00aab53aba03",
+          "op": "retract",
+          "owner_run_id": "remote-988151-1793360122-3500c0f1c5b6aa1a935f43f4360bbc2206d2313fc7ec997bd07ccd4fd206db85",
+          "schema": "mantle-live-build-protocol-v1"
+        }
+      ],
+      "owner_pid": 988151,
+      "response": {
+        "code": 3,
+        "error": "gateway-host-unavailable",
+        "kind": "internal"
+      },
+      "round": 0
+    },
+    {
+      "events": [
+        {
+          "fact": {
+            "schema": "mantle-live-build-fact-v1",
+            "value": {
+              "demand": {
+                "blocker_reason": "resource-memory-unavailable",
+                "job_id": "bc1d1bef259a248affdaa1a633c374ea0050df64601223ced832ae7945d8680a",
+                "policy_id": "mantle-lazy-priority-v1",
+                "requirement": {
+                  "accelerators": [],
+                  "cpu_units": 1,
+                  "memory_bytes": 67108864,
+                  "named_tokens": [],
+                  "placement_key_blake3": "8a2bfa1ea1b4c88c06b71d741d9a64bafdfb3f7d13e51f3cbf4a93dccc3f016f",
+                  "scratch_bytes": 268435456,
+                  "semantic_accelerator_classes": []
+                },
+                "requirement_id_blake3": "768d2ede3fd67b2067fd94fd4c0c1db4e2a8e65a93da33b9a452577c1cada242"
+              },
+              "kind": "worker-demand"
+            }
+          },
+          "fact_id": "5d581964eea06145012837565aa3599e18b1b09cce03a07c31bb7ba43fab6999",
+          "op": "publish",
+          "owner_run_id": "remote-988151-1793360123-438df9a9ba06a25d609a0346d89bef24dc62e18622664549fc6716a60ff11183",
+          "schema": "mantle-live-build-protocol-v1"
+        },
+        {
+          "fact_id": "5d581964eea06145012837565aa3599e18b1b09cce03a07c31bb7ba43fab6999",
+          "op": "retract",
+          "owner_run_id": "remote-988151-1793360123-438df9a9ba06a25d609a0346d89bef24dc62e18622664549fc6716a60ff11183",
+          "schema": "mantle-live-build-protocol-v1"
+        }
+      ],
+      "owner_pid": 988151,
+      "response": {
+        "code": 3,
+        "error": "gateway-host-unavailable",
+        "kind": "internal"
+      },
+      "round": 1
+    }
+  ],
+  "scenario": "actual-long-lived-production-gateway-derived-demand",
+  "source_drv_path": "/nix/store/n96wk64c9ybh8n9j4rpd27c0cbz81xlx-gateway-runtime-simple.drv",
+  "status": "passed"
+}
