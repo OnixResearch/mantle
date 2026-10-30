@@ -29,6 +29,8 @@ executed here and none is claimed.
 | Teardown | descendants stopped: `true`; late-write observation 21 s; cancelled output present: `false` |
 | Core tests | `cargo test --locked --offline -p crunch-watch-core -- --test-threads 1`: `test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s` |
 
+Raw outputs: `retrospective-waiver-2026-10-30-captures.json` (BLAKE3 `423f8dfc8541b7df5619bdbde39d18f5bfc985af96156e0b2e1cc45abb24ab20`) retains the complete result of the build run and of the smoke and core-test run, with the exact stdout and stderr and a BLAKE3 for each stream, including the source-identity and status steps. Absolute paths inside it name the original run directory.
+
 The smoke driver (BLAKE3 `da0d23c40a76de6dc19a76139bb6ce824984085c878bb1c0d87bed888430bd13`) is byte-identical to the instrument
 used in the historical-before attempt. The raw result is
 `watch-after-current-tree-2026-10-30.result.json` (BLAKE3 `ed8ed179fb206717fe6fd9953c40d4b5efd89487462a024de5475b5930274366`).

@@ -37,6 +37,12 @@ against 33554432 admitted), `jobs` 0, `resource_leases`
 0, and identical demand facts from plan and build with the daemon absent
 and present. The test binary's BLAKE3 was `dc5cd6cf60debdc060da5a932351c9aac92f5b075d012505919d420eb6506cc3`.
 
+Raw outputs: `retrospective-waiver-2026-10-30-captures.json` (BLAKE3 `a567bddf32725eda208045a5716f57e55c0bec7fd8d3b95280b79b192404336f`) retains the complete result of both runs, with the exact stdout and stderr and a BLAKE3 for each stream. Absolute paths inside it name the original run directory.
+
+### First real-daemon launch failed on harness input
+
+The coordinator and core rails ran in a command set that also launched the real-daemon rail (`decision-evidence-v93-demand`, step `demand-runtime-actual`). That launch exited 101 after 0.00 s: the test panicked at `tests/demand_runtime.rs:178` with `set a fresh retained runtime root`, because the fixture environment (`MANTLE_DEMAND_RUNTIME_ROOT`, `MANTLE_RESOURCE_INPUT_PATHS`) was not passed. No scenario ran, so it is a harness-input failure, not a product failure, and it is kept as recorded. The driver for that set exited 1 (the coordinator and core steps exited 0). The real-daemon row above is from a separate relaunch (`decision-evidence-v94-demand-runtime`) with the fixture environment set; its driver exited 0.
+
 ## Fixture regeneration
 
 The 2026-10-27 run's signed input descriptor no longer existed. It was regenerated for this

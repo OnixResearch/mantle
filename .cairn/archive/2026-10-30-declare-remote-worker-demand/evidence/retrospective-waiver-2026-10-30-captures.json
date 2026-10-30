@@ -1,0 +1,184 @@
+{
+ "schema": "mantle-retained-run-captures-v1",
+ "note": "Exact stdout/stderr of the retained command-observation runs cited by retrospective-waiver-2026-10-30.md, with the BLAKE3 of each raw stream. Absolute paths inside name the original run directory. No fixture key material appears in these runs.",
+ "runs": [
+  {
+   "label": "decision-evidence-v93-demand",
+   "request_blake3": "46a4295c9cf31ae6f17c652489109292c4a3094f0283aeba5ac4a7c920849cb1",
+   "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+   "driver_exit_code": 1,
+   "started_at": "2026-10-30T07:27:18.517129-04:00",
+   "finished_at": "2026-10-30T07:27:37.666248-04:00",
+   "source_unchanged": true,
+   "immutable_artifacts": null,
+   "steps": [
+    {
+     "label": "demand-coordinator-rail",
+     "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "mantle",
+      "--bin",
+      "mantle",
+      "worker_demand",
+      "--",
+      "--test-threads",
+      "1"
+     ],
+     "exit_code": 0,
+     "stdout": "\nrunning 6 tests\ntest remote_build::live_state::daemon::tests::worker_demand_socket_relay_retracts_on_owner_loss_and_rejects_forged_identity ... ok\ntest remote_build::tests::worker_demand_changes_retract_and_scoped_projection_cannot_claim_another_owner ... ok\ntest remote_build::tests::worker_demand_production_does_not_reuse_withdrawn_inventory_or_completed_history ... ok\ntest remote_build::tests::worker_demand_production_never_infers_inventory_from_presence_or_concurrency ... ok\ntest remote_build::tests::worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts ... ok\ntest remote_build::tests::worker_demand_unrelated_fact_preserves_placement_order_and_resource_reservations ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2842 filtered out; finished in 0.91s\n\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 808,
+     "stdout_blake3": "f21a722badefab12d549ebca9dd6aaed92197ffab832ef54f89b9057cfe95694",
+     "stderr": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.64s\n     Running unittests src/main.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/mantle-32f765d695dcb0fd)\nlive build daemon listening on /tmp/mantle-live-daemon-715614-11482347231580801383\n",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 585,
+     "stderr_blake3": "9ba372caa00b10b91cc9a1771bffb40fc7b60d03f1407576b035b70084a9de1c"
+    },
+    {
+     "label": "demand-core-rail",
+     "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "crunch-remote-core",
+      "demand",
+      "--",
+      "--test-threads",
+      "1"
+     ],
+     "exit_code": 0,
+     "stdout": "\nrunning 2 tests\ntest demand::tests::forged_identity_noncanonical_resources_and_count_bound_do_not_mutate_book ... ok\ntest demand::tests::repeated_rounds_dedupe_changed_requirements_replace_and_every_lifetime_end_retracts ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 105 filtered out; finished in 0.01s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 440,
+     "stdout_blake3": "7552613c209637f7b4d047e6d02b4cf35b726e5d1178504ecf5ac37d186d5fdd",
+     "stderr": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling libc v0.2.186\n   Compiling rustix v1.1.4\n   Compiling getrandom v0.4.2\n   Compiling linux-raw-sys v0.12.1\n   Compiling syn v2.0.117\n   Compiling num-traits v0.2.19\n   Compiling serde_core v1.0.228\n   Compiling getrandom v0.3.4\n   Compiling rand_core v0.9.5\n   Compiling once_cell v1.21.4\n   Compiling wait-timeout v0.2.1\n   Compiling ppv-lite86 v0.2.21\n   Compiling bit-vec v0.8.0\n   Compiling serde_json v1.0.149\n   Compiling quick-error v1.2.3\n   Compiling rand_chacha v0.9.0\n   Compiling tempfile v3.27.0\n   Compiling bit-set v0.8.0\n   Compiling rusty-fork v0.3.1\n   Compiling rand_xorshift v0.4.0\n   Compiling rand v0.9.3\n   Compiling memchr v2.8.0\n   Compiling unarray v0.1.4\n   Compiling proptest v1.11.0\n   Compiling synstructure v0.13.2\n   Compiling crunch-remote-core v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/crates/crunch-remote-core)\n   Compiling verus_builtin_macros v0.0.0-2026-01-25-0057\n   Compiling vstd v0.0.0-2026-01-25-0057\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.85s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/crunch_remote_core-bfa1ef2304415766)\n     Running tests/authority.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/authority-af4e13e9919a5513)\n",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 1654,
+     "stderr_blake3": "3ead10029043576a6c02d0bd9dc3e78008a21a157483f16c78051bc685489c71"
+    },
+    {
+     "label": "demand-runtime-actual",
+     "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "mantle",
+      "--test",
+      "demand_runtime",
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+     ],
+     "exit_code": 101,
+     "stdout": "\nrunning 1 test\ntest real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker ... FAILED\n\nfailures:\n\nfailures:\n    real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 304,
+     "stdout_blake3": "4a3713465ab7dfc1b939d7b8fc3fc4c8fd8bf2053cdce74cf7ad3f088a591b94",
+     "stderr": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.05s\n     Running tests/demand_runtime.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/demand_runtime-efc6bc7311f95681)\n\nthread 'real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker' (727395) panicked at tests/demand_runtime.rs:178:70:\nset a fresh retained runtime root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nerror: test failed, to rerun pass `-p mantle --test demand_runtime`\n",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 929,
+     "stderr_blake3": "f9b1b620ccf526ca11019eb93651b669ce52852b1384599fd01971953516513d"
+    },
+    {
+     "label": "worktree-status-after",
+     "argv": [
+      "git",
+      "status",
+      "--porcelain"
+     ],
+     "exit_code": 0,
+     "stdout": " M .cairn/changes/bind-source-observations-and-monotonic-ingest/tasks.md\n M .cairn/changes/standardize-derivation-finish-gates/tasks.md\n M .cairn/changes/verify-remote-admission-with-trellis/tasks.md\n M adr/0059-bind-source-observations-without-new-signature-authority.md\n M adr/0060-verify-remote-admission-with-a-trellis-model.md\n M adr/0095-version-derivation-finish-gates.md\n M adr/README.md\n?? .cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/operator-authorization-2026-10-30.md\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 499,
+     "stdout_blake3": "6178b2d6ad3d1d062bd28707cc7671a624922259fde485b253f7a996803d1f71",
+     "stderr": "",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 0,
+     "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    }
+   ]
+  },
+  {
+   "label": "decision-evidence-v94-demand-runtime",
+   "request_blake3": "33964caa58f403cbba3babbf5bbfed2e45dc824bd4380c090fa4f6fbcf0b24a1",
+   "driver_blake3": "93e431b88e990538ee266521a2ade108881d0b5d51f73b32f94ba461acd67b3d",
+   "driver_exit_code": 0,
+   "started_at": "2026-10-30T07:33:36.295109-04:00",
+   "finished_at": "2026-10-30T07:40:54.256426-04:00",
+   "source_unchanged": true,
+   "immutable_artifacts": [],
+   "steps": [
+    {
+     "label": "source-identity",
+     "argv": [
+      "git",
+      "rev-parse",
+      "HEAD",
+      "HEAD^{tree}"
+     ],
+     "exit_code": 0,
+     "stdout": "1776617592987af585e48e708961c962cde3407e\n2e907c0c611080595e0bb882a4b430e7a9732ab4\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 82,
+     "stdout_blake3": "9b1f4ad4caa0e946b7b0362d40207da4b7023e27fc702ec60f1fc3c866cf1691",
+     "stderr": "",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 0,
+     "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+     "label": "real-derived-demand-and-report-controls",
+     "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "mantle",
+      "--test",
+      "demand_runtime",
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+     ],
+     "exit_code": 0,
+     "stdout": "\nrunning 1 test\ntest real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 435.51s\n\n",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 199,
+     "stdout_blake3": "b1ed99d96f47a985fceb8458efa451bc53d87ed7a354cb7c501a681a7d616cff",
+     "stderr": "warning: /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.80s\n     Running tests/demand_runtime.rs (/home/brittonr/.cargo-target/mantle-cairn-supervisor-final-gates-20261023/debug/deps/demand_runtime-efc6bc7311f95681)\n",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 512,
+     "stderr_blake3": "21c2d8dff7229b2fcceeb578228da408ddd331f90e3cc2bde048d6a13abaa136"
+    },
+    {
+     "label": "worktree-status-after",
+     "argv": [
+      "git",
+      "status",
+      "--porcelain"
+     ],
+     "exit_code": 0,
+     "stdout": "",
+     "stdout_encoding": "utf-8",
+     "stdout_bytes": 0,
+     "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+     "stderr": "",
+     "stderr_encoding": "utf-8",
+     "stderr_bytes": 0,
+     "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    }
+   ]
+  }
+ ]
+}
