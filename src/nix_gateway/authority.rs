@@ -351,6 +351,26 @@ impl GatewayVerifier {
         Ok(session.admission_facts())
     }
 
+    /// Redacted effective caveat chain of the verified session's selected
+    /// capability, chosen by the same canonical containment as admission. This
+    /// is an observation for reviewers and local logs, never authority.
+    // r[impl mantle.authority_attenuation.composition_order]
+    pub fn effective_caveat_chain(
+        &self,
+        session: &GatewaySession,
+        now: u64,
+    ) -> Result<crate::remote_build::authority_caveats::EffectiveCaveatChain, Error> {
+        if now >= session.inner.expires_unix_s() {
+            return Err(Error);
+        }
+        let loaded = self.load(now)?;
+        let enforcement = loaded.verifier().enforcement(session.inner.request())?;
+        let selected = selected_capability(session.inner.effective_capabilities(), &enforcement)?;
+        let chain = crate::remote_build::authority_caveats::EffectiveCaveatChain::from_documents(&selected.caveats);
+        debug_assert!(chain.caveats.len() <= crunch_remote_core::caveat::MAX_CHAIN);
+        Ok(chain)
+    }
+
     fn replay_for(
         &self,
         request: &OperationRequest,

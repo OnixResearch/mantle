@@ -497,3 +497,31 @@ fn signed_project_selects_only_first_canonical_matching_grant_in_mixed_capabilit
         assert!(fixture.verifier.revalidate(&session, 1502).is_ok());
     }
 }
+
+// A verified project grant reports the exact signed chain it was admitted under,
+// redacted to ordinals, kinds, patterns and digests, and only while it is live.
+// r[verify mantle.authority_attenuation.composition_order]
+#[test]
+fn signed_project_grant_reports_its_effective_caveat_chain_only_while_live() {
+    let mut fixture = ProjectFixture::new();
+    let (token, signature) = fixture.sign(Operation::ProjectDeclare, vec![ProjectFixture::rewrite()], vec![]);
+    let session = fixture
+        .verifier
+        .verify_project_declaration(
+            fixture.request.clone(),
+            ProjectFixture::original(),
+            project_invocation(&token, &signature),
+            1500,
+        )
+        .unwrap();
+    let chain = fixture.verifier.effective_caveat_chain(&session, 1501).unwrap();
+    assert_eq!(chain.delegation, "holder-attenuated-ucan");
+    assert_eq!(chain.status, "bounded-filter-chain");
+    assert_eq!(chain.caveat_count, 1);
+    assert_eq!(chain.caveats[0].ordinal, "00");
+    assert_eq!(chain.caveats[0].kind, "rewrite");
+    assert_eq!(chain.caveats[0].pattern.as_deref(), Some("/project/project-a/declared/:name"));
+    assert_eq!(chain.caveats[0].template.as_deref(), Some("/project/project-a/goal/packages/check"));
+    assert!(!serde_json::to_string(&chain).unwrap().contains(token.as_str()));
+    assert!(fixture.verifier.effective_caveat_chain(&session, 1900).is_err());
+}

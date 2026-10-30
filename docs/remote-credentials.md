@@ -132,6 +132,16 @@ The service reads bounded admission frames before it takes the state lock. Under
 
 Protocol input and completed authentication owners wipe their buffers. Frame encoding and verifier-state encoding use zeroizing output owners before serialization starts. A failed partial `serde_json` decode can allocate a secret string before constructing its zeroizing owner. Mantle does not claim complete allocator-memory erasure for that failure path.
 
+## Holder-attenuated grants (optional)
+
+A ticket request may carry an `attenuated_grant`: a holder-signed UCAN presentation whose preserved Mantle caveats (`mantle`/`filter-v1`, ordinals `00`..`07`) restrict one job and output class. ADR 0090 and the `attenuate-build-authority-with-pattern-caveats` change own the semantics. Requests without a presentation use the bearer path above, unchanged, and are never described as delegated.
+
+The service verifies the presentation under the ticket-state lock, after bearer and request checks and before the ticket is redeemed, with its own clock. The declared job is the concrete `request_id`; the output class is the payload kind (`derivation` or `action`). The holder signs a BLAKE3 digest of the whole validated request (endpoint, store prefix, job and attempt identity, payload, inputs, limits, expected outputs), so changing any field after signing fails. The caveat deadline is the grant's signed expiry, checked against the service clock next to the ticket's own expiry. A refused presentation writes no protocol frame, redeems no ticket use, starts no work, and returns only `remote-attenuated-grant-denied`: it never names the job, path, caveat or reason. Unknown, malformed, ordinal-gapped, over-bound, expired, revoked, replayed or re-targeted grants are all refused the same way.
+
+Place the operator-owned authority snapshot at `<state-dir>/attenuation-authority.json` (owner-private, mode `0600`, same schema as the Nix gateway authority file) and its holder replay ledger directory at `<state-dir>/attenuation-replay` (mode `0700`). The snapshot `endpoint` must equal the builder endpoint id and the grant `project` must equal the endpoint binding scope. When the snapshot is absent, a presented grant is refused; a present but invalid snapshot stops `remote serve` before it reads a request. Each admitted grant logs its redacted effective caveat chain locally (target `mantle::remote::attenuation`); ticket issuance reports `effective_caveat_chain` with `delegation: legacy-bearer-not-delegated` and no caveats.
+
+Claim boundary: a holder who also holds the ticket bearer can omit the presentation and use the ticket unrestricted; the presentation restricts only requests that carry it. The grant verifier checks UCAN proof chains, parent-caveat preservation, revocation snapshot freshness and holder replay; it does not prove the authorized build is correct. No sender-supplied clock, endpoint, job, output class or deadline is trusted.
+
 ## Non-claims
 
 Verifier state does not prove ticket-user identity. Client time and client endpoint claims are not authority facts. SecretSpec resolution does not prove provider security, key freshness, or correct operator policy.

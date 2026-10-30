@@ -121,6 +121,7 @@ use zeroize::Zeroize as _;
 
 use crate::errors::RunError;
 
+pub(crate) mod attenuated_admission;
 pub(crate) mod authority_caveats;
 pub mod gateway;
 pub mod operation;
@@ -353,6 +354,10 @@ pub struct TicketAuthRequest {
     pub client_endpoint: Option<String>,
     /// Untrusted compatibility claim. Authorization ignores this value.
     pub now_unix_s: u64,
+    /// Optional holder-attenuated UCAN presentation. Absent for legacy bearer
+    /// admission, which stays unchanged and is never described as delegated.
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
+    pub attenuated_grant: Option<attenuated_admission::AttenuatedGrantPresentation>,
 }
 
 impl TicketAuthRequest {
@@ -375,6 +380,7 @@ impl std::fmt::Debug for TicketAuthRequest {
             .field("secret", &SECRET_REDACTION)
             .field("client_endpoint", &self.client_endpoint)
             .field("now_unix_s", &self.now_unix_s)
+            .field("attenuated_grant", &self.attenuated_grant)
             .finish()
     }
 }
@@ -10483,6 +10489,7 @@ fn remote_loopback_client_for_request(
             secret: options.ticket.secret.clone(),
             client_endpoint: options.client_endpoint.clone(),
             now_unix_s: options.now_unix_s,
+            attenuated_grant: None,
         },
         uploaded_input_refs: request.input_refs.clone(),
         request,
@@ -13209,6 +13216,9 @@ struct RemoteProductionServerContext<'a> {
     binding_config: Option<&'a endpoint_config::RemoteEndpointBindingConfig>,
     execution_state_dir: &'a Path,
     authenticated_client_endpoint: Option<String>,
+    /// Operator-loaded authority for holder-attenuated presentations. Absent
+    /// means a presented grant fails closed; bearer-only admission is unchanged.
+    attenuation_verifier: Option<&'a crate::nix_gateway::authority::GatewayVerifier>,
 }
 
 struct RemoteProductionServerOpening {
@@ -13408,6 +13418,11 @@ fn commit_remote_ticket_admission(
     if request.endpoint_binding.as_ref() != Some(admission.binding()) {
         return Err("remote-production-endpoint-binding-mismatch".into());
     }
+    let attenuation = attenuated_admission::AttenuationAdmission {
+        verifier: context.attenuation_verifier,
+        endpoint_id: &admission.binding().spec.name,
+        project_scope: &admission.binding().spec.scope,
+    };
     commit_remote_ticket_admission_for_state(
         context.credential_state_dir,
         context.verifier_key,
@@ -13415,6 +13430,7 @@ fn commit_remote_ticket_admission(
         auth,
         request,
         session,
+        Some(&attenuation),
     )
 }
 
@@ -13505,6 +13521,7 @@ fn commit_remote_ticket_admission_for_state(
     auth: &TicketAuthRequest,
     request: &ConcreteBuildRequest,
     session: &mut crunch_remote_core::effect::EffectSession<'_>,
+    attenuation: Option<&attenuated_admission::AttenuationAdmission<'_>>,
 ) -> Result<CommittedRemoteTicketAdmission, String> {
     let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(credential_state_dir)
         .map_err(|error| error.to_string())?;
@@ -13539,6 +13556,7 @@ fn commit_remote_ticket_admission_for_state(
     )
     .map_err(remote_application_error)?;
     validate_concrete_request(request, ticket)?;
+    admit_attenuated_presentation_before_redemption(attenuation, auth, request, server_now_unix_s)?;
     let max_upload_bytes = ticket.max_upload_bytes;
     redeem_and_commit_ticket_state(&mut state, &auth.ticket_id, &mut |candidate| {
         let mut persistence = ProductionTicketPersistencePort {
@@ -13554,6 +13572,32 @@ fn commit_remote_ticket_admission_for_state(
         server_now_unix_s,
         max_upload_bytes,
     })
+}
+
+/// A presented holder-attenuated grant must verify against this exact request
+/// with the receiver's own clock and authority before the ticket is redeemed.
+/// Legacy bearer admission (no presentation) is untouched. A denial returns one
+/// constant string: no job, path, caveat or reason reaches the sender.
+// r[impl mantle.authority_attenuation.attenuated_remote_grant]
+fn admit_attenuated_presentation_before_redemption(
+    attenuation: Option<&attenuated_admission::AttenuationAdmission<'_>>,
+    auth: &TicketAuthRequest,
+    request: &ConcreteBuildRequest,
+    server_now_unix_s: u64,
+) -> Result<(), String> {
+    let Some(presentation) = auth.attenuated_grant.as_ref() else {
+        return Ok(());
+    };
+    let denied = || attenuated_admission::ATTENUATED_GRANT_DENIED.to_string();
+    let attenuation = attenuation.ok_or_else(denied)?;
+    let chain = attenuated_admission::admit_presented_grant(attenuation, presentation, request, server_now_unix_s)
+        .map_err(|_| denied())?;
+    // Local log only; the report is redacted and never sent to the sender.
+    if let Ok(report) = serde_json::to_string(&chain) {
+        tracing::info!(target: "mantle::remote::attenuation", effective_caveat_chain = %report, "attenuated grant admitted");
+    }
+    debug_assert!(chain.caveat_count <= u32::try_from(crunch_remote_core::caveat::MAX_CHAIN).unwrap_or(u32::MAX));
+    Ok(())
 }
 
 fn read_remote_server_trace_context(
@@ -14189,6 +14233,7 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 )
                 .ok()
             });
+            let attenuation_verifier = attenuated_admission::open_operator_authority(input.state_dir)?;
             let result = match local_executor {
                 Some(local_executor) => serve_stdio_remote_production_once(
                     &mut std::io::stdin().lock(),
@@ -14203,6 +14248,7 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                         binding_config: binding_config.as_ref(),
                         execution_state_dir: input.execution_state_dir,
                         authenticated_client_endpoint: None,
+                        attenuation_verifier: attenuation_verifier.as_ref(),
                     },
                 )
                 .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}"))),
@@ -14312,6 +14358,9 @@ fn cmd_remote_status(
 struct TicketCreationReport {
     ticket: RemoteTicketView,
     delivery: TicketDeliveryReport,
+    /// A legacy bearer ticket carries no holder caveats and is never described
+    /// as delegated; the chain is reported for every issued grant.
+    effective_caveat_chain: authority_caveats::EffectiveCaveatChain,
 }
 
 #[derive(Debug, Serialize)]
@@ -14502,6 +14551,7 @@ fn create_and_deliver_remote_ticket(
             target: delivery_target.label(),
             delivered: true,
         },
+        effective_caveat_chain: authority_caveats::EffectiveCaveatChain::legacy_bearer(),
     };
     print_json_or_human(&report, json_output)
 }
@@ -14637,6 +14687,7 @@ mod tests {
 
     use super::*;
 
+    mod attenuated_admission_tests;
     mod coordinator_merge_tests;
     mod endpoint_binding_tests;
     mod external_batch_hardware_tests;
@@ -15576,6 +15627,7 @@ mod tests {
             secret: fixture_ticket_token().to_string(),
             client_endpoint: Some("client-a".to_string()),
             now_unix_s: 2,
+            attenuated_grant: None,
         };
         assert_eq!(authorize_ticket(&ticket, &auth, fixture_auth_facts(2)), TicketDecision::Authorized);
         let request = ConcreteBuildRequest {
@@ -15665,6 +15717,7 @@ mod tests {
             binding_config: Some(&binding_config),
             execution_state_dir: temp.path(),
             authenticated_client_endpoint: None,
+            attenuation_verifier: None,
         };
         let mut is_request_admitted = false;
         let error = serve_stdio_remote_production_once_with_commit(
@@ -15777,6 +15830,7 @@ mod tests {
             binding_config: None,
             execution_state_dir: temp.path(),
             authenticated_client_endpoint: None,
+            attenuation_verifier: None,
         };
         let attempt = opening.request.production_attempt.as_ref().expect("physical worker attempt");
         let mut session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
@@ -15919,6 +15973,7 @@ mod tests {
             binding_config: None,
             execution_state_dir: worker_root,
             authenticated_client_endpoint: None,
+            attenuation_verifier: None,
         };
         let attempt = request.production_attempt.as_ref().expect("physical attempt binding");
         let mut worker_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
@@ -16295,6 +16350,7 @@ mod tests {
                         &auth,
                         &request,
                         &mut session,
+                        None,
                     )
                 })
             })
@@ -16314,7 +16370,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let (verifier_key, auth, request) = persist_transaction_ticket(temp.path(), STALE_TRANSACTION_TICKET_USES);
         let mut session = crunch_remote_core::effect::EffectSession::new(&request.request_id).unwrap();
-        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request, &mut session)
+        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request, &mut session, None)
             .unwrap();
         {
             let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(temp.path()).unwrap();
@@ -16323,7 +16379,7 @@ mod tests {
             save_ticket_state(temp.path(), &state).unwrap();
         }
         let mut session = crunch_remote_core::effect::EffectSession::new(&request.request_id).unwrap();
-        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request, &mut session)
+        commit_remote_ticket_admission_for_state(temp.path(), &verifier_key, None, &auth, &request, &mut session, None)
             .unwrap();
         let state = load_ticket_state(temp.path()).unwrap();
 
@@ -16340,6 +16396,7 @@ mod tests {
             secret: fixture_ticket_token().to_string(),
             client_endpoint: Some("client-a".to_string()),
             now_unix_s: FORGED_CLIENT_NOW_UNIX_S,
+            attenuated_grant: None,
         };
 
         assert_eq!(
@@ -16377,6 +16434,7 @@ mod tests {
             secret: fixture_ticket_token().to_string(),
             client_endpoint: Some("client-a".to_string()),
             now_unix_s: 2,
+            attenuated_grant: None,
         };
 
         assert_eq!(
@@ -20679,6 +20737,7 @@ mod tests {
             secret: fixture_ticket_token().to_string(),
             client_endpoint: Some("client-a".to_string()),
             now_unix_s: 2,
+            attenuated_grant: None,
         }
     }
 

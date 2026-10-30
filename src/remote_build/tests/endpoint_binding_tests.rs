@@ -88,6 +88,7 @@ fn production_rejects_missing_forged_stale_and_revoked_binding_before_manifest_o
             binding_config: Some(&config),
             execution_state_dir: root.path(),
             authenticated_client_endpoint: None,
+            attenuation_verifier: None,
         };
         let mut called = false;
         assert!(
@@ -133,7 +134,7 @@ fn production_shared_binding_lease_allows_independent_ticket_commit_once() {
     auth.ticket_id = ticket_id.clone();
     let mut effects = crunch_remote_core::effect::EffectSession::new(&request.request_id).unwrap();
     let before = state.tickets[&ticket_id].uses_remaining;
-    commit_remote_ticket_admission_for_state(root.path(), &key, None, &auth, &request, &mut effects).unwrap();
+    commit_remote_ticket_admission_for_state(root.path(), &key, None, &auth, &request, &mut effects, None).unwrap();
     assert_eq!(load_ticket_state(root.path()).unwrap().tickets[&ticket_id].uses_remaining, before - 1);
     drop(admission);
     let _fresh = crate::remote_credential_state::acquire_ticket_state_mutation_guard(root.path()).unwrap();

@@ -72,6 +72,12 @@ fn ticket_creation_delivers_only_to_fd_and_persists_verifier_only_state() {
     assert!(created_unix_s >= issuance_started_unix_s);
     assert!(created_unix_s <= issuance_finished_unix_s);
     assert_eq!(report["delivery"]["target"], "caller-owned-fd");
+    // An issued legacy bearer reports an empty effective chain and is never
+    // described as delegated or attenuated.
+    // r[verify mantle.authority_attenuation.composition_order]
+    assert_eq!(report["effective_caveat_chain"]["delegation"], "legacy-bearer-not-delegated");
+    assert_eq!(report["effective_caveat_chain"]["caveat_count"], 0);
+    assert_eq!(report["effective_caveat_chain"]["caveats"], serde_json::json!([]));
     assert!(!String::from_utf8_lossy(&output.stdout).contains(token));
     assert!(!String::from_utf8_lossy(&output.stderr).contains(token));
     assert!(!state.contains(token));
