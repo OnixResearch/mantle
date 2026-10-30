@@ -135,6 +135,7 @@ pub fn cmd_store(
             store_dir,
             base_state_dirs,
             source_admission,
+            view: None,
             is_json_output,
             plan,
         })
@@ -150,11 +151,33 @@ struct StoreCommandContext<'a> {
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
     source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
+    /// Receiver-owned restriction. `None` is the unrestricted local operator
+    /// command surface; a restricted view allows only an exact `store info`.
+    view: Option<&'a std::sync::Arc<dyn crunch_store::LogicalPathView>>,
     is_json_output: bool,
     plan: StoreCommandPlan,
 }
 
+/// Refuse every command a restricted view cannot serve BEFORE the store opens
+/// or any record is scanned. Only an exact `store info` has a restricted form:
+/// filtering an unrestricted listing afterwards is not a restricted view.
+// r[impl mantle.authority_attenuation.attenuated_store_view]
+fn deny_unrestricted_command_under_view(
+    action: &crate::StoreAction,
+    view: Option<&std::sync::Arc<dyn crunch_store::LogicalPathView>>,
+) -> Result<(), RunError> {
+    let is_restricted = view.is_some();
+    let is_exact_info = matches!(action, crate::StoreAction::Info { .. });
+    debug_assert!(!crunch_store::RESTRICTED_VIEW_DENIED.is_empty());
+    debug_assert!(view.is_none() || is_restricted);
+    if is_restricted && !is_exact_info {
+        return Err(RunError::Internal(crunch_store::RESTRICTED_VIEW_DENIED.to_string()));
+    }
+    Ok(())
+}
+
 async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContext<'_>) -> Result<(), RunError> {
+    deny_unrestricted_command_under_view(&action, context.view)?;
     match action {
         crate::StoreAction::List => {
             let store = open_store(context).await?;
@@ -162,7 +185,7 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
         }
         crate::StoreAction::Info { path } => {
             let store = open_store(context).await?;
-            cmd_store_info(&store, context.plan.operation, &path, context.is_json_output).await
+            cmd_store_info(&store, context.plan.operation, &path, context.view, context.is_json_output).await
         }
         crate::StoreAction::Roots { migrate } => {
             let _guard = if migrate {
@@ -726,30 +749,70 @@ async fn cmd_store_list(
     Ok(())
 }
 
+/// Exact lookup of one logical store path through a restricted view. The path is
+/// gated before any PathInfo read; a malformed or outside path yields only the
+/// constant refusal. Returns the matching basename used by the printer.
+// r[impl mantle.authority_attenuation.attenuated_store_view]
+async fn restricted_info_entries(
+    store: &crunch_store::StoreHandle,
+    plan: StorePlan,
+    path: &str,
+    view: &std::sync::Arc<dyn crunch_store::LogicalPathView>,
+) -> Result<(Vec<crunch_store::layer::Layered<snix_store::path_info::PathInfo>>, String), RunError> {
+    let denied = || RunError::Internal(crunch_store::RESTRICTED_VIEW_DENIED.to_string());
+    let parsed = nix_compat::store_path::StorePath::from_absolute_path_with_prefix(path.as_bytes(), store.store_dir())
+        .map_err(|_| denied())?;
+    let lookup = crunch_store::RestrictedOutputLookup::new(store.output_lookup(), std::sync::Arc::clone(view));
+    let found = execute_store_port(plan, StoreLeaf::Info, async {
+        lookup.find_with_layer(&parsed).await.map_err(|error| RunError::Internal(format!("{error}")))
+    })
+    .await?;
+    let entries: Vec<_> = found.into_iter().collect();
+    debug_assert!(entries.len() <= 1);
+    debug_assert!(entries.iter().all(|entry| entry.value.store_path == parsed));
+    Ok((entries, parsed.to_string()))
+}
+
 async fn cmd_store_info(
     store: &crunch_store::StoreHandle,
     plan: StorePlan,
     path: &str,
+    view: Option<&std::sync::Arc<dyn crunch_store::LogicalPathView>>,
     is_json_output: bool,
 ) -> Result<(), RunError> {
     if path.is_empty() {
         return Err(RunError::Internal("store info path filter must not be empty".to_string()));
     }
-    let entries = execute_store_port(plan, StoreLeaf::Info, async {
-        store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))
-    })
-    .await?;
+    let restricted_filter;
+    let (entries, path) = if let Some(view) = view {
+        let (entries, filter) = restricted_info_entries(store, plan, path, view).await?;
+        restricted_filter = filter;
+        (entries, restricted_filter.as_str())
+    } else {
+        let entries = execute_store_port(plan, StoreLeaf::Info, async {
+            store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))
+        })
+        .await?;
+        (entries, path)
+    };
     let details: Vec<_> =
         entries.into_iter().filter(|entry| entry.value.store_path.to_string().contains(path)).collect();
     if details.is_empty() {
         return Err(RunError::Internal(format!("no PathInfo matching '{path}'")));
     }
     debug_assert!(u32::try_from(details.len()).is_ok());
-    let overlay = store
-        .overlay_report()
-        .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
-    let interests = crunch_store::list_interest_reports(store.state_dir())
-        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    // Overlay composition and retention interests describe paths and state beyond
+    // one exact path, so a restricted view reads neither.
+    let (overlay, interests) = if view.is_some() {
+        (None, Vec::new())
+    } else {
+        let overlay = store
+            .overlay_report()
+            .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
+        let interests = crunch_store::list_interest_reports(store.state_dir())
+            .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+        (overlay, interests)
+    };
     classify_store_result(plan, StoreFacts::Rows {
         rows: details.len(),
         invalid_rows: details.iter().filter(|entry| !entry.value.store_path.to_string().contains(path)).count(),
@@ -2598,5 +2661,135 @@ mod tests {
         let hashes = [crunch_store::VerifyResult::Ok("path".to_string())];
         let signatures = std::collections::HashMap::new();
         assert!(summarize_store_verify_results(&hashes, &signatures, true).is_err());
+    }
+    /// Admits exactly the listed absolute logical paths.
+    struct ExactPaths(Vec<String>);
+
+    impl crunch_store::LogicalPathView for ExactPaths {
+        fn admits(&self, logical_path: &str) -> bool {
+            self.0.iter().any(|path| path == logical_path)
+        }
+    }
+
+    struct ViewFixture {
+        state: tempfile::TempDir,
+        output: tempfile::TempDir,
+        inside: String,
+        outside: String,
+    }
+
+    const VIEW_STORE_DIR: &str = "/mantle/store";
+
+    fn view_context<'a>(
+        fixture: &'a ViewFixture,
+        store_dir: &'a str,
+        view: Option<&'a std::sync::Arc<dyn crunch_store::LogicalPathView>>,
+        action: &crate::StoreAction,
+    ) -> StoreCommandContext<'a> {
+        StoreCommandContext {
+            output_dir: fixture.output.path(),
+            state_dir: fixture.state.path(),
+            backend: crunch_store::StoreBackend::Snix,
+            store_dir,
+            base_state_dirs: &[],
+            source_admission: None,
+            view,
+            is_json_output: true,
+            plan: plan_store_command(action),
+        }
+    }
+
+    async fn view_fixture() -> ViewFixture {
+        use nix_compat::store_path::StorePath;
+        let fixture = ViewFixture {
+            state: tempfile::tempdir().unwrap(),
+            output: tempfile::tempdir().unwrap(),
+            inside: String::new(),
+            outside: String::new(),
+        };
+        let store = open_store(view_context(&fixture, VIEW_STORE_DIR, None, &crate::StoreAction::List)).await.unwrap();
+        let mut absolute = Vec::new();
+        for (name, fill) in [("inside-view", 3_u8), ("outside-view", 4_u8)] {
+            let store_path = StorePath::<String>::from_name_and_digest_fixed(name, [fill; 20]).unwrap();
+            absolute.push(store_path.to_absolute_path_with_prefix(VIEW_STORE_DIR));
+            store
+                .pathinfo_service()
+                .put(snix_store::path_info::PathInfo {
+                    store_path,
+                    node: snix_castore::Node::Symlink {
+                        target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+                    },
+                    references: Vec::new(),
+                    nar_size: 1,
+                    nar_sha256: [7; 32],
+                    signatures: Vec::new(),
+                    deriver: None,
+                    ca: None,
+                })
+                .await
+                .unwrap();
+        }
+        drop(store);
+        ViewFixture {
+            outside: absolute.pop().unwrap(),
+            inside: absolute.pop().unwrap(),
+            ..fixture
+        }
+    }
+
+    fn info(path: &str) -> crate::StoreAction {
+        crate::StoreAction::Info { path: path.to_string() }
+    }
+
+    // A restricted view serves one exact in-view path through `store info` and
+    // refuses everything else with one constant message that names no path.
+    // r[verify mantle.authority_attenuation.attenuated_store_view]
+    #[tokio::test]
+    async fn restricted_store_info_serves_only_the_exact_view_path() {
+        let fixture = view_fixture().await;
+        let view: std::sync::Arc<dyn crunch_store::LogicalPathView> =
+            std::sync::Arc::new(ExactPaths(vec![fixture.inside.clone()]));
+        let admitted = info(&fixture.inside);
+        cmd_store_async(admitted.clone(), view_context(&fixture, VIEW_STORE_DIR, Some(&view), &admitted))
+            .await
+            .expect("exact in-view path is served");
+        let fragment = "inside-view".to_string();
+        let traversal = format!("{VIEW_STORE_DIR}/../etc");
+        for requested in [&fixture.outside, &fragment, &traversal] {
+            let action = info(requested);
+            let error = cmd_store_async(action.clone(), view_context(&fixture, VIEW_STORE_DIR, Some(&view), &action))
+                .await
+                .expect_err("outside or non-exact request is refused");
+            let message = error.to_string();
+            assert!(message.contains(crunch_store::RESTRICTED_VIEW_DENIED), "{message}");
+            assert!(!message.contains("outside-view"), "refusal disclosed the outside path: {message}");
+        }
+        // Without a view the legacy substring filter is unchanged.
+        let legacy = info("outside-view");
+        cmd_store_async(legacy.clone(), view_context(&fixture, VIEW_STORE_DIR, None, &legacy))
+            .await
+            .expect("unrestricted operator info keeps its fragment match");
+    }
+
+    // A broad listing (or any scanning command) under a restricted view is
+    // denied before the store is even opened: with an invalid store directory the
+    // unrestricted command fails while opening, the restricted one never gets there.
+    // r[verify mantle.authority_attenuation.attenuated_store_view]
+    #[tokio::test]
+    async fn restricted_view_denies_broad_listing_before_opening_the_store() {
+        let fixture = view_fixture().await;
+        let view: std::sync::Arc<dyn crunch_store::LogicalPathView> =
+            std::sync::Arc::new(ExactPaths(vec![fixture.inside.clone()]));
+        for action in [crate::StoreAction::List, crate::StoreAction::Roots { migrate: false }] {
+            let unrestricted = cmd_store_async(action.clone(), view_context(&fixture, "", None, &action))
+                .await
+                .expect_err("an empty store directory cannot open");
+            assert!(unrestricted.to_string().contains("logical store directory"), "{unrestricted}");
+            let restricted = cmd_store_async(action.clone(), view_context(&fixture, "", Some(&view), &action))
+                .await
+                .expect_err("restricted view denies scanning commands");
+            assert!(restricted.to_string().contains(crunch_store::RESTRICTED_VIEW_DENIED), "{restricted}");
+            assert!(!restricted.to_string().contains("logical store directory"), "{restricted}");
+        }
     }
 }
