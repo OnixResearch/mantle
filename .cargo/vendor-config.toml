@@ -35,9 +35,9 @@ git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
 rev = "606489b5f40298181214bb76bc3457b607f225d9"
 replace-with = "vendored-sources"
 
-[source."git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=cc9e0fb611e75bb2d7f662435d1918653c93ce07"]
+[source."git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06"]
 git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
-rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07"
+rev = "250f3b25d0933c2fa106aa82d1cc17a496716f06"
 replace-with = "vendored-sources"
 
 [source."git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144"]
