@@ -1,0 +1,6 @@
+package mantle:wrpc-pilot;
+
+world client {
+    import wrpc-examples:hello/handler;
+    export run: func() -> u32;
+}

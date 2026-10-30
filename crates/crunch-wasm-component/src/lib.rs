@@ -11,6 +11,7 @@ mod pipeline;
 mod preflight;
 mod process;
 mod reporting;
+mod runtime;
 mod stages;
 mod toolchain;
 mod verification;

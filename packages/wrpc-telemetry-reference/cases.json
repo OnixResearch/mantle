@@ -1,0 +1,32 @@
+{
+  "schema": "mantle-wrpc-telemetry-cases-v1",
+  "entrypoint": "run",
+  "cases": [
+    {
+      "name": "safe-span",
+      "mode": 0,
+      "span_count": 1,
+      "call_sequence": ["current-span-context", "on-start", "on-end"],
+      "expected_result": 42,
+      "expected_host_outcome": "accepted"
+    },
+    {
+      "name": "secret-attribute",
+      "mode": 1,
+      "span_count": 1,
+      "attribute_key": "authorization",
+      "attribute_json_value": "\"secret\"",
+      "expected_host_outcome": "rejected-or-redacted-by-reviewed-host-policy",
+      "secret_must_not_appear_in_diagnostic_export": true
+    },
+    {
+      "name": "queue-budget",
+      "mode": 2,
+      "span_count": 33,
+      "call_sequence_per_span": ["current-span-context", "on-start", "on-end"],
+      "host_queue_bound": 32,
+      "expected_host_outcome": "33rd-span-rejected"
+    }
+  ],
+  "comparison_evidence_is_trusted_consumer_host_evidence": false
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-wrpc-telemetry-source-cohort-v1",
+  "repository": "https://github.com/WebAssembly/wasi-otel",
+  "revision": "e5262a84044aff064c9599eebc05013bb3432795",
+  "archive_sha256": "sha256-ZSESQKRr7xZkrkeK53J/TOtc8hQWTJKKg0Aw2tWZHS8=",
+  "package": "wasi:otel@0.2.0-rc.2",
+  "effect_interface": "wasi:otel/tracing@0.2.0-rc.2",
+  "functions": ["current-span-context", "on-start", "on-end"],
+  "type_only_dependencies": ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.0"],
+  "wasmtime": "33.0.0",
+  "wasmtime_wasi": "33.0.0",
+  "wit_bindgen": "0.36.0",
+  "runtime_profile": "molten-wrpc-wasmtime33-otel-tracing-v1",
+  "world": "mantle:wrpc-telemetry-pilot/emitter",
+  "comparison_is_trusted_host_evidence": false,
+  "otlp_protocol_claim": false,
+  "guest_build_owner": "Mantle"
+}

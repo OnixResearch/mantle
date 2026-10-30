@@ -61,6 +61,8 @@ pub struct ComponentPipelineRequest {
     pub package_resolution_network: bool,
     #[serde(default = "standalone_runtime_validation")]
     pub runtime_validation: crunch_wasm_component_core::RuntimeValidation,
+    #[serde(default = "no_runtime_composition")]
+    pub runtime_composition: Option<RuntimeComposition>,
     pub runtime_invoke: Option<String>,
     pub expected_runtime_stdout: String,
     pub aot_target: String,
@@ -70,6 +72,17 @@ pub struct ComponentPipelineRequest {
 
 fn standalone_runtime_validation() -> crunch_wasm_component_core::RuntimeValidation {
     crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke
+}
+
+fn no_runtime_composition() -> Option<RuntimeComposition> {
+    None
+}
+
+/// A smoke-only composition; the final portable artifact remains unlinked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeComposition {
+    pub source_wac: String,
+    pub dependencies: Vec<CompositionDependency>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

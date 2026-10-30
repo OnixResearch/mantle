@@ -1,0 +1,6 @@
+package mantle:wrpc-telemetry-pilot;
+
+world emitter {
+    import wasi:otel/tracing@0.2.0-rc.2;
+    export run: func(mode: u32) -> u32;
+}

@@ -1,0 +1,3 @@
+# WIT dependencies resolve from the reviewed source closure, never a registry.
+[overrides]
+"wrpc-examples:hello" = { path = "wit-deps/hello" }

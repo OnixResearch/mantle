@@ -1,0 +1,5 @@
+package mantle:wrpc-telemetry-pilot;
+
+world sink {
+    export wasi:otel/tracing@0.2.0-rc.2;
+}

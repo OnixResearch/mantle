@@ -598,6 +598,7 @@ fn request(
         }],
         package_resolution_network: false,
         runtime_validation: crunch_wasm_component_core::RuntimeValidation::StandaloneSmoke,
+        runtime_composition: None,
         runtime_invoke: Some("run()".to_string()),
         expected_runtime_stdout: EXPECTED_STDOUT.to_string(),
         aot_target: "x86_64-unknown-linux-gnu".to_string(),

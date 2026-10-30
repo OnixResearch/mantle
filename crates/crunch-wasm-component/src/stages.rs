@@ -557,11 +557,12 @@ pub(crate) fn run_runtime_smoke(
     artifact_path: &Path,
     artifact: &StoreObject,
 ) -> Result<bool, Error> {
+    let runtime_path = crate::runtime::compose_runtime(prepared, workspace, state, artifact_path)?;
     let mut args = vec!["run".to_string()];
     if let Some(runtime_invoke) = &prepared.request.runtime_invoke {
         args.extend(["--invoke".to_string(), runtime_invoke.clone()]);
     }
-    args.push(artifact_path.display().to_string());
+    args.push(runtime_path.display().to_string());
     let run = invoke(prepared, workspace, StageInvocation {
         stage_key: "runtime-smoke",
         tool_name: "wasmtime",
@@ -842,7 +843,8 @@ fn read_only_inputs(prepared: &PreparedPipeline) -> Vec<PathBuf> {
             paths.insert(PathBuf::from(root));
         }
     }
-    for dependency in &prepared.request.composition_dependencies {
+    let runtime_dependencies = prepared.request.runtime_composition.iter().flat_map(|plan| &plan.dependencies);
+    for dependency in prepared.request.composition_dependencies.iter().chain(runtime_dependencies) {
         if let CompositionDependencySource::StoreObject { path, .. } = &dependency.source {
             paths.insert(PathBuf::from(path));
         }

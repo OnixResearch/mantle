@@ -1,0 +1,5 @@
+# WIT dependencies resolve from the reviewed source closure, never a registry.
+[overrides]
+"wasi:otel" = { path = "wit-deps/otel" }
+"wasi:clocks" = { path = "wit-deps/wasi-clocks-0.2.0" }
+"wasi:io" = { path = "wit-deps/wasi-io-0.2.0" }

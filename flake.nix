@@ -1091,6 +1091,32 @@
           ];
         };
 
+        wrpcAuthor = craneLib.buildPackage {
+          pname = "mantle-wrpc-author";
+          inherit src cargoArtifacts cargoVendorDir nativeBuildInputs buildInputs;
+          cargoExtraArgs = "--package crunch-wasm-component --bin mantle-wrpc-author";
+          doCheck = false;
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
+        };
+        wrpcReference = import ./nix/wrpc-reference.nix {
+          inherit pkgs;
+          toolchain = wasmComponentToolchain;
+          mantle = crunch.overrideAttrs (_: { doCheck = false; });
+          author = wrpcAuthor;
+          packageRoot = ./packages/wrpc-reference;
+        };
+        wrpcTelemetryReference = import ./nix/wrpc-telemetry-reference.nix {
+          inherit pkgs;
+          producer = {
+            toolchain = wasmComponentToolchain;
+            mantle = crunch.overrideAttrs (_: { doCheck = false; });
+            author = wrpcAuthor;
+            sharedRoot = ./packages/wrpc-reference;
+            wrpcTools = wrpcReference.wrpcTools;
+          };
+          packageRoot = ./packages/wrpc-telemetry-reference;
+        };
+
         # Ship both the typed APK graph renderer and its Android-only signed
         # local input admission entry point from the same pinned Cargo closure.
         androidApkAdapter = craneLib.buildPackage {
@@ -1504,6 +1530,14 @@
           wasm-component-toolchain = wasmComponentToolchain;
           wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
+          wrpc-reference-bundle = wrpcReference.bundle;
+          wrpc-reference-source = wrpcReference.source;
+          wrpc-reference-components = wrpcReference.compiled;
+          wrpc-reference-bindgen = wrpcReference.wrpcTools;
+          wrpc-reference-author = wrpcAuthor;
+          wrpc-telemetry-reference-bundle = wrpcTelemetryReference.bundle;
+          wrpc-telemetry-reference-source = wrpcTelemetryReference.source;
+          wrpc-telemetry-reference-components = wrpcTelemetryReference.compiled;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
           check-store-retention-policy = checkStoreRetentionPolicy;

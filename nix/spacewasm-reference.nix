@@ -861,7 +861,9 @@ let
     support_matrix_path = "${evidence}/support-matrix.json";
     checks_path = "${evidence}/checks.json";
     requested_claim_class = "exact-reference-materialization-facts";
-    members = baseMembers ++ fixtureArtifactMembers ++ descriptorMembers;
+    members = baseMembers ++ fixtureArtifactMembers ++ descriptorMembers
+      ++ import ./spacewasm-host-segments.nix { inherit pkgs packageRoot; }
+      ++ import ./spacewasm-molten-abi.nix { inherit pkgs; };
   });
 
   bundle = pkgs.runCommand "mantle-spacewasm-reference-bundle-${sourceRevision}"
@@ -874,12 +876,17 @@ let
       ${pkgs.jq}/bin/jq --exit-status '.valid == true' "$TMPDIR/verify-summary.json" > /dev/null
     '';
 
+  pilotFixtureCheck = import ./spacewasm-pilot-negative.nix {
+    inherit pkgs bundle bundler;
+  };
+
   negativeCheck = pkgs.runCommand "mantle-spacewasm-reference-negative-check"
     {
       nativeBuildInputs = [ pkgs.jq ];
     }
     ''
       set -eu
+      test -s ${pilotFixtureCheck}/results.txt
       mkdir -p "$out"
       results="$TMPDIR/results.txt"
 

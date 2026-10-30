@@ -1,0 +1,23 @@
+{
+  "schema": "mantle-wrpc-source-cohort-v1",
+  "repository": "https://github.com/bytecodealliance/wrpc",
+  "revision": "aa01409ed38bf7a978570ff567c4475376925df6",
+  "release": "0.15.0",
+  "archive_sha256": "sha256-C1MFw8/ninRC5oqZc/Ff0Ymu2dZNdrrLSo3DfAUP+JI=",
+  "wasmtime": "33.0.0",
+  "wrpc_runtime_wasmtime": "0.29.0",
+  "wrpc_transport": "0.28.4",
+  "wit_bindgen": "0.36.0",
+  "wit_bindgen_wrpc": "0.10.0",
+  "interface": "wrpc-examples:hello/handler",
+  "function": "hello",
+  "parameters": [],
+  "result": "string",
+  "expected_result": "hello from Rust",
+  "remote_client_world": "mantle:wrpc-pilot/client",
+  "remote_client_export": "run",
+  "remote_client_expected_result": 42,
+  "server_world": "mantle:wrpc-pilot/server",
+  "composition_is_remote_rpc_evidence": false,
+  "guest_build_owner": "Mantle"
+}
