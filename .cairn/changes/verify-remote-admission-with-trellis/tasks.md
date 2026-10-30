@@ -4,7 +4,7 @@
 
 - [ ] [serial] V1 Record the current Mantle remote-attempt state, report, fence, event, authorization, transition, retry, and application surfaces plus focused test output. r[remote_builds.trellis_admission_projection]
 - [x] [serial] I1 Review and accept ADR 0060 for a Trellis-owned generic model, Mantle-owned projection, external proof evidence, and bounded claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_evidence_boundary] (ADR accepted by operator authorization 2026-10-30; see its Status.)
-- [ ] [depends:add-fenced-attempt-admission-primitives] I2 Record the accepted Trellis requirement IDs, revision, source digest, verifier/toolchain identity, exported proof artifact contract, and non-claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_safety]
+- [x] [depends:add-fenced-attempt-admission-primitives] I2 Record the accepted Trellis requirement IDs, revision, source digest, verifier/toolchain identity, exported proof artifact contract, and non-claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_safety] (Recorded 2026-10-30 in `evidence/trellis-pin-identity-2026-10-30.md`. The record exposes an open gap: the imported Trellis revision is unpublished and its kernel is not the model the published Trellis acceptance covers.)
 - [x] [depends:extend-nominal-types-to-trust-boundaries] I3 Reconcile the projection with admitted remote job, attempt, fence, event, digest, phase, and authorization types. r[remote_builds.trellis_admission_projection]
 - [ ] [depends:harden-remote-credential-boundary] [depends:add-nix-remote-service-gateway] [depends:add-evidence-driven-resource-policy] I4 Freeze the remote fact set used by the first proof profile after active remote contracts stabilize. r[remote_builds.trellis_admission_model]
 
@@ -39,3 +39,14 @@
 `evidence/task-closure-gate-v13-2026-10-26.json` maps I3 and I7 to the v13-identical projection source and exact identity/parity, malformed/unmodeled payload, exhausted-domain and retained-history tests. I10 records a bounded Rust-source scan: `FiniteProjection` occurs only in its module and its `cfg(test)` test module, not a runtime caller. These local implementation closures do not accept the named upstream dependency or freeze its cross-owner contract.
 
 `evidence/focused-tests-gate-v13-2026-10-26.json` lists 14 matched projection tests, all passing. The v13 flake check exited 1 on omitted compile-time Python inputs, a repository failure, not a host limitation. I1, I2, I4–I6, I8–I9, I11 and every V task remain open: no ADR approval, fresh producer Verus result, complete source/proof identity chain, Kamacite envelope, Valence receipt, external authority or whole-gate acceptance is inferred.
+
+## Retained individual task support (2026-10-30)
+
+I1 is accepted by the operator's ADR 0060 acceptance, scoped by that ADR's Status. I2 is recorded in
+`evidence/trellis-pin-identity-2026-10-30.md` from a read-only observation retained in
+`evidence/trellis-pin-observations-2026-10-30.json`. That record found that the revision Mantle imports
+(`d91188e495d65bca87551b7a06330efb2c909edf`) is not reachable from any ref on the Trellis remote, and that the
+kernel it contains is later than, and described separately from, the model Trellis accepted and archived on
+2026-09-03. Ticking I2 records that the identities were captured; it does not accept the consumed kernel, and the
+gap it exposes stays open for I5, V2, I6 and I9. Every other task above remains open, with the 2026-10-26 statement
+about them otherwise unchanged.

@@ -1,0 +1,287 @@
+{
+ "schema": "mantle-retained-observation-v1",
+ "purpose": "Read-only observations of the Trellis revision Mantle imports, for task I2 of verify-remote-admission-with-trellis.",
+ "command": "python3 observe-trellis-pin-v1.py <mantle-worktree>   # exit 0, empty stderr",
+ "script_name": "observe-trellis-pin-v1.py",
+ "script_blake3": "195c3080c05b548be08560d58ee27654bd0019b3d11259e934efe6722c913fab",
+ "script_source": "#!/usr/bin/env python3\n\"\"\"Read-only observations of the Trellis revision Mantle imports (task I2).\n\nWrites one JSON object to stdout. It never writes to the Trellis checkout: it\nuses `git show`/`ls-tree`/`rev-parse`, `git --no-optional-locks status`, and a\nnetwork fetch into a throwaway bare repository. The import check writes only to\na scratch directory it removes.\n\"\"\"\nimport json\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nfrom datetime import datetime, timezone\n\nTRELLIS = pathlib.Path(\"/home/brittonr/git/OnixResearch/trellis\")\nREMOTE = \"git@github.com:OnixResearch/trellis.git\"\nMANTLE = pathlib.Path(sys.argv[1]).resolve()\nPIN = \"d91188e495d65bca87551b7a06330efb2c909edf\"\nSPEC = \".cairn/specs/fenced-attempt-admission/spec.md\"\nPUBLISHED = {\n    \"origin/main\": \"origin/main\",\n    \"drain/fenced-attempt-admission-20260903\": \"8de4b24aa2d66cc2e6ec966d686df023492265d3\",\n    \"cairn/add-fenced-attempt-admission-primitives\": \"26ef22128296d2b5535aaa0cb4229291c85fb8ee\",\n}\n\n\ndef run(argv, cwd=None, stdin=None, check=False):\n    p = subprocess.run(argv, cwd=cwd, input=stdin, capture_output=True)\n    if check and p.returncode:\n        raise RuntimeError(f\"{argv}: {p.stderr.decode(errors='replace')}\")\n    return p\n\n\ndef git(*args, check=True):\n    return run([\"git\", \"--no-optional-locks\", \"-C\", str(TRELLIS), *args], check=check)\n\n\ndef text(p):\n    return p.stdout.decode(\"utf-8\", \"replace\").strip()\n\n\ndef b3(data):\n    return run([\"b3sum\", \"--no-names\"], stdin=data, check=True).stdout.decode().strip()\n\n\ndef blob(rev, path):\n    p = git(\"show\", f\"{rev}:{path}\", check=False)\n    return p.stdout if p.returncode == 0 else None\n\n\ndef req_ids(data):\n    return sorted(line.split(\"]\")[0][2:] for line in data.decode().splitlines() if line.startswith(\"r[\"))\n\n\nout = {\"schema\": \"mantle-trellis-pin-observations-v1\", \"observed_at_utc\": datetime.now(timezone.utc).isoformat()}\nout[\"mantle\"] = {\n    \"head\": text(run([\"git\", \"-C\", str(MANTLE), \"rev-parse\", \"HEAD\"], check=True)),\n    \"tracked_dirty_paths\": len([l for l in text(run([\"git\", \"-C\", str(MANTLE), \"status\", \"--porcelain\", \"--untracked-files=no\"])).splitlines() if l]),\n}\nout[\"trellis_checkout\"] = {\n    \"head\": text(git(\"rev-parse\", \"HEAD\")),\n    \"origin_main_tracking_ref\": text(git(\"rev-parse\", \"origin/main\")),\n    \"dirty_or_untracked_paths\": len([l for l in text(git(\"status\", \"--short\")).splitlines() if l]),\n    \"head_is_ancestor_of_origin_main\": git(\"merge-base\", \"--is-ancestor\", \"HEAD\", \"origin/main\", check=False).returncode == 0,\n}\n\npin = {\"revision\": PIN, \"object_type\": text(git(\"cat-file\", \"-t\", PIN))}\npin[\"commit\"] = text(git(\"log\", \"-1\", \"--format=%H|%ad|%s\", \"--date=iso-strict\", PIN))\npin[\"is_ancestor_of_origin_main_tracking_ref\"] = git(\"merge-base\", \"--is-ancestor\", PIN, \"origin/main\", check=False).returncode == 0\npin[\"local_branches_containing\"] = [l.strip(\" *\") for l in text(git(\"branch\", \"--contains\", PIN)).splitlines()]\npin[\"remote_tracking_branches_containing\"] = [l.strip() for l in text(git(\"branch\", \"-r\", \"--contains\", PIN)).splitlines()]\nout[\"pin\"] = pin\n\nwith tempfile.TemporaryDirectory(dir=str(MANTLE.parent / \"tmp\")) as probe:\n    run([\"git\", \"init\", \"-q\", \"--bare\", probe], check=True)\n    fetch = run([\"timeout\", \"90\", \"git\", \"-C\", probe, \"fetch\", \"--quiet\", \"--depth=1\", REMOTE, PIN])\n    out[\"remote_availability\"] = {\n        \"command\": f\"git fetch --depth=1 {REMOTE} {PIN} (into a throwaway bare repository)\",\n        \"exit_code\": fetch.returncode,\n        \"stderr\": fetch.stderr.decode(\"utf-8\", \"replace\").strip(),\n        \"object_present_after\": run([\"git\", \"-C\", probe, \"cat-file\", \"-e\", PIN]).returncode == 0,\n    }\nout[\"remote_heads\"] = {\n    name: text(run([\"timeout\", \"30\", \"git\", \"ls-remote\", REMOTE, f\"refs/heads/{name}\"])).split(\"\\t\")[0]\n    for name in (\"main\", \"drain/fenced-attempt-admission-20260903\", \"cairn/add-fenced-attempt-admission-primitives\")\n}\n\nupstream = json.loads((MANTLE / \"vendor/trellis-fenced-attempt/upstream.json\").read_text())\nout[\"mantle_pin_manifest\"] = upstream\nout[\"pinned_members_at_published_revisions\"] = {\n    label: {member: (\"absent\" if blob(rev, member) is None else (\"MATCH\" if b3(blob(rev, member)) == meta[\"blake3\"] else \"differs\"))\n            for member, meta in upstream[\"files\"].items()}\n    for label, rev in {\"pin\": PIN, **PUBLISHED}.items()\n}\n\npin_spec, pub_spec = blob(PIN, SPEC), blob(\"origin/main\", SPEC)\npin_lines, pub_lines = pin_spec.decode().splitlines(), pub_spec.decode().splitlines()\nout[\"accepted_spec\"] = {\n    \"path\": SPEC,\n    \"blake3_at_pin\": b3(pin_spec),\n    \"blake3_at_origin_main\": b3(pub_spec),\n    \"requirement_ids_at_pin\": req_ids(pin_spec),\n    \"requirement_ids_at_origin_main\": req_ids(pub_spec),\n    \"lines_only_in_pin\": [l for l in pin_lines if l not in pub_lines],\n    \"lines_only_in_origin_main\": [l for l in pub_lines if l not in pin_lines],\n}\narchive = \"2026-09-03-add-fenced-attempt-admission-primitives\"\nout[\"accepted_change\"] = {\n    \"archive_dir\": f\".cairn/archive/{archive}\",\n    \"archive_present_at_origin_main\": git(\"cat-file\", \"-e\", f\"origin/main:.cairn/archive/{archive}/proposal.md\", check=False).returncode == 0,\n    \"archive_commit\": text(git(\"log\", \"--diff-filter=A\", \"--format=%H|%ad|%s\", \"--date=short\", \"origin/main\", \"--\", f\".cairn/archive/{archive}/proposal.md\")),\n    \"focused_verus_log\": (blob(\"origin/main\", f\".cairn/archive/{archive}/evidence/final-2026-09-03/focused-verus.log\") or b\"\").decode().strip(),\n    \"full_verify_last_line\": (blob(\"origin/main\", f\".cairn/archive/{archive}/evidence/final-2026-09-03/full-verify.log\") or b\"\").decode().strip().splitlines()[-1:],\n}\n\nlock = json.loads(blob(PIN, \"flake.lock\"))\nnodes = lock[\"nodes\"]\ndef locked(name):\n    l = nodes[name][\"locked\"]\n    return {k: l.get(k) for k in (\"type\", \"owner\", \"repo\", \"rev\", \"narHash\")}\nflake_nix = (blob(PIN, \"flake.nix\") or b\"\").decode().splitlines()\nout[\"toolchain_at_pin\"] = {\n    \"vstd\": next((l.strip() for l in (blob(PIN, \"Cargo.toml\") or b\"\").decode().splitlines() if l.strip().startswith(\"vstd\")), None),\n    \"rust_toolchain_toml\": (blob(PIN, \"rust-toolchain.toml\") or b\"\").decode().strip(),\n    \"verus_script_blake3\": b3(blob(PIN, \"scripts/verus.sh\")),\n    \"verus_script_provider_lines\": [l.strip() for l in blob(PIN, \"scripts/verus.sh\").decode().splitlines() if \"octet\" in l.lower() or \".#verus\" in l][:6],\n    \"flake_nix_verus_lines\": [l.strip() for l in flake_nix if \"verus\" in l.lower() and \"octet\" in l.lower()][:6],\n    \"flake_lock_octet\": locked(\"octet\"),\n    \"flake_lock_octet_aeneas\": locked(\"octet-aeneas\"),\n    \"flake_lock_root_rust_overlay\": locked(nodes[lock[\"root\"]][\"inputs\"][\"rust-overlay\"]) if \"rust-overlay\" in nodes[lock[\"root\"]][\"inputs\"] else None,\n}\n\nbundle = json.loads(blob(PIN, \"docs/proof-evidence-bundle.json\"))\nrecord = next(r for r in bundle[\"records\"] if r[\"scope\"] == \"module:fenced_attempt_admission::verified\")\nout[\"exported_artifact_at_pin\"] = {\n    \"contract_file\": \"json-artifacts/proof-evidence-bundle.ncl\",\n    \"contract_file_text\": blob(PIN, \"json-artifacts/proof-evidence-bundle.ncl\").decode().strip(),\n    \"bundle_path\": \"docs/proof-evidence-bundle.json\",\n    \"bundle_blake3\": b3(blob(PIN, \"docs/proof-evidence-bundle.json\")),\n    \"bundle_schema_version\": bundle[\"schema_version\"],\n    \"bundle_generated_by\": bundle[\"generated_by\"],\n    \"record\": record,\n}\n\nwith tempfile.TemporaryDirectory(dir=str(MANTLE.parent / \"tmp\")) as scratch:\n    check = run([sys.executable, \"scripts/import-trellis-fenced-attempt.py\", \"--check\"], cwd=MANTLE)\n    imported = pathlib.Path(scratch) / \"imported\"\n    imp = run([sys.executable, \"scripts/import-trellis-fenced-attempt.py\", \"--repository\", str(TRELLIS), \"--out\", str(imported)], cwd=MANTLE)\n    diff = run([\"diff\", \"-r\", str(imported), str(MANTLE / \"vendor/trellis-fenced-attempt\")])\n    out[\"mantle_vendored_copy\"] = {\n        \"offline_check\": {\"exit_code\": check.returncode, \"stdout\": check.stdout.decode().strip(), \"stderr\": check.stderr.decode().strip()},\n        \"import_from_trellis_object_store\": {\"exit_code\": imp.returncode, \"stdout\": imp.stdout.decode().strip(), \"stderr\": imp.stderr.decode().strip()},\n        \"diff_recursive_imported_vs_vendored\": {\"exit_code\": diff.returncode, \"stdout\": diff.stdout.decode().strip()},\n    }\nprint(json.dumps(out, indent=1, sort_keys=True))\n",
+ "raw_stdout_blake3": "dbedf758a56cca0c0e95432df0da88bd5f9cbfed74e9c91e09971cd6fa118a52",
+ "raw_stdout_bytes": 11909,
+ "non_claims": [
+  "The Trellis checkout was read, not changed: git show/ls-tree/rev-parse, git --no-optional-locks status, and a fetch into a throwaway bare repository.",
+  "The remote-availability result is true at observed_at_utc only; a later push by the Trellis owner changes it.",
+  "No Verus, Tracey, Cargo or Nix build ran. Archived counts and the producer bundle outcome are the producer's reports, not observations here.",
+  "Nothing here accepts the consumed kernel, a proof, a Valence property role, runtime authority or release eligibility."
+ ],
+ "observations": {
+  "accepted_change": {
+   "archive_commit": "8de4b24aa2d66cc2e6ec966d686df023492265d3|2026-09-03|make fenced rejections preserve every modeled field",
+   "archive_dir": ".cairn/archive/2026-09-03-add-fenced-attempt-admission-primitives",
+   "archive_present_at_origin_main": true,
+   "focused_verus_log": "verification results:: 23 verified, 0 errors",
+   "full_verify_last_line": [
+    "=== ALL CHECKS PASSED ==="
+   ]
+  },
+  "accepted_spec": {
+   "blake3_at_origin_main": "fdf97bd7e985f3c703ab80ea9422c42e37ce506fab958a35f413a5115bf72176",
+   "blake3_at_pin": "93792be747168e40c0d618f909a40ee5958cb08ed7f8faffac9586ebe3ecf1b9",
+   "lines_only_in_origin_main": [],
+   "lines_only_in_pin": [
+    "The additional `fenced_attempt_admission::verified` kernel proves equality of",
+    "its finite specification and executable decision over seven phases and seven",
+    "report kinds. Its event relation is a caller-supplied fact, not a proved history",
+    "lookup: the consumer must classify events against complete retained history",
+    "before invoking it. The kernel does not establish digest computation, runtime",
+    "projection/equivalence, transport, storage, verifier soundness, a Valence",
+    "property receipt, or release eligibility. The earlier model and its evidence",
+    "remain separate; neither is a proof that Mantle's consumer matches this kernel."
+   ],
+   "path": ".cairn/specs/fenced-attempt-admission/spec.md",
+   "requirement_ids_at_origin_main": [
+    "fenced-attempt-admission.boundary",
+    "fenced-attempt-admission.completion-linkage",
+    "fenced-attempt-admission.event-idempotence",
+    "fenced-attempt-admission.evidence",
+    "fenced-attempt-admission.fence-safety",
+    "fenced-attempt-admission.refinement",
+    "fenced-attempt-admission.rejection-preservation",
+    "fenced-attempt-admission.terminal-closure"
+   ],
+   "requirement_ids_at_pin": [
+    "fenced-attempt-admission.boundary",
+    "fenced-attempt-admission.completion-linkage",
+    "fenced-attempt-admission.event-idempotence",
+    "fenced-attempt-admission.evidence",
+    "fenced-attempt-admission.fence-safety",
+    "fenced-attempt-admission.refinement",
+    "fenced-attempt-admission.rejection-preservation",
+    "fenced-attempt-admission.terminal-closure"
+   ]
+  },
+  "exported_artifact_at_pin": {
+   "bundle_blake3": "5312d8baf35189a17dcf3f0c7e8b9895c4988ab9f7ad4898ad7057b98265cd8a",
+   "bundle_generated_by": "src/bin/proof_evidence.rs",
+   "bundle_path": "docs/proof-evidence-bundle.json",
+   "bundle_schema_version": "trellis-proof-evidence-v1",
+   "contract_file": "json-artifacts/proof-evidence-bundle.ncl",
+   "contract_file_text": "let Contracts = import \"contracts.ncl\" in\n(import \"../docs/proof-evidence-bundle.json\") | Contracts.ProofEvidenceBundle | Contracts.ProofEvidenceBundleIntegrity",
+   "record": {
+    "algorithm_profile": "trellis.fenced-attempt-admission.bounded-decision.v1",
+    "claims": [
+     "records a finite Trellis spec/executable decision equality for caller-admitted facts"
+    ],
+    "content_identities": [
+     {
+      "algorithm": "blake3",
+      "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8",
+      "path": "docs/requirements.md"
+     },
+     {
+      "algorithm": "blake3",
+      "digest": "1bca372696deb7d68be296728c6c4128f2c5402880754976d11990bd61683ed7",
+      "path": "src/fenced_attempt/identity.rs"
+     },
+     {
+      "algorithm": "blake3",
+      "digest": "391047a21cec9a8100fb1f6e6535297e0e63296d5f2f90fd610d48e1f2feaefd",
+      "path": "src/fenced_attempt/tests/verified_negative.rs"
+     },
+     {
+      "algorithm": "blake3",
+      "digest": "1b91fa5e9b6f551a570806a26a6f0870374aa1dda947788f56ecdd03a2934a4a",
+      "path": "src/fenced_attempt/tests/verified_positive.rs"
+     },
+     {
+      "algorithm": "blake3",
+      "digest": "ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549",
+      "path": "src/fenced_attempt/verified.rs"
+     }
+    ],
+    "downstream_validation_requirement": "classify events against complete retained history; prove consumer projection or rerun",
+    "evidence_tier": "local-proof-summary",
+    "executable_oracle_symbol": "verified_logic::fenced_attempt_admission::verified::admit",
+    "maturity_facts": [],
+    "non_claims": [
+     "not release approval",
+     "not whole-program correctness",
+     "not third-party conformance",
+     "not event digest computation or complete-history lookup",
+     "not Mantle runtime equivalence or downstream correctness",
+     "not verifier soundness or a Valence property receipt",
+     "not release eligibility"
+    ],
+    "proof_command": "./scripts/verus.sh src/lib.rs --rlimit 40 --triggers-mode silent",
+    "proof_functions": [
+     "fenced_attempt_admission::verified::rejected_fence_preserves",
+     "fenced_attempt_admission::verified::terminal_new_event_preserves",
+     "fenced_attempt_admission::verified::duplicate_and_conflict_preserve",
+     "fenced_attempt_admission::verified::applied_completion_requires_linkage",
+     "fenced_attempt_admission::verified::non_applied_preserves",
+     "fenced_attempt_admission::verified::representable_fence_advances"
+    ],
+    "proof_gap_references": [],
+    "proof_outcome": "verified",
+    "requirement_ids": [
+     "fenced-attempt-admission.completion-linkage",
+     "fenced-attempt-admission.event-idempotence",
+     "fenced-attempt-admission.fence-safety",
+     "fenced-attempt-admission.rejection-preservation",
+     "fenced-attempt-admission.terminal-closure"
+    ],
+    "scope": "module:fenced_attempt_admission::verified",
+    "source_paths": [
+     "src/fenced_attempt/identity.rs",
+     "src/fenced_attempt/verified.rs",
+     "src/fenced_attempt/tests/verified_positive.rs",
+     "src/fenced_attempt/tests/verified_negative.rs"
+    ],
+    "tracey_coverage": "covered",
+    "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md"
+   }
+  },
+  "mantle": {
+   "head": "7a929f5751a6251951cc3d9841f7be541f171f79",
+   "tracked_dirty_paths": 0
+  },
+  "mantle_pin_manifest": {
+   "files": {
+    "LICENSE": {
+     "blake3": "7ad11002cb765572342fc15096832825a9071dfc7f4f427d92c6906d83ea9b54",
+     "bytes": 16726,
+     "path": "LICENSE"
+    },
+    "src/fenced_attempt/tests/verified_negative.rs": {
+     "blake3": "391047a21cec9a8100fb1f6e6535297e0e63296d5f2f90fd610d48e1f2feaefd",
+     "bytes": 4736,
+     "path": "tests/verified_negative.rs"
+    },
+    "src/fenced_attempt/tests/verified_positive.rs": {
+     "blake3": "1b91fa5e9b6f551a570806a26a6f0870374aa1dda947788f56ecdd03a2934a4a",
+     "bytes": 3139,
+     "path": "tests/verified_positive.rs"
+    },
+    "src/fenced_attempt/verified.rs": {
+     "blake3": "ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549",
+     "bytes": 12730,
+     "path": "verified.rs"
+    }
+   },
+   "repository": "https://github.com/OnixResearch/trellis",
+   "revision": "d91188e495d65bca87551b7a06330efb2c909edf",
+   "vstd_version": "=0.0.0-2026-01-25-0057"
+  },
+  "mantle_vendored_copy": {
+   "diff_recursive_imported_vs_vendored": {
+    "exit_code": 0,
+    "stdout": ""
+   },
+   "import_from_trellis_object_store": {
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\"model_blake3\": \"ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549\", \"non_claim\": \"not fresh Verus verification, proof acceptance, runtime authority or release eligibility\", \"revision\": \"d91188e495d65bca87551b7a06330efb2c909edf\", \"status\": \"source-identities-match\"}"
+   },
+   "offline_check": {
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\"model_blake3\": \"ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549\", \"non_claim\": \"not fresh Verus verification, proof acceptance, runtime authority or release eligibility\", \"revision\": \"d91188e495d65bca87551b7a06330efb2c909edf\", \"status\": \"source-identities-match\"}"
+   }
+  },
+  "observed_at_utc": "2026-10-30T12:08:07.448359+00:00",
+  "pin": {
+   "commit": "d91188e495d65bca87551b7a06330efb2c909edf|2026-10-01T02:27:22-04:00|Prove bounded fenced-attempt admission and bind source evidence",
+   "is_ancestor_of_origin_main_tracking_ref": false,
+   "local_branches_containing": [
+    "main"
+   ],
+   "object_type": "commit",
+   "remote_tracking_branches_containing": [],
+   "revision": "d91188e495d65bca87551b7a06330efb2c909edf"
+  },
+  "pinned_members_at_published_revisions": {
+   "cairn/add-fenced-attempt-admission-primitives": {
+    "LICENSE": "MATCH",
+    "src/fenced_attempt/tests/verified_negative.rs": "absent",
+    "src/fenced_attempt/tests/verified_positive.rs": "absent",
+    "src/fenced_attempt/verified.rs": "absent"
+   },
+   "drain/fenced-attempt-admission-20260903": {
+    "LICENSE": "MATCH",
+    "src/fenced_attempt/tests/verified_negative.rs": "absent",
+    "src/fenced_attempt/tests/verified_positive.rs": "absent",
+    "src/fenced_attempt/verified.rs": "absent"
+   },
+   "origin/main": {
+    "LICENSE": "MATCH",
+    "src/fenced_attempt/tests/verified_negative.rs": "absent",
+    "src/fenced_attempt/tests/verified_positive.rs": "absent",
+    "src/fenced_attempt/verified.rs": "absent"
+   },
+   "pin": {
+    "LICENSE": "MATCH",
+    "src/fenced_attempt/tests/verified_negative.rs": "MATCH",
+    "src/fenced_attempt/tests/verified_positive.rs": "MATCH",
+    "src/fenced_attempt/verified.rs": "MATCH"
+   }
+  },
+  "remote_availability": {
+   "command": "git fetch --depth=1 git@github.com:OnixResearch/trellis.git d91188e495d65bca87551b7a06330efb2c909edf (into a throwaway bare repository)",
+   "exit_code": 128,
+   "object_present_after": false,
+   "stderr": "fatal: remote error: upload-pack: not our ref d91188e495d65bca87551b7a06330efb2c909edf"
+  },
+  "remote_heads": {
+   "cairn/add-fenced-attempt-admission-primitives": "26ef22128296d2b5535aaa0cb4229291c85fb8ee",
+   "drain/fenced-attempt-admission-20260903": "8de4b24aa2d66cc2e6ec966d686df023492265d3",
+   "main": "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3"
+  },
+  "schema": "mantle-trellis-pin-observations-v1",
+  "toolchain_at_pin": {
+   "flake_lock_octet": {
+    "narHash": "sha256-viRh4WdWGSz1xNVeyID8N9bTgObHKe64wqR5w48NOYE=",
+    "owner": "OnixResearch",
+    "repo": "octet",
+    "rev": "374bd16b26cee2af34211a29bfa531c016811f51",
+    "type": "github"
+   },
+   "flake_lock_octet_aeneas": {
+    "narHash": "sha256-LH0cRVM9v9eapdyUBNViL39gxRZRXLRS0ZjIjdTKICk=",
+    "owner": "OnixResearch",
+    "repo": "octet",
+    "rev": "890f424cd7b1b2015f39c0eb5747f1bd1e576028",
+    "type": "github"
+   },
+   "flake_lock_root_rust_overlay": {
+    "narHash": "sha256-ba3c+hS7KzEiwtZRGHagIAYdcmdY3rCSWVCyn64rx7s=",
+    "owner": "oxalica",
+    "repo": "rust-overlay",
+    "rev": "c807e83cc2e32adc35f51138b3bdef722c0812ab",
+    "type": "github"
+   },
+   "flake_nix_verus_lines": [
+    "octetProductionVerus = builtins.getAttr \"octet-production-verus\" octetPackages;",
+    "verusfmt = builtins.getAttr \"octet-verusfmt\" octetPackages;",
+    "verusToolchainProfile = builtins.getAttr \"octet-verus-toolchain-profile\" octetPackages;",
+    "upgradeTrialSavedEvidence = ./cairn/archive/2026-07-12-repair-octet-verus-upgrade/evidence/trial;",
+    "profile_json=${verusToolchainProfile}/share/octet/verus-toolchain/profile.json",
+    ".schema_version == \"octet-verus-toolchain-profile/v1\""
+   ],
+   "rust_toolchain_toml": "[toolchain]\nchannel = \"nightly\"\ncomponents = [\"rust-src\", \"rustfmt\", \"clippy\"]\nprofile = \"default\"",
+   "verus_script_blake3": "f2a389f8133c0e9a3f28570139581a0dfd62fa129f43a7769467c782ec315685",
+   "verus_script_provider_lines": [
+    "# Run Trellis proofs with Octet's published production Verus package.",
+    "VERUS_ROOT=\"$(nix build .#verus --no-link --print-out-paths)\"",
+    "if [ -x \"$VERUS_ROOT/bin/octet-production-verus\" ]; then",
+    "VERUS_BIN=\"$VERUS_ROOT/bin/octet-production-verus\"",
+    "echo \"Set VERUS_ROOT to the Octet package or a compatible unpacked Verus root.\" >&2"
+   ],
+   "vstd": "vstd = \"=0.0.0-2026-01-25-0057\""
+  },
+  "trellis_checkout": {
+   "dirty_or_untracked_paths": 572,
+   "head": "6f8b01e165364d147905cd00b9e4e6977dbbe84c",
+   "head_is_ancestor_of_origin_main": false,
+   "origin_main_tracking_ref": "22d51fb8c1f57155f6c0c4acc4e14902ebb6b4f3"
+  }
+ }
+}
