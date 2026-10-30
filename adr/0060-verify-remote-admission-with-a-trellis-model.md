@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposed
+Accepted (2026-10-30), by operator authorization after assistant review. The review
+confirmed that the imported oracle the decision describes exists
+(`vendor/trellis-fenced-attempt/`, `scripts/import-trellis-fenced-attempt.py`). Accepting
+the decision does not accept the paired Trellis model, fresh Verus verification,
+Kamacite and Valence proof acceptance, or the parity rail: tasks I2 to I9 and V1 to V2 of
+`verify-remote-admission-with-trellis` remain open.
 
 ## Context
 

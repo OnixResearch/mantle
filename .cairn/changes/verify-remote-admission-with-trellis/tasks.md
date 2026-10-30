@@ -3,7 +3,7 @@
 ## Phase 1: Cross-repository contract and baseline
 
 - [ ] [serial] V1 Record the current Mantle remote-attempt state, report, fence, event, authorization, transition, retry, and application surfaces plus focused test output. r[remote_builds.trellis_admission_projection]
-- [ ] [serial] I1 Review and accept ADR 0060 for a Trellis-owned generic model, Mantle-owned projection, external proof evidence, and bounded claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_evidence_boundary]
+- [x] [serial] I1 Review and accept ADR 0060 for a Trellis-owned generic model, Mantle-owned projection, external proof evidence, and bounded claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_evidence_boundary] (ADR accepted by operator authorization 2026-10-30; see its Status.)
 - [ ] [depends:add-fenced-attempt-admission-primitives] I2 Record the accepted Trellis requirement IDs, revision, source digest, verifier/toolchain identity, exported proof artifact contract, and non-claims. r[remote_builds.trellis_admission_model] r[remote_builds.trellis_admission_safety]
 - [x] [depends:extend-nominal-types-to-trust-boundaries] I3 Reconcile the projection with admitted remote job, attempt, fence, event, digest, phase, and authorization types. r[remote_builds.trellis_admission_projection]
 - [ ] [depends:harden-remote-credential-boundary] [depends:add-nix-remote-service-gateway] [depends:add-evidence-driven-resource-policy] I4 Freeze the remote fact set used by the first proof profile after active remote contracts stabilize. r[remote_builds.trellis_admission_model]

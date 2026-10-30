@@ -8,7 +8,7 @@ or runtime gates. Those require captured execution.
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current per-recipe smoke inventory under `bootstrap/`, the builder-layer finish surface, and focused baseline test output. r[mantle.derivation_finish_gates.shared_contract]
 - [x] [serial] T1.2 Define the versioned finish-gate contract in typed Nickel policy with the deterministic export, named bounds, defaults, and explicit opt-outs. r[mantle.derivation_finish_gates.shared_contract]
-- [ ] [serial] T1.3 Review and accept the gate-set decision (version default-on, leak policy per build kind, relocation and dlopen opt-in) in an ADR. r[mantle.derivation_finish_gates.shared_contract]
+- [x] [serial] T1.3 Review and accept the gate-set decision (version default-on, leak policy per build kind, relocation and dlopen opt-in) in an ADR. r[mantle.derivation_finish_gates.shared_contract] (ADR accepted by operator authorization 2026-10-30; see its Status.)
 
 ## Phase 2: Core and shell
 

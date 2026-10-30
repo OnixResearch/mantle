@@ -2,7 +2,16 @@
 
 ## Status
 
-Proposed (2026-10-01). Acceptance depends on real build-time positive and negative proofs and bootstrap family adoption under `standardize-derivation-finish-gates`.
+Accepted (2026-10-30), by operator authorization, as the gate-set decision: version and
+reference reporting default on for newly constructed `mkDerivation` records, relocation
+and loader auditing opt-in, and raw legacy derivations unchanged until migrated. The
+condition recorded when this was proposed is split. Real build-time positive and negative
+proofs are recorded in `standardize-derivation-finish-gates` evidence
+(`actual-finish-runtime-2026-10-23.json`, `nonzero-exit-fixture-2026-10-26.json`: six core
+and eight real sandbox fixtures, plus CLI smokes). Bootstrap family adoption (T4.1), the
+unchanged-recipes proof (T3.3), the full gates and archive remain open. Accepting the
+decision does not accept production adoption, any GCC-family build, or release
+eligibility.
 
 ## Context
 

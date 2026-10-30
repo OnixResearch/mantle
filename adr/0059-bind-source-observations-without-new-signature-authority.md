@@ -2,7 +2,14 @@
 
 ## Status
 
-Proposed
+Accepted (2026-10-30), by operator authorization after assistant review. The review
+confirmed that the artifacts the decision names exist in the tree:
+`SourceObservationBinding::for_acquisition` (`crunch-release-core`), the
+`mantle-source-observation-v1` schema and domain tag (`crunch-source-core`), and its
+source-observation fixtures. Accepting the decision does not accept the open tasks of
+`bind-source-observations-and-monotonic-ingest` (I3 and I4), SHA-256 Git acquisition,
+reviewer-policy authority, or crash-atomic multi-file ingest; see "Current adapter
+compatibility" and "Durable ingest boundary".
 
 ## Context
 

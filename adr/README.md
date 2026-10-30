@@ -65,8 +65,8 @@ compatibility surface, crate name, or historical decision.
 | [0056](0056-generate-mantlepkgs-from-concrete-package-graphs.md) | Generate Mantlepkgs from concrete package graphs | Proposed |
 | [0057](0057-keep-composition-plans-concrete-and-frontend-neutral.md) | Keep composition plans concrete and frontend-neutral | Accepted |
 | [0058](0058-limit-store-access-with-concrete-capability-views.md) | Limit store access with concrete capability views | Proposed |
-| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Proposed |
-| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
+| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Accepted |
+| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Accepted |
 | [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
 | [0063](0063-keep-chaptered-release-archives-as-receipt-bound-transport.md) | Keep chaptered release archives as receipt-bound transport | Accepted |
@@ -100,7 +100,7 @@ compatibility surface, crate name, or historical decision.
 | [0091](0091-version-long-lived-service-readiness-states-and-restart-policy.md) | Version long-lived service readiness states and restart policy | Proposed |
 | [0092](0092-lock-driven-vendor-fetches.md) | Acquire Cargo vendor inputs from lock-driven fixed-output fetches | Proposed |
 | [0093](0093-diff-admitted-watch-goals-by-identity.md) | Diff admitted watch goals by identity and cancel retracted work | Proposed |
-| [0095](0095-version-derivation-finish-gates.md) | Version derivation finish gates with explicit adoption | Proposed |
+| [0095](0095-version-derivation-finish-gates.md) | Version derivation finish gates with explicit adoption | Accepted |
 | [0096](0096-keep-causal-build-traces-outside-evidence.md) | Keep causal build traces outside build evidence | Proposed |
 | [0098](0098-resolve-content-addressed-inputs-before-dispatch.md) | Resolve content-addressed inputs before dispatch under signed realisations | Proposed |
 | [0099](0099-reuse-local-daemon-for-depfile-validated-cc-cache.md) | Reuse local daemon for depfile-validated C/C++ compilation | Proposed |
