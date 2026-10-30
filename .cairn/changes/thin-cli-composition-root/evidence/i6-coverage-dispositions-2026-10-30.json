@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-i6-coverage-dispositions-v1",
+  "note": "Reviewer dispositions for audit gap flags, each anchored to source text that scripts/audit-i6-coverage.py re-checks on every run. A disposition records a reading of the source; it is not acceptance of I6.",
+  "dispositions": [
+    {
+      "leaf": "refactor list",
+      "kind": "effect-free",
+      "rationale": "The arm renders the one built-in session record (`crunch_to_mantle_session()`) through println!. It reads no file, process, environment, clock or network, so there is no effect to plan or observe. The I6 handoff key RF says the same: 'List is pure'.",
+      "anchors": [
+        {"file": "src/main.rs", "contains": "RefactorAction::List => {"},
+        {"file": "src/main.rs", "contains": "structured_refactor::crunch_to_mantle_session()"}
+      ]
+    },
+    {
+      "leaf": "evaluator-worker",
+      "kind": "classified-by-shared-owner",
+      "rationale": "Hidden child-protocol endpoint: it reads one framed request on stdin and writes one framed response on stdout, and it prints no operator report. The spawning parent consumes the frame and classifies the worker's exit, stdout and stderr (`classify_worker_output`), and the operator-visible `eval`/`build` leaves classify through build_observation. This is a parent-side exit classification, not a contract `classify_*` call at the endpoint.",
+      "anchors": [
+        {"file": "src/evaluator_budget.rs", "contains": "let (response, exit_kind, protocol_error) = classify_worker_output("},
+        {"file": "src/main.rs", "contains": "Command::EvaluatorWorker => return evaluator_budget::worker_main()"}
+      ]
+    },
+    {
+      "leaf": "evaluator-worker-fixture",
+      "kind": "classified-by-shared-owner",
+      "rationale": "Debug-build-only fault fixture for the same child protocol (panic, signal, memory/CPU exhaustion, malformed or flooding frames). It exists so the parent's `classify_worker_output` has real failures to classify; it has no operator success report and is unavailable in release builds.",
+      "anchors": [
+        {"file": "src/evaluator_budget.rs", "contains": "evaluator worker fixtures are unavailable in release builds"},
+        {"file": "src/evaluator_budget.rs", "contains": "\"malformed-frame\" => write_fixture_bytes"}
+      ]
+    }
+  ]
+}
