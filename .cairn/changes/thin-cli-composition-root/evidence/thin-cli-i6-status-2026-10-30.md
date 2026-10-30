@@ -117,6 +117,25 @@ in a retained log): with `"smol"` removed from `CONTRACT_FORBIDDEN` the self-tes
 `cli-architecture self-test: FAIL: async runtime authority lost its forbidden-table row `smol``. Limit: a row
 removed that is not in the required-row list (for example `rustix::net`) is still not detected.
 
+## Integrator re-run after formatting (2026-10-30)
+
+Rows 5 and 6 above ran before `rustfmt` was applied to the touched files. The integrator re-ran rows 3 to 9
+on the agent's final commit `7aebe584b` (worktree clean before and after). Every step exited 0.
+Exact output and the script are retained in `thin-cli-integrator-rerun-2026-10-30.json` (BLAKE3 `cd0a433776a1cb6299ad787f2e9741bb84458ddac7dc38ceea8d0d8929dd3ace`).
+
+| Step | Result lines (verbatim) |
+|---|---|
+| `cargo fmt --check -p mantle` | no output |
+| four new CLI test files | `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s`; `test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s`; `test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s`; `test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s` |
+| `foreign_import_cli` | `test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.43s` |
+| `foreign_import_cmd::tests` | `test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 2838 filtered out; finished in 5.51s` |
+| architecture checker | `cli-architecture self-test: PASS`; `cli architecture: PASS` |
+
+The audit report was generated before `rustfmt`, so its source line anchors had drifted. It was regenerated
+on the formatted merged tree with the same command and inputs: 72 of its leaf entries changed, every one a
+source line number only, and the summary counts are identical. The committed report now describes the tree
+at the regeneration commit; later edits to the audited files will shift its anchors again.
+
 ## Limits and non-claims
 
 - **Test attribution is lexical and unreliable in both directions.** CLI tests are matched by literal arguments

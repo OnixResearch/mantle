@@ -5374,12 +5374,12 @@
      "src/filegen_cmd.rs:961 plan_write_failure_is_classified_before_reporting",
      "src/filegen_cmd.rs:977 tampered_published_plan_fails_real_readback",
      "src/filegen_cmd.rs:998 partial_apply_write_is_observed_as_failure",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "tests/example_projects.rs:867 reviewed_file_generation_rejects_missing_contract_field"
     ],
     "success": [
      "src/filegen_cmd.rs:871 applied_files_and_state_must_both_read_back",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },
@@ -5397,7 +5397,7 @@
      ],
      "depth": 3,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5405,9 +5405,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:590 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:633 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1149 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:591 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:634 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1150 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5468,7 +5468,7 @@
      ],
      "depth": 4,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5476,9 +5476,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:577 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:605 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1067 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:578 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:606 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1068 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5514,10 +5514,10 @@
      "src/foreign_executable_plan.rs:1218 cache_only_plan_binds_route_and_rejects_path_or_route_tampering",
      "src/foreign_executable_plan.rs:1256 executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success",
      "src/foreign_graph_compiler.rs:1727 unrelated_or_non_token_store_text_is_not_rewritten",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3366 plan_inputs_returns_receipt_and_plan_without_process_invocations",
-     "src/foreign_import_cmd.rs:3403 nario_source_request_core_rejects_archive_key_and_route_limits",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3385 plan_inputs_returns_receipt_and_plan_without_process_invocations",
+     "src/foreign_import_cmd.rs:3422 nario_source_request_core_rejects_archive_key_and_route_limits",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:657 cache_only_audit_uses_the_receipt_runtime_closure_and_rejects_incompleteness",
      "src/source_built_recipe_command_state.rs:494 workspace_times_restore_exact_postorder_without_following_symlinks",
      "src/source_built_recipe_command_state.rs:534 workspace_times_reject_changed_inventory_noncanonical_and_out_of_range_records"
@@ -5527,8 +5527,8 @@
      "src/foreign_executable_plan.rs:1162 executable_plan_preserves_bare_source_store_literals_during_aterm_validation",
      "src/foreign_executable_plan.rs:1276 fixture_plan",
      "src/foreign_graph_compiler.rs:1710 known_store_dir_placeholders_use_the_active_store_prefix",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:531 fixture_plan",
      "src/foreign_realization.rs:679 fixture",
      "tests/foreign_import_cli.rs:1663 run_plan_json"
@@ -5549,7 +5549,7 @@
      ],
      "depth": 3,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5557,9 +5557,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:578 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:616 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1091 in foreign_import_cmd::cmd_foreign_import_with_observation",
+    "src/foreign_import_cmd.rs:579 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:617 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1092 in foreign_import_cmd::cmd_foreign_import_with_observation",
     "src/main.rs:3744 in main::preflight_store_cli_capabilities"
    ],
    "disposition": null,
@@ -5593,8 +5593,8 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3403 nario_source_request_core_rejects_archive_key_and_route_limits",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3422 nario_source_request_core_rejects_archive_key_and_route_limits",
      "src/foreign_realization.rs:620 cache_only_policy_and_empty_source_bundle_fail_closed",
      "src/source_built_recipe_command_state.rs:494 workspace_times_restore_exact_postorder_without_following_symlinks",
      "src/source_built_recipe_command_state.rs:534 workspace_times_reject_changed_inventory_noncanonical_and_out_of_range_records",
@@ -5602,7 +5602,7 @@
      "src/source_bundle.rs:9159 source_bundle_no_replace_publication_preserves_existing_destination"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },
@@ -5622,7 +5622,7 @@
      ],
      "depth": 5,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5630,9 +5630,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:592 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:634 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1169 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:593 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:635 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1170 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5689,7 +5689,7 @@
      ],
      "depth": 5,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5697,9 +5697,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:593 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:635 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1199 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:594 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:636 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1203 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5782,7 +5782,7 @@
      ],
      "depth": 5,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5790,9 +5790,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:594 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:636 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1233 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:595 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:637 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1240 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5849,7 +5849,7 @@
      ],
      "depth": 3,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5857,9 +5857,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:579 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:630 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1112 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:580 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:631 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1113 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -5892,7 +5892,7 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/foreign_realization.rs:503 admission_rejects_stale_receipt_missing_profile_and_unknown_root",
      "src/foreign_realization.rs:563 source_admission_rejects_missing_incomplete_and_stale_bindings",
      "src/foreign_realization.rs:620 cache_only_policy_and_empty_source_bundle_fail_closed",
@@ -5905,7 +5905,7 @@
      "src/source_bundle.rs:8214 explicit_empty_source_bundle_is_digest_bound_and_rejects_structure_tamper"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/foreign_realization.rs:482 admission_validates_receipt_roots_profiles_and_native_units",
      "src/foreign_realization.rs:546 source_admission_binds_payloads_to_manifest_records",
      "src/foreign_realization_shell.rs:751 cache_only_observer_removes_every_builder_dependency_and_argument",
@@ -5928,7 +5928,7 @@
      ],
      "depth": 4,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -5936,9 +5936,9 @@
    ],
    "classification_strength": "indirect",
    "dispatch_arms": [
-    "src/foreign_import_cmd.rs:574 in foreign_import_cmd::foreign_read_limit",
-    "src/foreign_import_cmd.rs:604 in foreign_import_cmd::foreign_effect_outputs",
-    "src/foreign_import_cmd.rs:1053 in foreign_import_cmd::cmd_foreign_import_with_observation"
+    "src/foreign_import_cmd.rs:575 in foreign_import_cmd::foreign_read_limit",
+    "src/foreign_import_cmd.rs:605 in foreign_import_cmd::foreign_effect_outputs",
+    "src/foreign_import_cmd.rs:1054 in foreign_import_cmd::cmd_foreign_import_with_observation"
    ],
    "disposition": null,
    "entry_functions": [
@@ -6344,7 +6344,7 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/pin_import.rs:962 relative_path_guard_rejects_absolute_and_parent_traversal",
      "src/pin_import.rs:988 readback_checks_real_target_and_bytes_not_just_file_count",
      "tests/lock_importer_offline_rail.rs:119 lock_importer_offline_rail_plan_no_mutate",
@@ -6352,7 +6352,7 @@
      "tests/pin_import_cli.rs:97 pins_import_plan_is_no_mutate_and_reviewable"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/pin_import.rs:946 future_adapter_pin_set_is_blocker_only",
      "tests/lock_importer_offline_rail.rs:170 lock_importer_offline_rail_apply_creates_planned_files",
      "tests/lock_importer_offline_rail.rs:211 lock_importer_offline_rail_composition_semantics_are_blockers",
@@ -6653,7 +6653,7 @@
      ],
      "depth": 6,
      "discarded": false,
-     "location": "src/foreign_import_cmd.rs:724",
+     "location": "src/foreign_import_cmd.rs:725",
      "order": [],
      "owner": "foreign_import_cmd::classify_foreign_observations",
      "sink": "classify_observations"
@@ -6700,10 +6700,10 @@
      "src/foreign_derivation_import.rs:3663 translation_rejects_unsupported_builtins_references_stale_receipts_indexes_and_features",
      "src/foreign_executable_plan.rs:1218 cache_only_plan_binds_route_and_rejects_path_or_route_tampering",
      "src/foreign_executable_plan.rs:1256 executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3366 plan_inputs_returns_receipt_and_plan_without_process_invocations",
-     "src/foreign_import_cmd.rs:3403 nario_source_request_core_rejects_archive_key_and_route_limits",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3385 plan_inputs_returns_receipt_and_plan_without_process_invocations",
+     "src/foreign_import_cmd.rs:3422 nario_source_request_core_rejects_archive_key_and_route_limits",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:645 audit_admission_rejects_stale_receipt_and_unknown_root",
      "src/foreign_provenance_audit.rs:657 cache_only_audit_uses_the_receipt_runtime_closure_and_rejects_incompleteness",
      "src/foreign_provenance_audit.rs:712 audit_receipt_digest_is_deterministic_and_tamper_evident",
@@ -6748,8 +6748,8 @@
      "src/foreign_executable_plan.rs:1139 executable_plan_is_deterministic_receipt_bound_and_self_validating",
      "src/foreign_executable_plan.rs:1162 executable_plan_preserves_bare_source_store_literals_during_aterm_validation",
      "src/foreign_executable_plan.rs:1276 fixture_plan",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:531 fixture_plan",
      "src/foreign_provenance_audit.rs:741 negative_audit_receipt_matrix_is_typed_and_self_digest_valid",
      "src/foreign_realization.rs:482 admission_validates_receipt_roots_profiles_and_native_units",
@@ -7305,10 +7305,10 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },
@@ -7379,10 +7379,10 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },
@@ -8098,10 +8098,10 @@
      "src/foreign_derivation_import.rs:3663 translation_rejects_unsupported_builtins_references_stale_receipts_indexes_and_features",
      "src/foreign_executable_plan.rs:1218 cache_only_plan_binds_route_and_rejects_path_or_route_tampering",
      "src/foreign_executable_plan.rs:1256 executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3366 plan_inputs_returns_receipt_and_plan_without_process_invocations",
-     "src/foreign_import_cmd.rs:3403 nario_source_request_core_rejects_archive_key_and_route_limits",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3385 plan_inputs_returns_receipt_and_plan_without_process_invocations",
+     "src/foreign_import_cmd.rs:3422 nario_source_request_core_rejects_archive_key_and_route_limits",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:645 audit_admission_rejects_stale_receipt_and_unknown_root",
      "src/foreign_provenance_audit.rs:657 cache_only_audit_uses_the_receipt_runtime_closure_and_rejects_incompleteness",
      "src/foreign_provenance_audit.rs:712 audit_receipt_digest_is_deterministic_and_tamper_evident",
@@ -8139,8 +8139,8 @@
      "src/foreign_executable_plan.rs:1139 executable_plan_is_deterministic_receipt_bound_and_self_validating",
      "src/foreign_executable_plan.rs:1162 executable_plan_preserves_bare_source_store_literals_during_aterm_validation",
      "src/foreign_executable_plan.rs:1276 fixture_plan",
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
-     "src/foreign_import_cmd.rs:3432 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3451 cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls",
      "src/foreign_provenance_audit.rs:531 fixture_plan",
      "src/foreign_provenance_audit.rs:741 negative_audit_receipt_matrix_is_typed_and_self_digest_valid",
      "src/foreign_realization.rs:482 admission_validates_receipt_roots_profiles_and_native_units",
@@ -12449,7 +12449,7 @@
     "classifier_success": [],
     "failure": [],
     "success": [
-     "tests/gateway_cli.rs:95 upload_binding"
+     "tests/gateway_cli.rs:101 upload_binding"
     ]
    }
   },
@@ -12568,7 +12568,7 @@
     "classifier_success": [],
     "failure": [],
     "success": [
-     "tests/gateway_cli.rs:152 campaign"
+     "tests/gateway_cli.rs:167 campaign"
     ]
    }
   },
@@ -16512,7 +16512,7 @@
      "crates/mantle-application-contract/tests/contract_fixtures.rs:173 observation_classification_checks_actual_authority_output_and_usage"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/foreign_realization.rs:620 cache_only_policy_and_empty_source_bundle_fail_closed",
      "src/source_built_fixed_point_shell.rs:3550 materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches",
      "src/source_bundle.rs:10189 source_offline_preflight_reports_unsupported_adapter",
@@ -16529,7 +16529,7 @@
      "src/source_bundle.rs:9649 source_bundle_verify_reports_missing_state"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case",
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case",
      "src/foreign_realization.rs:692 source_bundle_fixture",
      "src/source_built_fixed_point_shell.rs:3550 materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches",
      "src/source_bundle.rs:10212 source_offline_preflight_reports_untrusted_adapter",
@@ -17174,10 +17174,10 @@
      "crates/mantle-application-contract/src/store_administration.rs:893 signatures_require_both_transition_accounting_and_trusted_readback"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },
@@ -17242,10 +17242,10 @@
      "crates/mantle-application-contract/src/store_administration.rs:893 signatures_require_both_transition_accounting_and_trusted_readback"
     ],
     "failure": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ],
     "success": [
-     "src/foreign_import_cmd.rs:3140 run_realization_callback_case"
+     "src/foreign_import_cmd.rs:3153 run_realization_callback_case"
     ]
    }
   },

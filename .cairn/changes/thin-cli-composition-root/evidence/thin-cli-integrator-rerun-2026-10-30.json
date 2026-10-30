@@ -1,0 +1,64 @@
+{
+ "schema": "mantle-retained-observation-v1",
+ "purpose": "Integrator re-run, after rustfmt, of the checks the thin-cli I6/V1/V2 slice reported, in the agent worktree at its final commit.",
+ "agent_worktree_head": "7aebe584be2ae6195862f2cedc105f8629539987",
+ "worktree_status_before": "",
+ "worktree_status_after": "",
+ "script_source": "#!/bin/bash\n# Independent re-run of the thin-cli slice's executed checks, after formatting, in the agent's worktree.\ncd /home/brittonr/.cargo-target/agents-20261030/thin-cli\nV=/home/brittonr/.cargo-target/agents-20261030/validation/thin-cli\nW=\"python3 /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-in-worktree-v1.py --worktree $PWD/worktree --scratch $PWD/scratch --\"\ngit -C worktree rev-parse HEAD > $V/head.txt; git -C worktree status --short > $V/status-before.txt\nrun() { name=$1; shift; echo \"== $name: $*\" > $V/$name.log; $W \"$@\" >> $V/$name.log 2>&1; echo \"exit=$?\" >> $V/$name.log; }\nrun v-fmt cargo fmt --check -p mantle\nrun v-cli cargo test --locked --offline -p mantle --test gateway_cli --test profile_cli --test cargo_build_bundle_cli --test release_gauntlet_cli -- --test-threads 1\nrun v-foreign-cli cargo test --locked --offline -p mantle --test foreign_import_cli -- --test-threads 1\nrun v-foreign-unit cargo test --locked --offline -p mantle --bin mantle foreign_import_cmd::tests -- --test-threads 1\nrun v-arch-self cargo -Zscript scripts/check-cli-architecture.rs --self-test\nrun v-arch cargo -Zscript scripts/check-cli-architecture.rs\ngit -C worktree status --short > $V/status-after.txt\necho done > $V/DONE\n",
+ "script_blake3": "bcb53822ec88319c48bb0d3c14ed51b971cb06d889abe3d971fae18ff5cf77e4",
+ "steps": [
+  {
+   "label": "v-fmt",
+   "command": "cargo fmt --check -p mantle",
+   "exit_code": 0,
+   "output": "== v-fmt: cargo fmt --check -p mantle\nexit=0\n",
+   "output_bytes": 45,
+   "output_blake3": "abe6209dabfe9d6fb700b403ae35f834bbcbf56caebabfecb6f032e2b6a1989a"
+  },
+  {
+   "label": "v-cli",
+   "command": "cargo test --locked --offline -p mantle --test gateway_cli --test profile_cli --test cargo_build_bundle_cli --test release_gauntlet_cli -- --test-threads 1",
+   "exit_code": 0,
+   "output": "== v-cli: cargo test --locked --offline -p mantle --test gateway_cli --test profile_cli --test cargo_build_bundle_cli --test release_gauntlet_cli -- --test-threads 1\nwarning: /home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 37s\n     Running tests/cargo_build_bundle_cli.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/cargo_build_bundle_cli-b7062b3c4df677c4)\n\nrunning 8 tests\ntest inspect_prints_the_admitted_manifest_for_matching_compatibility ... ok\ntest inspect_refuses_a_compatibility_expectation_the_manifest_does_not_satisfy ... ok\ntest inspect_refuses_a_manifest_whose_content_no_longer_matches_its_identity ... ok\ntest inspect_refuses_missing_and_malformed_inputs_without_a_report ... ok\ntest inspect_without_its_required_inputs_is_a_usage_error ... ok\ntest verify_refuses_a_bundle_whose_declared_payloads_are_absent ... ok\ntest verify_refuses_a_trust_policy_that_is_not_the_one_the_manifest_declares ... ok\ntest verify_without_a_trusted_key_is_a_usage_error ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s\n\n     Running tests/gateway_cli.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/gateway_cli-902633c160586df2)\n\nrunning 7 tests\ntest provision_quota_initializes_once_and_never_rewrites_an_existing_ledger ... ok\ntest provision_quota_refuses_a_missing_directory_without_creating_it ... ok\ntest quota_fault_campaign_is_deterministic_per_seed_and_labelled_a_local_fixture ... ok\ntest quota_fault_campaign_refuses_to_reuse_a_directory_and_leaves_it_untouched ... ok\ntest store_read_binding_digest_is_deterministic_and_bound_to_generation_and_opcode ... ok\ntest store_read_binding_refuses_zero_generation_and_non_store_paths_without_a_report ... ok\ntest upload_binding_commits_to_the_byte_bound_and_refuses_an_unbounded_or_exposed_header ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s\n\n     Running tests/profile_cli.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/profile_cli-54c1227dd873068c)\n\nrunning 6 tests\ntest a_mutation_without_an_expected_generation_is_refused_before_any_filesystem_effect ... ok\ntest a_non_canonical_expected_generation_is_refused ... ok\ntest a_relative_profile_target_is_refused_before_any_filesystem_effect ... ok\ntest an_unknown_subcommand_is_a_usage_error ... ok\ntest domain_blockers_exit_as_blocked_and_print_no_success_report ... ok\ntest inspection_reports_each_requested_operation_for_an_empty_profile_without_applying ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s\n\n     Running tests/release_gauntlet_cli.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/release_gauntlet_cli-c010c8582cebb8d4)\n\nrunning 4 tests\ntest aggregate_actions_refuse_missing_evidence_without_writing_their_report ... ok\ntest aggregate_actions_require_at_least_one_evidence_input ... ok\ntest canonicalize_refuses_malformed_and_wrong_shaped_reports_without_publishing ... ok\ntest canonicalize_rejects_an_unknown_report_kind_as_a_usage_error ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s\n\nexit=0\n",
+   "output_bytes": 3642,
+   "output_blake3": "44c11cc9d53b3f05393633663fc35f86483a7a73642d4d307f6d34bdfbeebbc4"
+  },
+  {
+   "label": "v-foreign-cli",
+   "command": "cargo test --locked --offline -p mantle --test foreign_import_cli -- --test-threads 1",
+   "exit_code": 0,
+   "output": "== v-foreign-cli: cargo test --locked --offline -p mantle --test foreign_import_cli -- --test-threads 1\nwarning: /home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s\n     Running tests/foreign_import_cli.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/foreign_import_cli-da4fc9a4ad36e562)\n\nrunning 19 tests\ntest foreign_import_cli_does_not_require_foreign_frontend_commands ... ok\ntest foreign_import_cli_prepares_exact_nario_source_and_rejects_unmatched_records ... ok\ntest foreign_import_cli_produce_aterm_matches_nix_and_emits_guix_directory_artifacts ... ok\ntest foreign_import_cli_produce_aterm_rejects_bad_bundles_without_partial_artifacts ... ok\ntest foreign_import_cli_produce_aterm_rejects_duplicate_and_bounded_byte_inputs ... ok\ntest foreign_import_cli_produce_aterm_rejects_input_mode_conflicts_without_artifacts ... ok\ntest foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix ... ok\ntest foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix ... ok\ntest foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_without_nix ... ok\ntest foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs ... ok\ntest foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_artifacts ... ok\ntest foreign_import_cli_rejects_malformed_drv_without_partial_artifacts ... ok\ntest foreign_import_cli_rejects_malformed_json_and_policy_failures ... ok\ntest foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state ... ok\ntest foreign_import_cli_validates_and_plans_checked_fixtures ... ok\ntest foreign_plan_refuses_success_when_distinct_output_names_alias ... ok\ntest produce_backend_fix_and_host_nix_emit_parity_artifacts ... ignored, requires MANTLE_TEST_FIX_BACKEND_BINARY, MANTLE_TEST_NIX_INSTANTIATE_BINARY, and a reachable Nix daemon\ntest produce_backend_rejects_conflicting_target_modes ... ok\ntest produce_backend_rejects_unknown_backend ... ok\n\ntest result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.43s\n\nexit=0\n",
+   "output_bytes": 2361,
+   "output_blake3": "6c2e68adbb53d1ed4abe4de4710679e00659c8029849d2eedf4944a6a38b8962"
+  },
+  {
+   "label": "v-foreign-unit",
+   "command": "cargo test --locked --offline -p mantle --bin mantle foreign_import_cmd::tests -- --test-threads 1",
+   "exit_code": 0,
+   "output": "== v-foreign-unit: cargo test --locked --offline -p mantle --bin mantle foreign_import_cmd::tests -- --test-threads 1\nwarning: /home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/Cargo.toml: file `/home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/agents-20261030/thin-cli/worktree)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 30s\n     Running unittests src/main.rs (/home/brittonr/.cargo-target/agents-20261030/thin-cli/scratch/target/debug/deps/mantle-32f765d695dcb0fd)\n\nrunning 12 tests\ntest foreign_import_cmd::tests::a_rejected_producer_report_is_consistent_only_when_nothing_was_published ... ok\ntest foreign_import_cmd::tests::an_accepted_producer_report_requires_both_artifacts_to_read_back ... ok\ntest foreign_import_cmd::tests::bounded_json_reader_accepts_an_artifact_at_the_limit ... ok\ntest foreign_import_cmd::tests::bounded_json_reader_rejects_an_artifact_above_the_limit ... ok\ntest foreign_import_cmd::tests::cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls ... ok\ntest foreign_import_cmd::tests::foreign_file_port_denies_a_second_read_before_opening_it ... ok\ntest foreign_import_cmd::tests::foreign_published_artifact_must_read_back_as_the_written_value ... ok\ntest foreign_import_cmd::tests::human_report_preserves_diagnostics_and_non_claims ... ok\ntest foreign_import_cmd::tests::malformed_report_is_rejected ... ok\ntest foreign_import_cmd::tests::nario_source_request_core_rejects_archive_key_and_route_limits ... ok\ntest foreign_import_cmd::tests::plan_inputs_returns_receipt_and_plan_without_process_invocations ... ok\ntest foreign_import_cmd::tests::realization_callback_observes_committed_complete_and_partial_receipts_before_reporting ... ok\n\ntest result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 2838 filtered out; finished in 5.51s\n\nexit=0\n",
+   "output_bytes": 2004,
+   "output_blake3": "77d110bdbb8c5326eadd938bdb8a4e0fa81203b456d5ea96673dd89411bcec91"
+  },
+  {
+   "label": "v-arch-self",
+   "command": "cargo -Zscript scripts/check-cli-architecture.rs --self-test",
+   "exit_code": 0,
+   "output": "== v-arch-self: cargo -Zscript scripts/check-cli-architecture.rs --self-test\ncli-architecture self-test: PASS\nexit=0\n",
+   "output_bytes": 117,
+   "output_blake3": "8b4e1226ea1749c599fc88e03fa69f82570eefec4202b207e5fe06fc34f29dd1"
+  },
+  {
+   "label": "v-arch",
+   "command": "cargo -Zscript scripts/check-cli-architecture.rs",
+   "exit_code": 0,
+   "output": "== v-arch: cargo -Zscript scripts/check-cli-architecture.rs\ncli architecture: PASS\nexit=0\n",
+   "output_bytes": 90,
+   "output_blake3": "38464cef15a9f703ec651f3f8ea3c4608da1dd49930ac28b82b1c6b4e19d73e3"
+  }
+ ],
+ "non_claims": [
+  "Run through the Mantle worktree wrapper with --locked --offline; per-slice target directory.",
+  "No Clippy, no nix flake check, no Cairn gate, no V3-V5 re-run. Clippy was run by the agent on the formatted tree and is not repeated here.",
+  "Nothing here accepts I6, V1 or V2."
+ ]
+}
