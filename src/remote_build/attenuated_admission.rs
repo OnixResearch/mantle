@@ -10,8 +10,10 @@
 //! the receiver: its clock, its operator-loaded authority snapshot (policy,
 //! trusted roots, revocations, holder replay ledger), its endpoint identity and
 //! the validated request. The sender supplies only the signed credential. A
-//! denial carries one constant string to the sender: no job, path, caveat or
-//! reason. The receiver logs a reason code locally (`DenialReason`).
+//! denial carries one constant string in the protocol: no job, path, caveat or
+//! reason. A reason code (`DenialReason`) is emitted at `debug` level only; under
+//! ssh-stdio the client relays remote stderr, so debug logging must not be
+//! enabled where the peer is untrusted.
 use std::path::Path;
 
 use basalt::ucan::HolderInvocationNonce;
@@ -92,9 +94,34 @@ pub struct RemoteJobBinding {
     pub request_digest: [u8; 32],
 }
 
-/// Most output names a filter-visible target can carry: the target has seven
-/// fixed segments (with an attempt) and the filter language allows 16 segments.
-const MAX_BOUND_OUTPUT_NAMES: usize = crunch_remote_core::caveat::MAX_SEGMENTS - 7;
+/// Domain separating the output-set identifier from every other BLAKE3 use.
+const OUTPUT_SET_DOMAIN: &[u8] = b"mantle/remote/attenuated-output-set/v1\0";
+
+/// Identifier of a declared output set, as the last segment of the
+/// filter-visible target: 64 lowercase hex characters of BLAKE3 over
+/// `OUTPUT_SET_DOMAIN` followed by every output name in sorted (byte-wise) order,
+/// each framed as an 8-byte big-endian length then the name bytes. Order of
+/// declaration and the output paths are not part of it; duplicates and an empty
+/// set are not identifiable and yield `None`. Grant authors compute this to pin
+/// or reject an output set; because it is ONE fixed-width segment, a reject or
+/// wildcard caveat sees the same target shape whatever the number of outputs.
+#[must_use]
+pub fn output_set_id<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let mut sorted: Vec<&str> = names.into_iter().collect();
+    sorted.sort_unstable();
+    if sorted.is_empty() || sorted.windows(2).any(|pair| pair[0] == pair[1]) {
+        return None;
+    }
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(OUTPUT_SET_DOMAIN);
+    for name in &sorted {
+        frame(&mut hasher, name.as_bytes());
+    }
+    let id = hasher.finalize().to_hex().to_string();
+    debug_assert_eq!(id.len(), 64);
+    debug_assert!(id.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+    Some(id)
+}
 
 fn output_class(request: &ConcreteBuildRequest) -> &'static str {
     match request.payload {
@@ -115,11 +142,14 @@ fn is_filter_segment(segment: &str) -> bool {
         && segment.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"+._?=-".contains(&byte))
 }
 
-/// Filter-visible target:
-/// `/job/<request_id>[/attempt/<production job_id>]/class/<payload kind>/outputs/<sorted declared
-/// names>`. The attempt segments exist exactly when a coordinator attempt exists, so a
-/// grant for one attempt job id never matches another or none.
+/// Filter-visible target, always of one of two FIXED shapes:
+/// `/job/<request_id>/attempt/<production job_id>/class/<kind>/outputs/<output_set_id>` when a
+/// coordinator attempt exists (the only shape the production receiver reaches,
+/// because it requires `production_attempt`), otherwise the same without the
+/// `attempt/<job_id>` pair. Only the first four values vary in content, never in
+/// segment count, so a reject on a job id is complete for any output set.
 fn job_target(request: &ConcreteBuildRequest) -> Result<String, Error> {
+    let set_id = output_set_id(request.expected_outputs.iter().map(|output| output.name.as_str())).ok_or(Error)?;
     let mut segments: Vec<&str> = vec!["job", request.request_id.as_str()];
     if let Some(attempt) = request.production_attempt.as_ref() {
         segments.push("attempt");
@@ -128,12 +158,7 @@ fn job_target(request: &ConcreteBuildRequest) -> Result<String, Error> {
     segments.push("class");
     segments.push(output_class(request));
     segments.push("outputs");
-    let mut names: Vec<&str> = request.expected_outputs.iter().map(|output| output.name.as_str()).collect();
-    names.sort_unstable();
-    if names.is_empty() || names.len() > MAX_BOUND_OUTPUT_NAMES || names.windows(2).any(|pair| pair[0] == pair[1]) {
-        return Err(Error);
-    }
-    segments.extend(names);
+    segments.push(set_id.as_str());
     if !segments.iter().all(|segment| is_filter_segment(segment)) {
         return Err(Error);
     }
@@ -153,14 +178,14 @@ fn job_target(request: &ConcreteBuildRequest) -> Result<String, Error> {
 /// string, with no hash maps or floats), so a field added later is covered
 /// automatically and any change after signing is refused. The caveat-visible
 /// target carries the request id, production attempt job id, payload kind and
-/// declared output names (`job_target`).
+/// the declared output set identifier (`job_target`, `output_set_id`).
 // r[impl mantle.authority_attenuation.attenuated_remote_grant]
 pub fn bind_remote_job(request: &ConcreteBuildRequest, endpoint_id: &str) -> Result<RemoteJobBinding, Error> {
     if endpoint_id.is_empty() {
         return Err(Error);
     }
     let target = job_target(request)?;
-    let encoded = serde_json::to_vec(request).map_err(|_| Error)?;
+    let encoded = zeroize::Zeroizing::new(serde_json::to_vec(request).map_err(|_| Error)?);
     let mut hasher = blake3::Hasher::new();
     hasher.update(REQUEST_DIGEST_DOMAIN);
     frame(&mut hasher, endpoint_id.as_bytes());
@@ -194,8 +219,11 @@ fn presentation_is_bounded(presentation: &AttenuatedGrantPresentation) -> bool {
         && identities.iter().all(|value| !value.is_empty() && value.len() <= MAX_IDENTITY_BYTES)
 }
 
-/// Why a presented grant was refused. LOCAL diagnostics only: the sender sees
-/// `ATTENUATED_GRANT_DENIED` for every variant. The UCAN/Basalt verifier reports
+/// Why a presented grant was refused. Reason codes are receiver-side diagnostics,
+/// emitted at `debug` level only and never at the default level. The protocol
+/// carries `ATTENUATED_GRANT_DENIED` for every variant, but a debug-level stderr
+/// relayed by ssh-stdio WOULD show a code to the peer, so enable debug logging
+/// only where the peer is trusted. The UCAN/Basalt verifier reports
 /// one undifferentiated denial, so `Verification` covers signature, proof chain,
 /// preserved parent caveats, validity window, revocation, replay (including a
 /// full ledger), caveat filters and wrong endpoint/audience/generation/holder.
@@ -212,7 +240,7 @@ pub enum DenialReason {
 }
 
 impl DenialReason {
-    /// Stable operator-facing code; never sent to the sender.
+    /// Stable operator-facing code. Debug-level logging only (see the type docs).
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {

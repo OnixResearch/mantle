@@ -32,6 +32,7 @@ use crate::remote_build::attenuated_admission::DenialReason;
 use crate::remote_build::attenuated_admission::admit_presented_grant;
 use crate::remote_build::attenuated_admission::bind_remote_job;
 use crate::remote_build::attenuated_admission::open_operator_authority;
+use crate::remote_build::attenuated_admission::output_set_id;
 use crate::remote_build::authority_caveats::EffectiveCaveatChain;
 
 const SCOPE: &str = "fixture-builds";
@@ -59,6 +60,12 @@ struct GrantFixture {
     last_proof_reference: Vec<u8>,
     endpoint: String,
     next_nonce: u8,
+    /// Issuer of the parent grant. Only `ROOT_SEED` is a trusted root.
+    root_seed: u8,
+    /// Holder key. Only `HOLDER_SEED` is provisioned in the snapshot keys.
+    holder_seed: u8,
+    /// Whether the parent proof is published in the receiver snapshot.
+    publish_parent_proof: bool,
 }
 
 fn filter(key: &str, payload: &str) -> ucan::CaveatDocument {
@@ -132,6 +139,9 @@ impl GrantFixture {
             last_proof_reference: Vec::new(),
             endpoint: endpoint.to_string(),
             next_nonce: 1,
+            root_seed: ROOT_SEED,
+            holder_seed: HOLDER_SEED,
+            publish_parent_proof: true,
         }
     }
 
@@ -146,7 +156,7 @@ impl GrantFixture {
         let binding = bind_remote_job(request, &self.endpoint).unwrap();
         OperationRequest {
             operation: crate::nix_gateway::authority::Operation::BuildSubmit,
-            subject: signer(HOLDER_SEED).issuer().unwrap().as_str().into(),
+            subject: signer(self.holder_seed).issuer().unwrap().as_str().into(),
             account: ACCOUNT.into(),
             project: SCOPE.into(),
             endpoint: self.endpoint.clone(),
@@ -174,10 +184,10 @@ impl GrantFixture {
             ])
             .unwrap()
         };
-        let holder = signer(HOLDER_SEED);
+        let holder = signer(self.holder_seed);
         let audience = AudienceDid::from(holder.issuer().unwrap());
         let proof = ucan::issue_token_with_signer(
-            &signer(ROOT_SEED),
+            &signer(self.root_seed),
             &AudienceDid::from(signer(DELEGATE_SEED).issuer().unwrap()),
             &capability(parent),
             &ProofReferences::empty(),
@@ -193,7 +203,9 @@ impl GrantFixture {
         )
         .unwrap();
         self.last_proof_reference = ucan::proof_reference(&proof).as_bytes().to_vec();
-        self.proofs.push(proof.as_str().to_string());
+        if self.publish_parent_proof {
+            self.proofs.push(proof.as_str().to_string());
+        }
         self.publish();
         let nonce_bytes = [self.next_nonce; 32];
         let nonce = HolderInvocationNonce::from_bytes(nonce_bytes);
@@ -356,9 +368,18 @@ impl Receiver {
         request: &ConcreteBuildRequest,
         presentation: &AttenuatedGrantPresentation,
     ) -> Result<EffectiveCaveatChain, DenialReason> {
+        self.verify_directly_at(request, presentation, &self.grants.endpoint)
+    }
+
+    fn verify_directly_at(
+        &self,
+        request: &ConcreteBuildRequest,
+        presentation: &AttenuatedGrantPresentation,
+        endpoint_id: &str,
+    ) -> Result<EffectiveCaveatChain, DenialReason> {
         let attenuation = AttenuationAdmission {
             verifier: Some(&self.grants.verifier),
-            endpoint_id: &self.grants.endpoint,
+            endpoint_id,
             project_scope: SCOPE,
         };
         admit_presented_grant(&attenuation, presentation, request, now())
@@ -506,6 +527,13 @@ fn refusal_cases() -> Vec<&'static str> {
         "parent-caveat-dropped",
         "parent-caveat-reordered",
         "parent-caveat-modified",
+        "untrusted-root-issuer",
+        "unknown-holder-key",
+        "parent-proof-absent-from-snapshot",
+        "tampered-token-body",
+        "unregistered-caveat-domain",
+        "unregistered-caveat-type",
+        "duplicate-ordinal",
     ]
 }
 
@@ -523,11 +551,19 @@ fn case_window(case: &str) -> Window {
     }
 }
 
+fn raw_caveat(domain: &str, caveat_type: &str, key: &str, target: &str) -> ucan::CaveatDocument {
+    let payload = format!(r#"{{"kind":"rewrite","pattern":"{target}","template":"{target}"}}"#);
+    ucan::CaveatDocument::new(domain.into(), caveat_type.into(), key.into(), payload.into_bytes()).unwrap()
+}
+
 fn case_chains(case: &str, target: &str) -> (Vec<ucan::CaveatDocument>, Vec<ucan::CaveatDocument>) {
     let allow = identity_rewrite("00", target);
     let other = reject_target("01", "/job/r9/class/action/outputs/out");
     match case {
         "unknown-caveat" => (vec![], vec![filter("00", r#"{"kind":"future"}"#)]),
+        "unregistered-caveat-domain" => (vec![], vec![raw_caveat("other", "filter-v1", "00", target)]),
+        "unregistered-caveat-type" => (vec![], vec![raw_caveat("mantle", "filter-v2", "00", target)]),
+        "duplicate-ordinal" => (vec![], vec![allow.clone(), allow.clone()]),
         "malformed-caveat" => (vec![], vec![filter("00", &format!(r#"{{"kind":"rewrite","pattern":"{target}"}}"#))]),
         "ordinal-gap" => (vec![], vec![identity_rewrite("01", target)]),
         "chain-over-bound" => {
@@ -571,6 +607,15 @@ fn unsafe_presentations_are_refused_before_redemption_and_nonce_use_with_no_feed
             request.clone()
         };
         let (parent, child) = case_chains(case, &target_of(&signed_for));
+        match case {
+            "untrusted-root-issuer" => {
+                receiver.grants.root_seed = 99;
+                receiver.grants.document["keys"].as_array_mut().unwrap().push(serde_json::json!(public_key(99)));
+            }
+            "unknown-holder-key" => receiver.grants.holder_seed = 21,
+            "parent-proof-absent-from-snapshot" => receiver.grants.publish_parent_proof = false,
+            _ => {}
+        }
         let (mut presentation, token) = receiver.grants.sign(&signed_for, parent, child, case_window(case));
         let mut endpoint = receiver.grants.endpoint.clone();
         match case {
@@ -599,13 +644,29 @@ fn unsafe_presentations_are_refused_before_redemption_and_nonce_use_with_no_feed
                 presentation.holder_signature = second.holder_signature.clone();
             }
             "oversized-token" => presentation.compact_token.push_str(&"A".repeat(40 * 1024)),
+            "tampered-token-body" => {
+                let middle = presentation.compact_token.len() / 2;
+                let original = presentation.compact_token.as_bytes()[middle];
+                let replacement = if original == b'A' { "B" } else { "A" };
+                presentation.compact_token.replace_range(middle..=middle, replacement);
+            }
             _ => {}
         }
         let mut presented = request.clone();
         if case == "changed-request-field" {
             presented.build_time_limit_secs = presented.build_time_limit_secs.saturating_sub(1);
         }
+        // Attribution: each case is refused by the intended check, not merely
+        // refused. Everything the verifier rejects reports `Verification`
+        // (the UCAN/Basalt verifier is one undifferentiated denial); the two
+        // receiver-side pre-checks have their own reasons.
+        let expected = match case {
+            "oversized-token" => DenialReason::PresentationMalformed,
+            "wrong-project-scope" => DenialReason::ProjectScopeMismatch,
+            _ => DenialReason::Verification,
+        };
         let before = receiver.snapshot();
+        assert_eq!(receiver.verify_directly_at(&presented, &presentation, &endpoint).err(), Some(expected), "{case}");
         let result = receiver.admit_at(&presented, Some(presentation), Some(&receiver.grants.verifier), &endpoint);
         receiver.assert_refused_without_effect(result, &before, case);
     }
@@ -737,15 +798,19 @@ fn grant_for_a_production_job_id_admits_exactly_that_request() {
 }
 
 // Target shape and rejection rules. Unrepresentable identities are rejected,
-// never truncated or escaped, and every produced target is a valid filter value.
+// never truncated or escaped, and every produced target is a valid filter value
+// of a FIXED segment count: only the request id, job id and kind vary in
+// content, the output set is one 64-hex segment whatever its size.
 // r[verify mantle.authority_attenuation.attenuated_remote_grant]
 #[test]
-fn job_target_is_canonical_bounded_and_rejects_what_filters_cannot_express() {
+fn job_target_is_canonical_fixed_shape_bounded_and_rejects_what_filters_cannot_express() {
     let receiver = Receiver::new();
     let plain = target_of(&receiver.request);
-    assert_eq!(plain, "/job/r1/class/action/outputs/out");
+    let set_out = output_set_id(["out"]).unwrap();
+    let set_both = output_set_id(["dev", "out"]).unwrap();
+    assert_eq!(plain, format!("/job/r1/class/action/outputs/{set_out}"));
     let attempt = target_of(&attempt_request(&receiver, "job-a", &["out", "dev"]));
-    assert_eq!(attempt, "/job/r1/attempt/job-a/class/action/outputs/dev/out");
+    assert_eq!(attempt, format!("/job/r1/attempt/job-a/class/action/outputs/{set_both}"));
     for target in [&plain, &attempt] {
         assert!(crunch_remote_core::caveat::Pattern::parse(target).is_ok(), "{target}");
     }
@@ -756,21 +821,28 @@ fn job_target_is_canonical_bounded_and_rejects_what_filters_cannot_express() {
         },
         ..receiver.request.clone()
     };
-    assert_eq!(target_of(&derivation), "/job/r1/class/derivation/outputs/out");
+    assert_eq!(target_of(&derivation), format!("/job/r1/class/derivation/outputs/{set_out}"));
 
     let bind = |request: &ConcreteBuildRequest| bind_remote_job(request, ENDPOINT);
-    // Duplicate, empty, too many (9 allowed) and over-long output sets.
     let names = |names: &[String]| {
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
         attempt_request(&receiver, "job-a", &refs)
     };
-    let nine: Vec<String> = (0..9).map(|index| format!("o{index}")).collect();
-    assert!(bind(&names(&nine)).is_ok());
-    let ten: Vec<String> = (0..10).map(|index| format!("o{index}")).collect();
-    assert!(bind(&names(&ten)).is_err());
+    // Segment count does not depend on the number of outputs; there is no cap
+    // below the production limit of 128, and sets of any size stay one segment.
+    let segments = |request: &ConcreteBuildRequest| target_of(request).split('/').count();
+    let baseline = segments(&names(&["o0".into()]));
+    for count in [1, 2, 9, 10, 20, 128] {
+        let set: Vec<String> = (0..count).map(|index| format!("o{index}")).collect();
+        assert_eq!(segments(&names(&set)), baseline, "{count} outputs");
+        assert!(target_of(&names(&set)).len() <= crunch_remote_core::caveat::MAX_VALUE_BYTES);
+    }
     assert!(bind(&names(&["out".into(), "out".into()])).is_err());
     assert!(bind(&names(&[])).is_err());
-    // Characters outside the filter vocabulary, dot segments and over-long values.
+    // Output names need not be filter vocabulary: they are hashed, not embedded.
+    assert!(bind(&names(&["out put".into(), "\u{e9}".into()])).is_ok());
+    // Request and job ids ARE embedded: characters outside the filter
+    // vocabulary, dot segments and over-long values are rejected.
     for bad_id in ["r 1", "r/1", ".", "..", ":bind", "r\u{e9}", ""] {
         assert!(bind(&receiver.other_job(bad_id)).is_err(), "request id {bad_id:?}");
     }
@@ -778,6 +850,69 @@ fn job_target_is_canonical_bounded_and_rejects_what_filters_cannot_express() {
     assert!(bind(&receiver.other_job(&"j".repeat(600))).is_err());
     assert!(bind(&receiver.with_attempt(&"j".repeat(128))).is_ok());
     assert!(bind_remote_job(&receiver.request, "").is_err());
+}
+
+// Golden vectors an external signer can reproduce. The set id is BLAKE3 over the
+// domain `mantle/remote/attenuated-output-set/v1\0` and each SORTED name framed
+// as an 8-byte big-endian length plus the bytes (computed independently with
+// `b3sum`); order of declaration does not matter.
+// r[verify mantle.authority_attenuation.attenuated_remote_grant]
+#[test]
+fn output_set_id_matches_the_golden_vectors_and_ignores_declaration_order() {
+    assert_eq!(output_set_id(["out"]).unwrap(), "5aadee160983d4cbda395f623dee917c0ed67af797e6142d522209d267fbd248");
+    assert_eq!(
+        output_set_id(["dev", "out"]).unwrap(),
+        "37da46b8c8c74bf492cf7db06f9d45832615605e609bcea258ed70e5c9e22d08"
+    );
+    assert_eq!(output_set_id(["out", "dev"]), output_set_id(["dev", "out"]));
+    assert_ne!(output_set_id(["out"]), output_set_id(["out", "dev"]));
+    assert_ne!(output_set_id(["a", "bc"]), output_set_id(["ab", "c"]), "framing must separate names");
+    assert_eq!(output_set_id([]), None);
+    assert_eq!(output_set_id(["out", "out"]), None);
+}
+
+// A reject on a job id is COMPLETE: the same reject pattern matches the target
+// whether 1, 2 or 20 outputs are declared, so padding the output set cannot
+// evade it. A non-matching job id is untouched by the same reject.
+// r[verify mantle.authority_attenuation.composition_order]
+#[test]
+fn reject_on_a_job_id_refuses_regardless_of_declared_output_count() {
+    let mut receiver = Receiver::new();
+    let reject = reject_target("01", "/job/secret/attempt/job-a/class/action/outputs/:set");
+    let allow_any = filter(
+        "00",
+        "{\"kind\":\"alternatives\",\"alternatives\":[{\"pattern\":\"/job/:r/attempt/:j/class/action/outputs/:s\",\"template\":\"/job/:r/attempt/:j/class/action/outputs/:s\"}]}",
+    );
+    for count in [1_usize, 2, 20] {
+        let set: Vec<String> = (0..count).map(|index| format!("o{index}")).collect();
+        let refs: Vec<&str> = set.iter().map(String::as_str).collect();
+        let mut denied = attempt_request(&receiver, "job-a", &refs);
+        denied.request_id = "secret".into();
+        let (presentation, _) = receiver.grants.sign(
+            &denied,
+            vec![allow_any.clone()],
+            vec![allow_any.clone(), reject.clone()],
+            GrantFixture::current_window(),
+        );
+        let ledger = receiver.ledger();
+        assert_eq!(
+            receiver.verify_directly(&denied, &presentation).err(),
+            Some(DenialReason::Verification),
+            "{count} outputs"
+        );
+        assert_eq!(receiver.ledger(), ledger, "{count} outputs: nonce consumed");
+        let mut allowed = attempt_request(&receiver, "job-a", &refs);
+        allowed.request_id = "other".into();
+        let (presentation, _) = receiver.grants.sign(
+            &allowed,
+            vec![allow_any.clone()],
+            vec![allow_any.clone(), reject.clone()],
+            GrantFixture::current_window(),
+        );
+        receiver
+            .verify_directly(&allowed, &presentation)
+            .expect("a different job id passes the same reject");
+    }
 }
 
 // The digest covers the WHOLE validated request: every field that the first
@@ -987,9 +1122,10 @@ fn presented_grant_is_refused_on_every_non_enforcing_path() {
     assert_eq!(refused, ATTENUATED_GRANT_DENIED);
     assert_eq!(ticket, before);
 
-    // Frame-level admission (fixture executor): hello + auth only. With a
-    // presentation the refusal is the constant; without one the same frames get
-    // past authentication and stop later for a different reason.
+    // Frame-level admission (fixture executor path): the complete client frame
+    // sequence. The control admits and redeems the REAL ticket; with a
+    // presentation the same frames are refused with the constant string and the
+    // real ticket is untouched.
     let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
     let frames = |auth: TicketAuthRequest| {
         vec![
@@ -997,25 +1133,46 @@ fn presented_grant_is_refused_on_every_non_enforcing_path() {
                 hello: client.hello.clone(),
             },
             RemoteFrame::AuthTicket { auth },
+            RemoteFrame::BuildRequest {
+                request: client.request.clone(),
+            },
+            RemoteFrame::InputManifest {
+                manifest: client.input_manifest.clone(),
+            },
+            RemoteFrame::InputUpload {
+                upload: RemoteInputUpload {
+                    request_id: client.request.request_id.clone(),
+                    refs: client.request.input_refs.clone(),
+                    byte_count: client.request.upload_bytes,
+                    artifacts: Vec::new(),
+                    streamed: false,
+                },
+            },
         ]
     };
     let admit = |ticket: &mut RemoteTicket, frames: &[RemoteFrame]| {
-        let facts = fixture_service_auth_facts(ticket);
+        let endpoint = ticket.bound_client_endpoint.clone();
+        let facts = RemoteTicketAuthFacts {
+            server_now_unix_s: ticket.created_unix_s.saturating_add(1),
+            authenticated_client_endpoint: endpoint.as_deref(),
+        };
         admit_remote_builder_frames_with_auth_facts(
             &builder,
-            &mut ticket.clone(),
+            ticket,
             frames,
             RemoteTransferCapabilities::delta_and_full(),
             facts,
         )
-        .err()
+        .map(|admission| admission.ticket_uses_remaining)
     };
+    let mut control_ticket = fixture_ticket();
+    assert_eq!(admit(&mut control_ticket, &frames(client.auth.clone())), Ok(0), "control frames must admit");
+    assert_eq!(control_ticket.uses_remaining, 0, "control redeems the real ticket");
     let mut ticket = fixture_ticket();
     let mut auth = client.auth.clone();
-    assert_ne!(admit(&mut ticket, &frames(auth.clone())).as_deref(), Some(ATTENUATED_GRANT_DENIED));
     auth.attenuated_grant = Some(junk());
-    assert_eq!(admit(&mut ticket, &frames(auth)).as_deref(), Some(ATTENUATED_GRANT_DENIED));
-    assert_eq!(ticket.uses_remaining, fixture_ticket().uses_remaining);
+    assert_eq!(admit(&mut ticket, &frames(auth)), Err(ATTENUATED_GRANT_DENIED.to_string()));
+    assert_eq!(ticket, fixture_ticket(), "a refused presentation must leave the real ticket untouched");
 }
 
 struct ServeFixture {
@@ -1159,3 +1316,150 @@ fn production_wrapper_uses_the_admitted_endpoint_binding_for_the_signed_request(
         .expect("grant signed for the admitted endpoint admits");
     assert_eq!(receiver.uses_remaining(), TICKET_USES - 1);
 }
+
+/// Collects formatted tracing output so tests can see exactly what a process
+/// would print at a given level.
+#[derive(Clone, Default)]
+struct LogCapture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogCapture {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn captured_at(level: tracing::Level, run: impl FnOnce()) -> String {
+    let capture = LogCapture::default();
+    let sink = capture.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_ansi(false)
+        .with_writer(move || sink.clone())
+        .finish();
+    tracing::subscriber::with_default(subscriber, run);
+    let bytes = capture.0.lock().unwrap().clone();
+    String::from_utf8(bytes).unwrap()
+}
+
+fn serve_denied_once(unknown_caveat: bool) {
+    let mut receiver = Receiver::new();
+    let mut fixture = serve_fixture(&mut receiver, vec![filter("00", r#"{"kind":"future"}"#)], !unknown_caveat);
+    let mut writer = Vec::new();
+    let context = RemoteProductionServerContext {
+        builder: &fixture.builder,
+        verifier_key: &receiver.key,
+        executor: &fixture.executor,
+        secret_request: None,
+        usage_cgroup_root: None,
+        credential_state_dir: receiver.dir.path(),
+        binding_config: Some(&fixture.config),
+        execution_state_dir: receiver.dir.path(),
+        authenticated_client_endpoint: None,
+        attenuation_verifier: if unknown_caveat {
+            Some(&receiver.grants.verifier)
+        } else {
+            None
+        },
+    };
+    let error = serve_stdio_remote_production_once(&mut fixture.reader, &mut writer, context).unwrap_err();
+    assert_eq!(error, ATTENUATED_GRANT_DENIED);
+    assert!(writer.is_empty());
+}
+
+// Denial reason codes are debug-level only. At the default process level
+// (`warn`) and at `info`, a denied presentation on the production serve path and
+// on a non-enforcing path prints NOTHING, so an ssh-stdio client that relays the
+// remote's stderr learns no reason; at `debug` the reason code is present, which
+// proves the capture works and that debug logging must stay off for an
+// untrusted peer.
+// r[verify mantle.authority_attenuation.attenuated_remote_grant]
+#[test]
+fn denial_reason_codes_appear_only_at_debug_level() {
+    for (case, code) in [
+        ("verification", "verification-denied"),
+        ("no-authority", "no-operator-authority"),
+    ] {
+        let unknown = case == "verification";
+        for level in [tracing::Level::WARN, tracing::Level::INFO] {
+            let output = captured_at(level, || serve_denied_once(unknown));
+            assert!(output.is_empty(), "{case} at {level}: default-level output leaked: {output:?}");
+        }
+        let output = captured_at(tracing::Level::DEBUG, || serve_denied_once(unknown));
+        assert!(output.contains(code), "{case}: debug output must carry the reason: {output:?}");
+        assert!(!output.contains("future"), "{case}: debug output must not carry caveat text: {output:?}");
+    }
+    let refuse = || {
+        let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        client.auth.attenuated_grant = Some(AttenuatedGrantPresentation {
+            compact_token: "x".into(),
+            nonce: [1; 32],
+            holder_signature: vec![2; 64],
+            subject: "s".into(),
+            account: "a".into(),
+            project: SCOPE.into(),
+            audience: AUDIENCE.into(),
+            generation: GENERATION,
+        });
+        let error = run_loopback_remote_session(&fixture_loopback_builder(), &mut fixture_ticket(), &client);
+        assert_eq!(error.unwrap_err(), ATTENUATED_GRANT_DENIED);
+    };
+    assert!(captured_at(tracing::Level::WARN, refuse).is_empty());
+    assert!(captured_at(tracing::Level::DEBUG, refuse).contains("non-enforcing-admission-path"));
+}
+
+// Golden vector for the whole-request digest, reproducible by an external
+// signer: BLAKE3 over domain `mantle/remote/attenuated-build-request/v2\0`, then
+// the endpoint id and the compact `serde_json` bytes of the request, each framed
+// as an 8-byte big-endian length plus the bytes. The JSON is a function of
+// struct field declaration order, so reordering or adding a serialized field of
+// `ConcreteBuildRequest` (or a nested type) changes this vector on purpose and
+// invalidates every outstanding presentation. The expected digest was computed
+// independently with `b3sum`.
+// r[verify mantle.authority_attenuation.attenuated_remote_grant]
+#[test]
+fn whole_request_digest_matches_the_golden_vector() {
+    let request = ConcreteBuildRequest {
+        request_id: "r1".into(),
+        store_prefix: "/mantle/store".into(),
+        input_refs: Vec::new(),
+        source_input_refs: Vec::new(),
+        upload_bytes: 0,
+        build_time_limit_secs: 60,
+        contains_raw_frontend_eval: false,
+        payload: RemoteConcreteBuildPayload::Action {
+            action_id: "a".into(),
+            spec_json: "{}".into(),
+        },
+        expected_outputs: vec![RemoteExpectedOutput {
+            name: "out".into(),
+            logical_path: None,
+        }],
+        production_attempt: Some(RemoteProductionAttemptBinding {
+            job_id: RemoteJobId::new("job-a".to_string()).unwrap(),
+            attempt_id: RemoteAttemptId::new("attempt-1".to_string()).unwrap(),
+            fence_generation: RemoteFenceGeneration::INITIAL,
+        }),
+        transfer_policy: None,
+        resource_requirements: None,
+        locality_scope: None,
+        failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+        failure_replay: None,
+        endpoint_binding: None,
+    };
+    let json = String::from_utf8(serde_json::to_vec(&request).unwrap()).unwrap();
+    assert_eq!(json, GOLDEN_REQUEST_JSON);
+    let binding = bind_remote_job(&request, "builder-1").unwrap();
+    assert_eq!(data_encoding::HEXLOWER.encode(&binding.request_digest), GOLDEN_REQUEST_DIGEST);
+    assert_eq!(
+        binding.target,
+        format!("/job/r1/attempt/job-a/class/action/outputs/{}", output_set_id(["out"]).unwrap())
+    );
+}
+
+const GOLDEN_REQUEST_JSON: &str = r#"{"request_id":"r1","store_prefix":"/mantle/store","input_refs":[],"upload_bytes":0,"build_time_limit_secs":60,"contains_raw_frontend_eval":false,"payload":{"kind":"action","action_id":"a","spec_json":"{}"},"expected_outputs":[{"name":"out"}],"production_attempt":{"job_id":"job-a","attempt_id":"attempt-1","fence_generation":1},"failure_debug_policy":{"policy_name":"mantle-remote-failure-debug-default-v1","metadata_bytes_max":1048576,"object_bytes_max":67108864,"retention_secs":604800,"replay_enabled":false,"capture":{"enabled":false,"allowed_relative_paths":[],"sensitivity":"restricted-diagnostic","file_count_max":32,"total_bytes_max":16777216,"file_bytes_max":8388608,"depth_max":16,"failure_mode":"diagnostic-only"}}}"#;
+const GOLDEN_REQUEST_DIGEST: &str = "19634435d3643f1de010868bf63a38db19cfce470f7ec56c7a34c71f6a861997";

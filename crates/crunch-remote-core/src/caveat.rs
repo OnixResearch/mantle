@@ -406,8 +406,12 @@ pub struct RemoteGrantScope<'a> {
 pub const MAX_REMOTE_GRANT_JOBS: usize = 64;
 pub const MAX_REMOTE_OUTPUT_CLASSES: usize = 32;
 
-/// Check `/job/<request-id>/output/<validated-class>` against every retained
-/// parent restriction, the original value and each rewritten prefix output.
+/// Check `/job/<job>/output/<class>` against every retained
+/// parent restriction, the original value and each rewritten prefix output. This
+/// pure helper's value shape is NOT what the production shell signs: the shell
+/// builds `/job/<request>[/attempt/<job>]/class/<kind>/outputs/<output-set-id>`
+/// (`attenuated_admission::bind_remote_job`) and consumes the filters through
+/// `authority_caveats`, not through this function.
 /// A bool is a non-consuming decision, never a holder signature or ticket spend.
 /// This boolean gate admits the ORIGINAL effect, so a rewrite to a different
 /// allowed job or output class is not a grant to execute that original effect.

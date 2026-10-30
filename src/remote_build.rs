@@ -13573,7 +13573,7 @@ fn commit_remote_ticket_admission_for_state(
     });
     if let Err(error) = redeemed {
         if admitted_chain.is_some() {
-            tracing::warn!(
+            tracing::debug!(
                 target: "mantle::remote::attenuation",
                 reason = "redemption-failed-after-verified-grant-nonce-consumed",
                 "attenuated admission aborted"
@@ -13593,9 +13593,12 @@ fn commit_remote_ticket_admission_for_state(
 /// A presented holder-attenuated grant must verify against this exact request
 /// with the receiver's own clock and authority before the ticket is redeemed.
 /// Legacy bearer admission (no presentation) is untouched: attenuation is
-/// advisory, not enforcing. A denial returns one constant string to the sender
-/// (no job, path, caveat or reason) and logs a reason code locally at warn. A
-/// verified grant has consumed its holder nonce even if redemption then fails.
+/// advisory, not enforcing. A denial returns one constant string in the protocol
+/// (no job, path, caveat or reason). The reason code is emitted ONLY at `debug`
+/// level: the default stderr stays silent, because under ssh-stdio the client
+/// relays the remote's stderr to the sender, so debug logging must not be enabled
+/// where the peer is untrusted. A verified grant has consumed its holder nonce
+/// even if redemption then fails.
 // r[impl mantle.authority_attenuation.attenuated_remote_grant]
 fn admit_attenuated_presentation_before_redemption(
     attenuation: Option<&attenuated_admission::AttenuationAdmission<'_>>,
@@ -13615,8 +13618,8 @@ fn admit_attenuated_presentation_before_redemption(
     match outcome {
         Ok(chain) => Ok(Some(chain)),
         Err(reason) => {
-            // Local only. Never include the request id, caveats or paths.
-            tracing::warn!(target: "mantle::remote::attenuation", reason = reason.code(), "attenuated grant denied");
+            // Debug level only; never include the request id, caveats or paths.
+            tracing::debug!(target: "mantle::remote::attenuation", reason = reason.code(), "attenuated grant denied");
             Err(attenuated_admission::ATTENUATED_GRANT_DENIED.to_string())
         }
     }
@@ -13628,7 +13631,7 @@ fn refuse_presentation_on_non_enforcing_path(auth: &TicketAuthRequest) -> Result
     if auth.attenuated_grant.is_none() {
         return Ok(());
     }
-    tracing::warn!(
+    tracing::debug!(
         target: "mantle::remote::attenuation",
         reason = attenuated_admission::DenialReason::UnenforcedPath.code(),
         "attenuated grant denied"
@@ -13637,7 +13640,9 @@ fn refuse_presentation_on_non_enforcing_path(auth: &TicketAuthRequest) -> Result
 }
 
 /// Audit line for an admitted grant, emitted only after the ticket redemption
-/// committed. The report is redacted and local.
+/// committed, at `info` level (default stderr is `warn`, so it is silent unless
+/// the operator raises the level). The report is redacted but contains the
+/// grant's own patterns; under ssh-stdio a raised level is relayed to the peer.
 fn log_attenuated_admission(chain: &authority_caveats::EffectiveCaveatChain) {
     if let Ok(report) = serde_json::to_string(chain) {
         tracing::info!(
