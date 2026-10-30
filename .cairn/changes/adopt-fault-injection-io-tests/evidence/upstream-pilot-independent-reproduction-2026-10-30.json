@@ -1,0 +1,41 @@
+{
+ "schema": "mantle-retained-observation-v1",
+ "purpose": "Independent reproduction, by rebuilding from source, of the upstream fixture-flakiness claim for durable-file-publication branch agent/dfp-pilot-evidence-20261030.",
+ "method": "git archive of each commit from the upstream repository into a fresh directory; cargo test --lib --no-run --locked --offline through the Mantle worktree wrapper; the resulting lib test executable run 300 times with the default parallel harness (non-zero exit counted as a failure) and once with --test-threads 1.",
+ "script_source": "#!/bin/bash\n# Independent reproduction of the durable-file-publication fixture-flakiness claim: rebuild the lib tests from source at each commit, then stress-run them.\nD=/home/brittonr/.cargo-target/agents-20261030/dfp-pilot\nV=/home/brittonr/.cargo-target/agents-20261030/validation/dfp\nW=$D/worktree\nexport PATH=$D/scratch/bin:$PATH      # bwrap symlink the repo's dev shell lacks (same workaround the agent used)\nRUNS=300\nfor pair in orig:99d4281 fixed:fa26782; do\n  name=${pair%%:*}; rev=${pair##*:}\n  rm -rf $V/$name $V/scratch-$name; mkdir -p $V/$name\n  git -C $W archive $rev | tar -x -C $V/$name\n  echo \"$rev $(git -C $W rev-parse $rev)\" > $V/$name.rev\n  python3 /home/brittonr/.cargo-target/mantle-complete-20261026-9ar4jfgk/run-in-worktree-v1.py --worktree $V/$name --scratch $V/scratch-$name -- cargo test --lib --no-run --locked --offline > $V/$name.build.log 2>&1\n  echo \"build-exit=$?\" >> $V/$name.build.log\n  exe=$(grep -o 'Executable unittests src/lib.rs ([^)]*)' $V/$name.build.log | sed 's/.*(\\(.*\\))/\\1/' | head -1)\n  echo \"exe=$exe\" >> $V/$name.build.log\n  [ -x \"$exe\" ] || { echo \"no executable for $name\" >> $V/$name.build.log; continue; }\n  b3sum --no-names \"$exe\" > $V/$name.exe.b3\n  fail=0; i=0\n  while [ $i -lt $RUNS ]; do i=$((i+1)); \"$exe\" >/dev/null 2>&1 || fail=$((fail+1)); done\n  echo \"$name rev=$rev runs=$i failures=$fail\" | tee $V/$name.stress.txt\n  \"$exe\" --test-threads 1 2>&1 | grep -E '^test result' > $V/$name.serial.txt\ndone\necho done > $V/DONE\n",
+ "script_blake3": "b4a239b1ef3e0b2ffc3fe450e29772cbfafb314c426a943e9b5aac559c053d35",
+ "runs": [
+  {
+   "name": "orig",
+   "requested_rev": "99d4281",
+   "resolved_commit": "99d428199077a81dd09ac6918fa498e46581ebce",
+   "build_exit_code": 0,
+   "test_executable_blake3": "ab2f067f71a1e0422c3b3e3e18f90d684cc0fbddafe30ab20b33c1d7344719c2",
+   "parallel_default_harness_runs": 300,
+   "parallel_failures": 43,
+   "stress_line": "orig rev=99d4281 runs=300 failures=43",
+   "serial_run_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "build_log": "   Compiling shlex v2.0.1\n   Compiling find-msvc-tools v0.1.9\n   Compiling libc v0.2.189\n   Compiling rustix v1.1.4\n   Compiling cfg-if v1.0.4\n   Compiling getrandom v0.4.3\n   Compiling linux-raw-sys v0.12.1\n   Compiling cc v1.4.0\n   Compiling bitflags v2.13.1\n   Compiling constant_time_eq v0.4.2\n   Compiling arrayvec v0.7.8\n   Compiling cpufeatures v0.3.0\n   Compiling fastrand v2.5.0\n   Compiling arrayref v0.3.9\n   Compiling once_cell v1.21.4\n   Compiling fault-injection v1.0.10\n   Compiling blake3 v1.8.5\n   Compiling tempfile v3.27.0\n   Compiling durable-file-publication v0.1.0 (/home/brittonr/.cargo-target/agents-20261030/validation/dfp/orig)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.51s\n  Executable unittests src/lib.rs (/home/brittonr/.cargo-target/agents-20261030/validation/dfp/scratch-orig/target/debug/deps/durable_file_publication-b60b2a4665a8ea76)\nbuild-exit=0\nexe=/home/brittonr/.cargo-target/agents-20261030/validation/dfp/scratch-orig/target/debug/deps/durable_file_publication-b60b2a4665a8ea76\n",
+   "build_log_blake3": "e53010e671d7605bb00d443fa500cd134fc136b8852e07e243fbe42b1552236c"
+  },
+  {
+   "name": "fixed",
+   "requested_rev": "fa26782",
+   "resolved_commit": "fa26782f8fbf30d7ca5f699547fe3f8364ca789e",
+   "build_exit_code": 0,
+   "test_executable_blake3": "81c232f2d7c83715e7b5adf8b5e95520d71fac1c10698bf6fb69a0cfa3e4b102",
+   "parallel_default_harness_runs": 300,
+   "parallel_failures": 0,
+   "stress_line": "fixed rev=fa26782 runs=300 failures=0",
+   "serial_run_result_line": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "build_log": "   Compiling find-msvc-tools v0.1.9\n   Compiling libc v0.2.189\n   Compiling shlex v2.0.1\n   Compiling getrandom v0.4.3\n   Compiling cfg-if v1.0.4\n   Compiling rustix v1.1.4\n   Compiling bitflags v2.13.1\n   Compiling cc v1.4.0\n   Compiling linux-raw-sys v0.12.1\n   Compiling cpufeatures v0.3.0\n   Compiling arrayref v0.3.9\n   Compiling constant_time_eq v0.4.2\n   Compiling once_cell v1.21.4\n   Compiling arrayvec v0.7.8\n   Compiling fastrand v2.5.0\n   Compiling fault-injection v1.0.10\n   Compiling blake3 v1.8.5\n   Compiling tempfile v3.27.0\n   Compiling durable-file-publication v0.1.0 (/home/brittonr/.cargo-target/agents-20261030/validation/dfp/fixed)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.77s\n  Executable unittests src/lib.rs (/home/brittonr/.cargo-target/agents-20261030/validation/dfp/scratch-fixed/target/debug/deps/durable_file_publication-b60b2a4665a8ea76)\nbuild-exit=0\nexe=/home/brittonr/.cargo-target/agents-20261030/validation/dfp/scratch-fixed/target/debug/deps/durable_file_publication-b60b2a4665a8ea76\n",
+   "build_log_blake3": "b14c59e90b9ec5602754a51c701509804c09270c19a97fb3cfa804eb46d9fcf2"
+  }
+ ],
+ "non_claims": [
+  "Failure rates depend on host load and scheduling; they show the defect and its absence at the fix, not a rate.",
+  "Only the library test executable was stress-run; integration test targets were not.",
+  "No Nix check, no non-Linux run, and no upstream lifecycle gate ran in this reproduction.",
+  "This does not land, accept or archive anything upstream or in Mantle."
+ ]
+}
