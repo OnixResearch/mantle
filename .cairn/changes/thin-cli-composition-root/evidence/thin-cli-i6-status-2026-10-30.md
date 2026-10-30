@@ -29,7 +29,7 @@ through `run-in-worktree-v1.py` with `--locked --offline` and `-- --test-threads
 | 8 | `cargo -Zscript scripts/check-cli-architecture.rs` | 0 | `cli architecture: PASS` (`t-arch.log`) |
 
 | 9 | `cargo fmt --check -p mantle` (after `rustfmt --edition 2024` on the five touched files) | 0 | no output (`t-fmt2.log`: `exit=0`) |
-| 10 | `cargo clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings` | not finished | `t-clippy.log` was still at `Checking mantle` when this slice was written; **no clippy result is claimed**. The new files were not linted. |
+| 10 | `cargo clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings` | 0 | `Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 17s` (`t-clippy.log`; the only warning line is cargo's pre-existing duplicate-bin-target manifest notice). Run on the tree after `rustfmt`; the audit report predates that formatting. |
 
 The one ignored test in row 5 is the pre-existing `#[ignore]` in `foreign_import_cli`; it did not run. Row 5 and 6 ran
 before `rustfmt` was applied to the touched files (formatting only); they were not re-run afterwards.
@@ -129,7 +129,7 @@ removed that is not in the required-row list (for example `rustix::net`) is stil
   host-context modules are excluded); "classifier reachable" does not prove it runs before the report on every
   path, and the ordering rule only sees emissions that precede the classifier inside its owning function.
 - Nothing here runs a classifier against a real operation outside the tests listed above. Acceptance, tick-boxing,
-  V3-V5 reruns on the final source, `cargo clippy`, `nix flake check` and the Cairn gates were not run by this slice
+  V3-V5 reruns on the final source, `nix flake check` and the Cairn gates were not run by this slice
   unless a row above says so.
 - One slip, corrected: an early `edit` of `scripts/check-cli-architecture.rs` addressed the canonical checkout
   (`/home/brittonr/git/OnixResearch/mantle`) instead of this worktree. It was undone by removing exactly the 47
