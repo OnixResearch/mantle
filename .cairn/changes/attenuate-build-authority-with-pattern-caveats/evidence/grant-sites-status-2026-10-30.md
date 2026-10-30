@@ -1,67 +1,76 @@
-# Grant-site status: T3.1-T3.4, T4.1-T4.4 (2026-10-30)
+# Grant-site status: T3.1-T3.4, T4.1-T4.4 (2026-10-30, revised after security review)
 
-Branch `agent/attenuate-sites-20261030`. Statuses are "implemented and executed", never "accepted"; acceptance and checkbox ticking belong to the integrator. All commands ran through `run-in-worktree-v1.py --worktree <WT> --scratch <SCRATCH> --` with `--locked --offline`; full logs are retained under the agent scratch `logs/` directory (names below), not committed.
+Branch `agent/attenuate-sites-20261030`. Every status below means **implemented and executed, NOT accepted**; acceptance, checkbox ticking and ADR/spec changes belong to the integrator. Nothing here claims a task is complete. Commands ran through `run-in-worktree-v1.py --worktree <WT> --scratch <SCRATCH> --` with `--locked --offline`; full logs live in the agent scratch `logs/` directory (not committed).
 
-## Audit before changes (what existed at base 177661759)
+## Limits the integrator must read first
 
-| Site | Existing | Missing |
+- **F1 Attenuation is advisory.** A presentation is optional and the ticket bearer alone still admits: a holder who also has the bearer can omit the presentation and be admitted unrestricted. There is no enforcing / "attenuation required" mode and no ticket-schema change. That is the weakness ADR 0090 says an unsigned restriction has; here the signed presentation restricts only requests that carry it. Not implemented: needs an owner decision.
+- **F2 residual.** The filter-visible job identity is now `/job/<request_id>[/attempt/<production job_id>]/class/<kind>/outputs/<sorted names>`. A grant for that label still admits any payload body, input set or resource request that keeps the label; those are only bound by the holder signature (the whole request), not by any caveat. Prefix-resource grants are label-scoped.
+- **F3 Replay ledger.** One ledger shared by all holders, capped at 8,192 records, no expiry or GC. Exhaustion silently (sender-side) disables every attenuated admission; legacy bearer admission continues. The nonce is consumed by a verified presentation even if redemption then fails. Rotation procedure is in docs/remote-credentials.md. No GC or quota implemented.
+- **F4 Provisioning.** The presentation carries no proofs or keys: every parent proof, delegate key and holder key must already be in the operator snapshot (256 keys, 256 proofs, 8,192 revoked). A holder cannot sub-delegate unilaterally. Not implemented.
+- **F8 Store view.** `RestrictedOutputLookup` and the gated shell `store info` have no production producer (the CLI has no grant input, no adapter turns a UCAN/filter chain into a view). The view is exact-path-set only, not a pattern. An admitted PathInfo still prints references, deriver and signatures that name out-of-view paths. T3.2 is therefore not delivered in the sense of a declared logical-path pattern.
+- **F12 Project site / report.** The project site admits nested goals (`goal/packages/check`); the design text says one goal segment. `resolve_project_target_with_authority` and the gateway/project chain report (`GatewayVerifier::effective_caveat_chain`) have no production caller; remote admission is the only non-test caller. The report checks expiry, not revocation. A verified UCAN with zero caveats is now reported as `ucan-unrestricted`.
+- **F10 / F13 (recorded only).** Verification, snapshot parsing and the fsync'd ledger rewrite run under the global ticket-state lock. The snapshot rollback guard is per process and `remote serve` is stdio-once, so an older snapshot is accepted; revocation freshness equals the snapshot window.
+- **Non-enforcing paths.** `--executor` still defaults to fixture. A presented grant is now refused with the constant string on the fixture executor, loopback and frame-level paths, but an older receiver that predates the field drops it, and the hello advertises no attenuation capability.
+
+## Audit before changes (base 177661759)
+
+| Site | Existing | Missing then |
 | --- | --- | --- |
-| Remote ticket admission (`commit_remote_ticket_admission_for_state`) | Mutation guard, receiver clock, bearer check, request validation, durable redeem. No attenuation hook. `admit_remote_job` existed only in the pure core, unused by any shell. | Presentation on the wire, receiver verifier, pre-redemption check. |
-| Store view | `OutputLookup::{find,find_with_layer,find_remote}` unrestricted; shell `store info` listed everything then substring-filtered; `store list` scanned. Gateway native store read already gates one exact signed path per UCAN session. `admit_exact_store_path` unused outside the core. | Any restricted lookup type, gating before PathInfo/remote reads, deny-before-scan for broad listing. |
-| Project goal | `resolve_project_target_with_authority` + `GatewayVerifier::verify_project_declaration`: signed session, owner binding, digest, declared-to-goal rewrite, parent-prefix check via `PatternPolicies`, real-selector fixtures. No production caller (module carries a pre-existing `#![allow(dead_code)]` for another change). Core `admit_project_goal` unused. | Effective-chain report. Deviation: it admits multi-segment goals (`goal/packages/check`), design says one normalized goal segment. |
-| Chain report | none | everywhere |
+| Remote ticket admission | Mutation guard, receiver clock, bearer check, request validation, durable redeem. `admit_remote_job` existed only in the pure core. | Presentation on the wire, receiver verifier, pre-redemption check. |
+| Store view | `OutputLookup` unrestricted; shell `store info` listed then substring-filtered. Gateway native store read gates one exact signed path per UCAN session. | A restricted lookup type, gating before reads, deny-before-scan. |
+| Project goal | `resolve_project_target_with_authority` and `verify_project_declaration`: signed session, owner binding, digest, rewrite, parent-prefix check, real-selector fixtures; no production caller. | Chain report; one-segment goal rule. |
 
-## Per-task status
+## Per-task status (implemented, not accepted)
 
 | Task | Status | Evidence |
 | --- | --- | --- |
-| T3.1 remote grant | Delivered (implemented, executed). Not wired to a client or a CLI flag: see ambiguities. | `final-remote-attenuated.log`: test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 2851 filtered out; finished in 1.01s |
-| T3.2 store view | Partially delivered: `RestrictedOutputLookup` and shell `store info`/`store list`/other-command gating implemented and executed; no production caller supplies a view (CLI has no grant input). | `after-store-view.log`: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 459 filtered out; finished in 0.94s; `final-store-cmd-view.log`: test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2855 filtered out; finished in 0.12s |
-| T3.3 project goal | Partially delivered (pre-existing site audited, extended only by chain report). Nested-goal deviation and no production caller remain. | `final-gateway-authority.log`: test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2852 filtered out; finished in 0.72s |
-| T3.4 chain report | Delivered for ticket creation (legacy: empty, not delegated), remote admission (local log), and verified gateway/project sessions. | `after-cli-ticket-create.log`: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.19s; remote and gateway logs above |
-| T4.1 positive fixtures | Delivered: declared job admitted, further attenuation composes, chain at bound admits, view serves only its path, project rewrite (pre-existing). | tests below |
-| T4.2 negative fixtures | Delivered: second job refused, store-view escape refused, cross-project goal refused (pre-existing gateway case), unknown caveat, chain over bound, no feedback (no frame, constant error). | tests below |
-| T4.3 before/after | After rails executed (below). BEFORE = existing baseline evidence file; not re-run at base. | |
-| T4.4 quality | fmt, strict clippy, `git diff --check` executed for `mantle` and `crunch-store`; Cairn validation, Tracey, Nix checks NOT run (excluded). | below |
+| T3.1 remote grant | Implemented, not accepted. Advisory (F1), optional presentation, no client or CLI producer. | remote receiver rail below |
+| T3.2 store view | Partially implemented, not accepted: library lookup and shell gating only; no producer (F8). | store rails below |
+| T3.3 project goal | Pre-existing site audited and extended with a chain report only; nested goals admitted; no production caller (F12). | gateway rail below |
+| T3.4 chain report | Implemented for ticket creation (legacy: `legacy-bearer-not-delegated`, empty), remote admission (local log after redemption) and verified gateway sessions (test-only caller). | CLI rail and remote rail |
+| T4.1 positive fixtures | Implemented and executed: declared job admitted, further attenuation composes, chain at the bound admits, serve-path admit writes AuthOk and redeems once, grant for a production job id admits exactly that request. | remote receiver rail |
+| T4.2 negative fixtures | Implemented and executed (list below). | remote receiver rail |
+| T4.3 before/after | After rails recorded verbatim below. BEFORE is the existing baseline evidence; not re-run at base. | |
+| T4.4 quality | fmt, strict clippy, `git diff --check` executed for `mantle` and `crunch-store`. Cairn validation, Tracey, Nix checks NOT run. | below |
 
-### Fixtures (all executed, all passing)
+## Review follow-ups done in this revision
 
-Remote receiver (`src/remote_build/tests/attenuated_admission_tests.rs`, real ticket state on disk, production `commit_remote_ticket_admission_for_state`, `commit_remote_ticket_admission` wrapper and `serve_stdio_remote_production_once`, operator authority loaded through `open_operator_authority`, receiver clock):
-- `restricted_grant_authorizes_its_declared_job_and_legacy_bearer_is_unchanged`
-- `further_attenuation_composes_and_a_second_job_is_refused_without_effect`
-- `issued_grant_reports_its_effective_caveat_chain_redacted`
-- `unsafe_presentations_are_refused_before_redemption_with_no_feedback` (unknown, malformed, ordinal gap, 9-caveat chain, parent-rejected input rewritten, expired deadline, revoked, wrong project scope, other-job signature, changed request field, oversized token; each asserts state byte-equal and uses_remaining unchanged)
-- `replay_missing_authority_and_forged_client_time_fail_closed`
-- `chain_at_the_bound_admits`
-- `production_serve_refuses_unsafe_presentation_with_no_frame_and_no_state_change` (writer empty, constant error)
-- `production_wrapper_uses_the_admitted_endpoint_binding_for_the_signed_request`
+1. **Test integrity.** `assert_refused_without_effect` previously took its "before" snapshot after the admission. Now the ticket state AND the replay-ledger directory (all file bytes) are captured BEFORE each refused admission and compared afterwards. Finding: in all 22 refusal cases (unknown/malformed/ordinal-gap/over-bound caveats, parent-rejected-input rewritten, expired, not-yet-valid, revoked grant, revoked parent proof, wrong project scope, wrong endpoint at the receiver, wrong audience, wrong generation, wrong holder identity, flipped signature, signature from another invocation, other-job signature, changed request field, oversized token, parent caveat dropped / reordered / modified) the ledger is unchanged: the holder nonce is consumed only by a verification that succeeded. A replay of an admitted presentation also leaves ticket state and ledger unchanged. Not surprising, but only true as of those tests: a verified presentation followed by a failed redemption (ticket commit failure) does consume the nonce (now logged locally). Duplicate-ordinal parent caveats were not tested separately (`ordinal-gap` and `parent-caveat-reordered` cover ordinal order and gaps). A serve-path positive was added.
+2. **Job identity.** See F2 residual above. Over-bound or inexpressible values (non-vocabulary characters, dot segments, leading colon, over 9 output names, duplicates, over 512 bytes) are rejected, never truncated.
+3. **Digest.** Now BLAKE3 over domain `v2`, endpoint id and the serde_json encoding of the whole `ConcreteBuildRequest`. Nested types contain no hash maps or floats (checked in the crunch-build distributed types and the endpoint binding). Tests change each previously unbound field after signing (contains_raw_frontend_eval, attempt_id, fence_generation, transfer_policy, resource_requirements, locality_scope, failure_debug_policy, failure_replay, endpoint binding generation and scope) plus upload_bytes, input_refs, store_prefix and an expected output path; all refused; control admits. The ticket id is NOT bound.
+4. **Start checks.** `open_operator_authority` calls `GatewayVerifier::check_loadable` (the verifier's `load`): malformed, expired, not-yet-issued, wrong policy hash, unsupported version, no roots, no keys, mode 0644, symlink, oversized, replay directory not private or missing all fail the start (test `provisioned_but_invalid_authority_fails_the_server_start`).
+5. **Non-enforcing paths.** Refusal with the constant string tested on loopback and frame-level admission (the fixture executor reaches the same `take_auth`). `--executor` default unchanged.
+6. **Local diagnostics.** `DenialReason` codes logged at warn, never sent; admitted-chain info log moved after the redemption commit. The UCAN/Basalt verifier gives one undifferentiated denial, so signature, chain, caveat, window, revocation, replay and ledger-full share `verification-denied`. I did not test log output itself.
+7. **Store info / zero-caveat.** The exact path is parsed and gated before `open_store` (test: unopenable state dir, outside path refused without an open attempt; admitted path reaches the open). Zero-caveat chains are labelled `ucan-unrestricted`.
+8. **Documentation.** docs/remote-credentials.md, source doc comments and this record rewritten as above. The claim "state byte-equal" is now true for the ticket state and the replay-ledger directory, within the tested cases.
 
-Store: `crunch-store` `restricted_view::tests::{view_serves_only_its_path_and_refuses_every_lookup_outside_it,digest_lookalike_of_an_admitted_name_is_refused}`; shell `store_cmd::tests::{restricted_store_info_serves_only_the_exact_view_path,restricted_view_denies_broad_listing_before_opening_the_store}`.
+## Negative and positive fixtures (all executed)
 
-Mutation check (not retained as a test): temporarily making the pre-redemption check return Ok for most presentations made 4 of the 8 remote tests fail (`mutation-skip-check.log`: test result: FAILED. 4 passed; 4 failed). The mutation was reverted before the commit.
+Remote receiver (`src/remote_build/tests/attenuated_admission_tests.rs`, 16 tests including): `unsafe_presentations_are_refused_before_redemption_and_nonce_use_with_no_feedback`, `grant_for_one_job_id_and_output_set_refuses_another`, `every_request_field_changed_after_signing_is_refused`, `provisioned_but_invalid_authority_fails_the_server_start`, `presented_grant_is_refused_on_every_non_enforcing_path`, `production_serve_admits_a_valid_presentation_and_writes_auth_ok`, `production_serve_refuses_unsafe_presentation_with_no_frame_and_no_state_change`, `restricted_grant_authorizes_its_declared_job_and_legacy_bearer_is_unchanged`, `further_attenuation_composes_and_a_second_job_is_refused_without_effect`, `chain_at_the_bound_admits`, `job_target_is_canonical_bounded_and_rejects_what_filters_cannot_express`. Store: `crunch-store` `restricted_view::tests` (2) and `store_cmd::tests::restricted_*` (3). Gateway/project: `nix_gateway::authority::tests` (7, includes the cross-owner and unknown-caveat project cases).
 
-## T4.3 / T4.4 rails after the change (verbatim)
+## Rails after the change (verbatim result lines)
 
-| Rail | Command | Exit | Result line |
+| Rail | Command | Exit | Result |
 | --- | --- | --- | --- |
-| core filter+composition | `cargo test --locked --offline -p crunch-remote-core --lib caveat -- --test-threads 1` | 0 | test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.01s |
-| adapter | `cargo test --locked --offline -p mantle --bin mantle remote_build::authority_caveats -- --test-threads 1` | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2857 filtered out; finished in 0.00s |
-| gateway/project | `... nix_gateway::authority ...` | 0 | test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2852 filtered out; finished in 0.72s |
-| remote receiver (new) | `... remote_build::tests::attenuated_admission_tests ...` | 0 | test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 2851 filtered out; finished in 1.01s |
-| existing ticket admission | `... remote_build::tests::production ...` | 0 | test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 2851 filtered out; finished in 0.05s |
-| existing forged time | `... remote_build::tests::forged_client_time_and_endpoint_cannot_expand_ticket_authority -- --exact` | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2858 filtered out; finished in 0.03s |
-| existing malformed | `... remote_build::tests::malformed_request_does_not_consume_ticket -- --exact` | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2858 filtered out; finished in 0.01s |
-| project selector | `... project_build ...` | 0 | test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 2839 filtered out; finished in 0.03s |
-| store shell | `... store_cmd::tests ...` | 0 | test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2855 filtered out; finished in 0.12s |
-| store view | `cargo test --locked --offline -p crunch-store --lib restricted_view` | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 459 filtered out; finished in 0.94s |
-| store capability | `... -p crunch-store --lib capability::tests` | 0 | test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 458 filtered out; finished in 1.36s |
-| ticket CLI | `cargo test --locked --offline -p mantle --test remote_credentials_cli -- --test-threads 1` | 0 | test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.19s |
+| core filter+composition | `cargo test --locked --offline -p crunch-remote-core --lib caveat -- --test-threads 1` | 0 | test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.00s |
+| adapter | `... -p mantle --bin mantle remote_build::authority_caveats ...` | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2866 filtered out; finished in 0.00s |
+| gateway/project | `... nix_gateway::authority ...` | 0 | test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2861 filtered out; finished in 0.99s |
+| store_cmd | `... store_cmd::tests ...` | 0 | test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2863 filtered out; finished in 0.12s |
+| remote receiver | `... remote_build::tests::attenuated_admission_tests ...` | 0 | test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 2852 filtered out; finished in 2.83s |
+| ticket admission | `... remote_build::tests::production ...` | 0 | test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 2860 filtered out; finished in 0.06s |
+| forged time | `... remote_build::tests::forged_client_time_and_endpoint_cannot_expand_ticket_authority -- --exact` | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2867 filtered out; finished in 0.00s |
+| malformed | `... remote_build::tests::malformed_request_does_not_consume_ticket -- --exact` | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2867 filtered out; finished in 0.00s |
+| project selector | `... project_build ...` | 0 | test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 2848 filtered out; finished in 0.00s |
+| store view | `cargo test --locked --offline -p crunch-store --lib restricted_view -- --test-threads 1` | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 459 filtered out; finished in 0.10s |
+| store capability | `... -p crunch-store --lib capability::tests ...` | 0 | test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 458 filtered out; finished in 0.65s |
+| ticket CLI | `cargo test --locked --offline -p mantle --test remote_credentials_cli -- --test-threads 1` | 0 | test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.66s |
 | fmt | `cargo fmt --check -p mantle`, `-p crunch-store` | 0, 0 | no output |
-| clippy | `cargo clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings` and `-p crunch-store` | 0, 0 | no output |
+| clippy | `cargo clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings`, same for `crunch-store` | 0, 0 | no output |
 | whitespace | `git diff --check` | 0 | no output |
 
-(An earlier clippy run failed on two constant `debug_assert!`s I wrote; fixed and re-run clean. Final rails were re-run after the last source edit for the mantle package; crunch-store and crunch-remote-core were unchanged after their runs.)
+The first r3 mantle clippy run failed on `clippy::type_complexity` in a test; fixed, then the mantle fmt, clippy and the five mantle test rails (adapter, gateway, store_cmd, remote attenuated, ticket admission) were re-run after that last source edit (`r4-*` logs). The other rails ran before that test-only edit.
 
-## Not verified / non-claims
+## Not verified
 
-Not run: Cairn validation, Tracey coverage, Nix/flake checks, tigerstyle, workspace gates, the BEFORE rails at base. No end-to-end client that produces a presentation exists; the signed fixtures play the holder. No real network or SSH transport exercised. Tests use the real clock with wide windows. Acceptance not claimed.
+Cairn validation, Tracey, Nix/flake checks, tigerstyle, workspace gates; the BEFORE rails at base. No client that produces a presentation exists (fixtures play the holder); no real transport. Log output of denials was not asserted. Concurrent presentations, ledger-full and ledger write failure were not exercised. Duplicate-ordinal parent caveats not tested separately. Acceptance is not claimed.
