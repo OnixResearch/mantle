@@ -85,4 +85,4 @@ All rails above ran after the final source edit (`r5-*` logs).
 
 ## Not verified
 
-Cairn validation, Tracey, Nix/flake checks, tigerstyle, workspace gates; the BEFORE rails at base. No client that produces a presentation exists (fixtures play the holder); no real transport. Concurrent presentations, ledger-full, ledger write failure, the verified-then-redemption-failed abort and `remote serve` start wiring were not exercised. Duplicate-ordinal parent caveats not tested separately. Acceptance is not claimed.
+Cairn validation, Tracey, Nix/flake checks, tigerstyle, workspace gates; the BEFORE rails at base. No client that produces a presentation exists (fixtures play the holder); no real transport. Concurrent presentations, ledger-full, ledger write failure, the verified-then-redemption-failed abort and `remote serve` start wiring were not exercised. Acceptance is not claimed.
