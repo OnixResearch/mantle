@@ -917,6 +917,53 @@ fn self_test() -> Result<(), String> {
         fs::remove_file(&fixture).map_err(|error| format!("cleaning fixture: {error}"))?;
     }
 
+    // Every entry of the forbidden-authority table is load-bearing: each one is
+    // rejected in both protected scopes, and each V2 authority class keeps its
+    // required rows, so a class cannot silently lose coverage by a table edit.
+    let required_classes: [(&str, &[&str]); 12] = [
+        ("CLI", &["clap", "mantle", "crate::cli", "RunContext", "RunError"]),
+        ("Snix", &["snix_build", "snix_castore", "snix_store", "snix_eval", "snix_glue"]),
+        ("filesystem", &["std::fs", "std::os::unix::fs", "rustix::fs"]),
+        ("process", &["std::process", "std::thread"]),
+        ("async runtime", &["tokio", "async_std", "smol"]),
+        ("environment", &["std::env", "dotenv", "dotenvy"]),
+        ("clock", &["std::time::Instant", "std::time::SystemTime"]),
+        ("random", &["rand::random", "rand_core::OsRng", "getrandom"]),
+        ("network", &["std::net", "reqwest", "ureq", "hyper"]),
+        ("provider", &[
+            "crate::full_source_provider",
+            "crate::rust_source_provider",
+            "crate::source_root_provider",
+            "crate::stagex_provider",
+        ]),
+        ("store service", &["StoreHandle", "BlobService", "DirectoryService", "PathInfoService", "crunch_store"]),
+        ("rendering", &["crate::presentation", "std::io::stdout", "println!", "print!"]),
+    ];
+    for (class, required) in required_classes {
+        for entry in required {
+            if !CONTRACT_FORBIDDEN.contains(entry) {
+                return Err(format!("{class} authority lost its forbidden-table row `{entry}`"));
+            }
+        }
+    }
+    for (directory, boundary) in [(&core, "core host authority"), (&contract, "contract host authority")] {
+        let fixture = directory.join("authority.rs");
+        for forbidden in CONTRACT_FORBIDDEN {
+            let source = if forbidden.ends_with('!') {
+                format!("pub fn sample() {{ {forbidden}(); }}\n")
+            } else {
+                format!("pub fn sample() {{ {forbidden}::sample(); }}\n")
+            };
+            fs::write(&fixture, source).map_err(|error| format!("fixture: {error}"))?;
+            let rejected = scan_repository(&root)?;
+            let needle = format!("forbidden authority `{forbidden}`");
+            if !rejected.iter().any(|entry| entry.contains(boundary) && entry.contains(&needle)) {
+                return Err(format!("table row `{forbidden}` must be rejected in {boundary}, saw {rejected:?}"));
+            }
+        }
+        fs::remove_file(&fixture).map_err(|error| format!("cleaning fixture: {error}"))?;
+    }
+
     // Pure allocations/serialization, explicit values, provider/store facts,
     // formatting, and test-only host helpers remain legal in both scopes.
     let accepted_authority = [
