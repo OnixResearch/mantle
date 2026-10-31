@@ -26,6 +26,7 @@ use crate::pool::TrustedOutputKey;
 use crate::pool::WorkerFacts;
 use crate::pool::admits_pool;
 use crate::pool::plan_goal_placement;
+use crate::pool::plans_pool;
 use crate::resource::Capacity;
 use crate::resource::NamedResourceFit;
 use crate::resource::PlacementPreference;
@@ -127,6 +128,15 @@ fn two_independently_bound_workers_admit_together() {
     assert_eq!(admitted.pool_id(), "native-pool");
     assert_eq!(admitted.endpoint_names(), &[String::from("worker-a"), String::from("worker-b")]);
     assert_eq!(admitted.session(), selection.session);
+}
+
+#[test]
+fn plan_only_admission_needs_no_caller_credential() {
+    let selection = selection(&ENDPOINT_NAMES);
+    let table = bindings(&ENDPOINT_NAMES);
+    let planned = plans_pool(&selection, &table, NOW_UNIX_S).expect("plan-only admission");
+    assert_eq!(planned.endpoint_names().len(), 2);
+    assert_eq!(admits_pool(&selection, &table, &[], NOW_UNIX_S), Err(PoolAdmissionError::MissingCallerCredential));
 }
 
 #[test]

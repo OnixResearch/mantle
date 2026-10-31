@@ -164,13 +164,12 @@ impl AdmittedPool {
     }
 }
 
-/// Decide whether one operator-selected pool may dispatch against current bindings and caller-owned
-/// credentials. Binding expiry, revocation, and name/generation agreement are
-/// decided by the current table at `now_unix_s`.
-pub fn admits_pool(
+/// Decide whether one operator-selected pool is coherent against current
+/// bindings, without any caller-owned credential. This is the plan-only half:
+/// it can render intended routes but never authorizes a dispatch.
+pub fn plans_pool(
     selection: &PoolSelection,
     bindings: &EndpointBindingTable,
-    caller_credentials: &[CallerCredential],
     now_unix_s: u64,
 ) -> Result<AdmittedPool, PoolAdmissionError> {
     if !is_valid_identifier(&selection.pool_id, MAX_POOL_ID_BYTES) {
@@ -187,7 +186,6 @@ pub fn admits_pool(
     }
     admit_session_capacity(selection)?;
     let mut endpoint_names = Vec::with_capacity(selection.endpoints.len());
-    let mut credential_references = Vec::with_capacity(selection.endpoints.len());
     for endpoint in &selection.endpoints {
         let name = endpoint.presented_binding.spec.name.clone();
         if endpoint_names.contains(&name) {
@@ -197,8 +195,6 @@ pub fn admits_pool(
         bindings
             .resolve(&endpoint.presented_binding, now_unix_s)
             .map_err(PoolAdmissionError::EndpointBinding)?;
-        admit_endpoint_credential(endpoint, caller_credentials, &credential_references)?;
-        credential_references.push(endpoint.credential_reference.clone());
         endpoint_names.push(name);
     }
     debug_assert_eq!(endpoint_names.len(), selection.endpoints.len());
@@ -208,6 +204,25 @@ pub fn admits_pool(
         endpoint_names,
         session: selection.session,
     })
+}
+
+/// Decide whether one operator-selected pool may dispatch: the plan-only checks
+/// plus exactly one caller-authorized credential per selected endpoint.
+pub fn admits_pool(
+    selection: &PoolSelection,
+    bindings: &EndpointBindingTable,
+    caller_credentials: &[CallerCredential],
+    now_unix_s: u64,
+) -> Result<AdmittedPool, PoolAdmissionError> {
+    let admitted = plans_pool(selection, bindings, now_unix_s)?;
+    let mut credential_references = Vec::with_capacity(selection.endpoints.len());
+    for endpoint in &selection.endpoints {
+        admit_endpoint_credential(endpoint, caller_credentials, &credential_references)?;
+        credential_references.push(endpoint.credential_reference.clone());
+    }
+    debug_assert_eq!(credential_references.len(), admitted.endpoint_names().len());
+    debug_assert!(admitted.endpoint_names().iter().all(|name| !name.is_empty()));
+    Ok(admitted)
 }
 
 fn admit_session_capacity(selection: &PoolSelection) -> Result<(), PoolAdmissionError> {

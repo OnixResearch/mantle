@@ -3916,6 +3916,29 @@
     "supports_json": true
   },
   {
+    "path": "remote pool plan",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--builder-config",
+      "--builder-pool",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--remote-binding-config",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Render the intended routes of a selected pool without credentials or side effects",
+    "supports_json": true
+  },
+  {
     "path": "remote serve",
     "aliases": [],
     "flags": [

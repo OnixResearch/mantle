@@ -35,6 +35,8 @@ pub const MAX_TRANSPORT_PROGRAM_BYTES: u64 = 268_435_456;
 
 /// Report schema for one admitted pool selection.
 pub const POOL_PREFLIGHT_REPORT_SCHEMA: &str = "mantle-remote-pool-preflight-v1";
+/// Report schema for one side-effect-free pool route plan.
+pub const POOL_PLAN_REPORT_SCHEMA: &str = "mantle-remote-pool-plan-v1";
 
 /// One caller-owned bearer descriptor named for exactly one endpoint.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +153,63 @@ fn project_endpoint(
     Ok(projected)
 }
 
+/// Plan one selected pool without credentials: resolve current bindings, verify
+/// declared routes and transport identities, and apply the plan-only decision.
+pub fn plan_selected_pool(
+    farm: &RemoteBuildFarmConfig,
+    pool_id: &str,
+    bindings: &RemoteEndpointBindingConfig,
+    now_unix_s: u64,
+) -> Result<PoolPlanReport, RunError> {
+    let pool = farm.pools.iter().find(|pool| pool.pool_id == pool_id).ok_or_else(|| pool_error("pool-unknown"))?;
+    let selection = project_pool_selection(farm, pool_id, bindings)?;
+    let records = EndpointBindingStore::open(&bindings.endpoint_state_directory)?.records()?;
+    let table = EndpointBindingTable::from_records(records).map_err(|_| pool_error("pool-binding-table-invalid"))?;
+    let planned = crunch_remote_core::pool::plans_pool(&selection, &table, now_unix_s).map_err(admission_error)?;
+    let programs = verify_transport_programs(pool)?;
+    let endpoints = pool
+        .endpoints
+        .iter()
+        .map(|endpoint| plan_route(endpoint, &programs))
+        .collect::<Result<Vec<_>, RunError>>()?;
+    let report = PoolPlanReport {
+        schema: POOL_PLAN_REPORT_SCHEMA.to_string(),
+        pool_id: planned.pool_id().to_string(),
+        endpoints,
+        session: planned.session(),
+    };
+    debug_assert_eq!(report.endpoints.len(), pool.endpoints.len());
+    debug_assert_eq!(report.pool_id, pool_id);
+    Ok(report)
+}
+
+fn plan_route(
+    endpoint: &crate::remote_farm_config::RemoteEndpoint,
+    programs: &[VerifiedTransportProgram],
+) -> Result<PoolRoutePlan, RunError> {
+    if !matches!(endpoint.transport, RemoteTransportMode::Stdio | RemoteTransportMode::SshStdio) {
+        return Err(pool_error("pool-transport-unsupported"));
+    }
+    let program = programs
+        .iter()
+        .find(|program| program.endpoint_name == endpoint.endpoint_id)
+        .ok_or_else(|| pool_error("pool-transport-program-missing"))?;
+    let route = PoolRoutePlan {
+        endpoint_name: endpoint.endpoint_id.clone(),
+        transport: transport_name(endpoint.transport).to_string(),
+        transport_program: program.program.clone(),
+        transport_program_blake3: program.digest_blake3.clone(),
+        transport_args: endpoint.transport_args.clone(),
+        output_key_names: endpoint.trusted_output_keys.iter().map(|key| key.public_key_name.clone()).collect(),
+        worker_generation: endpoint.profile.worker_generation,
+        max_concurrency: endpoint.profile.max_concurrency,
+        declares_resource_inventory: endpoint.profile.resource_inventory.is_some(),
+    };
+    debug_assert_eq!(route.endpoint_name, endpoint.endpoint_id);
+    debug_assert_eq!(route.transport_program_blake3.len(), 64);
+    Ok(route)
+}
+
 /// Admit one selected pool: parse descriptors, verify ownership, resolve every
 /// endpoint against the current binding table, and apply the pure decision.
 pub fn admit_selected_pool(
@@ -190,6 +249,30 @@ pub fn admit_selected_pool(
     debug_assert!(!report.endpoints.is_empty());
     debug_assert_eq!(report.pool_id, pool_id);
     Ok(report)
+}
+
+/// One intended endpoint route. A plan proves declared facts only.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PoolRoutePlan {
+    pub endpoint_name: String,
+    pub transport: String,
+    pub transport_program: String,
+    pub transport_program_blake3: String,
+    pub transport_args: Vec<String>,
+    pub output_key_names: Vec<String>,
+    pub worker_generation: u64,
+    pub max_concurrency: u32,
+    pub declares_resource_inventory: bool,
+}
+
+/// Side-effect-free plan over one selected pool: bindings, declared routes, and
+/// remeasured transport identities, without credentials, sockets, or execution.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PoolPlanReport {
+    pub schema: String,
+    pub pool_id: String,
+    pub endpoints: Vec<PoolRoutePlan>,
+    pub session: PoolSessionPolicy,
 }
 
 /// One selected endpoint's transport executable, remeasured before use.
@@ -296,6 +379,18 @@ fn pool_error(code: &str) -> RunError {
 /// Run one `remote pool` preflight action and print its bounded report.
 pub fn cmd_remote_pool(action: crate::RemotePoolAction, json_output: bool) -> Result<(), RunError> {
     match action {
+        crate::RemotePoolAction::Plan {
+            builder_config,
+            builder_pool,
+            remote_binding_config,
+        } => {
+            let farm = crate::remote_farm_config::load_remote_build_farm_config(&builder_config)
+                .map_err(|reason| pool_error(&format!("pool-config-invalid:{reason}")))?;
+            let bindings = RemoteEndpointBindingConfig::load(&remote_binding_config)?;
+            let report = plan_selected_pool(&farm, &builder_pool, &bindings, unix_time_now_s()?)?;
+            print_pool_plan(&report, json_output)?;
+            Ok(())
+        }
         crate::RemotePoolAction::Check {
             builder_config,
             builder_pool,
@@ -310,6 +405,19 @@ pub fn cmd_remote_pool(action: crate::RemotePoolAction, json_output: bool) -> Re
             Ok(())
         }
     }
+}
+
+fn print_pool_plan(report: &PoolPlanReport, json_output: bool) -> Result<(), RunError> {
+    let rendered = if json_output {
+        serde_json::to_string(report)
+    } else {
+        serde_json::to_string_pretty(report)
+    }
+    .map_err(|error| pool_error(&format!("pool-plan-render:{error}")))?;
+    println!("{rendered}");
+    debug_assert!(!report.endpoints.is_empty());
+    debug_assert_eq!(report.schema, POOL_PLAN_REPORT_SCHEMA);
+    Ok(())
 }
 
 fn print_pool_report(report: &PoolPreflightReport, json_output: bool) -> Result<(), RunError> {
@@ -544,5 +652,27 @@ mod tests {
         )
         .expect_err("non-executable transport denies the pool");
         assert!(error.to_string().contains("pool-transport-program-not-executable"));
+    }
+
+    #[test]
+    fn plan_renders_routes_without_credentials_and_rejects_unimplemented_transport() {
+        let dir = tempfile::tempdir().expect("binding state dir");
+        let bindings = seeded_bindings(dir.path());
+        let (program, digest) = transport_program(dir.path());
+        let report = plan_selected_pool(&farm(&program, &digest), "native-pool", &bindings, NOW_UNIX_S)
+            .expect("pool plan renders");
+        assert_eq!(report.schema, POOL_PLAN_REPORT_SCHEMA);
+        assert_eq!(report.endpoints.len(), 2);
+        assert_eq!(report.endpoints[0].endpoint_name, "worker-a");
+        assert_eq!(report.endpoints[0].transport, "stdio");
+        assert_eq!(report.endpoints[0].transport_program_blake3, digest);
+        assert_eq!(report.endpoints[0].output_key_names, vec![String::from("worker-a-1")]);
+        assert_eq!(report.session.max_concurrency, 1);
+
+        let mut unsupported = farm(&program, &digest);
+        unsupported.pools[0].endpoints[0].transport = RemoteTransportMode::P2p;
+        let error = plan_selected_pool(&unsupported, "native-pool", &bindings, NOW_UNIX_S)
+            .expect_err("unimplemented transport denies the plan");
+        assert!(error.to_string().contains("pool-transport-unsupported"));
     }
 }

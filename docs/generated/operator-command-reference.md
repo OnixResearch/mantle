@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `4761c0554b5d996b4e418fd5b593b29b12ba59d249ad436159d7ed7bf5a27d59`
+Catalog BLAKE3: `aa54cb9567a34e9eb9b49ccdd953b35a24419520a4a355d09bb32c7f9f447e2e`
 
 ## Daily commands
 
@@ -1418,6 +1418,15 @@ Admit a selected pool against current bindings and caller-owned descriptors
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-remote-pool-preflight-v1`
+
+### `mantle remote pool plan`
+
+Render the intended routes of a selected pool without credentials or side effects
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-remote-pool-plan-v1`
 
 ### `mantle remote serve`
 

@@ -2858,6 +2858,18 @@ pub enum RemoteLiveAction {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RemotePoolAction {
+    /// Render the intended routes of a selected pool without credentials or side effects
+    Plan {
+        /// Evaluated Nickel remote-builders configuration
+        #[arg(long, value_name = "PATH")]
+        builder_config: PathBuf,
+        /// Configured pool id to select
+        #[arg(long)]
+        builder_pool: String,
+        /// Operator-local endpoint binding configuration
+        #[arg(long, value_name = "PATH")]
+        remote_binding_config: PathBuf,
+    },
     /// Admit a selected pool against current bindings and caller-owned descriptors
     Check {
         /// Evaluated Nickel remote-builders configuration
@@ -4436,6 +4448,7 @@ fn remote_command_label(action: &RemoteAction) -> &'static str {
             RemoteLiveAction::Subscribe { .. } => "remote.live.subscribe",
         },
         RemoteAction::Pool { action } => match action {
+            RemotePoolAction::Plan { .. } => "remote.pool.plan",
             RemotePoolAction::Check { .. } => "remote.pool.check",
         },
         #[cfg(target_os = "linux")]

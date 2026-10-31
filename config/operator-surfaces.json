@@ -7249,6 +7249,46 @@
       ]
     },
     {
+      "canonical": "remote pool plan",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--builder-config",
+        "--builder-pool",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--remote-binding-config",
+        "--state-dir",
+        "--store",
+        "--store-backend",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-remote-pool-plan-v1",
+      "migration_reference": null,
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "public-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
       "canonical": "remote serve",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
