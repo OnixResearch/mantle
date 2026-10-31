@@ -1148,6 +1148,124 @@ where F: Fn(&'a T) -> &'a str {
     Ok(())
 }
 
+/// One admitted pool endpoint with its own execution service.
+#[derive(Debug, Clone)]
+pub struct PoolEndpointService<S> {
+    endpoint_id: String,
+    service: S,
+}
+
+impl<S> PoolEndpointService<S> {
+    pub fn new(endpoint_id: impl Into<String>, service: S) -> Self {
+        Self {
+            endpoint_id: endpoint_id.into(),
+            service,
+        }
+    }
+
+    pub fn endpoint_id(&self) -> &str {
+        &self.endpoint_id
+    }
+}
+
+/// Chooses the endpoint for one ready goal. Placement policy lives outside this
+/// service: the selector receives the concrete request and the admitted endpoint
+/// ids, and returns an index into that same order.
+pub trait PoolEndpointSelector: Send + Sync {
+    fn select(
+        &self,
+        request: &snix_build::buildservice::BuildRequest,
+        endpoint_ids: &[String],
+    ) -> Result<usize, PoolSelectionError>;
+}
+
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum PoolSelectionError {
+    #[error("pool has no admitted endpoints")]
+    NoEndpoints,
+    #[error("pool endpoint id is empty or duplicated")]
+    InvalidEndpoint,
+    #[error("no admitted endpoint fits this goal")]
+    NoFit,
+    #[error("selector chose an endpoint outside the admitted pool")]
+    OutOfRange,
+}
+
+/// A build service that delegates each request to exactly one admitted pool
+/// endpoint. It owns no placement policy, reservation, or fallback: the injected
+/// selector decides, and the selected endpoint's own service performs the build.
+#[derive(Debug, Clone)]
+pub struct PoolBuildService<S, Sel> {
+    endpoints: Vec<PoolEndpointService<S>>,
+    endpoint_ids: Vec<String>,
+    selector: Sel,
+}
+
+impl<S, Sel> PoolBuildService<S, Sel> {
+    pub fn new(endpoints: Vec<PoolEndpointService<S>>, selector: Sel) -> Result<Self, PoolSelectionError> {
+        if endpoints.is_empty() {
+            return Err(PoolSelectionError::NoEndpoints);
+        }
+        let endpoint_ids = endpoints.iter().map(|endpoint| endpoint.endpoint_id.clone()).collect::<Vec<_>>();
+        let mut seen = std::collections::BTreeSet::new();
+        let is_valid = endpoint_ids.iter().all(|id| !id.is_empty() && seen.insert(id.clone()));
+        if !is_valid {
+            return Err(PoolSelectionError::InvalidEndpoint);
+        }
+        debug_assert_eq!(endpoint_ids.len(), endpoints.len());
+        debug_assert!(endpoint_ids.iter().all(|id| !id.is_empty()));
+        Ok(Self {
+            endpoints,
+            endpoint_ids,
+            selector,
+        })
+    }
+
+    pub fn endpoint_ids(&self) -> &[String] {
+        &self.endpoint_ids
+    }
+}
+
+impl<S, Sel> PoolBuildService<S, Sel>
+where Sel: PoolEndpointSelector
+{
+    fn select(&self, request: &snix_build::buildservice::BuildRequest) -> std::io::Result<&PoolEndpointService<S>> {
+        let index = self
+            .selector
+            .select(request, &self.endpoint_ids)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}")))?;
+        self.endpoints
+            .get(index)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range"))
+    }
+}
+
+#[async_trait::async_trait]
+impl<S, Sel> snix_build::buildservice::BuildService for PoolBuildService<S, Sel>
+where
+    S: snix_build::buildservice::BuildService,
+    Sel: PoolEndpointSelector,
+{
+    async fn do_build(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
+        let endpoint = self.select(&request)?;
+        endpoint.service.do_build(request).await
+    }
+
+    async fn do_build_cancellable(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+        cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
+        let endpoint = self.select(&request)?;
+        endpoint.service.do_build_cancellable(request, cancellation).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_ne;
@@ -2138,5 +2256,126 @@ mod tests {
                 field: "input_closure.store_path"
             })
         ));
+    }
+
+    struct FakePoolService {
+        label: &'static str,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl snix_build::buildservice::BuildService for FakePoolService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(build_result(self.label))
+        }
+    }
+
+    struct FixedSelector(usize);
+
+    impl PoolEndpointSelector for FixedSelector {
+        fn select(
+            &self,
+            _request: &snix_build::buildservice::BuildRequest,
+            _endpoint_ids: &[String],
+        ) -> Result<usize, PoolSelectionError> {
+            Ok(self.0)
+        }
+    }
+
+    struct NoFitSelector;
+
+    impl PoolEndpointSelector for NoFitSelector {
+        fn select(
+            &self,
+            _request: &snix_build::buildservice::BuildRequest,
+            _endpoint_ids: &[String],
+        ) -> Result<usize, PoolSelectionError> {
+            Err(PoolSelectionError::NoFit)
+        }
+    }
+
+    fn pool_service(
+        selector: impl PoolEndpointSelector,
+    ) -> (
+        PoolBuildService<FakePoolService, impl PoolEndpointSelector>,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        let first = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let second = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let service = PoolBuildService::new(
+            vec![
+                PoolEndpointService::new("worker-a", FakePoolService {
+                    label: "a",
+                    calls: first.clone(),
+                }),
+                PoolEndpointService::new("worker-b", FakePoolService {
+                    label: "b",
+                    calls: second.clone(),
+                }),
+            ],
+            selector,
+        )
+        .expect("fixture pool service");
+        (service, first, second)
+    }
+
+    #[test]
+    fn pool_service_delegates_only_to_the_selected_endpoint() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let (service, first, second) = pool_service(FixedSelector(1));
+        assert_eq!(service.endpoint_ids(), &[String::from("worker-a"), String::from("worker-b")]);
+        let result = runtime.block_on(service.do_build(concrete_build_request())).unwrap();
+        assert_eq!(result.log.as_deref(), Some("b"));
+        assert_eq!(first.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(second.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn pool_service_denies_unplaceable_out_of_range_and_invalid_pools() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let (no_fit, first, second) = pool_service(NoFitSelector);
+        let error = runtime.block_on(no_fit.do_build(concrete_build_request())).unwrap_err();
+        assert!(error.to_string().contains("remote-pool:no admitted endpoint fits"));
+        assert_eq!(first.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(second.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+        let (out_of_range, _, _) = pool_service(FixedSelector(9));
+        let error = runtime.block_on(out_of_range.do_build(concrete_build_request())).unwrap_err();
+        assert!(error.to_string().contains("selector-out-of-range"));
+
+        let empty = PoolBuildService::<FakePoolService, FixedSelector>::new(vec![], FixedSelector(0));
+        assert_eq!(empty.err(), Some(PoolSelectionError::NoEndpoints));
+
+        let duplicate = PoolBuildService::new(
+            vec![
+                PoolEndpointService::new("worker-a", FakePoolService {
+                    label: "a",
+                    calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+                }),
+                PoolEndpointService::new("worker-a", FakePoolService {
+                    label: "b",
+                    calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+                }),
+            ],
+            FixedSelector(0),
+        );
+        assert_eq!(duplicate.err(), Some(PoolSelectionError::InvalidEndpoint));
+    }
+
+    #[test]
+    fn pool_service_validates_the_request_before_selecting() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let (service, first, second) = pool_service(FixedSelector(0));
+        let mut request = concrete_build_request();
+        request.command_args.clear();
+        let error = runtime.block_on(service.do_build(request)).unwrap_err();
+        assert!(error.to_string().contains("remote"));
+        assert_eq!(first.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(second.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 }
