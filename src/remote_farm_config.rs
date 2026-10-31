@@ -335,6 +335,12 @@ pub struct RemoteEndpoint {
     pub transport: RemoteTransportMode,
     #[serde(default)]
     pub profile: RemoteCapabilityProfile,
+    /// Shell-owned handle name for a caller-owned bearer; never a bearer value.
+    #[serde(default = "empty_string")]
+    pub credential_reference: String,
+    /// Separate full output-verification keys for this endpoint.
+    #[serde(default = "empty_trust_roots")]
+    pub trusted_output_keys: Vec<TrustRoot>,
 }
 
 fn default_transport() -> RemoteTransportMode {
@@ -385,6 +391,39 @@ pub struct RemoteBuilderPool {
     pub output_trust_roots: Vec<TrustRoot>,
     #[serde(default = "empty_publisher_profiles")]
     pub publishers: Vec<PublisherProfile>,
+    #[serde(default)]
+    pub session: RemotePoolSessionPolicy,
+}
+
+/// Bounded pool-session policy. Concurrency is a job bound, never capacity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct RemotePoolSessionPolicy {
+    #[serde(default = "default_pool_session_concurrency")]
+    pub max_concurrency: u32,
+    #[serde(default = "default_pool_session_jobs")]
+    pub job_count_max: u32,
+    #[serde(default = "default_pool_session_bytes")]
+    pub session_bytes_max: u64,
+}
+
+impl Default for RemotePoolSessionPolicy {
+    fn default() -> Self {
+        Self {
+            max_concurrency: default_pool_session_concurrency(),
+            job_count_max: default_pool_session_jobs(),
+            session_bytes_max: default_pool_session_bytes(),
+        }
+    }
+}
+
+fn default_pool_session_concurrency() -> u32 {
+    DEFAULT_REMOTE_MAX_CONCURRENCY
+}
+fn default_pool_session_jobs() -> u32 {
+    crunch_remote_core::pool::MAX_SESSION_JOBS
+}
+fn default_pool_session_bytes() -> u64 {
+    DEFAULT_REMOTE_MAX_UPLOAD_BYTES
 }
 
 fn default_fallback_policy() -> RemoteFallbackPolicy {
@@ -492,6 +531,83 @@ pub struct RemoteBuildFarmConfig {
     pub failure_debug: RemoteFailureDebugPolicy,
 }
 
+fn validate_remote_pool_session(session: &RemotePoolSessionPolicy, pool_id: &str) -> Result<(), String> {
+    let concurrency_bounded =
+        session.max_concurrency >= 1 && session.max_concurrency <= crunch_remote_core::pool::MAX_POOL_CONCURRENCY;
+    if !concurrency_bounded {
+        return Err(format!(
+            "pool '{pool_id}' max_concurrency must be within 1..={}",
+            crunch_remote_core::pool::MAX_POOL_CONCURRENCY
+        ));
+    }
+    let jobs_bounded =
+        session.job_count_max >= 1 && session.job_count_max <= crunch_remote_core::pool::MAX_SESSION_JOBS;
+    if !jobs_bounded {
+        return Err(format!(
+            "pool '{pool_id}' job_count_max must be within 1..={}",
+            crunch_remote_core::pool::MAX_SESSION_JOBS
+        ));
+    }
+    let bytes_bounded =
+        session.session_bytes_max >= 1 && session.session_bytes_max <= crunch_remote_core::pool::MAX_SESSION_BYTES;
+    if !bytes_bounded {
+        return Err(format!(
+            "pool '{pool_id}' session_bytes_max must be within 1..={}",
+            crunch_remote_core::pool::MAX_SESSION_BYTES
+        ));
+    }
+    Ok(())
+}
+
+/// A configured endpoint may omit its reference, but two endpoints sharing one
+/// caller-owned bearer would make selection ambiguous.
+fn validate_remote_pool_credential_references(pool: &RemoteBuilderPool) -> Result<(), String> {
+    let mut references = std::collections::BTreeSet::new();
+    for endpoint in &pool.endpoints {
+        let reference = &endpoint.credential_reference;
+        if reference.is_empty() {
+            continue;
+        }
+        let is_bounded = reference.len() <= crunch_remote_core::pool::MAX_CREDENTIAL_REFERENCE_BYTES;
+        if !is_bounded || reference.contains(char::is_whitespace) {
+            return Err(format!(
+                "endpoint '{}' credential reference must be a bounded non-whitespace handle name",
+                endpoint.endpoint_id
+            ));
+        }
+        if !references.insert(reference) {
+            return Err(format!("duplicate credential reference '{reference}' in pool '{}'", pool.pool_id));
+        }
+    }
+    Ok(())
+}
+
+/// Names alone are never output authority: each key carries its full material
+/// and one endpoint may not declare the same name or material twice.
+fn validate_remote_pool_output_keys(pool: &RemoteBuilderPool) -> Result<(), String> {
+    for endpoint in &pool.endpoints {
+        let mut names = std::collections::BTreeSet::new();
+        let mut materials = std::collections::BTreeSet::new();
+        for key in &endpoint.trusted_output_keys {
+            let has_full_material = !key.public_key_name.is_empty() && !key.public_key_base64.is_empty();
+            if !has_full_material {
+                return Err(format!(
+                    "endpoint '{}' trusted output key needs a name and full material",
+                    endpoint.endpoint_id
+                ));
+            }
+            let is_unique = names.insert(&key.public_key_name) && materials.insert(&key.public_key_base64);
+            if !is_unique {
+                return Err(format!(
+                    "endpoint '{}' trusted output keys must be unique by name and by material",
+                    endpoint.endpoint_id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 impl RemoteBuildFarmConfig {
     /// Maximum number of configured pools.
     pub const MAX_POOLS: usize = 32;
@@ -551,6 +667,9 @@ impl RemoteBuildFarmConfig {
                     return Err(format!("duplicate endpoint_id '{}' in pool '{}'", endpoint.endpoint_id, pool.pool_id));
                 }
             }
+            validate_remote_pool_session(&pool.session, &pool.pool_id)?;
+            validate_remote_pool_credential_references(pool)?;
+            validate_remote_pool_output_keys(pool)?;
         }
         validate_remote_telemetry_export_config(&self.telemetry)
             .map_err(|reason| format!("remote telemetry configuration: {reason}"))?;
@@ -1000,6 +1119,11 @@ mod tests {
                         transfer_policy: RemoteTransferPolicy::default(),
                         workspace_policy: RemoteWorkspacePolicy::default(),
                     },
+                    credential_reference: "mantle-builder-ticket-01".to_string(),
+                    trusted_output_keys: vec![TrustRoot {
+                        public_key_name: "builder-01".to_string(),
+                        public_key_base64: "dGVzdC1rZXk=".to_string(),
+                    }],
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
                 output_trust_roots: vec![TrustRoot {
@@ -1011,6 +1135,7 @@ mod tests {
                     target_url: "https://cache.example.com".to_string(),
                     trusted_public_keys: Vec::new(),
                 }],
+                session: RemotePoolSessionPolicy::default(),
             }],
             dispatchers: vec![sample_dispatcher(RemoteBatchDispatcherAdapter::DirectProcessV1)],
             telemetry: RemoteTelemetryExportConfig::default(),
@@ -1023,6 +1148,46 @@ mod tests {
     fn valid_config_passes_validation() {
         let config = sample_config();
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn pool_session_bounds_and_credential_references_fail_closed() {
+        let mut unbounded = sample_config();
+        unbounded.pools[0].session.max_concurrency = 0;
+        let session_error = unbounded.validate().expect_err("unbounded pool session rejected");
+        assert!(session_error.contains("max_concurrency"));
+
+        let mut shared = sample_config();
+        let mut second = shared.pools[0].endpoints[0].clone();
+        second.endpoint_id = "builder-02".to_string();
+        shared.pools[0].endpoints.push(second);
+        let shared_error = shared.validate().expect_err("shared caller bearer rejected");
+        assert!(shared_error.contains("duplicate credential reference"));
+    }
+
+    #[test]
+    fn endpoint_output_trust_requires_full_unique_material() {
+        let mut named_only = sample_config();
+        named_only.pools[0].endpoints[0].trusted_output_keys = vec![TrustRoot {
+            public_key_name: "builder-01".to_string(),
+            public_key_base64: String::new(),
+        }];
+        let named_error = named_only.validate().expect_err("name without material rejected");
+        assert!(named_error.contains("full material"));
+
+        let mut ambiguous = sample_config();
+        ambiguous.pools[0].endpoints[0].trusted_output_keys = vec![
+            TrustRoot {
+                public_key_name: "builder-01".to_string(),
+                public_key_base64: "dGVzdC1rZXk=".to_string(),
+            },
+            TrustRoot {
+                public_key_name: "builder-01".to_string(),
+                public_key_base64: "b3RoZXIta2V5".to_string(),
+            },
+        ];
+        let ambiguous_error = ambiguous.validate().expect_err("same-name different-key rejected");
+        assert!(ambiguous_error.contains("unique by name and by material"));
     }
 
     #[test]
@@ -1100,6 +1265,7 @@ mod tests {
                 fallback_policy: RemoteFallbackPolicy::Never,
                 output_trust_roots: Vec::new(),
                 publishers: Vec::new(),
+                session: RemotePoolSessionPolicy::default(),
             })
             .collect();
         let config = RemoteBuildFarmConfig {
@@ -1539,6 +1705,63 @@ let remote = import "remote-builders.ncl" in
         assert_eq!(endpoint.profile.transfer_policy, RemoteTransferPolicy::default());
         assert!(!config.failure_debug.capture.enabled);
         assert!(!config.failure_debug.replay_enabled);
+    }
+
+    #[test]
+    fn nickel_pool_session_and_endpoint_references_round_trip() {
+        let temp = tempfile::tempdir().expect("temporary Nickel pool config dir");
+        let config_path = temp.path().join("remote-pool-session.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in {
+  pools = [({
+    pool_id = "session-pool",
+    endpoints = [{
+      endpoint_id = "session-worker",
+      credential_reference = "mantle-builder-ticket-a",
+      trusted_output_keys = [{ public_key_name = "session-worker-1", public_key_base64 = "dGVzdC1rZXk=" }],
+    }],
+    session = { max_concurrency = 2, job_count_max = 64, session_bytes_max = 1048576 },
+  } | remote.RemoteBuilderPool)],
+}
+"#,
+        )
+        .expect("Nickel pool session config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect("typed Nickel pool session deserializes");
+        let pool = &config.pools[0];
+        assert_eq!(pool.session.max_concurrency, 2);
+        assert_eq!(pool.session.job_count_max, 64);
+        assert_eq!(pool.session.session_bytes_max, 1_048_576);
+        assert_eq!(pool.endpoints[0].credential_reference, "mantle-builder-ticket-a");
+        assert_eq!(pool.endpoints[0].trusted_output_keys[0].public_key_base64, "dGVzdC1rZXk=");
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn nickel_pool_session_contract_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary Nickel pool config dir");
+        let config_path = temp.path().join("invalid-pool-session.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in {
+  pools = [({
+    pool_id = "invalid-session-pool",
+    endpoints = [{ endpoint_id = "invalid-session-worker" }],
+    session.max_concurrency = "two",
+  } | remote.RemoteBuilderPool)],
+}
+"#,
+        )
+        .expect("invalid Nickel pool session config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let error = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect_err("typed Nickel pool session rejects a string concurrency");
+        assert!(error.to_string().contains("contract"));
+        assert!(error.to_string().contains("max_concurrency"));
     }
 
     #[test]

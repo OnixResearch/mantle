@@ -16,6 +16,9 @@ pub mod identity;
 pub mod lease;
 pub mod nominal;
 pub mod output;
+pub mod pool;
+#[cfg(test)]
+mod pool_tests;
 pub mod protocol;
 pub mod provider;
 pub mod receipt;

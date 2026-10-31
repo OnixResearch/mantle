@@ -313,27 +313,6 @@ let RemoteCapabilityProfile = {
     | default = {},
 } in
 
-let RemoteEndpointDefaults = {
-  endpoint_id
-    | doc "Unique identifier for this remote builder endpoint"
-    | String
-    | optional,
-  transport
-    | RemoteTransportMode
-    | default = 'stdio,
-  profile
-    | RemoteCapabilityProfile
-    | default = {},
-  ..
-} in
-let RemoteEndpointRequired = {
-  endpoint_id : String,
-} in
-let RemoteEndpoint = std.contract.Sequence [
-  RemoteEndpointDefaults,
-  Shape [ "transport", "profile" ] RemoteEndpointRequired,
-] in
-
 let TrustRootDefaults = {
   public_key_name
     | doc "Verifier name (e.g. cache.example.com-1)"
@@ -352,6 +331,35 @@ let TrustRootRequired = {
 let TrustRoot = std.contract.Sequence [
   TrustRootDefaults,
   Shape [ ] TrustRootRequired,
+] in
+
+let RemoteEndpointDefaults = {
+  endpoint_id
+    | doc "Unique identifier for this remote builder endpoint"
+    | String
+    | optional,
+  transport
+    | RemoteTransportMode
+    | default = 'stdio,
+  profile
+    | RemoteCapabilityProfile
+    | default = {},
+  credential_reference
+    | doc "Shell-owned handle name for a caller-owned bearer; never a bearer value or FD number"
+    | String
+    | optional,
+  trusted_output_keys
+    | doc "Separate full output-verification keys for this endpoint; names alone are not authority"
+    | Array TrustRoot
+    | default = [],
+  ..
+} in
+let RemoteEndpointRequired = {
+  endpoint_id : String,
+} in
+let RemoteEndpoint = std.contract.Sequence [
+  RemoteEndpointDefaults,
+  Shape [ "transport", "profile", "credential_reference", "trusted_output_keys" ] RemoteEndpointRequired,
 ] in
 
 let PublisherProfile = {
@@ -465,6 +473,21 @@ let BatchDispatcherProfile = std.contract.Sequence [
   ] BatchDispatcherProfileRequired,
 ] in
 
+let RemotePoolSessionPolicy = {
+  max_concurrency
+    | doc "Concrete jobs this pool session may dispatch in parallel; never proof of capacity"
+    | Number
+    | default = DefaultRemoteConcurrency,
+  job_count_max
+    | doc "Concrete jobs this pool session may dispatch in total"
+    | Number
+    | default = 1000000,
+  session_bytes_max
+    | doc "Bytes this pool session may transfer in total"
+    | Number
+    | default = DefaultRemoteUploadBytes,
+} in
+
 let RemoteBuilderPoolContractDefaults = {
   pool_id
     | doc "Unique pool identifier"
@@ -482,6 +505,10 @@ let RemoteBuilderPoolContractDefaults = {
   publishers
     | Array PublisherProfile
     | default = [],
+  session
+    | doc "Bounded pool-session policy; ticket uses stay scoped to admitted concrete jobs"
+    | RemotePoolSessionPolicy
+    | default = {},
   ..
 } in
 let RemoteBuilderPoolContractRequired = {
@@ -494,6 +521,7 @@ let RemoteBuilderPoolContract = std.contract.Sequence [
     "fallback_policy",
     "output_trust_roots",
     "publishers",
+    "session",
   ] RemoteBuilderPoolContractRequired,
 ] in
 
