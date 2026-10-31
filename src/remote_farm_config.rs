@@ -341,7 +341,20 @@ pub struct RemoteEndpoint {
     /// Separate full output-verification keys for this endpoint.
     #[serde(default = "empty_trust_roots")]
     pub trusted_output_keys: Vec<TrustRoot>,
+    /// Absolute transport executable for this endpoint.
+    #[serde(default = "empty_string")]
+    pub transport_program: String,
+    /// Bounded static transport arguments; credentials and shell syntax are forbidden.
+    #[serde(default = "empty_strings")]
+    pub transport_args: Vec<String>,
 }
+
+/// Maximum transport arguments one endpoint may declare.
+const MAX_ENDPOINT_TRANSPORT_ARGS: usize = 64;
+/// Maximum bytes of one endpoint transport argument.
+const MAX_ENDPOINT_TRANSPORT_ARGUMENT_BYTES: usize = 4_096;
+/// Maximum bytes of one endpoint transport program path.
+const MAX_ENDPOINT_TRANSPORT_PROGRAM_BYTES: usize = 4_096;
 
 fn default_transport() -> RemoteTransportMode {
     RemoteTransportMode::Stdio
@@ -559,6 +572,39 @@ fn validate_remote_pool_session(session: &RemotePoolSessionPolicy, pool_id: &str
     Ok(())
 }
 
+/// A configured endpoint may omit its transport command until it is selected,
+/// but a declared command must stay an absolute bounded secret-free argv.
+fn validate_remote_pool_transport_commands(pool: &RemoteBuilderPool) -> Result<(), String> {
+    for endpoint in &pool.endpoints {
+        if !endpoint.transport_program.is_empty() {
+            let is_absolute = std::path::Path::new(&endpoint.transport_program).is_absolute();
+            let is_bounded = endpoint.transport_program.len() <= MAX_ENDPOINT_TRANSPORT_PROGRAM_BYTES;
+            if !is_absolute || !is_bounded {
+                return Err(format!(
+                    "endpoint '{}' transport program must be an absolute bounded path",
+                    endpoint.endpoint_id
+                ));
+            }
+        }
+        if endpoint.transport_args.len() > MAX_ENDPOINT_TRANSPORT_ARGS {
+            return Err(format!("endpoint '{}' declares too many transport arguments", endpoint.endpoint_id));
+        }
+        for arg in &endpoint.transport_args {
+            let is_bounded = !arg.is_empty() && arg.len() <= MAX_ENDPOINT_TRANSPORT_ARGUMENT_BYTES;
+            let normalized = arg.to_ascii_lowercase();
+            let has_secret = FORBIDDEN_REMOTE_BATCH_SECRET_MARKERS.iter().any(|marker| normalized.contains(marker));
+            let has_shell = FORBIDDEN_REMOTE_BATCH_SHELL_FRAGMENTS.iter().any(|fragment| arg.contains(fragment));
+            if !is_bounded || has_secret || has_shell {
+                return Err(format!(
+                    "endpoint '{}' transport arguments must be bounded, secret-free, and shell-syntax-free",
+                    endpoint.endpoint_id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// A configured endpoint may omit its reference, but two endpoints sharing one
 /// caller-owned bearer would make selection ambiguous.
 fn validate_remote_pool_credential_references(pool: &RemoteBuilderPool) -> Result<(), String> {
@@ -668,6 +714,7 @@ impl RemoteBuildFarmConfig {
                 }
             }
             validate_remote_pool_session(&pool.session, &pool.pool_id)?;
+            validate_remote_pool_transport_commands(pool)?;
             validate_remote_pool_credential_references(pool)?;
             validate_remote_pool_output_keys(pool)?;
         }
@@ -1124,6 +1171,8 @@ mod tests {
                         public_key_name: "builder-01".to_string(),
                         public_key_base64: "dGVzdC1rZXk=".to_string(),
                     }],
+                    transport_program: "/usr/bin/ssh".to_string(),
+                    transport_args: vec!["builder-01.example".to_string()],
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
                 output_trust_roots: vec![TrustRoot {
@@ -1163,6 +1212,24 @@ mod tests {
         shared.pools[0].endpoints.push(second);
         let shared_error = shared.validate().expect_err("shared caller bearer rejected");
         assert!(shared_error.contains("duplicate credential reference"));
+    }
+
+    #[test]
+    fn endpoint_transport_commands_stay_absolute_and_secret_free() {
+        let mut relative = sample_config();
+        relative.pools[0].endpoints[0].transport_program = "ssh".to_string();
+        let relative_error = relative.validate().expect_err("relative transport program rejected");
+        assert!(relative_error.contains("absolute bounded path"));
+
+        let mut secret = sample_config();
+        secret.pools[0].endpoints[0].transport_args.push("--ticket=do-not-store".to_string());
+        let secret_error = secret.validate().expect_err("secret-bearing transport argument rejected");
+        assert!(secret_error.contains("secret-free"));
+
+        let mut shell = sample_config();
+        shell.pools[0].endpoints[0].transport_args.push("$(ambient)".to_string());
+        let shell_error = shell.validate().expect_err("shell syntax rejected");
+        assert!(shell_error.contains("shell-syntax-free"));
     }
 
     #[test]
@@ -1721,6 +1788,8 @@ let remote = import "remote-builders.ncl" in {
       endpoint_id = "session-worker",
       credential_reference = "mantle-builder-ticket-a",
       trusted_output_keys = [{ public_key_name = "session-worker-1", public_key_base64 = "dGVzdC1rZXk=" }],
+      transport_program = "/usr/bin/ssh",
+      transport_args = ["session-worker.example"],
     }],
     session = { max_concurrency = 2, job_count_max = 64, session_bytes_max = 1048576 },
   } | remote.RemoteBuilderPool)],
@@ -1737,6 +1806,8 @@ let remote = import "remote-builders.ncl" in {
         assert_eq!(pool.session.session_bytes_max, 1_048_576);
         assert_eq!(pool.endpoints[0].credential_reference, "mantle-builder-ticket-a");
         assert_eq!(pool.endpoints[0].trusted_output_keys[0].public_key_base64, "dGVzdC1rZXk=");
+        assert_eq!(pool.endpoints[0].transport_program, "/usr/bin/ssh");
+        assert_eq!(pool.endpoints[0].transport_args, vec!["session-worker.example".to_string()]);
         assert!(config.validate().is_ok());
     }
 

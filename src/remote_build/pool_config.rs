@@ -120,6 +120,9 @@ fn project_endpoint(
     if endpoint.credential_reference.is_empty() {
         return Err(pool_error("pool-endpoint-credential-reference-missing"));
     }
+    if endpoint.transport_program.is_empty() {
+        return Err(pool_error("pool-endpoint-transport-program-missing"));
+    }
     let keys = endpoint
         .trusted_output_keys
         .iter()
@@ -340,6 +343,8 @@ mod tests {
                 public_key_name: format!("{name}-1"),
                 public_key_base64: format!("material-{name}"),
             }],
+            transport_program: String::from("/usr/bin/ssh"),
+            transport_args: vec![format!("{name}.example")],
         }
     }
 
@@ -403,6 +408,12 @@ mod tests {
                 .expect("partial pool binding config");
         let error = project_pool_selection(&farm(), "native-pool", &partial).expect_err("missing binding denies");
         assert!(error.to_string().contains("pool-endpoint-binding-missing"));
+
+        let mut no_command = farm();
+        no_command.pools[0].endpoints[0].transport_program = String::new();
+        let error = project_pool_selection(&no_command, "native-pool", &bindings)
+            .expect_err("selected endpoint without a transport command denies");
+        assert!(error.to_string().contains("pool-endpoint-transport-program-missing"));
     }
 
     #[test]

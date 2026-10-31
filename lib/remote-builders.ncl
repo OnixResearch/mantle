@@ -348,6 +348,14 @@ let RemoteEndpointDefaults = {
     | doc "Shell-owned handle name for a caller-owned bearer; never a bearer value or FD number"
     | String
     | optional,
+  transport_program
+    | doc "Absolute transport executable for this endpoint; verified before use"
+    | String
+    | optional,
+  transport_args
+    | doc "Bounded static transport arguments; credentials and shell syntax are forbidden"
+    | Array String
+    | default = [],
   trusted_output_keys
     | doc "Separate full output-verification keys for this endpoint; names alone are not authority"
     | Array TrustRoot
@@ -359,7 +367,14 @@ let RemoteEndpointRequired = {
 } in
 let RemoteEndpoint = std.contract.Sequence [
   RemoteEndpointDefaults,
-  Shape [ "transport", "profile", "credential_reference", "trusted_output_keys" ] RemoteEndpointRequired,
+  Shape [
+    "transport",
+    "profile",
+    "credential_reference",
+    "trusted_output_keys",
+    "transport_program",
+    "transport_args",
+  ] RemoteEndpointRequired,
 ] in
 
 let PublisherProfile = {
