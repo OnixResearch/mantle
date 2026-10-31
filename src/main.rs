@@ -2782,6 +2782,11 @@ pub enum RemoteAction {
         #[command(subcommand)]
         action: RemoteLiveAction,
     },
+    /// Validate an explicitly selected worker pool without dispatching
+    Pool {
+        #[command(subcommand)]
+        action: RemotePoolAction,
+    },
     /// Print remote server protocol metadata or serve one framed stdio session
     Serve {
         /// Builder endpoint id expected by clients
@@ -2848,6 +2853,25 @@ pub enum RemoteLiveAction {
         /// Limit to worker-presence, goal, reservation, or terminal-outcome
         #[arg(long = "kind")]
         kinds: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RemotePoolAction {
+    /// Admit a selected pool against current bindings and caller-owned descriptors
+    Check {
+        /// Evaluated Nickel remote-builders configuration
+        #[arg(long, value_name = "PATH")]
+        builder_config: PathBuf,
+        /// Configured pool id to select
+        #[arg(long)]
+        builder_pool: String,
+        /// Operator-local endpoint binding configuration
+        #[arg(long, value_name = "PATH")]
+        remote_binding_config: PathBuf,
+        /// Caller-owned bearer descriptor for exactly one endpoint
+        #[arg(long = "builder-ticket-fd", value_name = "ENDPOINT=FD")]
+        builder_ticket_fds: Vec<String>,
     },
 }
 
@@ -4410,6 +4434,9 @@ fn remote_command_label(action: &RemoteAction) -> &'static str {
         RemoteAction::Live { action } => match action {
             RemoteLiveAction::Serve { .. } => "remote.live.serve",
             RemoteLiveAction::Subscribe { .. } => "remote.live.subscribe",
+        },
+        RemoteAction::Pool { action } => match action {
+            RemotePoolAction::Check { .. } => "remote.pool.check",
         },
         #[cfg(target_os = "linux")]
         RemoteAction::Gateway { .. } => "remote.gateway",

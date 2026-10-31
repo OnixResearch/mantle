@@ -36,7 +36,11 @@ pub const MAX_REMOTE_ENDPOINT_BINDING_CONFIG_BYTES: u64 = 65_536;
 pub struct RemoteEndpointBindingConfig {
     schema: String,
     pub endpoint_state_directory: PathBuf,
+    /// Single-endpoint build binding used by the existing `--builder` interface.
     pub build: Option<BuildEndpointBindingConfig>,
+    /// Additional independently bound build endpoints for explicit pool selection.
+    #[serde(default)]
+    pub build_bindings: Vec<BuildEndpointBindingConfig>,
     #[serde(deserialize_with = "deserialize_source_bindings")]
     pub source_bindings: Vec<SourceEndpointBindingConfig>,
 }
@@ -69,7 +73,7 @@ impl RemoteEndpointBindingConfig {
             bytes_max: MAX_REMOTE_ENDPOINT_BINDING_CONFIG_BYTES,
             schema: &config.schema,
             expected_schema: REMOTE_ENDPOINT_BINDING_CONFIG_SCHEMA,
-            bindings: config.source_bindings.len() + usize::from(config.build.is_some()),
+            bindings: config.source_bindings.len() + usize::from(config.build.is_some()) + config.build_bindings.len(),
             bindings_max: MAX_ENDPOINT_BINDINGS,
         })?;
         Ok(config)
@@ -82,6 +86,7 @@ impl RemoteEndpointBindingConfig {
             schema: REMOTE_ENDPOINT_BINDING_CONFIG_SCHEMA.into(),
             endpoint_state_directory,
             build: Some(build),
+            build_bindings: Vec::new(),
             source_bindings: Vec::new(),
         };
         config.validate()?;
@@ -91,6 +96,33 @@ impl RemoteEndpointBindingConfig {
     pub fn build_binding(&self) -> Result<&EndpointBinding, RunError> {
         self.validate()?;
         Ok(&self.build_config()?.endpoint_binding)
+    }
+
+    /// Test-only constructor for a pooled binding configuration.
+    #[cfg(test)]
+    pub(crate) fn from_build_endpoints(
+        endpoint_state_directory: PathBuf,
+        builds: Vec<BuildEndpointBindingConfig>,
+    ) -> Result<Self, RunError> {
+        let config = Self {
+            schema: REMOTE_ENDPOINT_BINDING_CONFIG_SCHEMA.into(),
+            endpoint_state_directory,
+            build: None,
+            build_bindings: builds,
+            source_bindings: Vec::new(),
+        };
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Every configured build endpoint, single or pooled, by exact name.
+    pub fn build_endpoints(&self) -> impl Iterator<Item = &BuildEndpointBindingConfig> {
+        self.build.iter().chain(self.build_bindings.iter())
+    }
+
+    /// The exact configured build binding for one endpoint name.
+    pub fn build_endpoint(&self, endpoint_name: &str) -> Option<&BuildEndpointBindingConfig> {
+        self.build_endpoints().find(|build| build.endpoint_binding.spec.name == endpoint_name)
     }
 
     /// Short pre-prepare check only. The receiver must independently load its
@@ -140,13 +172,18 @@ impl RemoteEndpointBindingConfig {
         if self.endpoint_state_directory.as_os_str().is_empty() {
             return Err(config_error("state-directory-missing"));
         }
-        if self.source_bindings.len() > MAX_ENDPOINT_BINDINGS - usize::from(self.build.is_some()) {
+        let build_count = usize::from(self.build.is_some()) + self.build_bindings.len();
+        if self.source_bindings.len() > MAX_ENDPOINT_BINDINGS - build_count {
             return Err(config_error("binding-limit-exceeded"));
         }
-        if let Some(build) = &self.build {
+        let mut build_names = BTreeSet::new();
+        for build in self.build.iter().chain(self.build_bindings.iter()) {
             validate_descriptor(&build.endpoint_binding, &build.scope, &build.trust_requirement)?;
             if build.endpoint_binding.spec.kind != EndpointKind::BuilderTicket {
                 return Err(config_error("kind-mismatch"));
+            }
+            if !build_names.insert(build.endpoint_binding.spec.name.clone()) {
+                return Err(config_error("build-endpoint-duplicate"));
             }
         }
         let mut sources = BTreeSet::new();

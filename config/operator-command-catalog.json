@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "5d72a44109231da1554ed62102c34ead77bca1748f01c969d8c41a3b9f28e01d",
+  "identity_blake3": "4761c0554b5d996b4e418fd5b593b29b12ba59d249ad436159d7ed7bf5a27d59",
   "entries": [
     {
       "descriptor": {
@@ -10685,6 +10685,134 @@
           "usage"
         ],
         "machine_schema": "mantle-live-build-protocol-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote pool",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Validate an explicitly selected worker pool without dispatching",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote pool",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote pool check",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--builder-config",
+          "--builder-pool",
+          "--builder-ticket-fd",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Admit a selected pool against current bindings and caller-owned descriptors",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote pool check",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--builder-config",
+          "--builder-pool",
+          "--builder-ticket-fd",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-remote-pool-preflight-v1",
         "migration_reference": null,
         "removal_gate": null
       }

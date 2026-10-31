@@ -154,6 +154,7 @@ pub mod endpoint;
 pub mod endpoint_config;
 pub mod endpoint_service;
 pub mod live_state;
+pub mod pool_config;
 
 pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_OBSERVABILITY_NON_CLAIM: &str = "remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism";
@@ -13004,6 +13005,7 @@ pub fn cmd_remote(
             crate::remote_failure_debug::cmd_remote_failure_debug(action, state_dir, json_output)
         }
         crate::RemoteAction::Live { action } => crate::run_remote_live_command(ctx, action),
+        crate::RemoteAction::Pool { action } => crate::remote_build::pool_config::cmd_remote_pool(action, json_output),
         crate::RemoteAction::Serve {
             endpoint_id,
             binding,

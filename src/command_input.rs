@@ -1168,6 +1168,7 @@ pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmissi
         | RemoteAction::Status { .. }
         | RemoteAction::Debug { .. }
         | RemoteAction::Live { .. }
+        | RemoteAction::Pool { .. }
         | RemoteAction::UsageExecutor
         | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
     }

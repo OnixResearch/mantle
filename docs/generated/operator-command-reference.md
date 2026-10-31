@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `5d72a44109231da1554ed62102c34ead77bca1748f01c969d8c41a3b9f28e01d`
+Catalog BLAKE3: `4761c0554b5d996b4e418fd5b593b29b12ba59d249ad436159d7ed7bf5a27d59`
 
 ## Daily commands
 
@@ -1400,6 +1400,24 @@ Subscribe to the current matching set and later changes as NDJSON
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-live-build-protocol-v1`
+
+### `mantle remote pool`
+
+Validate an explicitly selected worker pool without dispatching
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote pool check`
+
+Admit a selected pool against current bindings and caller-owned descriptors
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-remote-pool-preflight-v1`
 
 ### `mantle remote serve`
 
