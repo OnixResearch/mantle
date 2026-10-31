@@ -8,6 +8,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crunch_build::distributed::RemoteResourceLease;
+use crunch_build::distributed::remote_resource_remaining_capacity;
 use crunch_remote_core::endpoint::EndpointBindingTable;
 use crunch_remote_core::pool::CallerCredential;
 use crunch_remote_core::pool::DeclaredCapabilities;
@@ -239,16 +241,32 @@ pub fn admit_selected_pool(
     let table = EndpointBindingTable::from_records(records).map_err(|_| pool_error("pool-binding-table-invalid"))?;
     let admitted = admits_pool(&selection, &table, &credentials, now_unix_s).map_err(admission_error)?;
     let transport_programs = verify_transport_programs(pool)?;
+    let coordinator = crate::remote_build::load_coordinator_state(&bindings.endpoint_state_directory)?;
+    let leases = coordinator.resource_leases.values().cloned().collect::<Vec<_>>();
+    let capacity = observed_capacity(pool, &leases)?;
     let report = PoolPreflightReport {
         schema: POOL_PREFLIGHT_REPORT_SCHEMA.to_string(),
         pool_id: admitted.pool_id().to_string(),
         endpoints: admitted.endpoint_names().to_vec(),
         session: admitted.session(),
         transport_programs,
+        capacity,
     };
     debug_assert!(!report.endpoints.is_empty());
     debug_assert_eq!(report.pool_id, pool_id);
     Ok(report)
+}
+
+/// Current capacity facts for one selected endpoint. Values are configuration
+/// inventory minus recorded live leases, not a probe of the worker.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct EndpointCapacityObservation {
+    pub endpoint_name: String,
+    pub declares_resource_inventory: bool,
+    pub remaining_cpu_units: Option<u32>,
+    pub remaining_memory_bytes: Option<u64>,
+    pub remaining_scratch_bytes: Option<u64>,
+    pub active_lease_count: u32,
 }
 
 /// One intended endpoint route. A plan proves declared facts only.
@@ -291,6 +309,7 @@ pub struct PoolPreflightReport {
     pub endpoints: Vec<String>,
     pub session: PoolSessionPolicy,
     pub transport_programs: Vec<VerifiedTransportProgram>,
+    pub capacity: Vec<EndpointCapacityObservation>,
 }
 
 fn transport_name(mode: RemoteTransportMode) -> &'static str {
@@ -314,6 +333,46 @@ fn network_name(mode: RemoteNetworkMode) -> &'static str {
         RemoteNetworkMode::Local => "local",
         RemoteNetworkMode::Full => "full",
     }
+}
+
+/// Current capacity facts per selected endpoint: declared inventory minus the
+/// recorded live leases of that endpoint. Absent inventory stays absent.
+pub fn observed_capacity(
+    pool: &RemoteBuilderPool,
+    active_leases: &[RemoteResourceLease],
+) -> Result<Vec<EndpointCapacityObservation>, RunError> {
+    let mut observations = Vec::with_capacity(pool.endpoints.len());
+    for endpoint in &pool.endpoints {
+        let lease_count =
+            active_leases.iter().filter(|lease| lease.scope.worker_endpoint_id == endpoint.endpoint_id).count();
+        let active_lease_count = u32::try_from(lease_count).map_err(|_| pool_error("pool-capacity-count-overflow"))?;
+        let observation = match &endpoint.profile.resource_inventory {
+            Some(inventory) => {
+                let remaining = remote_resource_remaining_capacity(&endpoint.endpoint_id, inventory, active_leases)
+                    .map_err(|reason| pool_error(&format!("pool-capacity-snapshot-invalid:{reason:?}")))?;
+                EndpointCapacityObservation {
+                    endpoint_name: endpoint.endpoint_id.clone(),
+                    declares_resource_inventory: true,
+                    remaining_cpu_units: Some(remaining.cpu_units),
+                    remaining_memory_bytes: Some(remaining.memory_bytes),
+                    remaining_scratch_bytes: Some(remaining.scratch_bytes),
+                    active_lease_count,
+                }
+            }
+            None => EndpointCapacityObservation {
+                endpoint_name: endpoint.endpoint_id.clone(),
+                declares_resource_inventory: false,
+                remaining_cpu_units: None,
+                remaining_memory_bytes: None,
+                remaining_scratch_bytes: None,
+                active_lease_count,
+            },
+        };
+        observations.push(observation);
+    }
+    debug_assert_eq!(observations.len(), pool.endpoints.len());
+    debug_assert!(observations.iter().all(|observation| !observation.endpoint_name.is_empty()));
+    Ok(observations)
 }
 
 /// Remeasure every selected endpoint's transport executable against its
@@ -674,5 +733,60 @@ mod tests {
         let error = plan_selected_pool(&unsupported, "native-pool", &bindings, NOW_UNIX_S)
             .expect_err("unimplemented transport denies the plan");
         assert!(error.to_string().contains("pool-transport-unsupported"));
+    }
+
+    #[test]
+    fn capacity_observation_subtracts_recorded_leases_only() {
+        use crunch_build::distributed::RemoteNamedResourceQuantity;
+        use crunch_build::distributed::RemoteResourceRequirements;
+        use crunch_build::distributed::RemoteResourceVector;
+        use crunch_build::distributed::RemoteWorkerResourceInventory;
+        use crunch_build::distributed::plan_remote_resource_reservation;
+        use crunch_remote_core::attempt::RemoteAttemptId;
+        use crunch_remote_core::attempt::RemoteFenceGeneration;
+        use crunch_remote_core::attempt::RemoteJobId;
+
+        let inventory = RemoteWorkerResourceInventory {
+            total: RemoteResourceVector {
+                cpu_units: 4,
+                memory_bytes: 8_192,
+                scratch_bytes: 8_192,
+                accelerators: Vec::new(),
+                named_tokens: Vec::<RemoteNamedResourceQuantity>::new(),
+            },
+        };
+        let requirements = RemoteResourceRequirements {
+            quantities: RemoteResourceVector {
+                cpu_units: 1,
+                memory_bytes: 1_024,
+                scratch_bytes: 1_024,
+                accelerators: Vec::new(),
+                named_tokens: Vec::<RemoteNamedResourceQuantity>::new(),
+            },
+            semantic_accelerator_classes: Vec::new(),
+        };
+        let scope = crunch_build::distributed::RemoteResourceLeaseScope {
+            worker_endpoint_id: String::from("worker-a"),
+            worker_generation: 1,
+            job_id: RemoteJobId::new("fixture-job").expect("job id"),
+            attempt_id: RemoteAttemptId::new("fixture-attempt").expect("attempt id"),
+            fence_generation: RemoteFenceGeneration::INITIAL,
+        };
+        let lease = plan_remote_resource_reservation(scope, &inventory, &requirements, &[])
+            .expect("fixture lease plans")
+            .lease;
+
+        let dir = tempfile::tempdir().expect("binding state dir");
+        let (program, digest) = transport_program(dir.path());
+        let mut farm = farm(&program, &digest);
+        farm.pools[0].endpoints[0].profile.resource_inventory = Some(inventory);
+        let observations = observed_capacity(&farm.pools[0], &[lease]).expect("capacity observation");
+        assert!(observations[0].declares_resource_inventory);
+        assert_eq!(observations[0].remaining_cpu_units, Some(3));
+        assert_eq!(observations[0].remaining_memory_bytes, Some(7_168));
+        assert_eq!(observations[0].active_lease_count, 1);
+        assert!(!observations[1].declares_resource_inventory);
+        assert_eq!(observations[1].remaining_cpu_units, None);
+        assert_eq!(observations[1].active_lease_count, 0);
     }
 }
