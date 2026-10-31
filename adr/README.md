@@ -135,3 +135,4 @@ compatibility surface, crate name, or historical decision.
 | [0135](0135-bind-component-profile-selection-to-toolchain-cohort.md) | Bind component artifact profile selection to the exact toolchain cohort | Proposed |
 | [0136](0136-materialize-consumer-hosted-effect-components.md) | Materialize consumer-hosted effect-world components | Accepted |
 | [0137](0137-validate-protected-executables-after-materialization.md) | Validate protected executables after sandbox input materialization | Accepted |
+| [0138](0138-distribute-compiler-units-through-native-build-goals.md) | Distribute completed compiler units through native build goals | Proposed |

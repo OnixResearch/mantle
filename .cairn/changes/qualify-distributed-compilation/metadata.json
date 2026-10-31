@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "distribute-rust-compilation-units",
+    "distribute-cc-compilation-units"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "depends_on": [
+    "schedule-native-goals-across-workers",
+    "build-cargo-units-as-dynamic-plans",
+    "run-cargo-build-scripts-as-plan-units"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

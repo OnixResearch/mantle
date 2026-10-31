@@ -1,0 +1,10 @@
+{
+  "depends_on": [
+    "schedule-native-goals-across-workers"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

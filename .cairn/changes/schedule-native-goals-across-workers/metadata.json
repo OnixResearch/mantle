@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "separate-remote-build-hexagon",
+    "resolve-remote-entry-points-through-one-binding"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}
