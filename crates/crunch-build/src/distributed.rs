@@ -1191,6 +1191,102 @@ pub enum PoolSelectionError {
     OutOfRange,
 }
 
+/// Facts the Worker resolved for one ready native goal. A bare
+/// `BuildRequest` cannot express pool placement requirements, so the executor
+/// seam must carry these explicitly rather than infer them from the request.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreparedPoolGoal {
+    pub request: snix_build::buildservice::BuildRequest,
+    pub realization_key: RealizationKey,
+    pub system: String,
+    pub required_features: Vec<String>,
+    pub required_sandbox_mode: String,
+    pub required_network_mode: String,
+    pub semantic_accelerator_classes: Vec<String>,
+    /// Binds the semantic requirement; never worker capacity or placement.
+    pub placement_key_blake3: String,
+    pub requested: crunch_remote_core::resource::Capacity,
+}
+
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum PreparedPoolGoalError {
+    #[error("prepared pool goal system is empty or too long")]
+    InvalidSystem,
+    #[error("prepared pool goal sandbox or network mode is empty")]
+    InvalidMode,
+    #[error("prepared pool goal placement key is not a BLAKE3 digest")]
+    InvalidPlacementKey,
+    #[error("prepared pool goal declares too many features or classes")]
+    TooManyCapabilities,
+    #[error("prepared pool goal capability name is empty or too long")]
+    InvalidCapabilityName,
+}
+
+pub const MAX_POOL_GOAL_CAPABILITIES: usize = 32;
+pub const MAX_POOL_GOAL_CAPABILITY_BYTES: usize = 128;
+pub const MAX_POOL_GOAL_SYSTEM_BYTES: usize = 128;
+
+impl PreparedPoolGoal {
+    pub fn new(facts: PreparedPoolGoalFacts) -> Result<Self, PreparedPoolGoalError> {
+        let has_system = !facts.system.is_empty() && facts.system.len() <= MAX_POOL_GOAL_SYSTEM_BYTES;
+        if !has_system {
+            return Err(PreparedPoolGoalError::InvalidSystem);
+        }
+        let has_modes = !facts.required_sandbox_mode.is_empty() && !facts.required_network_mode.is_empty();
+        if !has_modes {
+            return Err(PreparedPoolGoalError::InvalidMode);
+        }
+        let has_key = crunch_remote_core::output::is_blake3_hex_digest(&facts.placement_key_blake3);
+        if !has_key {
+            return Err(PreparedPoolGoalError::InvalidPlacementKey);
+        }
+        let capability_count = facts.required_features.len() + facts.semantic_accelerator_classes.len();
+        if capability_count > MAX_POOL_GOAL_CAPABILITIES {
+            return Err(PreparedPoolGoalError::TooManyCapabilities);
+        }
+        let names = facts.required_features.iter().chain(facts.semantic_accelerator_classes.iter());
+        let has_valid_names =
+            names.clone().all(|name| !name.is_empty() && name.len() <= MAX_POOL_GOAL_CAPABILITY_BYTES);
+        if !has_valid_names {
+            return Err(PreparedPoolGoalError::InvalidCapabilityName);
+        }
+        debug_assert!(has_system && has_modes && has_key);
+        debug_assert!(capability_count <= MAX_POOL_GOAL_CAPABILITIES);
+        Ok(Self {
+            request: facts.request,
+            realization_key: facts.realization_key,
+            system: facts.system,
+            required_features: facts.required_features,
+            required_sandbox_mode: facts.required_sandbox_mode,
+            required_network_mode: facts.required_network_mode,
+            semantic_accelerator_classes: facts.semantic_accelerator_classes,
+            placement_key_blake3: facts.placement_key_blake3,
+            requested: facts.requested,
+        })
+    }
+}
+
+/// Owned inputs to `PreparedPoolGoal::new`; kept separate so callers can build
+/// the facts without moving the request twice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreparedPoolGoalFacts {
+    pub request: snix_build::buildservice::BuildRequest,
+    pub realization_key: RealizationKey,
+    pub system: String,
+    pub required_features: Vec<String>,
+    pub required_sandbox_mode: String,
+    pub required_network_mode: String,
+    pub semantic_accelerator_classes: Vec<String>,
+    pub placement_key_blake3: String,
+    pub requested: crunch_remote_core::resource::Capacity,
+}
+
+/// Chooses the endpoint for one prepared goal. The selector receives the
+/// resolved facts, never a bare `BuildRequest`.
+pub trait PoolGoalSelector: Send + Sync {
+    fn select(&self, goal: &PreparedPoolGoal, endpoint_ids: &[String]) -> Result<usize, PoolSelectionError>;
+}
+
 /// A build service that delegates each request to exactly one admitted pool
 /// endpoint. It owns no placement policy, reservation, or fallback: the injected
 /// selector decides, and the selected endpoint's own service performs the build.
@@ -2377,5 +2473,65 @@ mod tests {
         assert!(error.to_string().contains("remote"));
         assert_eq!(first.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(second.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    fn prepared_pool_goal_facts() -> PreparedPoolGoalFacts {
+        PreparedPoolGoalFacts {
+            request: concrete_build_request(),
+            realization_key: key(&base_request()),
+            system: "x86_64-linux".to_string(),
+            required_features: vec!["native-compile".to_string()],
+            required_sandbox_mode: "practical".to_string(),
+            required_network_mode: "none".to_string(),
+            semantic_accelerator_classes: Vec::new(),
+            placement_key_blake3: "a".repeat(64),
+            requested: crunch_remote_core::resource::Capacity {
+                cpu_units: 1,
+                memory_bytes: 1_024,
+                scratch_bytes: 1_024,
+            },
+        }
+    }
+
+    #[test]
+    fn prepared_goal_requires_resolved_placement_facts() {
+        let mut facts = prepared_pool_goal_facts();
+        facts.system = String::new();
+        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidSystem));
+
+        facts.system = "x86_64-linux".to_string();
+        facts.required_network_mode = String::new();
+        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidMode));
+
+        facts.required_network_mode = "none".to_string();
+        facts.placement_key_blake3 = "not-a-digest".to_string();
+        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidPlacementKey));
+
+        facts.placement_key_blake3 = "a".repeat(64);
+        facts.required_features = vec![String::new()];
+        assert_eq!(PreparedPoolGoal::new(facts).err(), Some(PreparedPoolGoalError::InvalidCapabilityName));
+
+        let goal = PreparedPoolGoal::new(prepared_pool_goal_facts()).expect("prepared goal");
+        assert_eq!(goal.system, "x86_64-linux");
+        assert_eq!(goal.requested.cpu_units, 1);
+    }
+
+    #[test]
+    fn goal_selector_receives_prepared_facts_not_the_bare_request() {
+        struct SystemSelector;
+
+        impl PoolGoalSelector for SystemSelector {
+            fn select(&self, goal: &PreparedPoolGoal, endpoint_ids: &[String]) -> Result<usize, PoolSelectionError> {
+                if goal.system != "x86_64-linux" || goal.required_features != ["native-compile".to_string()] {
+                    return Err(PoolSelectionError::NoFit);
+                }
+                endpoint_ids.iter().position(|id| id == "worker-b").ok_or(PoolSelectionError::NoFit)
+            }
+        }
+
+        let goal = PreparedPoolGoal::new(prepared_pool_goal_facts()).expect("prepared goal");
+        let endpoints = vec![String::from("worker-a"), String::from("worker-b")];
+        assert_eq!(SystemSelector.select(&goal, &endpoints), Ok(1));
+        assert_eq!(SystemSelector.select(&goal, &[String::from("worker-a")]), Err(PoolSelectionError::NoFit));
     }
 }

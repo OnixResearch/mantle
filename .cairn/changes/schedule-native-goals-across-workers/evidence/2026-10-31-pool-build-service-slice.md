@@ -41,3 +41,13 @@ invalid request is rejected before selection.
   (pool placement + scheduling policy) and the real per-endpoint services.
 - Delegation proves routing only; it does not prove reservation, transport,
   output verification, or execution correctness.
+
+## Seam finding
+
+The service cannot be wired to a real selector yet: `BuildService::do_build`
+receives only `BuildRequest`, which does not carry the realization key, required
+system/features, sandbox/network modes, semantic accelerator classes, or prepared
+resource requirement that pool placement needs. The design records the two
+admissible resolutions (extend the prepared envelope, or select in the existing
+`ReadyDerivationGoal` scheduling path). No selector may infer those facts from a
+bare request, so dispatch wiring remains blocked rather than guessed.

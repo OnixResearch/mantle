@@ -142,3 +142,34 @@ single-builder, plan-only, cache-hit and unsupported-mode behavior.
 Small actions may cost more to transfer than to execute. Record actual counts;
 do not invent batching or a speedup claim. Independent-host qualification and
 operational support declarations belong to the final dependent change.
+
+## Seam finding (2026-10-31)
+
+The pool components landed so far (admission, placement decision, route plan,
+capacity observation, and a generic `PoolBuildService`) expose one blocking
+dependency that must be settled before dispatch wiring:
+
+`snix_build::buildservice::BuildService::do_build` receives only a
+`BuildRequest`. That request carries inputs, argv, environment, working/output
+paths and constraints, but not the resolved semantic facts a pool placement
+needs: realization key, required system/features, sandbox and network modes,
+semantic accelerator classes, or the prepared resource requirement. The CLI's
+single-endpoint path does not have this problem because it builds the request
+from `CrunchDerivation`/`Derivation` plus operator options before dispatch.
+
+Two options, both consistent with the existing contracts:
+
+1. Extend the Worker-to-executor seam with a prepared envelope that pairs the
+   concrete `BuildRequest` with those resolved facts (the ADR's "extend the
+   existing prepared execution envelope rather than infer them afterward").
+   `PoolBuildService`'s selector then consumes the envelope, not a bare request.
+2. Select the endpoint in the existing `ReadyDerivationGoal` scheduling path,
+   which already carries `RealizationKeyRequest` facts, and hand the selected
+   endpoint's service the concrete request.
+
+Option 1 keeps one lazy Worker and one executor seam, and reuses
+`PoolBuildService` as written; option 2 reuses `plan_remote_goal_attachments`
+and `RealizationKeyRequest` but would need the Worker to retain a
+request-to-goal binding. Neither is implemented yet, and no selector may infer
+placement facts from `BuildRequest` alone. Dispatch wiring stays blocked until
+one is chosen and the change records which.
