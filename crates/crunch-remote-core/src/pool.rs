@@ -359,12 +359,15 @@ pub enum GoalPlacement {
 }
 
 /// Choose one admitted worker for one ready goal: hard capability gates first,
-/// then capacity, then deterministic preference and stable endpoint identity.
-/// Placement facts never enter the goal's semantic action identity.
+/// then capacity, then the caller's scheduling preference order and stable
+/// endpoint identity. The shell maps its `SchedulingPolicy` onto
+/// `PlacementPreference`; this module does not choose a policy. Placement facts
+/// never enter the goal's semantic action identity.
 pub fn plan_goal_placement(
     pool: &AdmittedPool,
     requirement: &GoalRequirement,
     workers: &[WorkerFacts],
+    preferences: impl IntoIterator<Item = crate::resource::PlacementPreference>,
 ) -> GoalPlacement {
     let admitted = pool.endpoint_names();
     let mut admitted_workers = workers.iter().filter(|worker| admitted.contains(&worker.endpoint_name)).peekable();
@@ -385,7 +388,8 @@ pub fn plan_goal_placement(
             denial: PlacementDenial::InsufficientCapacity,
         };
     }
-    let selected = feasible.min_by(|left, right| compare_workers(left, right));
+    let preferences = preferences.into_iter().collect::<Vec<_>>();
+    let selected = feasible.min_by(|left, right| compare_workers(&preferences, left, right));
     match selected {
         Some(worker) => {
             debug_assert!(!worker.endpoint_name.is_empty());
@@ -435,14 +439,13 @@ fn placement_facts(worker: &WorkerFacts) -> crate::resource::PlacementFacts<'_> 
     }
 }
 
-fn compare_workers(left: &WorkerFacts, right: &WorkerFacts) -> core::cmp::Ordering {
-    use crate::resource::PlacementPreference;
-    use crate::resource::compare_placement;
-    let ordering = compare_placement(
-        [PlacementPreference::ResourceFit, PlacementPreference::LocalityTransfer],
-        placement_facts(left),
-        placement_facts(right),
-    );
+fn compare_workers(
+    preferences: &[crate::resource::PlacementPreference],
+    left: &WorkerFacts,
+    right: &WorkerFacts,
+) -> core::cmp::Ordering {
+    let ordering =
+        crate::resource::compare_placement(preferences.iter().copied(), placement_facts(left), placement_facts(right));
     debug_assert!(ordering != core::cmp::Ordering::Equal || left.endpoint_name != right.endpoint_name);
     debug_assert!(left.worker_generation >= 1 && right.worker_generation >= 1);
     ordering

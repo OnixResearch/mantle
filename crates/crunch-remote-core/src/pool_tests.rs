@@ -28,8 +28,11 @@ use crate::pool::admits_pool;
 use crate::pool::plan_goal_placement;
 use crate::resource::Capacity;
 use crate::resource::NamedResourceFit;
+use crate::resource::PlacementPreference;
 
 const NOW_UNIX_S: u64 = 1_000;
+const DEFAULT_PREFERENCES: [PlacementPreference; 2] =
+    [PlacementPreference::ResourceFit, PlacementPreference::LocalityTransfer];
 const EXPIRES_UNIX_S: u64 = 10_000;
 const ENDPOINT_NAMES: [&str; 2] = ["worker-a", "worker-b"];
 
@@ -264,7 +267,7 @@ fn worker(name: &str, cpu_units: u32, resource_fit: u8) -> WorkerFacts {
 fn two_ready_goals_take_distinct_workers_after_reservation() {
     let pool = admitted_pool();
     let workers = vec![worker("worker-a", 1, 200), worker("worker-b", 1, 100)];
-    let first = plan_goal_placement(&pool, &requirement(), &workers);
+    let first = plan_goal_placement(&pool, &requirement(), &workers, DEFAULT_PREFERENCES);
     assert_eq!(first, GoalPlacement::Selected {
         endpoint_name: String::from("worker-a"),
         worker_generation: 3
@@ -272,12 +275,12 @@ fn two_ready_goals_take_distinct_workers_after_reservation() {
     let mut reserved = workers.clone();
     reserved[0].remaining = capacity(0);
     reserved[0].resource_fit = 0;
-    let second = plan_goal_placement(&pool, &requirement(), &reserved);
+    let second = plan_goal_placement(&pool, &requirement(), &reserved, DEFAULT_PREFERENCES);
     assert_eq!(second, GoalPlacement::Selected {
         endpoint_name: String::from("worker-b"),
         worker_generation: 3
     });
-    let exhausted = plan_goal_placement(&pool, &requirement(), &[worker("worker-a", 0, 0)]);
+    let exhausted = plan_goal_placement(&pool, &requirement(), &[worker("worker-a", 0, 0)], DEFAULT_PREFERENCES);
     assert_eq!(exhausted, GoalPlacement::Unplaceable {
         denial: PlacementDenial::InsufficientCapacity
     });
@@ -288,26 +291,58 @@ fn placement_respects_hard_gates_and_pool_authority() {
     let pool = admitted_pool();
     let mut mismatched = worker("worker-a", 4, 200);
     mismatched.capabilities.system = String::from("aarch64-linux");
-    assert_eq!(plan_goal_placement(&pool, &requirement(), &[mismatched]), GoalPlacement::Unplaceable {
-        denial: PlacementDenial::CapabilityMismatch
-    });
+    assert_eq!(
+        plan_goal_placement(&pool, &requirement(), &[mismatched], DEFAULT_PREFERENCES),
+        GoalPlacement::Unplaceable {
+            denial: PlacementDenial::CapabilityMismatch
+        }
+    );
     let mut unadmitted = worker("worker-z", 4, 200);
     unadmitted.capabilities.features = vec![String::from("native-compile")];
-    assert_eq!(plan_goal_placement(&pool, &requirement(), &[unadmitted]), GoalPlacement::Unplaceable {
-        denial: PlacementDenial::NoAdmittedWorker
-    });
+    assert_eq!(
+        plan_goal_placement(&pool, &requirement(), &[unadmitted], DEFAULT_PREFERENCES),
+        GoalPlacement::Unplaceable {
+            denial: PlacementDenial::NoAdmittedWorker
+        }
+    );
     let mut missing_feature = worker("worker-a", 4, 200);
     missing_feature.capabilities.features.clear();
-    assert_eq!(plan_goal_placement(&pool, &requirement(), &[missing_feature]), GoalPlacement::Unplaceable {
-        denial: PlacementDenial::CapabilityMismatch
-    });
+    assert_eq!(
+        plan_goal_placement(&pool, &requirement(), &[missing_feature], DEFAULT_PREFERENCES),
+        GoalPlacement::Unplaceable {
+            denial: PlacementDenial::CapabilityMismatch
+        }
+    );
 }
 
 #[test]
 fn equal_fit_breaks_ties_by_stable_endpoint_identity() {
     let pool = admitted_pool();
     let workers = vec![worker("worker-b", 4, 100), worker("worker-a", 4, 100)];
-    assert_eq!(plan_goal_placement(&pool, &requirement(), &workers), GoalPlacement::Selected {
+    assert_eq!(plan_goal_placement(&pool, &requirement(), &workers, DEFAULT_PREFERENCES), GoalPlacement::Selected {
+        endpoint_name: String::from("worker-a"),
+        worker_generation: 3
+    });
+}
+
+#[test]
+fn caller_preference_order_decides_equal_fit_placement() {
+    let pool = admitted_pool();
+    let mut local = worker("worker-b", 4, 100);
+    local.content_locality = 200;
+    let mut remote = worker("worker-a", 4, 100);
+    remote.content_locality = 10;
+    let workers = vec![remote, local];
+    let by_locality = plan_goal_placement(&pool, &requirement(), &workers, [
+        PlacementPreference::LocalityTransfer,
+        PlacementPreference::ResourceFit,
+    ]);
+    assert_eq!(by_locality, GoalPlacement::Selected {
+        endpoint_name: String::from("worker-b"),
+        worker_generation: 3
+    });
+    let by_identity = plan_goal_placement(&pool, &requirement(), &workers, []);
+    assert_eq!(by_identity, GoalPlacement::Selected {
         endpoint_name: String::from("worker-a"),
         worker_generation: 3
     });

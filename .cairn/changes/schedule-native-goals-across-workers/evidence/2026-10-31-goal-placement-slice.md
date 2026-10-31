@@ -21,9 +21,10 @@ Denials, in order:
    `resource::reserve_capacity`, or the goal needs named resources while the
    worker's named availability is constrained.
 
-Selection: `resource::compare_placement` over adapter-supplied ordinals
-(`ResourceFit`, then `LocalityTransfer`), with the existing stable
-`worker_endpoint_id` tie-break. The planner supplies no capacity and infers none
+Selection: the caller supplies its scheduling preference order (the shell maps
+`SchedulingPolicy.preference_order` onto `resource::PlacementPreference`), and
+`resource::compare_placement` ranks the feasible candidates with the existing
+stable `worker_endpoint_id` tie-break. The core does not choose a policy. The planner supplies no capacity and infers none
 from concurrency; it returns the selected endpoint name and its worker
 generation.
 
@@ -31,14 +32,15 @@ generation.
 
 | Gate | Result |
 | --- | --- |
-| `cargo test -p crunch-remote-core --lib pool` | 10 passed (7 admission + 3 placement) |
+| `cargo test -p crunch-remote-core --lib pool` | 11 passed (7 admission + 4 placement) |
 | `cargo clippy -p crunch-remote-core --all-targets --no-deps -- -D warnings` | exit 0 |
 | `cargo fmt --check -p crunch-remote-core` | exit 0 |
 
 Placement fixtures cover: two ready goals taking distinct workers once the first
 reservation is applied, exhausted capacity denying rather than falling back, an
-unadmitted endpoint being ignored, a hard capability gate denying, and equal fit
-breaking ties by stable endpoint identity.
+unadmitted endpoint being ignored, a hard capability gate denying, equal fit
+breaking ties by stable endpoint identity, and a caller preference order changing
+an equal-fit choice.
 
 ## Not claimed
 
