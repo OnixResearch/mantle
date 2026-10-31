@@ -352,6 +352,10 @@ let RemoteEndpointDefaults = {
     | doc "Absolute transport executable for this endpoint; verified before use"
     | String
     | optional,
+  transport_program_digest_blake3
+    | doc "Declared BLAKE3 identity of the transport executable; verified before use"
+    | String
+    | optional,
   transport_args
     | doc "Bounded static transport arguments; credentials and shell syntax are forbidden"
     | Array String
@@ -373,6 +377,7 @@ let RemoteEndpoint = std.contract.Sequence [
     "credential_reference",
     "trusted_output_keys",
     "transport_program",
+    "transport_program_digest_blake3",
     "transport_args",
   ] RemoteEndpointRequired,
 ] in

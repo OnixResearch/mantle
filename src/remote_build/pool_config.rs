@@ -30,6 +30,8 @@ use crate::remote_farm_config::RemoteTransportMode;
 
 /// Maximum caller-supplied endpoint descriptors one preflight accepts.
 pub const MAX_POOL_TICKET_FDS: usize = crunch_remote_core::pool::MAX_POOL_ENDPOINTS;
+/// Maximum bytes of one transport executable this preflight will hash.
+pub const MAX_TRANSPORT_PROGRAM_BYTES: u64 = 268_435_456;
 
 /// Report schema for one admitted pool selection.
 pub const POOL_PREFLIGHT_REPORT_SCHEMA: &str = "mantle-remote-pool-preflight-v1";
@@ -177,15 +179,25 @@ pub fn admit_selected_pool(
     let records = EndpointBindingStore::open(&bindings.endpoint_state_directory)?.records()?;
     let table = EndpointBindingTable::from_records(records).map_err(|_| pool_error("pool-binding-table-invalid"))?;
     let admitted = admits_pool(&selection, &table, &credentials, now_unix_s).map_err(admission_error)?;
+    let transport_programs = verify_transport_programs(pool)?;
     let report = PoolPreflightReport {
         schema: POOL_PREFLIGHT_REPORT_SCHEMA.to_string(),
         pool_id: admitted.pool_id().to_string(),
         endpoints: admitted.endpoint_names().to_vec(),
         session: admitted.session(),
+        transport_programs,
     };
     debug_assert!(!report.endpoints.is_empty());
     debug_assert_eq!(report.pool_id, pool_id);
     Ok(report)
+}
+
+/// One selected endpoint's transport executable, remeasured before use.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct VerifiedTransportProgram {
+    pub endpoint_name: String,
+    pub program: String,
+    pub digest_blake3: String,
 }
 
 /// Bounded operator-facing preflight result. It proves admission only.
@@ -195,6 +207,7 @@ pub struct PoolPreflightReport {
     pub pool_id: String,
     pub endpoints: Vec<String>,
     pub session: PoolSessionPolicy,
+    pub transport_programs: Vec<VerifiedTransportProgram>,
 }
 
 fn transport_name(mode: RemoteTransportMode) -> &'static str {
@@ -218,6 +231,39 @@ fn network_name(mode: RemoteNetworkMode) -> &'static str {
         RemoteNetworkMode::Local => "local",
         RemoteNetworkMode::Full => "full",
     }
+}
+
+/// Remeasure every selected endpoint's transport executable against its
+/// declared BLAKE3 identity. Nothing is executed or resolved through PATH.
+fn verify_transport_programs(pool: &RemoteBuilderPool) -> Result<Vec<VerifiedTransportProgram>, RunError> {
+    let mut verified = Vec::with_capacity(pool.endpoints.len());
+    for endpoint in &pool.endpoints {
+        let path = Path::new(&endpoint.transport_program);
+        let metadata = std::fs::metadata(path).map_err(|_| pool_error("pool-transport-program-unreadable"))?;
+        if !metadata.is_file() || metadata.len() > MAX_TRANSPORT_PROGRAM_BYTES {
+            return Err(pool_error("pool-transport-program-unreadable"));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            if metadata.permissions().mode() & 0o111 == 0 {
+                return Err(pool_error("pool-transport-program-not-executable"));
+            }
+        }
+        let bytes = std::fs::read(path).map_err(|_| pool_error("pool-transport-program-unreadable"))?;
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        if digest != endpoint.transport_program_digest_blake3 {
+            return Err(pool_error("pool-transport-program-drift"));
+        }
+        verified.push(VerifiedTransportProgram {
+            endpoint_name: endpoint.endpoint_id.clone(),
+            program: endpoint.transport_program.clone(),
+            digest_blake3: digest,
+        });
+    }
+    debug_assert_eq!(verified.len(), pool.endpoints.len());
+    debug_assert!(verified.iter().all(|program| program.digest_blake3.len() == 64));
+    Ok(verified)
 }
 
 fn admission_error(error: PoolAdmissionError) -> RunError {
@@ -320,7 +366,16 @@ mod tests {
         }
     }
 
-    fn endpoint(name: &str) -> RemoteEndpoint {
+    fn transport_program(dir: &Path) -> (std::path::PathBuf, String) {
+        use std::os::unix::fs::PermissionsExt as _;
+        let path = dir.join("transport.sh");
+        std::fs::write(&path, b"#!/bin/sh\nexit 0\n").expect("fixture transport program writes");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("fixture mode");
+        let digest = blake3::hash(&std::fs::read(&path).expect("fixture read")).to_hex().to_string();
+        (path, digest)
+    }
+
+    fn endpoint(name: &str, program: &Path, digest: &str) -> RemoteEndpoint {
         RemoteEndpoint {
             endpoint_id: name.to_string(),
             transport: RemoteTransportMode::Stdio,
@@ -343,16 +398,17 @@ mod tests {
                 public_key_name: format!("{name}-1"),
                 public_key_base64: format!("material-{name}"),
             }],
-            transport_program: String::from("/usr/bin/ssh"),
+            transport_program: program.display().to_string(),
+            transport_program_digest_blake3: digest.to_string(),
             transport_args: vec![format!("{name}.example")],
         }
     }
 
-    fn farm() -> RemoteBuildFarmConfig {
+    fn farm(program: &Path, digest: &str) -> RemoteBuildFarmConfig {
         RemoteBuildFarmConfig {
             pools: vec![RemoteBuilderPool {
                 pool_id: "native-pool".to_string(),
-                endpoints: ENDPOINT_NAMES.iter().map(|name| endpoint(name)).collect(),
+                endpoints: ENDPOINT_NAMES.iter().map(|name| endpoint(name, program, digest)).collect(),
                 fallback_policy: crate::remote_farm_config::RemoteFallbackPolicy::TrustedOnly,
                 output_trust_roots: Vec::new(),
                 publishers: Vec::new(),
@@ -397,19 +453,22 @@ mod tests {
     fn projection_requires_a_configured_pool_binding_and_reference() {
         let dir = tempfile::tempdir().expect("binding state dir");
         let bindings = seeded_bindings(dir.path());
-        let selection = project_pool_selection(&farm(), "native-pool", &bindings).expect("pool projects");
+        let (program, digest) = transport_program(dir.path());
+        let selection =
+            project_pool_selection(&farm(&program, &digest), "native-pool", &bindings).expect("pool projects");
         assert_eq!(selection.endpoints.len(), 2);
         assert_eq!(selection.session.max_concurrency, 1);
         assert_eq!(selection.endpoints[0].credential_reference, "bearer-worker-a");
-        assert!(project_pool_selection(&farm(), "missing-pool", &bindings).is_err());
+        assert!(project_pool_selection(&farm(&program, &digest), "missing-pool", &bindings).is_err());
 
         let partial =
             RemoteEndpointBindingConfig::from_build_endpoints(dir.path().to_path_buf(), vec![build_config("worker-a")])
                 .expect("partial pool binding config");
-        let error = project_pool_selection(&farm(), "native-pool", &partial).expect_err("missing binding denies");
+        let error = project_pool_selection(&farm(&program, &digest), "native-pool", &partial)
+            .expect_err("missing binding denies");
         assert!(error.to_string().contains("pool-endpoint-binding-missing"));
 
-        let mut no_command = farm();
+        let mut no_command = farm(&program, &digest);
         no_command.pools[0].endpoints[0].transport_program = String::new();
         let error = project_pool_selection(&no_command, "native-pool", &bindings)
             .expect_err("selected endpoint without a transport command denies");
@@ -420,16 +479,19 @@ mod tests {
     fn preflight_admits_current_bindings_and_denies_revoked_ones() {
         let dir = tempfile::tempdir().expect("binding state dir");
         let bindings = seeded_bindings(dir.path());
+        let (program, digest) = transport_program(dir.path());
+        let farm = farm(&program, &digest);
         let file = tempfile::tempfile().expect("temp descriptor");
-        let report =
-            admit_selected_pool(&farm(), "native-pool", &bindings, &ticket_values(file.as_raw_fd()), NOW_UNIX_S)
-                .expect("pool admits");
+        let report = admit_selected_pool(&farm, "native-pool", &bindings, &ticket_values(file.as_raw_fd()), NOW_UNIX_S)
+            .expect("pool admits");
         assert_eq!(report.pool_id, "native-pool");
         assert_eq!(report.endpoints, vec![String::from("worker-a"), String::from("worker-b")]);
         assert_eq!(report.schema, POOL_PREFLIGHT_REPORT_SCHEMA);
+        assert_eq!(report.transport_programs.len(), 2);
+        assert_eq!(report.transport_programs[0].digest_blake3, digest);
 
         let unknown = admit_selected_pool(
-            &farm(),
+            &farm,
             "native-pool",
             &bindings,
             &[format!("worker-z={}", file.as_raw_fd())],
@@ -437,7 +499,7 @@ mod tests {
         );
         assert!(unknown.is_err(), "an unselected endpoint descriptor is not authority");
 
-        let mut concurrent = farm();
+        let mut concurrent = farm.clone();
         concurrent.pools[0].session.max_concurrency = 2;
         let inferred =
             admit_selected_pool(&concurrent, "native-pool", &bindings, &ticket_values(file.as_raw_fd()), NOW_UNIX_S);
@@ -448,9 +510,39 @@ mod tests {
         let presented =
             store.resolve(&build_config("worker-a").endpoint_binding, NOW_UNIX_S).expect("binding resolves");
         store.revoke(&presented).expect("fixture revocation");
-        let denied =
-            admit_selected_pool(&farm(), "native-pool", &bindings, &ticket_values(file.as_raw_fd()), NOW_UNIX_S);
+        let denied = admit_selected_pool(&farm, "native-pool", &bindings, &ticket_values(file.as_raw_fd()), NOW_UNIX_S);
         let error = denied.expect_err("revoked binding denies the pool");
         assert!(error.to_string().contains("pool-endpoint-binding-not-current"));
+    }
+
+    #[test]
+    fn transport_program_identity_is_remeasured_and_must_be_executable() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().expect("binding state dir");
+        let bindings = seeded_bindings(dir.path());
+        let (program, digest) = transport_program(dir.path());
+        let file = tempfile::tempfile().expect("temp descriptor");
+        std::fs::write(&program, b"#!/bin/sh\nexit 1\n").expect("program rewrite");
+        let error = admit_selected_pool(
+            &farm(&program, &digest),
+            "native-pool",
+            &bindings,
+            &ticket_values(file.as_raw_fd()),
+            NOW_UNIX_S,
+        )
+        .expect_err("changed executable denies the pool");
+        assert!(error.to_string().contains("pool-transport-program-drift"));
+
+        let (program, digest) = transport_program(dir.path());
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o644)).expect("fixture mode");
+        let error = admit_selected_pool(
+            &farm(&program, &digest),
+            "native-pool",
+            &bindings,
+            &ticket_values(file.as_raw_fd()),
+            NOW_UNIX_S,
+        )
+        .expect_err("non-executable transport denies the pool");
+        assert!(error.to_string().contains("pool-transport-program-not-executable"));
     }
 }

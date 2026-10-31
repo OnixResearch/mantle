@@ -344,6 +344,9 @@ pub struct RemoteEndpoint {
     /// Absolute transport executable for this endpoint.
     #[serde(default = "empty_string")]
     pub transport_program: String,
+    /// Declared BLAKE3 identity of the transport executable.
+    #[serde(default = "empty_string")]
+    pub transport_program_digest_blake3: String,
     /// Bounded static transport arguments; credentials and shell syntax are forbidden.
     #[serde(default = "empty_strings")]
     pub transport_args: Vec<String>,
@@ -585,6 +588,16 @@ fn validate_remote_pool_transport_commands(pool: &RemoteBuilderPool) -> Result<(
                     endpoint.endpoint_id
                 ));
             }
+            let has_digest =
+                crunch_remote_core::output::is_blake3_hex_digest(&endpoint.transport_program_digest_blake3);
+            if !has_digest {
+                return Err(format!(
+                    "endpoint '{}' transport program needs a lowercase BLAKE3 identity",
+                    endpoint.endpoint_id
+                ));
+            }
+        } else if !endpoint.transport_program_digest_blake3.is_empty() {
+            return Err(format!("endpoint '{}' declares a transport digest without a program", endpoint.endpoint_id));
         }
         if endpoint.transport_args.len() > MAX_ENDPOINT_TRANSPORT_ARGS {
             return Err(format!("endpoint '{}' declares too many transport arguments", endpoint.endpoint_id));
@@ -1172,6 +1185,7 @@ mod tests {
                         public_key_base64: "dGVzdC1rZXk=".to_string(),
                     }],
                     transport_program: "/usr/bin/ssh".to_string(),
+                    transport_program_digest_blake3: "a".repeat(64),
                     transport_args: vec!["builder-01.example".to_string()],
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
@@ -1220,6 +1234,11 @@ mod tests {
         relative.pools[0].endpoints[0].transport_program = "ssh".to_string();
         let relative_error = relative.validate().expect_err("relative transport program rejected");
         assert!(relative_error.contains("absolute bounded path"));
+
+        let mut undigested = sample_config();
+        undigested.pools[0].endpoints[0].transport_program_digest_blake3 = String::new();
+        let undigested_error = undigested.validate().expect_err("program without an identity rejected");
+        assert!(undigested_error.contains("lowercase BLAKE3 identity"));
 
         let mut secret = sample_config();
         secret.pools[0].endpoints[0].transport_args.push("--ticket=do-not-store".to_string());
@@ -1789,6 +1808,7 @@ let remote = import "remote-builders.ncl" in {
       credential_reference = "mantle-builder-ticket-a",
       trusted_output_keys = [{ public_key_name = "session-worker-1", public_key_base64 = "dGVzdC1rZXk=" }],
       transport_program = "/usr/bin/ssh",
+      transport_program_digest_blake3 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       transport_args = ["session-worker.example"],
     }],
     session = { max_concurrency = 2, job_count_max = 64, session_bytes_max = 1048576 },
@@ -1807,6 +1827,7 @@ let remote = import "remote-builders.ncl" in {
         assert_eq!(pool.endpoints[0].credential_reference, "mantle-builder-ticket-a");
         assert_eq!(pool.endpoints[0].trusted_output_keys[0].public_key_base64, "dGVzdC1rZXk=");
         assert_eq!(pool.endpoints[0].transport_program, "/usr/bin/ssh");
+        assert_eq!(pool.endpoints[0].transport_program_digest_blake3, "a".repeat(64));
         assert_eq!(pool.endpoints[0].transport_args, vec!["session-worker.example".to_string()]);
         assert!(config.validate().is_ok());
     }
