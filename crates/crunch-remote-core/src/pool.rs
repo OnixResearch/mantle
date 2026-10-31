@@ -305,3 +305,145 @@ fn is_valid_identifier(value: &str, max_bytes: usize) -> bool {
     let has_no_whitespace = !value.contains(char::is_whitespace);
     is_within_bound && has_no_whitespace
 }
+
+/// One worker's current declared and observed facts, supplied by the adapter.
+/// Ordinals are adapter-supplied facts; this module does not invent capacity.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkerFacts {
+    pub endpoint_name: String,
+    pub capabilities: DeclaredCapabilities,
+    pub declared_accelerator_classes: Vec<String>,
+    pub worker_generation: u64,
+    pub remaining: crate::resource::Capacity,
+    pub named: crate::resource::NamedResourceFit,
+    /// Higher is a better resource fit; the adapter derives it from its facts.
+    pub resource_fit: u8,
+    pub content_locality: u8,
+    pub transfer_cost: u8,
+}
+
+/// What one ready goal requires from a worker.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoalRequirement {
+    pub system: String,
+    pub sandbox_mode: String,
+    pub network_mode: String,
+    pub required_features: Vec<String>,
+    pub required_accelerator_classes: Vec<String>,
+    pub requested: crate::resource::Capacity,
+    /// Whether the goal needs named accelerator/token quantities at all.
+    pub requires_named_resources: bool,
+}
+
+/// Why a ready goal could not be placed in the admitted pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlacementDenial {
+    /// No admitted endpoint reported current facts.
+    NoAdmittedWorker,
+    /// Every admitted worker refused a hard capability gate.
+    CapabilityMismatch,
+    /// Every capability-compatible worker lacked the requested capacity.
+    InsufficientCapacity,
+}
+
+/// The deterministic outcome for one ready goal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GoalPlacement {
+    Selected {
+        endpoint_name: String,
+        worker_generation: u64,
+    },
+    Unplaceable {
+        denial: PlacementDenial,
+    },
+}
+
+/// Choose one admitted worker for one ready goal: hard capability gates first,
+/// then capacity, then deterministic preference and stable endpoint identity.
+/// Placement facts never enter the goal's semantic action identity.
+pub fn plan_goal_placement(
+    pool: &AdmittedPool,
+    requirement: &GoalRequirement,
+    workers: &[WorkerFacts],
+) -> GoalPlacement {
+    let admitted = pool.endpoint_names();
+    let mut admitted_workers = workers.iter().filter(|worker| admitted.contains(&worker.endpoint_name)).peekable();
+    if admitted_workers.peek().is_none() {
+        return GoalPlacement::Unplaceable {
+            denial: PlacementDenial::NoAdmittedWorker,
+        };
+    }
+    let mut compatible = admitted_workers.filter(|worker| fits_capabilities(worker, requirement)).peekable();
+    if compatible.peek().is_none() {
+        return GoalPlacement::Unplaceable {
+            denial: PlacementDenial::CapabilityMismatch,
+        };
+    }
+    let mut feasible = compatible.filter(|worker| fits_capacity(worker, requirement)).peekable();
+    if feasible.peek().is_none() {
+        return GoalPlacement::Unplaceable {
+            denial: PlacementDenial::InsufficientCapacity,
+        };
+    }
+    let selected = feasible.min_by(|left, right| compare_workers(left, right));
+    match selected {
+        Some(worker) => {
+            debug_assert!(!worker.endpoint_name.is_empty());
+            debug_assert!(worker.worker_generation >= 1);
+            GoalPlacement::Selected {
+                endpoint_name: worker.endpoint_name.clone(),
+                worker_generation: worker.worker_generation,
+            }
+        }
+        None => GoalPlacement::Unplaceable {
+            denial: PlacementDenial::NoAdmittedWorker,
+        },
+    }
+}
+
+fn fits_capabilities(worker: &WorkerFacts, requirement: &GoalRequirement) -> bool {
+    let is_system_matching = worker.capabilities.system == requirement.system;
+    let is_mode_matching = worker.capabilities.sandbox_mode == requirement.sandbox_mode
+        && worker.capabilities.network_mode == requirement.network_mode;
+    let has_features =
+        requirement.required_features.iter().all(|feature| worker.capabilities.features.contains(feature));
+    let has_classes = requirement
+        .required_accelerator_classes
+        .iter()
+        .all(|class| worker.declared_accelerator_classes.contains(class));
+    let is_matching = is_system_matching && is_mode_matching && has_features && has_classes;
+    debug_assert!(!requirement.system.is_empty());
+    debug_assert!(worker.capabilities.sandbox_mode.len() <= MAX_CAPABILITY_BYTES);
+    is_matching
+}
+
+fn fits_capacity(worker: &WorkerFacts, requirement: &GoalRequirement) -> bool {
+    let has_named = !requirement.requires_named_resources || !worker.named.is_constrained;
+    let has_capacity = crate::resource::reserve_capacity(worker.remaining, requirement.requested).is_ok();
+    let is_feasible = has_named && has_capacity;
+    debug_assert!(worker.worker_generation >= 1);
+    debug_assert!(!worker.endpoint_name.is_empty());
+    is_feasible
+}
+
+fn placement_facts(worker: &WorkerFacts) -> crate::resource::PlacementFacts<'_> {
+    crate::resource::PlacementFacts {
+        worker_endpoint_id: &worker.endpoint_name,
+        resource_fit: worker.resource_fit,
+        content_locality: worker.content_locality,
+        transfer_cost: worker.transfer_cost,
+    }
+}
+
+fn compare_workers(left: &WorkerFacts, right: &WorkerFacts) -> core::cmp::Ordering {
+    use crate::resource::PlacementPreference;
+    use crate::resource::compare_placement;
+    let ordering = compare_placement(
+        [PlacementPreference::ResourceFit, PlacementPreference::LocalityTransfer],
+        placement_facts(left),
+        placement_facts(right),
+    );
+    debug_assert!(ordering != core::cmp::Ordering::Equal || left.endpoint_name != right.endpoint_name);
+    debug_assert!(left.worker_generation >= 1 && right.worker_generation >= 1);
+    ordering
+}

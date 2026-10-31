@@ -15,12 +15,19 @@ use crate::endpoint::EndpointKind;
 use crate::pool::AdmittedPool;
 use crate::pool::CallerCredential;
 use crate::pool::DeclaredCapabilities;
+use crate::pool::GoalPlacement;
+use crate::pool::GoalRequirement;
+use crate::pool::PlacementDenial;
 use crate::pool::PoolAdmissionError;
 use crate::pool::PoolEndpoint;
 use crate::pool::PoolSelection;
 use crate::pool::PoolSessionPolicy;
 use crate::pool::TrustedOutputKey;
+use crate::pool::WorkerFacts;
 use crate::pool::admits_pool;
+use crate::pool::plan_goal_placement;
+use crate::resource::Capacity;
+use crate::resource::NamedResourceFit;
 
 const NOW_UNIX_S: u64 = 1_000;
 const EXPIRES_UNIX_S: u64 = 10_000;
@@ -210,4 +217,98 @@ fn declaration_shape_and_session_bounds_fail_closed() {
     assert_eq!(admit(&unnamed, &ENDPOINT_NAMES, &ENDPOINT_NAMES), Err(PoolAdmissionError::InvalidPoolId));
     let empty = selection(&[]);
     assert_eq!(admit(&empty, &ENDPOINT_NAMES, &ENDPOINT_NAMES), Err(PoolAdmissionError::EmptyPool));
+}
+
+fn admitted_pool() -> AdmittedPool {
+    admit(&selection(&ENDPOINT_NAMES), &ENDPOINT_NAMES, &ENDPOINT_NAMES).expect("fixture pool admits")
+}
+
+fn capacity(cpu_units: u32) -> Capacity {
+    Capacity {
+        cpu_units,
+        memory_bytes: 1_048_576,
+        scratch_bytes: 1_048_576,
+    }
+}
+
+fn requirement() -> GoalRequirement {
+    GoalRequirement {
+        system: String::from("x86_64-linux"),
+        sandbox_mode: String::from("practical"),
+        network_mode: String::from("none"),
+        required_features: vec![String::from("native-compile")],
+        required_accelerator_classes: Vec::new(),
+        requested: capacity(1),
+        requires_named_resources: false,
+    }
+}
+
+fn worker(name: &str, cpu_units: u32, resource_fit: u8) -> WorkerFacts {
+    WorkerFacts {
+        endpoint_name: name.to_string(),
+        capabilities: capabilities(),
+        declared_accelerator_classes: Vec::new(),
+        worker_generation: 3,
+        remaining: capacity(cpu_units),
+        named: NamedResourceFit {
+            is_empty: true,
+            is_constrained: false,
+        },
+        resource_fit,
+        content_locality: 0,
+        transfer_cost: 0,
+    }
+}
+
+#[test]
+fn two_ready_goals_take_distinct_workers_after_reservation() {
+    let pool = admitted_pool();
+    let workers = vec![worker("worker-a", 1, 200), worker("worker-b", 1, 100)];
+    let first = plan_goal_placement(&pool, &requirement(), &workers);
+    assert_eq!(first, GoalPlacement::Selected {
+        endpoint_name: String::from("worker-a"),
+        worker_generation: 3
+    });
+    let mut reserved = workers.clone();
+    reserved[0].remaining = capacity(0);
+    reserved[0].resource_fit = 0;
+    let second = plan_goal_placement(&pool, &requirement(), &reserved);
+    assert_eq!(second, GoalPlacement::Selected {
+        endpoint_name: String::from("worker-b"),
+        worker_generation: 3
+    });
+    let exhausted = plan_goal_placement(&pool, &requirement(), &[worker("worker-a", 0, 0)]);
+    assert_eq!(exhausted, GoalPlacement::Unplaceable {
+        denial: PlacementDenial::InsufficientCapacity
+    });
+}
+
+#[test]
+fn placement_respects_hard_gates_and_pool_authority() {
+    let pool = admitted_pool();
+    let mut mismatched = worker("worker-a", 4, 200);
+    mismatched.capabilities.system = String::from("aarch64-linux");
+    assert_eq!(plan_goal_placement(&pool, &requirement(), &[mismatched]), GoalPlacement::Unplaceable {
+        denial: PlacementDenial::CapabilityMismatch
+    });
+    let mut unadmitted = worker("worker-z", 4, 200);
+    unadmitted.capabilities.features = vec![String::from("native-compile")];
+    assert_eq!(plan_goal_placement(&pool, &requirement(), &[unadmitted]), GoalPlacement::Unplaceable {
+        denial: PlacementDenial::NoAdmittedWorker
+    });
+    let mut missing_feature = worker("worker-a", 4, 200);
+    missing_feature.capabilities.features.clear();
+    assert_eq!(plan_goal_placement(&pool, &requirement(), &[missing_feature]), GoalPlacement::Unplaceable {
+        denial: PlacementDenial::CapabilityMismatch
+    });
+}
+
+#[test]
+fn equal_fit_breaks_ties_by_stable_endpoint_identity() {
+    let pool = admitted_pool();
+    let workers = vec![worker("worker-b", 4, 100), worker("worker-a", 4, 100)];
+    assert_eq!(plan_goal_placement(&pool, &requirement(), &workers), GoalPlacement::Selected {
+        endpoint_name: String::from("worker-a"),
+        worker_generation: 3
+    });
 }
