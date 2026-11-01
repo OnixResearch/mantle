@@ -3910,6 +3910,7 @@ impl Worker {
                     drv_path: prepared.drv_path.to_absolute_path_with_prefix(builder.store_dir()),
                     derivation_json: serde_json::to_string(prepared.derivation.as_ref())
                         .map_err(|error| Error::Store(format!("remote-pool:derivation-serialize:{error}")))?,
+                    closure: prepared.pool_closure.clone(),
                     system: prepared.derivation.system.clone(),
                     required_features: Vec::new(),
                     required_sandbox_mode: builder.hermeticity_mode().as_str().to_string(),
@@ -6085,6 +6086,12 @@ mod tests {
             ) -> Result<usize, crate::distributed::PoolSelectionError> {
                 let parsed = serde_json::from_str::<nix_compat::derivation::Derivation>(&goal.derivation_json)
                     .map_err(|_| crate::distributed::PoolSelectionError::NoFit)?;
+                if goal.closure.is_empty()
+                    || goal.closure[0].drv_path != goal.drv_path
+                    || goal.closure[0].derivation_json != goal.derivation_json
+                {
+                    return Err(crate::distributed::PoolSelectionError::NoFit);
+                }
                 if goal.system.is_empty() || goal.required_sandbox_mode != "practical" || parsed.system != goal.system {
                     return Err(crate::distributed::PoolSelectionError::NoFit);
                 }

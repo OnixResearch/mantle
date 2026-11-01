@@ -165,6 +165,8 @@ pub const MAX_REMOTE_CAPABILITIES: usize = 32;
 pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
 pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
 pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
+pub const MAX_REMOTE_CLOSURE_ENTRIES: usize = 4_096;
+pub const MAX_REMOTE_CLOSURE_BYTES: usize = 67_108_864;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
 const MAX_REMOTE_PATHINFO_READ_BYTES: u64 = 1_048_577;
 const REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE: usize = 4;
@@ -440,16 +442,27 @@ pub enum RemoteConcreteBuildPayload {
         drv_path: String,
         drv_json: String,
     },
-    /// One canonical nix derivation with its declared inputs already supplied.
-    /// Workers execute it from uploaded inputs; a local rebuild executor rejects it.
+    /// One canonical nix derivation plus its resolved derivation closure.
+    /// Workers execute it from uploaded inputs.
     NixDerivation {
         drv_path: String,
         drv_json: String,
+        #[serde(default)]
+        closure: Vec<RemoteClosureEntry>,
     },
     Action {
         action_id: String,
         spec_json: String,
     },
+}
+
+/// One derivation in the resolved closure sent with a nix-derivation payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteClosureEntry {
+    pub drv_path: String,
+    pub hash_derivation_modulo: String,
+    pub derivation_json: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2198,9 +2211,11 @@ pub fn plan_remote_executable_request(request: &ConcreteBuildRequest) -> Result<
         RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
             plan_remote_derivation_payload((drv_path, drv_json), request)
         }
-        RemoteConcreteBuildPayload::NixDerivation { drv_path, drv_json } => {
-            plan_remote_nix_derivation_payload((drv_path, drv_json), request)
-        }
+        RemoteConcreteBuildPayload::NixDerivation {
+            drv_path,
+            drv_json,
+            closure,
+        } => plan_remote_nix_derivation_payload((drv_path, drv_json), closure, request),
     }
 }
 
@@ -2266,6 +2281,7 @@ fn plan_remote_derivation_payload(
 
 fn plan_remote_nix_derivation_payload(
     payload: (&str, &str),
+    closure: &[RemoteClosureEntry],
     request: &ConcreteBuildRequest,
 ) -> Result<RemoteExecutablePlan, String> {
     let (drv_path, drv_json) = payload;
@@ -2275,6 +2291,7 @@ fn plan_remote_nix_derivation_payload(
     validate_remote_payload_json_size(drv_json)?;
     let nix_drv: nix_compat::derivation::Derivation =
         serde_json::from_str(drv_json).map_err(|err| format!("remote-nix-derivation-json-invalid: {err}"))?;
+    validate_remote_derivation_closure(closure, drv_path, drv_json, &nix_drv, &request.store_prefix)?;
     let declared: StorePath<String> =
         StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
             .map_err(|_| "remote-nix-derivation-path-invalid".to_string())?;
@@ -2307,6 +2324,85 @@ fn plan_remote_nix_derivation_payload(
         remote_derivation_env_utf8(&nix_drv)?,
         nix_drv.system,
     )
+}
+
+/// Verify the sent closure is bounded, path-consistent, and internally
+/// HDM-consistent, and that it carries the payload's root derivation.
+fn validate_remote_derivation_closure(
+    closure: &[RemoteClosureEntry],
+    root_drv_path: &str,
+    root_drv_json: &str,
+    root: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Result<(), String> {
+    if closure.is_empty() {
+        return Err("remote-nix-derivation-closure-missing".to_string());
+    }
+    if closure.len() > MAX_REMOTE_CLOSURE_ENTRIES {
+        return Err("remote-nix-derivation-closure-limit".to_string());
+    }
+    let mut by_path = std::collections::BTreeMap::new();
+    let mut total_bytes = 0_usize;
+    let mut has_root = false;
+    for entry in closure {
+        validate_remote_payload_json_size(&entry.derivation_json)?;
+        let declared: StorePath<String> =
+            StorePath::from_absolute_path_with_prefix(entry.drv_path.as_bytes(), store_prefix)
+                .map_err(|_| "remote-nix-derivation-closure-path-invalid".to_string())?;
+        let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
+            .map_err(|error| format!("remote-nix-derivation-closure-json-invalid: {error}"))?;
+        let drv_name = declared
+            .name()
+            .strip_suffix(".drv")
+            .ok_or_else(|| "remote-nix-derivation-closure-name-invalid".to_string())?;
+        let computed = derivation
+            .calculate_derivation_path_with_store_dir(drv_name, store_prefix)
+            .map_err(|error| format!("remote-nix-derivation-closure-path-computation: {error}"))?;
+        if computed != declared {
+            return Err("remote-nix-derivation-closure-path-mismatch".to_string());
+        }
+        if entry.drv_path == root_drv_path {
+            if entry.derivation_json != root_drv_json {
+                return Err("remote-nix-derivation-closure-root-drift".to_string());
+            }
+            has_root = true;
+        }
+        total_bytes = total_bytes.saturating_add(entry.derivation_json.len());
+        if total_bytes > MAX_REMOTE_CLOSURE_BYTES {
+            return Err("remote-nix-derivation-closure-bytes".to_string());
+        }
+        if by_path.insert(entry.drv_path.clone(), entry).is_some() {
+            return Err("remote-nix-derivation-closure-duplicate".to_string());
+        }
+    }
+    if !has_root {
+        return Err("remote-nix-derivation-closure-root-missing".to_string());
+    }
+    let mut hdm_by_path = std::collections::BTreeMap::new();
+    for (path, entry) in &by_path {
+        let bytes = decode_hex_32(&entry.hash_derivation_modulo)
+            .ok_or_else(|| "remote-nix-derivation-closure-hdm-invalid".to_string())?;
+        hdm_by_path.insert(path.clone(), bytes);
+    }
+    for entry in by_path.values() {
+        let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
+            .map_err(|error| format!("remote-nix-derivation-closure-json-invalid: {error}"))?;
+        let computed = derivation.hash_derivation_modulo_with_store_dir(
+            |input| hdm_by_path.get(&input.to_absolute_path_with_prefix(store_prefix)).copied().unwrap_or([0u8; 32]),
+            store_prefix,
+        );
+        if data_encoding::HEXLOWER.encode(&computed) != entry.hash_derivation_modulo {
+            return Err("remote-nix-derivation-closure-hdm-mismatch".to_string());
+        }
+    }
+    debug_assert!(by_path.contains_key(root_drv_path));
+    debug_assert!(!root.outputs.is_empty());
+    Ok(())
+}
+
+fn decode_hex_32(value: &str) -> Option<[u8; 32]> {
+    let bytes = data_encoding::HEXLOWER.decode(value.as_bytes()).ok()?;
+    <[u8; 32]>::try_from(bytes.as_slice()).ok()
 }
 
 fn validate_remote_payload_json_size(payload_json: &str) -> Result<(), String> {
@@ -3036,40 +3132,67 @@ fn local_derivation_registry(
     request: &ConcreteBuildRequest,
     plan: &RemoteExecutablePlan,
 ) -> Result<(StorePath<String>, crunch_build::DerivationRegistry), String> {
-    let RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } = &request.payload else {
-        return Err(match &request.payload {
-            RemoteConcreteBuildPayload::NixDerivation { .. } => {
-                "remote-local-executor-nix-derivation-unsupported".to_string()
+    let mut registry = crunch_build::DerivationRegistry::new(&request.store_prefix);
+    let (declared, computed_abs) = match &request.payload {
+        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
+            let declared = StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
+                .map_err(|_| "remote-local-executor-drv-path-invalid".to_string())?;
+            let drv: crunch_glue::CrunchDerivation = serde_json::from_str(drv_json)
+                .map_err(|err| format!("remote-local-executor-derivation-json-invalid: {err}"))?;
+            let mut conversion_cache = crunch_glue::ConversionCache::new(&request.store_prefix);
+            let (computed, _) = crunch_glue::convert(&drv, &mut conversion_cache)
+                .map_err(|err| format!("remote-local-executor-derivation-convert-invalid: {err}"))?;
+            if declared != computed {
+                return Err("remote-local-executor-drv-path-mismatch".to_string());
             }
-            _ => "remote-local-executor-action-unsupported".to_string(),
-        });
+            crunch_build::populate_registry(&mut registry, conversion_cache.iter_entries());
+            (declared, computed.to_absolute_path_with_prefix(&request.store_prefix))
+        }
+        RemoteConcreteBuildPayload::NixDerivation {
+            drv_path,
+            drv_json: _,
+            closure,
+        } => {
+            if closure.is_empty() {
+                return Err("remote-local-executor-nix-derivation-closure-missing".to_string());
+            }
+            let declared = StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
+                .map_err(|_| "remote-local-executor-drv-path-invalid".to_string())?;
+            let mut entries = Vec::with_capacity(closure.len());
+            for entry in closure {
+                let path = StorePath::from_absolute_path_with_prefix(entry.drv_path.as_bytes(), &request.store_prefix)
+                    .map_err(|_| "remote-local-executor-closure-path-invalid".to_string())?;
+                let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
+                    .map_err(|error| format!("remote-local-executor-closure-json-invalid: {error}"))?;
+                let hdm = decode_hex_32(&entry.hash_derivation_modulo)
+                    .ok_or_else(|| "remote-local-executor-closure-hdm-invalid".to_string())?;
+                let is_ca = derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+                entries.push((path, hdm, derivation, is_ca, Vec::new(), None));
+            }
+            crunch_build::populate_registry(&mut registry, entries);
+            let declared_abs = declared.to_absolute_path_with_prefix(&request.store_prefix);
+            if registry.get_by_drv_path(&declared_abs).is_none() {
+                return Err("remote-local-executor-registry-root-missing".to_string());
+            }
+            (declared, declared_abs)
+        }
+        RemoteConcreteBuildPayload::Action { .. } => {
+            return Err("remote-local-executor-action-unsupported".to_string());
+        }
     };
-    let declared = StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
-        .map_err(|_| "remote-local-executor-drv-path-invalid".to_string())?;
-    let drv: crunch_glue::CrunchDerivation = serde_json::from_str(drv_json)
-        .map_err(|err| format!("remote-local-executor-derivation-json-invalid: {err}"))?;
-    let mut conversion_cache = crunch_glue::ConversionCache::new(&request.store_prefix);
-    let (computed, _) = crunch_glue::convert(&drv, &mut conversion_cache)
-        .map_err(|err| format!("remote-local-executor-derivation-convert-invalid: {err}"))?;
-    if declared != computed {
-        return Err("remote-local-executor-drv-path-mismatch".to_string());
-    }
     if !matches!(
         &plan.source,
         RemoteExecutablePlanSource::Derivation { computed_drv_path, .. }
-            if computed_drv_path == &computed.to_absolute_path_with_prefix(&request.store_prefix)
+            if computed_drv_path == &computed_abs
     ) {
         return Err("remote-local-executor-plan-source-mismatch".to_string());
     }
-    let mut registry = crunch_build::DerivationRegistry::new(&request.store_prefix);
-    crunch_build::populate_registry(&mut registry, conversion_cache.iter_entries());
-    let computed_abs = computed.to_absolute_path_with_prefix(&request.store_prefix);
     if registry.get_by_drv_path(&computed_abs).is_none() {
         return Err("remote-local-executor-registry-root-missing".to_string());
     }
-    debug_assert_eq!(declared, computed);
+    debug_assert_eq!(declared.to_absolute_path_with_prefix(&request.store_prefix), computed_abs);
     debug_assert!(registry.get_by_drv_path(&computed_abs).is_some());
-    Ok((computed, registry))
+    Ok((declared, registry))
 }
 
 fn remote_execution_outcome_from_build_outcome(
@@ -21033,11 +21156,13 @@ mod tests {
     #[test]
     fn nix_derivation_payload_rejects_drift_and_malformed_json() {
         let mut drifted = fixture_nix_derivation_request();
-        if let RemoteConcreteBuildPayload::NixDerivation { drv_path, .. } = &mut drifted.payload {
-            *drv_path = "/mantle/store/00000000000000000000000000000000-other.drv".to_string();
+        if let RemoteConcreteBuildPayload::NixDerivation { drv_path, closure, .. } = &mut drifted.payload {
+            let other = "/mantle/store/00000000000000000000000000000000-other.drv".to_string();
+            *drv_path = other.clone();
+            closure[0].drv_path = other;
         }
         let drift_error = plan_remote_executable_request(&drifted).expect_err("drifted path rejected");
-        assert!(drift_error.contains("remote-derivation-path-mismatch"), "{drift_error}");
+        assert!(drift_error.contains("remote-nix-derivation-closure-path-mismatch"), "{drift_error}");
 
         let mut malformed = fixture_nix_derivation_request();
         if let RemoteConcreteBuildPayload::NixDerivation { drv_json, .. } = &mut malformed.payload {
@@ -21047,12 +21172,25 @@ mod tests {
         assert!(json_error.contains("remote-nix-derivation-json-invalid"), "{json_error}");
 
         let request = fixture_nix_derivation_request();
-        let plan = plan_remote_executable_request(&request).expect("plan for local executor denial");
-        let local_error = match local_derivation_registry(&request, &plan) {
-            Ok(_) => panic!("local rebuild executor accepted a single-derivation payload"),
-            Err(error) => error,
-        };
-        assert_eq!(local_error, "remote-local-executor-nix-derivation-unsupported");
+        let plan = plan_remote_executable_request(&request).expect("plan for local executor");
+        let (root, registry) = local_derivation_registry(&request, &plan).expect("closure registers");
+        let root_abs = root.to_absolute_path_with_prefix("/mantle/store");
+        assert!(registry.get_by_drv_path(&root_abs).is_some());
+        assert!(registry.get_hdm_by_drv_path(&root_abs).is_some());
+
+        let mut without_closure = fixture_nix_derivation_request();
+        if let RemoteConcreteBuildPayload::NixDerivation { closure, .. } = &mut without_closure.payload {
+            closure.clear();
+        }
+        let error = plan_remote_executable_request(&without_closure).expect_err("missing closure denied");
+        assert!(error.contains("remote-nix-derivation-closure-missing"), "{error}");
+
+        let mut drifted_closure = fixture_nix_derivation_request();
+        if let RemoteConcreteBuildPayload::NixDerivation { closure, .. } = &mut drifted_closure.payload {
+            closure[0].hash_derivation_modulo = "a".repeat(64);
+        }
+        let error = plan_remote_executable_request(&drifted_closure).expect_err("drifted closure denied");
+        assert!(error.contains("remote-nix-derivation-closure-hdm-mismatch"), "{error}");
     }
 
     fn fixture_derivation_request() -> ConcreteBuildRequest {
@@ -21083,10 +21221,17 @@ mod tests {
             .expect("input-addressed output path")
             .to_absolute_path_with_prefix("/mantle/store");
         let drv_json = serde_json::to_string(&nix_drv).expect("nix derivation serializes");
+        let drv_abs = drv_path.to_absolute_path_with_prefix("/mantle/store");
+        let hdm = nix_drv.hash_derivation_modulo_with_store_dir(|_| [0u8; 32], "/mantle/store");
         ConcreteBuildRequest {
             payload: RemoteConcreteBuildPayload::NixDerivation {
-                drv_path: drv_path.to_absolute_path_with_prefix("/mantle/store"),
-                drv_json,
+                drv_path: drv_abs.clone(),
+                drv_json: drv_json.clone(),
+                closure: vec![RemoteClosureEntry {
+                    drv_path: drv_abs,
+                    hash_derivation_modulo: data_encoding::HEXLOWER.encode(&hdm),
+                    derivation_json: drv_json,
+                }],
             },
             expected_outputs: vec![RemoteExpectedOutput {
                 name: "out".to_string(),

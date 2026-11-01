@@ -275,10 +275,71 @@ pub(crate) struct PreparedBuild {
     /// Whether this derivation is a user-requested root.
     /// Root outputs get exported to disk; intermediate deps stay in castore.
     pub(crate) is_root: bool,
+    /// Resolved derivation closure for pool dispatch (root plus known inputs).
+    pub(crate) pool_closure: Vec<crate::distributed::PoolClosureEntry>,
 }
 
 /// Result of `prepare_build`: either already done (cached/fetcher) or
 /// needs a sandbox build.
+/// Collect the derivation closure the Worker already knows: the root plus every
+/// transitive input derivation present in the registry. Missing entries are
+/// skipped; a receiver that needs them fails closed rather than guessing.
+fn collect_pool_closure(
+    root_path: &StorePath<String>,
+    root: &Derivation,
+    registry: &DerivationRegistry,
+    store_dir: &str,
+) -> Vec<crate::distributed::PoolClosureEntry> {
+    use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
+    use crate::distributed::MAX_POOL_GOAL_CLOSURE_ENTRIES;
+    let mut entries = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut pending = vec![root_path.clone()];
+    let mut total_bytes = 0_usize;
+    let mut root_derivation = Some(root);
+    while let Some(path) = pending.pop() {
+        if entries.len() >= MAX_POOL_GOAL_CLOSURE_ENTRIES {
+            break;
+        }
+        let absolute = path.to_absolute_path_with_prefix(store_dir);
+        if !seen.insert(absolute.clone()) {
+            continue;
+        }
+        let (derivation, hdm) = match (registry.get_by_drv_path(&absolute), registry.get_hdm_by_drv_path(&absolute)) {
+            (Some(entry), Some(hdm)) => (entry.derivation.clone(), hdm),
+            _ => match root_derivation.take() {
+                Some(derivation) if path == *root_path => {
+                    let hdm = derivation.hash_derivation_modulo(|input| {
+                        registry
+                            .get_hdm_by_drv_path(&input.to_absolute_path_with_prefix(store_dir))
+                            .unwrap_or([0u8; 32])
+                    });
+                    (std::sync::Arc::new(derivation.clone()), hdm)
+                }
+                _ => continue,
+            },
+        };
+        let Ok(derivation_json) = serde_json::to_string(derivation.as_ref()) else {
+            continue;
+        };
+        total_bytes = total_bytes.saturating_add(derivation_json.len());
+        if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
+            break;
+        }
+        for input in derivation.input_derivations.keys() {
+            pending.push(input.clone());
+        }
+        entries.push(crate::distributed::PoolClosureEntry {
+            drv_path: absolute,
+            hash_derivation_modulo: data_encoding::HEXLOWER.encode(&hdm),
+            derivation_json,
+        });
+    }
+    debug_assert!(entries.len() <= MAX_POOL_GOAL_CLOSURE_ENTRIES);
+    debug_assert!(total_bytes <= MAX_POOL_GOAL_CLOSURE_BYTES);
+    entries
+}
+
 pub(crate) enum PrepareResult {
     Done(BuildOutcome),
     NeedsBuild {
@@ -978,6 +1039,7 @@ where BServ: BuildService + 'static
         }
 
         let is_ca = derivation_ref.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
+        let pool_closure = collect_pool_closure(drv_path, derivation_ref, known_paths, self.store.store_dir());
 
         Ok(PrepareResult::NeedsBuild {
             prepared: PreparedBuild {
@@ -992,6 +1054,7 @@ where BServ: BuildService + 'static
                 resolved_identity: resolved.identity,
                 is_ca,
                 is_root,
+                pool_closure,
             },
             build_request: Box::new(build_request),
         })

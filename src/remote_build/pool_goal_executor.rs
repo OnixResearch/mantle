@@ -102,6 +102,15 @@ pub fn concrete_pool_goal_request(
         payload: RemoteConcreteBuildPayload::NixDerivation {
             drv_path: goal.drv_path.clone(),
             drv_json: goal.derivation_json.clone(),
+            closure: goal
+                .closure
+                .iter()
+                .map(|entry| crate::remote_build::RemoteClosureEntry {
+                    drv_path: entry.drv_path.clone(),
+                    hash_derivation_modulo: entry.hash_derivation_modulo.clone(),
+                    derivation_json: entry.derivation_json.clone(),
+                })
+                .collect(),
         },
         expected_outputs,
         production_attempt: None,
@@ -251,6 +260,7 @@ mod tests {
             action_ref: "action:fixture".to_string(),
             drv_path: drv_path.to_string(),
             derivation_json: derivation_json.to_string(),
+            closure: Vec::new(),
             system: "x86_64-linux".to_string(),
             required_features: Vec::new(),
             required_sandbox_mode: "practical".to_string(),

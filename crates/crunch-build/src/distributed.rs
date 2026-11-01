@@ -1269,6 +1269,22 @@ impl PoolDispatch {
     }
 }
 
+/// One derivation in the resolved closure: exact path, derivation-modulo hash,
+/// and canonical derivation bytes. The Worker already holds these in its
+/// registry; a remote executor sends them because a bare request cannot express
+/// the closure.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoolClosureEntry {
+    pub drv_path: String,
+    pub hash_derivation_modulo: String,
+    pub derivation_json: String,
+}
+
+/// Maximum derivations one goal closure may carry.
+pub const MAX_POOL_GOAL_CLOSURE_ENTRIES: usize = 4_096;
+/// Maximum combined closure derivation bytes.
+pub const MAX_POOL_GOAL_CLOSURE_BYTES: usize = 67_108_864;
+
 /// Facts the Worker resolved for one ready native goal. A bare
 /// `BuildRequest` cannot express pool placement requirements, so the executor
 /// seam must carry these explicitly rather than infer them from the request.
@@ -1283,6 +1299,8 @@ pub struct PreparedPoolGoal {
     /// this because a `BuildRequest` cannot express it and the Nickel closure is
     /// not retained after conversion.
     pub derivation_json: String,
+    /// Resolved derivation closure (root plus transitive inputs), bounded.
+    pub closure: Vec<PoolClosureEntry>,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
@@ -1305,6 +1323,8 @@ pub enum PreparedPoolGoalError {
     InvalidDerivationPath,
     #[error("prepared pool goal derivation payload is empty or too large")]
     InvalidDerivationPayload,
+    #[error("prepared pool goal closure is malformed or too large")]
+    InvalidClosure,
     #[error("prepared pool goal declares too many features or classes")]
     TooManyCapabilities,
     #[error("prepared pool goal capability name is empty or too long")]
@@ -1344,6 +1364,7 @@ impl PreparedPoolGoal {
         if !has_derivation {
             return Err(PreparedPoolGoalError::InvalidDerivationPayload);
         }
+        validate_pool_closure(&facts.closure)?;
         let placement_key_blake3 = blake3::hash(facts.action_ref.as_bytes()).to_hex().to_string();
         let capability_count = facts.required_features.len() + facts.semantic_accelerator_classes.len();
         if capability_count > MAX_POOL_GOAL_CAPABILITIES {
@@ -1362,6 +1383,7 @@ impl PreparedPoolGoal {
             action_ref: facts.action_ref,
             drv_path: facts.drv_path,
             derivation_json: facts.derivation_json,
+            closure: facts.closure,
             system: facts.system,
             required_features: facts.required_features,
             required_sandbox_mode: facts.required_sandbox_mode,
@@ -1373,6 +1395,36 @@ impl PreparedPoolGoal {
     }
 }
 
+fn validate_pool_closure(closure: &[PoolClosureEntry]) -> Result<(), PreparedPoolGoalError> {
+    if closure.len() > MAX_POOL_GOAL_CLOSURE_ENTRIES {
+        return Err(PreparedPoolGoalError::InvalidClosure);
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut total_bytes = 0_usize;
+    for entry in closure {
+        let has_path = !entry.drv_path.is_empty()
+            && entry.drv_path.starts_with('/')
+            && entry.drv_path.len() <= MAX_POOL_GOAL_DRV_PATH_BYTES;
+        let has_hdm = entry.hash_derivation_modulo.len() == 64
+            && entry
+                .hash_derivation_modulo
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+        let has_bytes =
+            !entry.derivation_json.is_empty() && entry.derivation_json.len() <= MAX_POOL_GOAL_DERIVATION_BYTES;
+        if !has_path || !has_hdm || !has_bytes || !seen.insert(entry.drv_path.as_str()) {
+            return Err(PreparedPoolGoalError::InvalidClosure);
+        }
+        total_bytes = total_bytes.saturating_add(entry.derivation_json.len());
+    }
+    if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
+        return Err(PreparedPoolGoalError::InvalidClosure);
+    }
+    debug_assert!(closure.len() <= MAX_POOL_GOAL_CLOSURE_ENTRIES);
+    debug_assert!(total_bytes <= MAX_POOL_GOAL_CLOSURE_BYTES);
+    Ok(())
+}
+
 /// Owned inputs to `PreparedPoolGoal::new`; kept separate so callers can build
 /// the facts without moving the request twice.
 #[derive(Debug, Clone, PartialEq)]
@@ -1381,6 +1433,7 @@ pub struct PreparedPoolGoalFacts {
     pub action_ref: String,
     pub drv_path: String,
     pub derivation_json: String,
+    pub closure: Vec<PoolClosureEntry>,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
@@ -2536,6 +2589,7 @@ mod tests {
             action_ref: "action:fixture".to_string(),
             drv_path: "/mantle/store/00000000000000000000000000000000-fixture.drv".to_string(),
             derivation_json: "{\"name\":\"fixture\"}".to_string(),
+            closure: Vec::new(),
             system: "x86_64-linux".to_string(),
             required_features: vec!["native-compile".to_string()],
             required_sandbox_mode: "practical".to_string(),

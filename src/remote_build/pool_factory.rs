@@ -386,6 +386,7 @@ mod tests {
             action_ref: "action:fixture".to_string(),
             drv_path: "/mantle/store/00000000000000000000000000000000-fixture.drv".to_string(),
             derivation_json: "{}".to_string(),
+            closure: Vec::new(),
             system: system.to_string(),
             required_features: Vec::new(),
             required_sandbox_mode: "practical".to_string(),
