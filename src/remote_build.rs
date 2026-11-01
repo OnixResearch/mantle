@@ -10369,38 +10369,61 @@ pub fn plan_remote_ssh_stdio_client_dispatch(
     plan_remote_client_dispatch_for_binding(input, options, RemoteTransportBinding::SshStdio)
 }
 
+/// Plan one concrete request for a pool goal executor. The request already
+/// carries the derivation payload, expected outputs, and transfer policy.
+pub fn plan_remote_stdio_request_dispatch(
+    request: ConcreteBuildRequest,
+    options: &RemoteClientBuildOptions,
+) -> Result<RemoteClientDispatchPlan, String> {
+    plan_remote_request_dispatch_for_binding(request, options, RemoteTransportBinding::Stdio, "remote-pool-goal")
+}
+
 pub fn plan_remote_stdio_replay_dispatch(
     request: ConcreteBuildRequest,
     options: &RemoteClientBuildOptions,
 ) -> Result<RemoteClientDispatchPlan, String> {
-    validate_remote_client_options(options)?;
-    plan_remote_executable_request(&request)?;
     if request.production_attempt.is_some() || request.transfer_policy.is_some() {
         return Err("remote-replay-request-stale-authority".to_string());
     }
     if request.failure_replay.is_none() {
         return Err("remote-replay-binding-missing".to_string());
     }
+    let dispatch = plan_remote_request_dispatch_for_binding(
+        request,
+        options,
+        RemoteTransportBinding::Stdio,
+        "remote-failure-replay",
+    )?;
+    debug_assert_eq!(dispatch.command.binding, RemoteTransportBinding::Stdio);
+    debug_assert!(dispatch.client.request.failure_replay.is_some());
+    Ok(dispatch)
+}
+
+fn plan_remote_request_dispatch_for_binding(
+    request: ConcreteBuildRequest,
+    options: &RemoteClientBuildOptions,
+    binding: RemoteTransportBinding,
+    label: &str,
+) -> Result<RemoteClientDispatchPlan, String> {
+    validate_remote_client_options(options)?;
+    plan_remote_executable_request(&request)?;
     if request.store_prefix != options.store_prefix {
-        return Err("remote-replay-request-store-prefix-mismatch".to_string());
+        return Err("remote-request-store-prefix-mismatch".to_string());
     }
     let client = remote_loopback_client_for_request(request, options);
     let command = RemoteStdioCommand {
-        binding: RemoteTransportBinding::Stdio,
+        binding,
         program: options.builder.program.clone(),
         args: options.builder.args.clone(),
         input_frames: remote_client_request_frames(&client),
         timeout_secs: options.build_time_limit_secs,
         production_transfer: None,
     };
-    let dispatch = RemoteClientDispatchPlan {
-        label: "remote-failure-replay".to_string(),
+    Ok(RemoteClientDispatchPlan {
+        label: label.to_string(),
         command,
         client,
-    };
-    debug_assert_eq!(dispatch.command.binding, RemoteTransportBinding::Stdio);
-    debug_assert!(dispatch.client.request.failure_replay.is_some());
-    Ok(dispatch)
+    })
 }
 
 fn plan_remote_client_dispatch_for_binding(
@@ -20934,6 +20957,22 @@ mod tests {
         }
         assert_eq!(plan.command_args, vec!["/bin/sh".to_string(), "-c".to_string(), "echo hi".to_string()]);
         assert_eq!(plan.system, "x86_64-linux");
+    }
+
+    #[test]
+    fn request_dispatch_plans_a_pool_goal_without_a_nickel_closure() {
+        let request = fixture_nix_derivation_request();
+        let options = fixture_remote_client_options();
+        let dispatch = plan_remote_stdio_request_dispatch(request.clone(), &options).expect("pool goal plans");
+        assert_eq!(dispatch.label, "remote-pool-goal");
+        assert_eq!(dispatch.command.binding, RemoteTransportBinding::Stdio);
+        assert_eq!(dispatch.client.request.request_id, request.request_id);
+        assert_eq!(dispatch.client.request.store_prefix, options.store_prefix);
+
+        let mut drifted = options.clone();
+        drifted.store_prefix = "/other/store".to_string();
+        let error = plan_remote_stdio_request_dispatch(request, &drifted).expect_err("prefix drift denies");
+        assert!(error.contains("remote-request-store-prefix-mismatch"), "{error}");
     }
 
     #[test]
