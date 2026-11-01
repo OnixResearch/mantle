@@ -16737,6 +16737,23 @@ mod tests {
         let durable = load_coordinator_state(&coordinator_dir).expect("completed signed job reloads");
         assert_eq!(durable.jobs[&job_id], restarted.jobs[&job_id]);
         assert!(durable.resource_leases.is_empty());
+
+        // A duplicate completion (same or later event) must be refused and must
+        // not change the finished job or resurrect a lease.
+        let completed = restarted.jobs[&job_id].clone();
+        let duplicate = complete_remote_production_attempt(
+            &mut restarted,
+            &successor_binding,
+            &admission.output_digest_blake3,
+            TEST_RETRY_NOW_UNIX_S + 2,
+        )
+        .expect_err("duplicate completion is refused");
+        assert!(
+            matches!(duplicate.as_str(), "terminal-attempt" | "already-applied" | "current-attempt-completed"),
+            "unexpected duplicate-completion reason: {duplicate}"
+        );
+        assert_eq!(restarted.jobs[&job_id], completed);
+        assert!(restarted.resource_leases.is_empty());
     }
 
     #[test]
