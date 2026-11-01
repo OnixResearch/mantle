@@ -98,9 +98,10 @@ const fn guard_is_held(_guard: &std::sync::MutexGuard<'static, ()>) -> bool {
 /// Pool mode: one admitted endpoint executes a ready goal through the ordinary
 /// Worker, using the same ticket, binding, and local-build receiver as the
 /// single-endpoint path.
-#[test]
-fn production_pool_dispatches_one_goal_through_the_worker() {
-    let _guard = serial_transfer_guard();
+fn run_single_endpoint_pool_build(
+    _guard: std::sync::MutexGuard<'static, ()>,
+    write_build: impl FnOnce(&Path),
+) -> Value {
     let root = tempfile::tempdir().expect("pool transfer tempdir");
     let state_dir = root.path().join("state");
     let client_store = root.path().join("client-store");
@@ -113,7 +114,7 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     fs::create_dir_all(&worker_store).expect("worker store");
     fs::create_dir_all(&worker_state).expect("worker state");
     write_ticket_state(&state_dir);
-    write_replayable_derivation(&build_file);
+    write_build(&build_file);
 
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     // The debug binary carries debug info far beyond the transport-program bound;
@@ -207,11 +208,26 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
             .unwrap_or_default();
         panic!("pool build status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
     }
-    let report: Value = serde_json::from_slice(&output.stdout).expect("pool build JSON report");
+    serde_json::from_slice(&output.stdout).expect("pool build JSON report")
+}
+
+fn assert_one_pool_outcome(report: &Value) {
     let outcomes = report["outcomes"].as_array().expect("outcomes array");
     assert_eq!(outcomes.len(), 1, "one routed goal outcome: {report}");
     assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
     assert!(outcomes[0]["outputs"].as_array().is_some_and(|outputs| !outputs.is_empty()));
+}
+
+#[test]
+fn production_pool_dispatches_one_goal_through_the_worker() {
+    let report = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
+    assert_one_pool_outcome(&report);
+}
+
+#[test]
+fn production_pool_dispatches_one_content_addressed_goal_through_the_worker() {
+    let report = run_single_endpoint_pool_build(serial_transfer_guard(), write_content_addressed_derivation);
+    assert_one_pool_outcome(&report);
 }
 
 const POOL_WORKER_A: &str = "pool-builder-a";
@@ -222,9 +238,16 @@ const POOL_TICKET_FD_B: i32 = 8;
 
 /// Pool mode: two admitted endpoints execute a real diamond through ordinary
 /// Worker scheduling: one shared dependency, two branches, one join.
-#[test]
-fn production_pool_dispatches_a_diamond_across_two_workers() {
-    let _guard = serial_transfer_guard();
+struct PoolDiamondOutcome {
+    report: Value,
+    worker_a_store: PathBuf,
+    worker_b_store: PathBuf,
+}
+
+fn run_two_worker_pool_build(
+    _guard: std::sync::MutexGuard<'static, ()>,
+    write_build: impl FnOnce(&Path),
+) -> PoolDiamondOutcome {
     let root = tempfile::tempdir().expect("pool diamond tempdir");
     let state_dir = root.path().join("state");
     let client_store = root.path().join("client-store");
@@ -245,7 +268,7 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
         fs::create_dir_all(dir).expect("pool diamond directory");
     }
     write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, POOL_TICKET_USES, &[POOL_WORKER_A, POOL_WORKER_B]);
-    write_pool_diamond_derivation(&build_file);
+    write_build(&build_file);
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
     fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
@@ -356,7 +379,15 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
             .unwrap_or_default();
         panic!("pool diamond status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
     }
-    let report: Value = serde_json::from_slice(&output.stdout).expect("pool diamond JSON report");
+    PoolDiamondOutcome {
+        report: serde_json::from_slice(&output.stdout).expect("pool diamond JSON report"),
+        worker_a_store,
+        worker_b_store,
+    }
+}
+
+fn assert_pool_diamond(outcome: &PoolDiamondOutcome) {
+    let report = &outcome.report;
     let outcomes = report["outcomes"].as_array().expect("outcomes array");
     assert_eq!(outcomes.len(), 1, "one requested root outcome: {report}");
     assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
@@ -367,10 +398,21 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
     assert!(graph.contains("shared foundation"), "graph carries the shared dependency: {graph}");
     assert!(graph.contains("left branch"), "graph carries the left branch: {graph}");
     assert!(graph.contains("right branch"), "graph carries the right branch: {graph}");
-    for (label, store) in [("worker A", &worker_a_store), ("worker B", &worker_b_store)] {
+    for (label, store) in [
+        ("worker A", &outcome.worker_a_store),
+        ("worker B", &outcome.worker_b_store),
+    ] {
         let entries = fs::read_dir(store).expect("worker store entries").count();
         assert!(entries > 0, "{label} executed at least one goal");
     }
+}
+
+#[test]
+fn production_pool_dispatches_a_diamond_across_two_workers() {
+    let outcome = run_two_worker_pool_build(serial_transfer_guard(), |path| {
+        write_pool_diamond_derivation(path, Some("input-addressed"))
+    });
+    assert_pool_diamond(&outcome);
 }
 
 #[test]
@@ -1498,8 +1540,12 @@ fn write_replayable_derivation(path: &Path) {
     fs::write(path, source).expect("replayable derivation");
 }
 
-fn write_pool_diamond_derivation(path: &Path) {
+fn write_pool_diamond_derivation(path: &Path, addressing_mode: Option<&str>) {
     let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let addressing = match addressing_mode {
+        Some(mode) => format!("addressing_mode = '{mode},\n  "),
+        None => String::new(),
+    };
     let source = format!(
         r#"let mantle = import "{}" in
 let shared = {{
@@ -1509,8 +1555,7 @@ let shared = {{
   outputs = ["out"],
   env = {{}},
   inputs = [],
-  addressing_mode = 'input-addressed,
-  sandbox = 'native,
+  {addressing}sandbox = 'native,
 }} | mantle.Derivation in
 let branch = fun branch_name branch_message => {{
   name = branch_name,
@@ -1538,8 +1583,7 @@ let branch = fun branch_name branch_message => {{
   ],
   outputs = ["out"],
   env = {{}},
-  addressing_mode = 'input-addressed,
-  sandbox = 'native,
+  {addressing}sandbox = 'native,
 }} | mantle.Derivation in
 let left = branch "pool-diamond-left" "left branch" in
 let right = branch "pool-diamond-right" "right branch" in
@@ -1577,13 +1621,32 @@ let right = branch "pool-diamond-right" "right branch" in
   ],
   outputs = ["out"],
   env = {{}},
-  addressing_mode = 'input-addressed,
-  sandbox = 'native,
+  {addressing}sandbox = 'native,
 }} | mantle.Derivation
 "#,
         lib.display(),
     );
     fs::write(path, source).expect("pool diamond derivation");
+}
+
+fn write_content_addressed_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-remote-ca-replay",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf ca-replay-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+    );
+    fs::write(path, source).expect("content-addressed derivation");
 }
 
 fn write_failing_capture_derivation(path: &Path) {

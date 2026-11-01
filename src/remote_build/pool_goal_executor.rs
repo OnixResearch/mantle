@@ -78,7 +78,7 @@ pub fn concrete_pool_goal_request(
     goal: &PreparedPoolGoal,
     options: &RemoteClientBuildOptions,
 ) -> Result<ConcreteBuildRequest, String> {
-    let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&goal.derivation_json)
+    let derivation = crate::remote_build::parse_remote_derivation_json(&goal.derivation_json)
         .map_err(|error| format!("remote-pool-derivation-json-invalid: {error}"))?;
     let drv_path = nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
         goal.drv_path.as_bytes(),
@@ -109,6 +109,14 @@ pub fn concrete_pool_goal_request(
                     drv_path: entry.drv_path.clone(),
                     hash_derivation_modulo: entry.hash_derivation_modulo.clone(),
                     derivation_json: entry.derivation_json.clone(),
+                    outputs: entry
+                        .outputs
+                        .iter()
+                        .map(|output| crate::remote_build::RemoteClosureOutput {
+                            name: output.name.clone(),
+                            logical_path: output.logical_path.clone(),
+                        })
+                        .collect(),
                 })
                 .collect(),
         },
@@ -137,26 +145,31 @@ fn pool_goal_input_refs(
 ) -> Result<Vec<String>, String> {
     let mut closure = std::collections::BTreeMap::new();
     for entry in &goal.closure {
-        let parsed = serde_json::from_str::<nix_compat::derivation::Derivation>(&entry.derivation_json)
+        let parsed = crate::remote_build::parse_remote_derivation_json(&entry.derivation_json)
             .map_err(|error| format!("remote-pool-closure-json-invalid: {error}"))?;
-        closure.insert(entry.drv_path.clone(), parsed);
+        closure.insert(entry.drv_path.clone(), (parsed, entry.outputs.as_slice()));
     }
     let mut refs =
         Vec::with_capacity(derivation.input_derivations.len().saturating_add(derivation.input_sources.len()));
     for (drv_path, output_names) in &derivation.input_derivations {
         let absolute = drv_path.to_absolute_path_with_prefix(store_prefix);
-        let input_derivation =
+        let (input_derivation, resolved_outputs) =
             closure.get(&absolute).ok_or_else(|| format!("remote-pool-input-derivation-missing:{absolute}"))?;
         for output_name in output_names {
             let output = input_derivation
                 .outputs
                 .get(output_name)
                 .ok_or_else(|| format!("remote-pool-input-output-missing:{absolute}:{output_name}"))?;
-            let path = output
-                .path
-                .as_ref()
-                .ok_or_else(|| format!("remote-pool-input-output-unresolved:{absolute}:{output_name}"))?;
-            refs.push(path.to_absolute_path_with_prefix(store_prefix));
+            match &output.path {
+                Some(path) => refs.push(path.to_absolute_path_with_prefix(store_prefix)),
+                None => {
+                    let resolved = resolved_outputs
+                        .iter()
+                        .find(|candidate| candidate.name == *output_name)
+                        .ok_or_else(|| format!("remote-pool-input-output-unresolved:{absolute}:{output_name}"))?;
+                    refs.push(resolved.logical_path.clone());
+                }
+            }
         }
     }
     refs.extend(derivation.input_sources.iter().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
@@ -170,6 +183,11 @@ fn pool_error(code: &str) -> io::Error {
 }
 
 const MAX_COORDINATOR_SAVE_ATTEMPTS: u32 = 16;
+
+/// Serializes this process's coordinator transactions. Revision fencing still
+/// protects external writers, but two goals of one build must not spin on each
+/// other's intermediate candidate saves.
+static COORDINATOR_TRANSACTION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// The coordinator store fences every write with the persisted revision. A
 /// concurrent goal can advance it between our load and save; the caller reloads
@@ -188,6 +206,7 @@ fn save_coordinator_with_retry<F>(
 where
     F: FnMut(&mut crate::remote_build::RemoteCoordinatorState) -> io::Result<()>,
 {
+    let _transaction = COORDINATOR_TRANSACTION_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut attempt_number = 0;
     loop {
         attempt_number += 1;
@@ -328,16 +347,48 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             imported.push((action.logical_path.clone(), node));
         }
         let mut outputs = Vec::with_capacity(goal.request.outputs.len());
-        for relative in &goal.request.outputs {
-            let suffix = format!("/{}", relative.to_string_lossy().trim_start_matches('/'));
-            let matched = imported
-                .iter()
-                .find(|(logical_path, _)| logical_path.ends_with(&suffix))
-                .ok_or_else(|| pool_error(&format!("output-missing:{suffix}")))?;
-            outputs.push(BuildOutput {
-                node: matched.1.clone(),
+        // Content-addressed outputs have no declared path before the build, so
+        // the request carries placeholders while the worker reports realized
+        // paths. Match those by result order; input-addressed outputs match by
+        // the declared logical path.
+        let derivation = crate::remote_build::parse_remote_derivation_json(&goal.derivation_json)
+            .map_err(|error| pool_error(&format!("derivation-json:{error}")))?;
+        let declared_paths = derivation
+            .outputs
+            .values()
+            .filter_map(|output| output.path.as_ref())
+            .map(|path| path.to_absolute_path_with_prefix(&endpoint.options.store_prefix))
+            .collect::<BTreeSet<_>>();
+        let requested_paths = goal
+            .request
+            .outputs
+            .iter()
+            .map(|relative| {
+                format!(
+                    "{}/{}",
+                    endpoint.options.store_prefix.trim_end_matches('/'),
+                    relative.to_string_lossy().trim_start_matches('/')
+                )
+            })
+            .collect::<Vec<_>>();
+        let all_declared = requested_paths.iter().all(|path| declared_paths.contains(path));
+        if !all_declared && imported.len() == goal.request.outputs.len() {
+            outputs.extend(imported.iter().map(|(_, node)| BuildOutput {
+                node: node.clone(),
                 output_needles: BTreeSet::new(),
-            });
+            }));
+        } else {
+            for relative in &goal.request.outputs {
+                let suffix = format!("/{}", relative.to_string_lossy().trim_start_matches('/'));
+                let matched = imported
+                    .iter()
+                    .find(|(logical_path, _)| logical_path.ends_with(&suffix))
+                    .ok_or_else(|| pool_error(&format!("output-missing:{suffix}")))?;
+                outputs.push(BuildOutput {
+                    node: matched.1.clone(),
+                    output_needles: BTreeSet::new(),
+                });
+            }
         }
         if outputs.len() != goal.request.outputs.len() {
             return Err(pool_error("output-count-mismatch"));

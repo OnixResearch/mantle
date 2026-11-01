@@ -463,6 +463,17 @@ pub struct RemoteClosureEntry {
     pub drv_path: String,
     pub hash_derivation_modulo: String,
     pub derivation_json: String,
+    /// Resolved output paths for content-addressed outputs of this derivation.
+    #[serde(default)]
+    pub outputs: Vec<RemoteClosureOutput>,
+}
+
+/// One resolved output path carried with a closure derivation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteClosureOutput {
+    pub name: String,
+    pub logical_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2279,6 +2290,67 @@ fn plan_remote_derivation_payload(
     )
 }
 
+/// Parse the JSON form of a Nix derivation sent with a remote payload.
+///
+/// `nix_compat::derivation::Output` serializes an unset output path (a
+/// content-addressed derivation) as `"path": null`, while its derived
+/// deserializer accepts only a string. Parse the canonical form first, then
+/// rebuild from the wire shape so content-addressed outputs round-trip.
+pub(crate) fn parse_remote_derivation_json(text: &str) -> Result<nix_compat::derivation::Derivation, String> {
+    if let Ok(derivation) = serde_json::from_str(text) {
+        return Ok(derivation);
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireDerivation {
+        #[serde(rename = "args")]
+        arguments: Vec<String>,
+        builder: String,
+        #[serde(rename = "env")]
+        environment: std::collections::BTreeMap<String, bstr::BString>,
+        #[serde(rename = "inputDrvs")]
+        input_derivations:
+            std::collections::BTreeMap<nix_compat::store_path::StorePath<String>, std::collections::BTreeSet<String>>,
+        #[serde(rename = "inputSrcs")]
+        input_sources: std::collections::BTreeSet<nix_compat::store_path::StorePath<String>>,
+        outputs: std::collections::BTreeMap<String, serde_json::Value>,
+        system: String,
+    }
+    let wire: WireDerivation =
+        serde_json::from_str(text).map_err(|error| format!("remote-derivation-json-invalid: {error}"))?;
+    let mut outputs = std::collections::BTreeMap::new();
+    for (name, value) in wire.outputs {
+        let object = value.as_object().ok_or_else(|| format!("remote-derivation-output-invalid: {name}"))?;
+        let path = match object.get("path") {
+            None => return Err(format!("remote-derivation-output-path-missing: {name}")),
+            Some(serde_json::Value::Null) => None,
+            Some(serde_json::Value::String(text)) => Some(
+                nix_compat::store_path::StorePath::<String>::from_absolute_path(text.as_bytes())
+                    .map_err(|_| format!("remote-derivation-output-path-invalid: {name}"))?,
+            ),
+            Some(_) => return Err(format!("remote-derivation-output-path-invalid: {name}")),
+        };
+        let ca_hash = if object.contains_key("hash") || object.contains_key("hashAlgo") {
+            Some(
+                <nix_compat::nixhash::CAHash as serde::Deserialize>::deserialize(value)
+                    .map_err(|error| format!("remote-derivation-output-ca-invalid: {name}: {error}"))?,
+            )
+        } else {
+            None
+        };
+        outputs.insert(name, nix_compat::derivation::Output { path, ca_hash });
+    }
+    Ok(nix_compat::derivation::Derivation {
+        arguments: wire.arguments,
+        builder: wire.builder,
+        environment: wire.environment,
+        input_derivations: wire.input_derivations,
+        input_sources: wire.input_sources,
+        outputs,
+        system: wire.system,
+    })
+}
+
 fn plan_remote_nix_derivation_payload(
     payload: (&str, &str),
     closure: &[RemoteClosureEntry],
@@ -2289,8 +2361,7 @@ fn plan_remote_nix_derivation_payload(
         return Err("remote-derivation-path-store-prefix-mismatch".to_string());
     }
     validate_remote_payload_json_size(drv_json)?;
-    let nix_drv: nix_compat::derivation::Derivation =
-        serde_json::from_str(drv_json).map_err(|err| format!("remote-nix-derivation-json-invalid: {err}"))?;
+    let nix_drv = parse_remote_derivation_json(drv_json)?;
     validate_remote_derivation_closure(closure, drv_path, drv_json, &nix_drv, &request.store_prefix)?;
     let declared: StorePath<String> =
         StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
@@ -2349,8 +2420,7 @@ fn validate_remote_derivation_closure(
         let declared: StorePath<String> =
             StorePath::from_absolute_path_with_prefix(entry.drv_path.as_bytes(), store_prefix)
                 .map_err(|_| "remote-nix-derivation-closure-path-invalid".to_string())?;
-        let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
-            .map_err(|error| format!("remote-nix-derivation-closure-json-invalid: {error}"))?;
+        let derivation = parse_remote_derivation_json(&entry.derivation_json)?;
         let drv_name = declared
             .name()
             .strip_suffix(".drv")
@@ -2359,7 +2429,11 @@ fn validate_remote_derivation_closure(
             .calculate_derivation_path_with_store_dir(drv_name, store_prefix)
             .map_err(|error| format!("remote-nix-derivation-closure-path-computation: {error}"))?;
         if computed != declared {
-            return Err("remote-nix-derivation-closure-path-mismatch".to_string());
+            return Err(format!(
+                "remote-nix-derivation-closure-path-mismatch:{}:computed={}",
+                entry.drv_path,
+                computed.to_absolute_path_with_prefix(store_prefix)
+            ));
         }
         if entry.drv_path == root_drv_path {
             if entry.derivation_json != root_drv_json {
@@ -2385,8 +2459,7 @@ fn validate_remote_derivation_closure(
         hdm_by_path.insert(path.clone(), bytes);
     }
     for entry in by_path.values() {
-        let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
-            .map_err(|error| format!("remote-nix-derivation-closure-json-invalid: {error}"))?;
+        let derivation = parse_remote_derivation_json(&entry.derivation_json)?;
         let computed = derivation.hash_derivation_modulo_with_store_dir(
             |input| hdm_by_path.get(&input.to_absolute_path_with_prefix(store_prefix)).copied().unwrap_or([0u8; 32]),
             store_prefix,
@@ -3159,17 +3232,33 @@ fn local_derivation_registry(
             let declared = StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
                 .map_err(|_| "remote-local-executor-drv-path-invalid".to_string())?;
             let mut entries = Vec::with_capacity(closure.len());
+            let mut resolved_outputs = Vec::new();
             for entry in closure {
                 let path = StorePath::from_absolute_path_with_prefix(entry.drv_path.as_bytes(), &request.store_prefix)
                     .map_err(|_| "remote-local-executor-closure-path-invalid".to_string())?;
-                let derivation: nix_compat::derivation::Derivation = serde_json::from_str(&entry.derivation_json)
-                    .map_err(|error| format!("remote-local-executor-closure-json-invalid: {error}"))?;
+                let derivation = parse_remote_derivation_json(&entry.derivation_json)?;
                 let hdm = decode_hex_32(&entry.hash_derivation_modulo)
                     .ok_or_else(|| "remote-local-executor-closure-hdm-invalid".to_string())?;
                 let is_ca = derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+                if is_ca {
+                    let absolute = path.to_absolute_path_with_prefix(&request.store_prefix);
+                    for output in &entry.outputs {
+                        let resolved = StorePath::from_absolute_path_with_prefix(
+                            output.logical_path.as_bytes(),
+                            &request.store_prefix,
+                        )
+                        .map_err(|_| "remote-local-executor-closure-output-path-invalid".to_string())?;
+                        resolved_outputs.push((absolute.clone(), output.name.clone(), resolved));
+                    }
+                }
                 entries.push((path, hdm, derivation, is_ca, Vec::new(), None));
             }
             crunch_build::populate_registry(&mut registry, entries);
+            for (drv_abs, output_name, resolved) in resolved_outputs {
+                registry
+                    .resolve_output(&drv_abs, &output_name, resolved)
+                    .map_err(|error| format!("remote-local-executor-closure-output-registration: {error}"))?;
+            }
             let declared_abs = declared.to_absolute_path_with_prefix(&request.store_prefix);
             if registry.get_by_drv_path(&declared_abs).is_none() {
                 return Err("remote-local-executor-registry-root-missing".to_string());
@@ -6831,8 +6920,7 @@ fn coordinator_request_uses_mutable_workspace(request: &RemoteCoordinatorBuildRe
             Ok(policy.mode == crunch_build::WorkspaceMode::MutableSession)
         }
         RemoteConcreteBuildPayload::NixDerivation { drv_json, .. } => {
-            let derivation: nix_compat::derivation::Derivation = serde_json::from_str(drv_json)
-                .map_err(|error| format!("remote-workspace-nix-derivation-invalid: {error}"))?;
+            let derivation = parse_remote_derivation_json(drv_json)?;
             let Some(policy_bytes) = derivation.environment.get(crunch_glue::WORKSPACE_POLICY_ENV) else {
                 return Ok(false);
             };
@@ -21256,6 +21344,7 @@ mod tests {
                     drv_path: drv_abs,
                     hash_derivation_modulo: data_encoding::HEXLOWER.encode(&hdm),
                     derivation_json: drv_json,
+                    outputs: Vec::new(),
                 }],
             },
             expected_outputs: vec![RemoteExpectedOutput {
@@ -21359,6 +21448,16 @@ mod tests {
         let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
         let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture CA drv converts");
         (drv_json, drv_path, nix_drv)
+    }
+
+    #[test]
+    fn content_addressed_derivation_json_round_trips_through_the_pool_parser() {
+        let (_, _, nix_drv) = fixture_ca_derivation_parts();
+        assert!(nix_drv.outputs.values().any(|output| output.path.is_none()));
+        let json = serde_json::to_string(&nix_drv).expect("CA derivation serializes");
+        assert!(json.contains("\"path\":null"), "unset CA output path is null: {json}");
+        let parsed = parse_remote_derivation_json(&json).expect("CA derivation parses");
+        assert_eq!(parsed, nix_drv);
     }
 
     fn fixture_derivation_drv_path(request: &ConcreteBuildRequest) -> String {

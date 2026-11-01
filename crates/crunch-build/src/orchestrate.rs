@@ -327,13 +327,19 @@ fn collect_pool_closure(
         if !seen.insert(absolute.clone()) {
             continue;
         }
-        let derivation = match registry.get_by_drv_path(&absolute) {
-            Some(entry) => entry.derivation.clone(),
-            None if path == *root_path && !root_taken => {
-                root_taken = true;
-                std::sync::Arc::new(root.clone())
+        // The dispatched goal's own prepared derivation is authoritative for the
+        // root entry: a content-addressed root is unresolved there while the
+        // registry may already hold a resolved form.
+        let derivation = if path == *root_path && !root_taken {
+            root_taken = true;
+            std::sync::Arc::new(root.clone())
+        } else {
+            match registry.get_by_drv_path(&absolute) {
+                // A CA-resolved input-addressed derivation was registered under
+                // the resolved path; its original bytes no longer hash to it.
+                Some(entry) => entry.resolved_derivation.clone().unwrap_or_else(|| entry.derivation.clone()),
+                None => continue,
             }
-            None => continue,
         };
         for input in derivation.input_derivations.keys() {
             pending.push(input.clone());
@@ -359,7 +365,7 @@ fn collect_pool_closure(
     hdm_by_path.extend(hdm_memo.into_inner());
     let mut entries = Vec::with_capacity(collected.len());
     let mut total_bytes = 0_usize;
-    for (path, _) in &collected {
+    for (path, derivation) in &collected {
         let (Some(json), Some(hdm)) = (json_by_path.get(path), hdm_by_path.get(path)) else {
             continue;
         };
@@ -367,10 +373,24 @@ fn collect_pool_closure(
         if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
             break;
         }
+        let mut outputs = Vec::new();
+        for (output_name, output) in &derivation.outputs {
+            if output.path.is_some() {
+                continue;
+            }
+            let Some(resolved) = registry.get_output_path(path, output_name) else {
+                continue;
+            };
+            outputs.push(crate::distributed::PoolClosureOutput {
+                name: output_name.clone(),
+                logical_path: resolved.to_absolute_path_with_prefix(store_dir),
+            });
+        }
         entries.push(crate::distributed::PoolClosureEntry {
             drv_path: path.clone(),
             hash_derivation_modulo: data_encoding::HEXLOWER.encode(hdm),
             derivation_json: json.clone(),
+            outputs,
         });
     }
     debug_assert!(entries.len() <= MAX_POOL_GOAL_CLOSURE_ENTRIES);

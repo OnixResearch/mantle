@@ -1305,12 +1305,25 @@ pub struct PoolClosureEntry {
     pub drv_path: String,
     pub hash_derivation_modulo: String,
     pub derivation_json: String,
+    /// Resolved output paths for outputs the derivation does not declare.
+    /// Content-addressed outputs become known only after the dependency is
+    /// built, so a dependent goal cannot derive them from the derivation JSON.
+    pub outputs: Vec<PoolClosureOutput>,
+}
+
+/// One resolved output of a closure derivation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PoolClosureOutput {
+    pub name: String,
+    pub logical_path: String,
 }
 
 /// Maximum derivations one goal closure may carry.
 pub const MAX_POOL_GOAL_CLOSURE_ENTRIES: usize = 4_096;
 /// Maximum combined closure derivation bytes.
 pub const MAX_POOL_GOAL_CLOSURE_BYTES: usize = 67_108_864;
+/// Maximum resolved outputs carried for one closure derivation.
+pub const MAX_POOL_CLOSURE_OUTPUTS: usize = 64;
 
 /// Facts the Worker resolved for one ready native goal. A bare
 /// `BuildRequest` cannot express pool placement requirements, so the executor
@@ -1441,6 +1454,20 @@ fn validate_pool_closure(closure: &[PoolClosureEntry]) -> Result<(), PreparedPoo
             !entry.derivation_json.is_empty() && entry.derivation_json.len() <= MAX_POOL_GOAL_DERIVATION_BYTES;
         if !has_path || !has_hdm || !has_bytes || !seen.insert(entry.drv_path.as_str()) {
             return Err(PreparedPoolGoalError::InvalidClosure);
+        }
+        if entry.outputs.len() > MAX_POOL_CLOSURE_OUTPUTS {
+            return Err(PreparedPoolGoalError::InvalidClosure);
+        }
+        let mut output_names = std::collections::BTreeSet::new();
+        for output in &entry.outputs {
+            let is_valid = !output.name.is_empty()
+                && output.name.len() <= MAX_POOL_GOAL_CAPABILITY_BYTES
+                && output.logical_path.starts_with('/')
+                && output.logical_path.len() <= MAX_POOL_GOAL_DRV_PATH_BYTES
+                && output_names.insert(output.name.as_str());
+            if !is_valid {
+                return Err(PreparedPoolGoalError::InvalidClosure);
+            }
         }
         total_bytes = total_bytes.saturating_add(entry.derivation_json.len());
     }
@@ -2681,6 +2708,28 @@ mod tests {
                 scratch_bytes: 1_024,
             },
         }
+    }
+
+    #[test]
+    fn prepared_goal_validates_resolved_closure_outputs() {
+        let mut facts = prepared_pool_goal_facts();
+        let mut entry = PoolClosureEntry {
+            drv_path: "/mantle/store/11111111111111111111111111111111-fixture.drv".to_string(),
+            hash_derivation_modulo: "0".repeat(64),
+            derivation_json: "{}".to_string(),
+            outputs: vec![PoolClosureOutput {
+                name: "out".to_string(),
+                logical_path: "/mantle/store/22222222222222222222222222222222-fixture".to_string(),
+            }],
+        };
+        facts.closure = vec![entry.clone()];
+        assert!(PreparedPoolGoal::new(facts.clone()).is_ok());
+        entry.outputs.push(PoolClosureOutput {
+            name: "out".to_string(),
+            logical_path: "/mantle/store/33333333333333333333333333333333-fixture".to_string(),
+        });
+        facts.closure = vec![entry];
+        assert_eq!(PreparedPoolGoal::new(facts).err(), Some(PreparedPoolGoalError::InvalidClosure));
     }
 
     #[test]
