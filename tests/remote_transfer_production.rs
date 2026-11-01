@@ -235,6 +235,53 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert_one_pool_outcome(&outcome.report);
 }
 
+/// Two trusted keys with the same name must fail pool admission before dispatch.
+#[test]
+fn production_pool_rejects_ambiguous_output_keys_before_dispatch() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool ambiguous key tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let build_file = root.path().join("goal.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&client_store).expect("client store");
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
+    write_replayable_derivation(&build_file);
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "/bin/true",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = [],
+      trusted_output_keys = [
+        {{ public_key_name = "cache.example.com-1", public_key_base64 = "AAAA" }},
+        {{ public_key_name = "cache.example.com-1", public_key_base64 = "BBBB" }},
+      ],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        digest = "0".repeat(64),
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let output = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &build_file)
+        .output()
+        .expect("run ambiguous-key pool build");
+    assert!(!output.status.success(), "ambiguous output keys must reject the pool");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("trusted output keys must be unique"), "unexpected failure: {stderr}");
+    assert_eq!(fs::read_dir(&client_store).expect("client store entries").count(), 0);
+}
+
 /// A second pool build of the same derivation must hit the client store cache
 /// without spawning another worker.
 #[test]
