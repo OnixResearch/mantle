@@ -795,6 +795,7 @@ fn request_contains_secret_material(request: &ConcreteBuildRequest) -> Result<bo
     }
     let nested = match &request.payload {
         crate::remote_build::RemoteConcreteBuildPayload::Derivation { drv_json, .. } => drv_json,
+        crate::remote_build::RemoteConcreteBuildPayload::NixDerivation { drv_json, .. } => drv_json,
         crate::remote_build::RemoteConcreteBuildPayload::Action { spec_json, .. } => spec_json,
     };
     let nested_value = serde_json::from_str::<serde_json::Value>(nested)

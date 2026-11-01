@@ -126,6 +126,7 @@ pub fn output_set_id<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<Str
 fn output_class(request: &ConcreteBuildRequest) -> &'static str {
     match request.payload {
         RemoteConcreteBuildPayload::Derivation { .. } => "derivation",
+        RemoteConcreteBuildPayload::NixDerivation { .. } => "nix-derivation",
         RemoteConcreteBuildPayload::Action { .. } => "action",
     }
 }
