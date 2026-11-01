@@ -3907,6 +3907,8 @@ impl Worker {
                 crate::distributed::PreparedPoolGoal::new(crate::distributed::PreparedPoolGoalFacts {
                     request: build_request.clone(),
                     action_ref: prepared.action_ref.clone(),
+                    derivation_json: serde_json::to_string(prepared.derivation.as_ref())
+                        .map_err(|error| Error::Store(format!("remote-pool:derivation-serialize:{error}")))?,
                     system: prepared.derivation.system.clone(),
                     required_features: Vec::new(),
                     required_sandbox_mode: builder.hermeticity_mode().as_str().to_string(),
@@ -6080,7 +6082,9 @@ mod tests {
                 goal: &crate::distributed::PreparedPoolGoal,
                 endpoint_ids: &[String],
             ) -> Result<usize, crate::distributed::PoolSelectionError> {
-                if goal.system.is_empty() || goal.required_sandbox_mode != "practical" {
+                let parsed = serde_json::from_str::<nix_compat::derivation::Derivation>(&goal.derivation_json)
+                    .map_err(|_| crate::distributed::PoolSelectionError::NoFit)?;
+                if goal.system.is_empty() || goal.required_sandbox_mode != "practical" || parsed.system != goal.system {
                     return Err(crate::distributed::PoolSelectionError::NoFit);
                 }
                 endpoint_ids

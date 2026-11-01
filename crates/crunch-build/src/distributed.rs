@@ -1277,6 +1277,10 @@ pub struct PreparedPoolGoal {
     pub request: snix_build::buildservice::BuildRequest,
     /// Canonical semantic action identity the Worker already resolved.
     pub action_ref: String,
+    /// The concrete derivation serialized canonically. A remote executor sends
+    /// this because a `BuildRequest` cannot express it and the Nickel closure is
+    /// not retained after conversion.
+    pub derivation_json: String,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
@@ -1295,6 +1299,8 @@ pub enum PreparedPoolGoalError {
     InvalidMode,
     #[error("prepared pool goal action identity is empty or too long")]
     InvalidActionIdentity,
+    #[error("prepared pool goal derivation payload is empty or too large")]
+    InvalidDerivationPayload,
     #[error("prepared pool goal declares too many features or classes")]
     TooManyCapabilities,
     #[error("prepared pool goal capability name is empty or too long")]
@@ -1305,6 +1311,8 @@ pub const MAX_POOL_GOAL_CAPABILITIES: usize = 32;
 pub const MAX_POOL_GOAL_CAPABILITY_BYTES: usize = 128;
 pub const MAX_POOL_GOAL_SYSTEM_BYTES: usize = 128;
 pub const MAX_POOL_GOAL_ACTION_REF_BYTES: usize = 512;
+/// Matches the remote build payload bound.
+pub const MAX_POOL_GOAL_DERIVATION_BYTES: usize = 1_048_576;
 
 impl PreparedPoolGoal {
     pub fn new(facts: PreparedPoolGoalFacts) -> Result<Self, PreparedPoolGoalError> {
@@ -1320,6 +1328,11 @@ impl PreparedPoolGoal {
         if !has_action {
             return Err(PreparedPoolGoalError::InvalidActionIdentity);
         }
+        let has_derivation =
+            !facts.derivation_json.is_empty() && facts.derivation_json.len() <= MAX_POOL_GOAL_DERIVATION_BYTES;
+        if !has_derivation {
+            return Err(PreparedPoolGoalError::InvalidDerivationPayload);
+        }
         let placement_key_blake3 = blake3::hash(facts.action_ref.as_bytes()).to_hex().to_string();
         let capability_count = facts.required_features.len() + facts.semantic_accelerator_classes.len();
         if capability_count > MAX_POOL_GOAL_CAPABILITIES {
@@ -1331,11 +1344,12 @@ impl PreparedPoolGoal {
         if !has_valid_names {
             return Err(PreparedPoolGoalError::InvalidCapabilityName);
         }
-        debug_assert!(has_system && has_modes && has_action);
+        debug_assert!(has_system && has_modes && has_action && has_derivation);
         debug_assert!(capability_count <= MAX_POOL_GOAL_CAPABILITIES);
         Ok(Self {
             request: facts.request,
             action_ref: facts.action_ref,
+            derivation_json: facts.derivation_json,
             system: facts.system,
             required_features: facts.required_features,
             required_sandbox_mode: facts.required_sandbox_mode,
@@ -1353,6 +1367,7 @@ impl PreparedPoolGoal {
 pub struct PreparedPoolGoalFacts {
     pub request: snix_build::buildservice::BuildRequest,
     pub action_ref: String,
+    pub derivation_json: String,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
@@ -2506,6 +2521,7 @@ mod tests {
         PreparedPoolGoalFacts {
             request: concrete_build_request(),
             action_ref: "action:fixture".to_string(),
+            derivation_json: "{\"name\":\"fixture\"}".to_string(),
             system: "x86_64-linux".to_string(),
             required_features: vec!["native-compile".to_string()],
             required_sandbox_mode: "practical".to_string(),
@@ -2534,6 +2550,10 @@ mod tests {
         assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidActionIdentity));
 
         facts.action_ref = "action:fixture".to_string();
+        facts.derivation_json = String::new();
+        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidDerivationPayload));
+
+        facts.derivation_json = "{\"name\":\"fixture\"}".to_string();
         facts.required_features = vec![String::new()];
         assert_eq!(PreparedPoolGoal::new(facts).err(), Some(PreparedPoolGoalError::InvalidCapabilityName));
 
