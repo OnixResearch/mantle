@@ -235,6 +235,46 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert_one_pool_outcome(&outcome.report);
 }
 
+/// Single-builder and pool builds of the same derivation must produce identical
+/// output bytes.
+#[test]
+fn production_single_builder_and_pool_outputs_match() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("single builder comparison tempdir");
+    let state_dir = root.path().join("state");
+    let store_dir = root.path().join("store");
+    let build_file = root.path().join("single.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&store_dir).expect("store dir");
+    write_ticket_state(&state_dir);
+    write_replayable_derivation(&build_file);
+    let output = remote_build_command(&state_dir, &store_dir, &build_file)
+        .output()
+        .expect("run single-builder build");
+    assert!(output.status.success(), "single-builder build failed: {}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("single-builder JSON report");
+    let reported = Path::new(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("output path"));
+    let single_path = if reported.exists() {
+        reported.to_path_buf()
+    } else {
+        Path::new(report["output_dir"].as_str().expect("output dir"))
+            .join(reported.file_name().expect("output basename"))
+    };
+    let single_bytes = fs::read(&single_path).expect("single-builder output bytes");
+    let pool_outcome = run_single_endpoint_pool_build(_guard, write_replayable_derivation);
+    let pool_report = &pool_outcome.report;
+    let reported = Path::new(pool_report["outcomes"][0]["outputs"][0]["path"].as_str().expect("pool output path"));
+    let pool_path = if reported.exists() {
+        reported.to_path_buf()
+    } else {
+        Path::new(pool_report["output_dir"].as_str().expect("pool output dir"))
+            .join(reported.file_name().expect("output basename"))
+    };
+    let pool_bytes = fs::read(&pool_path).expect("pool output bytes");
+    assert!(!single_bytes.is_empty());
+    assert_eq!(pool_bytes, single_bytes, "pool output must match the single-builder build");
+}
+
 /// Local and pool builds of the same derivation must produce identical output
 /// bytes.
 #[test]
