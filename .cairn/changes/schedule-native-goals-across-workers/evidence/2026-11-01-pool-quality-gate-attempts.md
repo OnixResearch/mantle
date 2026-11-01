@@ -36,9 +36,18 @@ is still pending; each attempt reached a new leg.
   root, so the linker's `mktemp` failed. The test now creates those private
   directories; it passes.
 
-## Remaining
+## Green run
 
-A full green run is still pending. The last attempt stopped at
-`mantle-rust-differential`; earlier attempts stopped at `cargo_free_self_build_cli`
-and `wasm_component_cli`, all addressed above. The run takes roughly 100-110
-minutes in this workspace.
+`./scripts/check-first-party-quality.sh` completed with exit 0 after 6,280 s:
+226 `test result: ok` lines, zero `test result: FAILED`, zero panics, and the
+gcc40 configure bridge self-test PASS. The run used the environment listed
+above plus the two test fixes (`9378392cc`, `dc2d1c08d`).
+
+## Notes
+
+- Earlier attempts stopped at `cargo_free_self_build_cli`, `wasm_component_cli`,
+  `operator_diagnostics`, and `mantle-rust-differential`; the first two were
+  missing tools, the third was the real operator-contract drift, and the fourth
+  was a pre-existing test defect.
+- The gate is not runnable without the toolchain additions; a bare devshell
+  environment fails before reaching the pool-related tests.
