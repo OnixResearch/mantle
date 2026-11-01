@@ -4,6 +4,7 @@
 //! transfer capability into each endpoint executor and builds the selector from
 //! the admitted pool and the caller's scheduling preference order.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -159,6 +160,110 @@ impl PoolGoalSelector for PoolPolicySelector {
             }
             GoalPlacement::Unplaceable { .. } => Err(PoolSelectionError::NoFit),
         }
+    }
+}
+
+/// Inputs for constructing the factory from operator configuration.
+pub struct PoolFactoryInput<'a> {
+    pub farm_path: &'a Path,
+    pub pool_id: &'a str,
+    pub bindings: &'a crate::remote_build::endpoint_config::RemoteEndpointBindingConfig,
+    pub ticket_fds: &'a [String],
+    pub store_prefix: &'a str,
+    pub state_dir: &'a Path,
+    pub now_unix_s: u64,
+    pub build_time_limit_secs: u64,
+    pub preferences: Vec<PlacementPreference>,
+}
+
+/// Project the configured pool, admit it against current bindings and caller
+/// descriptors, and build the per-endpoint plans the factory needs.
+pub fn plan_pool_factory(input: PoolFactoryInput<'_>) -> Result<RemotePoolExecutorFactory, crate::errors::RunError> {
+    let farm = crate::remote_farm_config::load_remote_build_farm_config(input.farm_path)
+        .map_err(|reason| crate::errors::RunError::Internal(format!("remote-pool:config-invalid:{reason}")))?;
+    let pool = farm
+        .pools
+        .iter()
+        .find(|pool| pool.pool_id == input.pool_id)
+        .ok_or_else(|| crate::errors::RunError::Internal("remote-pool:pool-unknown".to_string()))?;
+    let selection = crate::remote_build::pool_config::project_pool_selection(&farm, input.pool_id, input.bindings)?;
+    let parsed = crate::remote_build::pool_config::parse_pool_ticket_fds(input.ticket_fds)?;
+    crate::remote_build::pool_config::verify_owned_descriptors(&parsed)?;
+    let mut fds = std::collections::BTreeMap::new();
+    for entry in &parsed {
+        fds.insert(entry.endpoint_name.clone(), entry.fd);
+    }
+    let credentials = pool
+        .endpoints
+        .iter()
+        .map(|endpoint| crunch_remote_core::pool::CallerCredential {
+            endpoint_name: endpoint.endpoint_id.clone(),
+            reference: endpoint.credential_reference.clone(),
+        })
+        .collect::<Vec<_>>();
+    let records = crate::remote_build::endpoint::EndpointBindingStore::open(&input.bindings.endpoint_state_directory)?
+        .records()?;
+    let table = crunch_remote_core::endpoint::EndpointBindingTable::from_records(records)
+        .map_err(|_| crate::errors::RunError::Internal("remote-pool:binding-table-invalid".to_string()))?;
+    let admitted = crunch_remote_core::pool::admits_pool(&selection, &table, &credentials, input.now_unix_s)
+        .map_err(|error| crate::errors::RunError::Internal(format!("remote-pool:{error:?}")))?;
+    let mut plans = Vec::with_capacity(pool.endpoints.len());
+    for endpoint in &pool.endpoints {
+        let fd = *fds
+            .get(&endpoint.endpoint_id)
+            .ok_or_else(|| crate::errors::RunError::Internal("remote-pool:pool-credential-missing".to_string()))?;
+        let ticket = crate::remote_build::read_remote_ticket_credential_from_owned_fd(fd)
+            .map_err(crate::errors::RunError::Internal)?;
+        let binding = input.bindings.build_endpoint(&endpoint.endpoint_id).ok_or_else(|| {
+            crate::errors::RunError::Internal("remote-pool:pool-endpoint-binding-missing".to_string())
+        })?;
+        let options = RemoteClientBuildOptions {
+            store_prefix: input.store_prefix.to_string(),
+            endpoint_binding: Some(binding.endpoint_binding.clone()),
+            ticket,
+            builder: crate::remote_build::RemoteStdioBuilderCommand {
+                endpoint_id: endpoint.endpoint_id.clone(),
+                program: PathBuf::from(&endpoint.transport_program),
+                args: endpoint.transport_args.clone(),
+            },
+            trusted_output_keys: endpoint.trusted_output_keys.iter().map(|key| key.public_key_name.clone()).collect(),
+            now_unix_s: input.now_unix_s,
+            build_time_limit_secs: input.build_time_limit_secs,
+            client_endpoint: None,
+            transfer_capabilities: crate::remote_build::RemoteTransferCapabilities::full_only().with_streaming(),
+        };
+        plans.push(PoolEndpointPlan {
+            endpoint_name: endpoint.endpoint_id.clone(),
+            options,
+            worker_generation: endpoint.profile.worker_generation,
+            worker_concurrency: endpoint.profile.max_concurrency,
+            resource_inventory: endpoint.profile.resource_inventory.clone(),
+            failure_debug: RemoteFailureDebugPolicy::default(),
+            transfer_policy: RemoteTransferPolicy::default(),
+            state_dir: input.state_dir.to_path_buf(),
+            capabilities: DeclaredCapabilities {
+                system: endpoint.profile.system.clone(),
+                sandbox_mode: sandbox_mode_name(endpoint.profile.sandbox_mode).to_string(),
+                network_mode: network_mode_name(endpoint.profile.network_mode).to_string(),
+                features: endpoint.profile.features.clone(),
+            },
+        });
+    }
+    RemotePoolExecutorFactory::new(admitted, plans, input.preferences).map_err(crate::errors::RunError::Internal)
+}
+
+fn sandbox_mode_name(mode: crate::remote_farm_config::RemoteSandboxMode) -> &'static str {
+    match mode {
+        crate::remote_farm_config::RemoteSandboxMode::Practical => "practical",
+        crate::remote_farm_config::RemoteSandboxMode::Strict => "strict",
+    }
+}
+
+fn network_mode_name(mode: crate::remote_farm_config::RemoteNetworkMode) -> &'static str {
+    match mode {
+        crate::remote_farm_config::RemoteNetworkMode::None => "none",
+        crate::remote_farm_config::RemoteNetworkMode::Local => "local",
+        crate::remote_farm_config::RemoteNetworkMode::Full => "full",
     }
 }
 

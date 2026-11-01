@@ -164,6 +164,7 @@ pub fn cmd_build(
     compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
     rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
+    pool_executor_factory: Option<std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>>,
 ) -> Result<(), RunError> {
     cmd_build_with_source_fetch_overrides(
         file,
@@ -190,6 +191,7 @@ pub fn cmd_build(
         compile_driver_runtime,
         rust_wait_runtime,
         source_admission,
+        pool_executor_factory,
     )
 }
 
@@ -225,6 +227,7 @@ pub fn cmd_build_with_source_fetch_overrides(
     compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
     rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
+    pool_executor_factory: Option<std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>>,
 ) -> Result<(), RunError> {
     if let Some(runtime) = &rust_wait_runtime {
         if hermeticity_mode == HermeticityMode::Strict {
@@ -267,6 +270,7 @@ pub fn cmd_build_with_source_fetch_overrides(
     )?;
     config.compile_driver_runtime = compile_driver_runtime;
     config.rust_wait_runtime = rust_wait_runtime;
+    config.pool_executor_factory = pool_executor_factory;
     if output_mode.is_evaluation_stream() {
         let completion = run_build_with_evaluation_stream(&config, StreamReporting { fix, logs_dir })?;
         return evaluation_stream_process_result(&completion);

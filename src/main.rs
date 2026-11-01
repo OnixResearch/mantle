@@ -663,6 +663,25 @@ enum Command {
         /// propagation.
         #[arg(long, requires = "builder")]
         remote_observability_config: Option<PathBuf>,
+
+        /// Explicitly selected native worker pool for ready-goal dispatch
+        #[arg(
+            long,
+            conflicts_with_all = [
+                "builder", "watch", "plan", "impure", "strict_hermetic",
+                "evaluation_stream", "compile_driver_runtime", "rust_wait_diagnostics",
+                "offline_source_preflight", "fix",
+            ]
+        )]
+        builder_pool: Option<String>,
+
+        /// Evaluated Nickel remote-builders configuration for pool selection
+        #[arg(long, requires = "builder_pool")]
+        builder_config: Option<PathBuf>,
+
+        /// Caller-owned bearer descriptor for one pool endpoint; repeat per endpoint
+        #[arg(long = "builder-ticket-fd", value_name = "ENDPOINT=FD", requires = "builder_pool")]
+        builder_ticket_fds: Vec<String>,
     },
 
     /// Build a portable WebAssembly component through the pinned production cohort.
@@ -5548,6 +5567,9 @@ struct BuildCommandInput<'a> {
     remote_build_time_secs: u64,
     remote_delta: bool,
     remote_observability_config: Option<&'a Path>,
+    builder_pool: Option<&'a str>,
+    builder_config: Option<&'a Path>,
+    builder_ticket_fds: &'a [String],
 }
 
 fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
@@ -5589,6 +5611,9 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         remote_build_time_secs,
         remote_delta,
         remote_observability_config,
+        builder_pool,
+        builder_config,
+        builder_ticket_fds,
     } = command
     else {
         return Err(RunError::Internal("build helper requires a build command".to_string()));
@@ -5637,6 +5662,9 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         remote_build_time_secs: *remote_build_time_secs,
         remote_delta: *remote_delta,
         remote_observability_config: remote_observability_config.as_deref(),
+        builder_pool: builder_pool.as_deref(),
+        builder_config: builder_config.as_deref(),
+        builder_ticket_fds,
     })
 }
 
@@ -5673,6 +5701,7 @@ struct PreparedBuildCommand<'a> {
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     remote_plan_facts: Option<realization_routing::RemoteBuilderPlanFacts>,
     remote_selection: Option<RemoteBuildSelection>,
+    pool_executor_factory: Option<std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>>,
 }
 
 fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> Result<(), RunError> {
@@ -5718,7 +5747,36 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
         &ctx.base_state_dirs,
         ctx.store_source_admission().as_deref(),
     )?;
+    let pool_executor_factory = match (input.builder_pool, input.builder_config) {
+        (Some(pool_id), Some(farm_path)) => {
+            let bindings = ctx.required_remote_binding()?;
+            let factory = crate::remote_build::pool_factory::plan_pool_factory(
+                crate::remote_build::pool_factory::PoolFactoryInput {
+                    farm_path,
+                    pool_id,
+                    bindings,
+                    ticket_fds: input.builder_ticket_fds,
+                    store_prefix: &ctx.store_prefix,
+                    state_dir: &ctx.resolved_state_dir,
+                    now_unix_s: unix_time_now_s()?,
+                    build_time_limit_secs: input.remote_build_time_secs,
+                    preferences: vec![
+                        crunch_remote_core::resource::PlacementPreference::ResourceFit,
+                        crunch_remote_core::resource::PlacementPreference::LocalityTransfer,
+                    ],
+                },
+            )?;
+            Some(std::sync::Arc::new(factory) as std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>)
+        }
+        (None, None) => None,
+        _ => {
+            return Err(RunError::Build(
+                "--builder-pool requires --builder-config and --builder-ticket-fd".to_string(),
+            ));
+        }
+    };
     let mut prepared = prepare_build_command(ctx, input)?;
+    prepared.pool_executor_factory = pool_executor_factory;
     prepared.rust_wait_runtime = prepared.rust_wait_runtime.take().and_then(|runtime| {
         match crunch_rustc_wrapper::observed_process::private_dir(&runtime.directory) {
             Ok(()) => Some(runtime),
@@ -5890,6 +5948,7 @@ fn prepare_build_command<'a>(
         hermeticity_mode: select_hermeticity_mode(input.hermeticity)?,
         remote_plan_facts,
         remote_selection,
+        pool_executor_factory: None,
     })
 }
 
@@ -6042,6 +6101,7 @@ fn run_local_file_build(
             prepared.compile_driver_runtime.clone(),
             prepared.rust_wait_runtime.clone(),
             prepared.ctx.store_source_admission(),
+            prepared.pool_executor_factory.clone(),
         );
     }
     build_cmd::cmd_build(
@@ -6066,6 +6126,7 @@ fn run_local_file_build(
         prepared.compile_driver_runtime.clone(),
         prepared.rust_wait_runtime.clone(),
         prepared.ctx.store_source_admission(),
+        prepared.pool_executor_factory.clone(),
     )
 }
 
@@ -9658,6 +9719,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.prepared.compile_driver_runtime.clone(),
         request.prepared.rust_wait_runtime.clone(),
         request.prepared.ctx.store_source_admission(),
+        request.prepared.pool_executor_factory.clone(),
     )
 }
 
