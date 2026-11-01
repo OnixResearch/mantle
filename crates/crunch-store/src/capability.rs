@@ -346,6 +346,16 @@ pub struct OwnedTransferObjectStore {
 }
 
 impl OwnedTransferObjectStore {
+    /// Configured logical store prefix.
+    pub fn store_dir(&self) -> &str {
+        &self.store_dir
+    }
+
+    /// Configured physical output directory.
+    pub fn output_dir_str(&self) -> &str {
+        &self.output_dir
+    }
+
     /// Render a castore node as a NAR stream.
     pub async fn render_nar<W: tokio::io::AsyncWrite + Unpin + Send>(
         &self,

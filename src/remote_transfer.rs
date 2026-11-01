@@ -511,7 +511,7 @@ fn prepare_inline_transfer_artifact(
 }
 
 pub struct NarNodeTransferArtifactRequest<'a> {
-    store: &'a crunch_store::TransferObjectStore<'a>,
+    store: &'a crunch_store::OwnedTransferObjectStore,
     node: &'a snix_castore::Node,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &'a Path,
@@ -526,7 +526,7 @@ pub struct NarNodeTransferArtifactRequest<'a> {
     reason = "stable NAR shell API delegates immediately to the named node artifact request"
 )]
 pub async fn prepare_nar_node_transfer_artifact(
-    store: &crunch_store::TransferObjectStore<'_>,
+    store: &crunch_store::OwnedTransferObjectStore,
     node: &snix_castore::Node,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
@@ -574,7 +574,7 @@ async fn prepare_nar_node_transfer_artifact_request(
 }
 
 pub struct NarTransferArtifactRequest<'a> {
-    store: &'a crunch_store::TransferObjectStore<'a>,
+    store: &'a crunch_store::OwnedTransferObjectStore,
     path_info: &'a PathInfo,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &'a Path,
@@ -589,7 +589,7 @@ pub struct NarTransferArtifactRequest<'a> {
     reason = "stable PathInfo NAR API delegates immediately to the named artifact request"
 )]
 pub async fn prepare_nar_transfer_artifact(
-    store: &crunch_store::TransferObjectStore<'_>,
+    store: &crunch_store::OwnedTransferObjectStore,
     path_info: &PathInfo,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
@@ -630,7 +630,7 @@ async fn prepare_nar_transfer_artifact_request(
 }
 
 pub async fn prepare_castore_blob_transfer_artifact(
-    store: &crunch_store::TransferObjectStore<'_>,
+    store: &crunch_store::OwnedTransferObjectStore,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
     is_required_for_completion: bool,
@@ -662,7 +662,7 @@ pub async fn prepare_castore_blob_transfer_artifact(
 }
 
 pub async fn prepare_castore_directory_transfer_artifact(
-    store: &crunch_store::TransferObjectStore<'_>,
+    store: &crunch_store::OwnedTransferObjectStore,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
     is_required_for_completion: bool,
@@ -2810,7 +2810,7 @@ mod tests {
             ca: None,
         };
         let spool = root.path().join("spool");
-        let transfers = store.transfer_objects();
+        let transfers = store.owned_transfer_objects();
         let policy = RemoteTransferPolicy::default();
         let blob = prepare_castore_blob_transfer_artifact(&transfers, blob_digest, &spool, true, policy).await.unwrap();
         let directory = prepare_castore_directory_transfer_artifact(&transfers, directory_digest, &spool, true, policy)

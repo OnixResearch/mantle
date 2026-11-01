@@ -302,7 +302,7 @@ pub(crate) async fn realize_foreign_plan(
         compile_driver_runtime: None,
         rust_wait_runtime: None,
         interchange_dir: None,
-            pool_executor_factory: None,
+        pool_executor_factory: None,
     };
     let build_result =
         crunch_pipeline::build_registered_derivations(&build_config, store, &mut registry, RegisteredBuildRequest {

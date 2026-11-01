@@ -6706,7 +6706,7 @@ async fn prepare_remote_failure_replay_runtime(
     }
     let replay_request = dispatch.client.request.clone();
     if let Err(error) = remote_build::prepare_remote_production_input_transfer(
-        &store,
+        &store.owned_transfer_objects(),
         &mut dispatch.command,
         &replay_request,
         input.state_dir,
@@ -7618,7 +7618,7 @@ async fn execute_remote_dispatch(
     debug_assert_eq!(input.prepared.request.request_id, input.prepared.plan.client.request.request_id);
     debug_assert!(!input.prepared.plan.client.trusted_output_keys.is_empty());
     remote_build::prepare_remote_production_input_transfer(
-        input.store,
+        &input.store.owned_transfer_objects(),
         &mut input.prepared.plan.command,
         &input.prepared.request,
         input.state_dir,

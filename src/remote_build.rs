@@ -3261,7 +3261,7 @@ pub fn set_remote_diagnostic_trace_context(
 }
 
 pub async fn prepare_remote_production_input_transfer(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::OwnedTransferObjectStore,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
@@ -3319,7 +3319,7 @@ pub async fn prepare_remote_production_input_transfer(
 }
 
 struct RemoteInputNarPrepareContext<'a> {
-    store: &'a crunch_store::StoreHandle,
+    store: &'a crunch_store::OwnedTransferObjectStore,
     request: &'a ConcreteBuildRequest,
     source_state_dir: &'a Path,
     spool_dir: &'a Path,
@@ -3331,35 +3331,35 @@ async fn prepare_remote_input_nar_artifact(
     input_ref: &str,
 ) -> Result<crate::remote_transfer::PreparedRemoteTransferArtifact, String> {
     let source_scratch;
-    let host_path = match remote_input_ref_host_path(context.store, &context.request.store_prefix, input_ref) {
-        Ok(path) => path,
-        Err(reason) if reason == "remote-input-source-path-missing" => {
-            source_scratch = tempfile::Builder::new()
-                .prefix("mantle-remote-streamed-source-input-")
-                .tempdir()
-                .map_err(|err| format!("remote-input-source-state-scratch-failed: {err}"))?;
-            let is_materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
-                context.source_state_dir,
-                &context.request.store_prefix,
-                input_ref,
-                source_scratch.path(),
-            )
-            .map_err(|err| format!("remote-input-source-state-materialize-failed: {err}"))?;
-            if !is_materialized {
-                return Err("remote-input-source-path-missing".to_string());
+    let host_path =
+        match remote_input_ref_host_path(context.store.output_dir_str(), &context.request.store_prefix, input_ref) {
+            Ok(path) => path,
+            Err(reason) if reason == "remote-input-source-path-missing" => {
+                source_scratch = tempfile::Builder::new()
+                    .prefix("mantle-remote-streamed-source-input-")
+                    .tempdir()
+                    .map_err(|err| format!("remote-input-source-state-scratch-failed: {err}"))?;
+                let is_materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
+                    context.source_state_dir,
+                    &context.request.store_prefix,
+                    input_ref,
+                    source_scratch.path(),
+                )
+                .map_err(|err| format!("remote-input-source-state-materialize-failed: {err}"))?;
+                if !is_materialized {
+                    return Err("remote-input-source-path-missing".to_string());
+                }
+                source_scratch.path().to_path_buf()
             }
-            source_scratch.path().to_path_buf()
-        }
-        Err(reason) => return Err(reason),
-    };
+            Err(reason) => return Err(reason),
+        };
     let node = context
         .store
-        .transfer_objects()
         .ingest_host_path(&host_path)
         .await
         .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
-        &context.store.transfer_objects(),
+        context.store,
         &node,
         remote_input_nar_artifact_id(input_ref)?,
         context.spool_dir,
@@ -3879,7 +3879,7 @@ pub fn validate_remote_source_upload_record(
 }
 
 fn remote_input_ref_host_path(
-    store: &crunch_store::StoreHandle,
+    output_dir: &str,
     store_prefix: &str,
     input_ref: impl AsRef<str>,
 ) -> Result<PathBuf, String> {
@@ -3889,7 +3889,7 @@ fn remote_input_ref_host_path(
         return Ok(logical_path);
     }
     let store_path = parse_remote_output_store_path(input_ref, store_prefix)?;
-    let store_host_path = PathBuf::from(store_path.to_absolute_path_with_prefix(store.output_dir_str()));
+    let store_host_path = PathBuf::from(store_path.to_absolute_path_with_prefix(output_dir));
     if store_host_path.exists() {
         return Ok(store_host_path);
     }
@@ -3902,7 +3902,7 @@ async fn render_remote_input_nar_payload_for_ref(
     input_ref: &str,
     source_state_dir: Option<&Path>,
 ) -> Result<Vec<u8>, String> {
-    match remote_input_ref_host_path(store, &request.store_prefix, input_ref) {
+    match remote_input_ref_host_path(store.output_dir_str(), &request.store_prefix, input_ref) {
         Ok(host_path) => render_remote_input_nar_payload(store, &host_path).await,
         Err(err) if err == "remote-input-source-path-missing" => {
             render_remote_input_nar_payload_from_source_state(store, request, input_ref, source_state_dir).await
@@ -3962,7 +3962,7 @@ async fn materialize_remote_input_upload(
             return Err("remote-streamed-input-inline-artifact-forbidden".to_string());
         }
         for input_ref in &upload.refs {
-            remote_input_ref_host_path(store, &request.store_prefix, input_ref)
+            remote_input_ref_host_path(store.output_dir_str(), &request.store_prefix, input_ref)
                 .map_err(|_| "remote-streamed-input-materialization-missing".to_string())?;
         }
         assert!(upload.artifacts.is_empty());
@@ -4095,7 +4095,7 @@ async fn prepare_remote_production_output(
             policy,
         )?;
         let nar = crate::remote_transfer::prepare_nar_transfer_artifact(
-            &store.transfer_objects(),
+            &store.owned_transfer_objects(),
             path_info,
             remote_output_nar_artifact_id(&output.name, &output.logical_path)?,
             &spool_dir,
