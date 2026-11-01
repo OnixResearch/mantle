@@ -2361,7 +2361,8 @@ fn plan_remote_nix_derivation_payload(
         return Err("remote-derivation-path-store-prefix-mismatch".to_string());
     }
     validate_remote_payload_json_size(drv_json)?;
-    let nix_drv = parse_remote_derivation_json(drv_json)?;
+    let nix_drv = parse_remote_derivation_json(drv_json)
+        .map_err(|error| format!("remote-nix-derivation-json-invalid: {error}"))?;
     validate_remote_derivation_closure(closure, drv_path, drv_json, &nix_drv, &request.store_prefix)?;
     let declared: StorePath<String> =
         StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
