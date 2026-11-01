@@ -5864,6 +5864,7 @@ dependencies = [
  "artifact-auth-core",
  "artifact-auth-ed25519",
  "assert_cmd",
+ "async-trait",
  "basalt",
  "base64",
  "blake3",

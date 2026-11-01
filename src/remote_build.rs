@@ -155,6 +155,7 @@ pub mod endpoint_config;
 pub mod endpoint_service;
 pub mod live_state;
 pub mod pool_config;
+pub mod pool_goal_executor;
 
 pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_OBSERVABILITY_NON_CLAIM: &str = "remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism";
@@ -10619,7 +10620,7 @@ fn remote_loopback_client_for_request(
     client
 }
 
-fn remote_client_request_id(label: &str, drv_path: &StorePath<String>, store_prefix: &str) -> String {
+pub fn remote_client_request_id(label: &str, drv_path: &StorePath<String>, store_prefix: &str) -> String {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "kind", REMOTE_CLIENT_REQUEST_ID_LABEL);
     hash_labeled_str(&mut hasher, "label", label);
