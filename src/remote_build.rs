@@ -11329,6 +11329,31 @@ fn admit_fenced_remote_stdio_output_core(
     Ok(admission)
 }
 
+pub fn mark_remote_production_result_ready(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    output_digest_blake3: &str,
+    event_number: u64,
+) -> Result<(), String> {
+    let ready_event =
+        production_attempt_report(binding, "result-ready", event_number, RemoteAttemptReportPayload::ResultReady {
+            output_digest_blake3: output_digest_blake3.to_string(),
+        })?;
+    let applied = apply_coordinator_attempt_report(
+        state,
+        &ready_event,
+        RemoteAttemptAuthorizationFacts {
+            worker_authorized: true,
+            output_admission_authorized: true,
+        },
+        RemoteLogRetentionPolicy::default(),
+    )?;
+    if applied.disposition != RemoteAttemptApplyDisposition::Applied {
+        return Err(applied.reason_code.as_str().to_string());
+    }
+    Ok(())
+}
+
 pub fn complete_remote_production_attempt(
     state: &mut RemoteCoordinatorState,
     binding: &RemoteProductionAttemptBinding,
@@ -11931,7 +11956,7 @@ impl crunch_remote_app::StoreAdmissionPort for ProductionStoreAdmissionPort<'_> 
     }
 }
 
-fn plan_streamed_remote_output_import_action(
+pub(crate) fn plan_streamed_remote_output_import_action(
     request: &ConcreteBuildRequest,
     output: &RemoteProducedOutput,
     streaming: &RemoteStreamingOutputReceipt,

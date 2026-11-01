@@ -377,7 +377,7 @@ pub fn observed_capacity(
 
 /// Remeasure every selected endpoint's transport executable against its
 /// declared BLAKE3 identity. Nothing is executed or resolved through PATH.
-fn verify_transport_programs(pool: &RemoteBuilderPool) -> Result<Vec<VerifiedTransportProgram>, RunError> {
+pub(crate) fn verify_transport_programs(pool: &RemoteBuilderPool) -> Result<Vec<VerifiedTransportProgram>, RunError> {
     let mut verified = Vec::with_capacity(pool.endpoints.len());
     for endpoint in &pool.endpoints {
         let path = Path::new(&endpoint.transport_program);

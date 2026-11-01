@@ -95,6 +95,125 @@ const fn guard_is_held(_guard: &std::sync::MutexGuard<'static, ()>) -> bool {
     true
 }
 
+/// Pool mode: one admitted endpoint executes a ready goal through the ordinary
+/// Worker, using the same ticket, binding, and local-build receiver as the
+/// single-endpoint path.
+#[test]
+fn production_pool_dispatches_one_goal_through_the_worker() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool transfer tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let worker_store = root.path().join("worker-store");
+    let worker_state = root.path().join("worker-state");
+    let build_file = root.path().join("pool-goal.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&client_store).expect("client store");
+    fs::create_dir_all(&worker_store).expect("worker store");
+    fs::create_dir_all(&worker_state).expect("worker state");
+    write_ticket_state(&state_dir);
+    write_replayable_derivation(&build_file);
+
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    // The debug binary carries debug info far beyond the transport-program bound;
+    // a tiny exec wrapper is the exact transport executable the pool pins.
+    let wrapper = root.path().join("mantle-transport.sh");
+    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+    let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+    let binding_config = remote_binding_config_path(&state_dir);
+    let worker_args = vec![
+        "--state-dir".to_string(),
+        state_dir.display().to_string(),
+        "--store".to_string(),
+        worker_store.display().to_string(),
+        "--store-prefix".to_string(),
+        STORE_PREFIX.to_string(),
+        "--store-backend".to_string(),
+        "snix".to_string(),
+        "--remote-binding-config".to_string(),
+        binding_config.display().to_string(),
+        "remote".to_string(),
+        "serve".to_string(),
+        "--endpoint-id".to_string(),
+        BUILDER_ID.to_string(),
+        "--binding".to_string(),
+        "stdio-once".to_string(),
+        "--executor".to_string(),
+        "local-build".to_string(),
+        "--execution-state-dir".to_string(),
+        worker_state.display().to_string(),
+    ];
+    let args_json = serde_json::to_string(&worker_args).expect("worker args JSON");
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        binary = wrapper.display(),
+        digest = binary_digest,
+        args = args_json,
+        material = signing_material,
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+
+    let mut command = Command::new(&binary);
+    configure_test_sandbox_command(&mut command);
+    command.args([
+        "--json",
+        "--state-dir",
+        state_dir.to_str().expect("UTF-8 state dir"),
+        "--store",
+        client_store.to_str().expect("UTF-8 client store"),
+        "--store-prefix",
+        STORE_PREFIX,
+        "build",
+        build_file.to_str().expect("UTF-8 build file"),
+        "--no-substitute",
+        "--builder-pool",
+        "native-pool",
+        "--builder-config",
+        pool_config.to_str().expect("UTF-8 pool config"),
+        "--builder-ticket-fd",
+        &format!("{BUILDER_ID}={REMOTE_TICKET_INPUT_FD}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
+    command.arg("--remote-binding-config").arg(&binding_config);
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fd(&mut command, &state_dir);
+    let output = command.output().expect("run pool build");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+        let log = report["failed"][0]["saved_log_path"]
+            .as_str()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        panic!("pool build status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
+    }
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool build JSON report");
+    let outcomes = report["outcomes"].as_array().expect("outcomes array");
+    assert_eq!(outcomes.len(), 1, "one routed goal outcome: {report}");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+    assert!(outcomes[0]["outputs"].as_array().is_some_and(|outputs| !outputs.is_empty()));
+}
+
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let _guard = serial_transfer_guard();

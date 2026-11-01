@@ -148,7 +148,7 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             &plan.client.trusted_output_keys,
             endpoint.options.now_unix_s,
         )
-        .map_err(|error| pool_error(&error))?;
+        .map_err(|error| pool_error(&format!("admission:{error}")))?;
         save_coordinator_state(&endpoint.state_dir, &coordinator)
             .map_err(|error| io::Error::other(format!("remote-pool:coordinator-save:{error}")))?;
         bind_remote_production_dispatch(
@@ -186,18 +186,63 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             validate_remote_stdio_output_import(&plan.client.request, &plan.client.trusted_output_keys, &transcript)
                 .map_err(|error| pool_error(&error))?;
 
+        let transfer = endpoint.transfer.as_ref().ok_or_else(|| pool_error("transfer-capability-missing"))?;
+        let actions = match transcript.streaming_output.as_ref() {
+            Some(streaming) => admission
+                .outputs
+                .iter()
+                .map(|output| {
+                    crate::remote_build::plan_streamed_remote_output_import_action(
+                        &plan.client.request,
+                        output,
+                        streaming,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| pool_error(&error))?,
+            None => crate::remote_build::plan_remote_output_import_actions(&plan.client.request, &admission)
+                .map_err(|error| pool_error(&error))?,
+        };
+        let mut imported: Vec<(String, snix_castore::Node)> = Vec::with_capacity(actions.len());
+        for action in &actions {
+            let payload = match (&action.nar_payload, &action.nar_path) {
+                (Some(payload), _) => payload.clone(),
+                (None, Some(path)) => {
+                    let observed = std::fs::metadata(path)
+                        .map_err(|error| pool_error(&format!("output-nar-metadata:{error}")))?
+                        .len();
+                    if observed != action.path_info.nar_size {
+                        return Err(pool_error(&format!("output-nar-size-mismatch:{}", action.output_name)));
+                    }
+                    std::fs::read(path).map_err(|error| pool_error(&format!("output-nar-read:{error}")))?
+                }
+                (None, None) => {
+                    return Err(pool_error(&format!("output-nar-payload-missing:{}", action.output_name)));
+                }
+            };
+            let mut cursor = std::io::Cursor::new(payload.as_slice());
+            let (node, nar_sha256, nar_size) = transfer
+                .ingest_nar(&mut cursor, &action.path_info.ca)
+                .await
+                .map_err(|error| pool_error(&format!("output-nar-ingest:{error}")))?;
+            if nar_sha256 != action.path_info.nar_sha256 || nar_size != action.path_info.nar_size {
+                return Err(pool_error(&format!("output-nar-digest-mismatch:{}", action.output_name)));
+            }
+            transfer
+                .export_node_to_output(&node, &action.logical_path)
+                .await
+                .map_err(|error| pool_error(&format!("output-export:{error}")))?;
+            imported.push((action.logical_path.clone(), node));
+        }
         let mut outputs = Vec::with_capacity(goal.request.outputs.len());
         for relative in &goal.request.outputs {
             let suffix = format!("/{}", relative.to_string_lossy().trim_start_matches('/'));
-            let matched = admission
-                .outputs
+            let matched = imported
                 .iter()
-                .find(|output| output.logical_path.ends_with(&suffix))
+                .find(|(logical_path, _)| logical_path.ends_with(&suffix))
                 .ok_or_else(|| pool_error(&format!("output-missing:{suffix}")))?;
-            let path_info =
-                matched.path_info.as_ref().ok_or_else(|| pool_error(&format!("output-pathinfo-missing:{suffix}")))?;
             outputs.push(BuildOutput {
-                node: path_info.node.clone(),
+                node: matched.1.clone(),
                 output_needles: BTreeSet::new(),
             });
         }
@@ -205,15 +250,28 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             return Err(pool_error("output-count-mismatch"));
         }
 
-        let completed_unix_s =
+        let mut ready_unix_s =
             crate::remote_build::remote_cli_now_unix_s(&request_id).map_err(|error| pool_error(&error))?;
+        // The start event used the admission clock; later events must be strictly
+        // ordered even when the exchange finishes within the same second.
+        if ready_unix_s <= endpoint.options.now_unix_s {
+            ready_unix_s = endpoint.options.now_unix_s.saturating_add(1);
+        }
+        let completed_unix_s = ready_unix_s.saturating_add(1);
+        crate::remote_build::mark_remote_production_result_ready(
+            &mut coordinator,
+            &attempt,
+            &admission.output_digest_blake3,
+            ready_unix_s,
+        )
+        .map_err(|error| pool_error(&format!("result-ready:{error}")))?;
         complete_remote_production_attempt(
             &mut coordinator,
             &attempt,
             &admission.output_digest_blake3,
             completed_unix_s,
         )
-        .map_err(|error| pool_error(&error))?;
+        .map_err(|error| pool_error(&format!("completion:{error}")))?;
         save_coordinator_state(&endpoint.state_dir, &coordinator)
             .map_err(|error| io::Error::other(format!("remote-pool:coordinator-save:{error}")))?;
         Ok(BuildResult {

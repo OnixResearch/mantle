@@ -284,6 +284,29 @@ pub(crate) struct PreparedBuild {
 /// Collect the derivation closure the Worker already knows: the root plus every
 /// transitive input derivation present in the registry. Missing entries are
 /// skipped; a receiver that needs them fails closed rather than guessing.
+fn closure_hdm_for(
+    path: &str,
+    derivations: &std::collections::BTreeMap<String, std::sync::Arc<Derivation>>,
+    store_dir: &str,
+    memo: &std::cell::RefCell<std::collections::BTreeMap<String, [u8; 32]>>,
+) -> [u8; 32] {
+    if let Some(value) = memo.borrow().get(path) {
+        return *value;
+    }
+    let Some(derivation) = derivations.get(path) else {
+        return [0u8; 32];
+    };
+    let value = derivation.hash_derivation_modulo_with_store_dir(
+        |input| {
+            let input_abs = input.to_absolute_path_with_prefix(store_dir);
+            closure_hdm_for(&input_abs, derivations, store_dir, memo)
+        },
+        store_dir,
+    );
+    memo.borrow_mut().insert(path.to_string(), value);
+    value
+}
+
 fn collect_pool_closure(
     root_path: &StorePath<String>,
     root: &Derivation,
@@ -292,47 +315,62 @@ fn collect_pool_closure(
 ) -> Vec<crate::distributed::PoolClosureEntry> {
     use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
     use crate::distributed::MAX_POOL_GOAL_CLOSURE_ENTRIES;
-    let mut entries = Vec::new();
+    let mut collected: Vec<(String, std::sync::Arc<Derivation>)> = Vec::new();
     let mut seen = BTreeSet::new();
     let mut pending = vec![root_path.clone()];
-    let mut total_bytes = 0_usize;
-    let mut root_derivation = Some(root);
+    let mut root_taken = false;
     while let Some(path) = pending.pop() {
-        if entries.len() >= MAX_POOL_GOAL_CLOSURE_ENTRIES {
+        if collected.len() >= MAX_POOL_GOAL_CLOSURE_ENTRIES {
             break;
         }
         let absolute = path.to_absolute_path_with_prefix(store_dir);
         if !seen.insert(absolute.clone()) {
             continue;
         }
-        let (derivation, hdm) = match (registry.get_by_drv_path(&absolute), registry.get_hdm_by_drv_path(&absolute)) {
-            (Some(entry), Some(hdm)) => (entry.derivation.clone(), hdm),
-            _ => match root_derivation.take() {
-                Some(derivation) if path == *root_path => {
-                    let hdm = derivation.hash_derivation_modulo(|input| {
-                        registry
-                            .get_hdm_by_drv_path(&input.to_absolute_path_with_prefix(store_dir))
-                            .unwrap_or([0u8; 32])
-                    });
-                    (std::sync::Arc::new(derivation.clone()), hdm)
-                }
-                _ => continue,
-            },
+        let derivation = match registry.get_by_drv_path(&absolute) {
+            Some(entry) => entry.derivation.clone(),
+            None if path == *root_path && !root_taken => {
+                root_taken = true;
+                std::sync::Arc::new(root.clone())
+            }
+            None => continue,
         };
-        let Ok(derivation_json) = serde_json::to_string(derivation.as_ref()) else {
-            continue;
-        };
-        total_bytes = total_bytes.saturating_add(derivation_json.len());
-        if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
-            break;
-        }
         for input in derivation.input_derivations.keys() {
             pending.push(input.clone());
         }
+        collected.push((absolute, derivation));
+    }
+    // Compute derivation-modulo hashes from the closure itself with the client
+    // store prefix, so the receiver recomputes the same identities.
+    let mut hdm_by_path = std::collections::BTreeMap::new();
+    let mut json_by_path = std::collections::BTreeMap::new();
+    for (path, derivation) in &collected {
+        let Ok(json) = serde_json::to_string(derivation.as_ref()) else {
+            continue;
+        };
+        json_by_path.insert(path.clone(), json);
+    }
+    let derivations: std::collections::BTreeMap<String, std::sync::Arc<Derivation>> =
+        collected.iter().cloned().collect();
+    let hdm_memo = std::cell::RefCell::new(std::collections::BTreeMap::new());
+    for path in derivations.keys() {
+        closure_hdm_for(path, &derivations, store_dir, &hdm_memo);
+    }
+    hdm_by_path.extend(hdm_memo.into_inner());
+    let mut entries = Vec::with_capacity(collected.len());
+    let mut total_bytes = 0_usize;
+    for (path, _) in &collected {
+        let (Some(json), Some(hdm)) = (json_by_path.get(path), hdm_by_path.get(path)) else {
+            continue;
+        };
+        total_bytes = total_bytes.saturating_add(json.len());
+        if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
+            break;
+        }
         entries.push(crate::distributed::PoolClosureEntry {
-            drv_path: absolute,
-            hash_derivation_modulo: data_encoding::HEXLOWER.encode(&hdm),
-            derivation_json,
+            drv_path: path.clone(),
+            hash_derivation_modulo: data_encoding::HEXLOWER.encode(hdm),
+            derivation_json: json.clone(),
         });
     }
     debug_assert!(entries.len() <= MAX_POOL_GOAL_CLOSURE_ENTRIES);

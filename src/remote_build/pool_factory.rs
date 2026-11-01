@@ -207,6 +207,7 @@ pub fn plan_pool_factory(input: PoolFactoryInput<'_>) -> Result<RemotePoolExecut
         .map_err(|_| crate::errors::RunError::Internal("remote-pool:binding-table-invalid".to_string()))?;
     let admitted = crunch_remote_core::pool::admits_pool(&selection, &table, &credentials, input.now_unix_s)
         .map_err(|error| crate::errors::RunError::Internal(format!("remote-pool:{error:?}")))?;
+    crate::remote_build::pool_config::verify_transport_programs(pool)?;
     let mut plans = Vec::with_capacity(pool.endpoints.len());
     for endpoint in &pool.endpoints {
         let fd = *fds
