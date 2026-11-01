@@ -263,8 +263,24 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             })?;
             admitted.ok_or_else(|| pool_error("admission-binding-missing"))?
         };
+        let result = self.run_admitted_goal(&goal, &mut plan, &attempt).await;
+        if result.is_err() {
+            self.settle_failed_attempt(&attempt).await;
+        }
+        result
+    }
+}
+
+impl RemotePoolGoalExecutor {
+    async fn run_admitted_goal(
+        &self,
+        goal: &PreparedPoolGoal,
+        plan: &mut crate::remote_build::RemoteClientDispatchPlan,
+        attempt: &crate::remote_build::RemoteProductionAttemptBinding,
+    ) -> io::Result<BuildResult> {
+        let endpoint = &self.endpoint;
         bind_remote_production_dispatch(
-            &mut plan,
+            plan,
             attempt.clone(),
             endpoint.transfer_policy,
             endpoint.failure_debug.clone(),
@@ -405,18 +421,34 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
         save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
             crate::remote_build::mark_remote_production_result_ready(
                 coordinator,
-                &attempt,
+                attempt,
                 &admission.output_digest_blake3,
                 ready_unix_s,
             )
             .map_err(|error| pool_error(&format!("result-ready:{error}")))?;
-            complete_remote_production_attempt(coordinator, &attempt, &admission.output_digest_blake3, completed_unix_s)
+            complete_remote_production_attempt(coordinator, attempt, &admission.output_digest_blake3, completed_unix_s)
                 .map_err(|error| pool_error(&format!("completion:{error}")))
         })?;
         Ok(BuildResult {
             outputs,
             log: Some(transcript.stderr_summary),
         })
+    }
+
+    /// Settle the current attempt after a failed exchange so its concurrency
+    /// slot and lease do not outlive the goal. Best effort: the original
+    /// failure remains the reported outcome.
+    async fn settle_failed_attempt(&self, attempt: &crate::remote_build::RemoteProductionAttemptBinding) {
+        let endpoint = &self.endpoint;
+        let mut failed_unix_s = crate::remote_build::remote_cli_now_unix_s("pool-failure-settlement")
+            .unwrap_or_else(|_| endpoint.options.now_unix_s.saturating_add(1));
+        if failed_unix_s <= endpoint.options.now_unix_s {
+            failed_unix_s = endpoint.options.now_unix_s.saturating_add(1);
+        }
+        let _ = save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
+            crate::remote_build::fail_remote_production_attempt(coordinator, attempt, failed_unix_s)
+                .map_err(|error| pool_error(&format!("failure-settlement:{error}")))
+        });
     }
 }
 
