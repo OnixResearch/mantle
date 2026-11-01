@@ -795,6 +795,7 @@ fn run_two_worker_pool_build(
     _guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
     lifecycle_log: Option<&Path>,
+    max_jobs: Option<u32>,
 ) -> PoolDiamondOutcome {
     let root = tempfile::tempdir().expect("pool diamond tempdir");
     let state_dir = root.path().join("state");
@@ -923,6 +924,9 @@ fn run_two_worker_pool_build(
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
     ]);
+    if let Some(jobs) = max_jobs {
+        command.args(["--jobs", &jobs.to_string()]);
+    }
     command.arg("--remote-binding-config").arg(&binding_config);
     command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
     configure_ticket_input_fds(&mut command, &state_dir, &[POOL_TICKET_FD_A, POOL_TICKET_FD_B]);
@@ -970,6 +974,7 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
         serial_transfer_guard(),
         |path| write_pool_diamond_derivation(path, Some("input-addressed")),
         None,
+        None,
     );
     assert_pool_diamond(&outcome);
 }
@@ -982,9 +987,16 @@ fn production_pool_diamond_worker_lifetimes_overlap() {
         serial_transfer_guard(),
         |path| write_pool_diamond_derivation(path, Some("input-addressed")),
         Some(&lifecycle_log),
+        None,
     );
     assert_pool_diamond(&outcome);
     let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
+    let starts = worker_lifetimes(&log);
+    assert_eq!(starts.len(), 4, "one transport lifetime per diamond goal: {log}");
+    assert!(starts[2].0 < starts[1].1, "the two branch workers must overlap: {starts:?}");
+}
+
+fn worker_lifetimes(log: &str) -> Vec<(u128, u128)> {
     let mut starts: Vec<(u128, u128)> = Vec::new();
     let mut open = std::collections::BTreeMap::<u128, u128>::new();
     for line in log.lines() {
@@ -1004,15 +1016,44 @@ fn production_pool_diamond_worker_lifetimes_overlap() {
         }
     }
     assert!(open.is_empty(), "worker lifecycle log has unfinished entries");
-    assert_eq!(starts.len(), 4, "one transport lifetime per diamond goal: {log}");
     starts.sort_unstable();
-    assert!(starts[2].0 < starts[1].1, "the two branch workers must overlap: {starts:?}");
+    starts
+}
+
+#[test]
+fn production_pool_respects_the_global_job_limit() {
+    let root = tempfile::tempdir().expect("pool jobs tempdir");
+    let lifecycle_log = root.path().join("worker-lifecycle.log");
+    let outcome = run_two_worker_pool_build(
+        serial_transfer_guard(),
+        |path| write_pool_diamond_derivation(path, Some("input-addressed")),
+        Some(&lifecycle_log),
+        Some(1),
+    );
+    let report = &outcome.report;
+    let outcomes = report["outcomes"].as_array().expect("outcomes array");
+    assert_eq!(outcomes.len(), 1, "one requested root outcome: {report}");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+    let outputs = outcomes[0]["outputs"].as_array().expect("root outputs");
+    let graph = fs::read_to_string(Path::new(outputs[0]["path"].as_str().expect("root path")).join("graph.txt"))
+        .expect("diamond graph output");
+    assert!(graph.contains("left branch") && graph.contains("right branch"), "{graph}");
+    let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
+    let starts = worker_lifetimes(&log);
+    assert_eq!(starts.len(), 4, "one transport lifetime per diamond goal: {log}");
+    for pair in starts.windows(2) {
+        assert!(pair[1].0 >= pair[0].1, "--jobs 1 must serialize goal execution: {starts:?}");
+    }
 }
 
 #[test]
 fn production_pool_dispatches_a_content_addressed_diamond_across_two_workers() {
-    let outcome =
-        run_two_worker_pool_build(serial_transfer_guard(), |path| write_pool_diamond_derivation(path, None), None);
+    let outcome = run_two_worker_pool_build(
+        serial_transfer_guard(),
+        |path| write_pool_diamond_derivation(path, None),
+        None,
+        None,
+    );
     assert_pool_diamond(&outcome);
 }
 
@@ -2092,10 +2133,22 @@ fn configure_ticket_input_fds(command: &mut Command, state_dir: &Path, fds: &[i3
     let targets = fds.to_vec();
     unsafe {
         command.pre_exec(move || {
-            for (ticket_file, fd) in ticket_files.iter().zip(&targets) {
-                if libc::dup2(ticket_file.as_raw_fd(), *fd) < 0 {
+            // Duplicate every source above the target range first: a parent fd
+            // that happens to equal another target would otherwise be
+            // overwritten before its own dup2 runs.
+            let mut sources = Vec::with_capacity(ticket_files.len());
+            for ticket_file in &ticket_files {
+                let high = libc::fcntl(ticket_file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64);
+                if high < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
+                sources.push(high);
+            }
+            for (source, fd) in sources.iter().zip(&targets) {
+                if libc::dup2(*source, *fd) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                libc::close(*source);
             }
             Ok(())
         });
