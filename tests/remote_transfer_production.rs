@@ -251,6 +251,8 @@ fn production_pool_failures_release_attempt_capacity() {
     let wrong_key_pool_config = root.path().join("wrong-key-pool.ncl");
     let pool_config = root.path().join("pool.ncl");
     let dead_pool_config = root.path().join("dead-pool.ncl");
+    let dead_worker_pool_config = root.path().join("dead-worker-pool.ncl");
+    let slow_worker_death_file = root.path().join("slow-worker-death.ncl");
     for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
         fs::create_dir_all(dir).expect("pool failure directory");
     }
@@ -260,6 +262,7 @@ fn production_pool_failures_release_attempt_capacity() {
     write_named_replay_derivation(&second_good_file, "production-remote-replay-two");
     write_named_replay_derivation(&third_good_file, "production-remote-replay-three");
     write_missing_input_derivation(&missing_input_file);
+    write_slow_derivation(&slow_worker_death_file);
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
     fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
@@ -270,6 +273,19 @@ fn production_pool_failures_release_attempt_capacity() {
     fs::write(&dead_wrapper, "#!/bin/sh\nexit 1\n").expect("dead transport wrapper");
     fs::set_permissions(&dead_wrapper, fs::Permissions::from_mode(0o755)).expect("dead wrapper mode");
     let dead_digest = blake3::hash(&fs::read(&dead_wrapper).expect("dead wrapper bytes")).to_hex().to_string();
+    // A worker that dies mid-exchange: start it, then SIGKILL it after a second.
+    let dead_worker_wrapper = root.path().join("dead-worker.sh");
+    fs::write(
+        &dead_worker_wrapper,
+        format!(
+            "#!/bin/sh\n{} \"$@\" &\nworker=$!\n( sleep 1; kill -9 \"$worker\" 2>/dev/null ) &\nwait \"$worker\"\n",
+            binary.display()
+        ),
+    )
+    .expect("dead worker wrapper");
+    fs::set_permissions(&dead_worker_wrapper, fs::Permissions::from_mode(0o755)).expect("dead worker mode");
+    let dead_worker_digest =
+        blake3::hash(&fs::read(&dead_worker_wrapper).expect("dead worker bytes")).to_hex().to_string();
     let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
     let binding_config = remote_binding_config_path(&state_dir);
     let worker_args = vec![
@@ -325,6 +341,13 @@ fn production_pool_failures_release_attempt_capacity() {
     fs::write(&dead_pool_config, dead_pool_source).expect("dead pool configuration");
     let wrong_key_pool_source = pool_source.replace("cache.example.com-1", WRONG_BUILDER_KEY);
     fs::write(&wrong_key_pool_config, wrong_key_pool_source).expect("wrong-key pool configuration");
+    let dead_worker_pool_source = pool_source
+        .replace(
+            &format!("\"{binary}\"", binary = wrapper.display()),
+            &format!("\"{}\"", dead_worker_wrapper.display()),
+        )
+        .replace(&binary_digest, &dead_worker_digest);
+    fs::write(&dead_worker_pool_config, dead_worker_pool_source).expect("dead-worker pool configuration");
     let run = |selected_pool: &Path, build_file: &Path, tamper_output: bool| -> (bool, Value) {
         let mut command = Command::new(&binary);
         configure_test_sandbox_command(&mut command);
@@ -402,6 +425,19 @@ fn production_pool_failures_release_attempt_capacity() {
         fs::read_dir(&client_store).expect("client store entries").count(),
         published_after_wrong_key,
         "a goal with a missing input must not publish"
+    );
+    let published_before_worker_death = fs::read_dir(&client_store).expect("client store entries").count();
+    let (worker_death_ok, worker_death_report) = run(&dead_worker_pool_config, &slow_worker_death_file, false);
+    assert!(!worker_death_ok, "a mid-exchange worker death must fail the goal: {worker_death_report}");
+    assert!(
+        worker_death_report.to_string().contains("stdio remote child")
+            || worker_death_report.to_string().contains("TransportSetup"),
+        "unexpected worker-death failure: {worker_death_report}"
+    );
+    assert_eq!(
+        fs::read_dir(&client_store).expect("client store entries").count(),
+        published_before_worker_death,
+        "a dead worker must not publish"
     );
     let (final_ok, final_report) = run(&pool_config, &second_good_file, false);
     assert!(final_ok, "a later goal must be admitted after attempt settlement: {final_report}");
