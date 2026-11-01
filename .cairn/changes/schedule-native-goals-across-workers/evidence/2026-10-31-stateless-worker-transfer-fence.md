@@ -24,11 +24,12 @@ not true for separate hosts).
 | --- | --- |
 | `cargo test -p mantle --bin mantle worker_transfer_fence` | 1 passed |
 | `cargo test -p mantle --bin mantle remote_build::tests::` | 207 passed, 1 failed — the pre-existing `attenuated_admission_tests::denial_reason_codes_appear_only_at_debug_level` (reproduces on the parent commit, passes alone) |
+| `cargo test -p mantle --test remote_transfer_production` | 12 passed |
 | `cargo fmt --check` on `src/remote_build.rs` | exit 0 |
 
-The production transfer suite was re-run after a full rebuild; its result is
-recorded separately when it completes (the build cache had to be cleared for
-disk space).
+The production transfer suite was re-run after a full rebuild (the build cache
+had to be cleared for disk space): `cargo test -p mantle --test
+remote_transfer_production` reports **12 passed** after this change.
 
 ## Not claimed
 
