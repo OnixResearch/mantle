@@ -734,6 +734,7 @@ struct PoolDiamondOutcome {
 fn run_two_worker_pool_build(
     _guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
+    lifecycle_log: Option<&Path>,
 ) -> PoolDiamondOutcome {
     let root = tempfile::tempdir().expect("pool diamond tempdir");
     let state_dir = root.path().join("state");
@@ -758,7 +759,16 @@ fn run_two_worker_pool_build(
     write_build(&build_file);
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
-    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    let wrapper_source = match lifecycle_log {
+        Some(log) => format!(
+            "#!/bin/sh\nprintf 'start %s %s\\n' \"$(date +%s%N)\" \"$$\" >> {}\n{} \"$@\"\nstatus=$?\nprintf 'end %s %s\\n' \"$(date +%s%N)\" \"$$\" >> {}\nexit $status\n",
+            log.display(),
+            binary.display(),
+            log.display()
+        ),
+        None => format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display()),
+    };
+    fs::write(&wrapper, wrapper_source).expect("transport wrapper");
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
     let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
     let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
@@ -896,15 +906,53 @@ fn assert_pool_diamond(outcome: &PoolDiamondOutcome) {
 
 #[test]
 fn production_pool_dispatches_a_diamond_across_two_workers() {
-    let outcome = run_two_worker_pool_build(serial_transfer_guard(), |path| {
-        write_pool_diamond_derivation(path, Some("input-addressed"))
-    });
+    let outcome = run_two_worker_pool_build(
+        serial_transfer_guard(),
+        |path| write_pool_diamond_derivation(path, Some("input-addressed")),
+        None,
+    );
     assert_pool_diamond(&outcome);
 }
 
 #[test]
+fn production_pool_diamond_worker_lifetimes_overlap() {
+    let root = tempfile::tempdir().expect("pool overlap tempdir");
+    let lifecycle_log = root.path().join("worker-lifecycle.log");
+    let outcome = run_two_worker_pool_build(
+        serial_transfer_guard(),
+        |path| write_pool_diamond_derivation(path, Some("input-addressed")),
+        Some(&lifecycle_log),
+    );
+    assert_pool_diamond(&outcome);
+    let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
+    let mut starts: Vec<(u128, u128)> = Vec::new();
+    let mut open = std::collections::BTreeMap::<u128, u128>::new();
+    for line in log.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        assert_eq!(fields.len(), 3, "unexpected lifecycle line: {line}");
+        let timestamp: u128 = fields[1].parse().expect("nanosecond timestamp");
+        let pid: u128 = fields[2].parse().expect("worker pid");
+        match fields[0] {
+            "start" => {
+                open.insert(pid, timestamp);
+            }
+            "end" => {
+                let start = open.remove(&pid).expect("end without start");
+                starts.push((start, timestamp));
+            }
+            other => panic!("unexpected lifecycle kind: {other}"),
+        }
+    }
+    assert!(open.is_empty(), "worker lifecycle log has unfinished entries");
+    assert_eq!(starts.len(), 4, "one transport lifetime per diamond goal: {log}");
+    starts.sort_unstable();
+    assert!(starts[2].0 < starts[1].1, "the two branch workers must overlap: {starts:?}");
+}
+
+#[test]
 fn production_pool_dispatches_a_content_addressed_diamond_across_two_workers() {
-    let outcome = run_two_worker_pool_build(serial_transfer_guard(), |path| write_pool_diamond_derivation(path, None));
+    let outcome =
+        run_two_worker_pool_build(serial_transfer_guard(), |path| write_pool_diamond_derivation(path, None), None);
     assert_pool_diamond(&outcome);
 }
 
