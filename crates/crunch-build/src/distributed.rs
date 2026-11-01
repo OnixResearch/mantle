@@ -1180,11 +1180,41 @@ pub enum PoolSelectionError {
     OutOfRange,
 }
 
+/// Executes one prepared goal on one admitted endpoint. A pool endpoint is not
+/// necessarily a Snix `BuildService`: the remote client needs the prepared
+/// payload, which a bare `BuildRequest` does not carry.
+#[async_trait::async_trait]
+pub trait PoolGoalExecutor: Send + Sync {
+    async fn execute(&self, goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult>;
+}
+
+/// Adapter for endpoints that really are Snix build services. It executes the
+/// goal's concrete request and ignores the extra resolved facts.
+#[derive(Debug, Clone)]
+pub struct BuildServiceExecutor<S> {
+    service: S,
+}
+
+impl<S> BuildServiceExecutor<S> {
+    pub fn new(service: S) -> Self {
+        Self { service }
+    }
+}
+
+#[async_trait::async_trait]
+impl<S> PoolGoalExecutor for BuildServiceExecutor<S>
+where S: snix_build::buildservice::BuildService
+{
+    async fn execute(&self, goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        self.service.do_build(goal.request).await
+    }
+}
+
 /// Executes each prepared goal on exactly one admitted pool endpoint. It owns
 /// no placement policy, reservation, or fallback: the injected selector decides
 /// from resolved facts, and the selected endpoint's service performs the build.
 pub struct PoolDispatch {
-    endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn snix_build::buildservice::BuildService>>>,
+    endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn PoolGoalExecutor>>>,
     endpoint_ids: Vec<String>,
     selector: std::sync::Arc<dyn PoolGoalSelector>,
 }
@@ -1200,7 +1230,7 @@ impl std::fmt::Debug for PoolDispatch {
 
 impl PoolDispatch {
     pub fn new(
-        endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn snix_build::buildservice::BuildService>>>,
+        endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn PoolGoalExecutor>>>,
         selector: std::sync::Arc<dyn PoolGoalSelector>,
     ) -> Result<Self, PoolSelectionError> {
         if endpoints.is_empty() {
@@ -1235,7 +1265,7 @@ impl PoolDispatch {
         let endpoint = self.endpoints.get(index).ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
         })?;
-        endpoint.service.do_build(goal.request).await
+        endpoint.service.execute(goal).await
     }
 }
 
@@ -2379,17 +2409,17 @@ mod tests {
             vec![
                 PoolEndpointService::new(
                     "worker-a",
-                    std::sync::Arc::new(FakePoolService {
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
                         label: "a",
                         calls: first.clone(),
-                    }) as std::sync::Arc<dyn snix_build::buildservice::BuildService>,
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
                 ),
                 PoolEndpointService::new(
                     "worker-b",
-                    std::sync::Arc::new(FakePoolService {
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
                         label: "b",
                         calls: second.clone(),
-                    }) as std::sync::Arc<dyn snix_build::buildservice::BuildService>,
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
                 ),
             ],
             selector,
@@ -2439,17 +2469,17 @@ mod tests {
             vec![
                 PoolEndpointService::new(
                     "worker-a",
-                    std::sync::Arc::new(FakePoolService {
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
                         label: "a",
                         calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-                    }) as std::sync::Arc<dyn snix_build::buildservice::BuildService>,
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
                 ),
                 PoolEndpointService::new(
                     "worker-a",
-                    std::sync::Arc::new(FakePoolService {
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
                         label: "b",
                         calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-                    }) as std::sync::Arc<dyn snix_build::buildservice::BuildService>,
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
                 ),
             ],
             std::sync::Arc::new(OutOfRangeSelector),

@@ -6095,11 +6095,13 @@ mod tests {
                 vec![
                     crate::distributed::PoolEndpointService::new(
                         "worker-a",
-                        std::sync::Arc::new(endpoint_a) as std::sync::Arc<dyn BuildService>,
+                        std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint_a))
+                            as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
                     ),
                     crate::distributed::PoolEndpointService::new(
                         "worker-b",
-                        std::sync::Arc::new(endpoint_b) as std::sync::Arc<dyn BuildService>,
+                        std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint_b))
+                            as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
                     ),
                 ],
                 std::sync::Arc::new(SecondEndpointSelector),
