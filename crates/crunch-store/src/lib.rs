@@ -93,6 +93,7 @@ pub use capability::BuildStore;
 pub use capability::BuilderStoreParts;
 pub use capability::LocalBuildRuntime;
 pub use capability::OutputLookup;
+pub use capability::OwnedTransferObjectStore;
 pub use capability::PipelineStoreParts;
 pub use capability::RootRegistry;
 pub use capability::SliceAdmission;

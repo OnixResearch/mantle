@@ -334,10 +334,114 @@ impl TransferObjectStore<'_> {
     }
 }
 
+/// Owned transfer-object authority for an executor that must outlive a single
+/// borrowed store handle. It exposes the same bounded surface as
+/// `TransferObjectStore` and holds no raw pathinfo or signing authority.
+#[derive(Clone)]
+pub struct OwnedTransferObjectStore {
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+    store_dir: String,
+    output_dir: String,
+}
+
+impl OwnedTransferObjectStore {
+    /// Render a castore node as a NAR stream.
+    pub async fn render_nar<W: tokio::io::AsyncWrite + Unpin + Send>(
+        &self,
+        node: &Node,
+        dest: &mut W,
+    ) -> Result<(), Error> {
+        snix_store::nar::write_nar(dest, node, self.blob_service.clone(), self.directory_service.clone())
+            .await
+            .map_err(|err| Error::Export(format!("rendering NAR: {err}")))
+    }
+
+    /// Open a stored castore blob for reading.
+    pub async fn open_blob(&self, digest: &snix_castore::B3Digest) -> Result<Option<TransferBlobReader>, Error> {
+        let reader = self
+            .blob_service
+            .open_read(digest)
+            .await
+            .map_err(|err| Error::Export(format!("opening castore blob: {err}")))?;
+        Ok(reader.map(|inner| TransferBlobReader { inner }))
+    }
+
+    /// Read the canonical postcard-encoded directory payload for a digest.
+    pub async fn read_directory_canonical_bytes(&self, digest: &snix_castore::B3Digest) -> Result<Vec<u8>, Error> {
+        let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
+        let directory = self
+            .directory_service
+            .get(digest)
+            .await
+            .map_err(|err| Error::Export(format!("reading castore directory {digest_hex}: {err}")))?
+            .ok_or_else(|| Error::Export(format!("castore directory missing: {digest_hex}")))?;
+        let bytes = postcard::to_stdvec(&snix_castore::proto::Directory::from(directory))
+            .map_err(|err| Error::Export(format!("serializing castore directory: {err}")))?;
+        assert_eq!(blake3::hash(&bytes).to_hex().as_str(), digest_hex, "directory bytes must hash to the digest");
+        Ok(bytes)
+    }
+
+    /// Ingest a host filesystem path into the castore and return its node.
+    pub async fn ingest_host_path(&self, path: &Path) -> Result<Node, Error> {
+        snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            path,
+            None,
+        )
+        .await
+        .map_err(|err| Error::Export(format!("ingesting host path {}: {err}", path.display())))
+    }
+
+    /// Ingest a NAR stream into the castore.
+    pub async fn ingest_nar<R: tokio::io::AsyncRead + Unpin + Send>(
+        &self,
+        reader: &mut R,
+        expected_ca_hash: &Option<CAHash>,
+    ) -> Result<(Node, [u8; NAR_SHA256_BYTES], u64), Error> {
+        snix_store::nar::ingest_nar_and_hash(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            reader,
+            expected_ca_hash,
+        )
+        .await
+        .map_err(|err| Error::Export(format!("ingesting NAR: {err}")))
+    }
+
+    /// Export a castore node to its physical output location.
+    pub async fn export_node_to_output(&self, node: &Node, logical_path: &str) -> Result<(), Error> {
+        let relative = logical_path.strip_prefix(&self.store_dir).unwrap_or_else(|| {
+            assert!(logical_path.starts_with('/'), "export logical path must be absolute under the store prefix");
+            logical_path
+        });
+        let host_path = Path::new(&self.output_dir).join(relative.trim_start_matches('/'));
+        assert!(!host_path.is_symlink(), "export target must not be an existing symlink: {host_path:?}");
+        if host_path.exists() {
+            return Ok(());
+        }
+        let dest = host_path.to_string_lossy().into_owned();
+        export_castore_to_disk(node, &dest, &self.blob_service, &self.directory_service)
+            .await
+            .map_err(|err| Error::Export(format!("exporting output {logical_path}: {err}")))
+    }
+}
+
 impl StoreHandle {
     /// Borrow the transfer-object read authority.
     pub fn transfer_objects(&self) -> TransferObjectStore<'_> {
         TransferObjectStore { handle: self }
+    }
+
+    /// Clone an owned transfer-object authority for a long-lived executor.
+    pub fn owned_transfer_objects(&self) -> OwnedTransferObjectStore {
+        OwnedTransferObjectStore {
+            blob_service: self.blob_service(),
+            directory_service: self.directory_service(),
+            store_dir: self.store_dir().to_owned(),
+            output_dir: self.output_dir_str().to_owned(),
+        }
     }
 }
 
@@ -1619,5 +1723,36 @@ mod tests {
                 build_ca_path_with_store_dir(&names[0], &first_ca, Vec::<&str>::new(), false, STORE_PREFIX).unwrap();
             assert!(parts.slice_admission.pathinfo_service.get(*first_excess_path.digest()).await.unwrap().is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn owned_transfer_objects_outlive_the_borrowed_handle() {
+        const STORE_PREFIX: &str = "/nix/store";
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("store");
+        std::fs::create_dir_all(&state).unwrap();
+        std::fs::create_dir_all(&output).unwrap();
+        let handle = StoreHandle::open(crate::StoreConfig::new(
+            StoreBackend::Snix,
+            state,
+            output.clone(),
+            STORE_PREFIX.to_string(),
+        ))
+        .await
+        .unwrap();
+        let owned = handle.owned_transfer_objects();
+        drop(handle);
+
+        let source = root.path().join("payload.txt");
+        std::fs::write(&source, b"owned transfer payload").unwrap();
+        let node = owned.ingest_host_path(&source).await.unwrap();
+        let mut nar = Vec::new();
+        owned.render_nar(&node, &mut nar).await.unwrap();
+        assert!(!nar.is_empty());
+
+        let logical = format!("{STORE_PREFIX}/owned-transfer-output");
+        owned.export_node_to_output(&node, &logical).await.unwrap();
+        assert_eq!(std::fs::read(output.join("owned-transfer-output")).unwrap(), b"owned transfer payload");
     }
 }
