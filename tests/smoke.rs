@@ -31,6 +31,49 @@ const DISABLE_FUSE_ENV: &str = "CRUNCH_NO_FUSE";
 const DISABLE_FUSE_ENV_VALUE: &str = "1";
 const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
 
+#[test]
+fn pool_mode_rejects_unsupported_modes_before_build() {
+    let temp = tempfile::tempdir().expect("pool preflight tempdir");
+    let state_dir = temp.path().join("state");
+    let store = temp.path().join("store");
+    let build_file = temp.path().join("goal.ncl");
+    std::fs::create_dir_all(&state_dir).expect("state dir");
+    std::fs::create_dir_all(&store).expect("store dir");
+    std::fs::write(&build_file, "{}").expect("build file");
+    let pool_config = temp.path().join("pool.ncl");
+    // Clap rejects these combinations before any state or store mutation; the
+    // runtime preflight repeats the checks for non-CLI callers.
+    let cases: [(&[&str], &str); 3] = [
+        (&["--watch"], "--watch"),
+        (&["--impure"], "--impure"),
+        (&["--evaluation-stream"], "--evaluation-stream"),
+    ];
+    for (extra, expected) in cases {
+        let mut command = Command::cargo_bin("mantle").expect("mantle binary");
+        command.args([
+            "--json",
+            "--state-dir",
+            state_dir.to_str().expect("UTF-8 state dir"),
+            "--store",
+            store.to_str().expect("UTF-8 store"),
+            "build",
+            build_file.to_str().expect("UTF-8 build file"),
+            "--builder-pool",
+            "native-pool",
+            "--builder-config",
+            pool_config.to_str().expect("UTF-8 pool config"),
+            "--builder-ticket-fd",
+            "builder=9",
+        ]);
+        command.args(extra);
+        let output = command.output().expect("run rejected pool build");
+        assert!(!output.status.success(), "{extra:?} must be rejected");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("cannot be used with"), "{extra:?} stderr: {stderr}");
+        assert!(stderr.contains(expected), "{extra:?} names the conflicting flag: {stderr}");
+    }
+}
+
 fn require_loopback_network(test_name: &str) -> bool {
     assert!(!test_name.is_empty(), "test name must not be empty");
     if loopback_network_available() {

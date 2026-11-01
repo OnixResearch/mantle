@@ -5708,7 +5708,8 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!ctx.store.as_os_str().is_empty());
     if input.watch {
-        if input.remote_builder.is_some()
+        if input.builder_pool.is_some()
+            || input.remote_builder.is_some()
             || input.remote_ticket_fd.is_some()
             || input.remote_builder_program.is_some()
             || !input.remote_builder_args.is_empty()
@@ -5738,6 +5739,19 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
         }
         if !matches!(project_build::parse_build_target(input.file), project_build::BuildTarget::File(_)) {
             return Err(RunError::Build("--watch requires an explicit file-backed Nickel target".to_string()));
+        }
+    }
+    if input.builder_pool.is_some() {
+        if input.hermeticity.impure {
+            return Err(RunError::Build(
+                "--builder-pool requires native immutable execution; --impure is unsupported".to_string(),
+            ));
+        }
+        if input.output_mode == BuildOutputMode::EvaluationStream {
+            return Err(RunError::Build("--builder-pool does not support --evaluation-stream".to_string()));
+        }
+        if !cfg!(target_os = "linux") {
+            return Err(RunError::Build("--builder-pool is supported only for Linux native builds".to_string()));
         }
     }
     build_application::preflight_backend(
