@@ -40,6 +40,13 @@ a cancellable pool goal at all.
 4. Add a SIGINT integration test with a slow worker and assert the coordinator
    attempt is terminal afterwards and a later goal is admitted.
 
+## Operator-visible consequence
+
+`docs/remote-pool.md` now has a Cancellation section stating that pool builds do
+not install a signal handler, an admitted attempt can remain Running after a
+process signal, and a later invocation for the same goal reports
+`current-attempt-applied` until the durable state is reconciled.
+
 ## Verification
 
 This slice adds no code. The finding is read from `worker.rs:3945-3955`; the

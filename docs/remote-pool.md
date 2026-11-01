@@ -123,6 +123,18 @@ Re-running a goal whose coordinator job already reached a terminal attempt is
 not retried by a later invocation; that is the existing attempt-policy
 boundary.
 
+## Cancellation
+
+Pool mode does not install an operator-cancellation handler. `SIGINT` or
+`SIGTERM` during an ordinary pool build terminates the process; an admitted
+attempt can remain `Running` in the coordinator state because the executor's
+settlement guard only runs when the future is dropped inside the process.
+
+The Worker also refuses cancellable pool dispatch
+(`remote-pool:watch-unsupported`) because transport-child teardown on a dropped
+exchange is not proven. A later invocation for the same goal reports
+`current-attempt-applied` until that durable attempt state is reconciled.
+
 ## Non-claims
 
 - Same-host `stdio` loopback is the only transport exercised end to end;
