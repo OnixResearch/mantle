@@ -668,7 +668,7 @@ enum Command {
         #[arg(
             long,
             conflicts_with_all = [
-                "builder", "watch", "plan", "impure", "strict_hermetic",
+                "builder", "watch", "impure", "strict_hermetic",
                 "evaluation_stream", "compile_driver_runtime", "rust_wait_diagnostics",
                 "offline_source_preflight", "fix",
             ]
@@ -5761,32 +5761,42 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
         &ctx.base_state_dirs,
         ctx.store_source_admission().as_deref(),
     )?;
-    let pool_executor_factory = match (input.builder_pool, input.builder_config) {
-        (Some(pool_id), Some(farm_path)) => {
-            let bindings = ctx.required_remote_binding()?;
-            let factory = crate::remote_build::pool_factory::plan_pool_factory(
-                crate::remote_build::pool_factory::PoolFactoryInput {
-                    farm_path,
-                    pool_id,
-                    bindings,
-                    ticket_fds: input.builder_ticket_fds,
-                    store_prefix: &ctx.store_prefix,
-                    state_dir: &ctx.resolved_state_dir,
-                    now_unix_s: unix_time_now_s()?,
-                    build_time_limit_secs: input.remote_build_time_secs,
-                    preferences: vec![
-                        crunch_remote_core::resource::PlacementPreference::ResourceFit,
-                        crunch_remote_core::resource::PlacementPreference::LocalityTransfer,
-                    ],
-                },
-            )?;
-            Some(std::sync::Arc::new(factory) as std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>)
-        }
-        (None, None) => None,
-        _ => {
-            return Err(RunError::Build(
-                "--builder-pool requires --builder-config and --builder-ticket-fd".to_string(),
-            ));
+    if input.plan
+        && let (Some(pool_id), Some(farm_path)) = (input.builder_pool, input.builder_config)
+    {
+        let bindings = ctx.required_remote_binding()?;
+        crate::remote_build::pool_factory::plan_pool_selection(farm_path, pool_id, bindings)?;
+    }
+    let pool_executor_factory = if input.plan {
+        None
+    } else {
+        match (input.builder_pool, input.builder_config) {
+            (Some(pool_id), Some(farm_path)) => {
+                let bindings = ctx.required_remote_binding()?;
+                let factory = crate::remote_build::pool_factory::plan_pool_factory(
+                    crate::remote_build::pool_factory::PoolFactoryInput {
+                        farm_path,
+                        pool_id,
+                        bindings,
+                        ticket_fds: input.builder_ticket_fds,
+                        store_prefix: &ctx.store_prefix,
+                        state_dir: &ctx.resolved_state_dir,
+                        now_unix_s: unix_time_now_s()?,
+                        build_time_limit_secs: input.remote_build_time_secs,
+                        preferences: vec![
+                            crunch_remote_core::resource::PlacementPreference::ResourceFit,
+                            crunch_remote_core::resource::PlacementPreference::LocalityTransfer,
+                        ],
+                    },
+                )?;
+                Some(std::sync::Arc::new(factory) as std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>)
+            }
+            (None, None) => None,
+            _ => {
+                return Err(RunError::Build(
+                    "--builder-pool requires --builder-config and --builder-ticket-fd".to_string(),
+                ));
+            }
         }
     };
     let mut prepared = prepare_build_command(ctx, input)?;

@@ -176,6 +176,29 @@ pub struct PoolFactoryInput<'a> {
     pub preferences: Vec<PlacementPreference>,
 }
 
+/// Validate a pool selection without credentials, tickets, or dispatch.
+///
+/// Plan mode uses this: the evaluated pool must exist, every selected endpoint
+/// must resolve its current binding, and each transport program must match its
+/// declared BLAKE3 identity. Ticket descriptors and executor construction are
+/// deliberately skipped.
+pub fn plan_pool_selection(
+    farm_path: &Path,
+    pool_id: &str,
+    bindings: &crate::remote_build::endpoint_config::RemoteEndpointBindingConfig,
+) -> Result<(), crate::errors::RunError> {
+    let farm = crate::remote_farm_config::load_remote_build_farm_config(farm_path)
+        .map_err(|reason| crate::errors::RunError::Internal(format!("remote-pool:config-invalid:{reason}")))?;
+    let pool = farm
+        .pools
+        .iter()
+        .find(|pool| pool.pool_id == pool_id)
+        .ok_or_else(|| crate::errors::RunError::Internal("remote-pool:pool-unknown".to_string()))?;
+    crate::remote_build::pool_config::project_pool_selection(&farm, pool_id, bindings)?;
+    crate::remote_build::pool_config::verify_transport_programs(pool)?;
+    Ok(())
+}
+
 /// Project the configured pool, admit it against current bindings and caller
 /// descriptors, and build the per-endpoint plans the factory needs.
 pub fn plan_pool_factory(input: PoolFactoryInput<'_>) -> Result<RemotePoolExecutorFactory, crate::errors::RunError> {

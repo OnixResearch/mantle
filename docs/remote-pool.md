@@ -24,11 +24,16 @@ mantle build TARGET.ncl \
 - `--remote-binding-config` must resolve every selected endpoint's current
   binding by name.
 - The clap surface rejects `--builder-pool` with `--builder`, `--watch`,
-  `--plan`, `--impure`, `--strict-hermetic`, `--evaluation-stream`,
+  `--impure`, `--strict-hermetic`, `--evaluation-stream`,
   `--compile-driver-runtime`, `--rust-wait-diagnostics`,
   `--offline-source-preflight`, and `--fix`. `run_build_command` repeats the
   watch, impure, evaluation-stream, and non-Linux checks for callers that bypass
   the CLI.
+- `--plan` is accepted with a pool: the evaluated pool must exist, every
+  selected endpoint must resolve its current binding, and each transport
+  program must match its declared BLAKE3 identity. Plan mode reads no ticket
+  descriptors, opens no transport, uploads nothing, reserves nothing, and does
+  not dispatch. The plan report does not render per-goal pool routes.
 
 ## Pool configuration
 

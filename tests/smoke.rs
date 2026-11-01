@@ -74,6 +74,75 @@ fn pool_mode_rejects_unsupported_modes_before_build() {
     }
 }
 
+#[test]
+fn pool_plan_validates_selection_without_tickets() {
+    let temp = tempfile::tempdir().expect("pool plan tempdir");
+    let state_dir = temp.path().join("state");
+    let store = temp.path().join("store");
+    let binding_config = temp.path().join("binding.json");
+    let pool_config = temp.path().join("pool.ncl");
+    std::fs::create_dir_all(&state_dir).expect("state dir");
+    std::fs::create_dir_all(&store).expect("store dir");
+    remote_endpoint_binding::write_endpoint_bindings(&state_dir, &binding_config, remote_endpoint_binding::Bindings {
+        store_prefix: "/mantle/store",
+        builder: Some("plan-builder"),
+        substituters: &[],
+    });
+    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    let digest = blake3::hash(&std::fs::read(&program).expect("program bytes")).to_hex().to_string();
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "plan-builder",
+      transport = 'stdio,
+      credential_reference = "plan-bearer",
+      transport_program = "{}",
+      transport_program_digest_blake3 = "{}",
+      transport_args = [],
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "AAAA" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        program.display(),
+        digest,
+    );
+    std::fs::write(&pool_config, pool_source).expect("pool configuration");
+    let plan_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hello.ncl");
+    let run = |pool_id: &str| {
+        let mut command = Command::cargo_bin("mantle").expect("mantle binary");
+        command.args([
+            "--json",
+            "--state-dir",
+            state_dir.to_str().expect("UTF-8 state dir"),
+            "--store",
+            store.to_str().expect("UTF-8 store"),
+            "--store-prefix",
+            "/mantle/store",
+            "build",
+            "--plan",
+            plan_file.to_str().expect("UTF-8 plan file"),
+            "--builder-pool",
+            pool_id,
+            "--builder-config",
+            pool_config.to_str().expect("UTF-8 pool config"),
+        ]);
+        command.arg("--remote-binding-config").arg(&binding_config);
+        command.output().expect("run pool plan")
+    };
+    let planned = run("native-pool");
+    assert!(planned.status.success(), "pool plan failed: {}", String::from_utf8_lossy(&planned.stderr));
+    let stdout = String::from_utf8_lossy(&planned.stdout);
+    assert!(stdout.contains("crunch-build-plan-v1"), "plan report missing: {stdout}");
+    let unknown = run("missing-pool");
+    assert!(!unknown.status.success(), "an unknown pool must fail plan validation");
+    let stderr = String::from_utf8_lossy(&unknown.stderr);
+    assert!(stderr.contains("remote-pool:pool-unknown"), "unexpected failure: {stderr}");
+}
+
 fn require_loopback_network(test_name: &str) -> bool {
     assert!(!test_name.is_empty(), "test name must not be empty");
     if loopback_network_available() {
