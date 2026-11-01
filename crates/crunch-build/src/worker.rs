@@ -3907,7 +3907,7 @@ impl Worker {
                 crate::distributed::PreparedPoolGoal::new(crate::distributed::PreparedPoolGoalFacts {
                     request: build_request.clone(),
                     action_ref: prepared.action_ref.clone(),
-                    drv_path: prepared.drv_path.to_absolute_path_with_prefix(builder.store_dir()),
+                    drv_path: prepared.resolved_drv_path.to_absolute_path_with_prefix(builder.store_dir()),
                     derivation_json: serde_json::to_string(prepared.derivation.as_ref())
                         .map_err(|error| Error::Store(format!("remote-pool:derivation-serialize:{error}")))?,
                     closure: prepared.pool_closure.clone(),

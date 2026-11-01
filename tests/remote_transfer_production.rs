@@ -416,6 +416,12 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
 }
 
 #[test]
+fn production_pool_dispatches_a_content_addressed_diamond_across_two_workers() {
+    let outcome = run_two_worker_pool_build(serial_transfer_guard(), |path| write_pool_diamond_derivation(path, None));
+    assert_pool_diamond(&outcome);
+}
+
+#[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let _guard = serial_transfer_guard();
     if !cfg!(debug_assertions) {

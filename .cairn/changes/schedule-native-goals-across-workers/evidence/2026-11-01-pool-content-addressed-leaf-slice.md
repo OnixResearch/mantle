@@ -29,8 +29,8 @@ cross the pool goal payload and admit its realized output.
 
 | Gate | Result |
 | --- | --- |
-| `cargo test -p mantle --test remote_transfer_production` | `test result: ok. 15 passed; 0 failed; 0 ignored` (52.78s) |
-| `cargo test -p crunch-build --lib -- pool_dispatch prepared_goal` | `test result: ok. 7 passed; 0 failed; 0 ignored` |
+| `cargo test -p mantle --test remote_transfer_production` | `test result: ok. 16 passed; 0 failed; 0 ignored` (36.22s) |
+| `cargo test -p crunch-build --lib -- distributed worker -- --test-threads 1` | `test result: ok. 224 passed; 0 failed; 0 ignored` |
 | `cargo test -p mantle --bin mantle -- content_addressed_derivation_json_round_trips` | `test result: ok. 1 passed` |
 | `cargo clippy -p crunch-build -p crunch-remote-core -p mantle --all-targets --no-deps -- -D warnings` | exit 0 |
 | `cargo fmt --check -p mantle -p crunch-build -p crunch-remote-core` | exit 0 |
@@ -38,18 +38,19 @@ cross the pool goal payload and admit its realized output.
 The suite now includes `production_pool_dispatches_one_content_addressed_goal_through_the_worker`
 alongside the input-addressed single goal and two-worker diamond.
 
-## Remaining gap
+## CA dependency resolution
 
-A CA **dependency** in a pool graph still fails closed at the receiver closure
-path check. A CA-resolved action has a scheduler identity (the evaluated
-`.drv` path) and an action identity (the resolved derivation and its own path).
-`PreparedPoolGoal` carries the scheduler path as `drv_path` while
-`derivation_json` is the resolved derivation, so the closure root key and the
-carried bytes disagree. Supporting it requires the S3 obligation: carry the
-resolved action path explicitly in the prepared envelope, key the closure root
-by it, and keep the scheduler key only for dedupe/waiters. The closure-output
-plumbing above is the prerequisite for that step and is not yet exercised by an
-end-to-end CA dependency.
+A CA-resolved action has two identities: the scheduler identity (the evaluated
+`.drv` path, used for dedupe and waiters) and the action identity (the resolved
+derivation and its own path). The prepared pool goal now carries the resolved
+path (`PreparedBuild::resolved_drv_path`) and the closure root is keyed by the
+bytes actually dispatched. CA inputs realized by resolution move from
+`inputDerivations` to `inputSources`, so the remaining dependency entries stay
+keyed by their unresolved original paths.
+
+`production_pool_dispatches_a_content_addressed_diamond_across_two_workers`
+now passes: the shared CA dependency is built once, both branches resolve its
+realized path, and the joined output bytes match.
 
 Non-claims: same-host stdio loopback only; one worker generation; no
 cancellation, stale fence, worker death, dynamic-plan return, or resource

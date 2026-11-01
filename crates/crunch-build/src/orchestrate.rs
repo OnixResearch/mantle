@@ -1097,7 +1097,10 @@ where BServ: BuildService + 'static
         }
 
         let is_ca = derivation_ref.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
-        let pool_closure = collect_pool_closure(drv_path, derivation_ref, known_paths, self.store.store_dir());
+        // A CA-resolved action has its own derivation path; the closure root
+        // must be keyed by the bytes actually dispatched.
+        let pool_closure =
+            collect_pool_closure(&resolved.path, resolved.derivation.as_ref(), known_paths, self.store.store_dir());
 
         Ok(PrepareResult::NeedsBuild {
             prepared: PreparedBuild {
