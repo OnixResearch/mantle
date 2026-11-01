@@ -235,6 +235,102 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert_one_pool_outcome(&outcome.report);
 }
 
+/// A second pool build of the same derivation must hit the client store cache
+/// without spawning another worker.
+#[test]
+fn production_pool_second_build_hits_the_client_cache() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool cache tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let worker_store = root.path().join("worker-store");
+    let worker_state = root.path().join("worker-state");
+    let build_file = root.path().join("goal.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    let lifecycle_log = root.path().join("worker-lifecycle.log");
+    for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
+        fs::create_dir_all(dir).expect("pool cache directory");
+    }
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
+    write_replayable_derivation(&build_file);
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let wrapper = root.path().join("mantle-transport.sh");
+    fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nprintf 'start %s %s\\n' \"$(date +%s%N)\" \"$$\" >> {}\n{} \"$@\"\nstatus=$?\nprintf 'end %s %s\\n' \"$(date +%s%N)\" \"$$\" >> {}\nexit $status\n",
+            lifecycle_log.display(),
+            binary.display(),
+            lifecycle_log.display()
+        ),
+    )
+    .expect("transport wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+    let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+    let binding_config = remote_binding_config_path(&state_dir);
+    let worker_args = vec![
+        "--state-dir".to_string(),
+        state_dir.display().to_string(),
+        "--store".to_string(),
+        worker_store.display().to_string(),
+        "--store-prefix".to_string(),
+        STORE_PREFIX.to_string(),
+        "--store-backend".to_string(),
+        "snix".to_string(),
+        "--remote-binding-config".to_string(),
+        binding_config.display().to_string(),
+        "remote".to_string(),
+        "serve".to_string(),
+        "--endpoint-id".to_string(),
+        BUILDER_ID.to_string(),
+        "--binding".to_string(),
+        "stdio-once".to_string(),
+        "--executor".to_string(),
+        "local-build".to_string(),
+        "--execution-state-dir".to_string(),
+        worker_state.display().to_string(),
+    ];
+    let args_json = serde_json::to_string(&worker_args).expect("worker args JSON");
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        binary = wrapper.display(),
+        digest = binary_digest,
+        args = args_json,
+        material = signing_material,
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+    let run = || {
+        let output = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &build_file)
+            .output()
+            .expect("run pool build");
+        assert!(output.status.success(), "pool build failed: {}", String::from_utf8_lossy(&output.stderr));
+        serde_json::from_slice::<Value>(&output.stdout).expect("pool JSON report")
+    };
+    let first = run();
+    assert_eq!(first["outcomes"][0]["cached"], false, "first build must execute: {first}");
+    let second = run();
+    assert_eq!(second["outcomes"][0]["cached"], true, "second build must hit the cache: {second}");
+    let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
+    assert_eq!(worker_lifetimes(&log).len(), 1, "cache hit must not spawn a worker: {log}");
+}
+
 /// Single-builder and pool builds of the same derivation must produce identical
 /// output bytes.
 #[test]
