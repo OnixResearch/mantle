@@ -64,3 +64,7 @@ fix in `tests/android_sources_offline.rs`.
   return, or saturated/unknown resource case is exercised.
 - Both worker stores being non-empty proves each endpoint executed at least one
   goal; it is not a deterministic placement or overlap measurement.
+- The assertion is now exact: the two worker stores together hold exactly four
+  exported outputs, one per diamond goal (shared, left, right, join), so no goal
+  executed twice and none was skipped. Placement itself (which worker got which
+  goal) is not pinned.
