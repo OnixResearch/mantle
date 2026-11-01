@@ -105,6 +105,61 @@ pub fn write_endpoint_bindings(endpoint_state_dir: &Path, config_path: &Path, bi
     write_private_json(config_path, &config);
 }
 
+/// Bind several builder-ticket endpoints under one store prefix.
+///
+/// The first builder uses the singular `build` field; the rest use
+/// `build_bindings`, the shape explicit pool selection resolves per endpoint.
+#[allow(dead_code)]
+pub fn write_pool_endpoint_bindings(
+    endpoint_state_dir: &Path,
+    config_path: &Path,
+    store_prefix: &str,
+    builders: &[&str],
+) {
+    assert!(!builders.is_empty(), "a pool binding fixture needs at least one builder");
+    let now_unix_s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let expires_unix_s = now_unix_s.checked_add(BINDING_TTL_SECS).unwrap();
+    let binding = |name: &str| {
+        let binding = EndpointBinding {
+            spec: EndpointBindingSpec {
+                kind: EndpointKind::BuilderTicket,
+                name: name.to_string(),
+                scope: SCOPE.to_string(),
+                trust_requirement: TRUST_REQUIREMENT.to_string(),
+                store_prefix: store_prefix.to_string(),
+                expires_unix_s,
+            },
+            generation: FIRST_GENERATION,
+        };
+        binding.validate().expect("valid endpoint binding");
+        binding
+    };
+    let bindings = builders.iter().map(|name| binding(name)).collect::<Vec<_>>();
+    let records = bindings
+        .iter()
+        .map(|binding| EndpointBindingRecord {
+            binding: binding.clone(),
+            revoked: false,
+        })
+        .collect::<Vec<_>>();
+    let table_dir = endpoint_state_dir.join(TABLE_DIRECTORY);
+    fs::create_dir_all(&table_dir).expect("endpoint binding table directory");
+    fs::set_permissions(&table_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE))
+        .expect("private endpoint binding table directory");
+    let table = serde_json::json!({ "schema_version": TABLE_SCHEMA_VERSION, "records": records });
+    write_private_json(&table_dir.join(TABLE_FILENAME), &table);
+    let build = |binding: &EndpointBinding| serde_json::json!({ "endpoint_binding": binding, "scope": SCOPE, "trust_requirement": TRUST_REQUIREMENT });
+    let (first, rest) = bindings.split_first().expect("at least one binding");
+    let config = serde_json::json!({
+        "schema": CONFIG_SCHEMA,
+        "endpoint_state_directory": endpoint_state_dir,
+        "build": build(first),
+        "build_bindings": rest.iter().map(build).collect::<Vec<_>>(),
+        "source_bindings": [],
+    });
+    write_private_json(config_path, &config);
+}
+
 fn write_private_json(path: &Path, value: &serde_json::Value) {
     fs::write(path, serde_json::to_vec_pretty(value).expect("endpoint binding JSON")).expect("write binding JSON");
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)).expect("private endpoint binding JSON");

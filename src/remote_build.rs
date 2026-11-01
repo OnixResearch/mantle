@@ -13228,9 +13228,11 @@ pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) 
     fs::rename(&tmp, &path)
         .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))?;
     sync_coordinator_state_parent(parent)?;
-    save.commit();
+    // The save lock is released by `commit`, so observe the committed files
+    // while the lock still serializes the next writer.
     debug_assert!(path.exists());
     debug_assert!(!tmp.exists());
+    save.commit();
     Ok(())
 }
 
@@ -14493,13 +14495,11 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                     .endpoint_binding_config
                     .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-config-required".into()))?;
                 let config = endpoint_config::RemoteEndpointBindingConfig::load(path)?;
-                config.verify_build(
-                    remote_cli_now_unix_s("remote-serve-startup").map_err(RunError::Internal)?,
-                    input.store_prefix,
-                )?;
-                if config.build_binding()?.spec.name != input.endpoint_id {
-                    return Err(RunError::Internal("remote-production-endpoint-binding-mismatch".into()));
-                }
+                let startup_now = remote_cli_now_unix_s("remote-serve-startup").map_err(RunError::Internal)?;
+                let binding = config
+                    .build_endpoint(&input.endpoint_id)
+                    .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-mismatch".into()))?;
+                config.admit_build(&binding.endpoint_binding, startup_now, input.store_prefix)?;
                 Some(config)
             } else {
                 None

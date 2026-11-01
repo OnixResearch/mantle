@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 use std::io;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_build::distributed::PoolGoalExecutor;
@@ -33,7 +34,6 @@ use crate::remote_build::prepare_remote_production_input_transfer;
 use crate::remote_build::remote_client_request_id;
 use crate::remote_build::remote_expected_outputs_from_derivation;
 use crate::remote_build::remote_input_ref_upload_bytes;
-use crate::remote_build::remote_input_refs_from_derivation;
 use crate::remote_build::remote_source_input_refs_from_derivation;
 use crate::remote_build::run_stdio_remote_child;
 use crate::remote_build::save_coordinator_state;
@@ -86,7 +86,7 @@ pub fn concrete_pool_goal_request(
     )
     .map_err(|_| "remote-pool-derivation-path-invalid".to_string())?;
     let expected_outputs = remote_expected_outputs_from_derivation(&derivation, &options.store_prefix)?;
-    let input_refs = remote_input_refs_from_derivation(&derivation, &options.store_prefix);
+    let input_refs = pool_goal_input_refs(goal, &derivation, &options.store_prefix)?;
     let source_input_refs = remote_source_input_refs_from_derivation(&derivation, &options.store_prefix);
     let upload_bytes = remote_input_ref_upload_bytes(&input_refs)?;
     let request_id = remote_client_request_id(&goal.action_ref, &drv_path, &options.store_prefix);
@@ -125,8 +125,97 @@ pub fn concrete_pool_goal_request(
     Ok(request)
 }
 
+/// Resolve the store paths a pool goal actually needs on the worker.
+///
+/// The derivation closure travels in the payload, so a dependency contributes
+/// its built outputs (which the client imported) rather than its `.drv` path,
+/// which is not a stored object in either store.
+fn pool_goal_input_refs(
+    goal: &PreparedPoolGoal,
+    derivation: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Result<Vec<String>, String> {
+    let mut closure = std::collections::BTreeMap::new();
+    for entry in &goal.closure {
+        let parsed = serde_json::from_str::<nix_compat::derivation::Derivation>(&entry.derivation_json)
+            .map_err(|error| format!("remote-pool-closure-json-invalid: {error}"))?;
+        closure.insert(entry.drv_path.clone(), parsed);
+    }
+    let mut refs =
+        Vec::with_capacity(derivation.input_derivations.len().saturating_add(derivation.input_sources.len()));
+    for (drv_path, output_names) in &derivation.input_derivations {
+        let absolute = drv_path.to_absolute_path_with_prefix(store_prefix);
+        let input_derivation =
+            closure.get(&absolute).ok_or_else(|| format!("remote-pool-input-derivation-missing:{absolute}"))?;
+        for output_name in output_names {
+            let output = input_derivation
+                .outputs
+                .get(output_name)
+                .ok_or_else(|| format!("remote-pool-input-output-missing:{absolute}:{output_name}"))?;
+            let path = output
+                .path
+                .as_ref()
+                .ok_or_else(|| format!("remote-pool-input-output-unresolved:{absolute}:{output_name}"))?;
+            refs.push(path.to_absolute_path_with_prefix(store_prefix));
+        }
+    }
+    refs.extend(derivation.input_sources.iter().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
+    refs.sort();
+    refs.dedup();
+    Ok(refs)
+}
+
 fn pool_error(code: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, format!("remote-pool:{code}"))
+}
+
+const MAX_COORDINATOR_SAVE_ATTEMPTS: u32 = 16;
+
+/// The coordinator store fences every write with the persisted revision. A
+/// concurrent goal can advance it between our load and save; the caller reloads
+/// and reapplies its own transition instead of overwriting the other job.
+fn coordinator_save_conflict(error: &crate::errors::RunError) -> bool {
+    matches!(
+        error,
+        crate::errors::RunError::Internal(message) if message.contains("remote-coordinator-save-conflict")
+    )
+}
+
+fn save_coordinator_with_retry<F>(
+    state_dir: &Path,
+    mut apply: F,
+) -> io::Result<crate::remote_build::RemoteCoordinatorState>
+where
+    F: FnMut(&mut crate::remote_build::RemoteCoordinatorState) -> io::Result<()>,
+{
+    let mut attempt_number = 0;
+    loop {
+        attempt_number += 1;
+        let mut coordinator = load_coordinator_state(state_dir)
+            .map_err(|error| io::Error::other(format!("remote-pool:coordinator-load:{error}")))?;
+        if let Err(error) = apply(&mut coordinator) {
+            // Admission persists its own candidate; a concurrent goal can
+            // advance the revision between load and that save.
+            if error.to_string().contains("remote-coordinator-save-conflict") {
+                if attempt_number >= MAX_COORDINATOR_SAVE_ATTEMPTS {
+                    return Err(io::Error::other(format!("remote-pool:coordinator-save-conflict-exhausted:{error}")));
+                }
+                continue;
+            }
+            return Err(error);
+        }
+        match save_coordinator_state(state_dir, &coordinator) {
+            Ok(()) => return Ok(coordinator),
+            Err(error) if coordinator_save_conflict(&error) => {
+                if attempt_number >= MAX_COORDINATOR_SAVE_ATTEMPTS {
+                    return Err(io::Error::other(format!("remote-pool:coordinator-save-conflict-exhausted:{error}")));
+                }
+            }
+            Err(error) => {
+                return Err(io::Error::other(format!("remote-pool:coordinator-save:{error}")));
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -136,21 +225,25 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
         let request = concrete_pool_goal_request(&goal, &endpoint.options).map_err(|error| pool_error(&error))?;
         let mut plan = plan_remote_stdio_request_dispatch(request.clone(), &endpoint.options)
             .map_err(|error| pool_error(&error))?;
-        let mut coordinator = load_coordinator_state(&endpoint.state_dir)
-            .map_err(|error| io::Error::other(format!("remote-pool:coordinator-load:{error}")))?;
-        let attempt = admit_remote_production_dispatch(
-            &mut coordinator,
-            &plan.client.request,
-            &endpoint.options.builder.endpoint_id,
-            endpoint.worker_generation,
-            endpoint.worker_concurrency,
-            endpoint.resource_inventory.clone(),
-            &plan.client.trusted_output_keys,
-            endpoint.options.now_unix_s,
-        )
-        .map_err(|error| pool_error(&format!("admission:{error}")))?;
-        save_coordinator_state(&endpoint.state_dir, &coordinator)
-            .map_err(|error| io::Error::other(format!("remote-pool:coordinator-save:{error}")))?;
+        let attempt = {
+            let mut admitted = None;
+            save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
+                let binding = admit_remote_production_dispatch(
+                    coordinator,
+                    &plan.client.request,
+                    &endpoint.options.builder.endpoint_id,
+                    endpoint.worker_generation,
+                    endpoint.worker_concurrency,
+                    endpoint.resource_inventory.clone(),
+                    &plan.client.trusted_output_keys,
+                    endpoint.options.now_unix_s,
+                )
+                .map_err(|error| pool_error(&format!("admission:{error}")))?;
+                admitted = Some(binding);
+                Ok(())
+            })?;
+            admitted.ok_or_else(|| pool_error("admission-binding-missing"))?
+        };
         bind_remote_production_dispatch(
             &mut plan,
             attempt.clone(),
@@ -258,22 +351,17 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             ready_unix_s = endpoint.options.now_unix_s.saturating_add(1);
         }
         let completed_unix_s = ready_unix_s.saturating_add(1);
-        crate::remote_build::mark_remote_production_result_ready(
-            &mut coordinator,
-            &attempt,
-            &admission.output_digest_blake3,
-            ready_unix_s,
-        )
-        .map_err(|error| pool_error(&format!("result-ready:{error}")))?;
-        complete_remote_production_attempt(
-            &mut coordinator,
-            &attempt,
-            &admission.output_digest_blake3,
-            completed_unix_s,
-        )
-        .map_err(|error| pool_error(&format!("completion:{error}")))?;
-        save_coordinator_state(&endpoint.state_dir, &coordinator)
-            .map_err(|error| io::Error::other(format!("remote-pool:coordinator-save:{error}")))?;
+        save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
+            crate::remote_build::mark_remote_production_result_ready(
+                coordinator,
+                &attempt,
+                &admission.output_digest_blake3,
+                ready_unix_s,
+            )
+            .map_err(|error| pool_error(&format!("result-ready:{error}")))?;
+            complete_remote_production_attempt(coordinator, &attempt, &admission.output_digest_blake3, completed_unix_s)
+                .map_err(|error| pool_error(&format!("completion:{error}")))
+        })?;
         Ok(BuildResult {
             outputs,
             log: Some(transcript.stderr_summary),

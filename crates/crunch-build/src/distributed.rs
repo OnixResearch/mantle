@@ -1255,18 +1255,45 @@ impl PoolDispatch {
         &self.endpoint_ids
     }
 
-    /// Validate, select from resolved facts, and execute on that endpoint only.
+    /// Validate, select from resolved facts, and execute on that endpoint.
+    ///
+    /// Selection uses the facts the Worker resolved, not live coordinator
+    /// occupancy. Two goals can therefore select the same endpoint before
+    /// either reserves capacity; the loser reports `worker-concurrency-limit`
+    /// from the current-state admission. That is a placement correction, not a
+    /// build retry: try the next endpoint once each, keeping the selector's
+    /// first choice when it has capacity.
     pub async fn dispatch(&self, goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult> {
         validate_remote_build_service_request(&goal.request).map_err(remote_dispatch_io_error)?;
-        let index = self
+        let first = self
             .selector
             .select(&goal, &self.endpoint_ids)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}")))?;
-        let endpoint = self.endpoints.get(index).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
-        })?;
-        endpoint.service.execute(goal).await
+        let mut tried = std::collections::BTreeSet::new();
+        let mut index = first;
+        for _ in 0..self.endpoints.len() {
+            if !tried.insert(index) {
+                break;
+            }
+            let endpoint = self.endpoints.get(index).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
+            })?;
+            match endpoint.service.execute(goal.clone()).await {
+                Ok(result) => return Ok(result),
+                Err(error) if pool_endpoint_busy(&error) => {
+                    index = (index + 1) % self.endpoints.len();
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:no-endpoint-with-capacity"))
     }
+}
+
+/// Whether an endpoint refused the goal because its current concurrency is
+/// fully reserved. The pool may re-place that goal on another endpoint.
+fn pool_endpoint_busy(error: &std::io::Error) -> bool {
+    error.to_string().contains("worker-concurrency-limit")
 }
 
 /// One derivation in the resolved closure: exact path, derivation-modulo hash,
@@ -2526,6 +2553,59 @@ mod tests {
         assert_eq!(result.log.as_deref(), Some("b"));
         assert_eq!(first.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(second.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    struct BusyExecutor {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl PoolGoalExecutor for BusyExecutor {
+        async fn execute(&self, _goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "remote-pool:admission:worker-concurrency-limit",
+            ))
+        }
+    }
+
+    struct FirstSelector;
+
+    impl PoolGoalSelector for FirstSelector {
+        fn select(&self, _goal: &PreparedPoolGoal, _endpoint_ids: &[String]) -> Result<usize, PoolSelectionError> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn pool_dispatch_replaces_a_busy_endpoint_without_retrying_the_build() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let busy_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let second_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let dispatch = PoolDispatch::new(
+            vec![
+                PoolEndpointService::new(
+                    "worker-a",
+                    std::sync::Arc::new(BusyExecutor {
+                        calls: busy_calls.clone(),
+                    }) as std::sync::Arc<dyn PoolGoalExecutor>,
+                ),
+                PoolEndpointService::new(
+                    "worker-b",
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
+                        label: "b",
+                        calls: second_calls.clone(),
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
+                ),
+            ],
+            std::sync::Arc::new(FirstSelector),
+        )
+        .expect("fixture pool dispatch");
+        let result = runtime.block_on(dispatch.dispatch(goal_with_system("x86_64-linux"))).unwrap();
+        assert_eq!(result.log.as_deref(), Some("b"));
+        assert_eq!(busy_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(second_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

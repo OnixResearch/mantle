@@ -150,7 +150,9 @@ impl RemoteEndpointBindingConfig {
         store_prefix: &str,
     ) -> Result<EndpointAdmissionGuard, RunError> {
         self.validate()?;
-        let build = self.build_config()?;
+        // Pool dispatch binds one endpoint per job; the receiver admits the
+        // presented descriptor against that endpoint's configured binding.
+        let build = self.build_endpoint(&presented.spec.name).ok_or_else(|| config_error("descriptor-mismatch"))?;
         if presented != &build.endpoint_binding {
             return Err(config_error("descriptor-mismatch"));
         }

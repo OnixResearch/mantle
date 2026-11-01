@@ -214,6 +214,165 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert!(outcomes[0]["outputs"].as_array().is_some_and(|outputs| !outputs.is_empty()));
 }
 
+const POOL_WORKER_A: &str = "pool-builder-a";
+const POOL_WORKER_B: &str = "pool-builder-b";
+const POOL_TICKET_USES: u32 = 8;
+const POOL_TICKET_FD_A: i32 = 9;
+const POOL_TICKET_FD_B: i32 = 8;
+
+/// Pool mode: two admitted endpoints execute a real diamond through ordinary
+/// Worker scheduling: one shared dependency, two branches, one join.
+#[test]
+fn production_pool_dispatches_a_diamond_across_two_workers() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool diamond tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let worker_a_store = root.path().join("worker-a-store");
+    let worker_b_store = root.path().join("worker-b-store");
+    let worker_a_state = root.path().join("worker-a-state");
+    let worker_b_state = root.path().join("worker-b-state");
+    let pool_config = root.path().join("pool.ncl");
+    let build_file = root.path().join("pool-diamond.ncl");
+    for dir in [
+        &state_dir,
+        &client_store,
+        &worker_a_store,
+        &worker_b_store,
+        &worker_a_state,
+        &worker_b_state,
+    ] {
+        fs::create_dir_all(dir).expect("pool diamond directory");
+    }
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, POOL_TICKET_USES, &[POOL_WORKER_A, POOL_WORKER_B]);
+    write_pool_diamond_derivation(&build_file);
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let wrapper = root.path().join("mantle-transport.sh");
+    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+    let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+    let binding_config = remote_binding_config_path(&state_dir);
+    let worker_args = |endpoint: &str, store: &Path, execution: &Path| -> Vec<String> {
+        vec![
+            "--state-dir".to_string(),
+            state_dir.display().to_string(),
+            "--store".to_string(),
+            store.display().to_string(),
+            "--store-prefix".to_string(),
+            STORE_PREFIX.to_string(),
+            "--store-backend".to_string(),
+            "snix".to_string(),
+            "--remote-binding-config".to_string(),
+            binding_config.display().to_string(),
+            "remote".to_string(),
+            "serve".to_string(),
+            "--endpoint-id".to_string(),
+            endpoint.to_string(),
+            "--binding".to_string(),
+            "stdio-once".to_string(),
+            "--executor".to_string(),
+            "local-build".to_string(),
+            "--execution-state-dir".to_string(),
+            execution.display().to_string(),
+        ]
+    };
+    let args_a = serde_json::to_string(&worker_args(POOL_WORKER_A, &worker_a_store, &worker_a_state))
+        .expect("worker A args JSON");
+    let args_b = serde_json::to_string(&worker_args(POOL_WORKER_B, &worker_b_store, &worker_b_state))
+        .expect("worker B args JSON");
+    let endpoint = |name: &str, credential: &str, args: &str| {
+        format!(
+            r#"    {{
+      endpoint_id = "{name}",
+      transport = 'stdio,
+      credential_reference = "{credential}",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      profile = {{
+        resource_inventory = {{
+          total = {{ cpu_units = 4, memory_bytes = 8589934592, scratch_bytes = 10737418240 }},
+        }},
+      }},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+    }}"#,
+            binary = wrapper.display(),
+            digest = binary_digest,
+            material = signing_material,
+        )
+    };
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [
+{endpoint_a},
+{endpoint_b},
+    ],
+    session = {{ max_concurrency = 2, job_count_max = 8, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        endpoint_a = endpoint(POOL_WORKER_A, "pool-bearer-a", &args_a),
+        endpoint_b = endpoint(POOL_WORKER_B, "pool-bearer-b", &args_b),
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+
+    let mut command = Command::new(&binary);
+    configure_test_sandbox_command(&mut command);
+    command.args([
+        "--json",
+        "--state-dir",
+        state_dir.to_str().expect("UTF-8 state dir"),
+        "--store",
+        client_store.to_str().expect("UTF-8 client store"),
+        "--store-prefix",
+        STORE_PREFIX,
+        "build",
+        build_file.to_str().expect("UTF-8 build file"),
+        "--no-substitute",
+        "--builder-pool",
+        "native-pool",
+        "--builder-config",
+        pool_config.to_str().expect("UTF-8 pool config"),
+        "--builder-ticket-fd",
+        &format!("{POOL_WORKER_A}={POOL_TICKET_FD_A}"),
+        "--builder-ticket-fd",
+        &format!("{POOL_WORKER_B}={POOL_TICKET_FD_B}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
+    command.arg("--remote-binding-config").arg(&binding_config);
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fds(&mut command, &state_dir, &[POOL_TICKET_FD_A, POOL_TICKET_FD_B]);
+    let output = command.output().expect("run pool diamond build");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+        let log = report["failed"][0]["saved_log_path"]
+            .as_str()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        panic!("pool diamond status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
+    }
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool diamond JSON report");
+    let outcomes = report["outcomes"].as_array().expect("outcomes array");
+    assert_eq!(outcomes.len(), 1, "one requested root outcome: {report}");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+    let outputs = outcomes[0]["outputs"].as_array().expect("root outputs");
+    assert_eq!(outputs.len(), 1, "one root output: {report}");
+    let result_path = Path::new(outputs[0]["path"].as_str().expect("root output path"));
+    let graph = fs::read_to_string(result_path.join("graph.txt")).expect("diamond graph output");
+    assert!(graph.contains("shared foundation"), "graph carries the shared dependency: {graph}");
+    assert!(graph.contains("left branch"), "graph carries the left branch: {graph}");
+    assert!(graph.contains("right branch"), "graph carries the right branch: {graph}");
+    for (label, store) in [("worker A", &worker_a_store), ("worker B", &worker_b_store)] {
+        let entries = fs::read_dir(store).expect("worker store entries").count();
+        assert!(entries > 0, "{label} executed at least one goal");
+    }
+}
+
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let _guard = serial_transfer_guard();
@@ -1211,6 +1370,10 @@ fn write_ticket_state(state_dir: &Path) {
 }
 
 fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64) {
+    write_ticket_state_full(state_dir, max_upload_bytes, TICKET_USES, &[BUILDER_ID]);
+}
+
+fn write_ticket_state_full(state_dir: &Path, max_upload_bytes: u64, uses_remaining: u32, builders: &[&str]) {
     let ticket_dir = state_dir.join("remote-builders");
     let created_unix_s = test_unix_time_now_s();
     let expires_unix_s = created_unix_s.checked_add(TEST_TICKET_TTL_SECS).unwrap();
@@ -1227,7 +1390,7 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
                 "verifier": ticket_verifier(),
                 "created_unix_s": created_unix_s,
                 "expires_unix_s": expires_unix_s,
-                "uses_remaining": TICKET_USES,
+                "uses_remaining": uses_remaining,
                 "max_build_time_secs": MAX_BUILD_TIME_SECS,
                 "max_upload_bytes": max_upload_bytes,
                 "bound_client_endpoint": null,
@@ -1245,15 +1408,24 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
         .expect("private ticket input file");
     write_service_credentials(state_dir);
     // The client and its generated local receiver both re-resolve this binding.
-    remote_endpoint_binding::write_endpoint_bindings(
-        state_dir,
-        &remote_binding_config_path(state_dir),
-        remote_endpoint_binding::Bindings {
-            store_prefix: STORE_PREFIX,
-            builder: Some(BUILDER_ID),
-            substituters: &[],
-        },
-    );
+    if builders.len() == 1 {
+        remote_endpoint_binding::write_endpoint_bindings(
+            state_dir,
+            &remote_binding_config_path(state_dir),
+            remote_endpoint_binding::Bindings {
+                store_prefix: STORE_PREFIX,
+                builder: builders.first().copied(),
+                substituters: &[],
+            },
+        );
+    } else {
+        remote_endpoint_binding::write_pool_endpoint_bindings(
+            state_dir,
+            &remote_binding_config_path(state_dir),
+            STORE_PREFIX,
+            builders,
+        );
+    }
 }
 
 fn remote_binding_config_path(state_dir: &Path) -> PathBuf {
@@ -1265,11 +1437,22 @@ fn test_unix_time_now_s() -> u64 {
 }
 
 fn configure_ticket_input_fd(command: &mut Command, state_dir: &Path) {
-    let ticket_file = fs::File::open(state_dir.join(REMOTE_TICKET_INPUT_FILENAME)).expect("ticket input file");
+    configure_ticket_input_fds(command, state_dir, &[REMOTE_TICKET_INPUT_FD]);
+}
+
+fn configure_ticket_input_fds(command: &mut Command, state_dir: &Path, fds: &[i32]) {
+    // Each target descriptor needs its own open file description: the reader
+    // consumes the ticket to EOF, so duplicated descriptors would share an
+    // offset and the second endpoint would observe an empty ticket.
+    let ticket_path = state_dir.join(REMOTE_TICKET_INPUT_FILENAME);
+    let ticket_files = fds.iter().map(|_| fs::File::open(&ticket_path).expect("ticket input file")).collect::<Vec<_>>();
+    let targets = fds.to_vec();
     unsafe {
         command.pre_exec(move || {
-            if libc::dup2(ticket_file.as_raw_fd(), REMOTE_TICKET_INPUT_FD) < 0 {
-                return Err(std::io::Error::last_os_error());
+            for (ticket_file, fd) in ticket_files.iter().zip(&targets) {
+                if libc::dup2(ticket_file.as_raw_fd(), *fd) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
             Ok(())
         });
@@ -1313,6 +1496,94 @@ fn write_replayable_derivation(path: &Path) {
         lib.display(),
     );
     fs::write(path, source).expect("replayable derivation");
+}
+
+fn write_pool_diamond_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+let shared = {{
+  name = "pool-diamond-shared",
+  builder = "/bin/sh",
+  args = ["-c", "printf '%s\n' 'shared foundation' > \"$out\""],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation in
+let branch = fun branch_name branch_message => {{
+  name = branch_name,
+  builder = "/bin/sh",
+  inputs = [shared],
+  args = [
+    "-c",
+    m%"
+      set -eu
+      BB=/bin/busybox
+      shared_input=""
+      for candidate in "$NIX_STORE"/*-pool-diamond-shared; do
+        if [ -f "$candidate" ]; then
+          shared_input="$candidate"
+          break
+        fi
+      done
+      if [ -z "$shared_input" ]; then
+        echo 'shared diamond input was not mounted' >&2
+        exit 1
+      fi
+      $BB cat "$shared_input" > "$out"
+      $BB printf '%s\n' '%{{branch_message}}' >> "$out"
+    "%
+  ],
+  outputs = ["out"],
+  env = {{}},
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation in
+let left = branch "pool-diamond-left" "left branch" in
+let right = branch "pool-diamond-right" "right branch" in
+{{
+  name = "pool-diamond-result",
+  builder = "/bin/sh",
+  inputs = [left, right],
+  args = [
+    "-c",
+    m%"
+      set -eu
+      BB=/bin/busybox
+      left_input=""
+      right_input=""
+      for candidate in "$NIX_STORE"/*-pool-diamond-left; do
+        if [ -f "$candidate" ]; then
+          left_input="$candidate"
+          break
+        fi
+      done
+      for candidate in "$NIX_STORE"/*-pool-diamond-right; do
+        if [ -f "$candidate" ]; then
+          right_input="$candidate"
+          break
+        fi
+      done
+      if [ -z "$left_input" ] || [ -z "$right_input" ]; then
+        echo 'both diamond branches must be mounted' >&2
+        exit 1
+      fi
+      $BB mkdir -p "$out"
+      $BB cat "$left_input" > "$out/graph.txt"
+      $BB cat "$right_input" >> "$out/graph.txt"
+    "%
+  ],
+  outputs = ["out"],
+  env = {{}},
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+    );
+    fs::write(path, source).expect("pool diamond derivation");
 }
 
 fn write_failing_capture_derivation(path: &Path) {

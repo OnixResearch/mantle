@@ -1302,7 +1302,7 @@ fn bzip_core_bash(m: &mut Middle<'_>) -> Result<(), RunError> {
     let mut source = m.archive_source(tool, "bzip2-1.0.8-source", "bzip2.c")?;
     let header = m.source("bzip2-utime-header-source")?;
     source = m.install(tool, "bzip2-utime-header", source, header, "utime.h")?;
-    for (i, script) in list(BZIP, "BZIP2_REWRITES")?.chunks_exact(2).enumerate() {
+    for (i, script) in list(BZIP, "BZIP2_REWRITES")?.as_chunks::<2>().0.iter().enumerate() {
         let exe = m.b.artifact("sed-4.0.9")?;
         let script = m.authored_text(&format!("instructions/bzip2-{i}.sed"), &format!("{}\n", script[0]))?;
         let rewritten = one(
@@ -2649,7 +2649,7 @@ fn native_musl(m: &mut Middle<'_>) -> Result<(), RunError> {
                 ArtifactKind::Tree,
             )?;
         }
-        for (j, pair) in tokens[1..].chunks_exact(2).enumerate() {
+        for (j, pair) in tokens[1..].as_chunks::<2>().0.iter().enumerate() {
             source =
                 m.replace(tool, &format!("native-musl-assembly-token-{i}-{j}"), source, path, &pair[0], &pair[1])?;
         }
