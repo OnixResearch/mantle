@@ -160,6 +160,49 @@ pub fn write_pool_endpoint_bindings(
     write_private_json(config_path, &config);
 }
 
+/// Bind one builder endpoint with a revoked durable record.
+///
+/// Pool admission re-reads the table, so a revoked record must fail selection
+/// even when the config still names the endpoint.
+#[allow(dead_code)]
+pub fn write_revoked_endpoint_binding(
+    endpoint_state_dir: &Path,
+    config_path: &Path,
+    store_prefix: &str,
+    builder: &str,
+) {
+    let now_unix_s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let expires_unix_s = now_unix_s.checked_add(BINDING_TTL_SECS).unwrap();
+    let binding = EndpointBinding {
+        spec: EndpointBindingSpec {
+            kind: EndpointKind::BuilderTicket,
+            name: builder.to_string(),
+            scope: SCOPE.to_string(),
+            trust_requirement: TRUST_REQUIREMENT.to_string(),
+            store_prefix: store_prefix.to_string(),
+            expires_unix_s,
+        },
+        generation: FIRST_GENERATION,
+    };
+    binding.validate().expect("valid endpoint binding");
+    let table_dir = endpoint_state_dir.join(TABLE_DIRECTORY);
+    fs::create_dir_all(&table_dir).expect("endpoint binding table directory");
+    fs::set_permissions(&table_dir, fs::Permissions::from_mode(PRIVATE_DIRECTORY_MODE))
+        .expect("private endpoint binding table directory");
+    let table = serde_json::json!({
+        "schema_version": TABLE_SCHEMA_VERSION,
+        "records": [{ "binding": binding, "revoked": true }],
+    });
+    write_private_json(&table_dir.join(TABLE_FILENAME), &table);
+    let config = serde_json::json!({
+        "schema": CONFIG_SCHEMA,
+        "endpoint_state_directory": endpoint_state_dir,
+        "build": { "endpoint_binding": binding, "scope": SCOPE, "trust_requirement": TRUST_REQUIREMENT },
+        "source_bindings": [],
+    });
+    write_private_json(config_path, &config);
+}
+
 fn write_private_json(path: &Path, value: &serde_json::Value) {
     fs::write(path, serde_json::to_vec_pretty(value).expect("endpoint binding JSON")).expect("write binding JSON");
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)).expect("private endpoint binding JSON");

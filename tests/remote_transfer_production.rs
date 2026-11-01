@@ -373,6 +373,79 @@ fn production_pool_failures_release_attempt_capacity() {
     assert_eq!(final_report["outcomes"].as_array().map(Vec::len), Some(1));
 }
 
+/// Pool mode: a revoked durable binding fails selection before any dispatch.
+#[test]
+fn production_pool_rejects_revoked_endpoint_binding_before_dispatch() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool revoked tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let build_file = root.path().join("goal.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&client_store).expect("client store");
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
+    remote_endpoint_binding::write_revoked_endpoint_binding(
+        &state_dir,
+        &remote_binding_config_path(&state_dir),
+        STORE_PREFIX,
+        BUILDER_ID,
+    );
+    write_replayable_derivation(&build_file);
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "/bin/true",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = [],
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "AAAA" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        digest = "0".repeat(64),
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let mut command = Command::new(&binary);
+    configure_test_sandbox_command(&mut command);
+    command.args([
+        "--json",
+        "--state-dir",
+        state_dir.to_str().expect("UTF-8 state dir"),
+        "--store",
+        client_store.to_str().expect("UTF-8 client store"),
+        "--store-prefix",
+        STORE_PREFIX,
+        "build",
+        build_file.to_str().expect("UTF-8 build file"),
+        "--no-substitute",
+        "--builder-pool",
+        "native-pool",
+        "--builder-config",
+        pool_config.to_str().expect("UTF-8 pool config"),
+        "--builder-ticket-fd",
+        &format!("{BUILDER_ID}={REMOTE_TICKET_INPUT_FD}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
+    command.arg("--remote-binding-config").arg(remote_binding_config_path(&state_dir));
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fd(&mut command, &state_dir);
+    let output = command.output().expect("run revoked pool build");
+    assert!(!output.status.success(), "a revoked binding must reject the pool");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("remote-pool"), "unexpected revocation failure: {stderr}");
+    assert_eq!(fs::read_dir(&client_store).expect("client store entries").count(), 0);
+}
+
 const POOL_WORKER_A: &str = "pool-builder-a";
 const POOL_WORKER_B: &str = "pool-builder-b";
 const POOL_TICKET_USES: u32 = 8;
