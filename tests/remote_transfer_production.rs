@@ -233,7 +233,7 @@ fn production_pool_dispatches_one_content_addressed_goal_through_the_worker() {
 /// Pool mode: a failed exchange settles its attempt so the endpoint's
 /// concurrency slot is not leaked to the next goal.
 #[test]
-fn production_pool_failed_goal_releases_attempt_capacity() {
+fn production_pool_failures_release_attempt_capacity() {
     let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("pool failure tempdir");
     let state_dir = root.path().join("state");
@@ -242,18 +242,26 @@ fn production_pool_failed_goal_releases_attempt_capacity() {
     let worker_state = root.path().join("worker-state");
     let failing_file = root.path().join("failing.ncl");
     let good_file = root.path().join("good.ncl");
+    let second_good_file = root.path().join("good-two.ncl");
     let pool_config = root.path().join("pool.ncl");
+    let dead_pool_config = root.path().join("dead-pool.ncl");
     for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
         fs::create_dir_all(dir).expect("pool failure directory");
     }
     write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
     write_failing_capture_derivation(&failing_file);
     write_replayable_derivation(&good_file);
+    write_named_replay_derivation(&second_good_file, "production-remote-replay-two");
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
     fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
     let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    // A transport that dies before the protocol starts models worker death.
+    let dead_wrapper = root.path().join("dead-transport.sh");
+    fs::write(&dead_wrapper, "#!/bin/sh\nexit 1\n").expect("dead transport wrapper");
+    fs::set_permissions(&dead_wrapper, fs::Permissions::from_mode(0o755)).expect("dead wrapper mode");
+    let dead_digest = blake3::hash(&fs::read(&dead_wrapper).expect("dead wrapper bytes")).to_hex().to_string();
     let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
     let binding_config = remote_binding_config_path(&state_dir);
     let worker_args = vec![
@@ -302,8 +310,12 @@ fn production_pool_failed_goal_releases_attempt_capacity() {
         args = args_json,
         material = signing_material,
     );
-    fs::write(&pool_config, pool_source).expect("pool configuration");
-    let run = |build_file: &Path| -> (bool, Value) {
+    fs::write(&pool_config, &pool_source).expect("pool configuration");
+    let dead_pool_source = pool_source
+        .replace(&format!("\"{binary}\"", binary = wrapper.display()), &format!("\"{}\"", dead_wrapper.display()))
+        .replace(&binary_digest, &dead_digest);
+    fs::write(&dead_pool_config, dead_pool_source).expect("dead pool configuration");
+    let run = |selected_pool: &Path, build_file: &Path| -> (bool, Value) {
         let mut command = Command::new(&binary);
         configure_test_sandbox_command(&mut command);
         command.args([
@@ -320,7 +332,7 @@ fn production_pool_failed_goal_releases_attempt_capacity() {
             "--builder-pool",
             "native-pool",
             "--builder-config",
-            pool_config.to_str().expect("UTF-8 pool config"),
+            selected_pool.to_str().expect("UTF-8 pool config"),
             "--builder-ticket-fd",
             &format!("{BUILDER_ID}={REMOTE_TICKET_INPUT_FD}"),
             "--remote-build-time-secs",
@@ -333,12 +345,15 @@ fn production_pool_failed_goal_releases_attempt_capacity() {
         let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
         (output.status.success(), report)
     };
-    let (first_ok, first_report) = run(&failing_file);
-    assert!(!first_ok, "the failing goal must fail: {first_report}");
-    assert!(first_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
-    let (second_ok, second_report) = run(&good_file);
-    assert!(second_ok, "a later goal must be admitted after attempt settlement: {second_report}");
-    assert_eq!(second_report["outcomes"].as_array().map(Vec::len), Some(1));
+    let (dead_ok, dead_report) = run(&dead_pool_config, &good_file);
+    assert!(!dead_ok, "a dead transport must fail the goal: {dead_report}");
+    assert!(dead_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
+    let (failed_ok, failed_report) = run(&pool_config, &failing_file);
+    assert!(!failed_ok, "the failing goal must fail: {failed_report}");
+    assert!(failed_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
+    let (final_ok, final_report) = run(&pool_config, &second_good_file);
+    assert!(final_ok, "a later goal must be admitted after attempt settlement: {final_report}");
+    assert_eq!(final_report["outcomes"].as_array().map(Vec::len), Some(1));
 }
 
 const POOL_WORKER_A: &str = "pool-builder-a";
@@ -1744,6 +1759,28 @@ let right = branch "pool-diamond-right" "right branch" in
         lib.display(),
     );
     fs::write(path, source).expect("pool diamond derivation");
+}
+
+fn write_named_replay_derivation(path: &Path, name: &str) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "{}",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf replay-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+        name,
+    );
+    fs::write(path, source).expect("named replayable derivation");
 }
 
 fn write_content_addressed_derivation(path: &Path) {
