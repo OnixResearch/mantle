@@ -9,6 +9,9 @@ use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
 
 use base64::Engine;
 use serde_json::Value;
@@ -458,6 +461,168 @@ fn production_pool_rejects_revoked_endpoint_binding_before_dispatch() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("remote-pool"), "unexpected revocation failure: {stderr}");
     assert_eq!(fs::read_dir(&client_store).expect("client store entries").count(), 0);
+}
+
+/// Pool mode: SIGINT cancels the in-flight transport, the attempt is settled,
+/// and a later goal is admitted on the same endpoint.
+#[test]
+fn production_pool_cancellation_settles_the_attempt() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool cancellation tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let worker_store = root.path().join("worker-store");
+    let worker_state = root.path().join("worker-state");
+    let slow_file = root.path().join("slow.ncl");
+    let followup_file = root.path().join("followup.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
+        fs::create_dir_all(dir).expect("pool cancellation directory");
+    }
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
+    write_slow_derivation(&slow_file);
+    write_named_replay_derivation(&followup_file, "production-remote-cancel-followup");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let wrapper = root.path().join("mantle-transport.sh");
+    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+    let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+    let binding_config = remote_binding_config_path(&state_dir);
+    let worker_args = vec![
+        "--state-dir".to_string(),
+        state_dir.display().to_string(),
+        "--store".to_string(),
+        worker_store.display().to_string(),
+        "--store-prefix".to_string(),
+        STORE_PREFIX.to_string(),
+        "--store-backend".to_string(),
+        "snix".to_string(),
+        "--remote-binding-config".to_string(),
+        binding_config.display().to_string(),
+        "remote".to_string(),
+        "serve".to_string(),
+        "--endpoint-id".to_string(),
+        BUILDER_ID.to_string(),
+        "--binding".to_string(),
+        "stdio-once".to_string(),
+        "--executor".to_string(),
+        "local-build".to_string(),
+        "--execution-state-dir".to_string(),
+        worker_state.display().to_string(),
+    ];
+    let args_json = serde_json::to_string(&worker_args).expect("worker args JSON");
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        binary = wrapper.display(),
+        digest = binary_digest,
+        args = args_json,
+        material = signing_material,
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+    let cancel_stderr = root.path().join("cancel-stderr.log");
+    let cancel_stdout = root.path().join("cancel-stdout.log");
+    let stderr_file = fs::File::create(&cancel_stderr).expect("cancel stderr file");
+    let stdout_file = fs::File::create(&cancel_stdout).expect("cancel stdout file");
+    let mut child = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &slow_file)
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file))
+        .spawn()
+        .expect("spawn cancelled pool build");
+    let state_path = state_dir.join("remote-coordinator-state.json");
+    let start_deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        let running = fs::read_to_string(&state_path)
+            .map(|state| state.contains("\"phase\": \"running\""))
+            .unwrap_or(false);
+        if running {
+            break;
+        }
+        if Instant::now() > start_deadline {
+            let _ = child.kill();
+            let stderr = fs::read_to_string(&cancel_stderr).unwrap_or_default();
+            let stdout = fs::read_to_string(&cancel_stdout).unwrap_or_default();
+            let state = fs::read_to_string(&state_path).unwrap_or_default();
+            panic!("pool attempt never reached the running phase; stdout={stdout} stderr={stderr} state={state}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let killed = unsafe { libc::kill(child.id() as i32, libc::SIGINT) };
+    assert_eq!(killed, 0, "SIGINT must be delivered");
+    let stop_deadline = Instant::now() + Duration::from_secs(90);
+    let status = loop {
+        match child.try_wait().expect("poll cancelled build") {
+            Some(status) => break status,
+            None if Instant::now() <= stop_deadline => std::thread::sleep(Duration::from_millis(50)),
+            None => {
+                let _ = child.kill();
+                panic!("cancelled pool build did not exit");
+            }
+        }
+    };
+    assert!(!status.success(), "a cancelled build must not report success");
+    let settled = fs::read_to_string(&state_path).expect("coordinator state after cancellation");
+    assert!(!settled.contains("\"phase\": \"running\""), "the cancelled attempt must be settled: {settled}");
+    assert!(settled.contains("\"phase\": \"failed\""), "the attempt must be failed: {settled}");
+    let output = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &followup_file)
+        .output()
+        .expect("run follow-up pool build");
+    assert!(
+        output.status.success(),
+        "a follow-up goal must run after cancellation: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn pool_build_command(
+    binary: &Path,
+    state_dir: &Path,
+    client_store: &Path,
+    pool_config: &Path,
+    build_file: &Path,
+) -> Command {
+    let mut command = Command::new(binary);
+    configure_test_sandbox_command(&mut command);
+    command.args([
+        "--json",
+        "--state-dir",
+        state_dir.to_str().expect("UTF-8 state dir"),
+        "--store",
+        client_store.to_str().expect("UTF-8 client store"),
+        "--store-prefix",
+        STORE_PREFIX,
+        "build",
+        build_file.to_str().expect("UTF-8 build file"),
+        "--no-substitute",
+        "--builder-pool",
+        "native-pool",
+        "--builder-config",
+        pool_config.to_str().expect("UTF-8 pool config"),
+        "--builder-ticket-fd",
+        &format!("{BUILDER_ID}={REMOTE_TICKET_INPUT_FD}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
+    command.arg("--remote-binding-config").arg(remote_binding_config_path(state_dir));
+    command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    configure_ticket_input_fd(&mut command, state_dir);
+    command
 }
 
 const POOL_WORKER_A: &str = "pool-builder-a";
@@ -1863,6 +2028,27 @@ let right = branch "pool-diamond-right" "right branch" in
         lib.display(),
     );
     fs::write(path, source).expect("pool diamond derivation");
+}
+
+fn write_slow_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-remote-slow",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "/bin/busybox sleep 20; printf slow-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+    );
+    fs::write(path, source).expect("slow derivation");
 }
 
 fn write_missing_input_derivation(path: &Path) {

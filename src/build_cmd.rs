@@ -596,9 +596,45 @@ pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
         if let Some(socket_path) = configured_live_socket()? {
             return rt.block_on(run_build_with_live_observation(config, &socket_path, false)).map(|(result, _)| result);
         }
+        if config.pool_executor_factory.is_some() {
+            return rt.block_on(run_pool_build_cancellable(config));
+        }
         rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
     })();
     crate::build_observation::pipeline(&plan, config, result)
+}
+
+/// Drive a pool build with operator cancellation.
+///
+/// Pool mode installs a signal monitor: a requested cancellation reaches the
+/// Worker, which terminates the pool transport child so the executor's
+/// settlement guard fails the admitted attempt and releases its endpoint slot.
+async fn run_pool_build_cancellable(config: &BuildConfig) -> Result<PipelineResult, RunError> {
+    let mut signals = OperatorSignalMonitor::new()?;
+    let cancellation = crunch_pipeline::EvaluationCancellation::new();
+    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
+    let build = crunch_pipeline::build_with_owned_cancellation(config, cancellation.clone(), stream_tx, None);
+    tokio::pin!(build);
+    let mut requested = false;
+    let mut stream_open = true;
+    loop {
+        tokio::select! {
+            biased;
+            signal = signals.receive(), if !requested => {
+                requested = true;
+                cancellation.request();
+                if let Ok(signal) = signal {
+                    eprintln!("received {}; requesting owned pool build cancellation", signal.name());
+                }
+            }
+            record = stream_rx.recv(), if stream_open => {
+                if record.is_none() {
+                    stream_open = false;
+                }
+            }
+            result = &mut build => return result.map_err(Into::into),
+        }
+    }
 }
 
 // Keep the completed pipeline inline rather than allocating on every successful test build.

@@ -1186,6 +1186,20 @@ pub enum PoolSelectionError {
 #[async_trait::async_trait]
 pub trait PoolGoalExecutor: Send + Sync {
     async fn execute(&self, goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult>;
+
+    /// Execute with an operator cancellation signal.
+    ///
+    /// Executors that cannot interrupt an in-flight exchange keep the default
+    /// behaviour and ignore the signal; the remote pool executor terminates its
+    /// transport child so the attempt can be settled.
+    async fn execute_cancellable(
+        &self,
+        goal: PreparedPoolGoal,
+        cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        let _ = cancellation;
+        self.execute(goal).await
+    }
 }
 
 /// Adapter for endpoints that really are Snix build services. It executes the
@@ -1264,6 +1278,24 @@ impl PoolDispatch {
     /// build retry: try the next endpoint once each, keeping the selector's
     /// first choice when it has capacity.
     pub async fn dispatch(&self, goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        self.dispatch_with(goal, None).await
+    }
+
+    /// Dispatch with an operator cancellation signal. Cancellation is not a
+    /// placement failure, so it is never retried on another endpoint.
+    pub async fn dispatch_cancellable(
+        &self,
+        goal: PreparedPoolGoal,
+        cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        self.dispatch_with(goal, Some(cancellation)).await
+    }
+
+    async fn dispatch_with(
+        &self,
+        goal: PreparedPoolGoal,
+        cancellation: Option<tokio::sync::watch::Receiver<bool>>,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
         validate_remote_build_service_request(&goal.request).map_err(remote_dispatch_io_error)?;
         let first = self
             .selector
@@ -1278,7 +1310,11 @@ impl PoolDispatch {
             let endpoint = self.endpoints.get(index).ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
             })?;
-            match endpoint.service.execute(goal.clone()).await {
+            let attempt = match cancellation.as_ref() {
+                Some(receiver) => endpoint.service.execute_cancellable(goal.clone(), receiver.clone()).await,
+                None => endpoint.service.execute(goal.clone()).await,
+            };
+            match attempt {
                 Ok(result) => return Ok(result),
                 Err(error) if pool_endpoint_busy(&error) => {
                     index = (index + 1) % self.endpoints.len();
@@ -2633,6 +2669,60 @@ mod tests {
         assert_eq!(result.log.as_deref(), Some("b"));
         assert_eq!(busy_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(second_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    struct CancelledExecutor {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl PoolGoalExecutor for CancelledExecutor {
+        async fn execute(&self, _goal: PreparedPoolGoal) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:cancelled-before-dispatch"))
+        }
+
+        async fn execute_cancellable(
+            &self,
+            _goal: PreparedPoolGoal,
+            _cancellation: tokio::sync::watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:cancelled-before-dispatch"))
+        }
+    }
+
+    #[test]
+    fn pool_dispatch_does_not_retry_cancellation_on_another_endpoint() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let cancelled_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let second_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let dispatch = PoolDispatch::new(
+            vec![
+                PoolEndpointService::new(
+                    "worker-a",
+                    std::sync::Arc::new(CancelledExecutor {
+                        calls: cancelled_calls.clone(),
+                    }) as std::sync::Arc<dyn PoolGoalExecutor>,
+                ),
+                PoolEndpointService::new(
+                    "worker-b",
+                    std::sync::Arc::new(BuildServiceExecutor::new(FakePoolService {
+                        label: "b",
+                        calls: second_calls.clone(),
+                    })) as std::sync::Arc<dyn PoolGoalExecutor>,
+                ),
+            ],
+            std::sync::Arc::new(FirstSelector),
+        )
+        .expect("fixture pool dispatch");
+        let (_sender, receiver) = tokio::sync::watch::channel(false);
+        let error = runtime
+            .block_on(dispatch.dispatch_cancellable(goal_with_system("x86_64-linux"), receiver))
+            .unwrap_err();
+        assert!(error.to_string().contains("cancelled"), "{error}");
+        assert_eq!(cancelled_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(second_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 
     #[test]

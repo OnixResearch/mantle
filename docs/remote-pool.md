@@ -125,15 +125,16 @@ boundary.
 
 ## Cancellation
 
-Pool mode does not install an operator-cancellation handler. `SIGINT` or
-`SIGTERM` during an ordinary pool build terminates the process; an admitted
-attempt can remain `Running` in the coordinator state because the executor's
-settlement guard only runs when the future is dropped inside the process.
+Pool builds install an operator-cancellation handler. `SIGINT` or `SIGTERM`
+requests owned cancellation; the Worker stops scheduling new pool goals and
+terminates the in-flight transport's process group. The client observes child
+teardown, the executor's settlement guard fails the admitted attempt, and the
+endpoint concurrency slot is released. A follow-up goal on the same endpoint is
+admitted normally.
 
-The Worker also refuses cancellable pool dispatch
-(`remote-pool:watch-unsupported`) because transport-child teardown on a dropped
-exchange is not proven. A later invocation for the same goal reports
-`current-attempt-applied` until that durable attempt state is reconciled.
+Cancellation is not a placement failure: it is never retried on another
+endpoint. A cancellation that arrives before a goal is dispatched refuses that
+goal with `remote-pool:cancelled-before-dispatch`.
 
 ## Non-claims
 

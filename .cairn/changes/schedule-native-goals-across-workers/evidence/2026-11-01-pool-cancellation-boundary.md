@@ -1,3 +1,6 @@
+> Superseded by `2026-11-01-pool-cancellation-slice.md`; the Worker now
+> implements cancellable pool dispatch and the operator handler is installed.
+
 # Pool cancellation boundary (2026-11-01)
 
 Scope: record why operator cancellation does not yet drive a pool attempt, and

@@ -3943,14 +3943,13 @@ impl Worker {
             let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
             let build_result = match _permit {
                 Ok(_p) if pool.is_some() => match (pool, pool_goal) {
-                    (Some(dispatch), Some(goal)) => {
-                        if cancellation.is_some() {
-                            // Watch teardown is not proven for a pool executor.
-                            Err(Error::Store("remote-pool:watch-unsupported".to_string()))
-                        } else {
-                            dispatch.dispatch(goal).await.map_err(|error| Error::Store(format!("build: {error}")))
-                        }
-                    }
+                    (Some(dispatch), Some(goal)) => match cancellation {
+                        Some(receiver) => dispatch
+                            .dispatch_cancellable(goal, receiver)
+                            .await
+                            .map_err(|error| Error::Store(format!("build: {error}"))),
+                        None => dispatch.dispatch(goal).await.map_err(|error| Error::Store(format!("build: {error}"))),
+                    },
                     _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
                 },
                 Ok(_p) => match cancellation {

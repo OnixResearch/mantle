@@ -10,6 +10,8 @@ use std::collections::BTreeSet;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use crunch_build::distributed::PoolGoalExecutor;
 use crunch_build::distributed::PreparedPoolGoal;
@@ -23,6 +25,7 @@ use snix_build::buildservice::BuildOutput;
 use snix_build::buildservice::BuildResult;
 
 use crate::remote_build::ConcreteBuildRequest;
+use crate::remote_build::RemoteChildKillSlot;
 use crate::remote_build::RemoteClientBuildOptions;
 use crate::remote_build::RemoteConcreteBuildPayload;
 use crate::remote_build::admit_remote_production_dispatch;
@@ -35,7 +38,6 @@ use crate::remote_build::remote_client_request_id;
 use crate::remote_build::remote_expected_outputs_from_derivation;
 use crate::remote_build::remote_input_ref_upload_bytes;
 use crate::remote_build::remote_source_input_refs_from_derivation;
-use crate::remote_build::run_stdio_remote_child;
 use crate::remote_build::save_coordinator_state;
 use crate::remote_build::validate_remote_stdio_output_import;
 
@@ -240,6 +242,50 @@ where
 #[async_trait::async_trait]
 impl PoolGoalExecutor for RemotePoolGoalExecutor {
     async fn execute(&self, goal: PreparedPoolGoal) -> io::Result<BuildResult> {
+        self.execute_with_kill(goal, None).await
+    }
+
+    async fn execute_cancellable(
+        &self,
+        goal: PreparedPoolGoal,
+        mut cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> io::Result<BuildResult> {
+        if *cancellation.borrow() {
+            return Err(pool_error("cancelled-before-dispatch"));
+        }
+        let kill: RemoteChildKillSlot = Arc::new(Mutex::new(None));
+        let cancel_kill = Arc::clone(&kill);
+        let cancel_task = tokio::spawn(async move {
+            if cancellation.changed().await.is_err() {
+                return;
+            }
+            // The runner publishes its process-group leader just after spawn;
+            // poll briefly so a cancellation racing the spawn still lands.
+            for _ in 0..20 {
+                let pid = cancel_kill.lock().ok().and_then(|slot| *slot);
+                if let Some(pid) = pid {
+                    // SAFETY: the runner created a new process group with this
+                    // leader, so the negative pid targets only that group.
+                    unsafe {
+                        libc::kill(-pid, libc::SIGKILL);
+                    }
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        });
+        let result = self.execute_with_kill(goal, Some(kill)).await;
+        cancel_task.abort();
+        result
+    }
+}
+
+impl RemotePoolGoalExecutor {
+    async fn execute_with_kill(
+        &self,
+        goal: PreparedPoolGoal,
+        kill: Option<RemoteChildKillSlot>,
+    ) -> io::Result<BuildResult> {
         let endpoint = &self.endpoint;
         let request = concrete_pool_goal_request(&goal, &endpoint.options).map_err(|error| pool_error(&error))?;
         let mut plan = plan_remote_stdio_request_dispatch(request.clone(), &endpoint.options)
@@ -264,7 +310,7 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             admitted.ok_or_else(|| pool_error("admission-binding-missing"))?
         };
         let mut settlement = AttemptSettlement::new(endpoint, attempt.clone());
-        let result = self.run_admitted_goal(&goal, &mut plan, &attempt).await;
+        let result = self.run_admitted_goal(&goal, &mut plan, &attempt, kill.as_ref()).await;
         if result.is_ok() {
             settlement.disarm();
         }
@@ -278,6 +324,7 @@ impl RemotePoolGoalExecutor {
         goal: &PreparedPoolGoal,
         plan: &mut crate::remote_build::RemoteClientDispatchPlan,
         attempt: &crate::remote_build::RemoteProductionAttemptBinding,
+        kill: Option<&RemoteChildKillSlot>,
     ) -> io::Result<BuildResult> {
         let endpoint = &self.endpoint;
         bind_remote_production_dispatch(
@@ -309,8 +356,9 @@ impl RemotePoolGoalExecutor {
             EffectActor::Client,
         )
         .map_err(|reason| pool_error(&format!("effect-{reason:?}")))?;
-        let transcript = run_stdio_remote_child(&plan.command, &request_id, &mut session)
-            .map_err(|error| pool_error(&error.to_string()))?;
+        let transcript =
+            crate::remote_build::run_stdio_remote_child_with_kill(&plan.command, &request_id, &mut session, kill)
+                .map_err(|error| pool_error(&error.to_string()))?;
         let admission =
             validate_remote_stdio_output_import(&plan.client.request, &plan.client.trusted_output_keys, &transcript)
                 .map_err(|error| pool_error(&error))?;

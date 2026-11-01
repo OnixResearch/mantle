@@ -10268,6 +10268,7 @@ fn finalize_remote_child_transcript(
 struct ProductionClientExchangePort<'a> {
     command: &'a RemoteStdioCommand,
     transcript: Option<RemoteStdioTranscript>,
+    kill: Option<RemoteChildKillSlot>,
 }
 
 impl crunch_remote_app::ClientExchangePort for ProductionClientExchangePort<'_> {
@@ -10302,7 +10303,8 @@ impl crunch_remote_app::ClientExchangePort for ProductionClientExchangePort<'_> 
             } else if self.command.production_transfer.is_some() {
                 return Err("remote-transport-exchange-production-request-missing".to_string());
             }
-            let transcript = run_stdio_remote_child_physical(self.command).map_err(|error| error.to_string())?;
+            let transcript =
+                run_stdio_remote_child_physical(self.command, self.kill.as_ref()).map_err(|error| error.to_string())?;
             if let Some(streaming) = transcript.streaming_output.as_ref() {
                 let manifest = &streaming.manifest;
                 if manifest.job_id != *exchange.job_id
@@ -10345,10 +10347,40 @@ impl crunch_remote_app::ClientExchangePort for ProductionClientExchangePort<'_> 
     }
 }
 
+/// Shared slot where a transport runner publishes its child pid so an operator
+/// cancellation can terminate the process group.
+pub type RemoteChildKillSlot = std::sync::Arc<std::sync::Mutex<Option<i32>>>;
+
+fn register_remote_child_pid(kill: Option<&RemoteChildKillSlot>, child: &std::process::Child) {
+    if let Some(slot) = kill {
+        let pid = i32::try_from(child.id()).ok();
+        if let Ok(mut current) = slot.lock() {
+            *current = pid;
+        }
+    }
+}
+
+fn clear_remote_child_pid(kill: Option<&RemoteChildKillSlot>) {
+    if let Some(slot) = kill
+        && let Ok(mut current) = slot.lock()
+    {
+        *current = None;
+    }
+}
+
 pub fn run_stdio_remote_child(
     command: &RemoteStdioCommand,
     request_id: &str,
     session: &mut crunch_remote_core::effect::EffectSession<'_>,
+) -> Result<RemoteStdioTranscript, RunError> {
+    run_stdio_remote_child_with_kill(command, request_id, session, None)
+}
+
+pub fn run_stdio_remote_child_with_kill(
+    command: &RemoteStdioCommand,
+    request_id: &str,
+    session: &mut crunch_remote_core::effect::EffectSession<'_>,
+    kill: Option<&RemoteChildKillSlot>,
 ) -> Result<RemoteStdioTranscript, RunError> {
     let binding = session
         .binding()
@@ -10356,6 +10388,7 @@ pub fn run_stdio_remote_child(
     let mut port = ProductionClientExchangePort {
         command,
         transcript: None,
+        kill: kill.cloned(),
     };
     crunch_remote_app::exchange_client(session, &mut port, crunch_remote_app::ClientExchangeCommand {
         request_id,
@@ -10371,7 +10404,10 @@ pub fn run_stdio_remote_child(
         .ok_or_else(|| RunError::Internal("remote-transport-exchange-transcript-missing".to_string()))
 }
 
-fn run_stdio_remote_child_physical(command: &RemoteStdioCommand) -> Result<RemoteStdioTranscript, RunError> {
+fn run_stdio_remote_child_physical(
+    command: &RemoteStdioCommand,
+    kill: Option<&RemoteChildKillSlot>,
+) -> Result<RemoteStdioTranscript, RunError> {
     if command.timeout_secs == 0 || command.timeout_secs > MAX_REMOTE_BUILD_TIME_SECS {
         return Err(RunError::Internal(format!(
             "stdio remote child timeout out of bounds: {} seconds",
@@ -10384,15 +10420,25 @@ fn run_stdio_remote_child_physical(command: &RemoteStdioCommand) -> Result<Remot
     let mut child = process.spawn().map_err(|err| {
         RunError::Internal(format!("spawning stdio remote child {}: {err}", command.program.display()))
     })?;
+    register_remote_child_pid(kill, &child);
     if let Some(production) = command.production_transfer.as_ref() {
-        return run_production_stdio_remote_child(child, command, production);
+        let result = run_production_stdio_remote_child(child, command, production);
+        clear_remote_child_pid(kill);
+        return result;
     }
     if let Some(mut stdin) = child.stdin.take() {
         for frame in &command.input_frames {
             write_remote_frame(&mut stdin, frame).map_err(RunError::Internal)?;
         }
     }
-    let output = wait_for_stdio_child_output(child, command.timeout_secs, &command.program)?;
+    let output = match wait_for_stdio_child_output(child, command.timeout_secs, &command.program) {
+        Ok(output) => output,
+        Err(error) => {
+            clear_remote_child_pid(kill);
+            return Err(error);
+        }
+    };
+    clear_remote_child_pid(kill);
     let child_output = RemoteStdioChildOutput {
         stdout: output.stdout,
         stderr: output.stderr,
