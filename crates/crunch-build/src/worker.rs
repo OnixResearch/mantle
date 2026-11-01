@@ -3943,13 +3943,28 @@ impl Worker {
             let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
             let build_result = match _permit {
                 Ok(_p) if pool.is_some() => match (pool, pool_goal) {
-                    (Some(dispatch), Some(goal)) => match cancellation {
-                        Some(receiver) => dispatch
-                            .dispatch_cancellable(goal, receiver)
-                            .await
-                            .map_err(|error| Error::Store(format!("build: {error}"))),
-                        None => dispatch.dispatch(goal).await.map_err(|error| Error::Store(format!("build: {error}"))),
-                    },
+                    (Some(dispatch), Some(goal)) => {
+                        let fallback_allowed = dispatch.allows_local_fallback();
+                        let fallback_cancellation = cancellation.clone();
+                        let attempt = match cancellation {
+                            Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
+                            None => dispatch.dispatch(goal).await,
+                        };
+                        match attempt {
+                            Ok(result) => Ok(result),
+                            Err(error) if fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
+                                // Local fallback keeps the ordinary build path; the
+                                // sandbox service does not advertise watch
+                                // cancellation teardown, so the goal completes
+                                // before the pipeline observes cancellation.
+                                let _ = fallback_cancellation;
+                                bs.do_build(build_request)
+                                    .await
+                                    .map_err(|error| Error::Store(format!("local fallback: {error}")))
+                            }
+                            Err(error) => Err(Error::Store(format!("build: {error}"))),
+                        }
+                    }
                     _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
                 },
                 Ok(_p) => match cancellation {

@@ -1233,6 +1233,8 @@ pub struct PoolDispatch {
     selector: std::sync::Arc<dyn PoolGoalSelector>,
     /// Bound on concurrent dispatches from the admitted pool session policy.
     session_limit: Option<std::sync::Arc<tokio::sync::Semaphore>>,
+    /// Admitted pre-dispatch local fallback policy.
+    local_fallback: bool,
 }
 
 impl std::fmt::Debug for PoolDispatch {
@@ -1265,7 +1267,20 @@ impl PoolDispatch {
             endpoint_ids,
             selector,
             session_limit: None,
+            local_fallback: false,
         })
+    }
+
+    /// Allow local execution when placement fails before dispatch.
+    #[must_use]
+    pub fn with_local_fallback(mut self, allowed: bool) -> Self {
+        self.local_fallback = allowed;
+        self
+    }
+
+    /// Whether the admitted policy allows local fallback before dispatch.
+    pub fn allows_local_fallback(&self) -> bool {
+        self.local_fallback
     }
 
     /// Bound concurrent dispatches by the admitted pool session policy.
@@ -1333,7 +1348,11 @@ impl PoolDispatch {
         let mut wait_attempts = 0_u32;
         loop {
             let first = self.selector.select(&goal, &self.endpoint_ids).map_err(|error| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}"))
+                if self.local_fallback {
+                    std::io::Error::new(std::io::ErrorKind::WouldBlock, "remote-pool:placement-unavailable")
+                } else {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}"))
+                }
             })?;
             let mut tried = std::collections::BTreeSet::new();
             let mut index = first;
@@ -1361,7 +1380,11 @@ impl PoolDispatch {
             wait_attempts = wait_attempts.saturating_add(1);
             if wait_attempts >= POOL_BUSY_WAIT_ATTEMPTS_MAX {
                 return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
+                    if self.local_fallback {
+                        std::io::ErrorKind::WouldBlock
+                    } else {
+                        std::io::ErrorKind::InvalidInput
+                    },
                     "remote-pool:no-endpoint-with-capacity",
                 ));
             }

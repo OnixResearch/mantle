@@ -51,6 +51,7 @@ pub struct RemotePoolExecutorFactory {
     admitted: AdmittedPool,
     endpoints: Vec<PoolEndpointPlan>,
     preferences: Vec<PlacementPreference>,
+    local_fallback: bool,
 }
 
 impl std::fmt::Debug for RemotePoolExecutorFactory {
@@ -63,6 +64,13 @@ impl std::fmt::Debug for RemotePoolExecutorFactory {
 }
 
 impl RemotePoolExecutorFactory {
+    /// Admit pre-dispatch local fallback for this factory.
+    #[must_use]
+    pub fn with_local_fallback(mut self, allowed: bool) -> Self {
+        self.local_fallback = allowed;
+        self
+    }
+
     pub fn new(
         admitted: AdmittedPool,
         endpoints: Vec<PoolEndpointPlan>,
@@ -82,6 +90,7 @@ impl RemotePoolExecutorFactory {
             admitted,
             endpoints,
             preferences,
+            local_fallback: false,
         })
     }
 }
@@ -130,6 +139,7 @@ impl PoolExecutorFactory for RemotePoolExecutorFactory {
         });
         PoolDispatch::new(services, selector)
             .map(|dispatch| dispatch.with_session_limit(self.admitted.session().max_concurrency))
+            .map(|dispatch| dispatch.with_local_fallback(self.local_fallback))
             .map(Arc::new)
             .map_err(|error| error.to_string())
     }
@@ -276,7 +286,14 @@ pub fn plan_pool_factory(input: PoolFactoryInput<'_>) -> Result<RemotePoolExecut
             },
         });
     }
-    RemotePoolExecutorFactory::new(admitted, plans, input.preferences).map_err(crate::errors::RunError::Internal)
+    RemotePoolExecutorFactory::new(admitted, plans, input.preferences)
+        .map(|factory| {
+            factory.with_local_fallback(matches!(
+                pool.fallback_policy,
+                crate::remote_farm_config::RemoteFallbackPolicy::Always
+            ))
+        })
+        .map_err(crate::errors::RunError::Internal)
 }
 
 fn sandbox_mode_name(mode: crate::remote_farm_config::RemoteSandboxMode) -> &'static str {

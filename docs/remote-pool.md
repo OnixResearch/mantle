@@ -116,6 +116,15 @@ identity, and executes the action in its local sandbox. The client then:
 - exports only admitted outputs to the client's physical store and lets the
   ordinary goal/store path persist PathInfo.
 
+## Fallback
+
+`fallback_policy = 'always` admits local execution when placement fails before
+dispatch (no fitting endpoint or capacity unavailable after the bounded wait).
+`never` and `trusted-only` (the default) fail closed instead. Local fallback
+uses the ordinary sandbox build path; a cancellation that arrives during the
+fallback goal is observed only after that goal completes, because the local
+service does not advertise watch sandbox teardown.
+
 ## Failures
 
 A failed exchange (transport death, build failure, untrusted key, invalid
@@ -149,15 +158,15 @@ global `--jobs` bound, the pool session `max_concurrency` bound, queueing when
 endpoints are at capacity, cancellation with transport-child teardown, worker
 death mid-exchange, tampered output bytes, untrusted output keys, ambiguous
 configured keys, revoked bindings, missing source inputs, duplicate completion
-refusal, cache hits on a second build, and byte-identical outputs against local
-and single-builder builds.
+refusal, cache hits on a second build, admitted pre-dispatch local fallback,
+and byte-identical outputs against local and single-builder builds.
 
 ## Non-claims
 
 - Same-host `stdio` loopback is the only transport exercised end to end;
   `ssh-stdio` and `p2p` are admitted by configuration but unproven here.
-- Dynamic-plan/source re-admission through a pool result, admitted
-  pre-dispatch fallback, stale-fence replacement, capacity shrink, and
-  per-goal waiter-notification counts are not covered.
+- Dynamic-plan/source re-admission through a pool result, stale-fence
+  replacement, capacity shrink, and per-goal waiter-notification counts are
+  not covered.
 - A successful pool build is not a release, self-hosting, distributed
   determinism, or physical-target claim.

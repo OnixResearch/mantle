@@ -235,6 +235,75 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert_one_pool_outcome(&outcome.report);
 }
 
+/// Admitted pre-dispatch fallback (`fallback_policy = 'always`) runs the goal
+/// locally when no endpoint fits; the default policy fails instead.
+#[test]
+fn production_pool_local_fallback_runs_when_no_endpoint_fits() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool fallback tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let build_file = root.path().join("goal.ncl");
+    let fallback_config = root.path().join("fallback-pool.ncl");
+    let strict_config = root.path().join("strict-pool.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&client_store).expect("client store");
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
+    write_replayable_derivation(&build_file);
+    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    let digest = blake3::hash(&fs::read(&program).expect("program bytes")).to_hex().to_string();
+    let pool_source = |policy: &str| {
+        format!(
+            r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    fallback_policy = '{policy},
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{}",
+      transport_program_digest_blake3 = "{}",
+      transport_args = [],
+      profile = {{ system = "aarch64-linux" }},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "AAAA" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+            program.display(),
+            digest,
+            builder = BUILDER_ID,
+        )
+    };
+    fs::write(&fallback_config, pool_source("always")).expect("fallback pool configuration");
+    fs::write(&strict_config, pool_source("trusted-only")).expect("strict pool configuration");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let strict = pool_build_command(&binary, &state_dir, &client_store, &strict_config, &build_file)
+        .output()
+        .expect("run strict pool build");
+    assert!(!strict.status.success(), "without fallback an unplaceable goal must fail");
+    let strict_text = format!("{}{}", String::from_utf8_lossy(&strict.stdout), String::from_utf8_lossy(&strict.stderr));
+    assert!(
+        strict_text.contains("placement-unavailable") || strict_text.contains("no admitted endpoint fits"),
+        "unexpected strict failure: {strict_text}"
+    );
+    let fallback = pool_build_command(&binary, &state_dir, &client_store, &fallback_config, &build_file)
+        .output()
+        .expect("run fallback pool build");
+    assert!(
+        fallback.status.success(),
+        "admitted fallback must build locally: stdout={} stderr={}",
+        String::from_utf8_lossy(&fallback.stdout),
+        String::from_utf8_lossy(&fallback.stderr)
+    );
+    let report: Value = serde_json::from_slice(&fallback.stdout).expect("fallback JSON report");
+    let outcomes = report["outcomes"].as_array().expect("outcomes array");
+    assert_eq!(outcomes.len(), 1, "one local outcome: {report}");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+}
+
 /// Two trusted keys with the same name must fail pool admission before dispatch.
 #[test]
 fn production_pool_rejects_ambiguous_output_keys_before_dispatch() {
