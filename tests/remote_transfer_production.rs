@@ -484,7 +484,12 @@ fn production_pool_cancellation_settles_the_attempt() {
     write_named_replay_derivation(&followup_file, "production-remote-cancel-followup");
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
-    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    let worker_pid_file = root.path().join("worker-pid");
+    fs::write(
+        &wrapper,
+        format!("#!/bin/sh\necho $$ > {} \nexec {} \"$@\"\n", worker_pid_file.display(), binary.display()),
+    )
+    .expect("transport wrapper");
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
     let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
     let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
@@ -580,6 +585,23 @@ fn production_pool_cancellation_settles_the_attempt() {
     let settled = fs::read_to_string(&state_path).expect("coordinator state after cancellation");
     assert!(!settled.contains("\"phase\": \"running\""), "the cancelled attempt must be settled: {settled}");
     assert!(settled.contains("\"phase\": \"failed\""), "the attempt must be failed: {settled}");
+    let worker_pid: i32 = fs::read_to_string(&worker_pid_file)
+        .expect("transport child pid recorded")
+        .trim()
+        .parse()
+        .expect("transport child pid parses");
+    let teardown_deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        // SAFETY: signal 0 only probes whether the recorded pid still exists.
+        let alive = unsafe { libc::kill(worker_pid, 0) } == 0;
+        if !alive {
+            break;
+        }
+        if Instant::now() > teardown_deadline {
+            panic!("transport child {worker_pid} is still alive after cancellation");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let output = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &followup_file)
         .output()
         .expect("run follow-up pool build");
