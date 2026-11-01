@@ -1289,6 +1289,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [9u8; 20]).unwrap();
         crate::build_log::write_log_file(logs_dir.path(), &drv_path, "demo", false, "failure body").unwrap();
@@ -1371,6 +1372,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [10u8; 20]).unwrap();
         let drv_key = drv_key_for(&config.store_dir, &drv_path);
@@ -1438,6 +1440,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
         let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [2u8; 20]).unwrap();
@@ -1821,6 +1824,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [5u8; 20]).unwrap();
         let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [6u8; 20]).unwrap();
@@ -2318,6 +2322,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let result = PipelineResult {
             outcomes: Vec::new(),
@@ -2430,6 +2435,7 @@ mod tests {
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [3u8; 20]).unwrap();
         let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [4u8; 20]).unwrap();

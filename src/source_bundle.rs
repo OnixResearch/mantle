@@ -10037,6 +10037,7 @@ let Derivation = import "derivation.ncl" in
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: None,
+            pool_executor_factory: None,
         };
         let drifted = crunch_pipeline::build(&config).await.unwrap();
         assert!(drifted.outcomes.is_empty(), "changed source-plan bytes must not execute a dependent tool");

@@ -150,6 +150,7 @@ fn pipeline_config(
         compile_driver_runtime: None,
         rust_wait_runtime: None,
         interchange_dir: None,
+            pool_executor_factory: None,
     }
 }
 

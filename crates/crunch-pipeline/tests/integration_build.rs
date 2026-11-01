@@ -74,6 +74,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         compile_driver_runtime: None,
         rust_wait_runtime: None,
         interchange_dir: None,
+        pool_executor_factory: None,
     }
 }
 

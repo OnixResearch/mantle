@@ -378,6 +378,7 @@ pub(crate) fn prepare_local_build_config(
             compile_driver_runtime: None,
             rust_wait_runtime: None,
             interchange_dir: interchange_dir.map(Path::to_path_buf),
+            pool_executor_factory: None,
             base_state_dirs,
             source_admission,
         };

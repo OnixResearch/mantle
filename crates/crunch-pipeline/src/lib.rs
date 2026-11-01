@@ -154,6 +154,21 @@ pub struct BuildConfig {
     pub rust_wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
     /// Optional directory for owner-emitted interchange records.
     pub interchange_dir: Option<PathBuf>,
+    /// Optional explicit pool executor. When present, ready goals route through
+    /// the admitted pool instead of the single build service.
+    pub pool_executor_factory: Option<std::sync::Arc<dyn PoolExecutorFactory>>,
+}
+
+/// Constructs a pool executor over the pipeline's opened store.
+///
+/// The shell owns endpoint configuration, credentials, transport, and the
+/// executor implementation; the pipeline only hands it the store capability and
+/// attaches the resulting dispatch to the ordinary lazy builder.
+pub trait PoolExecutorFactory: Send + Sync {
+    fn create(
+        &self,
+        store: &crunch_store::StoreHandle,
+    ) -> Result<std::sync::Arc<crunch_build::distributed::PoolDispatch>, String>;
 }
 
 #[derive(Debug)]
@@ -810,6 +825,10 @@ fn create_cache_only_observer(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    let pool_dispatch = match &config.pool_executor_factory {
+        Some(factory) => Some(factory.create(&store).map_err(Error::Build)?),
+        None => None,
+    };
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
@@ -833,6 +852,9 @@ fn create_cache_only_observer(
         config.verbose,
     );
     builder.set_hermeticity_mode(HermeticityMode::Strict);
+    if let Some(pool_dispatch) = pool_dispatch {
+        builder = builder.with_pool_dispatch(pool_dispatch);
+    }
     Ok(PipelineBuilderBundle {
         builder,
         output_lookup,
@@ -974,6 +996,10 @@ where
     debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
     debug_assert!(config.max_jobs >= 1, "builder requires at least one job");
 
+    let pool_dispatch = match &config.pool_executor_factory {
+        Some(factory) => Some(factory.create(&store).map_err(Error::Build)?),
+        None => None,
+    };
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
@@ -1012,6 +1038,9 @@ where
         config.root_retention_source
     });
     builder.set_root_registration(None);
+    if let Some(pool_dispatch) = pool_dispatch {
+        builder = builder.with_pool_dispatch(pool_dispatch);
+    }
     Ok(PipelineBuilderBundle {
         builder,
         output_lookup,
