@@ -6610,6 +6610,20 @@ pub fn remote_observability_adapter_health(
     }
 }
 
+/// Fence a transfer only when this host already knows the job. A worker that has
+/// never seen the client's coordinator state executes the action as a stateless
+/// executor; workspace and lease paths keep the strict check.
+pub fn validate_current_production_attempt_if_known(
+    state_dir: &Path,
+    expected: &RemoteProductionAttemptBinding,
+) -> Result<(), String> {
+    let state = load_coordinator_state(state_dir).map_err(|err| err.to_string())?;
+    if !state.jobs.contains_key(&expected.job_id) {
+        return Ok(());
+    }
+    validate_current_production_attempt(state_dir, expected)
+}
+
 pub fn validate_current_production_attempt(
     state_dir: &Path,
     expected: &RemoteProductionAttemptBinding,
@@ -9172,7 +9186,7 @@ fn receive_remote_transfer_interactively(
     } = input;
     let mut validate_fence = || {
         if let (Some(state_dir), Some(attempt)) = (state_dir, attempt) {
-            validate_current_production_attempt(state_dir, attempt)?;
+            validate_current_production_attempt_if_known(state_dir, attempt)?;
         }
         Ok(())
     };
@@ -20156,6 +20170,45 @@ mod tests {
         assert_eq!(fs::read(&manifest_path).unwrap(), manifest_before);
         assert_eq!(fs::read(coordinator_state_path(temp.path())).unwrap(), control_before);
         assert_eq!(state, state_before);
+    }
+
+    #[test]
+    fn worker_transfer_fence_ignores_unknown_jobs_but_rejects_known_mismatches() {
+        let temp = tempfile::tempdir().unwrap();
+        let unknown = RemoteProductionAttemptBinding {
+            job_id: RemoteJobId::new("unknown-job").unwrap(),
+            attempt_id: RemoteAttemptId::new("unknown-attempt").unwrap(),
+            fence_generation: RemoteFenceGeneration::INITIAL,
+        };
+        validate_current_production_attempt_if_known(temp.path(), &unknown)
+            .expect("an unknown job is not a local worker fence");
+
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let current = state
+            .jobs
+            .values()
+            .next()
+            .and_then(|job| job.current_attempt.clone())
+            .expect("dispatched job has an attempt");
+        save_coordinator_state(temp.path(), &state).expect("coordinator state persists");
+
+        let known = RemoteProductionAttemptBinding {
+            job_id: current.job_id.clone(),
+            attempt_id: current.attempt_id.clone(),
+            fence_generation: current.fence_generation,
+        };
+        validate_current_production_attempt_if_known(temp.path(), &known).expect("current attempt passes");
+        let stale = RemoteProductionAttemptBinding {
+            attempt_id: RemoteAttemptId::new("stale-attempt").unwrap(),
+            ..known
+        };
+        assert!(
+            validate_current_production_attempt_if_known(temp.path(), &stale).is_err(),
+            "a known job with a different attempt is still fenced"
+        );
     }
 
     #[test]
