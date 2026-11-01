@@ -1297,34 +1297,58 @@ impl PoolDispatch {
         cancellation: Option<tokio::sync::watch::Receiver<bool>>,
     ) -> std::io::Result<snix_build::buildservice::BuildResult> {
         validate_remote_build_service_request(&goal.request).map_err(remote_dispatch_io_error)?;
-        let first = self
-            .selector
-            .select(&goal, &self.endpoint_ids)
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}")))?;
-        let mut tried = std::collections::BTreeSet::new();
-        let mut index = first;
-        for _ in 0..self.endpoints.len() {
-            if !tried.insert(index) {
-                break;
-            }
-            let endpoint = self.endpoints.get(index).ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
+        let mut wait_attempts = 0_u32;
+        loop {
+            let first = self.selector.select(&goal, &self.endpoint_ids).map_err(|error| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("remote-pool:{error}"))
             })?;
-            let attempt = match cancellation.as_ref() {
-                Some(receiver) => endpoint.service.execute_cancellable(goal.clone(), receiver.clone()).await,
-                None => endpoint.service.execute(goal.clone()).await,
-            };
-            match attempt {
-                Ok(result) => return Ok(result),
-                Err(error) if pool_endpoint_busy(&error) => {
-                    index = (index + 1) % self.endpoints.len();
+            let mut tried = std::collections::BTreeSet::new();
+            let mut index = first;
+            for _ in 0..self.endpoints.len() {
+                if !tried.insert(index) {
+                    break;
                 }
-                Err(error) => return Err(error),
+                let endpoint = self.endpoints.get(index).ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:selector-out-of-range")
+                })?;
+                let attempt = match cancellation.as_ref() {
+                    Some(receiver) => endpoint.service.execute_cancellable(goal.clone(), receiver.clone()).await,
+                    None => endpoint.service.execute(goal.clone()).await,
+                };
+                match attempt {
+                    Ok(result) => return Ok(result),
+                    Err(error) if pool_endpoint_busy(&error) => {
+                        index = (index + 1) % self.endpoints.len();
+                    }
+                    Err(error) => return Err(error),
+                }
             }
+            // Every endpoint is at its current concurrency limit. A pool with
+            // fewer slots than ready goals must queue, not fail the goal.
+            wait_attempts = wait_attempts.saturating_add(1);
+            if wait_attempts >= POOL_BUSY_WAIT_ATTEMPTS_MAX {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "remote-pool:no-endpoint-with-capacity",
+                ));
+            }
+            if let Some(receiver) = cancellation.as_ref()
+                && *receiver.borrow()
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "remote-pool:cancelled-before-dispatch",
+                ));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(POOL_BUSY_WAIT_INTERVAL_MS)).await;
         }
-        Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "remote-pool:no-endpoint-with-capacity"))
     }
 }
+
+/// How long a queued goal waits for endpoint capacity before failing.
+const POOL_BUSY_WAIT_INTERVAL_MS: u64 = 50;
+/// 12,000 attempts × 50 ms = ten minutes, matching the default build budget.
+const POOL_BUSY_WAIT_ATTEMPTS_MAX: u32 = 12_000;
 
 /// Whether an endpoint refused the goal because its current concurrency is
 /// fully reserved. The pool may re-place that goal on another endpoint.

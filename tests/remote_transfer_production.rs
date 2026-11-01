@@ -116,7 +116,7 @@ fn run_single_endpoint_pool_build(
     fs::create_dir_all(&client_store).expect("client store");
     fs::create_dir_all(&worker_store).expect("worker store");
     fs::create_dir_all(&worker_state).expect("worker state");
-    write_ticket_state(&state_dir);
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
     write_build(&build_file);
 
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
@@ -225,6 +225,20 @@ fn assert_one_pool_outcome(report: &Value) {
 fn production_pool_dispatches_one_goal_through_the_worker() {
     let report = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
     assert_one_pool_outcome(&report);
+}
+
+#[test]
+fn production_pool_diamond_runs_on_one_endpoint_at_concurrency_one() {
+    let report = run_single_endpoint_pool_build(serial_transfer_guard(), |path| {
+        write_pool_diamond_derivation(path, Some("input-addressed"))
+    });
+    assert_one_pool_outcome(&report);
+    let outputs = report["outcomes"][0]["outputs"].as_array().expect("root outputs");
+    let graph = fs::read_to_string(Path::new(outputs[0]["path"].as_str().expect("root output path")).join("graph.txt"))
+        .expect("diamond graph output");
+    assert!(graph.contains("shared foundation"), "graph carries the shared dependency: {graph}");
+    assert!(graph.contains("left branch"), "graph carries the left branch: {graph}");
+    assert!(graph.contains("right branch"), "graph carries the right branch: {graph}");
 }
 
 #[test]
