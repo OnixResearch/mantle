@@ -128,7 +128,10 @@ impl PoolExecutorFactory for RemotePoolExecutorFactory {
             workers,
             preferences: self.preferences.clone(),
         });
-        PoolDispatch::new(services, selector).map(Arc::new).map_err(|error| error.to_string())
+        PoolDispatch::new(services, selector)
+            .map(|dispatch| dispatch.with_session_limit(self.admitted.session().max_concurrency))
+            .map(Arc::new)
+            .map_err(|error| error.to_string())
     }
 }
 

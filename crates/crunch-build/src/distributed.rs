@@ -1231,6 +1231,8 @@ pub struct PoolDispatch {
     endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn PoolGoalExecutor>>>,
     endpoint_ids: Vec<String>,
     selector: std::sync::Arc<dyn PoolGoalSelector>,
+    /// Bound on concurrent dispatches from the admitted pool session policy.
+    session_limit: Option<std::sync::Arc<tokio::sync::Semaphore>>,
 }
 
 impl std::fmt::Debug for PoolDispatch {
@@ -1262,7 +1264,18 @@ impl PoolDispatch {
             endpoints,
             endpoint_ids,
             selector,
+            session_limit: None,
         })
+    }
+
+    /// Bound concurrent dispatches by the admitted pool session policy.
+    #[must_use]
+    pub fn with_session_limit(mut self, max_concurrency: u32) -> Self {
+        assert!(max_concurrency >= 1, "pool session concurrency must be positive");
+        self.session_limit = Some(std::sync::Arc::new(tokio::sync::Semaphore::new(
+            usize::try_from(max_concurrency).unwrap_or(usize::MAX),
+        )));
+        self
     }
 
     pub fn endpoint_ids(&self) -> &[String] {
@@ -1297,6 +1310,26 @@ impl PoolDispatch {
         cancellation: Option<tokio::sync::watch::Receiver<bool>>,
     ) -> std::io::Result<snix_build::buildservice::BuildResult> {
         validate_remote_build_service_request(&goal.request).map_err(remote_dispatch_io_error)?;
+        let _session_permit = match &self.session_limit {
+            Some(limit) => Some(match cancellation.as_ref() {
+                Some(receiver) => {
+                    let mut wait = receiver.clone();
+                    tokio::select! {
+                        permit = limit.acquire() => {
+                            permit.map_err(|_| std::io::Error::other("remote-pool:session-limit-closed"))?
+                        }
+                        _ = wait.changed() => {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                "remote-pool:cancelled-before-dispatch",
+                            ));
+                        }
+                    }
+                }
+                None => limit.acquire().await.map_err(|_| std::io::Error::other("remote-pool:session-limit-closed"))?,
+            }),
+            None => None,
+        };
         let mut wait_attempts = 0_u32;
         loop {
             let first = self.selector.select(&goal, &self.endpoint_ids).map_err(|error| {

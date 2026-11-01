@@ -796,6 +796,7 @@ fn run_two_worker_pool_build(
     write_build: impl FnOnce(&Path),
     lifecycle_log: Option<&Path>,
     max_jobs: Option<u32>,
+    session_concurrency: u32,
 ) -> PoolDiamondOutcome {
     let root = tempfile::tempdir().expect("pool diamond tempdir");
     let state_dir = root.path().join("state");
@@ -891,12 +892,13 @@ fn run_two_worker_pool_build(
 {endpoint_a},
 {endpoint_b},
     ],
-    session = {{ max_concurrency = 2, job_count_max = 8, session_bytes_max = 1048576 }},
+    session = {{ max_concurrency = {session_concurrency}, job_count_max = 8, session_bytes_max = 1048576 }},
   }}],
 }}
 "#,
         endpoint_a = endpoint(POOL_WORKER_A, "pool-bearer-a", &args_a),
         endpoint_b = endpoint(POOL_WORKER_B, "pool-bearer-b", &args_b),
+        session_concurrency = session_concurrency,
     );
     fs::write(&pool_config, pool_source).expect("pool configuration");
 
@@ -975,6 +977,7 @@ fn production_pool_dispatches_a_diamond_across_two_workers() {
         |path| write_pool_diamond_derivation(path, Some("input-addressed")),
         None,
         None,
+        2,
     );
     assert_pool_diamond(&outcome);
 }
@@ -988,6 +991,7 @@ fn production_pool_diamond_worker_lifetimes_overlap() {
         |path| write_pool_diamond_derivation(path, Some("input-addressed")),
         Some(&lifecycle_log),
         None,
+        2,
     );
     assert_pool_diamond(&outcome);
     let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
@@ -1029,6 +1033,7 @@ fn production_pool_respects_the_global_job_limit() {
         |path| write_pool_diamond_derivation(path, Some("input-addressed")),
         Some(&lifecycle_log),
         Some(1),
+        2,
     );
     let report = &outcome.report;
     let outcomes = report["outcomes"].as_array().expect("outcomes array");
@@ -1047,12 +1052,36 @@ fn production_pool_respects_the_global_job_limit() {
 }
 
 #[test]
+fn production_pool_respects_the_session_concurrency_limit() {
+    let root = tempfile::tempdir().expect("pool session tempdir");
+    let lifecycle_log = root.path().join("worker-lifecycle.log");
+    let outcome = run_two_worker_pool_build(
+        serial_transfer_guard(),
+        |path| write_pool_diamond_derivation(path, Some("input-addressed")),
+        Some(&lifecycle_log),
+        None,
+        1,
+    );
+    let report = &outcome.report;
+    let outcomes = report["outcomes"].as_array().expect("outcomes array");
+    assert_eq!(outcomes.len(), 1, "one requested root outcome: {report}");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+    let log = fs::read_to_string(&lifecycle_log).expect("worker lifecycle log");
+    let starts = worker_lifetimes(&log);
+    assert_eq!(starts.len(), 4, "one transport lifetime per diamond goal: {log}");
+    for pair in starts.windows(2) {
+        assert!(pair[1].0 >= pair[0].1, "session max_concurrency 1 must serialize goal execution: {starts:?}");
+    }
+}
+
+#[test]
 fn production_pool_dispatches_a_content_addressed_diamond_across_two_workers() {
     let outcome = run_two_worker_pool_build(
         serial_transfer_guard(),
         |path| write_pool_diamond_derivation(path, None),
         None,
         None,
+        2,
     );
     assert_pool_diamond(&outcome);
 }
