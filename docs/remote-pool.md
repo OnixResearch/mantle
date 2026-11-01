@@ -141,12 +141,23 @@ Cancellation is not a placement failure: it is never retried on another
 endpoint. A cancellation that arrives before a goal is dispatched refuses that
 goal with `remote-pool:cancelled-before-dispatch`.
 
+## Verified behavior
+
+The current test suites cover: single-goal and diamond dispatch, CA leaf and
+diamond graphs, exact execution counts, overlapping worker lifetimes, the
+global `--jobs` bound, the pool session `max_concurrency` bound, queueing when
+endpoints are at capacity, cancellation with transport-child teardown, worker
+death mid-exchange, tampered output bytes, untrusted output keys, ambiguous
+configured keys, revoked bindings, missing source inputs, duplicate completion
+refusal, cache hits on a second build, and byte-identical outputs against local
+and single-builder builds.
+
 ## Non-claims
 
 - Same-host `stdio` loopback is the only transport exercised end to end;
   `ssh-stdio` and `p2p` are admitted by configuration but unproven here.
-- No cancellation, last-owner teardown, stale-fence, duplicate-result, capacity
-  shrink, or worker-death-mid-exchange case is covered by the current pool
-  evidence.
+- Dynamic-plan/source re-admission through a pool result, admitted
+  pre-dispatch fallback, stale-fence replacement, capacity shrink, and
+  per-goal waiter-notification counts are not covered.
 - A successful pool build is not a release, self-hosting, distributed
   determinism, or physical-target claim.
