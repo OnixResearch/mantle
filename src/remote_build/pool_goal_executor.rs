@@ -180,6 +180,29 @@ fn pool_goal_input_refs(
     Ok(refs)
 }
 
+/// Test seam: corrupt one streamed NAR byte before ingest so the executor's
+/// size/digest verification is exercised end to end.
+#[cfg(debug_assertions)]
+fn tamper_pool_output_nar_for_test(action: &crate::remote_build::RemoteOutputImportAction) {
+    if std::env::var_os("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR").is_none() {
+        return;
+    }
+    let Some(path) = action.nar_path.as_ref() else {
+        return;
+    };
+    let Ok(mut bytes) = std::fs::read(path) else {
+        return;
+    };
+    if bytes.len() < 2 {
+        return;
+    }
+    // Flip a payload byte, not the NAR header, so the format still parses and
+    // the digest comparison is what rejects the artifact.
+    let index = bytes.len() / 2;
+    bytes[index] ^= 0xFF;
+    let _ = std::fs::write(path, bytes);
+}
+
 fn pool_error(code: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, format!("remote-pool:{code}"))
 }
@@ -382,6 +405,8 @@ impl RemotePoolGoalExecutor {
         };
         let mut imported: Vec<(String, snix_castore::Node)> = Vec::with_capacity(actions.len());
         for action in &actions {
+            #[cfg(debug_assertions)]
+            tamper_pool_output_nar_for_test(action);
             let payload = match (&action.nar_payload, &action.nar_path) {
                 (Some(payload), _) => payload.clone(),
                 (None, Some(path)) => {

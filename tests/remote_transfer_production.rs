@@ -325,7 +325,7 @@ fn production_pool_failures_release_attempt_capacity() {
     fs::write(&dead_pool_config, dead_pool_source).expect("dead pool configuration");
     let wrong_key_pool_source = pool_source.replace("cache.example.com-1", WRONG_BUILDER_KEY);
     fs::write(&wrong_key_pool_config, wrong_key_pool_source).expect("wrong-key pool configuration");
-    let run = |selected_pool: &Path, build_file: &Path| -> (bool, Value) {
+    let run = |selected_pool: &Path, build_file: &Path, tamper_output: bool| -> (bool, Value) {
         let mut command = Command::new(&binary);
         configure_test_sandbox_command(&mut command);
         command.args([
@@ -350,19 +350,22 @@ fn production_pool_failures_release_attempt_capacity() {
         ]);
         command.arg("--remote-binding-config").arg(&binding_config);
         command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+        if tamper_output {
+            command.env("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR", "1");
+        }
         configure_ticket_input_fd(&mut command, &state_dir);
         let output = command.output().expect("run pool build");
         let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
         (output.status.success(), report)
     };
-    let (dead_ok, dead_report) = run(&dead_pool_config, &good_file);
+    let (dead_ok, dead_report) = run(&dead_pool_config, &good_file, false);
     assert!(!dead_ok, "a dead transport must fail the goal: {dead_report}");
     assert!(dead_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
-    let (failed_ok, failed_report) = run(&pool_config, &failing_file);
+    let (failed_ok, failed_report) = run(&pool_config, &failing_file, false);
     assert!(!failed_ok, "the failing goal must fail: {failed_report}");
     assert!(failed_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
     let published_before = fs::read_dir(&client_store).expect("client store entries").count();
-    let (wrong_key_ok, wrong_key_report) = run(&wrong_key_pool_config, &third_good_file);
+    let (wrong_key_ok, wrong_key_report) = run(&wrong_key_pool_config, &third_good_file, false);
     assert!(!wrong_key_ok, "an untrusted output key must fail the goal: {wrong_key_report}");
     assert!(
         wrong_key_report.to_string().contains("untrusted-output-key"),
@@ -373,8 +376,23 @@ fn production_pool_failures_release_attempt_capacity() {
         published_before,
         "a rejected output must not publish to the client store"
     );
+    let tampered_file = root.path().join("tampered.ncl");
+    write_named_replay_derivation(&tampered_file, "production-remote-tampered");
+    let published_before_tamper = fs::read_dir(&client_store).expect("client store entries").count();
+    let (tampered_ok, tampered_report) = run(&pool_config, &tampered_file, true);
+    assert!(!tampered_ok, "a tampered output NAR must fail the goal: {tampered_report}");
+    let tampered_failure = tampered_report.to_string();
+    assert!(
+        tampered_failure.contains("output-nar-digest-mismatch") || tampered_failure.contains("output-nar-ingest"),
+        "unexpected tampered-output failure: {tampered_report}"
+    );
+    assert_eq!(
+        fs::read_dir(&client_store).expect("client store entries").count(),
+        published_before_tamper,
+        "a tampered output must not publish"
+    );
     let published_after_wrong_key = fs::read_dir(&client_store).expect("client store entries").count();
-    let (missing_ok, missing_report) = run(&pool_config, &missing_input_file);
+    let (missing_ok, missing_report) = run(&pool_config, &missing_input_file, false);
     assert!(!missing_ok, "a missing source input must fail the goal: {missing_report}");
     assert!(
         missing_report.to_string().contains("source input not found in store"),
@@ -385,7 +403,7 @@ fn production_pool_failures_release_attempt_capacity() {
         published_after_wrong_key,
         "a goal with a missing input must not publish"
     );
-    let (final_ok, final_report) = run(&pool_config, &second_good_file);
+    let (final_ok, final_report) = run(&pool_config, &second_good_file, false);
     assert!(final_ok, "a later goal must be admitted after attempt settlement: {final_report}");
     assert_eq!(final_report["outcomes"].as_array().map(Vec::len), Some(1));
 }
@@ -556,7 +574,9 @@ fn production_pool_cancellation_settles_the_attempt() {
         let running = fs::read_to_string(&state_path)
             .map(|state| state.contains("\"phase\": \"running\""))
             .unwrap_or(false);
-        if running {
+        // The transport child writes its pid before exec; wait for it so the
+        // signal lands on a live process instead of the admission window.
+        if running && worker_pid_file.exists() {
             break;
         }
         if Instant::now() > start_deadline {

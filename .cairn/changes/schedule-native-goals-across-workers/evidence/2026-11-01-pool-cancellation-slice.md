@@ -42,7 +42,8 @@ endpoint slot.
 
 - The watcher polls the kill slot for up to 100 ms after the signal, so a
   cancellation racing the spawn may miss the child; the pre-dispatch flag check
-  covers earlier arrivals.
+  covers earlier arrivals. The test therefore waits for the transport pid file
+  before signalling.
 - Only `SIGINT` is exercised; `SIGTERM` shares the same monitor.
 - The process-group kill relies on the runner's `setpgid` setup; non-Unix
   platforms keep the no-op group configuration and are untested.
