@@ -49,7 +49,7 @@ pub struct PoolEndpointDispatch {
     pub failure_debug: RemoteFailureDebugPolicy,
     pub transfer_policy: RemoteTransferPolicy,
     pub state_dir: PathBuf,
-    pub transfer: crunch_store::OwnedTransferObjectStore,
+    pub transfer: Option<crunch_store::OwnedTransferObjectStore>,
 }
 
 impl std::fmt::Debug for PoolEndpointDispatch {
@@ -150,8 +150,9 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
             &endpoint.state_dir,
         )
         .map_err(|error| pool_error(&error))?;
+        let transfer = endpoint.transfer.as_ref().ok_or_else(|| pool_error("transfer-capability-missing"))?;
         prepare_remote_production_input_transfer(
-            &endpoint.transfer,
+            transfer,
             &mut plan.command,
             &plan.client.request,
             &endpoint.state_dir,

@@ -155,6 +155,7 @@ pub mod endpoint_config;
 pub mod endpoint_service;
 pub mod live_state;
 pub mod pool_config;
+pub mod pool_factory;
 pub mod pool_goal_executor;
 
 pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
