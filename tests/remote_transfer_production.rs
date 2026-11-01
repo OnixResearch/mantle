@@ -101,10 +101,15 @@ const fn guard_is_held(_guard: &std::sync::MutexGuard<'static, ()>) -> bool {
 /// Pool mode: one admitted endpoint executes a ready goal through the ordinary
 /// Worker, using the same ticket, binding, and local-build receiver as the
 /// single-endpoint path.
+struct SinglePoolOutcome {
+    report: Value,
+    _root: tempfile::TempDir,
+}
+
 fn run_single_endpoint_pool_build(
     _guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
-) -> Value {
+) -> SinglePoolOutcome {
     let root = tempfile::tempdir().expect("pool transfer tempdir");
     let state_dir = root.path().join("state");
     let client_store = root.path().join("client-store");
@@ -211,7 +216,10 @@ fn run_single_endpoint_pool_build(
             .unwrap_or_default();
         panic!("pool build status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
     }
-    serde_json::from_slice(&output.stdout).expect("pool build JSON report")
+    SinglePoolOutcome {
+        report: serde_json::from_slice(&output.stdout).expect("pool build JSON report"),
+        _root: root,
+    }
 }
 
 fn assert_one_pool_outcome(report: &Value) {
@@ -223,17 +231,69 @@ fn assert_one_pool_outcome(report: &Value) {
 
 #[test]
 fn production_pool_dispatches_one_goal_through_the_worker() {
-    let report = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
-    assert_one_pool_outcome(&report);
+    let outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
+    assert_one_pool_outcome(&outcome.report);
+}
+
+/// Local and pool builds of the same derivation must produce identical output
+/// bytes.
+#[test]
+fn production_pool_output_matches_local_build() {
+    let local = tempfile::tempdir().expect("local comparison tempdir");
+    let local_store = local.path().join("store");
+    let local_state = local.path().join("state");
+    fs::create_dir_all(&local_store).expect("local store");
+    fs::create_dir_all(&local_state).expect("local state");
+    let local_file = local.path().join("local.ncl");
+    write_replayable_derivation(&local_file);
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let local_output = Command::new(&binary)
+        .args([
+            "--json",
+            "--state-dir",
+            local_state.to_str().expect("UTF-8 state dir"),
+            "--store",
+            local_store.to_str().expect("UTF-8 local store"),
+            "--store-prefix",
+            STORE_PREFIX,
+            "build",
+            local_file.to_str().expect("UTF-8 build file"),
+            "--no-substitute",
+        ])
+        .output()
+        .expect("run local build");
+    assert!(
+        local_output.status.success(),
+        "local build failed: {}",
+        String::from_utf8_lossy(&local_output.stderr)
+    );
+    let local_report: Value = serde_json::from_slice(&local_output.stdout).expect("local JSON report");
+    let local_path = Path::new(local_report["outcomes"][0]["outputs"][0]["path"].as_str().expect("local output path"));
+    let local_bytes = fs::read(local_path).expect("local output bytes");
+    let pool_outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
+    let pool_report = &pool_outcome.report;
+    let reported = Path::new(pool_report["outcomes"][0]["outputs"][0]["path"].as_str().expect("pool output path"));
+    // Pool outcomes may report the logical store path; the physical export is
+    // the report's output_dir plus the store basename.
+    let pool_path = if reported.exists() {
+        reported.to_path_buf()
+    } else {
+        Path::new(pool_report["output_dir"].as_str().expect("pool output dir"))
+            .join(reported.file_name().expect("output basename"))
+    };
+    let pool_bytes = fs::read(&pool_path)
+        .unwrap_or_else(|error| panic!("pool output bytes at {pool_path:?}: {error}; report={pool_report}"));
+    assert!(!local_bytes.is_empty());
+    assert_eq!(pool_bytes, local_bytes, "pool output must match the local build");
 }
 
 #[test]
 fn production_pool_diamond_runs_on_one_endpoint_at_concurrency_one() {
-    let report = run_single_endpoint_pool_build(serial_transfer_guard(), |path| {
+    let outcome = run_single_endpoint_pool_build(serial_transfer_guard(), |path| {
         write_pool_diamond_derivation(path, Some("input-addressed"))
     });
-    assert_one_pool_outcome(&report);
-    let outputs = report["outcomes"][0]["outputs"].as_array().expect("root outputs");
+    assert_one_pool_outcome(&outcome.report);
+    let outputs = outcome.report["outcomes"][0]["outputs"].as_array().expect("root outputs");
     let graph = fs::read_to_string(Path::new(outputs[0]["path"].as_str().expect("root output path")).join("graph.txt"))
         .expect("diamond graph output");
     assert!(graph.contains("shared foundation"), "graph carries the shared dependency: {graph}");
@@ -243,8 +303,8 @@ fn production_pool_diamond_runs_on_one_endpoint_at_concurrency_one() {
 
 #[test]
 fn production_pool_dispatches_one_content_addressed_goal_through_the_worker() {
-    let report = run_single_endpoint_pool_build(serial_transfer_guard(), write_content_addressed_derivation);
-    assert_one_pool_outcome(&report);
+    let outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_content_addressed_derivation);
+    assert_one_pool_outcome(&outcome.report);
 }
 
 /// Pool mode: a failed exchange settles its attempt so the endpoint's
