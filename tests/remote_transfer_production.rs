@@ -244,6 +244,7 @@ fn production_pool_failures_release_attempt_capacity() {
     let good_file = root.path().join("good.ncl");
     let second_good_file = root.path().join("good-two.ncl");
     let third_good_file = root.path().join("good-three.ncl");
+    let missing_input_file = root.path().join("missing-input.ncl");
     let wrong_key_pool_config = root.path().join("wrong-key-pool.ncl");
     let pool_config = root.path().join("pool.ncl");
     let dead_pool_config = root.path().join("dead-pool.ncl");
@@ -255,6 +256,7 @@ fn production_pool_failures_release_attempt_capacity() {
     write_replayable_derivation(&good_file);
     write_named_replay_derivation(&second_good_file, "production-remote-replay-two");
     write_named_replay_derivation(&third_good_file, "production-remote-replay-three");
+    write_missing_input_derivation(&missing_input_file);
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
     fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
@@ -367,6 +369,18 @@ fn production_pool_failures_release_attempt_capacity() {
         fs::read_dir(&client_store).expect("client store entries").count(),
         published_before,
         "a rejected output must not publish to the client store"
+    );
+    let published_after_wrong_key = fs::read_dir(&client_store).expect("client store entries").count();
+    let (missing_ok, missing_report) = run(&pool_config, &missing_input_file);
+    assert!(!missing_ok, "a missing source input must fail the goal: {missing_report}");
+    assert!(
+        missing_report.to_string().contains("source input not found in store"),
+        "unexpected missing-input failure: {missing_report}"
+    );
+    assert_eq!(
+        fs::read_dir(&client_store).expect("client store entries").count(),
+        published_after_wrong_key,
+        "a goal with a missing input must not publish"
     );
     let (final_ok, final_report) = run(&pool_config, &second_good_file);
     assert!(final_ok, "a later goal must be admitted after attempt settlement: {final_report}");
@@ -1849,6 +1863,28 @@ let right = branch "pool-diamond-right" "right branch" in
         lib.display(),
     );
     fs::write(path, source).expect("pool diamond derivation");
+}
+
+fn write_missing_input_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-remote-missing-input",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf missing-input-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = ["{}"],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+        INPUT_STORE_PATH,
+    );
+    fs::write(path, source).expect("missing-input derivation");
 }
 
 fn write_named_replay_derivation(path: &Path, name: &str) {
