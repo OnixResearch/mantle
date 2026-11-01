@@ -243,6 +243,8 @@ fn production_pool_failures_release_attempt_capacity() {
     let failing_file = root.path().join("failing.ncl");
     let good_file = root.path().join("good.ncl");
     let second_good_file = root.path().join("good-two.ncl");
+    let third_good_file = root.path().join("good-three.ncl");
+    let wrong_key_pool_config = root.path().join("wrong-key-pool.ncl");
     let pool_config = root.path().join("pool.ncl");
     let dead_pool_config = root.path().join("dead-pool.ncl");
     for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
@@ -252,6 +254,7 @@ fn production_pool_failures_release_attempt_capacity() {
     write_failing_capture_derivation(&failing_file);
     write_replayable_derivation(&good_file);
     write_named_replay_derivation(&second_good_file, "production-remote-replay-two");
+    write_named_replay_derivation(&third_good_file, "production-remote-replay-three");
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
     let wrapper = root.path().join("mantle-transport.sh");
     fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
@@ -315,6 +318,8 @@ fn production_pool_failures_release_attempt_capacity() {
         .replace(&format!("\"{binary}\"", binary = wrapper.display()), &format!("\"{}\"", dead_wrapper.display()))
         .replace(&binary_digest, &dead_digest);
     fs::write(&dead_pool_config, dead_pool_source).expect("dead pool configuration");
+    let wrong_key_pool_source = pool_source.replace("cache.example.com-1", WRONG_BUILDER_KEY);
+    fs::write(&wrong_key_pool_config, wrong_key_pool_source).expect("wrong-key pool configuration");
     let run = |selected_pool: &Path, build_file: &Path| -> (bool, Value) {
         let mut command = Command::new(&binary);
         configure_test_sandbox_command(&mut command);
@@ -351,6 +356,18 @@ fn production_pool_failures_release_attempt_capacity() {
     let (failed_ok, failed_report) = run(&pool_config, &failing_file);
     assert!(!failed_ok, "the failing goal must fail: {failed_report}");
     assert!(failed_report["failed"].as_array().is_some_and(|failed| !failed.is_empty()));
+    let published_before = fs::read_dir(&client_store).expect("client store entries").count();
+    let (wrong_key_ok, wrong_key_report) = run(&wrong_key_pool_config, &third_good_file);
+    assert!(!wrong_key_ok, "an untrusted output key must fail the goal: {wrong_key_report}");
+    assert!(
+        wrong_key_report.to_string().contains("untrusted-output-key"),
+        "unexpected wrong-key failure: {wrong_key_report}"
+    );
+    assert_eq!(
+        fs::read_dir(&client_store).expect("client store entries").count(),
+        published_before,
+        "a rejected output must not publish to the client store"
+    );
     let (final_ok, final_report) = run(&pool_config, &second_good_file);
     assert!(final_ok, "a later goal must be admitted after attempt settlement: {final_report}");
     assert_eq!(final_report["outcomes"].as_array().map(Vec::len), Some(1));
