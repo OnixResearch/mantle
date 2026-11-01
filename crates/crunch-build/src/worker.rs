@@ -3900,6 +3900,30 @@ impl Worker {
             trace.dispatched(drv_key);
         }
 
+        // A bare BuildRequest cannot express pool placement requirements, so the
+        // resolved facts travel with it when a pool executor is attached.
+        let pool_goal = match builder.pool_dispatch() {
+            Some(_) => Some(
+                crate::distributed::PreparedPoolGoal::new(crate::distributed::PreparedPoolGoalFacts {
+                    request: build_request.clone(),
+                    action_ref: prepared.action_ref.clone(),
+                    system: prepared.derivation.system.clone(),
+                    required_features: Vec::new(),
+                    required_sandbox_mode: builder.hermeticity_mode().as_str().to_string(),
+                    required_network_mode: "none".to_string(),
+                    semantic_accelerator_classes: Vec::new(),
+                    requested: crunch_remote_core::resource::Capacity {
+                        cpu_units: 0,
+                        memory_bytes: 0,
+                        scratch_bytes: 0,
+                    },
+                })
+                .map_err(|error| Error::Store(format!("remote-pool:{error}")))?,
+            ),
+            None => None,
+        };
+        let pool = builder.pool_dispatch().cloned();
+
         let replaced = state.pending_meta.insert(drv_key.to_string(), prepared);
         debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
 
@@ -3914,6 +3938,17 @@ impl Worker {
         state.join_set.spawn(async move {
             let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
             let build_result = match _permit {
+                Ok(_p) if pool.is_some() => match (pool, pool_goal) {
+                    (Some(dispatch), Some(goal)) => {
+                        if cancellation.is_some() {
+                            // Watch teardown is not proven for a pool executor.
+                            Err(Error::Store("remote-pool:watch-unsupported".to_string()))
+                        } else {
+                            dispatch.dispatch(goal).await.map_err(|error| Error::Store(format!("build: {error}")))
+                        }
+                    }
+                    _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
+                },
                 Ok(_p) => match cancellation {
                     Some(receiver) => {
                         match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
@@ -6015,6 +6050,75 @@ mod tests {
         state.join_set.abort_all();
         while state.join_set.join_next().await.is_some() {}
         assert!(state.join_set.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pool_dispatch_routes_the_goal_to_the_selected_endpoint() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (ordinary, ordinary_calls) = MockBuildService::new(bs.clone());
+        let builder = Builder::new(
+            bs.clone(),
+            ds,
+            ordinary,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let (endpoint_a, calls_a) = MockBuildService::new(bs.clone());
+        let (endpoint_b, calls_b) = MockBuildService::new(bs.clone());
+
+        struct SecondEndpointSelector;
+
+        impl crate::distributed::PoolGoalSelector for SecondEndpointSelector {
+            fn select(
+                &self,
+                goal: &crate::distributed::PreparedPoolGoal,
+                endpoint_ids: &[String],
+            ) -> Result<usize, crate::distributed::PoolSelectionError> {
+                if goal.system.is_empty() || goal.required_sandbox_mode != "practical" {
+                    return Err(crate::distributed::PoolSelectionError::NoFit);
+                }
+                endpoint_ids
+                    .iter()
+                    .position(|id| id == "worker-b")
+                    .ok_or(crate::distributed::PoolSelectionError::NoFit)
+            }
+        }
+
+        let dispatch = std::sync::Arc::new(
+            crate::distributed::PoolDispatch::new(
+                vec![
+                    crate::distributed::PoolEndpointService::new(
+                        "worker-a",
+                        std::sync::Arc::new(endpoint_a) as std::sync::Arc<dyn BuildService>,
+                    ),
+                    crate::distributed::PoolEndpointService::new(
+                        "worker-b",
+                        std::sync::Arc::new(endpoint_b) as std::sync::Arc<dyn BuildService>,
+                    ),
+                ],
+                std::sync::Arc::new(SecondEndpointSelector),
+            )
+            .expect("fixture pool dispatch"),
+        );
+        let mut builder = builder.with_pool_dispatch(dispatch);
+
+        let mut kp = DerivationRegistry::default();
+        let (sp, _) = build_and_register("pool-routed", &[], &mut kp);
+        let mut w = Worker::new(1);
+        w.want(&sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(result.failed.is_empty());
+        assert_eq!(ordinary_calls.lock().unwrap().len(), 0, "ordinary service must not run");
+        assert_eq!(calls_a.lock().unwrap().len(), 0, "unselected endpoint must not run");
+        assert_eq!(calls_b.lock().unwrap().len(), 1, "selected endpoint runs the goal");
     }
 
     #[tokio::test]

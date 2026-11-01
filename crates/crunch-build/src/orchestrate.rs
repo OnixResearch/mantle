@@ -313,6 +313,9 @@ pub struct Builder<BServ> {
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     observed_source_paths: BTreeSet<StorePath<String>>,
     root_retention_source: Option<GcRootSource>,
+    /// Explicit pool executor. When present, ready goals are routed through the
+    /// pool instead of the ordinary single build service.
+    pool_dispatch: Option<Arc<crate::distributed::PoolDispatch>>,
     pub(crate) rust_wait_units: Option<
         Arc<std::sync::Mutex<BTreeMap<crunch_rustc_wrapper::waits::Digest, crunch_rustc_wrapper::waits::UnitIdentity>>>,
     >,
@@ -437,6 +440,7 @@ where BServ: BuildService + 'static
             source_closure_cache: HashMap::new(),
             observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
+            pool_dispatch: None,
             rust_wait_units: None,
         }
     }
@@ -447,6 +451,21 @@ where BServ: BuildService + 'static
     /// Get a cloned Arc to the build service (for spawning tasks).
     pub(crate) fn build_service(&self) -> Arc<BServ> {
         self.build_service.clone()
+    }
+
+    /// Attach an explicit pool executor. Construction and admission of the pool
+    /// happen in the shell; this only routes ready goals through it.
+    pub fn with_pool_dispatch(mut self, pool_dispatch: Arc<crate::distributed::PoolDispatch>) -> Self {
+        self.pool_dispatch = Some(pool_dispatch);
+        self
+    }
+
+    pub fn pool_dispatch(&self) -> Option<&Arc<crate::distributed::PoolDispatch>> {
+        self.pool_dispatch.as_ref()
+    }
+
+    pub(crate) fn hermeticity_mode(&self) -> HermeticityMode {
+        self.hermeticity_mode
     }
 
     pub(crate) async fn observe_source_slice(

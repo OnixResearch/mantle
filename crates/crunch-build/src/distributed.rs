@@ -1245,13 +1245,14 @@ impl PoolDispatch {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedPoolGoal {
     pub request: snix_build::buildservice::BuildRequest,
-    pub realization_key: RealizationKey,
+    /// Canonical semantic action identity the Worker already resolved.
+    pub action_ref: String,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
     pub required_network_mode: String,
     pub semantic_accelerator_classes: Vec<String>,
-    /// Binds the semantic requirement; never worker capacity or placement.
+    /// BLAKE3 of `action_ref`; binds the semantic requirement, never capacity.
     pub placement_key_blake3: String,
     pub requested: crunch_remote_core::resource::Capacity,
 }
@@ -1262,8 +1263,8 @@ pub enum PreparedPoolGoalError {
     InvalidSystem,
     #[error("prepared pool goal sandbox or network mode is empty")]
     InvalidMode,
-    #[error("prepared pool goal placement key is not a BLAKE3 digest")]
-    InvalidPlacementKey,
+    #[error("prepared pool goal action identity is empty or too long")]
+    InvalidActionIdentity,
     #[error("prepared pool goal declares too many features or classes")]
     TooManyCapabilities,
     #[error("prepared pool goal capability name is empty or too long")]
@@ -1273,6 +1274,7 @@ pub enum PreparedPoolGoalError {
 pub const MAX_POOL_GOAL_CAPABILITIES: usize = 32;
 pub const MAX_POOL_GOAL_CAPABILITY_BYTES: usize = 128;
 pub const MAX_POOL_GOAL_SYSTEM_BYTES: usize = 128;
+pub const MAX_POOL_GOAL_ACTION_REF_BYTES: usize = 512;
 
 impl PreparedPoolGoal {
     pub fn new(facts: PreparedPoolGoalFacts) -> Result<Self, PreparedPoolGoalError> {
@@ -1284,10 +1286,11 @@ impl PreparedPoolGoal {
         if !has_modes {
             return Err(PreparedPoolGoalError::InvalidMode);
         }
-        let has_key = crunch_remote_core::output::is_blake3_hex_digest(&facts.placement_key_blake3);
-        if !has_key {
-            return Err(PreparedPoolGoalError::InvalidPlacementKey);
+        let has_action = !facts.action_ref.is_empty() && facts.action_ref.len() <= MAX_POOL_GOAL_ACTION_REF_BYTES;
+        if !has_action {
+            return Err(PreparedPoolGoalError::InvalidActionIdentity);
         }
+        let placement_key_blake3 = blake3::hash(facts.action_ref.as_bytes()).to_hex().to_string();
         let capability_count = facts.required_features.len() + facts.semantic_accelerator_classes.len();
         if capability_count > MAX_POOL_GOAL_CAPABILITIES {
             return Err(PreparedPoolGoalError::TooManyCapabilities);
@@ -1298,17 +1301,17 @@ impl PreparedPoolGoal {
         if !has_valid_names {
             return Err(PreparedPoolGoalError::InvalidCapabilityName);
         }
-        debug_assert!(has_system && has_modes && has_key);
+        debug_assert!(has_system && has_modes && has_action);
         debug_assert!(capability_count <= MAX_POOL_GOAL_CAPABILITIES);
         Ok(Self {
             request: facts.request,
-            realization_key: facts.realization_key,
+            action_ref: facts.action_ref,
             system: facts.system,
             required_features: facts.required_features,
             required_sandbox_mode: facts.required_sandbox_mode,
             required_network_mode: facts.required_network_mode,
             semantic_accelerator_classes: facts.semantic_accelerator_classes,
-            placement_key_blake3: facts.placement_key_blake3,
+            placement_key_blake3,
             requested: facts.requested,
         })
     }
@@ -1319,13 +1322,12 @@ impl PreparedPoolGoal {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedPoolGoalFacts {
     pub request: snix_build::buildservice::BuildRequest,
-    pub realization_key: RealizationKey,
+    pub action_ref: String,
     pub system: String,
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
     pub required_network_mode: String,
     pub semantic_accelerator_classes: Vec<String>,
-    pub placement_key_blake3: String,
     pub requested: crunch_remote_core::resource::Capacity,
 }
 
@@ -2473,13 +2475,12 @@ mod tests {
     fn prepared_pool_goal_facts() -> PreparedPoolGoalFacts {
         PreparedPoolGoalFacts {
             request: concrete_build_request(),
-            realization_key: key(&base_request()),
+            action_ref: "action:fixture".to_string(),
             system: "x86_64-linux".to_string(),
             required_features: vec!["native-compile".to_string()],
             required_sandbox_mode: "practical".to_string(),
             required_network_mode: "none".to_string(),
             semantic_accelerator_classes: Vec::new(),
-            placement_key_blake3: "a".repeat(64),
             requested: crunch_remote_core::resource::Capacity {
                 cpu_units: 1,
                 memory_bytes: 1_024,
@@ -2499,16 +2500,17 @@ mod tests {
         assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidMode));
 
         facts.required_network_mode = "none".to_string();
-        facts.placement_key_blake3 = "not-a-digest".to_string();
-        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidPlacementKey));
+        facts.action_ref = String::new();
+        assert_eq!(PreparedPoolGoal::new(facts.clone()).err(), Some(PreparedPoolGoalError::InvalidActionIdentity));
 
-        facts.placement_key_blake3 = "a".repeat(64);
+        facts.action_ref = "action:fixture".to_string();
         facts.required_features = vec![String::new()];
         assert_eq!(PreparedPoolGoal::new(facts).err(), Some(PreparedPoolGoalError::InvalidCapabilityName));
 
         let goal = PreparedPoolGoal::new(prepared_pool_goal_facts()).expect("prepared goal");
         assert_eq!(goal.system, "x86_64-linux");
         assert_eq!(goal.requested.cpu_units, 1);
+        assert_eq!(goal.placement_key_blake3, blake3::hash(b"action:fixture").to_hex().to_string());
     }
 
     #[test]
