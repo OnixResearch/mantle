@@ -203,6 +203,57 @@ fn tamper_pool_output_nar_for_test(action: &crate::remote_build::RemoteOutputImp
     let _ = std::fs::write(path, bytes);
 }
 
+/// Match the worker's admitted outputs to the goal's requested outputs.
+///
+/// Content-addressed outputs have no declared path before the build, so the
+/// request carries placeholders while the worker reports realized paths. Those
+/// match by result order; input-addressed outputs match by declared logical
+/// path. A count difference or an unmatched requested output fails closed.
+fn match_pool_outputs(
+    requested: &[PathBuf],
+    imported: &[(String, snix_castore::Node)],
+    derivation: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Result<Vec<BuildOutput>, io::Error> {
+    if imported.len() != requested.len() {
+        return Err(pool_error("output-count-mismatch"));
+    }
+    let declared_paths = derivation
+        .outputs
+        .values()
+        .filter_map(|output| output.path.as_ref())
+        .map(|path| path.to_absolute_path_with_prefix(store_prefix))
+        .collect::<BTreeSet<_>>();
+    let requested_paths = requested
+        .iter()
+        .map(|relative| {
+            format!("{}/{}", store_prefix.trim_end_matches('/'), relative.to_string_lossy().trim_start_matches('/'))
+        })
+        .collect::<Vec<_>>();
+    let all_declared = requested_paths.iter().all(|path| declared_paths.contains(path));
+    let mut outputs = Vec::with_capacity(requested.len());
+    if all_declared {
+        for relative in requested {
+            let suffix = format!("/{}", relative.to_string_lossy().trim_start_matches('/'));
+            let matched = imported
+                .iter()
+                .find(|(logical_path, _)| logical_path.ends_with(&suffix))
+                .ok_or_else(|| pool_error(&format!("output-missing:{suffix}")))?;
+            outputs.push(BuildOutput {
+                node: matched.1.clone(),
+                output_needles: BTreeSet::new(),
+            });
+        }
+    } else {
+        outputs.extend(imported.iter().map(|(_, node)| BuildOutput {
+            node: node.clone(),
+            output_needles: BTreeSet::new(),
+        }));
+    }
+    debug_assert_eq!(outputs.len(), requested.len());
+    Ok(outputs)
+}
+
 fn pool_error(code: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, format!("remote-pool:{code}"))
 }
@@ -436,53 +487,10 @@ impl RemotePoolGoalExecutor {
                 .map_err(|error| pool_error(&format!("output-export:{error}")))?;
             imported.push((action.logical_path.clone(), node));
         }
-        let mut outputs = Vec::with_capacity(goal.request.outputs.len());
-        // Content-addressed outputs have no declared path before the build, so
-        // the request carries placeholders while the worker reports realized
-        // paths. Match those by result order; input-addressed outputs match by
-        // the declared logical path.
         let derivation = crate::remote_build::parse_remote_derivation_json(&goal.derivation_json)
             .map_err(|error| pool_error(&format!("derivation-json:{error}")))?;
-        let declared_paths = derivation
-            .outputs
-            .values()
-            .filter_map(|output| output.path.as_ref())
-            .map(|path| path.to_absolute_path_with_prefix(&endpoint.options.store_prefix))
-            .collect::<BTreeSet<_>>();
-        let requested_paths = goal
-            .request
-            .outputs
-            .iter()
-            .map(|relative| {
-                format!(
-                    "{}/{}",
-                    endpoint.options.store_prefix.trim_end_matches('/'),
-                    relative.to_string_lossy().trim_start_matches('/')
-                )
-            })
-            .collect::<Vec<_>>();
-        let all_declared = requested_paths.iter().all(|path| declared_paths.contains(path));
-        if !all_declared && imported.len() == goal.request.outputs.len() {
-            outputs.extend(imported.iter().map(|(_, node)| BuildOutput {
-                node: node.clone(),
-                output_needles: BTreeSet::new(),
-            }));
-        } else {
-            for relative in &goal.request.outputs {
-                let suffix = format!("/{}", relative.to_string_lossy().trim_start_matches('/'));
-                let matched = imported
-                    .iter()
-                    .find(|(logical_path, _)| logical_path.ends_with(&suffix))
-                    .ok_or_else(|| pool_error(&format!("output-missing:{suffix}")))?;
-                outputs.push(BuildOutput {
-                    node: matched.1.clone(),
-                    output_needles: BTreeSet::new(),
-                });
-            }
-        }
-        if outputs.len() != goal.request.outputs.len() {
-            return Err(pool_error("output-count-mismatch"));
-        }
+        let outputs =
+            match_pool_outputs(&goal.request.outputs, &imported, &derivation, &endpoint.options.store_prefix)?;
 
         let mut ready_unix_s =
             crate::remote_build::remote_cli_now_unix_s(&request_id).map_err(|error| pool_error(&error))?;
@@ -603,6 +611,67 @@ mod tests {
             },
         })
         .expect("fixture goal")
+    }
+
+    fn output_node() -> snix_castore::Node {
+        snix_castore::Node::File {
+            digest: snix_castore::B3Digest::from(blake3::hash(b"output")),
+            size: 1,
+            executable: false,
+        }
+    }
+
+    fn derivation_with_output_path(path: &str) -> nix_compat::derivation::Derivation {
+        crate::remote_build::parse_remote_derivation_json(&format!(
+            r#"{{"args":[],"builder":"/bin/sh","env":{{}},"inputDrvs":{{}},"inputSrcs":[],"outputs":{{"out":{{"path":"{path}"}}}},"system":"x86_64-linux"}}"#
+        ))
+        .expect("fixture derivation")
+    }
+
+    #[test]
+    fn pool_output_matching_rejects_missing_extra_and_wrong_outputs() {
+        let name = "00000000000000000000000000000000-out";
+        let derivation = derivation_with_output_path(&format!("/nix/store/{name}"));
+        let requested = vec![PathBuf::from(name)];
+        let imported = vec![(format!("/mantle/store/{name}"), output_node())];
+        let matched = match_pool_outputs(&requested, &imported, &derivation, "/mantle/store").expect("declared match");
+        assert_eq!(matched.len(), 1);
+
+        let missing = match_pool_outputs(&requested, &[], &derivation, "/mantle/store").unwrap_err();
+        assert!(missing.to_string().contains("output-count-mismatch"), "{missing}");
+
+        let extra = match_pool_outputs(
+            &requested,
+            &[
+                imported[0].clone(),
+                (format!("/mantle/store/{name}-extra"), output_node()),
+            ],
+            &derivation,
+            "/mantle/store",
+        )
+        .unwrap_err();
+        assert!(extra.to_string().contains("output-count-mismatch"), "{extra}");
+
+        let wrong = match_pool_outputs(
+            &requested,
+            &[("/mantle/store/11111111111111111111111111111111-other".to_string(), output_node())],
+            &derivation,
+            "/mantle/store",
+        )
+        .unwrap_err();
+        assert!(wrong.to_string().contains("output-missing"), "{wrong}");
+    }
+
+    #[test]
+    fn pool_output_matching_uses_result_order_for_content_addressed_outputs() {
+        let derivation = crate::remote_build::parse_remote_derivation_json(
+            r#"{"args":[],"builder":"/bin/sh","env":{},"inputDrvs":{},"inputSrcs":[],"outputs":{"out":{"path":null}},"system":"x86_64-linux"}"#,
+        )
+        .expect("CA derivation");
+        let requested = vec![PathBuf::from("00000000000000000000000000000000-placeholder")];
+        let imported = vec![("/mantle/store/11111111111111111111111111111111-realized".to_string(), output_node())];
+        let outputs = match_pool_outputs(&requested, &imported, &derivation, "/mantle/store").expect("CA order match");
+        assert_eq!(outputs.len(), 1);
     }
 
     #[test]
