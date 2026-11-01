@@ -1204,6 +1204,11 @@ mod tests {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
         ));
         crunch_rustc_wrapper::observed_process::private_dir(&root).unwrap();
+        // The child environment points HOME, CARGO_HOME, and TMPDIR at private
+        // subdirectories; the linker's mktemp needs TMPDIR to exist.
+        for directory in ["home", "cargo-home", "tmp"] {
+            crunch_rustc_wrapper::observed_process::private_dir(&root.join(directory)).unwrap();
+        }
         fs::create_dir(root.join(".cargo")).unwrap();
         let wrapper = root.join("forbidden-wrapper");
         fs::write(&wrapper, b"#!/bin/sh\nexit 97\n").unwrap();

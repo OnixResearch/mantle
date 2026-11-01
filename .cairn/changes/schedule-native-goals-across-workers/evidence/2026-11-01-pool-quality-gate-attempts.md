@@ -1,32 +1,44 @@
 # Ordinary quality-gate attempts for pool work (2026-11-01)
 
-Scope: record what `./scripts/check-first-party-quality.sh` did and did not
-prove for the pool changes in this environment. No green full-gate run was
-obtained; the focused suites and the one real failure it found are recorded.
+Scope: record what `./scripts/check-first-party-quality.sh` proved for the pool
+changes and which failures were environmental or pre-existing. A green full run
+is still pending; each attempt reached a new leg.
 
-## Runs
+## Environment required by the gate
 
-| Run | Environment | Outcome |
-| --- | --- | --- |
-| 1 | devshell env as-is | `crunch-build` fetcher tests failed: `which`/`git` absent from the constructed PATH; `crunch-eval` stdlib tests failed with `HOME=/homeless-shelter`; incremental tests failed with `incremental configuration budget exhausted` (ambient env is 87 KiB, budget is 64 KiB) |
-| 2 | + `git`/`which`, `HOME`, trimmed `NIX_*` | reached the `mantle` bin suite: 2798 passed, 1 failed — `nix_derivation_payload_rejects_drift_and_malformed_json` expected `remote-nix-derivation-json-invalid`, which the tolerant pool parser had replaced. Fixed in `dbfa0257f`; focused test passes |
-| 3 | same as 2, detached | stopped at the 3600s tool cap while running individual bin legs; large suites passed (788, 462, 241 tests) |
-| 4 | same as 2, detached | failed on two `crunch-rustc-wrapper` timing/socket tests (`occupied_authority_times_out_and_removes_waiter`, `crunch_rust_cache_core_adoption_compiles_then_reuses_local_castore_result`: `read-protocol-frame-prefix` `WouldBlock`); both pass when rerun serialized with the full toolchain env (`test result: ok. 2 passed`) |
+- `HOME` must be a writable user home (`/homeless-shelter` breaks embedded
+  stdlib extraction).
+- `git` and `which` must be on `PATH` (fetcher tests).
+- `x86_64-unknown-linux-musl-gcc` and `ld.lld` must be on `PATH`
+  (`cargo_free_self_build_cli`).
+- `MANTLE_WASM_COMPONENT_TOOLCHAIN` must point at the pinned toolchain store
+  path (`wasm_component_cli`).
+- The ambient environment must stay under 64 KiB for the incremental
+  fingerprint tests; the devshell env is 87 KiB. Dropping the `*_FOR_BUILD`,
+  `pkgsBuildHost`, `nativeBuildInputs`, `HOST_PATH`, `initialPath`, and
+  `PYTHONPATH` entries brings it to 52 KiB while keeping host `NIX_CFLAGS_COMPILE`
+  and `NIX_LDFLAGS` for C rebuilds.
 
-## Focused results that stand
+## Real defect found and fixed
 
-- `cargo test -p mantle --test remote_transfer_production`: 18 passed.
-- `cargo test -p mantle --bin mantle -- nix_derivation_payload_rejects_drift_and_malformed_json`: 1 passed after `dbfa0257f`.
-- strict Clippy and `cargo fmt --check` for `mantle`, `crunch-build`, `crunch-remote-core`: exit 0.
-- `cargo test -p crunch-eval --lib` with the trimmed env: 91 passed.
-- `cargo test -p crunch-build --lib` with `git`/`which` on PATH: 788 passed.
-- `cargo test -p crunch-rustc-wrapper --lib` (the two gate failures): 2 passed serialized.
+- `operator_diagnostics::terminal_report_output_failure_is_a_cli_error_not_a_panic`
+  failed with `operator command contract: flag-drift: build`: the reviewed
+  operator surface never included `--builder-pool`, `--builder-config`, or
+  `--builder-ticket-fd`. Fixed by adding the flags to
+  `config/operator-surfaces.ncl` and regenerating the descriptors, inventory
+  JSON, catalog, and command reference (`9378392cc`). The contract check now
+  passes with 214 commands.
 
-## Non-claims
+## Pre-existing test defect fixed
 
-- No uninterrupted green run of the ordinary gate is claimed. The environment
-  forces a trade-off: the untrimmed devshell env breaks the incremental
-  fingerprint budget, while trimming `NIX_CFLAGS*` breaks C rebuilds
-  (`aws-lc-sys` cannot find `openssl/boringssl_prefix_symbols.h`).
-- The two rustc-wrapper failures are attributed to timing/resource contention
-  because they pass serialized, but no root cause was proven.
+- `mantle-rust-differential`'s wrapper-isolation test set `HOME`,
+  `CARGO_HOME`, and `TMPDIR` to private subdirectories but created only the
+  root, so the linker's `mktemp` failed. The test now creates those private
+  directories; it passes.
+
+## Remaining
+
+A full green run is still pending. The last attempt stopped at
+`mantle-rust-differential`; earlier attempts stopped at `cargo_free_self_build_cli`
+and `wasm_component_cli`, all addressed above. The run takes roughly 100-110
+minutes in this workspace.
