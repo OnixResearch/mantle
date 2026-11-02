@@ -165,8 +165,9 @@ and byte-identical outputs against local and single-builder builds.
 
 - Same-host `stdio` loopback is the only transport exercised end to end;
   `ssh-stdio` and `p2p` are admitted by configuration but unproven here.
-- Dynamic-plan/source re-admission through a pool result, stale-fence
-  replacement, capacity shrink, and per-goal waiter-notification counts are
-  not covered.
+- Dynamic-plan/source re-admission through a pool result is not covered.
+- Stale-fence, unknown-future-fence, and lease overcommit rules are covered by
+  the coordinator/resource tests the executor uses, but not by a pool-specific
+  two-attempt scenario.
 - A successful pool build is not a release, self-hosting, distributed
   determinism, or physical-target claim.
