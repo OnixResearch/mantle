@@ -25,6 +25,21 @@ cargo test -p mantle --test example_projects production_workflow_projects_evalua
 - Single-builder parity and local/pool parity are covered by their own tests and
   the retained parity digest report.
 
+## Signed-cache workflow attempt
+
+Running the documented `examples/projects/signed-cache-roundtrip` workflow
+(producer build with `fixtures/cache.key`, `store push --all`, busybox httpd,
+consumer build with `--substituters` and `--trusted-public-keys`) reached the
+consumer step but failed before substitution:
+
+```text
+{"error":"opening store: store: store-source-admission-required","code":3,"kind":"internal"}
+```
+
+The current binary requires an operator source-admission policy for substituters;
+the example README does not supply one. This is example/CLI drift outside this
+change, so the signed-cache hit is not evidenced here.
+
 ## Non-claims
 
 - No S12 completion, acceptance, or archive claim.
