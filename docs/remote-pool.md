@@ -159,13 +159,16 @@ endpoints are at capacity, cancellation with transport-child teardown, worker
 death mid-exchange, tampered output bytes, untrusted output keys, ambiguous
 configured keys, revoked bindings, missing source inputs, duplicate completion
 refusal, cache hits on a second build, admitted pre-dispatch local fallback,
-and byte-identical outputs against local and single-builder builds.
+byte-identical outputs against local and single-builder builds, a malformed
+ticket credential rejected before dispatch, and a returned `mantle-plan-v1`
+chain (two dependent units built through the pool).
 
 ## Non-claims
 
 - Same-host `stdio` loopback is the only transport exercised end to end;
   `ssh-stdio` and `p2p` are admitted by configuration but unproven here.
-- Dynamic-plan/source re-admission through a pool result is not covered.
+- Dynamic-plan re-admission is covered for one two-unit chain; larger plans,
+  multi-root plans, and per-goal placement observations are not.
 - Stale-fence, unknown-future-fence, and lease overcommit rules are covered by
   the coordinator/resource tests the executor uses, but not by a pool-specific
   two-attempt scenario.
