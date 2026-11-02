@@ -24,12 +24,24 @@
       "command": "nix build -L --option builders '' --option build-hook '' .#wrpc-reference-bundle",
       "exit": 1,
       "result": "the wrpc bindgen, author, and mantle toolchain derivations built, but the reference-bundle derivation stopped at an authoritative wasm-component blocker; the emitted report path was not materialized",
-      "note": "the default host build hook also fails before building (a lock file name derived from the configured remote socket exceeds the filename limit), so the hook was disabled for this attempt"
+      "note": "the default host build hook also fails before building (a lock file name derived from the configured remote socket exceeds the filename limit), so the hook was disabled for this attempt",
+      "blocker_detail": {
+        "code": "octet-report-not-admitted",
+        "stage_key": "octet-validation",
+        "octet_status": "failed",
+        "profile": "portable-component-baseline",
+        "finding_counts": {
+          "disallowed-import": 1,
+          "disallowed-proposal": 1
+        },
+        "first_finding": "import `component@3::import-func-hello::Func(0)` is not allowed by profile `portable-component-baseline`",
+        "evidence": "/nix/store/i818gryb5pah8n4xdpcyva34xslz7fxp-mantle-wrpc-reference-bundle-aa01409ed38bf7a978570ff567c4475376925df6/server/artifacts/octet-evidence-rail-receipt.json",
+        "interpretation": "the wrpc reference bundle imports a function outside the portable-component-baseline profile; this is a wasm-component fixture/profile finding independent of the resolve change, so the Nix check cannot pass without a separate fixture or profile decision"
+      }
     }
   },
   "open_t4_2_items": [
-    "a Nix check that can realize the missing source derivation",
-    "the wrpc reference-bundle wasm-component blocker"
+    "the wrpc reference-bundle Octet profile finding (disallowed-import/disallowed-proposal)"
   ],
   "non_claim": "Tracey coverage is green, but T4.2 is not complete: the Nix check did not pass, and T4.3 sync/archive remains open."
 }
