@@ -36,12 +36,18 @@ is still pending; each attempt reached a new leg.
   root, so the linker's `mktemp` failed. The test now creates those private
   directories; it passes.
 
-## Green run
+## Green runs
 
-`./scripts/check-first-party-quality.sh` completed with exit 0 after 6,280 s:
-226 `test result: ok` lines, zero `test result: FAILED`, zero panics, and the
-gcc40 configure bridge self-test PASS. The run used the environment listed
-above plus the two test fixes (`9378392cc`, `dc2d1c08d`).
+`./scripts/check-first-party-quality.sh` completed with exit 0 twice:
+
+- after 6,280 s on the tree before the session-concurrency and fallback work:
+  226 `test result: ok` lines, zero failures, gcc40 bridge PASS;
+- after 6,349 s on `a827237ff` (fallback, session bounds, cache hit, output
+  matching, operator contract): 224 `test result: ok` lines, zero
+  `test result: FAILED`, gcc40 bridge PASS.
+
+Both runs used the environment listed above and the two test fixes
+(`9378392cc`, `dc2d1c08d`).
 
 ## Notes
 
