@@ -769,6 +769,7 @@ where BServ: BuildService + 'static
                 native_dynamic_plans: Vec::new(),
                 plan_output_bindings: Vec::new(),
                 priority_decisions: Vec::new(),
+                waiter_notifications: 0,
             });
         }
         debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");

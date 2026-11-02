@@ -336,6 +336,8 @@ pub struct WorkerResult {
     pub plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     /// Bounded, redacted evidence for each selected ready goal.
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
+    /// Waiters woken by completed goals in this run.
+    pub waiter_notifications: u32,
 }
 
 /// Observed late binding for one statically evaluated consumer input.
@@ -831,6 +833,7 @@ fn finish_worker_result(
     mut native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
+    waiter_notifications: u32,
 ) -> WorkerResult {
     sort_native_dynamic_plan_reports(&mut native_dynamic_plans);
     for row in &mut failed {
@@ -858,6 +861,7 @@ fn finish_worker_result(
         native_dynamic_plans,
         plan_output_bindings,
         priority_decisions,
+        waiter_notifications,
     }
 }
 
@@ -1534,6 +1538,8 @@ pub struct Worker {
     build_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
     is_watch_active: bool,
     streaming_cancellation: Option<watch::Receiver<bool>>,
+    /// Waiters woken by completed goals in this run.
+    waiter_notifications: u32,
 }
 
 fn redacted_goal_identity(goal_key: &str) -> String {
@@ -1582,6 +1588,7 @@ impl Worker {
             build_cancellations: None,
             is_watch_active: false,
             streaming_cancellation: None,
+            waiter_notifications: 0,
         })
     }
 
@@ -2158,6 +2165,7 @@ impl Worker {
                     native_dynamic_plans,
                     binding_rows,
                     priority_decisions,
+                    self.waiter_notifications,
                 ));
             }
 
@@ -2359,6 +2367,7 @@ impl Worker {
             native_dynamic_plans,
             binding_rows,
             priority_decisions,
+            self.waiter_notifications,
         ))
     }
 
@@ -2430,6 +2439,7 @@ impl Worker {
             native_dynamic_plans,
             bindings,
             std::mem::take(&mut self.priority_decisions),
+            self.waiter_notifications,
         ))
     }
 
@@ -4045,6 +4055,8 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
+        self.waiter_notifications =
+            self.waiter_notifications.saturating_add(u32::try_from(waiters.len()).unwrap_or(u32::MAX));
         if let Some(trace) = self.causal_trace.as_mut() {
             trace.completed(drv_key, outcome.cached, None);
         }
@@ -6220,13 +6232,15 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3);
-
         // Verify ordering: dep before mid before top.
         let pos_dep = recorded.iter().position(|a| a.iter().any(|s| s.contains("dep"))).unwrap();
         let pos_mid = recorded.iter().position(|a| a.iter().any(|s| s.contains("mid"))).unwrap();
         let pos_top = recorded.iter().position(|a| a.iter().any(|s| s.contains("top"))).unwrap();
         assert!(pos_dep < pos_mid, "dep before mid");
         assert!(pos_mid < pos_top, "mid before top");
+        drop(recorded);
+        // dep wakes mid once, mid wakes top once.
+        assert_eq!(result.waiter_notifications, 2, "one notification per dependent");
     }
 
     #[tokio::test]
@@ -6270,6 +6284,9 @@ mod tests {
         assert_eq!(recorded.len(), 3, "shared + left + right");
         let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1, "shared built exactly once");
+        drop(recorded);
+        // Shared wakes both branches once; the two roots have no waiters.
+        assert_eq!(result.waiter_notifications, 2, "one notification per dependent");
     }
 
     // r[verify build_scheduling.lazy_known_critical_path]
@@ -8192,6 +8209,7 @@ mod tests {
             ],
             Vec::new(),
             Vec::new(),
+            0,
         );
 
         assert_eq!(result.native_dynamic_plans[0].producer_key, "/store/a.drv");
