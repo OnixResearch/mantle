@@ -141,6 +141,10 @@ reaches the sandbox and its child teardown instead of waiting for the goal.
 
 ## Failures
 
+A completion for an attempt the coordinator no longer owns (the job moved to a
+newer fence) is rejected before its outputs are exported, so a stale attempt
+cannot materialize bytes or release the successor's reservation.
+
 A failed exchange (transport death, build failure, untrusted key, invalid
 output) settles its attempt as a retryable failure and releases the endpoint
 concurrency slot before the executor returns. Retry and timeout budgets are the
@@ -176,8 +180,9 @@ refusal, cache hits on a second build, admitted pre-dispatch local fallback
 (including cancellation during the fallback goal), byte-identical outputs against local and single-builder builds, a malformed
 ticket credential rejected before dispatch, a live source input uploaded from
 the client store backend, a declared resource requirement placed only within a
-declared inventory, and a returned `mantle-plan-v1` chain (two dependent units
-built through the pool).
+declared inventory, a stale completion rejected after a newer-fence
+reassignment (no outputs exported), and a returned `mantle-plan-v1` chain (two
+dependent units built through the pool).
 
 ## Non-claims
 

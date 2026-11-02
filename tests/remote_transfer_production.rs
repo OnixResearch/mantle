@@ -110,7 +110,7 @@ fn run_single_endpoint_pool_build(
     guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
 ) -> SinglePoolOutcome {
-    let (output, _worker_store, root) = run_single_endpoint_pool_build_with(guard, write_build, |_| {}, true);
+    let (output, _worker_store, root) = run_single_endpoint_pool_build_with(guard, write_build, |_| {}, true, None);
     let report: Value = serde_json::from_slice(&output.stdout).expect("pool build JSON report");
     SinglePoolOutcome { report, _root: root }
 }
@@ -120,6 +120,7 @@ fn run_single_endpoint_pool_build_with(
     write_build: impl FnOnce(&Path),
     prepare: impl FnOnce(&Path),
     expect_success: bool,
+    seam_env: Option<(&str, &str)>,
 ) -> (std::process::Output, PathBuf, tempfile::TempDir) {
     let root = tempfile::tempdir().expect("pool transfer tempdir");
     let state_dir = root.path().join("state");
@@ -217,6 +218,9 @@ fn run_single_endpoint_pool_build_with(
     ]);
     command.arg("--remote-binding-config").arg(&binding_config);
     command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+    if let Some((key, value)) = seam_env {
+        command.env(key, value);
+    }
     configure_ticket_input_fd(&mut command, &state_dir);
     let output = command.output().expect("run pool build");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -253,6 +257,7 @@ fn production_pool_rejects_a_malformed_ticket_credential() {
             fs::write(state_dir.join(REMOTE_TICKET_INPUT_FILENAME), b"not-a-ticket\n").expect("malformed ticket");
         },
         false,
+        None,
     );
     assert!(!output.status.success(), "a malformed credential must fail the build");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -644,6 +649,42 @@ fn production_pool_enforces_declared_resource_quantities() {
     );
 }
 
+/// Pool mode: a job reassigned to a newer fence between admission and
+/// completion must reject the stale completion before exporting its outputs.
+#[test]
+fn production_pool_rejects_a_stale_completion_after_reassignment() {
+    let (output, _worker_store, root) = run_single_endpoint_pool_build_with(
+        serial_transfer_guard(),
+        write_replayable_derivation,
+        |_| {},
+        false,
+        Some(("MANTLE_TEST_REASSIGN_POOL_ATTEMPT", "1")),
+    );
+    assert!(!output.status.success(), "a stale completion must fail the goal");
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+    let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    assert!(
+        text.contains("attempt-stale") || text.contains("stale-report-rejected"),
+        "unexpected stale-completion failure: {text}"
+    );
+    assert!(
+        report["outcomes"].as_array().is_some_and(Vec::is_empty),
+        "a stale completion must not report an outcome: {report}"
+    );
+    let client_entries = fs::read_dir(root.path().join("client-store")).expect("client store entries").count();
+    assert_eq!(client_entries, 0, "a stale attempt must not materialize outputs");
+    let state: Value = serde_json::from_slice(
+        &fs::read(root.path().join("state").join("remote-coordinator-state.json")).expect("coordinator state"),
+    )
+    .expect("coordinator state JSON");
+    let successor = state["jobs"]
+        .as_object()
+        .expect("jobs")
+        .values()
+        .any(|job| job["current_attempt"]["fence_generation"].as_u64().is_some_and(|fence| fence > 1));
+    assert!(successor, "the reassigned attempt must own a newer fence: {state}");
+}
+
 /// A source input produced by an earlier local build lives only in the client
 /// store backend; the pool must upload that live store object to the worker.
 #[test]
@@ -662,6 +703,7 @@ fn production_pool_admits_a_live_private_source_input() {
             *input_path.borrow_mut() = Some(input);
         },
         true,
+        None,
     );
     let report: Value = serde_json::from_slice(&output.stdout).expect("pool private-input JSON report");
     let outcomes = report["outcomes"].as_array().expect("outcomes");

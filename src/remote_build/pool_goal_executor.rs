@@ -258,6 +258,60 @@ fn pool_error(code: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, format!("remote-pool:{code}"))
 }
 
+/// Whether the coordinator still owns the admitted attempt. The durable
+/// completion transition is authoritative; this check only prevents exporting
+/// output bytes for a job that has already moved to a newer fence.
+fn ensure_pool_attempt_is_current(
+    state_dir: &Path,
+    attempt: &crate::remote_build::RemoteProductionAttemptBinding,
+) -> io::Result<()> {
+    let coordinator =
+        crate::remote_build::load_coordinator_state(state_dir).map_err(|_| pool_error("attempt-state-unavailable"))?;
+    let current = coordinator.jobs.get(&attempt.job_id).and_then(|job| job.current_attempt.as_ref());
+    match current {
+        Some(current)
+            if current.attempt_id == attempt.attempt_id && current.fence_generation == attempt.fence_generation =>
+        {
+            Ok(())
+        }
+        _ => Err(pool_error("attempt-stale")),
+    }
+}
+
+/// Test seam: reassign the admitted attempt to a successor fence between
+/// admission and completion so a stale completion path is exercised end to end.
+#[cfg(debug_assertions)]
+fn reassign_pool_attempt_for_test(
+    endpoint: &PoolEndpointDispatch,
+    attempt: &crate::remote_build::RemoteProductionAttemptBinding,
+) -> io::Result<()> {
+    if std::env::var_os("MANTLE_TEST_REASSIGN_POOL_ATTEMPT").is_none() {
+        return Ok(());
+    }
+    let retry_policy = crunch_remote_core::attempt::RemoteAttemptRetryPolicy::default();
+    let now_unix_s = endpoint.options.now_unix_s.saturating_add(retry_policy.retry_delay_secs).saturating_add(1);
+    save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
+        let decision = crate::remote_build::reassign_coordinator_attempt(
+            coordinator,
+            &attempt.job_id,
+            &endpoint.options.builder.endpoint_id,
+            crunch_remote_core::attempt::RemoteAttemptFailureClass::Retryable,
+            retry_policy,
+            crunch_remote_core::attempt::RemoteAttemptTimeFacts {
+                now_unix_s,
+                failure_observed_unix_s: endpoint.options.now_unix_s,
+                overall_deadline_unix_s: now_unix_s.saturating_add(retry_policy.attempt_timeout_secs),
+            },
+        )
+        .map_err(|error| pool_error(&format!("test-reassign:{error}")))?;
+        match decision {
+            crate::remote_build::RemoteCoordinatorDispatchDecision::Dispatch { .. } => Ok(()),
+            _ => Err(pool_error("test-reassign-not-dispatched")),
+        }
+    })
+    .map(|_| ())
+}
+
 const MAX_COORDINATOR_SAVE_ATTEMPTS: u32 = 16;
 
 /// Serializes this process's coordinator transactions. Revision fencing still
@@ -409,6 +463,8 @@ impl RemotePoolGoalExecutor {
             &endpoint.state_dir,
         )
         .map_err(|error| pool_error(&error))?;
+        #[cfg(debug_assertions)]
+        reassign_pool_attempt_for_test(endpoint, attempt)?;
         let transfer = endpoint.transfer.as_ref().ok_or_else(|| pool_error("transfer-capability-missing"))?;
         prepare_remote_production_input_transfer(
             transfer,
@@ -436,6 +492,10 @@ impl RemotePoolGoalExecutor {
         let admission =
             validate_remote_stdio_output_import(&plan.client.request, &plan.client.trusted_output_keys, &transcript)
                 .map_err(|error| pool_error(&error))?;
+        // A reassigned job must not materialize a stale attempt's outputs. The
+        // completion below re-checks under the coordinator guard; this earlier
+        // check avoids exporting bytes the coordinator will refuse.
+        ensure_pool_attempt_is_current(&endpoint.state_dir, attempt)?;
 
         let transfer = endpoint.transfer.as_ref().ok_or_else(|| pool_error("transfer-capability-missing"))?;
         let actions = match transcript.streaming_output.as_ref() {
