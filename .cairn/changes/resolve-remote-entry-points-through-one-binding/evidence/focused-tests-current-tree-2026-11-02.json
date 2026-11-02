@@ -1,0 +1,31 @@
+{
+  "schema": "mantle-focused-tests-current-tree-v1",
+  "date": "2026-11-02",
+  "change": "resolve-remote-entry-points-through-one-binding",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "tree": {
+    "commit": "ceeb5d020943ffa914d9647bb6a054699761fe4f",
+    "clean": true
+  },
+  "command": "cargo test -p mantle --bin mantle remote_build::tests::source_binding_tests:: -- --test-threads 1",
+  "result": {
+    "matched": 4,
+    "ok": 4,
+    "failed": 0,
+    "ignored": 0,
+    "test_result_line": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2891 filtered out; finished in 2.04s"
+  },
+  "tests": [
+    "remote_build::tests::source_binding_tests::configured_cache_denies_missing_forged_stale_revoked_and_expired_before_any_request",
+    "remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission",
+    "remote_build::tests::source_binding_tests::live_cache_binding_still_rejects_untrusted_signatures_and_corrupt_nar_content",
+    "remote_build::tests::source_binding_tests::shared_cache_and_base_leases_preserve_signed_content_generation_and_revocation_fences"
+  ],
+  "remaining_t4_2_items": [
+    "Tracey coverage",
+    "relevant Nix checks"
+  ],
+  "open_tasks": ["T1.1", "T4.1", "T4.2", "T4.3"],
+  "non_claim": "This records focused tests on the current tree only. It does not claim T4.2 completion, baseline parity, acceptance, spec sync, or archive."
+}
