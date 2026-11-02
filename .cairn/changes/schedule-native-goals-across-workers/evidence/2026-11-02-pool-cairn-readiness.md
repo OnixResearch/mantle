@@ -37,3 +37,20 @@ schedule-native-goals-across-workers: unavailable
 - Completion stays unavailable because implementation tasks are unchecked.
 - Sync and archive stay blocked by the two declared dependencies in
   `metadata.json`; archival is outside this worker's authority.
+
+## Dependency readiness (same run)
+
+```text
+resolve-remote-entry-points-through-one-binding: unavailable
+  artifact: ready, proposal: ready, design: ready, tasks: ready
+  completion: unavailable, sync: blocked, archive: blocked
+  open tasks: T1.1 baseline, T4.1 rails, T4.2 focused gates, T4.3 sync/archive
+
+separate-remote-build-hexagon: unavailable
+  artifact: ready, proposal: ready, design: ready, tasks: ready
+  completion: unavailable, sync: blocked, archive: blocked
+  open tasks: I1-I6 core/ports/transition, V1-V5 fixtures and gates
+```
+
+Neither dependency is archivable yet, so this change's archive remains
+transitively blocked. Archival is outside this worker's authority.
