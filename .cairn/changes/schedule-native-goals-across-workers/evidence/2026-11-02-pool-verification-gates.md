@@ -54,8 +54,19 @@ so the gate is not green on this host.
 
 A second full ordinary-gate attempt failed identically: 788 passed, 1 failed on
 `production_workspace_local_dispatch_stack_reaches_owned_watch_cancel`
-("watch sandbox did not start"). The host cannot start that sandbox reliably;
-this is recorded as a host limitation, not a source defect.
+("watch sandbox did not start"). The cause was environmental: bubblewrap was not
+on the gate's PATH. With the store bubblewrap on PATH and `SNIX_BUILD_BWRAP`
+set, that test passes in isolation.
+
+A third gate attempt with bubblewrap on PATH reached `crunch-eval --lib` and
+failed six unrelated incremental-session tests:
+
+- `ambient_environment_identity_is_observed_in_subprocesses` (subprocess did
+  not succeed)
+- five more with `Boundary("incremental configuration budget exhausted")`
+
+The gate therefore does not complete on this host. The failures are in
+`crunch-eval`, which this change does not touch.
 
 ## Non-claims
 
