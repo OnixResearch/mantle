@@ -1,9 +1,9 @@
 # Tasks: Schedule native goals across remote workers
 
 Checked tasks cite the evidence map in `evidence/2026-11-01-pool-task-map.md`.
-S1-S11 are checked in order. S12-S14 stay unchecked until the compatibility
-scenarios and gates are evidenced; S15 stays blocked by acceptance and the
-dependency archive state.
+S1-S12 are checked in order. S13/S14 stay unchecked until the verification
+gates are run and recorded; S15 stays blocked by acceptance and the dependency
+archive state.
 Dependency archive state is enforced by `metadata.json`, not waived by these
 structural gates.
 
@@ -26,7 +26,7 @@ structural gates.
 - [x] [task:S9][after:S8][parallel] Run a real two-worker diamond and returned dynamic-plan graph with barriers, transitive inputs and a shared dependency; inspect overlap, exact compile/executor counts, final output bytes and one waiter notification per goal. r[distributed_compilation.goal_dispatch] r[distributed_compilation.concrete_payload]
 - [x] [task:S10][after:S8][parallel] Exercise concurrent coordinators/completions, saturated/unknown/shrinking resources, bounded queues, worker death, cancellation and stale fences; prove current lease ownership and no live owned descendants or duplicate accepted result. r[distributed_compilation.resource_ownership] r[distributed_compilation.terminal_behavior]
 - [x] [task:S11][after:S8][parallel] Pair valid full-key/NAR/attestation imports with same-name-different-key, tampered bytes, missing/extra output, revoked binding, private input and malformed credential cases; inspect absence of inadmissible store publication and network effects. r[distributed_compilation.pool_selection] r[distributed_compilation.output_admission]
-- [ ] [task:S12][after:S9][after:S10][after:S11] Run actual local, one-worker pool, existing single-builder, signed-cache-hit and plan-only CLI scenarios; reject unsupported modes/backends before mutation and retain exact report compatibility evidence. r[distributed_compilation.compatibility_evidence]
+- [x] [task:S12][after:S9][after:S10][after:S11] Run actual local, one-worker pool, existing single-builder, signed-cache-hit and plan-only CLI scenarios; reject unsupported modes/backends before mutation and retain exact report compatibility evidence. r[distributed_compilation.compatibility_evidence]
 
 ## Phase 4: Verification and delivery
 

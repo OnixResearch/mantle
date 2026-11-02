@@ -13,17 +13,20 @@ cargo test -p mantle --test smoke pool_mode_rejects_unsupported_modes_before_bui
   -> ok. 1 passed
 
 cargo test -p mantle --test example_projects production_workflow_projects_evaluate_and_keep_negative_paths
-  -> ok. 1 passed (evaluates the signed-cache-roundtrip project; it does not run
-     the project's signed-cache build/hit workflow)
+  -> ok. 1 passed (evaluates the signed-cache-roundtrip project)
+
+cargo test -p mantle --test example_projects signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache
+  -> ok. 1 passed (producer build + store push + StaticCacheServer + admitted
+     substituter binding; consumer built_total 0 and one recorded substitution)
 ```
 
-## Still not exercised
+## Coverage
 
-- A signed-cache *hit* through the pool path: only the client-store cache-hit
-  test exists (`production_pool_second_build_hits_the_client_cache`), and the
-  signed-cache example is evaluated, not built.
-- Single-builder parity and local/pool parity are covered by their own tests and
-  the retained parity digest report.
+- Signed-cache hit: `signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache`
+  verifies a trusted substituter hit with no local build.
+- Client-store cache hit: `production_pool_second_build_hits_the_client_cache`.
+- Single-builder and local/pool parity: their own tests plus the retained parity
+  digest report.
 
 ## Signed-cache workflow attempt
 
@@ -37,8 +40,8 @@ consumer step but failed before substitution:
 ```
 
 The current binary requires an operator source-admission policy for substituters;
-the example README does not supply one. This is example/CLI drift outside this
-change, so the signed-cache hit is not evidenced here.
+the example README does not supply one. The integration test supplies the
+admission through `--remote-binding-config` and passes.
 
 ## Non-claims
 

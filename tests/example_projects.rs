@@ -437,6 +437,105 @@ fn check_result(run: &ProjectRun) -> String {
     std::fs::read_to_string(output_path(run).join("result.txt")).unwrap().trim().to_string()
 }
 
+const SIGNED_CACHE_VERIFIER: &str = "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
+
+#[test]
+fn signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: signed-cache workflow requires Linux, bwrap, static BusyBox, and loopback HTTP");
+        return;
+    }
+    let root = tempfile::tempdir().expect("signed cache workflow root");
+    let producer_store = root.path().join("producer-store");
+    let producer_state = root.path().join("producer-state");
+    let consumer_store = root.path().join("consumer-store");
+    let consumer_state = root.path().join("consumer-state");
+    let cache = root.path().join("cache");
+    for dir in [&producer_store, &producer_state, &consumer_store, &consumer_state, &cache] {
+        std::fs::create_dir_all(dir).expect("signed cache directory");
+    }
+    let project = project_root(SIGNED_CACHE_PROJECT);
+    let producer = mantle_cmd()
+        .current_dir(&project)
+        .args([
+            "--store",
+            producer_store.to_str().expect("UTF-8 producer store"),
+            "--state-dir",
+            producer_state.to_str().expect("UTF-8 producer state"),
+            "build",
+            ".#payload",
+            "--no-substitute",
+            "--signing-key",
+            "fixtures/cache.key",
+        ])
+        .output()
+        .expect("run signed cache producer");
+    assert!(
+        producer.status.success(),
+        "signed cache producer failed: {}",
+        String::from_utf8_lossy(&producer.stderr)
+    );
+    let push = mantle_cmd()
+        .args([
+            "--store",
+            producer_store.to_str().expect("UTF-8 producer store"),
+            "--state-dir",
+            producer_state.to_str().expect("UTF-8 producer state"),
+            "store",
+            "push",
+            "--to",
+            cache.to_str().expect("UTF-8 cache"),
+            "--all",
+        ])
+        .output()
+        .expect("push signed cache");
+    assert!(push.status.success(), "signed cache push failed: {}", String::from_utf8_lossy(&push.stderr));
+    let server = StaticCacheServer::start(&cache);
+    let binding_config = consumer_state.join("binding.json");
+    remote_endpoint_binding::write_endpoint_bindings(
+        &consumer_state,
+        &binding_config,
+        remote_endpoint_binding::Bindings {
+            store_prefix: "/mantle/store",
+            builder: None,
+            substituters: &[&server.base_url],
+        },
+    );
+    let consumer = mantle_cmd()
+        .current_dir(&project)
+        .args([
+            "--json",
+            "--store",
+            consumer_store.to_str().expect("UTF-8 consumer store"),
+            "--state-dir",
+            consumer_state.to_str().expect("UTF-8 consumer state"),
+            "build",
+            ".#payload",
+            "--substituters",
+            &server.base_url,
+            "--trusted-public-keys",
+            SIGNED_CACHE_VERIFIER,
+            "--remote-binding-config",
+            binding_config.to_str().expect("UTF-8 binding config"),
+        ])
+        .output()
+        .expect("run signed cache consumer");
+    assert!(
+        consumer.status.success(),
+        "signed cache consumer failed: {}",
+        String::from_utf8_lossy(&consumer.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&consumer.stdout).expect("consumer JSON");
+    assert_eq!(report["counts"]["built_total"], 0, "substitution must avoid a local build: {report}");
+    let substitutions = report["outcomes"][0]["outputs"]
+        .as_array()
+        .expect("consumer outputs")
+        .iter()
+        .filter(|output| output.get("substitution").is_some())
+        .count();
+    assert_eq!(substitutions, 1, "the verified cache hit must record one substitution: {report}");
+}
+
 #[test]
 fn project_output_parser_accepts_named_outputs_and_rejects_duplicates() {
     let parsed =
