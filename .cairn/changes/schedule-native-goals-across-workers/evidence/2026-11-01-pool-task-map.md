@@ -5,7 +5,7 @@ remains. No task is checked here; several obligations are only partly met.
 
 | Task | Status | Evidence / missing |
 | --- | --- | --- |
-| S1 baseline | partial | `2026-10-31-baseline-behavior.md` records source-level facts only; no runtime reproduction with exact binary/config identities and no admitted single-builder/dynamic-plan baseline. |
+| S1 baseline | partial | `2026-10-31-baseline-behavior.md` records source-level facts only; an in-test single-builder/dynamic-plan baseline now exists (`production_pool_admits_and_builds_a_returned_dynamic_plan_unit`), but the evidence file still lacks a captured transcript with exact binary/config identities. |
 | S2 pool schema and admission | evidenced | `2026-10-31-pool-plan-slice.md`, `…-pool-admission-slice.md`, `…-pool-preflight-slice.md`; config, per-endpoint FD, binding, key, resource, and session admission are exercised. |
 | S3 prepared envelope | evidenced | `2026-10-31-prepared-pool-goal-slice.md`, `…-remote-nix-derivation-payload-slice.md`, `…-content-addressed-leaf-slice.md` (resolved action identity). |
 | S4 executor adapter | evidenced | `2026-10-31-pool-goal-executor-slice.md`, `…-goal-end-to-end-slice.md`, `…-content-addressed-leaf-slice.md`. |
@@ -23,10 +23,12 @@ remains. No task is checked here; several obligations are only partly met.
 
 ## Next obligations, in dependency order
 
-1. Runtime baseline with exact identities (S1).
-2. Quantified resource placement and a global-job/session-bound scenario (S6).
-3. Admitted pre-dispatch fallback and stale-fence/lease-ownership proof (S7, S10).
-4. Dynamic plan/source re-admission through a pool result (S8).
-5. Waiter-notification assertion (S9).
+1. Runtime baseline transcript with exact identities (S1).
+2. Quantified resource placement (S6).
+3. Stale-fence/lease proof in a pool-specific two-attempt scenario and fallback cancellation observed before the local goal completes (S7, S10).
+4. Multi-unit and plan-root dependency re-admission through a pool result (S8).
+5. Live private-input and malformed-credential admission cases (S11).
+6. Retained local/single-builder/pool comparison report (S12).
+7. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
 6. Remaining negative admission cases (S11).
 7. Single-builder/cache-hit comparison report (S12).
