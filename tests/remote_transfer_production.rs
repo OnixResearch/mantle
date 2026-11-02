@@ -269,10 +269,11 @@ fn production_pool_rejects_a_malformed_ticket_credential() {
     assert_eq!(entries, 0, "a malformed credential must not admit or build a goal");
 }
 
-/// A producer plan output is scanned, its unit is registered, and the unit is
-/// built through the pool with its declared builder source input.
+/// A producer plan output is scanned, two dependent units are registered, the
+/// builder source input is transferred, and the chain is built through the
+/// pool: `unit.main` reads the output path of `unit.dep`.
 #[test]
-fn production_pool_admits_and_builds_a_returned_dynamic_plan_unit() {
+fn production_pool_admits_and_builds_a_returned_dynamic_plan_chain() {
     let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("pool dynamic plan tempdir");
     let state_dir = root.path().join("state");
@@ -288,7 +289,11 @@ fn production_pool_admits_and_builds_a_returned_dynamic_plan_unit() {
     let builder_name = "00000000000000000000000000000001-dynplan-builder";
     let builder_logical = format!("{STORE_PREFIX}/{builder_name}");
     let builder_host = client_store.join(builder_name);
-    fs::write(&builder_host, "#!/bin/sh\nprintf dynplan-ok > \"$out\"\n").expect("plan builder script");
+    fs::write(
+        &builder_host,
+        "#!/bin/sh\ncase \"$1\" in\n  dep) printf dep-ok > \"$out\" ;;\n  main) IFS= read -r dep < \"$2\"; printf 'main-%s' \"$dep\" > \"$out\" ;;\nesac\n",
+    )
+    .expect("plan builder script");
     fs::set_permissions(&builder_host, fs::Permissions::from_mode(0o755)).expect("plan builder mode");
     let plan_name = "00000000000000000000000000000002-dynplan.json";
     let plan_logical = format!("{STORE_PREFIX}/{plan_name}");
@@ -297,29 +302,57 @@ fn production_pool_admits_and_builds_a_returned_dynamic_plan_unit() {
         "schema": "mantle-plan-v1",
         "producer": { "logical_name": "producer", "goal_hint": null },
         "sources": [],
-        "units": [{
-            "id": "unit.main",
-            "derivation": {
-                "name": "unit-main",
-                "builder": builder_logical,
-                "system": "x86_64-linux",
-                "args": [],
-                "outputs": ["out"],
-                "env": {},
-                "inputs": [{ "kind": "store_path", "path": builder_logical }],
-                "fixed_output": null,
-                "addressing_mode": "content-addressed",
-                "sandbox": "native",
-                "dynamic_plan_outputs": []
+        "units": [
+            {
+                "id": "unit.dep",
+                "derivation": {
+                    "name": "unit-dep",
+                    "builder": builder_logical,
+                    "system": "x86_64-linux",
+                    "args": ["dep"],
+                    "outputs": ["out"],
+                    "env": {},
+                    "inputs": [{ "kind": "store_path", "path": builder_logical }],
+                    "fixed_output": null,
+                    "addressing_mode": "input-addressed",
+                    "sandbox": "native",
+                    "dynamic_plan_outputs": []
+                },
+                "requested_outputs": ["out"],
+                "policy": {
+                    "sandbox": "inherit",
+                    "substitutions": "inherit",
+                    "store_prefix": "inherit",
+                    "host_paths": "none"
+                }
             },
-            "requested_outputs": ["out"],
-            "policy": {
-                "sandbox": "inherit",
-                "substitutions": "inherit",
-                "store_prefix": "inherit",
-                "host_paths": "none"
+            {
+                "id": "unit.main",
+                "derivation": {
+                    "name": "unit-main",
+                    "builder": builder_logical,
+                    "system": "x86_64-linux",
+                    "args": ["main", "{{mantle-unit-output:unit.dep:out}}"],
+                    "outputs": ["out"],
+                    "env": {},
+                    "inputs": [
+                        { "kind": "store_path", "path": builder_logical },
+                        { "kind": "unit_output", "unit": "unit.dep", "output": "out" }
+                    ],
+                    "fixed_output": null,
+                    "addressing_mode": "input-addressed",
+                    "sandbox": "native",
+                    "dynamic_plan_outputs": []
+                },
+                "requested_outputs": ["out"],
+                "policy": {
+                    "sandbox": "inherit",
+                    "substitutions": "inherit",
+                    "store_prefix": "inherit",
+                    "host_paths": "none"
+                }
             }
-        }],
+        ],
         "roots": ["unit.main"],
         "provenance": {}
     });
@@ -460,13 +493,13 @@ fn production_pool_admits_and_builds_a_returned_dynamic_plan_unit() {
                 path.join("out")
             };
             if let Ok(bytes) = fs::read(&candidate)
-                && bytes == b"dynplan-ok"
+                && bytes == b"main-dep-ok"
             {
                 found = true;
             }
         }
     }
-    assert!(found, "the dynamic plan unit output must be built: {report}");
+    assert!(found, "the dependent dynamic plan unit output must be built: {report}");
 }
 
 /// Admitted pre-dispatch fallback (`fallback_policy = 'always`) runs the goal
