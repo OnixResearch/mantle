@@ -14,10 +14,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crunch_build::distributed::PoolGoalExecutor;
+use crunch_build::distributed::PoolGoalObservation;
 use crunch_build::distributed::PreparedPoolGoal;
 use crunch_build::distributed::RemoteFailureDebugPolicy;
 use crunch_build::distributed::RemoteTransferPolicy;
 use crunch_build::distributed::RemoteWorkerResourceInventory;
+use crunch_build::distributed::record_pool_observation;
 use crunch_remote_core::effect::EffectActor;
 use crunch_remote_core::effect::EffectSession;
 use crunch_remote_core::effect::RemoteEffectBinding;
@@ -52,6 +54,8 @@ pub struct PoolEndpointDispatch {
     pub transfer_policy: RemoteTransferPolicy,
     pub state_dir: PathBuf,
     pub transfer: Option<crunch_store::OwnedTransferObjectStore>,
+    /// Shared bounded per-goal observation sink, when the pool dispatch has one.
+    pub observations: Option<std::sync::Arc<std::sync::Mutex<Vec<PoolGoalObservation>>>>,
 }
 
 impl std::fmt::Debug for PoolEndpointDispatch {
@@ -571,6 +575,17 @@ impl RemotePoolGoalExecutor {
             complete_remote_production_attempt(coordinator, attempt, &admission.output_digest_blake3, completed_unix_s)
                 .map_err(|error| pool_error(&format!("completion:{error}")))
         })?;
+        if let Some(sink) = endpoint.observations.as_ref() {
+            record_pool_observation(sink, PoolGoalObservation {
+                drv_key: goal.drv_path.clone(),
+                endpoint_id: endpoint.options.builder.endpoint_id.clone(),
+                worker_generation: endpoint.worker_generation,
+                job_id: attempt.job_id.as_str().to_string(),
+                attempt_id: attempt.attempt_id.as_str().to_string(),
+                fence_generation: attempt.fence_generation.get(),
+                trusted_output_key_names: endpoint.options.trusted_output_keys.clone(),
+            });
+        }
         Ok(BuildResult {
             outputs,
             log: Some(transcript.stderr_summary),

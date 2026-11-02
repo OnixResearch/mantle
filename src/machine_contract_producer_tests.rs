@@ -170,6 +170,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         overlay_plan_blake3: None,
         store_layer_selections: Vec::new(),
         remote_telemetry_events: Vec::new(),
+        pool_goal_observations: Vec::new(),
         remote_observability: None,
         frontend_artifact_attestations: Vec::new(),
         cargo_build_evidence: Vec::new(),

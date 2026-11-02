@@ -53,6 +53,10 @@ pub struct BuildJsonReport {
     pub store_layer_selections: Vec<BuildJsonStoreLayerSelection>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remote_telemetry_events: Vec<crunch_build::distributed::RemoteTelemetryEvent>,
+    /// Bounded per-goal pool placement/attempt/trust observations; omitted for
+    /// ordinary local builds.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub pool_goal_observations: Vec<crunch_build::distributed::PoolGoalObservation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_observability: Option<Vec<BuildJsonRemoteObservability>>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
@@ -517,6 +521,7 @@ fn build_json_report(
         overlay_plan_blake3,
         store_layer_selections,
         remote_telemetry_events,
+        pool_goal_observations: result.pool_goal_observations.clone(),
         remote_observability: None,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         ast_grep_structural_evidence,
@@ -1319,6 +1324,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };
@@ -1397,6 +1403,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };
@@ -1641,6 +1648,7 @@ mod tests {
                 },
             ],
             priority_decisions: vec![sample_priority_decision()],
+            pool_goal_observations: Vec::new(),
             overlay_report: Some(crunch_store::StoreOverlayReport {
                 schema: crunch_store::STORE_OVERLAY_REPORT_SCHEMA.to_string(),
                 policy_blake3: "a".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
@@ -1892,6 +1900,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };
@@ -2339,6 +2348,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };
@@ -2491,6 +2501,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };

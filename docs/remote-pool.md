@@ -114,7 +114,10 @@ identity, and executes the action in its local sandbox. The client then:
 - verifies expected outputs, NAR size and SHA-256, and the declared content
   address before ingesting;
 - exports only admitted outputs to the client's physical store and lets the
-  ordinary goal/store path persist PathInfo.
+  ordinary goal/store path persist PathInfo;
+- records one bounded `pool_goal_observations` entry per completed goal
+  (endpoint, worker generation, job/attempt/fence, trusted output key names).
+  The field is omitted from ordinary local JSON.
 
 ## Resources
 

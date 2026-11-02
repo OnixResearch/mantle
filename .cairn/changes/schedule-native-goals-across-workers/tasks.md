@@ -1,9 +1,8 @@
 # Tasks: Schedule native goals across remote workers
 
 Checked tasks cite the evidence map in `evidence/2026-11-01-pool-task-map.md`.
-S1-S7 are checked in order. Later tasks stay unchecked until their predecessors
-complete: S8 (larger plans and per-goal observations), S9-S14 (ordered behind
-S8/S11/S12), and S15 (acceptance/archive).
+S1-S10 are checked in order. S11-S14 stay unchecked until their predecessors
+complete; S15 stays blocked by acceptance and the dependency archive state.
 Dependency archive state is enforced by `metadata.json`, not waived by these
 structural gates.
 
@@ -19,12 +18,12 @@ structural gates.
 - [x] [task:S5][after:S4] Connect local/native-pool selection to the ordinary Worker for static and late dynamic-plan goals; remove the local-as-remote composition and obsolete native serial dispatch loops, keeping portable/single-builder public contracts explicit. r[distributed_compilation.goal_dispatch] r[distributed_compilation.compatibility_evidence]
 - [x] [task:S6][after:S5] Persist/reconcile current fenced reservations under concurrent dispatch/completion; enforce global jobs, worker concurrency, explicit resource quantities, session/queue/transfer bounds and no lock across network I/O. r[distributed_compilation.resource_ownership]
 - [x] [task:S7][after:S6] Integrate last-owner cancellation, owned remote teardown, stale-result refusal and existing bounded retries; allow only admitted pre-dispatch fallback and preserve compiler/trust failure distinctions. r[distributed_compilation.terminal_behavior]
-- [ ] [task:S8][after:S7] Finish verified outputs through the normal goal/store path, re-admit returned producer plan/source outputs, and add bounded per-goal placement/attempt/trust observations without changing ordinary JSON behavior. r[distributed_compilation.output_admission] r[distributed_compilation.compatibility_evidence]
+- [x] [task:S8][after:S7] Finish verified outputs through the normal goal/store path, re-admit returned producer plan/source outputs, and add bounded per-goal placement/attempt/trust observations without changing ordinary JSON behavior. r[distributed_compilation.output_admission] r[distributed_compilation.compatibility_evidence]
 
 ## Phase 3: Behavioral acceptance
 
-- [ ] [task:S9][after:S8][parallel] Run a real two-worker diamond and returned dynamic-plan graph with barriers, transitive inputs and a shared dependency; inspect overlap, exact compile/executor counts, final output bytes and one waiter notification per goal. r[distributed_compilation.goal_dispatch] r[distributed_compilation.concrete_payload]
-- [ ] [task:S10][after:S8][parallel] Exercise concurrent coordinators/completions, saturated/unknown/shrinking resources, bounded queues, worker death, cancellation and stale fences; prove current lease ownership and no live owned descendants or duplicate accepted result. r[distributed_compilation.resource_ownership] r[distributed_compilation.terminal_behavior]
+- [x] [task:S9][after:S8][parallel] Run a real two-worker diamond and returned dynamic-plan graph with barriers, transitive inputs and a shared dependency; inspect overlap, exact compile/executor counts, final output bytes and one waiter notification per goal. r[distributed_compilation.goal_dispatch] r[distributed_compilation.concrete_payload]
+- [x] [task:S10][after:S8][parallel] Exercise concurrent coordinators/completions, saturated/unknown/shrinking resources, bounded queues, worker death, cancellation and stale fences; prove current lease ownership and no live owned descendants or duplicate accepted result. r[distributed_compilation.resource_ownership] r[distributed_compilation.terminal_behavior]
 - [ ] [task:S11][after:S8][parallel] Pair valid full-key/NAR/attestation imports with same-name-different-key, tampered bytes, missing/extra output, revoked binding, private input and malformed credential cases; inspect absence of inadmissible store publication and network effects. r[distributed_compilation.pool_selection] r[distributed_compilation.output_admission]
 - [ ] [task:S12][after:S9][after:S10][after:S11] Run actual local, one-worker pool, existing single-builder, signed-cache-hit and plan-only CLI scenarios; reject unsupported modes/backends before mutation and retain exact report compatibility evidence. r[distributed_compilation.compatibility_evidence]
 

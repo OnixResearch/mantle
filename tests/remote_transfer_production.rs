@@ -246,6 +246,17 @@ fn assert_one_pool_outcome(report: &Value) {
 fn production_pool_dispatches_one_goal_through_the_worker() {
     let outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
     assert_one_pool_outcome(&outcome.report);
+    let observations = outcome.report["pool_goal_observations"].as_array().expect("pool observations");
+    assert_eq!(observations.len(), 1, "one recorded goal observation: {}", outcome.report);
+    assert_eq!(observations[0]["endpoint_id"], BUILDER_ID);
+    assert!(observations[0]["fence_generation"].as_u64().is_some_and(|fence| fence >= 1));
+    assert!(
+        observations[0]["trusted_output_key_names"]
+            .as_array()
+            .is_some_and(|keys| keys.iter().any(|key| key == "cache.example.com-1")),
+        "the observation must name the admitted output trust set: {}",
+        observations[0]
+    );
 }
 
 #[test]
@@ -1083,6 +1094,10 @@ fn production_pool_output_matches_local_build() {
         String::from_utf8_lossy(&local_output.stderr)
     );
     let local_report: Value = serde_json::from_slice(&local_output.stdout).expect("local JSON report");
+    assert!(
+        local_report.get("pool_goal_observations").is_none(),
+        "ordinary local JSON must not gain the pool observation field"
+    );
     let local_path = Path::new(local_report["outcomes"][0]["outputs"][0]["path"].as_str().expect("local output path"));
     let local_bytes = fs::read(local_path).expect("local output bytes");
     let pool_outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);

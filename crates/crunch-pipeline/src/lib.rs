@@ -187,6 +187,9 @@ pub struct PipelineResult {
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
+    /// Bounded per-goal pool placement/attempt/trust observations; empty for
+    /// ordinary local builds.
+    pub pool_goal_observations: Vec<crunch_build::distributed::PoolGoalObservation>,
     pub overlay_report: Option<crunch_store::StoreOverlayReport>,
     pub store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
 }
@@ -637,12 +640,14 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     let source_generation_paths = builder.source_generation_paths();
     let pipeline_evidence =
         collect_pipeline_evidence(&mut builder, workspace_evidence_sink, request.hermeticity_audit_events)?;
+    let pool_goal_observations = builder.pool_dispatch().map(|dispatch| dispatch.observations()).unwrap_or_default();
     let result = finish_pipeline_result(
         &config.store_dir,
         config.hermeticity_mode,
         worker_result,
         eval_stream,
         pipeline_evidence,
+        pool_goal_observations,
     );
     if !request.owned_cancellation || !cancellation.is_requested() {
         register_managed_generation(
@@ -1081,6 +1086,7 @@ fn finish_pipeline_result(
     mut worker_result: WorkerResult,
     eval_stream: EvalStreamResult,
     evidence: PipelineRunEvidence,
+    pool_goal_observations: Vec<crunch_build::distributed::PoolGoalObservation>,
 ) -> PipelineResult {
     debug_assert!(!store_dir.is_empty(), "store prefix must not be empty");
     let eval_failures = evaluation_failures(&eval_stream.summary);
@@ -1125,6 +1131,7 @@ fn finish_pipeline_result(
         native_dynamic_plans: worker_result.native_dynamic_plans,
         plan_output_bindings: worker_result.plan_output_bindings,
         priority_decisions: worker_result.priority_decisions,
+        pool_goal_observations,
         overlay_report: evidence.overlay_report,
         store_layer_selections: evidence.store_layer_selections,
     }
@@ -1269,6 +1276,7 @@ fn build_preflight_failure(
         native_dynamic_plans: Vec::new(),
         plan_output_bindings: Vec::new(),
         priority_decisions: Vec::new(),
+        pool_goal_observations: Vec::new(),
         overlay_report: None,
         store_layer_selections: Vec::new(),
     })

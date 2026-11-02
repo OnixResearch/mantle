@@ -3921,6 +3921,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };
@@ -3968,6 +3969,7 @@ mod tests {
             native_dynamic_plans: Vec::new(),
             plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
         };

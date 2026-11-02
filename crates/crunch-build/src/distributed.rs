@@ -1240,6 +1240,36 @@ where S: snix_build::buildservice::BuildService
 /// Executes each prepared goal on exactly one admitted pool endpoint. It owns
 /// no placement policy, reservation, or fallback: the injected selector decides
 /// from resolved facts, and the selected endpoint's service performs the build.
+/// One bounded per-goal pool observation: where the goal ran and under which
+/// attempt/fence and output trust set. Placement/attempt/trust facts only; it
+/// carries no output bytes and no authority.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolGoalObservation {
+    pub drv_key: String,
+    pub endpoint_id: String,
+    pub worker_generation: u64,
+    pub job_id: String,
+    pub attempt_id: String,
+    pub fence_generation: u64,
+    pub trusted_output_key_names: Vec<String>,
+}
+
+/// Bounded observation count per pool dispatch.
+pub const MAX_POOL_GOAL_OBSERVATIONS: usize = 4_096;
+
+/// Record one observation into a shared sink; entries beyond the bound are
+/// dropped, not grown.
+pub fn record_pool_observation(sink: &std::sync::Mutex<Vec<PoolGoalObservation>>, observation: PoolGoalObservation) {
+    let Ok(mut observations) = sink.lock() else {
+        return;
+    };
+    if observations.len() >= MAX_POOL_GOAL_OBSERVATIONS {
+        return;
+    }
+    observations.push(observation);
+}
+
 pub struct PoolDispatch {
     endpoints: Vec<PoolEndpointService<std::sync::Arc<dyn PoolGoalExecutor>>>,
     endpoint_ids: Vec<String>,
@@ -1250,6 +1280,8 @@ pub struct PoolDispatch {
     local_fallback: bool,
     /// Operator-declared quantified requirements applied to every pool goal.
     resource_requirements: Option<RemoteResourceRequirements>,
+    /// Bounded per-goal placement/attempt/trust observations.
+    observations: std::sync::Arc<std::sync::Mutex<Vec<PoolGoalObservation>>>,
 }
 
 impl std::fmt::Debug for PoolDispatch {
@@ -1284,6 +1316,7 @@ impl PoolDispatch {
             session_limit: None,
             local_fallback: false,
             resource_requirements: None,
+            observations: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
         })
     }
 
@@ -1309,6 +1342,28 @@ impl PoolDispatch {
     /// The declared requirements every pool goal carries, when any.
     pub fn resource_requirements(&self) -> Option<&RemoteResourceRequirements> {
         self.resource_requirements.as_ref()
+    }
+
+    /// The bounded observation sink shared with every endpoint executor.
+    pub fn observation_sink(&self) -> std::sync::Arc<std::sync::Mutex<Vec<PoolGoalObservation>>> {
+        std::sync::Arc::clone(&self.observations)
+    }
+
+    /// Record one observation; entries beyond the bound are dropped, not grown.
+    pub fn record_observation(&self, observation: PoolGoalObservation) {
+        record_pool_observation(&self.observations, observation);
+    }
+
+    /// Share an already-created observation sink with this dispatch.
+    #[must_use]
+    pub fn with_observation_sink(mut self, sink: std::sync::Arc<std::sync::Mutex<Vec<PoolGoalObservation>>>) -> Self {
+        self.observations = sink;
+        self
+    }
+
+    /// A snapshot of the recorded observations, bounded by construction.
+    pub fn observations(&self) -> Vec<PoolGoalObservation> {
+        self.observations.lock().map(|observations| observations.clone()).unwrap_or_default()
     }
 
     /// Bound concurrent dispatches by the admitted pool session policy.

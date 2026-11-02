@@ -109,6 +109,7 @@ impl RemotePoolExecutorFactory {
 impl PoolExecutorFactory for RemotePoolExecutorFactory {
     fn create(&self, store: &crunch_store::StoreHandle) -> Result<Arc<PoolDispatch>, String> {
         let transfer = store.owned_transfer_objects();
+        let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut services = Vec::with_capacity(self.endpoints.len());
         let mut workers = Vec::with_capacity(self.endpoints.len());
         for endpoint in &self.endpoints {
@@ -121,6 +122,7 @@ impl PoolExecutorFactory for RemotePoolExecutorFactory {
                 transfer_policy: endpoint.transfer_policy,
                 state_dir: endpoint.state_dir.clone(),
                 transfer: Some(transfer.clone()),
+                observations: Some(Arc::clone(&observations)),
             };
             let executor: Arc<dyn PoolGoalExecutor> = Arc::new(RemotePoolGoalExecutor::new(dispatch));
             services.push(PoolEndpointService::new(endpoint.endpoint_name.clone(), executor));
@@ -154,6 +156,7 @@ impl PoolExecutorFactory for RemotePoolExecutorFactory {
             .map(|dispatch| dispatch.with_session_limit(self.admitted.session().max_concurrency))
             .map(|dispatch| dispatch.with_local_fallback(self.local_fallback))
             .map(|dispatch| dispatch.with_resource_requirements(self.resource_requirements.clone()))
+            .map(|dispatch| dispatch.with_observation_sink(Arc::clone(&observations)))
             .map(Arc::new)
             .map_err(|error| error.to_string())
     }
