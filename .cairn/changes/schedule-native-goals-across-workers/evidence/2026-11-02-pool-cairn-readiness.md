@@ -54,3 +54,14 @@ separate-remote-build-hexagon: unavailable
 
 Neither dependency is archivable yet, so this change's archive remains
 transitively blocked. Archival is outside this worker's authority.
+
+## Structural gates (same run)
+
+```text
+gate proposal schedule-native-goals-across-workers: PASS (valid true), exit 0
+gate design   schedule-native-goals-across-workers: PASS (valid true), exit 0
+gate tasks    schedule-native-goals-across-workers: PASS (valid true), exit 0
+```
+
+Acceptance and archive remain open: acceptance is not inferred from structural
+gates, and archive stays blocked by the two dependency changes recorded above.
