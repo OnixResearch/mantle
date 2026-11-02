@@ -235,6 +235,206 @@ fn production_pool_dispatches_one_goal_through_the_worker() {
     assert_one_pool_outcome(&outcome.report);
 }
 
+/// A producer plan output is scanned, its unit is registered, and the unit is
+/// built through the pool with its declared builder source input.
+#[test]
+fn production_pool_admits_and_builds_a_returned_dynamic_plan_unit() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("pool dynamic plan tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let worker_store = root.path().join("worker-store");
+    let worker_state = root.path().join("worker-state");
+    let build_file = root.path().join("producer.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
+        fs::create_dir_all(dir).expect("pool dynamic plan directory");
+    }
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
+    let builder_name = "00000000000000000000000000000001-dynplan-builder";
+    let builder_logical = format!("{STORE_PREFIX}/{builder_name}");
+    let builder_host = client_store.join(builder_name);
+    fs::write(&builder_host, "#!/bin/sh\nprintf dynplan-ok > \"$out\"\n").expect("plan builder script");
+    fs::set_permissions(&builder_host, fs::Permissions::from_mode(0o755)).expect("plan builder mode");
+    let plan_name = "00000000000000000000000000000002-dynplan.json";
+    let plan_logical = format!("{STORE_PREFIX}/{plan_name}");
+    let plan_host = client_store.join(plan_name);
+    let plan = serde_json::json!({
+        "schema": "mantle-plan-v1",
+        "producer": { "logical_name": "producer", "goal_hint": null },
+        "sources": [],
+        "units": [{
+            "id": "unit.main",
+            "derivation": {
+                "name": "unit-main",
+                "builder": builder_logical,
+                "system": "x86_64-linux",
+                "args": [],
+                "outputs": ["out"],
+                "env": {},
+                "inputs": [{ "kind": "store_path", "path": builder_logical }],
+                "fixed_output": null,
+                "addressing_mode": "content-addressed",
+                "sandbox": "native",
+                "dynamic_plan_outputs": []
+            },
+            "requested_outputs": ["out"],
+            "policy": {
+                "sandbox": "inherit",
+                "substitutions": "inherit",
+                "store_prefix": "inherit",
+                "host_paths": "none"
+            }
+        }],
+        "roots": ["unit.main"],
+        "provenance": {}
+    });
+    fs::write(&plan_host, serde_json::to_vec(&plan).expect("plan JSON")).expect("plan file");
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let producer_source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "pool-dynplan-producer",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "IFS= read -r line < {}; printf '%s' \"$line\" > \"$plan\""],
+  outputs = ["plan"],
+  dynamic_plan_outputs = ["plan"],
+  env = {{}},
+  inputs = ["{}"],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+        plan_logical,
+        plan_logical,
+    );
+    fs::write(&build_file, producer_source).expect("producer derivation");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let wrapper = root.path().join("mantle-transport.sh");
+    fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+    let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+    let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+    let binding_config = remote_binding_config_path(&state_dir);
+    let worker_args = vec![
+        "--state-dir".to_string(),
+        state_dir.display().to_string(),
+        "--store".to_string(),
+        worker_store.display().to_string(),
+        "--store-prefix".to_string(),
+        STORE_PREFIX.to_string(),
+        "--store-backend".to_string(),
+        "snix".to_string(),
+        "--remote-binding-config".to_string(),
+        binding_config.display().to_string(),
+        "remote".to_string(),
+        "serve".to_string(),
+        "--endpoint-id".to_string(),
+        BUILDER_ID.to_string(),
+        "--binding".to_string(),
+        "stdio-once".to_string(),
+        "--executor".to_string(),
+        "local-build".to_string(),
+        "--execution-state-dir".to_string(),
+        worker_state.display().to_string(),
+    ];
+    let args_json = serde_json::to_string(&worker_args).expect("worker args JSON");
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 8, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        builder = BUILDER_ID,
+        binary = wrapper.display(),
+        digest = binary_digest,
+        args = args_json,
+        material = signing_material,
+    );
+    fs::write(&pool_config, pool_source).expect("pool configuration");
+    let local_store = root.path().join("local-store");
+    let local_state = root.path().join("local-state");
+    fs::create_dir_all(&local_store).expect("local store");
+    fs::create_dir_all(&local_state).expect("local state");
+    fs::copy(&builder_host, local_store.join(builder_name)).expect("local builder copy");
+    fs::copy(&plan_host, local_store.join(plan_name)).expect("local plan copy");
+    let local = Command::new(&binary)
+        .args([
+            "--json",
+            "--state-dir",
+            local_state.to_str().expect("UTF-8 state dir"),
+            "--store",
+            local_store.to_str().expect("UTF-8 store"),
+            "--store-prefix",
+            STORE_PREFIX,
+            "build",
+            build_file.to_str().expect("UTF-8 build file"),
+            "--no-substitute",
+        ])
+        .output()
+        .expect("run local dynamic plan build");
+    assert!(
+        local.status.success(),
+        "local dynamic plan build failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&local.stdout),
+        String::from_utf8_lossy(&local.stderr)
+    );
+    let output = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &build_file)
+        .output()
+        .expect("run pool dynamic plan build");
+    if !output.status.success() {
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+        let log = report["failed"][0]["saved_log_path"]
+            .as_str()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        panic!(
+            "pool dynamic plan build failed: failed={} log={log} stderr={}",
+            report["failed"],
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool dynamic plan JSON report");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty));
+    let plans = report["native_dynamic_plans"].as_array().expect("native dynamic plans");
+    assert!(
+        plans
+            .iter()
+            .any(|row| row["accepted_unit_ids"].as_array().is_some_and(|ids| ids.iter().any(|id| id == "unit.main"))),
+        "the returned plan must be accepted: {report}"
+    );
+    let mut found = false;
+    for outcome in report["outcomes"].as_array().expect("outcomes") {
+        for output in outcome["outputs"].as_array().expect("outputs") {
+            let path = Path::new(output["path"].as_str().expect("output path"));
+            let candidate = if path.is_file() {
+                path.to_path_buf()
+            } else {
+                path.join("out")
+            };
+            if let Ok(bytes) = fs::read(&candidate)
+                && bytes == b"dynplan-ok"
+            {
+                found = true;
+            }
+        }
+    }
+    assert!(found, "the dynamic plan unit output must be built: {report}");
+}
+
 /// Admitted pre-dispatch fallback (`fallback_policy = 'always`) runs the goal
 /// locally when no endpoint fits; the default policy fails instead.
 #[test]
