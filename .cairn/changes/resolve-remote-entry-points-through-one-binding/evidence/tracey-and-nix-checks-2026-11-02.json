@@ -36,7 +36,49 @@
         },
         "first_finding": "import `component@3::import-func-hello::Func(0)` is not allowed by profile `portable-component-baseline`",
         "evidence": "/nix/store/i818gryb5pah8n4xdpcyva34xslz7fxp-mantle-wrpc-reference-bundle-aa01409ed38bf7a978570ff567c4475376925df6/server/artifacts/octet-evidence-rail-receipt.json",
-        "interpretation": "the wrpc reference bundle imports a function outside the portable-component-baseline profile; this is a wasm-component fixture/profile finding independent of the resolve change, so the Nix check cannot pass without a separate fixture or profile decision"
+        "interpretation": "the wrpc reference bundle imports a function outside the portable-component-baseline profile; this is a wasm-component fixture/profile finding independent of the resolve change, so the Nix check cannot pass without a separate fixture or profile decision",
+        "profile_admission": {
+          "portable-component-baseline": {
+            "allowed_imports": [],
+            "allowed_proposals": [
+              "wasm1",
+              "component-model"
+            ]
+          },
+          "molten-component-baseline": {
+            "allowed_imports": [
+              "component::preserves-payload::Type(Eq(0))"
+            ],
+            "allowed_proposals": [
+              "wasm1",
+              "component-model",
+              "bulk-memory",
+              "call-indirect-overlong"
+            ]
+          },
+          "molten-component-effects-v1": {
+            "allowed_imports": [
+              "component::preserves-payload::Type(list<u8>)",
+              "component::effect-request::Func(list<u8>)->result<list<u8>,string>"
+            ],
+            "allowed_exports": [
+              "component::invoke::Func(list<u8>)->result<list<u8>,string>"
+            ],
+            "allowed_proposals": [
+              "wasm1",
+              "component-model",
+              "bulk-memory",
+              "call-indirect-overlong"
+            ]
+          },
+          "spacewasm-mvp": {
+            "allowed_imports": [],
+            "allowed_proposals": [
+              "wasm1"
+            ]
+          },
+          "observation": "no shipped profile admits 'component@3::import-func-hello::Func(0)'; the wrpc reference bundle is evaluated against portable-component-baseline, so the gap needs its own profile/fixture decision"
+        }
       }
     }
   },
