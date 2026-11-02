@@ -107,9 +107,20 @@ struct SinglePoolOutcome {
 }
 
 fn run_single_endpoint_pool_build(
-    _guard: std::sync::MutexGuard<'static, ()>,
+    guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
 ) -> SinglePoolOutcome {
+    let (output, _worker_store, root) = run_single_endpoint_pool_build_with(guard, write_build, |_| {}, true);
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool build JSON report");
+    SinglePoolOutcome { report, _root: root }
+}
+
+fn run_single_endpoint_pool_build_with(
+    _guard: std::sync::MutexGuard<'static, ()>,
+    write_build: impl FnOnce(&Path),
+    prepare: impl FnOnce(&Path),
+    expect_success: bool,
+) -> (std::process::Output, PathBuf, tempfile::TempDir) {
     let root = tempfile::tempdir().expect("pool transfer tempdir");
     let state_dir = root.path().join("state");
     let client_store = root.path().join("client-store");
@@ -122,6 +133,7 @@ fn run_single_endpoint_pool_build(
     fs::create_dir_all(&worker_store).expect("worker store");
     fs::create_dir_all(&worker_state).expect("worker state");
     write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 8, &[BUILDER_ID]);
+    prepare(&state_dir);
     write_build(&build_file);
 
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
@@ -208,7 +220,7 @@ fn run_single_endpoint_pool_build(
     configure_ticket_input_fd(&mut command, &state_dir);
     let output = command.output().expect("run pool build");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success() {
+    if !output.status.success() && expect_success {
         let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
         let log = report["failed"][0]["saved_log_path"]
             .as_str()
@@ -216,10 +228,7 @@ fn run_single_endpoint_pool_build(
             .unwrap_or_default();
         panic!("pool build status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
     }
-    SinglePoolOutcome {
-        report: serde_json::from_slice(&output.stdout).expect("pool build JSON report"),
-        _root: root,
-    }
+    (output, worker_store, root)
 }
 
 fn assert_one_pool_outcome(report: &Value) {
@@ -233,6 +242,31 @@ fn assert_one_pool_outcome(report: &Value) {
 fn production_pool_dispatches_one_goal_through_the_worker() {
     let outcome = run_single_endpoint_pool_build(serial_transfer_guard(), write_replayable_derivation);
     assert_one_pool_outcome(&outcome.report);
+}
+
+#[test]
+fn production_pool_rejects_a_malformed_ticket_credential() {
+    let (output, worker_store, _root) = run_single_endpoint_pool_build_with(
+        serial_transfer_guard(),
+        write_replayable_derivation,
+        |state_dir| {
+            fs::write(state_dir.join(REMOTE_TICKET_INPUT_FILENAME), b"not-a-ticket\n").expect("malformed ticket");
+        },
+        false,
+    );
+    assert!(!output.status.success(), "a malformed credential must fail the build");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+    let message = report["failed"][0]["message"].as_str().unwrap_or(&stderr);
+    assert!(
+        message.contains("ticket")
+            || message.contains("credential")
+            || stderr.contains("ticket")
+            || stderr.contains("credential"),
+        "the failure must name the malformed credential: {message} stderr={stderr}"
+    );
+    let entries = fs::read_dir(&worker_store).expect("worker store").count();
+    assert_eq!(entries, 0, "a malformed credential must not admit or build a goal");
 }
 
 /// A producer plan output is scanned, its unit is registered, and the unit is
