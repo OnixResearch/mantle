@@ -719,6 +719,11 @@ fn production_single_builder_and_pool_outputs_match() {
     let pool_bytes = fs::read(&pool_path).expect("pool output bytes");
     assert!(!single_bytes.is_empty());
     assert_eq!(pool_bytes, single_bytes, "pool output must match the single-builder build");
+    eprintln!(
+        "pool-parity single-builder: bytes={} blake3={}",
+        single_bytes.len(),
+        blake3::hash(&single_bytes).to_hex()
+    );
 }
 
 /// Local and pool builds of the same derivation must produce identical output
@@ -771,6 +776,7 @@ fn production_pool_output_matches_local_build() {
         .unwrap_or_else(|error| panic!("pool output bytes at {pool_path:?}: {error}; report={pool_report}"));
     assert!(!local_bytes.is_empty());
     assert_eq!(pool_bytes, local_bytes, "pool output must match the local build");
+    eprintln!("pool-parity local: bytes={} blake3={}", local_bytes.len(), blake3::hash(&local_bytes).to_hex());
 }
 
 #[test]

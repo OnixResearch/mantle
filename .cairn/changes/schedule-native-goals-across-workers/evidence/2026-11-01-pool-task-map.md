@@ -16,7 +16,7 @@ remains. No task is checked here; several obligations are only partly met.
 | S9 diamond, overlap, counts, waiters | evidenced | `…-diamond-slice.md`, `…-overlap-slice.md` prove exact counts and overlapping worker lifetimes; `…-waiter-notifications-slice.md` asserts one notification per dependent in the diamond and chain. |
 | S10 concurrency, saturation, worker death, cancellation, stale fences | partial | Concurrent completions, queueing, session/global bounds, mid-exchange worker death, and cancellation are covered by the pool suites. Stale-fence, unknown-future-fence, and lease overcommit/shrink rules are covered by the coordinator and resource tests the executor uses (`stale_report_is_rejected_before_output_admission`, `malformed_identity_and_unknown_future_fence_fail_without_state_change`, `lease_snapshot_rejects_corruption_and_overcommit`), but no pool-specific two-attempt scenario is run. |
 | S11 positive and negative admission | partial | Full-key/NAR import, untrusted key name, tampered NAR bytes, missing source input, revoked binding, ambiguous configured keys, a malformed ticket credential rejected before dispatch (worker store stays empty), and the executor's missing/extra/wrong-output guard are covered; a live private-input case is not. |
-| S12 CLI compatibility scenarios | partial | Plan-only pool validation, unsupported-mode rejection, local/single-builder/pool byte parity, the client-cache-hit test, the 27-test pool suite, and the green ordinary gate cover the scenarios; no separately retained comparison report file exists. |
+| S12 CLI compatibility scenarios | partial | Plan-only pool validation, unsupported-mode rejection, local/single-builder/pool byte parity, the client-cache-hit test, the 30-test pool suite, and the green ordinary gate cover the scenarios; `2026-11-02-pool-parity-report.md` retains the comparison digests. |
 | S13 verification and delivery gates | evidenced | Ordinary gate exit 0 (226 suites), 27-test pool suite, strict Clippy, fmt, and the operator contract check. |
 | S14 documentation | evidenced | `docs/remote-pool.md`, README link, and operator contract regeneration. |
 | S15 validation and acceptance | blocked | Cairn validation passes (`2026-11-01-pool-cairn-validation.md`), but sync/archive wait on `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon`; no acceptance yet. |
@@ -28,7 +28,4 @@ remains. No task is checked here; several obligations are only partly met.
 3. Stale-fence/lease proof in a pool-specific two-attempt scenario and fallback cancellation observed before the local goal completes (S7, S10).
 4. Multi-unit and plan-root dependency re-admission through a pool result (S8).
 5. Live private-input admission case (S11).
-6. Retained local/single-builder/pool comparison report (S12).
-7. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
-6. Remaining negative admission cases (S11).
-7. Single-builder/cache-hit comparison report (S12).
+6. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
