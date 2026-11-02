@@ -1,10 +1,9 @@
 # Tasks: Schedule native goals across remote workers
 
 Checked tasks cite the evidence map in `evidence/2026-11-01-pool-task-map.md`.
-S1-S6 are checked in order. Later tasks stay unchecked until their predecessors
-complete: S7 (stale-result refusal relies on the coordinator tests), S8 (larger
-plans and per-goal observations), S9-S14 (ordered behind S8/S11/S12), and S15
-(acceptance/archive).
+S1-S7 are checked in order. Later tasks stay unchecked until their predecessors
+complete: S8 (larger plans and per-goal observations), S9-S14 (ordered behind
+S8/S11/S12), and S15 (acceptance/archive).
 Dependency archive state is enforced by `metadata.json`, not waived by these
 structural gates.
 
@@ -19,7 +18,7 @@ structural gates.
 - [x] [task:S4][after:S3] Implement the native-pool execution adapter through the remote application ports and canonical store capabilities; preserve binding, credential, transfer, attestation and full-key verification rather than signing unverified results locally. r[distributed_compilation.output_admission]
 - [x] [task:S5][after:S4] Connect local/native-pool selection to the ordinary Worker for static and late dynamic-plan goals; remove the local-as-remote composition and obsolete native serial dispatch loops, keeping portable/single-builder public contracts explicit. r[distributed_compilation.goal_dispatch] r[distributed_compilation.compatibility_evidence]
 - [x] [task:S6][after:S5] Persist/reconcile current fenced reservations under concurrent dispatch/completion; enforce global jobs, worker concurrency, explicit resource quantities, session/queue/transfer bounds and no lock across network I/O. r[distributed_compilation.resource_ownership]
-- [ ] [task:S7][after:S6] Integrate last-owner cancellation, owned remote teardown, stale-result refusal and existing bounded retries; allow only admitted pre-dispatch fallback and preserve compiler/trust failure distinctions. r[distributed_compilation.terminal_behavior]
+- [x] [task:S7][after:S6] Integrate last-owner cancellation, owned remote teardown, stale-result refusal and existing bounded retries; allow only admitted pre-dispatch fallback and preserve compiler/trust failure distinctions. r[distributed_compilation.terminal_behavior]
 - [ ] [task:S8][after:S7] Finish verified outputs through the normal goal/store path, re-admit returned producer plan/source outputs, and add bounded per-goal placement/attempt/trust observations without changing ordinary JSON behavior. r[distributed_compilation.output_admission] r[distributed_compilation.compatibility_evidence]
 
 ## Phase 3: Behavioral acceptance
