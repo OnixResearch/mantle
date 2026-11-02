@@ -52,6 +52,11 @@ in the serialized workspace tests on the known host flake
 failed on the committed tree earlier in this session and passed in other runs,
 so the gate is not green on this host.
 
+A second full ordinary-gate attempt failed identically: 788 passed, 1 failed on
+`production_workspace_local_dispatch_stack_reaches_owned_watch_cancel`
+("watch sandbox did not start"). The host cannot start that sandbox reliably;
+this is recorded as a host limitation, not a source defect.
+
 ## Non-claims
 
 - S13 is not complete: the ordinary gate is not green because of the host
