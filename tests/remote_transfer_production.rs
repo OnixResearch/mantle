@@ -1225,6 +1225,83 @@ fn production_pool_rejects_revoked_endpoint_binding_before_dispatch() {
     assert_eq!(fs::read_dir(&client_store).expect("client store entries").count(), 0);
 }
 
+/// Pool mode: SIGINT during an admitted local fallback stops the local goal
+/// before it completes; the cancelled build publishes no output.
+#[test]
+fn production_pool_local_fallback_cancellation_stops_the_local_goal() {
+    let _guard = serial_transfer_guard();
+    let root = tempfile::tempdir().expect("fallback cancellation tempdir");
+    let state_dir = root.path().join("state");
+    let client_store = root.path().join("client-store");
+    let slow_file = root.path().join("slow.ncl");
+    let pool_config = root.path().join("pool.ncl");
+    fs::create_dir_all(&state_dir).expect("state dir");
+    fs::create_dir_all(&client_store).expect("client store");
+    write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
+    write_slow_derivation(&slow_file);
+    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    let digest = blake3::hash(&fs::read(&program).expect("program bytes")).to_hex().to_string();
+    let pool_source = format!(
+        r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    fallback_policy = 'always,
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{}",
+      transport_program_digest_blake3 = "{}",
+      transport_args = [],
+      profile = {{ system = "aarch64-linux" }},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "AAAA" }}],
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+        program.display(),
+        digest,
+        builder = BUILDER_ID,
+    );
+    fs::write(&pool_config, pool_source).expect("fallback pool configuration");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let stdout_path = root.path().join("stdout.log");
+    let stderr_path = root.path().join("stderr.log");
+    let stdout_file = fs::File::create(&stdout_path).expect("stdout file");
+    let stderr_file = fs::File::create(&stderr_path).expect("stderr file");
+    let started = Instant::now();
+    let mut child = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &slow_file)
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file))
+        .spawn()
+        .expect("spawn fallback build");
+    // The fallback is admitted immediately and the local sandbox then runs the
+    // 20-second builder; 2 seconds is inside that build on every observed run.
+    std::thread::sleep(Duration::from_secs(2));
+    let killed = unsafe { libc::kill(child.id() as i32, libc::SIGINT) };
+    assert_eq!(killed, 0, "SIGINT must be delivered");
+    let stop_deadline = Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        match child.try_wait().expect("poll cancelled fallback build") {
+            Some(status) => break status,
+            None if Instant::now() <= stop_deadline => std::thread::sleep(Duration::from_millis(50)),
+            None => {
+                let _ = child.kill();
+                panic!("cancelled fallback build did not exit");
+            }
+        }
+    };
+    let elapsed = started.elapsed();
+    assert!(!status.success(), "a cancelled fallback must not report success");
+    assert!(
+        elapsed < Duration::from_secs(15),
+        "the local goal must stop before its 20-second builder ends: {elapsed:?}"
+    );
+    let published = fs::read_dir(&client_store).expect("client store entries").flatten().count();
+    assert_eq!(published, 0, "a cancelled local goal must not publish an output");
+}
+
 /// Pool mode: SIGINT cancels the in-flight transport, the attempt is settled,
 /// and a later goal is admitted on the same endpoint.
 #[test]

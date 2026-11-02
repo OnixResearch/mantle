@@ -121,9 +121,9 @@ identity, and executes the action in its local sandbox. The client then:
 `fallback_policy = 'always` admits local execution when placement fails before
 dispatch (no fitting endpoint or capacity unavailable after the bounded wait).
 `never` and `trusted-only` (the default) fail closed instead. Local fallback
-uses the ordinary sandbox build path; a cancellation that arrives during the
-fallback goal is observed only after that goal completes, because the local
-service does not advertise watch sandbox teardown.
+uses the ordinary sandbox build path with the same watch cancellation as a
+direct local build: a cancellation that arrives during the fallback goal
+reaches the sandbox and its child teardown instead of waiting for the goal.
 
 ## Failures
 
@@ -158,8 +158,8 @@ global `--jobs` bound, the pool session `max_concurrency` bound, queueing when
 endpoints are at capacity, cancellation with transport-child teardown, worker
 death mid-exchange, tampered output bytes, untrusted output keys, ambiguous
 configured keys, revoked bindings, missing source inputs, duplicate completion
-refusal, cache hits on a second build, admitted pre-dispatch local fallback,
-byte-identical outputs against local and single-builder builds, a malformed
+refusal, cache hits on a second build, admitted pre-dispatch local fallback
+(including cancellation during the fallback goal), byte-identical outputs against local and single-builder builds, a malformed
 ticket credential rejected before dispatch, a live source input uploaded from
 the client store backend, and a returned `mantle-plan-v1` chain (two dependent
 units built through the pool).

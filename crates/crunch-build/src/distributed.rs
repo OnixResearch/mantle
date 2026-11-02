@@ -610,6 +610,17 @@ where
             },
         }
     }
+
+    /// Watch-cancellable execution takes the local sandbox path: the remote
+    /// realizer cannot prove owned child teardown when its future is dropped.
+    async fn do_build_cancellable(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+        cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
+        self.local.do_build_cancellable(request, cancellation).await
+    }
 }
 
 fn remote_dispatch_io_error(error: RemoteBuildServiceDispatchError) -> std::io::Error {

@@ -3963,14 +3963,19 @@ impl Worker {
                         match attempt {
                             Ok(result) => Ok(result),
                             Err(error) if fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
-                                // Local fallback keeps the ordinary build path; the
-                                // sandbox service does not advertise watch
-                                // cancellation teardown, so the goal completes
-                                // before the pipeline observes cancellation.
-                                let _ = fallback_cancellation;
-                                bs.do_build(build_request)
-                                    .await
-                                    .map_err(|error| Error::Store(format!("local fallback: {error}")))
+                                // The fallback is still an owned sandbox build:
+                                // watch cancellation reaches the sandbox and its
+                                // child teardown instead of waiting for the goal.
+                                match fallback_cancellation {
+                                    Some(receiver) => bs
+                                        .do_build_cancellable(build_request, receiver)
+                                        .await
+                                        .map_err(|error| Error::Store(format!("local fallback: {error}"))),
+                                    None => bs
+                                        .do_build(build_request)
+                                        .await
+                                        .map_err(|error| Error::Store(format!("local fallback: {error}"))),
+                                }
                             }
                             Err(error) => Err(Error::Store(format!("build: {error}"))),
                         }
