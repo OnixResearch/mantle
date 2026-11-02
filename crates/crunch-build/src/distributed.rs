@@ -1189,6 +1189,8 @@ pub enum PoolSelectionError {
     NoFit,
     #[error("selector chose an endpoint outside the admitted pool")]
     OutOfRange,
+    #[error("pool capacity snapshot is unavailable or inconsistent")]
+    CapacitySnapshotInvalid,
 }
 
 /// Executes one prepared goal on one admitted endpoint. A pool endpoint is not
@@ -1246,6 +1248,8 @@ pub struct PoolDispatch {
     session_limit: Option<std::sync::Arc<tokio::sync::Semaphore>>,
     /// Admitted pre-dispatch local fallback policy.
     local_fallback: bool,
+    /// Operator-declared quantified requirements applied to every pool goal.
+    resource_requirements: Option<RemoteResourceRequirements>,
 }
 
 impl std::fmt::Debug for PoolDispatch {
@@ -1279,6 +1283,7 @@ impl PoolDispatch {
             selector,
             session_limit: None,
             local_fallback: false,
+            resource_requirements: None,
         })
     }
 
@@ -1292,6 +1297,18 @@ impl PoolDispatch {
     /// Whether the admitted policy allows local fallback before dispatch.
     pub fn allows_local_fallback(&self) -> bool {
         self.local_fallback
+    }
+
+    /// Attach the operator-declared quantified requirements for every goal.
+    #[must_use]
+    pub fn with_resource_requirements(mut self, requirements: Option<RemoteResourceRequirements>) -> Self {
+        self.resource_requirements = requirements;
+        self
+    }
+
+    /// The declared requirements every pool goal carries, when any.
+    pub fn resource_requirements(&self) -> Option<&RemoteResourceRequirements> {
+        self.resource_requirements.as_ref()
     }
 
     /// Bound concurrent dispatches by the admitted pool session policy.
@@ -1476,6 +1493,8 @@ pub struct PreparedPoolGoal {
     /// BLAKE3 of `action_ref`; binds the semantic requirement, never capacity.
     pub placement_key_blake3: String,
     pub requested: crunch_remote_core::resource::Capacity,
+    /// Operator-declared quantified requirements carried by this goal.
+    pub resource_requirements: Option<RemoteResourceRequirements>,
 }
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
@@ -1496,6 +1515,8 @@ pub enum PreparedPoolGoalError {
     TooManyCapabilities,
     #[error("prepared pool goal capability name is empty or too long")]
     InvalidCapabilityName,
+    #[error("prepared pool goal resource requirements are not canonical")]
+    InvalidResourceRequirements,
 }
 
 pub const MAX_POOL_GOAL_CAPABILITIES: usize = 32;
@@ -1543,6 +1564,10 @@ impl PreparedPoolGoal {
         if !has_valid_names {
             return Err(PreparedPoolGoalError::InvalidCapabilityName);
         }
+        if let Some(requirements) = &facts.resource_requirements {
+            canonical_remote_resource_requirements(requirements)
+                .map_err(|_| PreparedPoolGoalError::InvalidResourceRequirements)?;
+        }
         debug_assert!(has_system && has_modes && has_action && has_drv_path && has_derivation);
         debug_assert!(capability_count <= MAX_POOL_GOAL_CAPABILITIES);
         Ok(Self {
@@ -1558,6 +1583,7 @@ impl PreparedPoolGoal {
             semantic_accelerator_classes: facts.semantic_accelerator_classes,
             placement_key_blake3,
             requested: facts.requested,
+            resource_requirements: facts.resource_requirements,
         })
     }
 }
@@ -1621,6 +1647,7 @@ pub struct PreparedPoolGoalFacts {
     pub required_network_mode: String,
     pub semantic_accelerator_classes: Vec<String>,
     pub requested: crunch_remote_core::resource::Capacity,
+    pub resource_requirements: Option<RemoteResourceRequirements>,
 }
 
 /// Chooses the endpoint for one prepared goal. The selector receives the
@@ -2888,6 +2915,7 @@ mod tests {
                 memory_bytes: 1_024,
                 scratch_bytes: 1_024,
             },
+            resource_requirements: None,
         }
     }
 

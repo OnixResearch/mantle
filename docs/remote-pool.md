@@ -116,6 +116,20 @@ identity, and executes the action in its local sandbox. The client then:
 - exports only admitted outputs to the client's physical store and lets the
   ordinary goal/store path persist PathInfo.
 
+## Resources
+
+`--remote-resource-requirements <json>` applies the operator's canonical
+quantified requirement to every pool goal (it previously required the
+single-builder `--builder` path). The requirement travels in the concrete
+request and the Worker's placement facts.
+
+Placement subtracts the endpoint's live resource leases from its declared
+`profile.resource_inventory` before comparing a goal's request. An endpoint
+that declares no inventory has unknown capacity, so a quantified goal is never
+placed there by inference. Dispatch admission then reserves the lease under the
+coordinator guard; a snapshot that no longer fits fails the admission instead of
+fabricating capacity.
+
 ## Fallback
 
 `fallback_policy = 'always` admits local execution when placement fails before
@@ -161,8 +175,9 @@ configured keys, revoked bindings, missing source inputs, duplicate completion
 refusal, cache hits on a second build, admitted pre-dispatch local fallback
 (including cancellation during the fallback goal), byte-identical outputs against local and single-builder builds, a malformed
 ticket credential rejected before dispatch, a live source input uploaded from
-the client store backend, and a returned `mantle-plan-v1` chain (two dependent
-units built through the pool).
+the client store backend, a declared resource requirement placed only within a
+declared inventory, and a returned `mantle-plan-v1` chain (two dependent units
+built through the pool).
 
 ## Non-claims
 

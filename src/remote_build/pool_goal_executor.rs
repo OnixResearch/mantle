@@ -125,7 +125,7 @@ pub fn concrete_pool_goal_request(
         expected_outputs,
         production_attempt: None,
         transfer_policy: None,
-        resource_requirements: None,
+        resource_requirements: goal.resource_requirements.clone(),
         locality_scope: None,
         failure_debug_policy: RemoteFailureDebugPolicy::default(),
         failure_replay: None,
@@ -609,6 +609,7 @@ mod tests {
                 memory_bytes: 0,
                 scratch_bytes: 0,
             },
+            resource_requirements: None,
         })
         .expect("fixture goal")
     }

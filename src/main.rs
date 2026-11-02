@@ -628,7 +628,7 @@ enum Command {
         trusted_builder_keys: Vec<String>,
 
         /// Canonical quantified remote requirement JSON; never inferred from jobs or history.
-        #[arg(long, requires = "builder", conflicts_with = "watch")]
+        #[arg(long, conflicts_with = "watch")]
         remote_resource_requirements: Option<PathBuf>,
 
         /// SecretSpec metadata manifest for the local remote service
@@ -5754,6 +5754,14 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
             return Err(RunError::Build("--builder-pool is supported only for Linux native builds".to_string()));
         }
     }
+    let resource_requirements = input
+        .remote_resource_requirements
+        .map(crate::remote_build::demand::load_declared_requirements)
+        .transpose()
+        .map_err(RunError::Internal)?;
+    if resource_requirements.is_some() && input.remote_builder.is_none() && input.builder_pool.is_none() {
+        return Err(RunError::Build("--remote-resource-requirements requires --builder or --builder-pool".to_string()));
+    }
     build_application::preflight_backend(
         ctx.store_backend,
         &ctx.resolved_state_dir,
@@ -5787,6 +5795,7 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
                             crunch_remote_core::resource::PlacementPreference::ResourceFit,
                             crunch_remote_core::resource::PlacementPreference::LocalityTransfer,
                         ],
+                        resource_requirements: resource_requirements.clone(),
                     },
                 )?;
                 Some(std::sync::Arc::new(factory) as std::sync::Arc<dyn crunch_pipeline::PoolExecutorFactory>)

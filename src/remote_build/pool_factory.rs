@@ -15,6 +15,7 @@ use crunch_build::distributed::PoolGoalSelector;
 use crunch_build::distributed::PoolSelectionError;
 use crunch_build::distributed::PreparedPoolGoal;
 use crunch_build::distributed::RemoteFailureDebugPolicy;
+use crunch_build::distributed::RemoteResourceRequirements;
 use crunch_build::distributed::RemoteTransferPolicy;
 use crunch_build::distributed::RemoteWorkerResourceInventory;
 use crunch_pipeline::PoolExecutorFactory;
@@ -29,6 +30,7 @@ use crunch_remote_core::resource::NamedResourceFit;
 use crunch_remote_core::resource::PlacementPreference;
 
 use crate::remote_build::RemoteClientBuildOptions;
+use crate::remote_build::RemoteCoordinatorState;
 use crate::remote_build::pool_goal_executor::PoolEndpointDispatch;
 use crate::remote_build::pool_goal_executor::RemotePoolGoalExecutor;
 
@@ -52,6 +54,7 @@ pub struct RemotePoolExecutorFactory {
     endpoints: Vec<PoolEndpointPlan>,
     preferences: Vec<PlacementPreference>,
     local_fallback: bool,
+    resource_requirements: Option<RemoteResourceRequirements>,
 }
 
 impl std::fmt::Debug for RemotePoolExecutorFactory {
@@ -68,6 +71,13 @@ impl RemotePoolExecutorFactory {
     #[must_use]
     pub fn with_local_fallback(mut self, allowed: bool) -> Self {
         self.local_fallback = allowed;
+        self
+    }
+
+    /// Attach the operator-declared quantified requirements for every goal.
+    #[must_use]
+    pub fn with_resource_requirements(mut self, requirements: Option<RemoteResourceRequirements>) -> Self {
+        self.resource_requirements = requirements;
         self
     }
 
@@ -91,6 +101,7 @@ impl RemotePoolExecutorFactory {
             endpoints,
             preferences,
             local_fallback: false,
+            resource_requirements: None,
         })
     }
 }
@@ -136,10 +147,13 @@ impl PoolExecutorFactory for RemotePoolExecutorFactory {
             admitted: self.admitted.clone(),
             workers,
             preferences: self.preferences.clone(),
+            inventories: self.endpoints.iter().map(|endpoint| endpoint.resource_inventory.clone()).collect(),
+            state_dirs: self.endpoints.iter().map(|endpoint| endpoint.state_dir.clone()).collect(),
         });
         PoolDispatch::new(services, selector)
             .map(|dispatch| dispatch.with_session_limit(self.admitted.session().max_concurrency))
             .map(|dispatch| dispatch.with_local_fallback(self.local_fallback))
+            .map(|dispatch| dispatch.with_resource_requirements(self.resource_requirements.clone()))
             .map(Arc::new)
             .map_err(|error| error.to_string())
     }
@@ -150,24 +164,63 @@ struct PoolPolicySelector {
     admitted: AdmittedPool,
     workers: Vec<WorkerFacts>,
     preferences: Vec<PlacementPreference>,
+    inventories: Vec<Option<RemoteWorkerResourceInventory>>,
+    state_dirs: Vec<PathBuf>,
+}
+
+impl PoolPolicySelector {
+    /// Rebuild worker facts with the capacity currently remaining after live
+    /// leases. An endpoint without a declared inventory keeps unknown (zero)
+    /// capacity, so a quantified goal cannot be placed by inference.
+    fn worker_facts_with_current_capacity(&self) -> Result<Vec<WorkerFacts>, PoolSelectionError> {
+        debug_assert_eq!(self.workers.len(), self.inventories.len());
+        debug_assert_eq!(self.workers.len(), self.state_dirs.len());
+        let mut facts = self.workers.clone();
+        let mut states: std::collections::BTreeMap<&Path, RemoteCoordinatorState> = std::collections::BTreeMap::new();
+        for (index, inventory) in self.inventories.iter().enumerate() {
+            let Some(inventory) = inventory else {
+                continue;
+            };
+            let state_dir = self.state_dirs[index].as_path();
+            if !states.contains_key(state_dir) {
+                let state = crate::remote_build::load_coordinator_state(state_dir)
+                    .map_err(|_| PoolSelectionError::CapacitySnapshotInvalid)?;
+                states.insert(state_dir, state);
+            }
+            let state = states.get(state_dir).ok_or(PoolSelectionError::CapacitySnapshotInvalid)?;
+            let leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+            let remaining = crunch_build::distributed::remote_resource_remaining_capacity(
+                &facts[index].endpoint_name,
+                inventory,
+                &leases,
+            )
+            .map_err(|_| PoolSelectionError::CapacitySnapshotInvalid)?;
+            facts[index].remaining = Capacity {
+                cpu_units: remaining.cpu_units,
+                memory_bytes: remaining.memory_bytes,
+                scratch_bytes: remaining.scratch_bytes,
+            };
+        }
+        Ok(facts)
+    }
 }
 
 impl PoolGoalSelector for PoolPolicySelector {
     fn select(&self, goal: &PreparedPoolGoal, endpoint_ids: &[String]) -> Result<usize, PoolSelectionError> {
+        let requires_named_resources = goal.resource_requirements.as_ref().is_some_and(|requirements| {
+            !requirements.quantities.accelerators.is_empty() || !requirements.quantities.named_tokens.is_empty()
+        });
         let requirement = GoalRequirement {
             system: goal.system.clone(),
             sandbox_mode: goal.required_sandbox_mode.clone(),
             network_mode: goal.required_network_mode.clone(),
-            required_features: Vec::new(),
-            required_accelerator_classes: Vec::new(),
-            requested: Capacity {
-                cpu_units: 0,
-                memory_bytes: 0,
-                scratch_bytes: 0,
-            },
-            requires_named_resources: false,
+            required_features: goal.required_features.clone(),
+            required_accelerator_classes: goal.semantic_accelerator_classes.clone(),
+            requested: goal.requested,
+            requires_named_resources,
         };
-        match plan_goal_placement(&self.admitted, &requirement, &self.workers, self.preferences.iter().copied()) {
+        let workers = self.worker_facts_with_current_capacity()?;
+        match plan_goal_placement(&self.admitted, &requirement, &workers, self.preferences.iter().copied()) {
             GoalPlacement::Selected { endpoint_name, .. } => {
                 endpoint_ids.iter().position(|id| id == &endpoint_name).ok_or(PoolSelectionError::NoFit)
             }
@@ -187,6 +240,7 @@ pub struct PoolFactoryInput<'a> {
     pub now_unix_s: u64,
     pub build_time_limit_secs: u64,
     pub preferences: Vec<PlacementPreference>,
+    pub resource_requirements: Option<RemoteResourceRequirements>,
 }
 
 /// Validate a pool selection without credentials, tickets, or dispatch.
@@ -293,6 +347,7 @@ pub fn plan_pool_factory(input: PoolFactoryInput<'_>) -> Result<RemotePoolExecut
                 crate::remote_farm_config::RemoteFallbackPolicy::Always
             ))
         })
+        .map(|factory| factory.with_resource_requirements(input.resource_requirements.clone()))
         .map_err(crate::errors::RunError::Internal)
 }
 
@@ -441,8 +496,91 @@ mod tests {
                 memory_bytes: 0,
                 scratch_bytes: 0,
             },
+            resource_requirements: None,
         })
         .expect("fixture goal")
+    }
+
+    fn goal_with_capacity(system: &str, cpu_units: u32) -> PreparedPoolGoal {
+        PreparedPoolGoal::new(crunch_build::distributed::PreparedPoolGoalFacts {
+            request: snix_build::buildservice::BuildRequest::default(),
+            action_ref: "action:capacity-fixture".to_string(),
+            drv_path: "/mantle/store/00000000000000000000000000000000-capacity.drv".to_string(),
+            derivation_json: "{}".to_string(),
+            closure: Vec::new(),
+            system: system.to_string(),
+            required_features: Vec::new(),
+            required_sandbox_mode: "practical".to_string(),
+            required_network_mode: "none".to_string(),
+            semantic_accelerator_classes: Vec::new(),
+            requested: Capacity {
+                cpu_units,
+                memory_bytes: 0,
+                scratch_bytes: 0,
+            },
+            resource_requirements: None,
+        })
+        .expect("capacity fixture goal")
+    }
+
+    fn capacity_worker() -> WorkerFacts {
+        WorkerFacts {
+            endpoint_name: "worker-a".to_string(),
+            capabilities: DeclaredCapabilities {
+                system: "x86_64-linux".to_string(),
+                sandbox_mode: "practical".to_string(),
+                network_mode: "none".to_string(),
+                features: Vec::new(),
+            },
+            declared_accelerator_classes: Vec::new(),
+            worker_generation: 1,
+            remaining: Capacity {
+                cpu_units: 0,
+                memory_bytes: 0,
+                scratch_bytes: 0,
+            },
+            named: NamedResourceFit {
+                is_empty: true,
+                is_constrained: false,
+            },
+            resource_fit: 0,
+            content_locality: 0,
+            transfer_cost: 0,
+        }
+    }
+
+    #[test]
+    fn selector_uses_declared_goal_capacity_against_declared_inventory() {
+        let admitted = admitted(&["worker-a"]);
+        let root = tempfile::tempdir().expect("selector capacity tempdir");
+        let inventory = RemoteWorkerResourceInventory {
+            total: crunch_build::distributed::RemoteResourceVector {
+                cpu_units: 1,
+                memory_bytes: 1_024,
+                scratch_bytes: 1_024,
+                accelerators: Vec::new(),
+                named_tokens: Vec::new(),
+            },
+        };
+        let selector = PoolPolicySelector {
+            admitted,
+            workers: vec![capacity_worker()],
+            preferences: Vec::new(),
+            inventories: vec![Some(inventory)],
+            state_dirs: vec![root.path().to_path_buf()],
+        };
+        let endpoints = vec!["worker-a".to_string()];
+        assert_eq!(selector.select(&goal_with_capacity("x86_64-linux", 1), &endpoints), Ok(0));
+        assert_eq!(selector.select(&goal_with_capacity("x86_64-linux", 2), &endpoints), Err(PoolSelectionError::NoFit));
+        let unknown = PoolPolicySelector {
+            inventories: vec![None],
+            ..selector
+        };
+        assert_eq!(
+            unknown.select(&goal_with_capacity("x86_64-linux", 1), &endpoints),
+            Err(PoolSelectionError::NoFit),
+            "an endpoint without a declared inventory cannot prove quantified capacity"
+        );
     }
 
     #[test]
@@ -505,6 +643,8 @@ mod tests {
                 },
             ],
             preferences: vec![PlacementPreference::ResourceFit],
+            inventories: vec![None, None],
+            state_dirs: vec![PathBuf::from("/tmp/remote-pool-factory-test"); 2],
         };
         let endpoints = vec![String::from("worker-a"), String::from("worker-b")];
         assert_eq!(selector.select(&goal("x86_64-linux"), &endpoints), Ok(0));

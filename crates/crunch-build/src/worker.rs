@@ -3912,6 +3912,19 @@ impl Worker {
 
         // A bare BuildRequest cannot express pool placement requirements, so the
         // resolved facts travel with it when a pool executor is attached.
+        let pool_requirements = builder.pool_dispatch().and_then(|dispatch| dispatch.resource_requirements()).cloned();
+        let pool_requested = pool_requirements
+            .as_ref()
+            .map(|requirements| crunch_remote_core::resource::Capacity {
+                cpu_units: requirements.quantities.cpu_units,
+                memory_bytes: requirements.quantities.memory_bytes,
+                scratch_bytes: requirements.quantities.scratch_bytes,
+            })
+            .unwrap_or(crunch_remote_core::resource::Capacity {
+                cpu_units: 0,
+                memory_bytes: 0,
+                scratch_bytes: 0,
+            });
         let pool_goal = match builder.pool_dispatch() {
             Some(_) => Some(
                 crate::distributed::PreparedPoolGoal::new(crate::distributed::PreparedPoolGoalFacts {
@@ -3925,12 +3938,12 @@ impl Worker {
                     required_features: Vec::new(),
                     required_sandbox_mode: builder.hermeticity_mode().as_str().to_string(),
                     required_network_mode: "none".to_string(),
-                    semantic_accelerator_classes: Vec::new(),
-                    requested: crunch_remote_core::resource::Capacity {
-                        cpu_units: 0,
-                        memory_bytes: 0,
-                        scratch_bytes: 0,
-                    },
+                    semantic_accelerator_classes: pool_requirements
+                        .as_ref()
+                        .map(|requirements| requirements.semantic_accelerator_classes.clone())
+                        .unwrap_or_default(),
+                    requested: pool_requested,
+                    resource_requirements: pool_requirements.clone(),
                 })
                 .map_err(|error| Error::Store(format!("remote-pool:{error}")))?,
             ),

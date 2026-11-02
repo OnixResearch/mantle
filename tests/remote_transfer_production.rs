@@ -504,6 +504,146 @@ fn production_pool_admits_and_builds_a_returned_dynamic_plan_chain() {
 
 /// Admitted pre-dispatch fallback (`fallback_policy = 'always`) runs the goal
 /// locally when no endpoint fits; the default policy fails instead.
+/// Pool mode: an operator-declared requirement larger than the endpoint's
+/// declared inventory is refused; the same requirement within the inventory
+/// dispatches normally.
+#[test]
+fn production_pool_enforces_declared_resource_quantities() {
+    let _guard = serial_transfer_guard();
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let run = |inventory_cpu: u32, requirement_cpu: u32| -> (std::process::Output, PathBuf) {
+        let root = tempfile::tempdir().expect("resource pool tempdir");
+        let state_dir = root.path().join("state");
+        let client_store = root.path().join("client-store");
+        let worker_store = root.path().join("worker-store");
+        let worker_state = root.path().join("worker-state");
+        let build_file = root.path().join("goal.ncl");
+        let pool_config = root.path().join("pool.ncl");
+        let requirements = root.path().join("requirements.json");
+        for dir in [&state_dir, &client_store, &worker_store, &worker_state] {
+            fs::create_dir_all(dir).expect("resource pool directory");
+        }
+        write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
+        write_replayable_derivation(&build_file);
+        fs::write(
+            &requirements,
+            format!(
+                r#"{{"quantities":{{"cpu_units":{requirement_cpu},"memory_bytes":1073741824,"scratch_bytes":1073741824}},"semantic_accelerator_classes":[]}}"#
+            ),
+        )
+        .expect("requirements JSON");
+        let wrapper = root.path().join("mantle-transport.sh");
+        fs::write(&wrapper, format!("#!/bin/sh\nexec {} \"$@\"\n", binary.display())).expect("transport wrapper");
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("wrapper mode");
+        let binary_digest = blake3::hash(&fs::read(&wrapper).expect("wrapper bytes")).to_hex().to_string();
+        let signing_material = RESULT_SIGNING_KEY.split_once(':').expect("signing key material").1;
+        let binding_config = remote_binding_config_path(&state_dir);
+        let worker_args = vec![
+            "--state-dir".to_string(),
+            state_dir.display().to_string(),
+            "--store".to_string(),
+            worker_store.display().to_string(),
+            "--store-prefix".to_string(),
+            STORE_PREFIX.to_string(),
+            "--store-backend".to_string(),
+            "snix".to_string(),
+            "--remote-binding-config".to_string(),
+            binding_config.display().to_string(),
+            "remote".to_string(),
+            "serve".to_string(),
+            "--endpoint-id".to_string(),
+            BUILDER_ID.to_string(),
+            "--binding".to_string(),
+            "stdio-once".to_string(),
+            "--executor".to_string(),
+            "local-build".to_string(),
+            "--execution-state-dir".to_string(),
+            worker_state.display().to_string(),
+        ];
+        let args_json = serde_json::to_string(&worker_args).expect("worker args JSON");
+        let pool_source = format!(
+            r#"{{
+  pools = [{{
+    pool_id = "native-pool",
+    endpoints = [{{
+      endpoint_id = "{builder}",
+      transport = 'stdio,
+      credential_reference = "pool-bearer",
+      transport_program = "{binary}",
+      transport_program_digest_blake3 = "{digest}",
+      transport_args = {args},
+      trusted_output_keys = [{{ public_key_name = "cache.example.com-1", public_key_base64 = "{material}" }}],
+      profile = {{
+        system = "x86_64-linux",
+        max_concurrency = 1,
+        resource_inventory = {{ total = {{ cpu_units = {inventory_cpu}, memory_bytes = 2147483648, scratch_bytes = 2147483648 }} }},
+      }},
+    }}],
+    session = {{ max_concurrency = 1, job_count_max = 4, session_bytes_max = 1048576 }},
+  }}],
+}}
+"#,
+            builder = BUILDER_ID,
+            binary = wrapper.display(),
+            digest = binary_digest,
+            args = args_json,
+            material = signing_material,
+            inventory_cpu = inventory_cpu,
+        );
+        fs::write(&pool_config, pool_source).expect("pool configuration");
+        let mut command = pool_build_command(&binary, &state_dir, &client_store, &pool_config, &build_file);
+        command.arg("--remote-resource-requirements").arg(&requirements);
+        let output = command.output().expect("run resource pool build");
+        (output, root.path().to_path_buf())
+    };
+    let (fitting, _fitting_root) = run(4, 2);
+    if !fitting.status.success() {
+        let report: Value = serde_json::from_slice(&fitting.stdout).unwrap_or(Value::Null);
+        let log = report["failed"][0]["saved_log_path"]
+            .as_str()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        panic!(
+            "fitting requirement failed: failed={} log={log} stderr={}",
+            report["failed"],
+            String::from_utf8_lossy(&fitting.stderr)
+        );
+    }
+    let report: Value = serde_json::from_slice(&fitting.stdout).expect("resource pool JSON report");
+    assert!(report["failed"].as_array().is_some_and(Vec::is_empty), "{report}");
+    let (oversized, _oversized_root) = run(1, 2);
+    assert!(!oversized.status.success(), "a requirement above the inventory must be refused");
+    let text = format!("{}{}", String::from_utf8_lossy(&oversized.stdout), String::from_utf8_lossy(&oversized.stderr));
+    assert!(
+        text.contains("placement-unavailable") || text.contains("no admitted endpoint fits"),
+        "unexpected oversized-requirement failure: {text}"
+    );
+    let unbound = tempfile::tempdir().expect("unbound requirements tempdir");
+    let unbound_file = unbound.path().join("goal.ncl");
+    let unbound_requirements = unbound.path().join("requirements.json");
+    write_replayable_derivation(&unbound_file);
+    fs::write(&unbound_requirements, br#"{"quantities":{"cpu_units":1,"memory_bytes":1073741824,"scratch_bytes":1073741824},"semantic_accelerator_classes":[]}"#)
+        .expect("unbound requirements JSON");
+    let rejected = Command::new(&binary)
+        .args([
+            "--json",
+            "build",
+            unbound_file.to_str().expect("UTF-8 build file"),
+            "--no-substitute",
+            "--remote-resource-requirements",
+            unbound_requirements.to_str().expect("UTF-8 requirements"),
+        ])
+        .output()
+        .expect("run unbound requirements build");
+    assert!(!rejected.status.success(), "requirements without a remote builder must be refused");
+    let rejected_text =
+        format!("{}{}", String::from_utf8_lossy(&rejected.stdout), String::from_utf8_lossy(&rejected.stderr));
+    assert!(
+        rejected_text.contains("requires --builder or --builder-pool"),
+        "unexpected unbound-requirements failure: {rejected_text}"
+    );
+}
+
 /// A source input produced by an earlier local build lives only in the client
 /// store backend; the pool must upload that live store object to the worker.
 #[test]

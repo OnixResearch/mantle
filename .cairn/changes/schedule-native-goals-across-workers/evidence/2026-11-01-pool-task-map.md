@@ -10,7 +10,7 @@ remains. No task is checked here; several obligations are only partly met.
 | S3 prepared envelope | evidenced | `2026-10-31-prepared-pool-goal-slice.md`, `…-remote-nix-derivation-payload-slice.md`, `…-content-addressed-leaf-slice.md` (resolved action identity). |
 | S4 executor adapter | evidenced | `2026-10-31-pool-goal-executor-slice.md`, `…-goal-end-to-end-slice.md`, `…-content-addressed-leaf-slice.md`. |
 | S5 Worker wiring | evidenced | `2026-10-31-worker-pool-routing-slice.md`, `…-pool-build-service-slice.md`, `…-diamond-slice.md`. |
-| S6 reservations and bounds | partial | Revision-conflict reload/reapply, busy queueing, the global `--jobs` bound, and the pool session `max_concurrency` bound are covered (`…-diamond-slice.md`, `…-capacity-queueing-slice.md`, `…-global-jobs-slice.md`, `…-session-concurrency-slice.md`); explicit resource quantities are still not enforced in placement (requested capacity is zero). |
+| S6 reservations and bounds | evidenced | Revision-conflict reload/reapply, busy queueing, the global `--jobs` bound, and the pool session `max_concurrency` bound are covered (`…-diamond-slice.md`, `…-capacity-queueing-slice.md`, `…-global-jobs-slice.md`, `…-session-concurrency-slice.md`); `--remote-resource-requirements` now applies to pool goals, placement subtracts live leases from the declared inventory, an endpoint without an inventory cannot prove quantified capacity, and `production_pool_enforces_declared_resource_quantities` proves both the fitting dispatch and the oversized refusal (plus the unbound-flag refusal). |
 | S7 cancellation, teardown, retries, fallback | partial | Cancellation with owned transport teardown and attempt settlement are covered (`…-cancellation-slice.md`, `…-transport-death-slice.md`); admitted pre-dispatch local fallback is implemented and tested (`…-local-fallback-slice.md`); a SIGINT during the fallback goal now reaches the sandbox and stops the local goal before its builder ends (`production_pool_local_fallback_cancellation_stops_the_local_goal`); stale-result refusal relies on existing coordinator tests. |
 | S8 verified outputs, plan/source re-admission, observations | partial | Output verification/import, duplicate-completion refusal, and a returned `mantle-plan-v1` chain (two dependent units, builder source input transferred, `unit.main` bound to `unit.dep` output, chain built through the pool, output content checked) are covered; larger plans and per-goal placement/attempt/trust observations remain limited to the existing report fields. |
 | S9 diamond, overlap, counts, waiters | evidenced | `…-diamond-slice.md`, `…-overlap-slice.md` prove exact counts and overlapping worker lifetimes; `…-waiter-notifications-slice.md` asserts one notification per dependent in the diamond and chain. |
@@ -23,6 +23,5 @@ remains. No task is checked here; several obligations are only partly met.
 
 ## Next obligations, in dependency order
 
-1. Quantified resource placement (S6).
-2. Stale-fence/lease proof in a pool-specific two-attempt scenario (S7, S10).
-3. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
+1. Stale-fence/lease proof in a pool-specific two-attempt scenario (S7, S10).
+2. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
