@@ -5,7 +5,7 @@ remains. No task is checked here; several obligations are only partly met.
 
 | Task | Status | Evidence / missing |
 | --- | --- | --- |
-| S1 baseline | partial | `2026-10-31-baseline-behavior.md` records source-level facts only; an in-test single-builder/dynamic-plan baseline now exists (`production_pool_admits_and_builds_a_returned_dynamic_plan_unit`), but the evidence file still lacks a captured transcript with exact binary/config identities. |
+| S1 baseline | evidenced | `2026-10-31-baseline-behavior.md` records source-level facts; `2026-11-02-pool-baseline-transcript.md` captures a runtime local build with the exact binary BLAKE3, store prefix, scheduler policy, derivation, output path, and output BLAKE3. |
 | S2 pool schema and admission | evidenced | `2026-10-31-pool-plan-slice.md`, `…-pool-admission-slice.md`, `…-pool-preflight-slice.md`; config, per-endpoint FD, binding, key, resource, and session admission are exercised. |
 | S3 prepared envelope | evidenced | `2026-10-31-prepared-pool-goal-slice.md`, `…-remote-nix-derivation-payload-slice.md`, `…-content-addressed-leaf-slice.md` (resolved action identity). |
 | S4 executor adapter | evidenced | `2026-10-31-pool-goal-executor-slice.md`, `…-goal-end-to-end-slice.md`, `…-content-addressed-leaf-slice.md`. |
@@ -23,8 +23,7 @@ remains. No task is checked here; several obligations are only partly met.
 
 ## Next obligations, in dependency order
 
-1. Runtime baseline transcript with exact identities (S1).
-2. Quantified resource placement (S6).
-3. Stale-fence/lease proof in a pool-specific two-attempt scenario and fallback cancellation observed before the local goal completes (S7, S10).
-4. Live private-input admission case (S11).
-5. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
+1. Quantified resource placement (S6).
+2. Stale-fence/lease proof in a pool-specific two-attempt scenario and fallback cancellation observed before the local goal completes (S7, S10).
+3. Live private-input admission case (S11).
+4. Archive after `resolve-remote-entry-points-through-one-binding` and `separate-remote-build-hexagon` close (S15).
