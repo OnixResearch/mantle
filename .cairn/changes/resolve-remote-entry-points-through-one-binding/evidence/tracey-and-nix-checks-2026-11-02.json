@@ -78,6 +78,11 @@
             ]
           },
           "observation": "no shipped profile admits 'component@3::import-func-hello::Func(0)'; the wrpc reference bundle is evaluated against portable-component-baseline, so the gap needs its own profile/fixture decision"
+        },
+        "profile_ownership": {
+          "mantle_reference": "flake.nix:679 octetProfileConfig = \"${octet}/standards/wasm-artifact/generated/profiles.json\"",
+          "installed_by": "flake.nix:736 copies the Octet profile file into the wasm-component toolchain",
+          "owner": "the sibling octet repository (generated profiles), with its own change lifecycle; no profile edit is made from this change"
         }
       }
     }
