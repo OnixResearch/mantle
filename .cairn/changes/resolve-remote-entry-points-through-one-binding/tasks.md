@@ -4,7 +4,7 @@ Only the individually evidenced contract, implementation and fixture tasks below
 
 ## Phase 1: Baseline and contract
 
-- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record every remote entry point, its name shape, its admission checks, and its current revocation behavior. r[remote_builds.single_binding_resolution]
+- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record every remote entry point, its name shape, its admission checks, and its current revocation behavior. r[remote_builds.single_binding_resolution]
 - [x] [serial] T1.2 Define the resolve step, the binding record, the generation fence, and the revocation operation. r[remote_builds.single_binding_resolution]
 - [x] [serial] T1.3 Record the generation-bound, retraction-not-deletion, and fail-closed-early decisions in an ADR. r[remote_builds.binding_revocation]
 
@@ -23,7 +23,7 @@ Only the individually evidenced contract, implementation and fixture tasks below
 
 ## Phase 4: Verification
 
-- [ ] [serial] T4.1 Run the resolve, generation, and revocation rails before and after the change. Preserve exact results. r[remote_builds.binding_revocation]
+- [x] [serial] T4.1 Run the resolve, generation, and revocation rails before and after the change. Preserve exact results. r[remote_builds.binding_revocation]
 - [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.single_binding_resolution]
 - [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.binding_revocation]
 
@@ -31,4 +31,4 @@ Only the individually evidenced contract, implementation and fixture tasks below
 
 `evidence/task-closure-gate-v13-2026-10-26.json` maps T1.2, T1.3, T2.1–T2.4 and T3.1–T3.3 to exact v13 source digests, named passing tests and the pinned v8 endpoint smoke. Each named source still matches the v13 start snapshot. The smoke reports all four endpoint kinds, isolated exact revocation and generation 1 fenced by 2. T1.3 records ADR 0128 as **Proposed**, not approved. The earlier failed cache-binding fixture remains in historical evidence; its named v13 result is now `ok`.
 
-`evidence/focused-tests-gate-v13-2026-10-26.json` lists four passing source-binding tests. The v13 gate's non-flake steps exited 0, but flake exited 1 because its source filter omitted compile-time Python inputs; this is a repository failure, not a host limitation. T1.1 and T4.1–T4.3 remain open: no before-change baseline, full quality-gate acceptance, spec sync or archive is manufactured.
+`evidence/focused-tests-gate-v13-2026-10-26.json` lists four passing source-binding tests. The v13 gate's non-flake steps exited 0, but flake exited 1 because its source filter omitted compile-time Python inputs; this is a repository failure, not a host limitation. T4.2 and T4.3 remain open: Tracey coverage and the relevant Nix checks are not evidenced, and no spec sync or archive is manufactured. T1.1 and T4.1 now cite `baseline-entry-points-2026-11-02.md` and `rail-parity-before-after-2026-11-02.json`.

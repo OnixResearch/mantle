@@ -1,0 +1,51 @@
+{
+  "schema": "mantle-rail-parity-before-after-v1",
+  "date": "2026-11-02",
+  "change": "resolve-remote-entry-points-through-one-binding",
+  "acceptance_claimed": false,
+  "checkboxes_changed": true,
+  "before": {
+    "revision": "dbeb354ba",
+    "description": "parent of 41d0bdfc2 (the commit that introduced the EndpointBindingTable and single_binding_resolution)",
+    "worktree": "/tmp/resolve-prechange-wt",
+    "target": "/tmp/mantle-prechange-target"
+  },
+  "after": {
+    "revision": "f15966018",
+    "description": "current origin/main when the runs were recorded"
+  },
+  "commands": [
+    "cargo test -p crunch-remote-core --lib -- --test-threads 1",
+    "cargo test -p mantle --bin mantle ticket_authorization_rejects_revoked_and_expired_tickets -- --test-threads 1",
+    "cargo test -p mantle --bin mantle check_metadata_validity_expired_when_past_expiry -- --test-threads 1"
+  ],
+  "results": {
+    "before": {
+      "core": "test result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 60.55s",
+      "ticket": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2894 filtered out; finished in 0.00s",
+      "expiry": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2894 filtered out; finished in 0.00s"
+    },
+    "after": {
+      "core": "test result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 76.22s",
+      "ticket": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2894 filtered out; finished in 0.01s",
+      "expiry": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2894 filtered out; finished in 0.01s"
+    }
+  },
+  "rails": {
+    "shared_before_after": [
+      "crunch_remote_core::attempt::tests::repeated_assignment_advances_every_fence_generation",
+      "crunch_remote_core::effect::tests::fenced_session_rejects_other_job_attempt_and_generation_before_effect_planning",
+      "crunch_remote_core::resource::tests::generation_fence_and_attempt_bind_existing_lease",
+      "remote_build::tests::ticket_authorization_rejects_revoked_and_expired_tickets",
+      "cache_substitution::tests::check_metadata_validity_expired_when_past_expiry"
+    ],
+    "post_change_only": [
+      "remote_build::tests::source_binding_tests::configured_cache_denies_missing_forged_stale_revoked_and_expired_before_any_request",
+      "remote_build::tests::source_binding_tests::exact_cache_binding_pulls_signed_bytes_and_revocation_preserves_local_admission",
+      "remote_build::tests::source_binding_tests::live_cache_binding_still_rejects_untrusted_signatures_and_corrupt_nar_content",
+      "remote_build::tests::source_binding_tests::shared_cache_and_base_leases_preserve_signed_content_generation_and_revocation_fences"
+    ]
+  },
+  "interpretation": "The generation, ticket-revocation/expiry, and cache-expiry rails behave identically before and after the binding change (same test names, same pass counts). The four binding resolve/revocation rails are introduced by the change, so they have no pre-change counterpart; they pass post-change (4/4, recorded separately).",
+  "non_claim": "No acceptance, spec sync, archive, or whole-quality-gate completion is claimed. T4.2's Tracey and Nix items and T4.3 remain open."
+}
