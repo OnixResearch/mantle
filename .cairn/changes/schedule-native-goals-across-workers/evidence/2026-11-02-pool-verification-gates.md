@@ -18,20 +18,43 @@ cargo fmt --check (crunch-build, crunch-pipeline, mantle) -> exit 0
 cairn validate -> issues [], change_issues [], receipt recorded
 ```
 
-## Blocked
+## No-std boundary (passed with an alternate nightly)
+
+The devshell's active rustc (1.96.0-nightly-2026-03-21) has no
+`wasm32-unknown-unknown` std and no rustup. The store also contains
+`rust-default-1.96.0-nightly-2026-04-08`, which includes the wasm target; the
+check ran with that toolchain first on `PATH`:
 
 ```text
-bash scripts/check-no-std-core.sh
-  -> "rustup not found and target wasm32-unknown-unknown is not preinstalled
-     under the active rustc sysroot"
+bash scripts/check-no-std-core.sh  -> exit 0
+  [11/12] API shape check OK
+  [12/12] ownership check OK
 ```
 
-The host toolchain has no `wasm32-unknown-unknown` target and no rustup to add
-it, so the no-std boundary check cannot run here. The ordinary quality-gate
-script includes the same step and is therefore not run.
+The ownership step required classifying fourteen touched std sources; the
+entries were added to `openspec/specs/functional-core/evidence/ownership-review.md`
+(pool core and wasm/store/example sources `unrelated`, remote pool shell and
+protected-build runner `adapter-only`).
+
+## Nickel and operator checks
+
+```text
+cargo test -p mantle --test stdlib_tests            -> ok. 29 passed
+scripts/check-operator-command-contract.sh          -> PASS (commands=214)
+```
+
+## Ordinary gate
+
+`bash scripts/check-first-party-quality.sh` passed fmt and Clippy, then failed
+in the serialized workspace tests on the known host flake
+`workspace_shell::tests::production_workspace_local_dispatch_stack_reaches_owned_watch_cancel`
+("watch sandbox did not start"; 788 passed, 1 failed). The same test also
+failed on the committed tree earlier in this session and passed in other runs,
+so the gate is not green on this host.
 
 ## Non-claims
 
-- S13 is not complete; the no-std boundary and the ordinary gate remain
-  unevidenced on this host.
+- S13 is not complete: the ordinary gate is not green because of the host
+  watch-sandbox flake, although its fmt and Clippy steps passed and the focused
+  suites, no-std boundary, Nickel contracts, and operator contract are green.
 - S14 stays ordered behind S13 and is unchecked.

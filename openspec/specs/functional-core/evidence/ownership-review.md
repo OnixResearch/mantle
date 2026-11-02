@@ -1409,4 +1409,44 @@ logic is a std production owner of an extracted algorithm.
 - `tests/fixtures/resource-benchmark/workload.rs` → `unrelated`
 - `tests/support/remote_endpoint_binding.rs` → `unrelated`
 
+### Pool, wasm-component and shell sources touched since the review (2026-11-02)
+
+The pool placement core is a pure decision module in the std `crunch-remote-core`
+crate, not part of the adopted no-std functional-core inventory. Store views,
+wasm-component tooling, verifier helpers and examples are std adapters; the
+remote pool configuration/factory/executor and the protected-build runner are
+shell adapters over the remote application ports.
+
+- `crates/crunch-remote-core/src/pool.rs` → `unrelated`
+- `crates/crunch-remote-core/src/pool_tests.rs` → `unrelated`
+- `crates/crunch-store/src/restricted_view.rs` → `unrelated`
+- `crates/crunch-wasm-component/examples/prepare_effect_fixture.rs` → `unrelated`
+- `crates/crunch-wasm-component/src/bin/mantle-wrpc-author.rs` → `unrelated`
+- `crates/crunch-wasm-component/src/runtime.rs` → `unrelated`
+- `crates/mantle-wasm-consumer-verifier/src/source_tree.rs` → `unrelated`
+- `crates/mantle-wasm-consumer-verifier/tests/wrpc-producer.rs` → `unrelated`
+- `examples/resource_evidence_check.rs` → `unrelated`
+- `src/bin/mantle-protected-build-runner.rs` → `adapter-only`
+- `src/remote_build/attenuated_admission.rs` → `adapter-only`
+- `src/remote_build/pool_config.rs` → `adapter-only`
+- `src/remote_build/pool_factory.rs` → `adapter-only`
+- `src/remote_build/pool_goal_executor.rs` → `adapter-only`
+
+### Additional test and test-support modules (2026-11-02)
+
+These are integration tests and test-support modules added since the earlier
+classification. They exercise adapters and CLI surfaces; none is a std
+functional-core production owner.
+
+- `src/remote_build/tests/attenuated_admission_tests.rs` → `unrelated`
+- `tests/cargo_build_bundle_cli.rs` → `unrelated`
+- `tests/demand_runtime.rs` → `unrelated`
+- `tests/gateway_cli.rs` → `unrelated`
+- `tests/profile_cli.rs` → `unrelated`
+- `tests/release_gauntlet_cli.rs` → `unrelated`
+- `tests/resource_gateway_runtime.rs` → `unrelated`
+- `tests/support/gateway_runtime.rs` → `unrelated`
+
+Supplement reviewer: omp session 2026-11-02 (path and module-role inspection only).
+
 Supplement reviewer: omp session 2026-10-25 (source inspection and path metadata only).

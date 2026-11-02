@@ -451,7 +451,13 @@ fn signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache() {
     let consumer_store = root.path().join("consumer-store");
     let consumer_state = root.path().join("consumer-state");
     let cache = root.path().join("cache");
-    for dir in [&producer_store, &producer_state, &consumer_store, &consumer_state, &cache] {
+    for dir in [
+        &producer_store,
+        &producer_state,
+        &consumer_store,
+        &consumer_state,
+        &cache,
+    ] {
         std::fs::create_dir_all(dir).expect("signed cache directory");
     }
     let project = project_root(SIGNED_CACHE_PROJECT);
