@@ -160,8 +160,9 @@ death mid-exchange, tampered output bytes, untrusted output keys, ambiguous
 configured keys, revoked bindings, missing source inputs, duplicate completion
 refusal, cache hits on a second build, admitted pre-dispatch local fallback,
 byte-identical outputs against local and single-builder builds, a malformed
-ticket credential rejected before dispatch, and a returned `mantle-plan-v1`
-chain (two dependent units built through the pool).
+ticket credential rejected before dispatch, a live source input uploaded from
+the client store backend, and a returned `mantle-plan-v1` chain (two dependent
+units built through the pool).
 
 ## Non-claims
 

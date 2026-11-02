@@ -504,6 +504,115 @@ fn production_pool_admits_and_builds_a_returned_dynamic_plan_chain() {
 
 /// Admitted pre-dispatch fallback (`fallback_policy = 'always`) runs the goal
 /// locally when no endpoint fits; the default policy fails instead.
+/// A source input produced by an earlier local build lives only in the client
+/// store backend; the pool must upload that live store object to the worker.
+#[test]
+fn production_pool_admits_a_live_private_source_input() {
+    let input_path = std::rc::Rc::new(std::cell::RefCell::new(None::<String>));
+    let slot = input_path.clone();
+    let (output, worker_store, _root) = run_single_endpoint_pool_build_with(
+        serial_transfer_guard(),
+        move |path| {
+            let input = slot.borrow().clone().expect("live input path");
+            write_seen_input_derivation(path, &input);
+        },
+        |state_dir| {
+            let client_store = state_dir.parent().expect("state parent").join("client-store");
+            let input = run_local_private_input_build(state_dir, &client_store);
+            *input_path.borrow_mut() = Some(input);
+        },
+        true,
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool private-input JSON report");
+    let outcomes = report["outcomes"].as_array().expect("outcomes");
+    assert_eq!(outcomes.len(), 1, "one routed goal: {report}");
+    let reported = Path::new(outcomes[0]["outputs"][0]["path"].as_str().expect("output path"));
+    let output_path = if reported.exists() {
+        reported.to_path_buf()
+    } else {
+        Path::new(report["output_dir"].as_str().expect("output dir"))
+            .join(reported.file_name().expect("output basename"))
+    };
+    assert_eq!(fs::read(&output_path).expect("pool output bytes"), b"seen-private-ok");
+    let input = input_path.borrow().clone().expect("live input path");
+    let input_file = worker_store.join(Path::new(&input).file_name().expect("input basename"));
+    assert_eq!(
+        fs::read(&input_file).expect("transferred live input bytes"),
+        b"private-ok",
+        "the worker store must receive the live input NAR"
+    );
+}
+
+fn run_local_private_input_build(state_dir: &Path, client_store: &Path) -> String {
+    let build_file = state_dir.parent().expect("state parent").join("private-input.ncl");
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    fs::write(
+        &build_file,
+        format!(
+            r#"let mantle = import "{}" in
+{{
+  name = "production-private-input",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf private-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+            lib.display()
+        ),
+    )
+    .expect("private input derivation");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_mantle"));
+    let mut command = Command::new(&binary);
+    configure_test_sandbox_command(&mut command);
+    let output = command
+        .args([
+            "--json",
+            "--state-dir",
+            state_dir.to_str().expect("UTF-8 state dir"),
+            "--store",
+            client_store.to_str().expect("UTF-8 client store"),
+            "--store-prefix",
+            STORE_PREFIX,
+            "build",
+            build_file.to_str().expect("UTF-8 build file"),
+            "--no-substitute",
+        ])
+        .output()
+        .expect("run private input build");
+    assert!(output.status.success(), "private input build failed: {}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("private input JSON report");
+    let reported = Path::new(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("output path"));
+    format!("{STORE_PREFIX}/{}", reported.file_name().expect("output basename").to_string_lossy())
+}
+
+fn write_seen_input_derivation(path: &Path, input: &str) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-seen-input",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "IFS= read -r value < {}; printf 'seen-%s' \"$value\" > \"$out\""],
+  outputs = ["out"],
+  env = {{}},
+  inputs = ["{}"],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+        input,
+        input,
+    );
+    fs::write(path, source).expect("seen-input derivation");
+}
+
 #[test]
 fn production_pool_local_fallback_runs_when_no_endpoint_fits() {
     let _guard = serial_transfer_guard();
