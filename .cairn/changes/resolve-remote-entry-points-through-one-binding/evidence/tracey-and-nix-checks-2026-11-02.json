@@ -1,0 +1,28 @@
+{
+  "schema": "mantle-t4-2-partial-v1",
+  "date": "2026-11-02",
+  "change": "resolve-remote-entry-points-through-one-binding",
+  "acceptance_claimed": false,
+  "checkboxes_changed": false,
+  "tree": {
+    "commit": "fe3440896",
+    "clean": true
+  },
+  "tracey": {
+    "command": "cairn tracey coverage --root .",
+    "exit": 0,
+    "output": "traceability coverage ok: 155/155 referenced (profile mantle-default)"
+  },
+  "nix": {
+    "command": "nix flake check --no-build -L",
+    "exit": 1,
+    "error": "error: path '/nix/store/p1s6asfx03907773g3q655d144pa1ri5-source.drv' is not valid",
+    "context": "evaluating derivation 'cargo-vendor-dir'; the referenced source derivation is absent from the local store and --no-build cannot realize it",
+    "full_build_attempted": false,
+    "reason_not_attempted": "the root filesystem had ~18 GiB free and the full check builds every exported package; running it risked exhausting the store"
+  },
+  "open_t4_2_items": [
+    "a Nix check that can realize the missing source derivation"
+  ],
+  "non_claim": "Tracey coverage is green, but T4.2 is not complete: the Nix check did not pass, and T4.3 sync/archive remains open."
+}
