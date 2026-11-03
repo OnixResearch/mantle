@@ -34,3 +34,18 @@ check now exists, and Mantle selects it for the wrpc reference pair.
 
 - T4.2's full Nix check result is recorded separately when `nix flake check -L`
   completes; T4.3 acceptance/archive remains open.
+
+## Full flake check
+
+```text
+nix flake check --no-build -L   -> exit 0, "all checks passed!"
+nix flake check -L              -> exit 1 at
+  checks.x86_64-linux.durable-file-publication-adoption
+```
+
+The failing check is unrelated to the remote entry-point change or the Octet
+profile; it runs three Nickel commands on `evidence/radicle/`, `lib/`, and
+`tests/` durable-file-publication files. The same three commands pass when run
+directly with the pinned Nickel 1.17.0, the flake source contains all three
+files, and the derivation produces no builder log. Its failure is recorded as a
+separate repository-check issue, not as a remote-entry-point defect.
