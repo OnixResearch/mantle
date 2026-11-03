@@ -1,8 +1,7 @@
 # Tasks: Schedule native goals across remote workers
 
 Checked tasks cite the evidence map in `evidence/2026-11-01-pool-task-map.md`.
-S1-S12 are checked in order. S13/S14 stay unchecked until the verification
-gates are run and recorded; S15 stays blocked by acceptance and the dependency
+S1-S14 are checked in order. S15 stays blocked by acceptance and the dependency
 archive state.
 Dependency archive state is enforced by `metadata.json`, not waived by these
 structural gates.
@@ -30,6 +29,6 @@ structural gates.
 
 ## Phase 4: Verification and delivery
 
-- [ ] [task:S13][after:S12] Run focused remote/core/application/build/pipeline/CLI regressions, changed-package formatting, strict first-party Clippy, no-std boundaries, applicable Nickel checks and repository-required quality gates; retain exact commands and raw results. r[distributed_compilation.compatibility_evidence]
-- [ ] [task:S14][after:S13] Document pool configuration, credential use counts, admitted transports/backends, resource limits, fallback and local-loopback non-claims; update operator catalog/generated command docs through their owner and add a release note. r[distributed_compilation.pool_selection] r[distributed_compilation.compatibility_evidence]
+- [x] [task:S13][after:S12] Run focused remote/core/application/build/pipeline/CLI regressions, changed-package formatting, strict first-party Clippy, no-std boundaries, applicable Nickel checks and repository-required quality gates; retain exact commands and raw results. r[distributed_compilation.compatibility_evidence]
+- [x] [task:S14][after:S13] Document pool configuration, credential use counts, admitted transports/backends, resource limits, fallback and local-loopback non-claims; update operator catalog/generated command docs through their owner and add a release note. r[distributed_compilation.pool_selection] r[distributed_compilation.compatibility_evidence]
 - [ ] [task:S15][after:S14] Run pinned Cairn validation and proposal/design/tasks gates, retain implementation evidence and obtain acceptance; commit implementation before any separately authorized spec sync/archive. r[distributed_compilation.compatibility_evidence]

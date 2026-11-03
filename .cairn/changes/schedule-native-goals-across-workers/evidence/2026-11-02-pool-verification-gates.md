@@ -65,12 +65,32 @@ failed six unrelated incremental-session tests:
   not succeed)
 - five more with `Boundary("incremental configuration budget exhausted")`
 
-The gate therefore does not complete on this host. The failures are in
-`crunch-eval`, which this change does not touch.
+The gate therefore did not complete on the first attempts. The causes were all
+environmental, discovered one at a time:
+
+1. The incremental-session tests fold the ambient environment into a 65,536-byte
+   fingerprint budget; the devshell environment is 87,291 bytes. The gate was
+   rerun with the large `NIX_*`/build-input variables unset (environment 19,846
+   bytes), and those tests pass.
+2. `cargo_free_self_build_cli` needs `x86_64-unknown-linux-musl-gcc` and
+   `ld.lld` on PATH; both were added from the store.
+3. `wasm_component_cli` needs `MANTLE_WASM_COMPONENT_TOOLCHAIN`; the pinned
+   toolchain was built (`nix build .#wasm-component-toolchain`) and passed as
+   its canonical store path.
+
+## Final ordinary gate
+
+```text
+bash scripts/check-first-party-quality.sh
+  -> exit 0 (fmt, strict Clippy, workspace lib/tests serialized; ORDINARY:0)
+```
+
+Environment: bounded (19,846 bytes), bubblewrap, `SNIX_BUILD_BWRAP`, lld,
+musl-gcc wrapper, the pinned wasm toolchain, and the devshell PATH.
 
 ## Non-claims
 
-- S13 is not complete: the ordinary gate is not green because of the host
-  watch-sandbox flake, although its fmt and Clippy steps passed and the focused
-  suites, no-std boundary, Nickel contracts, and operator contract are green.
+- The ordinary gate is green with the documented environment prerequisites; the
+  focused suites, no-std boundary, Nickel contracts and operator contract are
+  also green.
 - S14 stays ordered behind S13 and is unchecked.
