@@ -65,3 +65,12 @@ gate tasks    schedule-native-goals-across-workers: PASS (valid true), exit 0
 
 Acceptance and archive remain open: acceptance is not inferred from structural
 gates, and archive stays blocked by the two dependency changes recorded above.
+
+
+## Update 2026-11-03
+
+The Octet profile blocker is resolved: `wrpc-reference` exists on Octet branch
+`cairn/add-wrpc-reference-artifact-profile` (`f081ed96…`), Mantle pins it, and
+`nix build .#wrpc-reference-bundle` succeeds with Octet `passed` for both roles.
+`nix flake check --no-build -L` reports all checks evaluated. The dependency
+archives and acceptance remain the only blockers.
