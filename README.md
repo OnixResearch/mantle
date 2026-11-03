@@ -922,6 +922,7 @@ Useful documentation:
 - [Build correctness primitives](docs/build-correctness-primitives.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Remote build pools](docs/remote-pool.md)
+- [Native remote build pool release note](docs/release-notes/native-remote-pool-2026-11-02.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
