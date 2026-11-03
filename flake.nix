@@ -45,7 +45,7 @@
       url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9";
       flake = false;
     };
-    octet.url = "github:OnixResearch/octet/abb6082062251944a40093a274df3d35331fa168";
+    octet.url = "github:OnixResearch/octet/f081ed9682d478e585f4cede89bb89b542755ab9";
     cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
@@ -665,7 +665,7 @@
             '';
 
         wasiVirtVersion = "0.2.0";
-        octetSourceRevision = "abb6082062251944a40093a274df3d35331fa168";
+        octetSourceRevision = "f081ed9682d478e585f4cede89bb89b542755ab9";
         octetSourceRepository = "https://github.com/OnixResearch/octet";
         octetPackageName = "cargo-octet";
         octetPackageVersion = "0.1.0";
@@ -674,6 +674,7 @@
           octetProfileId
           "molten-component-baseline"
           "molten-component-effects-v1"
+          "wrpc-reference"
         ];
         octetPackage = octet.packages.${system}.cargo-octet;
         octetProfileConfig = "${octet}/standards/wasm-artifact/generated/profiles.json";
@@ -777,12 +778,16 @@
                 for profile_id in ${pkgs.lib.escapeShellArgs octetProfileIds}; do
                   case "$profile_id" in
                     portable-component-baseline|molten-component-baseline)
-                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component.wat" ;;
+                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component.wat"
+                      "$out/bin/wasm-tools" parse "$seed" -o "$TMPDIR/octet-positive-component.wasm" ;;
                     molten-component-effects-v1)
-                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component-effects.wat" ;;
+                      seed="${octet}/standards/wasm-artifact/fixtures/positive/component-effects.wat"
+                      "$out/bin/wasm-tools" parse "$seed" -o "$TMPDIR/octet-positive-component.wasm" ;;
+                    wrpc-reference)
+                      seed="${octet}/standards/wasm-artifact/fixtures/positive/wrpc-hello-component.wasm"
+                      cp "$seed" "$TMPDIR/octet-positive-component.wasm" ;;
                     *) echo "unknown Octet component profile: $profile_id" >&2; exit 1 ;;
                   esac
-                  "$out/bin/wasm-tools" parse "$seed" -o "$TMPDIR/octet-positive-component.wasm"
                   artifact_dir="$TMPDIR/octet-$profile_id-evidence"
                   "$out/bin/cargo-octet" evidence collect \
                     --rail wasm-artifact \

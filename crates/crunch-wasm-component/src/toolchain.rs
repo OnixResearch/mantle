@@ -209,10 +209,11 @@ fn verify_octet_profiles(octet: &crate::model::OctetRailIdentity) -> Result<(), 
         OCTET_PROFILE_ID,
         crate::model::OCTET_MOLTEN_PROFILE_ID,
         crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_ID,
+        crate::model::OCTET_WRPC_REFERENCE_PROFILE_ID,
     ];
     if octet.profiles.len() != expected.len() {
         return Err(Error::Invalid(
-            "Octet toolchain must declare exactly the three pinned artifact profiles".to_string(),
+            "Octet toolchain must declare exactly the four pinned artifact profiles".to_string(),
         ));
     }
     for (index, profile) in octet.profiles.iter().enumerate() {
@@ -223,6 +224,7 @@ fn verify_octet_profiles(octet: &crate::model::OctetRailIdentity) -> Result<(), 
             OCTET_PROFILE_ID => OCTET_PROFILE_IDENTITY_BLAKE3,
             crate::model::OCTET_MOLTEN_PROFILE_ID => crate::model::OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3,
             crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_ID => crate::model::OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3,
+            crate::model::OCTET_WRPC_REFERENCE_PROFILE_ID => crate::model::OCTET_WRPC_REFERENCE_PROFILE_IDENTITY_BLAKE3,
             _ => return Err(octet_identity_drift()),
         };
         if profile.profile_identity_blake3 != pinned_identity(expected_identity, OctetPinnedRole::Profile)? {

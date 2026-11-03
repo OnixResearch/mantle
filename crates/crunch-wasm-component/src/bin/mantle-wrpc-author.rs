@@ -186,6 +186,18 @@ fn export_statements(role: &str) -> &'static str {
     "export app.run;\n"
 }
 
+/// The wrpc reference components are admitted by the exact wrpc-reference
+/// artifact profile, not the toolchain's generic default profile.
+fn wrpc_profile_identity(toolchain: &ToolchainManifest) -> AuthorResult<crunch_wasm_component_core::Blake3Identity> {
+    toolchain
+        .octet
+        .profiles
+        .iter()
+        .find(|profile| profile.profile_id == crunch_wasm_component::OCTET_WRPC_REFERENCE_PROFILE_ID)
+        .map(|profile| profile.profile_identity_blake3.clone())
+        .ok_or_else(|| "toolchain omits the wrpc-reference artifact profile".to_string().into())
+}
+
 fn manifest(role: &str, toolchain: &ToolchainManifest, facts: Value) -> AuthorResult<Value> {
     debug_assert!(facts.is_object());
     debug_assert!(!role.is_empty());
@@ -206,7 +218,7 @@ fn manifest(role: &str, toolchain: &ToolchainManifest, facts: Value) -> AuthorRe
                 "artifact":facts["compiled"], "required_imports":[]}],
             "edges":[], "output_world":role, "import_dependencies":false},
         "virtualization":{"defaults_overridden":true, "rules":[], "expected_remaining_imports":remaining_imports(role)},
-        "validation_profiles":{"octet_artifact_profile_identity_blake3":toolchain.octet.profile_identity_blake3,
+        "validation_profiles":{"octet_artifact_profile_identity_blake3":wrpc_profile_identity(toolchain)?,
             "expected_runtime_profile_identity_blake3":facts["profile"]},
         "wizer":{"mode":"disabled", "initialization_entrypoint":null, "deterministic_virtual_imports":[],
             "linker_split":null, "componentization":null},

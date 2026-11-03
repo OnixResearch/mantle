@@ -89,6 +89,15 @@ fn selectable_cohort_rejects_missing_duplicate_and_misbound_profiles() {
         profile_identity_blake3: Blake3Identity::parse(crate::OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3.to_string())
             .unwrap(),
     });
+    assert!(
+        super::verify_octet_profiles(&octet).is_err(),
+        "wrpc-reference profile is required in the closed cohort"
+    );
+    octet.profiles.push(OctetProfileIdentity {
+        profile_id: crate::OCTET_WRPC_REFERENCE_PROFILE_ID.to_string(),
+        profile_identity_blake3: Blake3Identity::parse(crate::OCTET_WRPC_REFERENCE_PROFILE_IDENTITY_BLAKE3.to_string())
+            .unwrap(),
+    });
     octet.profiles.swap(0, 1);
     super::verify_octet_profiles(&octet).expect("profile order is not authority");
     let mut invalid = octet.clone();

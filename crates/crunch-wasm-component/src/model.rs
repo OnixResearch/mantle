@@ -17,13 +17,16 @@ pub const PIPELINE_REQUEST_SCHEMA: &str = "mantle-wasm-component-pipeline-reques
 pub const PIPELINE_EXECUTION_REPORT_SCHEMA: &str = "mantle-wasm-component-pipeline-execution-report-v1";
 pub const TOOLCHAIN_MANIFEST_SCHEMA: &str = "mantle-wasm-component-toolchain-v1";
 pub const OCTET_SOURCE_REPOSITORY: &str = "https://github.com/OnixResearch/octet";
-pub const OCTET_SOURCE_REVISION: &str = "abb6082062251944a40093a274df3d35331fa168";
+pub const OCTET_SOURCE_REVISION: &str = "f081ed9682d478e585f4cede89bb89b542755ab9";
 pub const OCTET_PACKAGE_NAME: &str = "cargo-octet";
 pub const OCTET_PACKAGE_VERSION: &str = "0.1.0";
 pub const OCTET_PROFILE_ID: &str = "portable-component-baseline";
 pub const OCTET_MOLTEN_PROFILE_ID: &str = "molten-component-baseline";
 pub const OCTET_MOLTEN_EFFECTS_PROFILE_ID: &str = "molten-component-effects-v1";
-pub const OCTET_CONFIG_BLAKE3: &str = "09f1fbb7ce4d9da085b3f1325dbd5e8ae1c17bde2755caf79c1d2850e67b116a";
+pub const OCTET_WRPC_REFERENCE_PROFILE_ID: &str = "wrpc-reference";
+pub const OCTET_WRPC_REFERENCE_PROFILE_IDENTITY_BLAKE3: &str =
+    "f7c26c93f643fc8d277de8c8b9a0ee34e386d8ac6e3159726b1bbecbd4919f23";
+pub const OCTET_CONFIG_BLAKE3: &str = "39d88464323c9b14bbd408271138741470837643ea750c73eeda6a9c2b1b69ab";
 pub const OCTET_PROFILE_IDENTITY_BLAKE3: &str = "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd";
 pub const OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3: &str =
     "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846";
