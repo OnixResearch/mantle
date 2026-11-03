@@ -47,5 +47,14 @@
     ]
   },
   "interpretation": "The generation, ticket-revocation/expiry, and cache-expiry rails behave identically before and after the binding change (same test names, same pass counts). The four binding resolve/revocation rails are introduced by the change, so they have no pre-change counterpart; they pass post-change (4/4, recorded separately).",
-  "non_claim": "No acceptance, spec sync, archive, or whole-quality-gate completion is claimed. T4.2's Tracey and Nix items and T4.3 remain open."
+  "non_claim": "No acceptance, spec sync, archive, or whole-quality-gate completion is claimed. T4.2's Tracey and Nix items and T4.3 remain open.",
+  "scratch_cleanup": {
+    "date": "2026-11-02",
+    "removed": [
+      "/tmp/resolve-prechange-wt",
+      "/tmp/mantle-prechange-target"
+    ],
+    "reproduce": "git worktree add /tmp/resolve-prechange-wt dbeb354ba and rebuild with CARGO_TARGET_DIR=/tmp/mantle-prechange-target",
+    "note": "the scratch worktree and target were removed after the runs; the recorded revisions and commands reproduce them"
+  }
 }
