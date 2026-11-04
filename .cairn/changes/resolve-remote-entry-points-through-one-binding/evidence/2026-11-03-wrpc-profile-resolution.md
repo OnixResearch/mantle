@@ -49,3 +49,18 @@ profile; it runs three Nickel commands on `evidence/radicle/`, `lib/`, and
 directly with the pinned Nickel 1.17.0, the flake source contains all three
 files, and the derivation produces no builder log. Its failure is recorded as a
 separate repository-check issue, not as a remote-entry-point defect.
+
+## Durable-file-publication check follow-up (2026-11-03)
+
+The full flake failure was traced to stale manifest bindings in the adoption
+evidence: `Cargo.toml`/`Cargo.lock` changed after the evidence was recorded
+(`7f48786b3`), and this change's flake updates changed `flake.nix`/`flake.lock`.
+The Nickel source, exported JSON, adjacent checksum, receipt constants, and
+prose digests were rebound (`ef099dc6b`). A direct replay of the check's exact
+command sequence with pinned Nickel/jq/b3sum/ripgrep passes
+(`DURABLE_CHECK_MANUAL_PASS`).
+
+The check derivation itself could not be scheduled on this host: repeated
+`nix build` attempts waited behind the daemon/GC lock until timeout (600-900 s)
+under a load average above 40, with hundreds of daemon handlers. That is a host
+resource limitation, not a source failure.
