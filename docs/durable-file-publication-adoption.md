@@ -83,7 +83,7 @@ file bindings and their independent validator constants. `flake.nix` measured
 `flake.lock` measured
 `1095e18485b3746e4aff36fc52deab1a01cffac9dd07f04bd14ea3165ff68521`.
 Pinned Nickel regenerated the live JSON; its adjacent checksum is
-`8e7de798b4843230a8672aa8bf7a63b651055f70278daac6e684244419aaa8ac`.
+`6774ae413951a69de543f491ecfe69c490176c50c7575c27c3d3338b0f7917c5`.
 Historical adoption observations and governed publication identities remain
 unchanged; this is source-binding maintenance, not a new upstream fetch or
 durability proof.
@@ -213,8 +213,8 @@ upstream fetch, bootstrap result or release eligibility.
 The 2026-10-27 Wasm source-closure verifier repair pins the published
 nonblocking Bounded Tree implementation and regenerates its dependency cohort.
 Direct BLAKE3 measurements refresh all four current workspace bindings:
-`Cargo.toml` is `51bac26a52efa61aa661a0cf4fce420755156038b6c0d90e54c452ddcc07a85c`,
-`Cargo.lock` is `44d2b9cd57fbf2cdd4ada7f7a360d0dd015da1f65956b410b8af3210b80c4abe`,
+`Cargo.toml` is `c42a29ea2b14729204ad9ca852d62bfd15b130eb9ab3865c433f2a8e9f052f71`,
+`Cargo.lock` is `d0d6b77c634c6e2c5aa4d5368bd7783907905c506625048cfcca552a9cf79632`,
 `flake.nix` is `82756f706a8f7b79ca98023b04129f983df81e0ecf0edb914261f52eef4b7c95`,
 and `flake.lock` is `685db7856ff7920b2bd67b5c4868196feef703c903280176dc61a3596810b808`.
 The typed receipt and independent validator bind these measurements. Pinned
