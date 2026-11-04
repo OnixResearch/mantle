@@ -74,3 +74,11 @@ The Octet profile blocker is resolved: `wrpc-reference` exists on Octet branch
 `nix build .#wrpc-reference-bundle` succeeds with Octet `passed` for both roles.
 `nix flake check --no-build -L` reports all checks evaluated. The dependency
 archives and acceptance remain the only blockers.
+
+
+## Update 2026-11-03 (archive progress)
+
+`resolve-remote-entry-points-through-one-binding` is synced and archived
+(`.cairn/archive/1970-01-01-resolve-remote-entry-points-through-one-binding`,
+post-archive validate clean). The remaining dependency wait for this change is
+`separate-remote-build-hexagon`.

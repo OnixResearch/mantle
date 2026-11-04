@@ -25,7 +25,7 @@ Only the individually evidenced contract, implementation and fixture tasks below
 
 - [x] [serial] T4.1 Run the resolve, generation, and revocation rails before and after the change. Preserve exact results. r[remote_builds.binding_revocation]
 - [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.single_binding_resolution]
-- [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.binding_revocation]
+- [x] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.binding_revocation]
 
 ## Retained individual task support (2026-10-26)
 
