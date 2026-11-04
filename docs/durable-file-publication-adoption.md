@@ -79,11 +79,11 @@ readiness.
 
 The 2026-10-28 hosted-effects checker repin refreshed only the current Nix
 file bindings and their independent validator constants. `flake.nix` measured
-`1d60660088d2dca94b5fac346544b72007c19a4d815c1d595c2aad5d52f58724`;
+`e747d7908bc64316a75f6121b788415f0eab60f61ee234849136e1679da8f00b`;
 `flake.lock` measured
-`a72e67a730e6699af5a6d4d03ac9de8e3dc8ae117a1b29950284a282cc473143`.
+`1095e18485b3746e4aff36fc52deab1a01cffac9dd07f04bd14ea3165ff68521`.
 Pinned Nickel regenerated the live JSON; its adjacent checksum is
-`f90e286f820e1ad09486340c4663da29b107fd3a41dff5ed4523193f27356e67`.
+`8e7de798b4843230a8672aa8bf7a63b651055f70278daac6e684244419aaa8ac`.
 Historical adoption observations and governed publication identities remain
 unchanged; this is source-binding maintenance, not a new upstream fetch or
 durability proof.

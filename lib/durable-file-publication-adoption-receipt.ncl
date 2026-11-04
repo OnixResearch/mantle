@@ -18,8 +18,8 @@ let _expected = {
   package_version = "0.1.0",
   cargo_manifest_blake3 = "51bac26a52efa61aa661a0cf4fce420755156038b6c0d90e54c452ddcc07a85c",
   cargo_lock_blake3 = "44d2b9cd57fbf2cdd4ada7f7a360d0dd015da1f65956b410b8af3210b80c4abe",
-  flake_blake3 = "1d60660088d2dca94b5fac346544b72007c19a4d815c1d595c2aad5d52f58724",
-  flake_lock_blake3 = "a72e67a730e6699af5a6d4d03ac9de8e3dc8ae117a1b29950284a282cc473143",
+  flake_blake3 = "e747d7908bc64316a75f6121b788415f0eab60f61ee234849136e1679da8f00b",
+  flake_lock_blake3 = "1095e18485b3746e4aff36fc52deab1a01cffac9dd07f04bd14ea3165ff68521",
   nar_hash = "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
 }
 in
