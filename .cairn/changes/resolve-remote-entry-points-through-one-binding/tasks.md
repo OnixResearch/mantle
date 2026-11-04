@@ -24,11 +24,11 @@ Only the individually evidenced contract, implementation and fixture tasks below
 ## Phase 4: Verification
 
 - [x] [serial] T4.1 Run the resolve, generation, and revocation rails before and after the change. Preserve exact results. r[remote_builds.binding_revocation]
-- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.single_binding_resolution]
+- [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.single_binding_resolution]
 - [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.binding_revocation]
 
 ## Retained individual task support (2026-10-26)
 
 `evidence/task-closure-gate-v13-2026-10-26.json` maps T1.2, T1.3, T2.1–T2.4 and T3.1–T3.3 to exact v13 source digests, named passing tests and the pinned v8 endpoint smoke. Each named source still matches the v13 start snapshot. The smoke reports all four endpoint kinds, isolated exact revocation and generation 1 fenced by 2. T1.3 records ADR 0128 as **Proposed**, not approved. The earlier failed cache-binding fixture remains in historical evidence; its named v13 result is now `ok`.
 
-`evidence/focused-tests-gate-v13-2026-10-26.json` lists four passing source-binding tests. The v13 gate's non-flake steps exited 0, but flake exited 1 because its source filter omitted compile-time Python inputs; this is a repository failure, not a host limitation. T4.2 and T4.3 remain open: Tracey coverage is green (`155/155 referenced`), but `nix flake check --no-build` fails on an unbuilt source derivation, and no spec sync or archive is manufactured. See `tracey-and-nix-checks-2026-11-02.json`. T1.1 and T4.1 now cite `baseline-entry-points-2026-11-02.md` and `rail-parity-before-after-2026-11-02.json`.
+`evidence/focused-tests-gate-v13-2026-10-26.json` lists four passing source-binding tests. The v13 gate's non-flake steps exited 0, but flake exited 1 because its source filter omitted compile-time Python inputs; this is a repository failure, not a host limitation. T4.3 remains open: acceptance and spec sync/archive are not manufactured. T4.2 now cites the Tracey result, the rebind of the durable-file-publication check, the successful wrpc reference bundle, and `nix flake check --no-build` ("all checks passed"); the check derivation was not schedulable on this host. See `2026-11-03-wrpc-profile-resolution.md`. T1.1 and T4.1 now cite `baseline-entry-points-2026-11-02.md` and `rail-parity-before-after-2026-11-02.json`.
