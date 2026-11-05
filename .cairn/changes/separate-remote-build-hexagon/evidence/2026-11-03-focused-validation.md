@@ -36,3 +36,11 @@ scheduled on this host (see the end).
 1300 worker processes and the check waited in evaluation/GC contention until
 cancelled. `nix flake check --no-build -L` evaluates all checks ("all checks
 passed"). The full build check remains unevidenced; V5 stays open.
+
+### Second V5 attempt (serialized)
+
+`nix flake check -L --max-jobs 1` also failed to advance: after one hour it
+remained in evaluation at `check-store-retention-policy` with no builder output,
+while the host load averaged 29-40 and the daemon carried more than 1,300
+handlers. The check was cancelled. `nix flake check --no-build -L` still reports
+"all checks passed" for evaluation.
