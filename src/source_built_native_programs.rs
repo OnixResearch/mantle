@@ -90,13 +90,38 @@ pub(crate) fn logical_prefixes(
     for node in &graph.derivations {
         let drv = node.drv_path.to_absolute_path_with_prefix(prefix);
         for (name, output) in &node.derivation.outputs {
-            // Content-addressed intermediates have no path before execution.
-            // Record only the static outputs; required compiler components are
-            // resolved explicitly below and fail closed if they are absent.
-            let Some(path) = output.path.as_ref() else {
-                continue;
+            // Content-addressed outputs have no final path before realization.
+            // Carry the derivation's provisional input-addressed path so the
+            // ADR 0098 pre-dispatch resolution binds the realized path; a
+            // required component with no valid provisional path still fails
+            // closed. Absolute prefixes embedded inside a compiler's own
+            // outputs remain an output-finalization self-reference concern.
+            let path = match output.path.as_ref() {
+                Some(path) => path.to_absolute_path_with_prefix(prefix),
+                None => {
+                    let provisional = node.derivation.environment.get(name).ok_or_else(|| {
+                        error(&format!(
+                            "content-addressed native output {drv}:{name} has no provisional path"
+                        ))
+                    })?;
+                    let provisional = std::str::from_utf8(provisional.as_ref()).map_err(|_| {
+                        error(&format!(
+                            "content-addressed native output {drv}:{name} has a non-UTF-8 provisional path"
+                        ))
+                    })?;
+                    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+                        provisional.as_bytes(),
+                        prefix,
+                    )
+                    .map_err(|_| {
+                        error(&format!(
+                            "content-addressed native output {drv}:{name} has an invalid provisional path"
+                        ))
+                    })?;
+                    provisional.to_string()
+                }
             };
-            outputs.insert(format!("{drv}:{name}"), path.to_absolute_path_with_prefix(prefix));
+            outputs.insert(format!("{drv}:{name}"), path);
         }
     }
     let selected = |suffix: &str| -> Result<String, crate::errors::RunError> {
