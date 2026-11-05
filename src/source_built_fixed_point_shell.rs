@@ -750,12 +750,17 @@ fn prepare_profile_attempt(
         &bound_stagex_manifest,
         &records.native_source_records,
     )?;
-    let native_source_manifest_digest = hash_materialized_source(&native_source_authority_manifest)?;
     let native_source_manifest = staging_dir.join(NATIVE_SOURCE_MANIFEST_FILE);
     let combined_native_manifest = assemble_source_bundle(
         records.native_source_records.iter().map(|record| (*record).clone()).collect(),
         LOGICAL_STORE_PREFIX,
     )?;
+    // Bind the materialized union as the native source root. The profile's
+    // included bundles carry authenticated host-tool source records that the
+    // declared native authority manifest alone does not contain; authoring must
+    // see them without regenerating the retained profile.
+    crate::source_bundle::write_source_bundle(&native_source_authority_manifest, &combined_native_manifest)?;
+    let native_source_manifest_digest = hash_materialized_source(&native_source_authority_manifest)?;
     crate::source_bundle::write_source_bundle(&native_source_manifest, &combined_native_manifest)?;
     let source_digests = MaterializedSourceDigests {
         stagex_seed: stagex_seed_digest,
