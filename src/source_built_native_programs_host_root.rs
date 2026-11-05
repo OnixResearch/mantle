@@ -318,9 +318,7 @@ pub(crate) fn lower_original_shell_node(
             executable: ControllerExecutable::Inventory(plan.tools),
             inputs: command_inputs.clone(),
             runtime_mounts: runtime_mounts.clone(),
-            exit_policy: RecipeExitPolicy::OneOf {
-                codes: (0..=255).collect(),
-            },
+            exit_policy: RecipeExitPolicy::Normal,
             merge_stderr: false,
             generated_outputs: true,
         },
@@ -331,9 +329,7 @@ pub(crate) fn lower_original_shell_node(
             },
             inputs: command_inputs,
             runtime_mounts,
-            exit_policy: RecipeExitPolicy::OneOf {
-                codes: (0..=255).collect(),
-            },
+            exit_policy: RecipeExitPolicy::Normal,
             merge_stderr: false,
             generated_outputs: true,
         },
