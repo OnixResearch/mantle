@@ -676,9 +676,7 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
         .iter()
         .map(|(k, v)| (format!("{TRANSITION}:{k}"), v.clone()))
         .collect::<BTreeMap<_, _>>();
-    if binutils_admitted {
-        publication::extend(&mut builder, request, &mut exports)?;
-    }
+    publication::extend(&mut builder, request, &mut exports, binutils_admitted)?;
     Ok(AuthoredPrograms {
         files: builder.files,
         exports,

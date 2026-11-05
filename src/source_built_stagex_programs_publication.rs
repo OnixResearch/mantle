@@ -99,6 +99,7 @@ pub(super) fn extend(
     b: &mut TransitionBuilder,
     request: &AuthoringRequest<'_>,
     exports: &mut BTreeMap<String, ArtifactRef>,
+    binutils_admitted: bool,
 ) -> Result<(), RunError> {
     let mut p = Publication { recipe: program(STAGE) };
     let tcc = b.artifact("tcc-musl-v2")?;
@@ -126,11 +127,13 @@ pub(super) fn extend(
         ("tcc-selfhost".into(), "tcc-musl-selfhost".into()),
         ("tcc-0.9.26".into(), "tinycc-0.9.26".into()),
     ];
-    tools.extend(
-        crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
-            .iter()
-            .map(|(tool, _)| (tool.to_string(), format!("binutils-installed-{tool}"))),
-    );
+    if binutils_admitted {
+        tools.extend(
+            crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS
+                .iter()
+                .map(|(tool, _)| (tool.to_string(), format!("binutils-installed-{tool}"))),
+        );
+    }
     for (role, original) in tools {
         let source = b.artifact(&original)?;
         // Compare against the actual canonical transition member before copying:
@@ -153,14 +156,18 @@ pub(super) fn extend(
         let suffix = if role == "tcc-0.9.26" { "tcc-0.9.26" } else { &role };
         payload.insert(format!("bin/x86_64-linux-musl-{suffix}"), refs["tool"].clone());
     }
-    let trees = [
+    let mut trees = vec![
         ("musl.headers", "publication-musl-headers", "x86_64-linux-musl/include"),
         ("musl.libraries", "publication-musl-libraries", "x86_64-linux-musl/lib"),
         ("tcc.runtime", "publication-tcc-runtime", "lib/tcc"),
         ("tcc.source", "publication-tcc-source", "share/mantle-stagex/tcc-source-patched"),
-        ("binutils.headers", "publication-binutils-headers", "x86_64-linux-musl/include-binutils"),
-        ("binutils.ldscripts", "publication-binutils-ldscripts", "x86_64-linux-musl/lib/ldscripts"),
     ];
+    if binutils_admitted {
+        trees.extend([
+            ("binutils.headers", "publication-binutils-headers", "x86_64-linux-musl/include-binutils"),
+            ("binutils.ldscripts", "publication-binutils-ldscripts", "x86_64-linux-musl/lib/ldscripts"),
+        ]);
+    }
     let mut local_trees = BTreeMap::new();
     for (role, original, path) in trees {
         let refs = p.exec(
@@ -217,15 +224,22 @@ pub(super) fn extend(
         0,
     )?["object"]
         .clone();
-    let canonical = p.exec(
-        "canonicalize-runtime-supplement",
-        b.artifact("elf-local-symbol-canonicalizer-copy")?,
-        BTreeMap::from([("object".into(), runtime_object)]),
-        vec![input("object", ""), output("object", "")],
-        BTreeMap::from([("object".into(), bounded(ArtifactKind::Object, FILE_MAX))]),
-        0,
-    )?["object"]
-        .clone();
+    // The canonicalizer source belongs to the binutils bundle. A StageX-only
+    // publication without binutils keeps the deterministic raw supplement; the
+    // object identity is still bound by its producing action.
+    let canonical = if binutils_admitted {
+        p.exec(
+            "canonicalize-runtime-supplement",
+            b.artifact("elf-local-symbol-canonicalizer-copy")?,
+            BTreeMap::from([("object".into(), runtime_object)]),
+            vec![input("object", ""), output("object", "")],
+            BTreeMap::from([("object".into(), bounded(ArtifactKind::Object, FILE_MAX))]),
+            0,
+        )?["object"]
+            .clone()
+    } else {
+        runtime_object
+    };
     let runtime = p.exec(
         "assemble-complete-tcc-runtime",
         helper.clone(),
@@ -284,33 +298,35 @@ pub(super) fn extend(
         BTreeMap::new(),
         1,
     )?;
-    let object = p.exec(
-        "as-positive",
-        tool_exports["as"].clone(),
-        BTreeMap::from([("source".into(), smoke_sources["positive.s"].clone())]),
-        vec![input("source", ""), literal("-o"), output("object", "")],
-        BTreeMap::from([("object".into(), bounded(ArtifactKind::Object, FILE_MAX))]),
-        0,
-    )?["object"]
-        .clone();
-    let binary = p.exec(
-        "ld-positive",
-        tool_exports["ld"].clone(),
-        BTreeMap::from([("object".into(), object)]),
-        vec![input("object", ""), literal("-o"), output("positive", "")],
-        BTreeMap::from([("positive".into(), bounded(ArtifactKind::Executable, FILE_MAX))]),
-        0,
-    )?["positive"]
-        .clone();
-    p.exec(
-        "as-negative",
-        tool_exports["as"].clone(),
-        BTreeMap::from([("source".into(), smoke_sources["negative.s"].clone())]),
-        vec![input("source", ""), literal("-o"), literal("negative-as.o")],
-        BTreeMap::new(),
-        1,
-    )?;
-    p.exec("positive-execution", binary, BTreeMap::new(), Vec::new(), BTreeMap::new(), 42)?;
+    if binutils_admitted {
+        let object = p.exec(
+            "as-positive",
+            tool_exports["as"].clone(),
+            BTreeMap::from([("source".into(), smoke_sources["positive.s"].clone())]),
+            vec![input("source", ""), literal("-o"), output("object", "")],
+            BTreeMap::from([("object".into(), bounded(ArtifactKind::Object, FILE_MAX))]),
+            0,
+        )?["object"]
+            .clone();
+        let binary = p.exec(
+            "ld-positive",
+            tool_exports["ld"].clone(),
+            BTreeMap::from([("object".into(), object)]),
+            vec![input("object", ""), literal("-o"), output("positive", "")],
+            BTreeMap::from([("positive".into(), bounded(ArtifactKind::Executable, FILE_MAX))]),
+            0,
+        )?["positive"]
+            .clone();
+        p.exec(
+            "as-negative",
+            tool_exports["as"].clone(),
+            BTreeMap::from([("source".into(), smoke_sources["negative.s"].clone())]),
+            vec![input("source", ""), literal("-o"), literal("negative-as.o")],
+            BTreeMap::new(),
+            1,
+        )?;
+        p.exec("positive-execution", binary, BTreeMap::new(), Vec::new(), BTreeMap::new(), 42)?;
+    }
     // Source-controller consumers need the genuine writer/Make variants, while
     // the normalized provider above remains the unchanged raw tool authority.
     let mut phase_payload = payload.clone();
@@ -333,11 +349,12 @@ pub(super) fn extend(
         },
     })?;
     p.export("stagex-provider", refs["stagex-provider"].clone());
-    for (role, original, path) in [
-        ("tcc", "phase-tool:tcc-musl-v2", "bin/x86_64-linux-musl-tcc"),
-        ("ld", "phase-tool:binutils-ld", "bin/x86_64-linux-musl-ld"),
-        ("make", "phase-tool:make-3.82", "make-stage/runtime/output/bin/make"),
-    ] {
+    let mut phase_tools = vec![("tcc", "phase-tool:tcc-musl-v2", "bin/x86_64-linux-musl-tcc")];
+    if binutils_admitted {
+        phase_tools.push(("ld", "phase-tool:binutils-ld", "bin/x86_64-linux-musl-ld"));
+    }
+    phase_tools.push(("make", "phase-tool:make-3.82", "make-stage/runtime/output/bin/make"));
+    for (role, original, path) in phase_tools {
         let value = p.exec(
             &format!("publish-phase-{role}"),
             helper.clone(),
