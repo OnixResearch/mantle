@@ -322,7 +322,7 @@ CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
   --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
   --proof-bwrap "$BWRAP" --proof-sandbox-shell "$STATIC_BUSYBOX" \
   --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 536870912000 \
-  --proof-exec-events-max 262144 --proof-source-records-max 65536 \
+  --proof-exec-events-max 524288 --proof-source-records-max 65536 \
   --out "$PREPARED_COHORT"
 ```
 
@@ -340,7 +340,7 @@ CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
   --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
   --proof-bwrap "$BWRAP" --proof-sandbox-shell "$STATIC_BUSYBOX" \
   --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 536870912000 \
-  --proof-exec-events-max 262144 --proof-source-records-max 65536 \
+  --proof-exec-events-max 524288 --proof-source-records-max 65536 \
   --out "$FRESH_PROOF_ROOT"
 "$MANTLE" --json bootstrap trust-report --proof-root "$FRESH_PROOF_ROOT"
 "$MANTLE" --json bootstrap parity-report \
@@ -349,7 +349,7 @@ CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
 
 The example declares a 500 GiB disk budget; confirm at least that much free
 space on the output filesystem before launch. Hard maxima are 86,400 seconds,
-1 TiB disk, 262,144 protected exec events, 65,536 source records, and 4,096 open
+1 TiB disk, 524,288 protected exec events, 65,536 source records, and 4,096 open
 file descriptors. Jobs must be within 1–16. Invalid bounds reject before
 source hydration. The launch environment must contain no inherited
 `MANTLE_CC_CACHE_*` or `MANTLE_COMPILE_*` authority; remove these at the outer

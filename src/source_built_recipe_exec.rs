@@ -1546,7 +1546,7 @@ fn protected_launch(
                 }
                 .into();
                 count = count.saturating_add(1);
-                if count > 262_144 {
+                if count > 524_288 {
                     row.allowed = false;
                     row.reason = "protected notification bound exceeded".into();
                 }
