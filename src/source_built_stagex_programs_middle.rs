@@ -891,7 +891,7 @@ impl Middle<'_> {
     }
     fn tcc_source(&mut self, tool: &str, prefix: &str, recipe_id: &str) -> Result<ArtifactRef, RunError> {
         let source = self.archive_source(tool, "tinycc-0.9.27-source", "tcc.c")?;
-        let patch = self.source("tinycc-0.9.27-patch-source")?;
+        let patch = self.source("tinycc-0.9.27-stagex-patch")?;
         let source = self.patch_tree(tool, &format!("{prefix}-stagex-patch"), source, patch)?;
         let source = self.replace(
             tool,
@@ -2023,9 +2023,18 @@ fn selected_musl_members(members: &BTreeSet<String>, native: bool) -> Vec<String
         if !(path.starts_with("src/") || path.starts_with("crt/")) {
             continue;
         }
+        if path.starts_with("crt/") {
+            // The checked musl recipe selects the generic `crt/<leaf>` sources
+            // only; arch subdirectory CRT assemblies are not part of that
+            // selection and would collide on the installed `crti`/`crtn` names.
+            if path.matches('/').count() == 1 {
+                base.insert(path.clone(), path.clone());
+            }
+            continue;
+        }
         if let Some((directory, leaf)) = path.split_once("/x86_64/") {
             arch.insert(format!("{directory}/{leaf}"), path.clone());
-        } else if path.matches('/').count() == if path.starts_with("src/") { 2 } else { 1 } {
+        } else if path.matches('/').count() == 2 {
             base.insert(path.clone(), path.clone());
         }
     }

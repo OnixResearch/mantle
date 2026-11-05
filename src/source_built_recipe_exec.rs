@@ -302,7 +302,7 @@ impl<'a> CommandOperands<'a> {
         let mut result = String::new();
         for part in &word.parts {
             match part {
-                WordPart::Literal { text } => result.push_str(text),
+                WordPart::Literal { text } | WordPart::LiteralData { text } => result.push_str(text),
                 WordPart::Input { name, path } => {
                     result.push_str("/inputs/");
                     result.push_str(name);

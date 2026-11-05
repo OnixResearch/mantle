@@ -90,7 +90,12 @@ pub(crate) fn logical_prefixes(
     for node in &graph.derivations {
         let drv = node.drv_path.to_absolute_path_with_prefix(prefix);
         for (name, output) in &node.derivation.outputs {
-            let path = output.path.as_ref().ok_or_else(|| error("original static native output path is missing"))?;
+            // Content-addressed intermediates have no path before execution.
+            // Record only the static outputs; required compiler components are
+            // resolved explicitly below and fail closed if they are absent.
+            let Some(path) = output.path.as_ref() else {
+                continue;
+            };
             outputs.insert(format!("{drv}:{name}"), path.to_absolute_path_with_prefix(prefix));
         }
     }

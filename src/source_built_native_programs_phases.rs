@@ -577,7 +577,7 @@ fn append_response_steps_guarded(
                 WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
                     Some(name)
                 }
-                WordPart::Literal { .. } => None,
+                WordPart::Literal { .. } | WordPart::LiteralData { .. } => None,
                 WordPart::CwdRelative { path } => {
                     if phase.expected_image.parts.len() != 1 {
                         return Err(error("cwd-relative GCC image requires one whole operand"));

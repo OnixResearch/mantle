@@ -39,9 +39,15 @@ fn definition_header(
     let mut definitions = String::new();
     let mut index = 0;
     while index + 1 < arguments.len() {
-        let is_define = matches!(arguments[index].parts.as_slice(), [crate::source_built_recipe::WordPart::Literal { text }] if text == "-D");
+        let is_define = matches!(
+            arguments[index].parts.as_slice(),
+            [crate::source_built_recipe::WordPart::Literal { text }
+                | crate::source_built_recipe::WordPart::LiteralData { text }]
+                if text == "-D"
+        );
         if is_define
-            && let [crate::source_built_recipe::WordPart::Literal { text }] = arguments[index + 1].parts.as_slice()
+            && let [crate::source_built_recipe::WordPart::Literal { text }
+                | crate::source_built_recipe::WordPart::LiteralData { text }] = arguments[index + 1].parts.as_slice()
             && (text.contains('/') || text.contains('\\'))
         {
             definitions.push_str(text);

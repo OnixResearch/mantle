@@ -2823,7 +2823,7 @@ fn tcc_musl_v2_stage_plans(tinycc_root: &Path, v2_root: &Path) -> Vec<StagexStag
             ],
             &[
                 "tinycc-0.9.27-source",
-                "tinycc-0.9.27-patch-source",
+                "tinycc-0.9.27-stagex-patch",
                 "tcc-musl-v2-recipe-source",
                 "tcc-musl-v2-stdarg-runtime-source",
             ],
@@ -3491,7 +3491,7 @@ fn tcc_musl_stage_plans(prep_root: &Path, tcc_musl_root: &Path) -> Vec<StagexSta
             &[TCC_MUSL_PREP_BUILD_STAGE_ID, MUSL_BUILD_STAGE_ID, MUSL_SMOKE_STAGE_ID],
             &[
                 "tinycc-0.9.27-source",
-                "tinycc-0.9.27-patch-source",
+                "tinycc-0.9.27-stagex-patch",
                 "tcc-musl-recipe-source",
             ],
             &[
@@ -3602,7 +3602,7 @@ fn tcc_musl_prep_stage_plans(tinycc27_root: &Path, prep_root: &Path) -> Vec<Stag
             ],
             &[
                 "tinycc-0.9.27-source",
-                "tinycc-0.9.27-patch-source",
+                "tinycc-0.9.27-stagex-patch",
                 "tcc-musl-prep-recipe-source",
             ],
             &[

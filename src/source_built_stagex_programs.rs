@@ -26,6 +26,17 @@ use crate::source_built_recipe::SourceRecipe;
 use crate::source_built_recipe::WordPart;
 use crate::source_built_recipe::{self as recipe};
 
+/// The pinned StageX lineage declares the TinyCC compatibility patch as
+/// `tinycc-0.9.27-stagex-patch` but three transition-tool entries list the
+/// phantom id `tinycc-0.9.27-patch-source`. Resolve the phantom id to the one
+/// declared patch without rewriting the lineage bytes or their pinned digest.
+pub(crate) const TINYCC_STAGEX_PATCH_ID: &str = "tinycc-0.9.27-stagex-patch";
+const LEGACY_TINYCC_PATCH_SOURCE_ID: &str = "tinycc-0.9.27-patch-source";
+
+pub(crate) fn canonical_original_source_id(id: &str) -> &str {
+    if id == LEGACY_TINYCC_PATCH_SOURCE_ID { TINYCC_STAGEX_PATCH_ID } else { id }
+}
+
 #[path = "source_built_stagex_programs_binutils.rs"]
 mod binutils;
 #[path = "source_built_stagex_programs_controller.rs"]
@@ -53,7 +64,7 @@ pub(super) fn error(message: impl Into<String>) -> RunError {
 }
 pub(super) fn literal(text: &str) -> RecipeWord {
     RecipeWord {
-        parts: vec![WordPart::Literal { text: text.into() }],
+        parts: vec![WordPart::LiteralData { text: text.into() }],
     }
 }
 pub(super) fn input(name: &str, path: &str) -> RecipeWord {
@@ -124,6 +135,7 @@ pub(super) struct TransitionBuilder {
 }
 impl TransitionBuilder {
     pub fn source(&self, id: &str) -> Result<ArtifactRef, RunError> {
+        let id = canonical_original_source_id(id);
         self.sources
             .get(id)
             .or_else(|| self.patches.get(id))
@@ -131,6 +143,7 @@ impl TransitionBuilder {
             .ok_or_else(|| error(format!("unknown original source {id}")))
     }
     pub fn artifact(&self, id: &str) -> Result<ArtifactRef, RunError> {
+        let id = canonical_original_source_id(id);
         self.artifacts.get(id).cloned().ok_or_else(|| error(format!("missing original producer {id}")))
     }
     pub fn original_inputs(&self, tool: &str) -> Result<BTreeMap<String, ArtifactRef>, RunError> {
@@ -138,7 +151,10 @@ impl TransitionBuilder {
             .get(tool)
             .ok_or_else(|| error(format!("unknown original tool {tool}")))?
             .iter()
-            .map(|id| Ok((id.clone(), self.artifact(id)?)))
+            .map(|id| {
+                let canonical = canonical_original_source_id(id);
+                Ok((canonical.to_string(), self.artifact(id)?))
+            })
             .collect()
     }
     pub fn predecessors(&self, tool: &str) -> Result<BTreeMap<String, ArtifactRef>, RunError> {
@@ -162,6 +178,7 @@ impl TransitionBuilder {
         Ok(predecessors)
     }
     pub fn member(&mut self, id: &str, path: &str) -> Result<ArtifactRef, RunError> {
+        let id = canonical_original_source_id(id);
         recipe::relative(path, true)?;
         let key = (id.to_string(), path.to_string());
         if let Some(reference) = self.members.get(&key) {
@@ -252,6 +269,7 @@ impl TransitionBuilder {
     /// Hydrate an original fetcher result at execution, retaining its raw record
     /// identity separately for lineage source admission.
     pub fn fetcher(&mut self, tool: &str, id: &str) -> Result<ArtifactRef, RunError> {
+        let id = canonical_original_source_id(id);
         let key = format!("{tool}:{id}");
         if let Some(reference) = self.fetchers.get(&key) {
             return Ok(reference.clone());
@@ -330,6 +348,7 @@ impl TransitionBuilder {
         }
     }
     pub fn source_path(&mut self, id: &str) -> Result<PathBuf, RunError> {
+        let id = canonical_original_source_id(id);
         if let Some(path) = self.hydrated.get(id) {
             return Ok(path.clone());
         }
@@ -503,7 +522,8 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
     };
     for tool in &lineage.transition_tools {
         for id in &tool.source_artifact_ids {
-            builder.source_owners.entry(id.clone()).or_insert_with(|| tool.id.clone());
+            let id = canonical_original_source_id(id);
+            builder.source_owners.entry(id.to_string()).or_insert_with(|| tool.id.clone());
         }
     }
     builder.authored(
@@ -539,7 +559,14 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
     middle::extend(&mut builder, request)?;
     late::extend(&mut builder, request)?;
     generators::extend(&mut builder, request)?;
-    binutils::extend(&mut builder, request)?;
+    // The binutils authoring and provider-publication paths belong to native
+    // provider construction. The pinned StageX transition lineage does not
+    // declare binutils sources or tools, so only extend them when the active
+    // lineage admits that source.
+    let binutils_admitted = builder.source(binutils::SOURCE_ARTIFACT_ID).is_ok();
+    if binutils_admitted {
+        binutils::extend(&mut builder, request)?;
+    }
     for tool in &lineage.transition_tools {
         let expanded = builder
             .tools
@@ -606,7 +633,20 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
     // topology node invented by the sidecar.
     let final_tool = lineage.transition_tools.last().ok_or_else(|| error("empty original transition"))?.id.clone();
     builder.add(&final_tool, step)?;
-    builder.recipe.roots = vec![canonical.clone()];
+    // Every authored action output is an execution obligation: generator
+    // products, observations, and negative smoke receipts must not become
+    // unreachable merely because they are not part of the canonical tree.
+    builder.recipe.roots = builder
+        .recipe
+        .steps
+        .iter()
+        .flat_map(|step| {
+            step.outputs.keys().map(|output| ArtifactRef::Produced {
+                action_id: format!("{TRANSITION}/{}", step.id),
+                output_id: output.clone(),
+            })
+        })
+        .collect();
     builder.recipe.exports = builder
         .artifacts
         .iter()
@@ -636,7 +676,9 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
         .iter()
         .map(|(k, v)| (format!("{TRANSITION}:{k}"), v.clone()))
         .collect::<BTreeMap<_, _>>();
-    publication::extend(&mut builder, request, &mut exports)?;
+    if binutils_admitted {
+        publication::extend(&mut builder, request, &mut exports)?;
+    }
     Ok(AuthoredPrograms {
         files: builder.files,
         exports,

@@ -32,7 +32,8 @@ mod runtime;
 type Files = BTreeMap<String, ArtifactRef>;
 const FILE_BYTES_MAX: u64 = 64 * 1024 * 1024;
 const TREE_BYTES_MAX: u64 = 1024 * 1024 * 1024;
-const SOURCE: &str = "binutils-2.30-source";
+pub(super) const SOURCE_ARTIFACT_ID: &str = "binutils-2.30-source";
+const SOURCE: &str = SOURCE_ARTIFACT_ID;
 const RECIPE: &str = "binutils-2.30-recipe-source";
 
 struct Author<'a> {

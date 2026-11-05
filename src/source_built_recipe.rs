@@ -103,6 +103,14 @@ pub(crate) enum WordPart {
     Literal {
         text: String,
     },
+    /// Literal bytes passed to a child process as data, never resolved by the
+    /// executor as a filesystem path. Use for transform search/replace text,
+    /// embedded `-D` strings, environment values, and similar operands that may
+    /// legitimately contain path-like spellings.
+    #[serde(rename = "literal-data")]
+    LiteralData {
+        text: String,
+    },
     Input {
         name: String,
         path: String,
@@ -708,7 +716,14 @@ pub(crate) fn validate_source_recipe(recipe: &SourceRecipe) -> Result<(), RunErr
         }
     }
     if reachable.len() != recipe.steps.len() {
-        return Err(error("unreachable or omitted command topology"));
+        let mut omitted = recipe
+            .steps
+            .iter()
+            .filter(|step| !reachable.contains(&action_id(&recipe.stage_id, &step.id)))
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>();
+        omitted.sort_unstable();
+        return Err(error(format!("unreachable or omitted command topology: {}", omitted.join(","))));
     }
     for refs in recipe
         .exports
@@ -1086,7 +1101,16 @@ fn validate_word_scoped(
                 // All filesystem paths are typed. This also rejects response-file
                 // paths and embedded -I/host or --sysroot=/host spellings.
                 if text.contains('/') || text.contains('\\') || text.contains('\0') {
-                    return Err(error("untyped filesystem path in literal command word"));
+                    return Err(error(format!(
+                        "untyped filesystem path in literal command word for step {}",
+                        step.id
+                    )));
+                }
+            }
+            WordPart::LiteralData { text } => {
+                bytes = bytes.saturating_add(text.len());
+                if text.contains('\0') {
+                    return Err(error("literal data must not contain NUL"));
                 }
             }
             WordPart::Input { name, path } => {

@@ -321,7 +321,10 @@ fn validate_transition(
     for tool in &lineage.transition_tools {
         let node = &index.tools[&tool.id];
         for id in tool.source_artifact_ids.iter().chain(&tool.input_artifact_ids) {
-            let input = artifacts.get(id).ok_or_else(|| error(format!("unknown original input {id}")))?;
+            let canonical = crate::source_built_stagex_programs::canonical_original_source_id(id);
+            let input = artifacts
+                .get(canonical)
+                .ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
             require_node_input(program, node, input)?;
         }
     }
