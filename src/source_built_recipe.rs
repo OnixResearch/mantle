@@ -699,7 +699,9 @@ pub(crate) fn validate_source_recipe(recipe: &SourceRecipe) -> Result<(), RunErr
         let ArtifactRef::Produced { action_id, output_id } = reference else {
             return Err(error("recipe root must be produced, not imported source"));
         };
-        let producer = producers.get(action_id).ok_or_else(|| error("recipe root must name a local producer"))?;
+        let producer = producers.get(action_id).ok_or_else(|| {
+            error(format!("recipe root {action_id} must name a local producer in stage {}", recipe.stage_id))
+        })?;
         if !producer.outputs.contains_key(output_id) {
             return Err(error("unknown root output"));
         }

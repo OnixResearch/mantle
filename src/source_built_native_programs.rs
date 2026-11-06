@@ -1044,10 +1044,29 @@ fn export_original_products(
     }
     // Preserve the selected original union as products, never merely semantic
     // labels over a reduced compiler or source-only helper closure.
+    let local_prefix = format!("{STAGE}/");
     recipe.roots = programs
         .values()
         .flat_map(|program| program.outputs.values().cloned())
-        .chain(recipe.exports.values().cloned())
+        .chain(programs.values().flat_map(|program| {
+            program.members.values().flat_map(|members| {
+                members
+                    .values()
+                    .filter(|reference| {
+                        matches!(
+                            reference,
+                            ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
+                        )
+                    })
+                    .cloned()
+            })
+        }))
+        .chain(recipe.exports.values().filter(|reference| {
+            matches!(
+                reference,
+                ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
+            )
+        }).cloned())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
