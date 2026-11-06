@@ -1,0 +1,11 @@
+{"error":"Rust successor source topology: original vendor identity memchr 2.7.1 is not unique","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 64:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: macro-compact-real-preparation              
+  Start: Fri, 6 Nov 2026 13:12:19 -0500              
+    End: Fri, 6 Nov 2026 13:18:06 -0500              
+
+output:

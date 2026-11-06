@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo",
+    "metadata",
+    "--offline",
+    "--format-version=1",
+    "--filter-platform",
+    "x86_64-unknown-linux-musl",
+    "--manifest-path",
+    "/home/brittonr/mantle-macro-20261106/cargo-feature-target-probe/Cargo.toml"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "rustc": "/nix/store/iy93ls6kxapwixmar6gyj9lqv3mbim8k-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08/bin/rustc",
+  "removed_environment": [
+    "RUSTFLAGS",
+    "CARGO_ENCODED_RUSTFLAGS"
+  ],
+  "cargo_version": "cargo 1.99.0-nightly (3efb1f477 2026-07-17)",
+  "exit": 0
+}

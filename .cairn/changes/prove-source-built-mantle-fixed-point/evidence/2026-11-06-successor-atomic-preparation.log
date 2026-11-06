@@ -1,0 +1,11 @@
+{"error":"Rust successor source topology: unclassified original target predicate miri","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 38:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: successor-atomic-real-preparation           
+  Start: Fri, 6 Nov 2026 14:48:40 -0500              
+    End: Fri, 6 Nov 2026 14:58:03 -0500              
+
+output:

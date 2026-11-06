@@ -1,0 +1,225 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling blake3 v1.8.5
+   Compiling ring v0.17.14
+   Compiling aws-lc-sys v0.45.0
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling simsimd v6.5.16
+   Compiling libmimalloc-sys v0.1.44
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-attestation-core)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling bao-tree v0.16.1
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-repair-core)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-overlay-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core)
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-core)
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-spacewasm-core)
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-action-result-core)
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling xz2 v0.1.7
+   Compiling verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-wasm-component-core)
+   Compiling ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-project-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-evaluation-stream-core)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling bzip2 v0.5.2
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-source-core)
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-eval)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-differential-core)
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-test-core)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-release-core)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-application-contract)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-cargo-build-bundle-core)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-remote-app)
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-app)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation-core)
+   Compiling mimalloc v0.1.48
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/nix-compat)
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-test-app)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-build-contract)
+   Compiling crunch-test v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-test)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantlepkgs-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-eval-budget-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-bootstrap-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-wasm-component)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-project)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-kernelscript-core)
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-glue)
+   Compiling ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling zstd-safe v7.2.4
+   Compiling zstd v0.13.3
+   Compiling async-compression v0.4.19
+   Compiling aws-lc-rs v1.18.1
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-castore)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-build)
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-build)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-nix-gateway)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 5m 40s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 27 tests
+test project_resolve::tests::bounded_stderr_preserves_valid_text_within_limit ... ok
+test project_resolve::tests::bounded_stderr_replaces_malformed_utf8_without_exceeding_limit ... ok
+test project_resolve::tests::local_project_trust_signature_produces_verified_fact ... ok
+test project_resolve::tests::local_project_trust_signature_with_wrong_digest_yields_no_fact ... ok
+test project_resolve::tests::missing_vcs_tool_reports_unsupported_blocker ... ok
+test project_resolve::tests::oversized_shell_observation_becomes_failed_observation ... ok
+test project_resolve::tests::parse_branch_output_returns_matching_rev ... ok
+test project_resolve::tests::parse_fossil_checkout_id_reads_checkout_line ... ok
+test project_resolve::tests::parse_pijul_channel_state_uses_named_channel_line ... ok
+test project_resolve::tests::parse_tag_output_falls_back_to_direct_tag ... ok
+test project_resolve::tests::parse_tag_output_prefers_peeled_commit ... ok
+test project_resolve::tests::pijul_change_selector_fails_closed_without_state_proof ... ok
+test project_resolve::tests::validate_git_rev_rejects_short_rev ... ok
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... FAILED
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... FAILED
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... FAILED
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... FAILED
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... FAILED
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... FAILED
+
+failures:
+
+---- source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock' (626685) panicked at src/source_built_rust_resolve_tests.rs:52:5:
+assertion `left == right` failed
+  left: "vendor/memchr-2.7.1/Cargo.toml"
+ right: "vendor/memchr-2.7.5/Cargo.toml"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies' (626686) panicked at src/source_built_rust_resolve_tests.rs:76:5:
+assertion `left == right` failed
+  left: "vendor/memchr-2.7.1/Cargo.toml"
+ right: "patch/memchr/Cargo.toml"
+
+---- source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock' (626687) panicked at src/source_built_rust_resolve_tests.rs:61:5:
+dependency-local lock substituted for missing consuming authority
+
+---- source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected' (626688) panicked at src/source_built_rust_resolve_tests.rs:90:5:
+unadmitted patch selected
+
+---- source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces' (626689) panicked at src/source_built_rust_resolve_tests.rs:130:5:
+conflicting consuming lock scopes were merged
+
+---- source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback stdout ----
+
+thread 'source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback' (626690) panicked at src/source_built_rust_resolve_tests.rs:109:5:
+assertion `left == right` failed
+  left: "vendor/memchr-2.7.1/Cargo.toml"
+ right: "vendor/memchr-2.7.4/Cargo.toml"
+
+
+failures:
+    source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock
+    source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies
+    source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock
+    source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected
+    source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces
+    source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback
+
+test result: FAILED. 21 passed; 6 failed; 0 ignored; 0 measured; 2889 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
+┌───────────────────────────────────────┐
+│ Task 28:    failed with exit code 101 │
+└───────────────────────────────────────┘
+Command: nix develop --offline --no-write-lock-file -c /home/brittonr/mantle-macro-20261106/successor-resolve-checks.sh before 
+   Path: /home/brittonr/git/OnixResearch/mantle                                                                                
+  Label: successor-lock-before                                                                                                 
+  Start: Fri, 6 Nov 2026 14:10:42 -0500                                                                                        
+    End: Fri, 6 Nov 2026 14:16:48 -0500                                                                                        
+
+output:

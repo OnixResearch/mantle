@@ -44,3 +44,43 @@ validate its v2 receipt, complete action reconciliation, stage1/stage2 binary
 equality, provider/closure links, and release evidence. I3–I5 and V1–V3 remain
 unaccepted until that current evidence exists; old wrappers, provider-only
 smokes, and successful source preparation do not substitute for it.
+
+## Source-authoring handoff (2026-11-06)
+
+The resolver and successor cc overlay repairs have focused test and real helper
+execution evidence in [bounded minicargo resolution](evidence/2026-11-06-bounded-minicargo-resolution.md).
+Real preparation now stops at the macro-continuation capacity boundary, not the
+earlier version search or deleted-transformer panic. I3–I5 and V1–V3 remain
+unchecked: this handoff does not accept preparation, a provider, or a cold proof.
+
+## Compact macro handoff (2026-11-06)
+
+The compact controller and explicit deferred-command namespace handoff have
+author/protocol tests, real protected execution and focused Clippy/build evidence
+in [compact macro continuations](evidence/2026-11-06-compact-macro-continuations.md).
+Pueue 64 reran real preparation with unchanged profile pins and resource bounds;
+it passed the prior macro-capacity boundary and now rejects ambiguous original
+vendor identity `memchr 2.7.1` in successor source topology. No prepared profile,
+provider or fixed-point proof is accepted; I3–I5 and V1–V3 remain unchecked.
+
+## Successor resolution handoff (2026-11-06)
+
+The consuming-workspace lock/patch repair has failing-before/passing-after
+behavioral regressions and focused Clippy/build evidence in
+[successor resolution](evidence/2026-11-06-successor-resolution.md). Real
+preparation in Pueue 31 passed the stale `memchr 2.7.1` selection and reached
+the fixed target's unclassified `target_has_atomic = "64"` predicate. Source
+pins and resource bounds were unchanged. No prepared profile or cold proof is
+accepted; I3–I5 and V1–V3 remain unchecked.
+
+## Successor admission checkpoint (2026-11-06)
+
+Consuming lock/patch scope, fixed native cfg selection, Cargo-feature namespace
+separation and lossless producer labels now have final focused execution evidence
+in [successor resolution](evidence/2026-11-06-successor-resolution.md).
+Pueue 86 passed 2 label-admission and 15 successor-resolution tests, focused
+release Clippy and CLI build. Real preparation in Pueue 88 passed the preceding
+admission boundaries and now stops at `source recipe capacity exhausted before
+original LLVM graph`. Existing bounds, reservations and profile pins were not
+weakened. No prepared profile or provider/fixed-point acceptance is implied;
+I3–I5 and V1–V3 remain unchecked.

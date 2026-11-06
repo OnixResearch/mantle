@@ -326,6 +326,61 @@ CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \
   --out "$PREPARED_COHORT"
 ```
 
+The mrustc package resolver uses dependency-directed rollback with finite work
+and decision limits ([ADR 0139](../adr/0139-bound-minicargo-unification-with-dependency-directed-rollback.md)).
+`original dependency resolver exceeded finite work bound` or `finite decision
+bound` is a failed preparation, never a partially resolved program. A version
+filtered by unification cannot be silently omitted as an absent optional crate.
+The successor cc helper consumes the canonical native overlay descriptors;
+changed original source boundaries reject rather than selecting an unpatched
+fallback. Retain the failing task log and private staging directory.
+
+Successor source topologies bind one consuming workspace's lockfile and local
+registry patches ([ADR 0141](../adr/0141-bind-successor-resolution-to-consuming-workspace.md)).
+Vendored dependencies' own lockfiles/workspaces cannot select their transitive
+registry identities. A missing consuming lock is not replaced by a dependency
+lock or a parent workspace's lock; mixed-workspace goal groups are rejected.
+Retain the exact source diagnostic rather than guessing a substitute version.
+For the fixed `x86_64-unknown-linux-musl` target, successor dependency predicates
+classify atomic widths `8`, `16`, `32`, `64` and `ptr` from the original target's
+64-bit atomic ceiling. A 128-bit atomic dependency is not selected. Only target
+tables containing a selected dependency kind require predicate evaluation;
+dev-only tables are not interpreted for these builds. Unclassified predicates
+on selected kinds remain errors, never an implicit false result.
+Disabled optional edges likewise do not require classification until a selected
+feature activates them. The sealed native profiles leave the reviewed backend
+and instrumentation modes unset ([ADR 0142](../adr/0142-bind-native-cfg-classification-to-sealed-source-profiles.md)).
+Cargo features do not activate global cfg modes. Rustix therefore selects its
+original supported Linux raw backend, not an invented libc fallback.
+The same profiles supply no global `getrandom_backend` override. Its comparisons
+are false during dependency selection, allowing the original default backend
+clause to select its dependencies before per-crate build-script cfgs run.
+Package feature values likewise do not populate the global target context.
+Thus `cfg(feature = "alloc")` is false there even when the package enables
+Cargo feature `alloc`; ordinary feature expansion and per-crate cfgs are unchanged.
+Generated recipe labels encode source identity components losslessly
+([ADR 0143](../adr/0143-keep-source-identity-data-separate-from-recipe-labels.md)).
+SemVer build metadata and combined crate-type punctuation remain unchanged in
+Cargo data and compiler arguments; only the producer-label representation changes.
+
+Macro reservations use the existing compact controller engine rather than
+expanding a recipe per reserved invocation ([ADR 0140](../adr/0140-keep-macro-reservations-inside-compact-source-controllers.md)).
+The source-owned slot reservation is unchanged; compiler and plugin invocations
+consume the checked controller command budget. Only an observed compiler exit
+zero can complete it. Exhaustion, failed commands, image drift or malformed
+observations remain failures, not reasons to lower a hint or raise a hard limit.
+
+The opt-in `compact_macro_protected_smoke` test requires explicit
+`MANTLE_MACRO_SMOKE_RUSTC` (with musl std), `MANTLE_MACRO_SMOKE_LINKER`,
+`MANTLE_PROTECTED_BWRAP`, and a fresh absolute `MANTLE_MACRO_SMOKE_ROOT`.
+Run it with `cargo test -p mantle --bin mantle compact_macro_protected_smoke --
+--ignored --nocapture --test-threads=1` inside the checked-in development shell.
+It compiles a static request-protocol fixture, then uses real protected commands
+and action reconciliation. It also compiles the native deferred-command decoder
+and checks direct/controller output namespaces, mismatched declarations and
+unknown namespaces. Its compiler/plugin fixture is not an original Rust compiler,
+a provider, or a bootstrap proof; missing prerequisites fail loudly.
+
 Preparation does not execute a provider or prove a fixed point. Review and
 freeze its `source-program-preparation.json` and `source-profile.json`. The
 report's `output_profile_blake3` binds the new cohort. Use that reviewed value

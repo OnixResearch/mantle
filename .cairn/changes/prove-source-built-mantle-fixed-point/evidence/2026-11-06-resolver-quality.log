@@ -1,0 +1,418 @@
+11:04:05 - Found active Task 35 with status Running
+11:12:49 - Task 35 failed with 1
+┌─────────────────────────────────────┐
+│ Task 35:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/resolver-quality-final.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle                        
+  Start: Fri, 6 Nov 2026 11:03:49 -0500                                
+    End: Fri, 6 Nov 2026 11:12:48 -0500                                
+
+output:
+[1/4] bounded GCC 4.0 configure bridge
+gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+[2/4] rustfmt
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p crunch-cmake-core -p crunch-cmake -p crunch-esp-idf-core -p crunch-esp-idf -p crunch-fpga-core -p crunch-fpga -p crunch-gpu-core -p crunch-gpu -p crunch-model-conversion-core -p crunch-model-conversion -p crunch-pnpm-core -p crunch-pnpm -p crunch-python-core -p crunch-python -p crunch-test-core -p crunch-test-app -p crunch-test -p crunch-verification-bridge-core -p crunch-verification-bridge -p crunch-zephyr-core -p crunch-zephyr -p mantle-cargo-build-bundle-core -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_fixed_point_stagex_actions.rs:322:
+         let node = &index.tools[&tool.id];
+         for id in tool.source_artifact_ids.iter().chain(&tool.input_artifact_ids) {
+             let canonical = crate::source_built_stagex_programs::canonical_original_source_id(id);
+-            let input = artifacts
+-                .get(canonical)
+-                .ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
++            let input =
++                artifacts.get(canonical).ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
+             require_node_input(program, node, input)?;
+         }
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs.rs:100:
+                 Some(path) => path.to_absolute_path_with_prefix(prefix),
+                 None => {
+                     let provisional = node.derivation.environment.get(name).ok_or_else(|| {
+-                        error(&format!(
+-                            "content-addressed native output {drv}:{name} has no provisional path"
+-                        ))
++                        error(&format!("content-addressed native output {drv}:{name} has no provisional path"))
+                     })?;
+                     let provisional = std::str::from_utf8(provisional.as_ref()).map_err(|_| {
+-                        error(&format!(
+-                            "content-addressed native output {drv}:{name} has a non-UTF-8 provisional path"
+-                        ))
++                        error(&format!("content-addressed native output {drv}:{name} has a non-UTF-8 provisional path"))
+                     })?;
+                     nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+                         provisional.as_bytes(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs.rs:114:
+                         prefix,
+                     )
+                     .map_err(|_| {
+-                        error(&format!(
+-                            "content-addressed native output {drv}:{name} has an invalid provisional path"
+-                        ))
++                        error(&format!("content-addressed native output {drv}:{name} has an invalid provisional path"))
+                     })?;
+                     provisional.to_string()
+                 }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs.rs:210:
+         id: id.into(),
+         inputs,
+         outputs: BTreeMap::from([
+-            (
+-                "tool".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Executable,
+-                    bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
+-                },
+-            ),
+-            (
+-                "stdout".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Text,
+-                    bytes_max: 64 * 1024 * 1024,
+-                },
+-            ),
+-            (
+-                "stderr".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Text,
+-                    bytes_max: 64 * 1024 * 1024,
+-                },
+-            ),
++            ("tool".into(), RecipeOutput {
++                kind: ArtifactKind::Executable,
++                bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
++            }),
++            ("stdout".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
++            ("stderr".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
+         ]),
+         operation: RecipeOperation::Exec {
+             executable_input: "tcc".into(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs.rs:365:
+             ("metadata".into(), source("collect2-driver-metadata.inc")),
+         ]),
+         outputs: BTreeMap::from([
+-            (
+-                "source".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Text,
+-                    bytes_max: 8 * 1024 * 1024,
+-                },
+-            ),
+-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
++            ("source".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 8 * 1024 * 1024,
++            }),
++            ("stdout".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
++            ("stderr".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
+         ]),
+         operation: RecipeOperation::Exec {
+             executable_input: "tool".into(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs.rs:1061:
+                     .cloned()
+             })
+         }))
+-        .chain(recipe.exports.values().filter(|reference| {
+-            matches!(
+-                reference,
+-                ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
+-            )
+-        }).cloned())
++        .chain(
++            recipe
++                .exports
++                .values()
++                .filter(|reference| {
++                    matches!(
++                        reference,
++                        ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
++                    )
++                })
++                .cloned(),
++        )
+         .collect::<BTreeSet<_>>()
+         .into_iter()
+         .collect();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs_early_gnu.rs:368:
+         BTreeMap::new(),
+         members,
+         BTreeMap::new(),
+-        &[crate::source_built_native_programs::final_gnu::controller_hooks(&callbacks)],
++        &[crate::source_built_native_programs::final_gnu::controller_hooks(
++            &callbacks,
++        )],
+     )?;
+     // The shell-stage contract names the normalized provider tree
+     // `full-source-native-provider`, not the derivation's generic `out`.
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs_host_bootstrap.rs:56:
+         inputs,
+         outputs: BTreeMap::from([
+             ("result".into(), RecipeOutput { kind, bytes_max: limit }),
+-            (
+-                "stdout".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Text,
+-                    bytes_max: 64 * 1024 * 1024,
+-                },
+-            ),
+-            (
+-                "stderr".into(),
+-                RecipeOutput {
+-                    kind: ArtifactKind::Text,
+-                    bytes_max: 64 * 1024 * 1024,
+-                },
+-            ),
++            ("stdout".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
++            ("stderr".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
+         ]),
+         operation: RecipeOperation::Exec {
+             executable_input: executable.into(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs_host_root.rs:101:
+         inputs: Files::from([("tool".into(), projector.clone()), ("tree".into(), from)]),
+         outputs: BTreeMap::from([
+             ("result".into(), RecipeOutput { kind, bytes_max }),
+-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
++            ("stdout".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
++            ("stderr".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
+         ]),
+         operation: RecipeOperation::Exec {
+             executable_input: "tool".into(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_native_programs_host_root.rs:143:
+                 kind: ArtifactKind::Executable,
+                 bytes_max,
+             }),
+-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
++            ("stdout".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
++            ("stderr".into(), RecipeOutput {
++                kind: ArtifactKind::Text,
++                bytes_max: 64 * 1024 * 1024,
++            }),
+         ]),
+         operation: RecipeOperation::Exec {
+             executable_input: "tool".into(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_recipe.rs:862:
+         }
+     }
+     if let RecipeOperation::ObservePhase { phase, state, .. } = &step.operation {
+-        let producer = preceding
+-            .get(&action_id(stage, phase))
+-            .ok_or_else(|| {
+-                error(format!("phase observation {} requires a prior local guarded command {phase}", step.id))
+-            })?;
++        let producer = preceding.get(&action_id(stage, phase)).ok_or_else(|| {
++            error(format!("phase observation {} requires a prior local guarded command {phase}", step.id))
++        })?;
+         if operation_guard(&producer.operation).is_none() {
+             return Err(error(format!("phase observation {} requires a guarded command for {phase}", step.id)));
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_recipe.rs:1109:
+                 // All filesystem paths are typed. This also rejects response-file
+                 // paths and embedded -I/host or --sysroot=/host spellings.
+                 if text.contains('/') || text.contains('\\') || text.contains('\0') {
+-                    return Err(error(format!(
+-                        "untyped filesystem path in literal command word for step {}",
+-                        step.id
+-                    )));
++                    return Err(error(format!("untyped filesystem path in literal command word for step {}", step.id)));
+                 }
+             }
+             WordPart::LiteralData { text } => {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_stagex_programs.rs:34:
+ const LEGACY_TINYCC_PATCH_SOURCE_ID: &str = "tinycc-0.9.27-patch-source";
+ 
+ pub(crate) fn canonical_original_source_id(id: &str) -> &str {
+-    if id == LEGACY_TINYCC_PATCH_SOURCE_ID { TINYCC_STAGEX_PATCH_ID } else { id }
++    if id == LEGACY_TINYCC_PATCH_SOURCE_ID {
++        TINYCC_STAGEX_PATCH_ID
++    } else {
++        id
++    }
+ }
+ 
+ #[path = "source_built_stagex_programs_binutils.rs"]
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_built_stagex_programs_early.rs:46:
+                 if text == "-D"
+         );
+         if is_define
+-            && let [crate::source_built_recipe::WordPart::Literal { text }
+-                | crate::source_built_recipe::WordPart::LiteralData { text }] = arguments[index + 1].parts.as_slice()
++            && let [
++                crate::source_built_recipe::WordPart::Literal { text }
++                | crate::source_built_recipe::WordPart::LiteralData { text },
++            ] = arguments[index + 1].parts.as_slice()
+             && (text.contains('/') || text.contains('\\'))
+         {
+             definitions.push_str(text);
+ORDINARY_GATE_EXIT=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo clippy --fix --lib -p crunch-nix-gateway -- --no-deps -D warnings` to apply 1 suggestion)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 1m 13s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+FOCUSED_CLIPPY_EXIT=0
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 3m 49s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 8 tests
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 2896 filtered out; finished in 0.02s
+
+FOCUSED_TEST_EXIT=0
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 5.80s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 1 test
+test source_built_rust_programs::successors::helper::cc::export_helper_for_operator_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2903 filtered out; finished in 0.01s
+
+HELPER_EXPORT_EXIT=0
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 3m 21s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+BUILD_EXIT=0

@@ -1,0 +1,11 @@
+{"error":"Rust source provider authoring: source recipe capacity exhausted before original LLVM graph","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 88:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: successor-label-real-preparation            
+  Start: Fri, 6 Nov 2026 17:22:12 -0500              
+    End: Fri, 6 Nov 2026 17:31:11 -0500              
+
+output:

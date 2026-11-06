@@ -1,0 +1,131 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 3m 58s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 34 tests
+test project_resolve::tests::bounded_stderr_preserves_valid_text_within_limit ... ok
+test project_resolve::tests::bounded_stderr_replaces_malformed_utf8_without_exceeding_limit ... ok
+test project_resolve::tests::local_project_trust_signature_produces_verified_fact ... ok
+test project_resolve::tests::local_project_trust_signature_with_wrong_digest_yields_no_fact ... ok
+test project_resolve::tests::missing_vcs_tool_reports_unsupported_blocker ... ok
+test project_resolve::tests::oversized_shell_observation_becomes_failed_observation ... ok
+test project_resolve::tests::parse_branch_output_returns_matching_rev ... ok
+test project_resolve::tests::parse_fossil_checkout_id_reads_checkout_line ... ok
+test project_resolve::tests::parse_pijul_channel_state_uses_named_channel_line ... ok
+test project_resolve::tests::parse_tag_output_falls_back_to_direct_tag ... ok
+test project_resolve::tests::parse_tag_output_prefers_peeled_commit ... ok
+test project_resolve::tests::pijul_change_selector_fails_closed_without_state_proof ... ok
+test project_resolve::tests::validate_git_rev_rejects_short_rev ... ok
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+test source_built_rust_programs::resolve::tests::atomic_predicates_follow_the_original_fixed_target ... ok
+test source_built_rust_programs::resolve::tests::atomic_target_dependencies_select_only_supported_edges ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... ok
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... ok
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... ok
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... ok
+test source_built_rust_programs::resolve::tests::sealed_native_profile_selects_rustix_linux_raw_backend ... ok
+test source_built_rust_programs::resolve::tests::selected_dependency_kinds_still_reject_unclassified_predicates ... ok
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... ok
+test source_built_rust_programs::resolve::tests::target_optional_features_classify_predicates_only_when_selected ... ok
+test source_built_rust_programs::resolve::tests::unselected_dependency_kinds_do_not_require_target_classification ... ok
+test source_built_rust_programs::resolve::tests::unset_getrandom_override_selects_linux_default_dependencies ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 2889 filtered out; finished in 0.09s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo clippy --fix --lib -p crunch-nix-gateway -- --no-deps -D warnings` to apply 1 suggestion)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 57.12s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 3m 35s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+┌────────────────────────────────────┐
+│ Task 58:    completed successfully │
+└────────────────────────────────────┘
+Command: nix develop --offline --no-write-lock-file -c /home/brittonr/mantle-macro-20261106/successor-resolve-checks.sh after 
+   Path: /home/brittonr/git/OnixResearch/mantle                                                                               
+  Label: successor-backend-after                                                                                              
+  Start: Fri, 6 Nov 2026 15:48:01 -0500                                                                                       
+    End: Fri, 6 Nov 2026 15:57:01 -0500                                                                                       
+
+output:

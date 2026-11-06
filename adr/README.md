@@ -136,3 +136,8 @@ compatibility surface, crate name, or historical decision.
 | [0136](0136-materialize-consumer-hosted-effect-components.md) | Materialize consumer-hosted effect-world components | Accepted |
 | [0137](0137-validate-protected-executables-after-materialization.md) | Validate protected executables after sandbox input materialization | Accepted |
 | [0138](0138-distribute-compiler-units-through-native-build-goals.md) | Distribute completed compiler units through native build goals | Proposed |
+| [0139](0139-bound-minicargo-unification-with-dependency-directed-rollback.md) | Bound minicargo unification with dependency-directed rollback | Accepted |
+| [0140](0140-keep-macro-reservations-inside-compact-source-controllers.md) | Keep macro reservations inside compact source controllers | Accepted |
+| [0141](0141-bind-successor-resolution-to-consuming-workspace.md) | Bind successor resolution to the consuming workspace | Accepted |
+| [0142](0142-bind-native-cfg-classification-to-sealed-source-profiles.md) | Bind native cfg classification to sealed source profiles | Accepted |
+| [0143](0143-keep-source-identity-data-separate-from-recipe-labels.md) | Keep source identity data separate from recipe labels | Accepted |

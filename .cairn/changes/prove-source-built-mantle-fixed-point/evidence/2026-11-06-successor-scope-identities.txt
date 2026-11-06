@@ -1,0 +1,5 @@
+base_commit=49bb15d908940a580a38b12d7add0fd52b3c6bdb
+7882c60dc26422395fc8506117537bc48c12038df66a18ba02d887dfd72db0a4  src/source_built_rust_resolve.rs
+0a99d5ea168501d6b4864c0f8146042dba9d1672acb4195281bf2a2b3034c780  src/source_built_rust_resolve_tests.rs
+a287139c63fefe0eb29e1e29e6342365dd4224f9e2fe72617b7125657cf38b46  target/self-hosting-proof/work/cargo-target/release/mantle
+4e4e95776c2fd2b28dac941674e34da3bec25122ab7b688ecd2f4d50401602e7  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.90.0.tar.gz

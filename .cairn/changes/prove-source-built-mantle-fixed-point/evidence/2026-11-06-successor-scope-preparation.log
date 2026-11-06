@@ -1,0 +1,11 @@
+{"error":"Rust successor source topology: unclassified original target cfg target_has_atomic = \"64\"","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 31:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: successor-lock-real-preparation             
+  Start: Fri, 6 Nov 2026 14:28:42 -0500              
+    End: Fri, 6 Nov 2026 14:35:07 -0500              
+
+output:

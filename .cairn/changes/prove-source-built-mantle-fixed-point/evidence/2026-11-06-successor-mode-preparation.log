@@ -1,0 +1,11 @@
+{"error":"Rust successor source topology: unclassified original target cfg feature = \"alloc\"","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 64:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: successor-mode-real-preparation             
+  Start: Fri, 6 Nov 2026 16:17:35 -0500              
+    End: Fri, 6 Nov 2026 16:25:50 -0500              
+
+output:

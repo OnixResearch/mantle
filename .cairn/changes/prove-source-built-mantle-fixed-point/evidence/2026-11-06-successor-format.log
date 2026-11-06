@@ -1,0 +1,2 @@
+command: /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --check --edition 2024 --config skip_children=true src/source_built_rust_resolve.rs src/source_built_rust_resolve_tests.rs src/source_built_rust_programs_successors_graph.rs src/source_built_rust_programs_successors_graph_tests.rs
+exit=0

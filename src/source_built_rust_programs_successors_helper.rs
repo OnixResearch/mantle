@@ -52,21 +52,37 @@ pub(super) fn source() -> String {
         .replace("/*CC_OVERLAY*/", &cc::source())
         .replace("/*PROCESS_OVERLAY*/", &process::source())
         .replace("/*INVOCATION_HELPER*/", invocation::SOURCE)
-        .replace("/*MACRO_HELPER*/", macro_control::SOURCE)
+        .replace(
+            "/*MACRO_HELPER*/",
+            &format!(
+                "{}\n{}",
+                macro_control::SOURCE,
+                include_str!("source_built_rust_programs_successors_macro_tests.rs")
+            ),
+        )
         .replace("/*STD_PROCESS_OVERLAY*/", super::std_process::OVERLAY_SOURCE)
 }
 
 pub(super) fn process_source() -> String {
     let random = crate::source_built_mantle_programs::native::CC_PROCESS_SOURCE
+        .split_once("static RANDOM_NEXT:")
+        .expect("source-owned cc random declaration")
+        .1
         .split_once("fn next_command()")
         .expect("source-owned cc random boundary")
         .0;
-    format!("{random}\npub(crate) fn output(command: &mut Command) -> io::Result<Output> {{ command.output() }}\n")
+    format!(
+        "use std::{{fs, io, path::Path, process::{{Command, Output}}, sync::atomic::{{AtomicUsize, Ordering}}}};\nstatic RANDOM_NEXT:{random}\npub(crate) fn output(command: &mut Command) -> io::Result<Output> {{ command.output() }}\n"
+    )
 }
 pub(super) const SOURCE: &str = r#"
 use std::path::{Path,PathBuf};
 use std::collections::BTreeMap;
 use std::io::{self,Read,Write};
+fn replace_once(text:&str,before:&str,after:&str)->Result<String,String>{
+    if before.is_empty() || text.matches(before).count()!=1{return Err("original source boundary must have one exact match".into());}
+    Ok(text.replacen(before,after,1))
+}
 fn copy(source:&Path,dest:&Path,count:&mut usize)->io::Result<()> {
     *count+=1; if *count>1_000_000 { return Err(io::Error::other("source tree exceeds entry bound")); }
     let meta=std::fs::symlink_metadata(source)?;
@@ -110,10 +126,12 @@ fn main()->io::Result<()> {
         Some("--std-process-overlay") if args.len()==5 => std_process_overlay(&args),
         Some("--original-script-overlay") if args.len()==4 => original_script_overlay(&args),
         Some("--process-library") if args.len()==5 => process_library(&args),
-        Some("--macro-classify") if args.len()>=9 && args.len()%2==1 => {let code=macro_classify(&args)?;std::process::exit(code)},
-        Some("--macro-invocation") if args.len()>=8 && args.len()%2==0 => macro_invocation(&args),
-        Some("--macro-reply") if args.len()>=7 => {let code=macro_reply(&args)?;std::process::exit(code)},
-        Some("--macro-finish") if args.len()==3 => macro_finish(&args),
+        Some("--mantle-controller-start" | "--mantle-controller-prepare" | "--mantle-controller-executable" | "--mantle-controller-resume" | "--mantle-controller-finish") => {
+            // 0 pauses, 1 is genuine completion/unselected; errors must never
+            // inherit Rust main's exit1 and authorize a synthetic done result.
+            let code=match macro_controller(&args){Ok(code)=>code,Err(error)=>{eprintln!("macro controller: {error}");2}};
+            std::process::exit(code)
+        },
         Some("--provider-receipt") if args.len()==5 => provider_receipt(&args),
         Some("--merge-trees") if args.len()>=4 => merge_trees(&args),
         Some("--cargo-metadata") if matches!(args.len(),3|4) => cargo_metadata(&args),

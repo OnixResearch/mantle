@@ -1,0 +1,11 @@
+{"error":"Rust successor source topology: unclassified original target predicate tracing_unstable","code":1,"kind":"build"}
+┌─────────────────────────────────────┐
+│ Task 59:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Label: successor-backend-real-preparation          
+  Start: Fri, 6 Nov 2026 15:57:01 -0500              
+    End: Fri, 6 Nov 2026 16:04:57 -0500              
+
+output:

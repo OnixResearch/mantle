@@ -1,0 +1,13 @@
+
+thread 'main' (1557593) panicked at src/source_built_rust_programs_successors_cc.rs:7:10:
+source-owned cc transformer declaration
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+┌───────────────────────────────────────┐
+│ Task 33:    failed with exit code 101 │
+└───────────────────────────────────────┘
+Command: /home/brittonr/mantle-cold-20261105/prep.sh 
+   Path: /home/brittonr/git/OnixResearch/mantle      
+  Start: Fri, 6 Nov 2026 10:48:18 -0500              
+    End: Fri, 6 Nov 2026 10:58:12 -0500              
+
+output:

@@ -1,5 +1,6 @@
 //! Original release crate/build-script topology and the run_rustc/std/compiler
 //! cutover. No Cargo or bootstrap executable is an executor in this graph.
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -46,6 +47,33 @@ struct Unit {
 struct Group {
     programs: BTreeMap<String, Compiled>,
     libraries: BTreeMap<String, ArtifactRef>,
+}
+
+/// Preserve identity bytes without admitting label punctuation or ambiguous
+/// escape markers. Original versions and crate-type arguments remain data.
+fn label_component(value: &str) -> Result<Cow<'_, str>, RunError> {
+    let safe = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.');
+    let bytes = value
+        .bytes()
+        .try_fold(0usize, |size, byte| size.checked_add(if safe(byte) { 1 } else { 3 }))
+        .ok_or_else(|| error("recipe label component size overflow"))?;
+    if bytes == value.len() {
+        return Ok(Cow::Borrowed(value));
+    }
+    let mut encoded = String::with_capacity(bytes);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for byte in value.bytes() {
+        if safe(byte) {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('_');
+            encoded.push(char::from(HEX[(byte >> 4) as usize]));
+            encoded.push(char::from(HEX[(byte & 15) as usize]));
+        }
+    }
+    debug_assert_eq!(encoded.len(), bytes);
+    debug_assert!(encoded.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-._".contains(&byte)));
+    Ok(Cow::Owned(encoded))
 }
 impl Context<'_, '_> {
     fn tree(&mut self, id: &str, entries: BTreeMap<String, ArtifactRef>) -> ArtifactRef {
@@ -459,8 +487,8 @@ impl Context<'_, '_> {
             let package = &topology.packages[key];
             let unit_id = self.id(&format!(
                 "{name}.{}.{}.{}",
-                package.name.replace('_', "-"),
-                package.version,
+                label_component(&package.name)?,
+                label_component(&package.version)?,
                 if key.host { "host" } else { "target" }
             ));
             let (mut environment, mut extra) = self.package_env(package, sources, &unit_id)?;
@@ -621,7 +649,7 @@ impl Context<'_, '_> {
                     let previous_override = self.build_override;
                     self.build_override = key.host;
                     let compiled = self.compile_program(
-                        &format!("{unit_id}.lib.{kind}"),
+                        &format!("{unit_id}.lib.{}", label_component(&kind)?),
                         package_source.clone(),
                         &format!("{}/{}/{path}", self.top, package.directory),
                         &crate_name,
@@ -1112,3 +1140,7 @@ fn install_provider(
     );
     context.tree(id, BTreeMap::from([("bin".into(), bin), ("lib".into(), product(&lib, "tree"))]))
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_successors_graph_tests.rs"]
+mod tests;

@@ -25,7 +25,7 @@ fn error(s: impl Into<String>) -> RunError {
     RunError::Build(format!("original minicargo resolution: {}", s.into()))
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Version {
     numbers: [u64; 3],
     patch_set: bool,
@@ -245,12 +245,7 @@ fn inherited(s: &Sources, manifest: &str, alias: &str, value: &toml::Value) -> R
     }
     Ok((base.into(), result))
 }
-fn patch_path(
-    s: &Sources,
-    owner: &str,
-    name: &str,
-    goal_workspace: Option<&str>,
-) -> Result<Option<String>, RunError> {
+fn patch_path(s: &Sources, owner: &str, name: &str, goal_workspace: Option<&str>) -> Result<Option<String>, RunError> {
     // Patches are owned by the workspace of the package being built. A
     // vendored crate's nearest workspace ancestor is the compiler workspace,
     // while its rustc-std-workspace aliases are patched by the goal workspace.
@@ -282,17 +277,45 @@ struct Pending {
     alias: String,
     value: toml::Value,
 }
+type Causes = BTreeSet<u32>;
+
+#[derive(Clone)]
+struct ResolvedVersion {
+    path: String,
+    causes: Causes,
+}
+
 #[derive(Clone, Default)]
 struct Selection {
     queue: VecDeque<Pending>,
     visited: BTreeSet<String>,
-    selected: BTreeSet<String>,
     edges: BTreeMap<(String, String), String>,
+    resolved: BTreeMap<String, BTreeMap<Version, ResolvedVersion>>,
+    /// Choices that introduced each manifest, including through path edges.
+    causes: BTreeMap<String, Causes>,
 }
+
+struct Decision {
+    dep: Pending,
+    name: String,
+    remaining: Vec<(Version, String)>,
+    saved: Option<Selection>,
+    failures: Causes,
+}
+
+struct Candidates {
+    matching: bool,
+    available: Vec<(Version, String)>,
+    blocked: Causes,
+}
+
+const MAX_RESOLUTION_STEPS: u32 = 65_536;
+const MAX_RESOLUTION_DECISIONS: u32 = 4_096;
 fn push(s: &Sources, state: &mut Selection, path: &str) -> Result<(), RunError> {
     if !state.visited.insert(path.into()) {
         return Ok(());
     }
+    state.causes.entry(path.into()).or_default();
     let manifest = s.manifests.get(path).ok_or_else(|| {
         error(
             s.policy
@@ -316,18 +339,132 @@ fn push(s: &Sources, state: &mut Selection, path: &str) -> Result<(), RunError> 
     }
     Ok(())
 }
+fn select_version(
+    s: &Sources,
+    state: &mut Selection,
+    dep: &Pending,
+    name: &str,
+    candidate: (Version, String),
+    causes: Causes,
+) -> Result<(), RunError> {
+    let (version, path) = candidate;
+    state.edges.insert((dep.owner.clone(), dep.alias.clone()), path.clone());
+    state.causes.entry(path.clone()).or_insert_with(|| causes.clone());
+    state.resolved.entry(name.into()).or_default().insert(version, ResolvedVersion {
+        path: path.clone(),
+        causes,
+    });
+    push(s, state, &path)
+}
+
+fn candidates(
+    s: &Sources,
+    state: &Selection,
+    paths: &[&str],
+    name: &str,
+    requirement: &str,
+) -> Result<Candidates, RunError> {
+    let mut matching = false;
+    let mut available = Vec::new();
+    let mut blocked = Causes::new();
+    for path in paths {
+        let version = Version::parse(
+            s.manifests[*path]
+                .get("package")
+                .and_then(|p| p.get("version"))
+                .and_then(toml::Value::as_str)
+                .ok_or_else(|| error("original vendor lacks version"))?,
+        )?;
+        if !accepts(requirement, &version)? {
+            continue;
+        }
+        matching = true;
+        let conflict = state
+            .resolved
+            .get(name)
+            .and_then(|versions| versions.iter().find(|(selected, _)| selected.family() == version.family()));
+        if let Some((_, selected)) = conflict {
+            blocked.extend(&selected.causes);
+        } else {
+            available.push((version, (*path).into()));
+        }
+    }
+    available.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(Candidates {
+        matching,
+        available,
+        blocked,
+    })
+}
+
+fn backtrack(
+    s: &Sources,
+    state: &mut Selection,
+    decisions: &mut Vec<Decision>,
+    mut conflict: Causes,
+) -> Result<bool, RunError> {
+    while let Some(mut decision) = decisions.pop() {
+        let level = u32::try_from(decisions.len()).expect("bounded decision stack") + 1;
+        if !conflict.remove(&level) {
+            continue;
+        }
+        decision.failures.extend(conflict);
+        let Some(candidate) = decision.remaining.pop() else {
+            conflict = decision.failures;
+            continue;
+        };
+        let saved = decision.saved.as_mut().expect("untried candidates retain a snapshot");
+        *state = if decision.remaining.is_empty() {
+            decision.saved.take().expect("last candidate consumes snapshot")
+        } else {
+            saved.clone()
+        };
+        select_version(s, state, &decision.dep, &decision.name, candidate, Causes::from([level]))?;
+        decisions.push(decision);
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn vendor_catalog(s: &Sources) -> BTreeMap<&str, Vec<&str>> {
+    let mut catalog = BTreeMap::<&str, Vec<&str>>::new();
+    for (path, manifest) in &s.manifests {
+        if !path.starts_with("vendor/") {
+            continue;
+        }
+        if let Some(name) = manifest.get("package").and_then(|p| p.get("name")).and_then(toml::Value::as_str) {
+            catalog.entry(name).or_default().push(path);
+        }
+    }
+    catalog
+}
+
+fn reuse_version(state: &Selection, name: &str, requirement: &str) -> Result<Option<String>, RunError> {
+    for (version, selected) in state.resolved.get(name).into_iter().flatten() {
+        if accepts(requirement, version)? {
+            return Ok(Some(selected.path.clone()));
+        }
+    }
+    Ok(None)
+}
+
 fn choose(
     s: &Sources,
     mut state: Selection,
-    depth: usize,
     goal_workspace: Option<&str>,
+    steps_max: u32,
 ) -> Result<Option<Selection>, RunError> {
-    if depth > 16384 {
-        return Err(error("original dependency resolver exceeded finite graph bound"));
-    }
+    let catalog = vendor_catalog(s);
+    let mut decisions = Vec::new();
+    let mut steps = 0u32;
     while let Some(dep) = state.queue.pop_front() {
+        if steps >= steps_max {
+            return Err(error("original dependency resolver exceeded finite work bound"));
+        }
+        steps += 1;
         let (base, value) = inherited(s, &dep.owner, &dep.alias, &dep.value)?;
         let name = value.get("package").and_then(toml::Value::as_str).unwrap_or(&dep.alias);
+        let mut causes = state.causes[&dep.owner].clone();
         let path = if let Some(path) = value.get("path").and_then(toml::Value::as_str) {
             Some(format!("{}/Cargo.toml", normalize(&base, path)?))
         } else {
@@ -335,57 +472,47 @@ fn choose(
         };
         if let Some(path) = path {
             state.edges.insert((dep.owner.clone(), dep.alias), path.clone());
+            state.causes.entry(path.clone()).or_insert(causes);
             push(s, &mut state, &path)?;
             continue;
         }
         let requirement = value.as_str().or_else(|| value.get("version").and_then(toml::Value::as_str)).unwrap_or("*");
-        let mut candidates = Vec::new();
-        for (path, m) in &s.manifests {
-            if !path.starts_with("vendor/") {
-                continue;
-            }
-            if m.get("package").and_then(|p| p.get("name")).and_then(toml::Value::as_str) != Some(name) {
-                continue;
-            }
-            let v = Version::parse(
-                m.get("package")
-                    .and_then(|p| p.get("version"))
-                    .and_then(toml::Value::as_str)
-                    .ok_or_else(|| error("original vendor lacks version"))?,
-            )?;
-            if accepts(requirement, &v)? {
-                candidates.push((v, path.clone()));
-            }
-        }
-        // Original resolve_cargo.cpp soft-fails absent optional vendor packages;
-        // load_dependencies later rejects one if its feature actually enables it.
-        if candidates.is_empty() {
+        if let Some(path) = reuse_version(&state, name, requirement)? {
+            state.edges.insert((dep.owner.clone(), dep.alias), path);
             continue;
         }
-        candidates.sort_by(|a, b| a.0.cmp(&b.0));
-        if let Some((_, path)) = candidates.iter().find(|(_, path)| state.selected.contains(path)) {
-            state.edges.insert((dep.owner.clone(), dep.alias), path.clone());
+        let Candidates {
+            matching,
+            mut available,
+            blocked,
+        } = candidates(s, &state, catalog.get(name).map_or(&[], Vec::as_slice), name, requirement)?;
+        // Only a genuinely absent vendor version soft-fails (e.g. an optional
+        // simd-adler32). A filtered version is a conflict, never a missing edge.
+        if !matching {
             continue;
         }
-        for (version, path) in candidates.into_iter().rev() {
-            let conflict = state.selected.iter().any(|p| {
-                s.manifests[p].get("package").and_then(|v| v.get("name")).and_then(toml::Value::as_str) == Some(name)
-                    && Version::parse(s.manifests[p]["package"]["version"].as_str().unwrap_or(""))
-                        .map(|v| v.family() == version.family())
-                        .unwrap_or(false)
+        causes.extend(blocked);
+        let Some(candidate) = available.pop() else {
+            if !backtrack(s, &mut state, &mut decisions, causes)? {
+                return Ok(None);
+            }
+            continue;
+        };
+        if !available.is_empty() {
+            let level = u32::try_from(decisions.len()).expect("bounded decision stack") + 1;
+            if level > MAX_RESOLUTION_DECISIONS {
+                return Err(error("original dependency resolver exceeded finite decision bound"));
+            }
+            decisions.push(Decision {
+                dep: dep.clone(),
+                name: name.into(),
+                remaining: available,
+                saved: Some(state.clone()),
+                failures: causes,
             });
-            if conflict {
-                continue;
-            }
-            let mut branch = state.clone();
-            branch.edges.insert((dep.owner.clone(), dep.alias.clone()), path.clone());
-            branch.selected.insert(path.clone());
-            push(s, &mut branch, &path)?;
-            if let Some(done) = choose(s, branch, depth + 1, goal_workspace)? {
-                return Ok(Some(done));
-            }
+            causes = Causes::from([level]);
         }
-        return Ok(None);
+        select_version(s, &mut state, &dep, name, candidate, causes)?;
     }
     Ok(Some(state))
 }
@@ -743,7 +870,7 @@ pub(crate) fn resolve(s: &Sources, goals: &[(&str, &[&str])], scripts: bool) -> 
     } else {
         None
     };
-    let selected = choose(s, state, 0, goal_workspace.as_deref())?
+    let selected = choose(s, state, goal_workspace.as_deref(), MAX_RESOLUTION_STEPS)?
         .ok_or_else(|| error("original version unification has no solution"))?;
     let mut local = Sources {
         top: s.top.clone(),
@@ -957,3 +1084,7 @@ pub(crate) fn suffix(package: &Package) -> String {
     }
     suffix
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_minicargo_resolve_tests.rs"]
+mod tests;

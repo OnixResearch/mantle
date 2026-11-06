@@ -1,13 +1,12 @@
-//! Protected source-compiler continuations at original proc-macro boundaries.
-//! Only actual compiler requests select plugin leaves; observed stdout remains
-//! binary and the original compiler validates the replayed protocol and inputs.
+//! Compact protected source-compiler continuations at original proc-macro boundaries.
+//! The controller only selects commands; original compiler and plugin images remain
+//! separately guarded and observed leaves, including binary protocol and /tmp state.
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::artifact;
 use super::error;
 use super::input;
 use super::lit;
-use super::logs;
 use super::output;
 use super::outputs;
 use super::produced;
@@ -16,31 +15,43 @@ use crate::errors::RunError;
 use crate::source_built_recipe::ArtifactKind;
 use crate::source_built_recipe::ArtifactRef;
 use crate::source_built_recipe::RecipeExitPolicy;
-use crate::source_built_recipe::RecipeGuard;
-use crate::source_built_recipe::RecipeGuardCondition;
+use crate::source_built_recipe::RecipeInvocation;
 use crate::source_built_recipe::RecipeOperation;
+use crate::source_built_recipe::RecipeOutput;
 use crate::source_built_recipe::RecipeStep;
 use crate::source_built_recipe::RecipeWord;
+use crate::source_built_recipe::RecipeWorkspaceMount;
 use crate::source_built_recipe::SourceRecipe;
+use crate::source_built_recipe::WordPart;
+use crate::source_built_stagex_programs::controller::ControllerExecutable;
+use crate::source_built_stagex_programs::controller::ControllerSlot;
+use crate::source_built_stagex_programs::controller::ControllerSpec;
 
-fn guard(status: &str, code: i32) -> RecipeGuard {
-    RecipeGuard {
-        conditions: vec![RecipeGuardCondition {
-            status_input: status.into(),
-            accepted_codes: vec![code],
-        }],
+/// Empty initial tmp, normalized invocation, compact controller, and two extracts.
+pub(super) const DECLARATION_STEPS_MAX: usize = 5;
+
+fn commands_max(slots: usize) -> Result<usize, RunError> {
+    let commands = slots
+        .checked_mul(2)
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| error("macro command reservation overflow"))?;
+    if slots == 0 || commands > crate::source_built_recipe::controller::CONTROLLER_COMMANDS_MAX as usize {
+        return Err(error("macro command reservation exceeds the protected controller ceiling"));
     }
+    Ok(commands)
 }
+
 fn command(
     id: &str,
     helper: ArtifactRef,
     mut inputs: BTreeMap<String, ArtifactRef>,
     arguments: Vec<RecipeWord>,
-    declared: BTreeMap<String, crate::source_built_recipe::RecipeOutput>,
-    conditional: Option<RecipeGuard>,
-    policy: RecipeExitPolicy,
+    name: &str,
+    disk: u64,
 ) -> RecipeStep {
     inputs.insert("helper".into(), helper);
+    let mut declared = outputs(name, ArtifactKind::Tree);
+    declared.get_mut(name).expect("declared tree").bytes_max = disk;
     RecipeStep {
         id: id.into(),
         inputs,
@@ -55,25 +66,153 @@ fn command(
             cwd_output: None,
             output_seeds: BTreeMap::new(),
             command_state: None,
-            guard: conditional,
+            guard: None,
             stdin_input: None,
             merge_stderr: false,
-            exit_policy: policy,
+            exit_policy: RecipeExitPolicy::Exact { code: 0 },
         },
     }
 }
-fn observe(program: &mut SourceRecipe, id: &str, phase: &str) -> ArtifactRef {
-    program.steps.push(RecipeStep {
-        id: id.into(),
-        inputs: BTreeMap::new(),
-        outputs: BTreeMap::from([("observation".into(), artifact(ArtifactKind::Tree))]),
-        operation: RecipeOperation::ObservePhase {
-            phase: phase.into(),
-            output: "observation".into(),
-            state: None,
+
+/// Remap only typed output operands, never source text or user literal data.
+fn normalize_word(word: &mut RecipeWord) -> Result<(), RunError> {
+    for part in &mut word.parts {
+        if let WordPart::Output { name, path } = part {
+            if name != "translation" {
+                return Err(error("macro compiler refers to an output outside its translation tree"));
+            }
+            crate::source_built_recipe::relative(path, true)?;
+            *name = "workspace".into();
+            *path = if path.is_empty() {
+                "translation".into()
+            } else {
+                format!("translation/{path}")
+            };
+        }
+    }
+    Ok(())
+}
+
+fn references_input(invocation: &RecipeInvocation, alias: &str) -> bool {
+    invocation
+        .arguments
+        .iter()
+        .chain(invocation.environment.values())
+        .chain(invocation.cwd.iter())
+        .any(|word| {
+            word.parts.iter().any(|part| match part {
+                WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
+                    name == alias
+                }
+                _ => false,
+            })
+        })
+}
+
+fn compiler_slot(compiler: RecipeStep) -> Result<(ControllerSlot, RecipeInvocation, String), RunError> {
+    let RecipeOperation::Exec {
+        executable_input,
+        invocation_input,
+        mut arguments,
+        mut environment,
+        runtime_mounts,
+        cwd_input,
+        cwd_output,
+        output_seeds,
+        command_state,
+        guard,
+        stdin_input,
+        merge_stderr,
+        exit_policy,
+    } = compiler.operation
+    else {
+        return Err(error("macro continuation template is not an original compiler command"));
+    };
+    if invocation_input.is_some()
+        || guard.is_some()
+        || !output_seeds.is_empty()
+        || command_state.is_some()
+        || stdin_input.is_some()
+        || runtime_mounts.contains_key("/tmp")
+        || exit_policy != (RecipeExitPolicy::Exact { code: 0 })
+    {
+        return Err(error("macro continuation requires an unbound original static compiler invocation"));
+    }
+    if environment.contains_key("MRUSTC_CAIRN_MACRO_HISTORY") || environment.contains_key("MRUSTC_CAIRN_MACRO_WORK") {
+        return Err(error("macro compiler shadows continuation environment"));
+    }
+    if !compiler.outputs.get("translation").is_some_and(|spec| spec.kind == ArtifactKind::Tree)
+        || compiler.outputs.keys().any(|name| !matches!(name.as_str(), "translation" | "stdout" | "stderr"))
+    {
+        return Err(error("macro compiler must declare only its original translation tree and streams"));
+    }
+    let executable = compiler
+        .inputs
+        .get(&executable_input)
+        .ok_or_else(|| error("macro compiler image is not bound"))?
+        .clone();
+    produced(&executable)?;
+    let mut readonly = BTreeSet::from(["package".into()]);
+    readonly.extend(runtime_mounts.values().cloned());
+    let mut cwd = match (cwd_input, cwd_output) {
+        (Some(name), None) => {
+            readonly.insert(name.clone());
+            Some(input(&name, ""))
+        }
+        (None, Some(name)) => Some(output(&name, "")),
+        (None, None) => None,
+        _ => return Err(error("macro compiler has conflicting cwd roots")),
+    };
+    for word in arguments.iter_mut().chain(environment.values_mut()).chain(cwd.iter_mut()) {
+        normalize_word(word)?;
+    }
+    environment.insert("MRUSTC_CAIRN_MACRO_HISTORY".into(), input("workspace-seed", "history"));
+    environment.insert("MRUSTC_CAIRN_MACRO_WORK".into(), output("workspace", "translation"));
+    let argv0 = format!("/inputs/{executable_input}");
+    let invocation = RecipeInvocation {
+        arguments,
+        environment,
+        cwd,
+        argv0: Some(RecipeWord {
+            parts: vec![WordPart::TextSlice {
+                name: "data".into(),
+                offset_bytes: 0,
+                length_bytes: argv0.len() as u64,
+            }],
+        }),
+        executable_path: None,
+        workspace_mounts: BTreeMap::from([("/tmp".into(), RecipeWorkspaceMount {
+            output: "workspace".into(),
+            path: "tmp".into(),
+        })]),
+        readonly_input_roots: readonly.into_iter().collect(),
+        process_attributes: None,
+        descriptors: None,
+    };
+    let mut inputs = compiler.inputs;
+    if !references_input(&invocation, &executable_input)
+        && !runtime_mounts.values().any(|name| name == &executable_input)
+    {
+        inputs.remove(&executable_input);
+    }
+    for name in &invocation.readonly_input_roots {
+        let reference =
+            inputs.get(name).ok_or_else(|| error(format!("macro compiler lacks readonly input root {name}")))?;
+        produced(reference)?;
+    }
+    Ok((
+        ControllerSlot {
+            id: "compiler".into(),
+            executable: ControllerExecutable::Fixed(executable),
+            inputs,
+            runtime_mounts,
+            exit_policy: RecipeExitPolicy::OneOf { codes: vec![0, 75] },
+            merge_stderr,
+            generated_outputs: false,
         },
-    });
-    product(id, "observation")
+        invocation,
+        argv0,
+    ))
 }
 
 pub(super) fn append(
@@ -87,220 +226,127 @@ pub(super) fn append(
     disk: u64,
 ) -> Result<(ArtifactRef, ArtifactRef), RunError> {
     produced(&helper)?;
-    if plugins.is_empty() || slots == 0 {
-        return Err(error(
-            "macro continuations require a nonempty original plugin inventory and an explicit resource reservation",
-        ));
+    let commands_max = commands_max(slots)?;
+    if plugins.is_empty() {
+        return Err(error("macro continuations require a nonempty exact original plugin inventory"));
     }
-    let package = compiler
-        .inputs
-        .get("package")
-        .ok_or_else(|| error("macro compiler inputs require the real source/dependency world under package/"))?
-        .clone();
-    let runtime = compiler
-        .inputs
-        .get("rust-runtime")
-        .ok_or_else(|| error("macro compiler lacks the original target runtime"))?
-        .clone();
-    let empty = format!("{id}.macro-empty");
-    program.steps.push(command(
-        &empty,
-        helper.clone(),
-        BTreeMap::new(),
-        vec![lit("--empty"), output("tree", "")],
-        outputs("tree", ArtifactKind::Tree),
-        None,
-        RecipeExitPolicy::Exact { code: 0 },
-    ));
-    let mut state = product(&empty, "tree");
-    let mut history = state.clone();
-    let mut tmp = captured_tmp.unwrap_or_else(|| state.clone());
-    let mut resume = None;
-    for slot in 0..=slots {
-        let prefix = format!("{id}.macro-{slot}");
-        let mut step = compiler.clone();
-        step.id = format!("{prefix}.compiler");
-        step.inputs.insert("macro-history".into(), history.clone());
-        let RecipeOperation::Exec {
-            environment,
-            guard: conditional,
-            exit_policy,
-            ..
-        } = &mut step.operation
-        else {
-            return Err(error("macro continuation template is not a compiler command"));
-        };
-        environment.insert("MRUSTC_CAIRN_MACRO_HISTORY".into(), input("macro-history", ""));
-        environment.insert("MRUSTC_CAIRN_MACRO_WORK".into(), output("translation", ""));
-        if let Some(status) = resume.take() {
-            step.inputs.insert("resume".into(), status);
-            *conditional = Some(guard("resume", 1));
-        } else {
-            step.inputs.insert("initial-status".into(), product(&empty, "exit-status"));
-            *conditional = Some(guard("initial-status", 0));
+    let declarations = DECLARATION_STEPS_MAX - usize::from(captured_tmp.is_some());
+    if program
+        .steps
+        .len()
+        .checked_add(declarations)
+        .is_none_or(|count| count > crate::source_built_recipe::STEP_COUNT_MAX)
+    {
+        return Err(error("compact macro controller exceeds remaining recipe declaration capacity"));
+    }
+    if let Some(tmp) = &captured_tmp {
+        produced(tmp)?;
+    }
+    let (compiler, invocation, argv0) = compiler_slot(compiler)?;
+    let mut macro_inputs = BTreeMap::new();
+    for name in std::iter::once("package").chain(compiler.runtime_mounts.values().map(String::as_str)) {
+        let reference =
+            compiler.inputs.get(name).ok_or_else(|| error(format!("macro runtime input {name} is not bound")))?;
+        macro_inputs.insert(name.into(), reference.clone());
+    }
+    // One canonical JSON line followed by the original argv[0] data frame.
+    let config = format!(
+        "{}\n{argv0}",
+        serde_json::to_string(&invocation).map_err(|e| error(format!("macro compiler invocation: {e}")))?
+    );
+    let mut inputs = BTreeMap::new();
+    let mut start_arguments = vec![
+        lit("--macro-control"),
+        lit("-"),
+        lit("-"),
+        output("checkpoint", ""),
+        input("compiler-config", ""),
+        input("initial-tmp", ""),
+        lit(slots.to_string()),
+    ];
+    for (index, (name, image)) in plugins.iter().enumerate() {
+        produced(image)?;
+        crate::source_built_recipe::relative(name, false)?;
+        if name.contains('/') {
+            return Err(error("macro inventory keys must retain exact original executable basenames"));
         }
-        *exit_policy = RecipeExitPolicy::OneOf { codes: vec![0, 75] };
-        let compiler_id = step.id.clone();
-        let step = super::bind_tmp_step(program, step, tmp.clone(), disk)?;
-        program.steps.push(step);
-        let observed = observe(program, &format!("{prefix}.observe-compiler"), &compiler_id);
-        let classify = format!("{prefix}.classify");
-        let mut inputs = BTreeMap::from([
-            ("phase".into(), observed),
-            ("prior".into(), state),
-            ("prior-tmp".into(), tmp),
-        ]);
-        let mut args = vec![
-            lit("--macro-classify"),
-            input("phase", ""),
-            input("prior", ""),
-            output("state", ""),
-            input("prior-tmp", ""),
-            output("tmp", ""),
-        ];
-        for (index, (name, executable)) in plugins.iter().enumerate() {
-            produced(executable)?;
-            if name.is_empty() || name.contains('/') {
-                return Err(error("macro inventory keys must retain exact original executable basenames"));
-            }
-            let alias = format!("plugin-{index}");
-            inputs.insert(alias.clone(), executable.clone());
-            args.extend([lit(name), input(&alias, "")]);
+        let alias = format!("plugin-{index}");
+        inputs.insert(alias.clone(), image.clone());
+        start_arguments.extend([lit(name), input(&alias, "")]);
+    }
+    for name in inputs.keys().map(String::as_str).chain(["compiler-config", "initial-tmp"]) {
+        if compiler.inputs.contains_key(name) || macro_inputs.contains_key(name) {
+            return Err(error(format!("macro controller source/command input name collision {name}")));
         }
-        // package supplies the exact compiler-visible request executable path.
-        inputs.insert("package".into(), package.clone());
-        args.push(input("package", ""));
-        let mut declared = outputs("state", ArtifactKind::Tree);
-        declared.insert("tmp".into(), crate::source_built_recipe::RecipeOutput {
-            kind: ArtifactKind::Tree,
-            bytes_max: disk,
-        });
-        program
-            .steps
-            .push(command(&classify, helper.clone(), inputs, args, declared, None, RecipeExitPolicy::OneOf {
-                codes: vec![0, 1],
-            }));
-        state = product(&classify, "state");
-        tmp = product(&classify, "tmp");
-        if slot == slots {
-            break;
-        }
-        let decode = format!("{prefix}.decode");
-        let mut declared = logs();
-        for (name, kind) in [
-            ("executable", ArtifactKind::Executable),
-            ("invocation", ArtifactKind::Text),
-            ("environment-data", ArtifactKind::Text),
-            ("stdin", ArtifactKind::Object),
-        ] {
-            declared.insert(name.into(), artifact(kind));
-        }
-        let mut decode_inputs = BTreeMap::from([
-            ("selection".into(), product(&classify, "exit-status")),
-            ("state".into(), state.clone()),
-            ("package".into(), package.clone()),
-        ]);
-        let mut decode_arguments = vec![
-            lit("--macro-invocation"),
-            input("state", ""),
-            output("executable", ""),
-            output("invocation", ""),
-            output("environment-data", ""),
-            output("stdin", ""),
-        ];
-        for (index, (name, executable)) in plugins.iter().enumerate() {
-            let alias = format!("plugin-{index}");
-            decode_inputs.insert(alias.clone(), executable.clone());
-            decode_arguments.extend([lit(name), input(&alias, "")]);
-        }
+    }
+    let tmp = if let Some(tmp) = captured_tmp {
+        tmp
+    } else {
+        let empty = format!("{id}.macro-empty");
         program.steps.push(command(
-            &decode,
+            &empty,
             helper.clone(),
-            decode_inputs,
-            decode_arguments,
-            declared,
-            Some(guard("selection", 1)),
-            RecipeExitPolicy::Exact { code: 0 },
+            BTreeMap::new(),
+            vec![lit("--empty"), output("tree", "")],
+            "tree",
+            disk,
         ));
-        let run = format!("{prefix}.execute-macro");
-        let mut declared = logs();
-        declared.insert("stdout".into(), artifact(ArtifactKind::Object));
-        declared.insert("generated-tmp".into(), crate::source_built_recipe::RecipeOutput {
-            kind: ArtifactKind::Tree,
-            bytes_max: disk,
-        });
-        program.steps.push(RecipeStep {
-            id: run.clone(),
-            inputs: BTreeMap::from([
-                ("executable".into(), product(&decode, "executable")),
-                ("invocation".into(), product(&decode, "invocation")),
-                ("environment-data".into(), product(&decode, "environment-data")),
-                ("stdin".into(), product(&decode, "stdin")),
-                ("generated-tmp-seed".into(), tmp.clone()),
-                ("selection".into(), product(&classify, "exit-status")),
-                ("package".into(), package.clone()),
-                ("rust-runtime".into(), runtime.clone()),
-            ]),
-            outputs: declared,
-            operation: RecipeOperation::Exec {
-                executable_input: "executable".into(),
-                invocation_input: Some("invocation".into()),
-                arguments: Vec::new(),
-                environment: BTreeMap::new(),
-                runtime_mounts: BTreeMap::from([("/mantle-rust-runtime".into(), "rust-runtime".into())]),
-                cwd_input: None,
-                cwd_output: None,
-                output_seeds: BTreeMap::from([("generated-tmp".into(), "generated-tmp-seed".into())]),
-                command_state: None,
-                guard: Some(guard("selection", 1)),
-                stdin_input: Some("stdin".into()),
-                merge_stderr: false,
-                exit_policy: RecipeExitPolicy::Exact { code: 0 },
-            },
-        });
-        let observed_plugins = vec![observe(program, &format!("{prefix}.observe-macro"), &run)];
-        let reply = format!("{prefix}.reply");
-        let mut inputs = BTreeMap::from([
-            ("state".into(), state.clone()),
-            ("prior".into(), history),
-            ("prior-tmp".into(), tmp),
-        ]);
-        let mut args = vec![
-            lit("--macro-reply"),
-            input("state", ""),
-            input("prior", ""),
-            output("history", ""),
-            input("prior-tmp", ""),
-            output("tmp", ""),
-        ];
-        for (index, phase) in observed_plugins.into_iter().enumerate() {
-            let alias = format!("phase-{index}");
-            inputs.insert(alias.clone(), phase);
-            args.push(input(&alias, ""));
-        }
-        let mut declared = outputs("history", ArtifactKind::Tree);
-        declared.insert("tmp".into(), crate::source_built_recipe::RecipeOutput {
-            kind: ArtifactKind::Tree,
-            bytes_max: disk,
-        });
-        program
-            .steps
-            .push(command(&reply, helper.clone(), inputs, args, declared, None, RecipeExitPolicy::OneOf {
-                codes: vec![0, 1],
-            }));
-        history = product(&reply, "history");
-        tmp = product(&reply, "tmp");
-        resume = Some(product(&reply, "exit-status"));
+        product(&empty, "tree")
+    };
+    let config_id = format!("{id}.macro-compiler-config");
+    program.steps.push(RecipeStep {
+        id: config_id.clone(),
+        inputs: BTreeMap::new(),
+        outputs: BTreeMap::from([("invocation".into(), RecipeOutput {
+            kind: ArtifactKind::Text,
+            bytes_max: config.len() as u64,
+        })]),
+        operation: RecipeOperation::WriteText {
+            output: "invocation".into(),
+            text: config,
+        },
+    });
+    inputs.insert("compiler-config".into(), product(&config_id, "invocation"));
+    inputs.insert("initial-tmp".into(), tmp);
+    let macro_slot = ControllerSlot {
+        id: "macro".into(),
+        executable: ControllerExecutable::Inventory(
+            plugins.iter().map(|(name, image)| (name.clone(), image.clone())).collect(),
+        ),
+        inputs: macro_inputs,
+        runtime_mounts: compiler.runtime_mounts.clone(),
+        exit_policy: RecipeExitPolicy::Exact { code: 0 },
+        merge_stderr: false,
+        generated_outputs: false,
+    };
+    let result = crate::source_built_recipe::controller::append(program, ControllerSpec {
+        id: format!("{id}.macro-controller"),
+        controller: helper.clone(),
+        inputs,
+        controller_runtime_mounts: BTreeMap::new(),
+        start_arguments,
+        environment: BTreeMap::new(),
+        restart_indices: [1, 2, 3],
+        slots: vec![compiler, macro_slot],
+        commands_max,
+        exit_policy: RecipeExitPolicy::Exact { code: 0 },
+        file_bytes_max: super::MAX,
+        tree_bytes_max: disk,
+    })?;
+    for member in ["translation", "tmp"] {
+        let select = format!("{id}.macro-{member}");
+        program.steps.push(command(
+            &select,
+            helper.clone(),
+            BTreeMap::from([("workspace".into(), result.workspace.clone())]),
+            vec![lit("--select"), input("workspace", member), output("tree", "")],
+            "tree",
+            disk,
+        ));
     }
-    let finish = format!("{id}.macro-finish");
-    program.steps.push(command(
-        &finish,
-        helper,
-        BTreeMap::from([("state".into(), state)]),
-        vec![lit("--macro-finish"), input("state", ""), output("translation", "")],
-        outputs("translation", ArtifactKind::Tree),
-        None,
-        RecipeExitPolicy::Exact { code: 0 },
-    ));
-    Ok((product(&finish, "translation"), tmp))
+    Ok((product(&format!("{id}.macro-translation"), "tree"), product(&format!("{id}.macro-tmp"), "tree")))
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_macros_tests.rs"]
+mod tests;

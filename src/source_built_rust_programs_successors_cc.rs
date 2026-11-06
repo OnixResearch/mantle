@@ -1,34 +1,55 @@
 //! Source transformations shared with the direct native continuation ABI.
-//! The policies below preserve original cc option/tool/source selection.
+//! The canonical overlay descriptors own cc option/tool/source selection.
+use std::fmt::Write;
+
+use crate::source_built_fixed_point::SourceAuthorityRole;
+use crate::source_built_mantle_programs::native;
+use crate::source_built_recipe::ArtifactRef;
+
 pub(super) fn source() -> String {
-    let original = include_str!("source_built_mantle_programs_native.rs");
-    let transform = original
-        .split_once("pub(crate) fn cc_linux_process_transform(")
-        .expect("source-owned cc transformer declaration")
-        .1
-        .split_once("/// Preserve original fresh RandomState results")
-        .expect("source-owned cc transformer boundary")
-        .0;
-    let transform = format!("fn cc_linux_process_transform({transform}").replace("RunError", "String");
+    let overlays = native::cc_library_overlays(
+        &ArtifactRef::Source {
+            role: SourceAuthorityRole::RustSourceArchiveSet,
+            path: String::new(),
+        },
+        "cc",
+    )
+    .expect("static source-relative cc overlay paths");
+    let process = super::process_source();
+    let mut descriptors = String::from("const CC_OVERLAYS: &[(&str, &[(&str, &str)], &[&str])] = &[\n");
+    for overlay in overlays {
+        let member = overlay.compiler_path.strip_prefix("cc/").expect("cc compiler package prefix");
+        write!(&mut descriptors, "({member:?}, &{:?}, &[", overlay.replacements).expect("writing source string");
+        for addition in overlay.append {
+            // The successor's instrumented std::process owns child requests;
+            // retain the shared random boundary but not native replay dispatch.
+            write!(&mut descriptors, "{:?},", addition.replace(native::CC_PROCESS_SOURCE, &process))
+                .expect("writing source string");
+        }
+        descriptors.push_str("]),\n");
+    }
+    descriptors.push_str("];\n");
     format!(
         r#"
-const CC_PROCESS_SOURCE:&str={process:?};
-fn replace_once(text:&str,before:&str,after:&str)->Result<String,String>{{if text.matches(before).count()!=1{{return Err("original cc process boundary changed".into());}}Ok(text.replacen(before,after,1))}}
-fn error(message:&str)->String{{message.into()}}
-{transform}
+{descriptors}
 fn cc_overlay(args:&[String])->io::Result<()>{{
     let source=Path::new(&args[1]);let destination=Path::new(&args[2]);copy(source,destination,&mut 0)?;
     let selected=if args.len()==3{{vec![source.to_owned()]}}else{{args[3..].iter().map(PathBuf::from).collect()}};
-    for package in selected{{let relative=package.strip_prefix(source).map_err(io::Error::other)?;let target=destination.join(relative);
-        let lib=std::fs::read_to_string(package.join("src/lib.rs"))?;
-        let commands=std::fs::read_to_string(package.join("src/command_helpers.rs"))?;
-        for(path,text)in cc_linux_process_transform(&lib,&commands).map_err(io::Error::other)?{{std::fs::write(target.join(path),text)?;}}
-        let tempfile=target.join("src/tempfile.rs");
-        if tempfile.is_file(){{let text=std::fs::read_to_string(&tempfile)?;let text=replace_once(&text,"    RandomState::new().build_hasher().finish()","    crate::mantle_process::random(|| RandomState::new().build_hasher().finish())").map_err(io::Error::other)?;std::fs::write(tempfile,text)?;}}
+    for package in selected{{
+        let relative=package.strip_prefix(source).map_err(io::Error::other)?;let target=destination.join(relative);
+        for &(member,replacements,additions) in CC_OVERLAYS{{
+            let original=package.join(member);
+            if member=="src/tempfile.rs" && !original.try_exists()?{{continue;}}
+            let mut text=std::fs::read_to_string(original)?;
+            for &(before,after) in replacements{{
+                text=replace_once(&text,before,after).map_err(io::Error::other)?;
+            }}
+            for addition in additions{{text.push_str(addition);}}
+            std::fs::write(target.join(member),text)?;
+        }}
     }}
     Ok(())
 }}
-"#,
-        process = super::process_source()
+"#
     )
 }

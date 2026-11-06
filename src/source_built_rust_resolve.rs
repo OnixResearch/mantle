@@ -199,6 +199,14 @@ pub(crate) fn normalize(base: &str, path: &str) -> Result<String, RunError> {
 pub(crate) fn directory(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(directory, _)| directory)
 }
+
+/// One Cargo resolution invocation has one consuming lock/patch authority.
+/// Dependency-local workspace inheritance is deliberately separate.
+struct ResolutionContext<'a> {
+    directory: &'a str,
+    lock: Option<&'a toml::Value>,
+    patches: Option<&'a toml::Value>,
+}
 impl Sources {
     pub(crate) fn workspace(&self, manifest: &str) -> Option<(&str, &toml::Value)> {
         let mut path = PathBuf::from(directory(manifest));
@@ -233,21 +241,33 @@ impl Sources {
             }
         }
     }
-    fn lock(&self, manifest: &str) -> Option<&toml::Value> {
-        let mut path = PathBuf::from(directory(manifest));
-        loop {
-            let lock = if path.as_os_str().is_empty() {
+    fn resolution_context(&self, roots: &[Key]) -> Result<Option<ResolutionContext<'_>>, RunError> {
+        let mut context: Option<ResolutionContext<'_>> = None;
+        for key in roots {
+            let (root_directory, manifest) = self
+                .workspace(&key.manifest)
+                .or_else(|| self.manifests.get_key_value(&key.manifest).map(|(path, value)| (directory(path), value)))
+                .ok_or_else(|| error(format!("missing resolution-root manifest {}", key.manifest)))?;
+            debug_assert!(manifest.is_table(), "source loader admits parsed TOML root tables");
+            if let Some(existing) = &context {
+                if existing.directory != root_directory {
+                    return Err(error("topology goals have different resolution workspaces"));
+                }
+                continue;
+            }
+            let lock_path = if root_directory.is_empty() {
                 "Cargo.lock".into()
             } else {
-                format!("{}/Cargo.lock", path.display())
+                format!("{root_directory}/Cargo.lock")
             };
-            if let Some(lock) = self.locks.get(&lock) {
-                return Some(lock);
-            }
-            if !path.pop() {
-                return None;
-            }
+            context = Some(ResolutionContext {
+                directory: root_directory,
+                lock: self.locks.get(&lock_path),
+                patches: manifest.get("patch").and_then(|patch| patch.get("crates-io")),
+            });
         }
+        debug_assert_eq!(context.is_none(), roots.is_empty());
+        Ok(context)
     }
     pub(crate) fn package(&self, key: &Key) -> Result<Package, RunError> {
         let manifest = self.manifests.get(&key.manifest).ok_or_else(|| {
@@ -296,6 +316,7 @@ impl Sources {
     fn resolve_dependency(
         &self,
         package: &Package,
+        context: &ResolutionContext<'_>,
         alias: &str,
         value: &toml::Value,
         host: bool,
@@ -332,19 +353,14 @@ impl Sources {
         let name = value.get("package").and_then(toml::Value::as_str).unwrap_or(alias);
         let path = if let Some(path) = value.get("path").and_then(toml::Value::as_str) {
             format!("{}/Cargo.toml", normalize(&base, path)?)
-        } else if let Some((workspace_dir, patch)) = self
-            .workspace(&package.key.manifest)
-            .and_then(|(dir, v)| v.get("patch")?.get("crates-io")?.get(name).map(|p| (dir, p)))
-        {
+        } else if let Some(patch) = context.patches.and_then(|patches| patches.get(name)) {
             let path = patch
                 .get("path")
                 .and_then(toml::Value::as_str)
                 .ok_or_else(|| error("nonlocal original dependency patch"))?;
-            format!("{}/Cargo.toml", normalize(workspace_dir, path)?)
+            format!("{}/Cargo.toml", normalize(context.directory, path)?)
         } else {
-            let lock = self
-                .lock(&package.key.manifest)
-                .ok_or_else(|| error(format!("no original lockfile for {}", package.name)))?;
+            let lock = context.lock.ok_or_else(|| error(format!("no original lockfile for {}", package.name)))?;
             let locked = lock
                 .get("package")
                 .and_then(toml::Value::as_array)
@@ -454,12 +470,34 @@ pub(crate) fn cfg(text: &str) -> Result<bool, RunError> {
             "target_endian" => value == "little",
             "target_abi" => value.is_empty(),
             "target_feature" => ["fxsr", "sse", "sse2"].contains(&value),
+            // Original x86_64-unknown-linux-musl target: max_atomic_width = 64.
+            "target_has_atomic" => ["8", "16", "32", "64", "ptr"].contains(&value),
+            // Cargo selects dependencies before per-crate build-script cfgs;
+            // the sealed native profile supplies no global backend override.
+            "getrandom_backend" => false,
+            // Package features are not global Cargo target-selection cfgs.
+            "feature" => false,
             _ => return Err(error(format!("unclassified original target cfg {text}"))),
         });
     }
     Ok(match text {
         "unix" => true,
         "windows" => false,
+        // ADR 0142: these reviewed mode cfgs are unset in the sealed native
+        // profiles. Cargo features and per-crate build scripts do not enable
+        // global dependency-selection modes; unreviewed names still fail.
+        "rustix_use_libc"
+        | "miri"
+        | "rustix_use_experimental_asm"
+        | "tracing_unstable"
+        | "tokio_unstable"
+        | "tokio_taskdump"
+        | "tokio_uring"
+        | "loom"
+        | "crossbeam_loom"
+        | "fuzzing"
+        | "aes_armv8"
+        | "windows_raw_dylib" => false,
         "x86_64-unknown-linux-musl" => true,
         v if !v.starts_with("cfg(") && v.contains('-') => false,
         _ => return Err(error(format!("unclassified original target predicate {text}"))),
@@ -481,6 +519,7 @@ pub(crate) fn resolve_with_scripts(
             host: false,
         })
         .collect::<Vec<_>>();
+    let context = sources.resolution_context(&roots)?;
     let mut packages = BTreeMap::new();
     let mut pending = VecDeque::new();
     for ((_, features), key) in goals.iter().zip(&roots) {
@@ -543,10 +582,16 @@ pub(crate) fn resolve_with_scripts(
             }
             if let Some(targets) = table(&package.manifest, "target") {
                 for (predicate, target) in targets {
-                    if cfg(predicate)?
-                        && let Some(deps) = table(target, kind)
-                    {
-                        for (name, value) in deps {
+                    let Some(deps) = table(target, kind) else { continue };
+                    let mut selected = deps
+                        .iter()
+                        .filter(|(name, value)| {
+                            value.get("optional").and_then(toml::Value::as_bool) != Some(true)
+                                || optional.contains(name.as_str())
+                        })
+                        .peekable();
+                    if selected.peek().is_some() && cfg(predicate)? {
+                        for (name, value) in selected {
                             edges.push((kind, name.clone(), value.clone()));
                         }
                     }
@@ -562,8 +607,13 @@ pub(crate) fn resolve_with_scripts(
             if value.get("optional").and_then(toml::Value::as_bool) == Some(true) && !optional.contains(&alias) {
                 continue;
             }
-            let (mut dependency, mut features, defaults, is_optional) =
-                sources.resolve_dependency(&package, &alias, &value, key.host || kind == "build-dependencies")?;
+            let (mut dependency, mut features, defaults, is_optional) = sources.resolve_dependency(
+                &package,
+                context.as_ref().expect("pending packages have consuming roots"),
+                &alias,
+                &value,
+                key.host || kind == "build-dependencies",
+            )?;
             if is_optional && !optional.contains(&alias) {
                 continue;
             }
@@ -623,3 +673,7 @@ pub(crate) fn resolve_with_scripts(
     }
     Ok(Topology { packages, roots, order })
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_resolve_tests.rs"]
+mod tests;

@@ -1,7 +1,8 @@
 //! Canonical typed argv/environment emission from genuine source requests.
 pub(super) const SOURCE: &str = r###"
 fn json_string(value:&str)->String{let mut out=String::from("\"");for c in value.chars(){match c{'"'=>out.push_str("\\\""),'\\'=>out.push_str("\\\\"),'\n'=>out.push_str("\\n"),'\r'=>out.push_str("\\r"),'\t'=>out.push_str("\\t"),'\u{8}'=>out.push_str("\\b"),'\u{c}'=>out.push_str("\\f"),c if c<' '=>out.push_str(&format!("\\u{:04x}",c as u32)),c=>out.push(c)}}out.push('"');out}
-fn data_word(value:&str,data:&mut String)->String{let offset=data.len();data.push_str(value);format!("{{\"parts\":[{{\"kind\":\"text_slice\",\"name\":\"environment-data\",\"offset_bytes\":{offset},\"length_bytes\":{}}}]}}",value.len())}
+fn named_data_word(value:&str,name:&str,data:&mut String)->String{let offset=data.len();data.push_str(value);format!("{{\"parts\":[{{\"kind\":\"text_slice\",\"name\":{},\"offset_bytes\":{offset},\"length_bytes\":{}}}]}}",json_string(name),value.len())}
+fn data_word(value:&str,data:&mut String)->String{named_data_word(value,"environment-data",data)}
 fn typed_word(value:&str)->io::Result<String>{
     if value.contains('\0'){return Err(io::Error::other("NUL in source invocation operand"));}
     let mut parts=Vec::new();let mut rest=value;

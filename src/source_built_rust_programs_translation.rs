@@ -28,17 +28,19 @@ use crate::source_built_recipe::relative;
 #[path = "source_built_rust_programs_macros.rs"]
 mod macros;
 
-/// Static step capacity of the immutable macro controller (8/slot + 6).
-/// This is a resource calculation, never a source expansion-count prediction.
+/// Compact declaration capacity is constant; reservations consume command turns,
+/// never expanded recipe steps or a prediction of actual source expansions.
 pub(crate) fn macro_reservation_slots_max(remaining_steps: usize) -> Result<u32, RunError> {
-    let slots = remaining_steps
-        .checked_sub(6)
-        .ok_or_else(|| error("macro controller needs six fixed recipe steps before any continuation reservation"))?
-        / 8;
-    if slots == 0 {
-        return Err(error("no macro continuation slot fits the remaining immutable recipe capacity"));
+    if remaining_steps < macros::DECLARATION_STEPS_MAX {
+        return Err(error("compact macro controller needs five fixed recipe declarations"));
     }
-    u32::try_from(slots).map_err(|_| error("macro reservation capacity exceeds u32"))
+    let commands_max = crate::source_built_recipe::controller::CONTROLLER_COMMANDS_MAX;
+    let slots = commands_max
+        .checked_sub(1)
+        .map(|count| count / 2)
+        .filter(|count| *count != 0)
+        .ok_or_else(|| error("no macro continuation fits the protected controller command ceiling"))?;
+    Ok(slots)
 }
 
 pub(crate) const TRANSLATION_HELPER_SOURCE: &str = include_str!("source_built_rust_programs_translation.c");
@@ -740,6 +742,18 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
         declared.insert("marker".into(), artifact(ArtifactKind::Text));
         args.push(output("marker", ""));
     }
+    // Comparison data, not a path opened by the decoder. Bind the compiler's
+    // actual namespace explicitly; never infer it from generated command text.
+    args.push(RecipeWord {
+        parts: vec![WordPart::LiteralData {
+            text: if invocation.proc_macro_executables.is_empty() {
+                "/outputs/translation"
+            } else {
+                "/outputs/workspace/translation"
+            }
+            .into(),
+        }],
+    });
     p.steps.push(RecipeStep {
         id: prepare.clone(),
         inputs: BTreeMap::from([
@@ -1186,3 +1200,7 @@ pub(crate) fn append_link_response(
     program.exports.insert(format!("{id}.generated-tmp"), product(&finish, "generated-tmp"));
     Ok(product(&finish, output_name))
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_macro_smoke_tests.rs"]
+mod smoke_tests;
