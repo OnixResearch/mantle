@@ -245,7 +245,28 @@ fn inherited(s: &Sources, manifest: &str, alias: &str, value: &toml::Value) -> R
     }
     Ok((base.into(), result))
 }
-fn patch_path(s: &Sources, owner: &str, name: &str) -> Result<Option<String>, RunError> {
+fn patch_path(
+    s: &Sources,
+    owner: &str,
+    name: &str,
+    goal_workspace: Option<&str>,
+) -> Result<Option<String>, RunError> {
+    // Patches are owned by the workspace of the package being built. A
+    // vendored crate's nearest workspace ancestor is the compiler workspace,
+    // while its rustc-std-workspace aliases are patched by the goal workspace.
+    let goal_patch = goal_workspace.and_then(|base| {
+        s.manifests
+            .get(&if base.is_empty() {
+                "Cargo.toml".to_string()
+            } else {
+                format!("{base}/Cargo.toml")
+            })
+            .and_then(|w| w.get("patch")?.get("crates-io")?.get(name).map(|p| (base.to_string(), p)))
+    });
+    if let Some((base, p)) = goal_patch {
+        let path = p.get("path").and_then(toml::Value::as_str).ok_or_else(|| error("non-source dependency patch"))?;
+        return Ok(Some(format!("{}/Cargo.toml", normalize(&base, path)?)));
+    }
     if let Some((base, p)) = s
         .workspace(owner)
         .and_then(|(base, w)| w.get("patch")?.get("crates-io")?.get(name).map(|p| (base, p)))
@@ -295,7 +316,12 @@ fn push(s: &Sources, state: &mut Selection, path: &str) -> Result<(), RunError> 
     }
     Ok(())
 }
-fn choose(s: &Sources, mut state: Selection, depth: usize) -> Result<Option<Selection>, RunError> {
+fn choose(
+    s: &Sources,
+    mut state: Selection,
+    depth: usize,
+    goal_workspace: Option<&str>,
+) -> Result<Option<Selection>, RunError> {
     if depth > 16384 {
         return Err(error("original dependency resolver exceeded finite graph bound"));
     }
@@ -305,7 +331,7 @@ fn choose(s: &Sources, mut state: Selection, depth: usize) -> Result<Option<Sele
         let path = if let Some(path) = value.get("path").and_then(toml::Value::as_str) {
             Some(format!("{}/Cargo.toml", normalize(&base, path)?))
         } else {
-            patch_path(s, &dep.owner, name)?
+            patch_path(s, &dep.owner, name, goal_workspace)?
         };
         if let Some(path) = path {
             state.edges.insert((dep.owner.clone(), dep.alias), path.clone());
@@ -355,7 +381,7 @@ fn choose(s: &Sources, mut state: Selection, depth: usize) -> Result<Option<Sele
             branch.edges.insert((dep.owner.clone(), dep.alias.clone()), path.clone());
             branch.selected.insert(path.clone());
             push(s, &mut branch, &path)?;
-            if let Some(done) = choose(s, branch, depth + 1)? {
+            if let Some(done) = choose(s, branch, depth + 1, goal_workspace)? {
                 return Ok(Some(done));
             }
         }
@@ -708,7 +734,17 @@ pub(crate) fn resolve(s: &Sources, goals: &[(&str, &[&str])], scripts: bool) -> 
     for (path, _) in goals {
         push(s, &mut state, path)?;
     }
-    let selected = choose(s, state, 0)?.ok_or_else(|| error("original version unification has no solution"))?;
+    let goal_workspaces = goals
+        .iter()
+        .filter_map(|(path, _)| s.workspace(path).map(|(base, _)| base.to_string()))
+        .collect::<BTreeSet<_>>();
+    let goal_workspace = if goal_workspaces.len() == 1 {
+        goal_workspaces.into_iter().next()
+    } else {
+        None
+    };
+    let selected = choose(s, state, 0, goal_workspace.as_deref())?
+        .ok_or_else(|| error("original version unification has no solution"))?;
     let mut local = Sources {
         top: s.top.clone(),
         manifests: s.manifests.clone(),
