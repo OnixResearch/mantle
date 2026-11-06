@@ -239,6 +239,7 @@ pub(crate) fn prepare(request: &NativeNodeRequest<'_, '_>) -> Result<Option<Earl
             | "gcc-4.0.4-musl-pass6-v1"
             | "gcc-4.0.4-musl-cxx-v8"
     );
+    let gcc47 = name == "gcc-4.7.4-musl-gcc40-v1";
     let musl = matches!(
         name,
         "musl-1.1.24-native-candidate"
@@ -266,7 +267,7 @@ pub(crate) fn prepare(request: &NativeNodeRequest<'_, '_>) -> Result<Option<Earl
             | "heirloom-devtools-070527-gcc-v6"
             | "bison-2.3-gcc-v9"
     );
-    if !gcc && !musl && !perl && !other {
+    if !gcc && !gcc47 && !musl && !perl && !other {
         return Ok(None);
     }
     let mut plan = EarlyOriginal {
@@ -286,7 +287,34 @@ pub(crate) fn prepare(request: &NativeNodeRequest<'_, '_>) -> Result<Option<Earl
     plan.literal_overrides =
         super::tcc::literal_overrides(request, &mut plan.preparation, name == "tcc-0.9.27-musl-native-runtime")?;
     let mut installed = BTreeMap::new();
-    if gcc {
+    if gcc47 {
+        let (original, root) = source(request, "-gcc-4.7.4-src", "gcc-4.7.4", "gcc/gcc.c")?;
+        let ready = super::append_gcc4_phase_ready_source(
+            request,
+            &mut plan.preparation,
+            "original",
+            original.artifact.clone(),
+            &root,
+        )?;
+        plan.source_overrides.insert(original.original_output.clone(), ready);
+        for (capability, path) in [
+            ("gcc", "bin/gcc"),
+            ("cc1", "libexec/gcc/x86_64-unknown-linux-musl/4.7.4/cc1"),
+            ("collect2", "libexec/gcc/x86_64-unknown-linux-musl/4.7.4/collect2"),
+        ] {
+            installed.insert(path.into(), ArtifactKind::Executable);
+            plan.phase_members.insert(capability.into(), ("out".into(), path.into()));
+        }
+        for path in [
+            "bin/g++",
+            "bin/cc",
+            "bin/c++",
+            "libexec/gcc/x86_64-unknown-linux-musl/4.7.4/cc1plus",
+        ] {
+            installed.insert(path.into(), ArtifactKind::Executable);
+        }
+        installed.insert("lib/gcc/x86_64-unknown-linux-musl/4.7.4/libgcc.a".into(), ArtifactKind::Archive);
+    } else if gcc {
         let (original, root) = source(request, "-gcc-4.0.4-native-src", "gcc-4.0.4", "gcc/gcc.c")?;
         let ready = super::append_gcc4_phase_ready_source(
             request,

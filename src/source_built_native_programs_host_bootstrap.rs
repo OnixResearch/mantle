@@ -54,7 +54,23 @@ fn add(
     recipe.steps.push(RecipeStep {
         id: id.clone(),
         inputs,
-        outputs: BTreeMap::from([("result".into(), RecipeOutput { kind, bytes_max: limit })]),
+        outputs: BTreeMap::from([
+            ("result".into(), RecipeOutput { kind, bytes_max: limit }),
+            (
+                "stdout".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 64 * 1024 * 1024,
+                },
+            ),
+            (
+                "stderr".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 64 * 1024 * 1024,
+                },
+            ),
+        ]),
         operation: RecipeOperation::Exec {
             executable_input: executable.into(),
             arguments,

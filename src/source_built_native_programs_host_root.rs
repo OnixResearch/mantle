@@ -99,7 +99,11 @@ fn project(
     recipe.steps.push(RecipeStep {
         id: id.clone(),
         inputs: Files::from([("tool".into(), projector.clone()), ("tree".into(), from)]),
-        outputs: BTreeMap::from([("result".into(), RecipeOutput { kind, bytes_max })]),
+        outputs: BTreeMap::from([
+            ("result".into(), RecipeOutput { kind, bytes_max }),
+            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+        ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),
             arguments: vec![lit("copy"), input("tree", path), output("result")],
@@ -134,10 +138,14 @@ fn project_executable(
             ("tree".into(), from),
             ("catalog".into(), catalog.clone()),
         ]),
-        outputs: BTreeMap::from([("result".into(), RecipeOutput {
-            kind: ArtifactKind::Executable,
-            bytes_max,
-        })]),
+        outputs: BTreeMap::from([
+            ("result".into(), RecipeOutput {
+                kind: ArtifactKind::Executable,
+                bytes_max,
+            }),
+            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+        ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),
             arguments: vec![

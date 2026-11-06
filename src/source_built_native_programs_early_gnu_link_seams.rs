@@ -118,6 +118,7 @@ pub(crate) fn append_gcc4_link_seam(
     {
         return Err(error("reserved GCC4 source seam input"));
     }
+    let guarded = invocation.guard.is_some();
     let id = invocation.id;
     let outputs = BTreeMap::from([
         ("result".into(), bounded(ArtifactKind::Text, FILE_MAX)),
@@ -159,23 +160,30 @@ pub(crate) fn append_gcc4_link_seam(
             command_state: None,
         },
     });
-    let observation = format!("{id}.observation");
-    program.steps.push(RecipeStep {
-        id: observation.clone(),
-        inputs: BTreeMap::new(),
-        outputs: BTreeMap::from([(
-            "outcome".into(),
-            bounded(ArtifactKind::Tree, request.request.proof.resource_bounds.disk_bytes_max),
-        )]),
-        operation: RecipeOperation::ObservePhase {
-            phase: id.clone(),
-            output: "outcome".into(),
-            state: None,
-        },
-    });
+    // An unguarded seam has no guarded-continuation authority to observe; its
+    // diagnostic stream remains the exact produced evidence for assertions.
+    let outcome = if guarded {
+        let observation = format!("{id}.observation");
+        program.steps.push(RecipeStep {
+            id: observation.clone(),
+            inputs: BTreeMap::new(),
+            outputs: BTreeMap::from([(
+                "outcome".into(),
+                bounded(ArtifactKind::Tree, request.request.proof.resource_bounds.disk_bytes_max),
+            )]),
+            operation: RecipeOperation::ObservePhase {
+                phase: id.clone(),
+                output: "outcome".into(),
+                state: None,
+            },
+        });
+        produced(&observation, "outcome")
+    } else {
+        produced(&id, "stdout")
+    };
     Ok(Gcc4LinkSeamExpansion {
         query: produced(&id, "result"),
         status: produced(&id, "exit-status"),
-        outcome: produced(&observation, "outcome"),
+        outcome,
     })
 }

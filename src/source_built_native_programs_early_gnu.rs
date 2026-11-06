@@ -45,7 +45,7 @@ fn error(message: impl Into<String>) -> RunError {
 }
 fn literal(text: impl Into<String>) -> RecipeWord {
     RecipeWord {
-        parts: vec![WordPart::Literal { text: text.into() }],
+        parts: vec![WordPart::LiteralData { text: text.into() }],
     }
 }
 fn input(name: &str, path: &str) -> RecipeWord {
@@ -327,6 +327,82 @@ pub(crate) fn append_gcc4_phase_ready_source(
     Ok(state)
 }
 
+/// Author the normalized full-source seed provider from its original shell
+/// recipe. Consumers require the raw compiler, assembler, linker and runtime
+/// members; the recipe itself copies and normalizes them under `$out`.
+fn provider(request: &NativeNodeRequest<'_, '_>) -> Result<NativeNodeProgram, RunError> {
+    let callbacks = crate::source_built_native_programs::final_gnu::controller_source(request)?;
+    let mut installed = BTreeMap::new();
+    for path in [
+        "bin/gcc.real",
+        "bin/g++.real",
+        "bin/as",
+        "bin/ld",
+        "bin/ar",
+        "bin/nm",
+        "bin/ranlib",
+        "bin/objcopy",
+        "bin/strip",
+        "bin/readelf",
+        "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1",
+        "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus",
+        "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/collect2",
+        "x86_64-linux-musl/lib/ld-musl-x86_64.so.1",
+        "x86_64-linux-musl/lib/libgcc_s.so.1",
+    ] {
+        installed.insert(path.to_string(), ArtifactKind::Executable);
+    }
+    for path in [
+        "x86_64-linux-musl/lib/libc.a",
+        "x86_64-linux-musl/lib/libgcc.a",
+        "x86_64-linux-musl/lib/libgcc_eh.a",
+        "x86_64-linux-musl/lib/libstdc++.a",
+    ] {
+        installed.insert(path.to_string(), ArtifactKind::Archive);
+    }
+    installed.insert("x86_64-linux-musl/lib/libc.so".to_string(), ArtifactKind::Text);
+    let members = BTreeMap::from([("out".to_string(), installed)]);
+    let mut program = crate::source_built_native_programs::host::original_node_with(
+        request,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        members,
+        BTreeMap::new(),
+        &[crate::source_built_native_programs::final_gnu::controller_hooks(&callbacks)],
+    )?;
+    // The shell-stage contract names the normalized provider tree
+    // `full-source-native-provider`, not the derivation's generic `out`.
+    let out = program.outputs.get("out").cloned().ok_or_else(|| error("provider out is absent"))?;
+    let copy = predecessor(request, "stagex-transition:member:coreutils-stage/runtime/output/bin/cp")?;
+    let id = format!("{}.canonical-provider", request.id);
+    program.steps.push(RecipeStep {
+        id: id.clone(),
+        inputs: BTreeMap::from([("copy".into(), copy), ("source".into(), out)]),
+        outputs: BTreeMap::from([
+            (STAGE.into(), bounded(ArtifactKind::Tree, request.request.proof.resource_bounds.disk_bytes_max)),
+            ("stdout".into(), bounded(ArtifactKind::Text, FILE_MAX)),
+            ("stderr".into(), bounded(ArtifactKind::Text, FILE_MAX)),
+        ]),
+        operation: RecipeOperation::Exec {
+            executable_input: "copy".into(),
+            arguments: vec![literal("-R"), literal("."), output(STAGE)],
+            environment: BTreeMap::new(),
+            invocation_input: None,
+            runtime_mounts: BTreeMap::new(),
+            cwd_input: Some("source".into()),
+            cwd_output: None,
+            stdin_input: None,
+            merge_stderr: false,
+            exit_policy: RecipeExitPolicy::Exact { code: 0 },
+            guard: None,
+            output_seeds: BTreeMap::new(),
+            command_state: None,
+        },
+    });
+    program.outputs.insert("out".into(), produced(&id, STAGE));
+    Ok(program)
+}
+
 /// Expand original early GNU configure/build nodes, the generator bundle and
 /// POSIX/Make adapters. Selection uses the evaluated original derivation name.
 pub(crate) fn lower(request: &NativeNodeRequest<'_, '_>) -> Result<Option<NativeNodeProgram>, RunError> {
@@ -336,6 +412,9 @@ pub(crate) fn lower(request: &NativeNodeRequest<'_, '_>) -> Result<Option<Native
     let name: Option<&[u8]> = request.node.derivation.environment.get("name").map(|value| value.as_ref());
     if name == Some(b"gcc-generator-base-v4".as_slice()) {
         return generator_base::lower(request).map(Some);
+    }
+    if name == Some(b"full-source-seed-toolchain".as_slice()) {
+        return provider(request).map(Some);
     }
     let stage0 = match name {
         Some(b"stage0-posix") => true,

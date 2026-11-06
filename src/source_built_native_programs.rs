@@ -209,10 +209,29 @@ pub(crate) fn append_stagex_c_helper(
     program.steps.push(RecipeStep {
         id: id.into(),
         inputs,
-        outputs: BTreeMap::from([("tool".into(), RecipeOutput {
-            kind: ArtifactKind::Executable,
-            bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
-        })]),
+        outputs: BTreeMap::from([
+            (
+                "tool".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Executable,
+                    bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
+                },
+            ),
+            (
+                "stdout".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 64 * 1024 * 1024,
+                },
+            ),
+            (
+                "stderr".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 64 * 1024 * 1024,
+                },
+            ),
+        ]),
         operation: RecipeOperation::Exec {
             executable_input: "tcc".into(),
             arguments: vec![
@@ -345,10 +364,17 @@ pub(crate) fn append_gcc10_collect2_source(
             ("phase".into(), source("collect2-phase.inc")),
             ("metadata".into(), source("collect2-driver-metadata.inc")),
         ]),
-        outputs: BTreeMap::from([("source".into(), RecipeOutput {
-            kind: ArtifactKind::Text,
-            bytes_max: 8 * 1024 * 1024,
-        })]),
+        outputs: BTreeMap::from([
+            (
+                "source".into(),
+                RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 8 * 1024 * 1024,
+                },
+            ),
+            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+        ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),
             arguments: vec![
@@ -607,7 +633,10 @@ fn validate_node_program(
                 .get(output)
                 .ok_or_else(|| author_error("missing selected original dependency output"))?;
             if !program.steps.iter().any(|step| step.inputs.values().any(|input| input == reference)) {
-                return Err(author_error(format!("original commands omit selected dependency {key}:{output}")));
+                return Err(author_error(format!(
+                    "original commands for {} omit selected dependency {key}:{output}",
+                    node.drv_path
+                )));
             }
         }
     }

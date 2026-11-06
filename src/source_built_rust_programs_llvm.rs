@@ -151,7 +151,11 @@ pub(crate) fn append_cmake_source(
             input("header", ""),
             output("source", ""),
         ],
-        BTreeMap::from([("source".into(), spec(ArtifactKind::Tree, request.proof.resource_bounds.disk_bytes_max))]),
+        BTreeMap::from([
+            ("source".into(), spec(ArtifactKind::Tree, request.proof.resource_bounds.disk_bytes_max)),
+            ("stdout".into(), spec(ArtifactKind::Text, 64 * 1024 * 1024)),
+            ("stderr".into(), spec(ArtifactKind::Text, 64 * 1024 * 1024)),
+        ]),
     );
     let result = ArtifactRef::Produced {
         action_id: format!("{}/{id}", recipe.stage_id),

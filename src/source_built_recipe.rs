@@ -664,7 +664,10 @@ pub(crate) fn validate_source_recipe(recipe: &SourceRecipe) -> Result<(), RunErr
                     .get(action_id)
                     .ok_or_else(|| error(format!("unknown, cyclic, or late producer {action_id}")))?;
                 if !producer.outputs.contains_key(output_id) {
-                    return Err(error("unknown produced input output"));
+                    return Err(error(format!(
+                        "unknown produced input output {output_id} for {name} in step {}",
+                        step.id
+                    )));
                 }
                 validate_guarded_reference(step, name, input, producer)?;
             }
@@ -859,9 +862,11 @@ fn validate_control_edges(
     if let RecipeOperation::ObservePhase { phase, state, .. } = &step.operation {
         let producer = preceding
             .get(&action_id(stage, phase))
-            .ok_or_else(|| error("phase observation requires a prior local guarded command"))?;
+            .ok_or_else(|| {
+                error(format!("phase observation {} requires a prior local guarded command {phase}", step.id))
+            })?;
         if operation_guard(&producer.operation).is_none() {
-            return Err(error("phase observation requires a guarded command"));
+            return Err(error(format!("phase observation {} requires a guarded command for {phase}", step.id)));
         }
         if let Some(state) = state {
             output_kind(producer, &state.output, ArtifactKind::Tree)?;
@@ -999,8 +1004,10 @@ fn validate_operation(step: &RecipeStep) -> Result<(), RunError> {
                     return Err(error("runtime mount destinations duplicate or overlap an ancestor"));
                 }
             }
-            let stdout =
-                step.outputs.get("stdout").ok_or_else(|| error("command must publish actual bounded stdout"))?;
+            let stdout = step
+                .outputs
+                .get("stdout")
+                .ok_or_else(|| error(format!("command {} must publish actual bounded stdout", step.id)))?;
             if !matches!(stdout.kind, ArtifactKind::Text | ArtifactKind::Object | ArtifactKind::Archive) {
                 return Err(error("stdout must be a regular text/binary artifact, not a tree or executable"));
             }
@@ -1061,9 +1068,8 @@ fn validate_operation(step: &RecipeStep) -> Result<(), RunError> {
         }
         RecipeOperation::AssembleTree { output, entries } => {
             output_kind(step, output, ArtifactKind::Tree)?;
-            if entries.is_empty() {
-                return Err(error("empty assembled tree"));
-            }
+            // An intentionally empty tree is a real artifact: the original
+            // shell interpreter seeds `/tmp` and output roots as empty trees.
             for (path, name) in entries {
                 relative(path, false)?;
                 input_exists(step, name)?;

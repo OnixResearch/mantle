@@ -60,7 +60,7 @@ fn fail(message: impl Into<String>) -> RunError {
 }
 fn lit(text: impl Into<String>) -> RecipeWord {
     RecipeWord {
-        parts: vec![WordPart::Literal { text: text.into() }],
+        parts: vec![WordPart::LiteralData { text: text.into() }],
     }
 }
 fn input(name: &str, path: &str) -> RecipeWord {
@@ -121,6 +121,8 @@ struct Host<'a, 'b, 'c> {
     prefixes: NativeLogicalPrefixes,
     provider: &'a NativeNodeProgram,
     tool_inputs: Files,
+    dependency_trees: Files,
+    dependency_trees_attached: bool,
     mounts: BTreeMap<String, String>,
 }
 impl<'a, 'b, 'c> Host<'a, 'b, 'c> {
@@ -134,6 +136,12 @@ impl<'a, 'b, 'c> Host<'a, 'b, 'c> {
             "provider".into(),
             provider.outputs.get("out").cloned().ok_or_else(|| fail("provider out is absent"))?,
         )]);
+        let mut dependency_trees = Files::new();
+        for (index, program) in request.dependencies.values().enumerate() {
+            for (name, reference) in &program.outputs {
+                dependency_trees.insert(format!("dependency-{index}-{name}"), reference.clone());
+            }
+        }
         let mounts = BTreeMap::from([
             (prefixes.provider.clone(), "provider".into()),
             (prefixes.gcc.clone(), "provider".into()),
@@ -158,6 +166,8 @@ impl<'a, 'b, 'c> Host<'a, 'b, 'c> {
             prefixes,
             provider,
             tool_inputs,
+            dependency_trees,
+            dependency_trees_attached: false,
             mounts,
         })
     }
@@ -172,12 +182,23 @@ impl<'a, 'b, 'c> Host<'a, 'b, 'c> {
     fn id(&self, suffix: &str) -> String {
         format!("{}.host.{suffix}", self.request.id)
     }
-    fn add(&mut self, suffix: &str, inputs: Files, kind: ArtifactKind, operation: RecipeOperation) -> ArtifactRef {
+    fn add(&mut self, suffix: &str, mut inputs: Files, kind: ArtifactKind, operation: RecipeOperation) -> ArtifactRef {
+        if !self.dependency_trees_attached {
+            for (name, reference) in &self.dependency_trees {
+                inputs.entry(name.clone()).or_insert_with(|| reference.clone());
+            }
+            self.dependency_trees_attached = true;
+        }
         let id = self.id(suffix);
+        let mut outputs = BTreeMap::from([("result".into(), spec(kind))]);
+        if matches!(operation, RecipeOperation::Exec { .. }) {
+            outputs.insert("stdout".into(), spec(ArtifactKind::Text));
+            outputs.insert("stderr".into(), spec(ArtifactKind::Text));
+        }
         self.recipe.steps.push(RecipeStep {
             id: id.clone(),
             inputs,
-            outputs: BTreeMap::from([("result".into(), spec(kind))]),
+            outputs,
             operation,
         });
         produced(&id, "result")

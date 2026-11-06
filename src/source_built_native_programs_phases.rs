@@ -785,10 +785,13 @@ fn append_response_steps_guarded(
                 }],
             }]
         };
+        let mut phase_outputs_map = phase.outputs;
+        phase_outputs_map.entry("stdout".into()).or_insert_with(|| text_output(LOG_BYTES_MAX));
+        phase_outputs_map.entry("stderr".into()).or_insert_with(|| text_output(LOG_BYTES_MAX));
         phase_steps.push(RecipeStep {
             id: phase_id,
             inputs: phase_inputs,
-            outputs: phase.outputs,
+            outputs: phase_outputs_map,
             operation: RecipeOperation::Exec {
                 executable_input: "gcc-phase-tool".into(),
                 arguments,
@@ -810,6 +813,8 @@ fn append_response_steps_guarded(
             },
         });
     }
+    split_outputs.insert("stdout".into(), text_output(LOG_BYTES_MAX));
+    split_outputs.insert("stderr".into(), text_output(LOG_BYTES_MAX));
     steps.push(RecipeStep {
         id: split_id,
         inputs: split_inputs,
