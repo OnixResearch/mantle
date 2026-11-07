@@ -1,0 +1,546 @@
+{
+  "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)\nrelease: 1.97.1\ncommit-hash: c980f4866141969fab6254a680546a277789d6f0\ncommit-date: 2026-06-30\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.2 (sys:0.20.4 vendored)\nlibcurl: 8.20.0-DEV (sys:0.4.88+curl-8.20.0 vendored ssl:OpenSSL/3.6.2)\nssl: OpenSSL 3.6.2 7 Apr 2026\nos: NixOS 26.11.0 [64-bit]\n",
+  "commands": [
+    {
+      "label": "cargo-version",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "--version",
+        "--verbose"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/fixture",
+      "env": {
+        "CARGO_HOME": "/home/brittonr/mantle-lock-source-20261106/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "RUSTC": "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+        "PATH": "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin"
+      },
+      "returncode": 0
+    },
+    {
+      "label": "baseline",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/fixture",
+      "env": {
+        "CARGO_HOME": "/home/brittonr/mantle-lock-source-20261106/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "RUSTC": "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+        "PATH": "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:/home/brittonr/.local/bin:/home/brittonr/.nix-profile/bin:/nix/store/7a60q5dgnv6z96c279rc1nalyiw4mgqn-bash-interactive-5.3p15/bin:/nix/store/gzh2rx2sjwra135my0jw3va49hm7z4vf-bun-1.3.13/bin:/nix/store/jnsflr3i2c90hrlly1cgwvxr9s74kgab-docker-29.8.0/bin:/nix/store/f51vybn5cd5v88pk7hnrdr6db1q0rzw7-ghzinga-0.5.0/bin:/nix/store/8yjpgadavqdwphcd2kw4dfvxmgdp5sb3-git-2.55.0/bin:/nix/store/xvd6920kffyyshg7mbw5wvfk6lg9wfkl-jq-1.8.2-bin/bin:/nix/store/hwifmhfi50y1595lhwiqsn7acppa7zdm-jujutsu-0.45.1/bin:/nix/store/ggcm0s524bsly3qc7kww945qs7003psf-openssh-10.5p1/bin:/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin:/nix/store/a8hj1bz1gd378sxz4fabmgrl61ad202p-socat-1.8.1.3/bin:/home/brittonr/.optmem:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin"
+      },
+      "returncode": 0
+    }
+  ],
+  "archive_provenance": {
+    "archive": "/home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.94.1.tar.gz",
+    "member_prefix": "rustc-1.94.1-src/vendor/memchr-2.7.6/",
+    "checksum": {
+      "files": {
+        ".cargo_vcs_info.json": "32184fbeeef54a11ecc1ee09a2bedd94706767377f431a528f48134f56cd3b6f",
+        ".ignore": "ae8b19032d4fc418b99ccae9e7cc3996b1386665d0bd5edc5634a158e7d2f6a2",
+        ".vim/coc-settings.json": "cdc5e2b88bddbdbd1b85f21389c4d882720e4c4488ad566c43fccd9124f2e3bf",
+        "COPYING": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+        "Cargo.lock": "839877bbdcf9c1ee00d0b290c76d6adc590a2cc9e374eb2bb9dc494f803c0145",
+        "Cargo.toml": "5750ca97e8b2643f2ba1d7e98f54dcf54518c0176899e547876a59eb736198a5",
+        "Cargo.toml.orig": "b919c7322ecc6da819546cb677da938730e5df32fdfe9ef5d7c2dc54cc768526",
+        "LICENSE-MIT": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+        "README.md": "92a74aaffe011bdaa06fbc34a01686a6eba58ca1322e976759417a547fddf734",
+        "UNLICENSE": "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c",
+        "rustfmt.toml": "1ca600239a27401c4a43f363cf3f38183a212affc1f31bff3ae93234bbaec228",
+        "src/arch/aarch64/memchr.rs": "5bb70f915084e629d940dbc322f5b9096b2e658cf63fea8a2f6e7550412e73a0",
+        "src/arch/aarch64/mod.rs": "44cd1a614bd66f1e66fc86c541d3c3b8d3a14a644c13e8bf816df3f555eac2d4",
+        "src/arch/aarch64/neon/memchr.rs": "e8c00b8fb2c7e2711832ae3cedefe59f32ebedd7dfa4d0ec6de2a566c979daea",
+        "src/arch/aarch64/neon/mod.rs": "eab6d56c2b2354db4ee395f40282cd49f97e2ab853547be5de6e65fbe1b2f634",
+        "src/arch/aarch64/neon/packedpair.rs": "32d3e4cd0dd9b6c8382e5308cbd896d20242c90b12862c44a5de6a8b4d6126df",
+        "src/arch/all/memchr.rs": "b0b1214aa573ed5d02ae62a77c42c773065566b50274d4096e37817d65ab1594",
+        "src/arch/all/mod.rs": "05f3fc2b069682eb1545fc6366d167bb620a454365dac8b8dd6cde6cd64de18a",
+        "src/arch/all/packedpair/default_rank.rs": "abffd1b5b8b7a3be95c03dd1105b905c246a379854dc56f1e846ea7c4408f2c7",
+        "src/arch/all/packedpair/mod.rs": "292b66042c5b5c78bba33db6526aeae6904db803d601fcdd29032b87b3eb3754",
+        "src/arch/all/rabinkarp.rs": "236f69c04b90c14c253ae6c8d9b78150b4a56df75bb50af6d63b15145668b7cc",
+        "src/arch/all/shiftor.rs": "0d79117f52a1e4795843603a3bb0b45397df4ad5e4184bbc923658dab9dc3b5f",
+        "src/arch/all/twoway.rs": "47c97a265bfbafde90a618946643d3e97dfd9a85f01aa4ac758cd4c1573a450d",
+        "src/arch/generic/memchr.rs": "cab4636bf8042c81ca1bcc49fe4214b362100992c0a850859ff445fa6a48f327",
+        "src/arch/generic/mod.rs": "1dd75f61e0ea2563b8205a08aaa7b55500130aa331d18b9e9f995724b66c7a39",
+        "src/arch/generic/packedpair.rs": "a4a6efb29877ced9cf4c4e5ae9f36a79f019a16b831f2b9424899a1513d458ad",
+        "src/arch/mod.rs": "ca3960b7e2ed28d1b3c121710a870430531aad792f64d4dcb4ca4709d6cbda30",
+        "src/arch/wasm32/memchr.rs": "d88ac79f891d8530f505f5035062d3da274a05d66c611480c75430d52709d052",
+        "src/arch/wasm32/mod.rs": "a20377aa8fe07d68594879101dc73061e4f51d9c8d812b593b1f376e3c8add79",
+        "src/arch/wasm32/simd128/memchr.rs": "bac2c4c43fe710c83a6f2b1118fede043be89dd821d4b532907f129f09fdb5cf",
+        "src/arch/wasm32/simd128/mod.rs": "c157b373faedbfd65323be432e25bc411d97aa1b7bc58e76048614c7b2bf3bf6",
+        "src/arch/wasm32/simd128/packedpair.rs": "288ba6e5eee6a7a8e5e45c64cff1aa5d72d996c2a6bc228be372c75789f08e45",
+        "src/arch/x86_64/avx2/memchr.rs": "576ec0c30f49874f7fd9f6caeb490d56132c0fbbaa4d877b1aa532cafce19323",
+        "src/arch/x86_64/avx2/mod.rs": "0033d1b712d0b10f0f273ef9aa8caa53e05e49f4c56a64f39af0b9df97eec584",
+        "src/arch/x86_64/avx2/packedpair.rs": "87b69cb4301815906127db4f6370f572c7c5d5dad35c0946c00ad888dbcaec8c",
+        "src/arch/x86_64/memchr.rs": "7426e27c39a334d500a6803acdfd97ffc05fbf2d70ba8e74492a8ad3f22d20da",
+        "src/arch/x86_64/mod.rs": "61b2aa876942fd3e78714c2ae21e356c8634545c06995020f443fa50218df027",
+        "src/arch/x86_64/sse2/memchr.rs": "0de0444e26d885eaf866220578752aac871e03bebee7b4f5de7fe8a35f5fa97f",
+        "src/arch/x86_64/sse2/mod.rs": "38b70ae52a64ec974dbb91d04d6ca8013d9e06d1fe4af852206bbc2faf1c59aa",
+        "src/arch/x86_64/sse2/packedpair.rs": "241ea981d8eea6024769f1c9375f726a9bb9700160c5857781d4befd9f5ef55d",
+        "src/cow.rs": "34eddd02cb82cc2d5a2c640891d64efe332dabcc1eea5115764200d8f46b66f7",
+        "src/ext.rs": "210f89d1e32211bc64414cbd56e97b4f56ce8a8832d321d77a9fe519634e27ea",
+        "src/lib.rs": "614f778a41e88a29ea0ceb8e92c839dbb6b5a61c967f8bfd962975e18f932c71",
+        "src/macros.rs": "3e4b39252bfa471fad384160a43f113ebfec7bec46a85d16f006622881dd2081",
+        "src/memchr.rs": "6ae779ec5d00f443075316e0105edf30b489a38e2e96325bec14ccecd014145b",
+        "src/memmem/mod.rs": "1b0a9d6a681fd0887c677c4fc8d4c8f9719ddde250bdd5ea545365c1a7fb9094",
+        "src/memmem/searcher.rs": "7763472d43c66df596ca0697c07db0b4666d38a6a14f64f9f298aaf756c4a715",
+        "src/tests/memchr/mod.rs": "269f8e4b4f7f5ea458f27a3c174eb1020ffb2484eeba9464170beb51747df69b",
+        "src/tests/memchr/naive.rs": "6a0bee033e5edfb5b1d5769a5fa1c78388f7e9ff7bb91cb67f0ad029289e00e7",
+        "src/tests/memchr/prop.rs": "1854eea2338c405fe4635aac430f51e10d2069cd37a7489ddaff47da95f8720b",
+        "src/tests/mod.rs": "7cec8f809e279310a465c6a7725087970f219a676cc76c83de30c695bb490740",
+        "src/tests/packedpair.rs": "b02ec4fbb61a8653cb5f2268c31bc9168b8043347f2abdcc74081acf83b98e15",
+        "src/tests/substring/mod.rs": "c7660d10749363ac4687e7da2b5fda60768230425df8ba416c0c28b8d56a5c74",
+        "src/tests/substring/naive.rs": "df6f55d165382b8a53762ba4c324926cac13ebc62cde1805f4ce08740b326483",
+        "src/tests/substring/prop.rs": "38c15992609b5681a95d838ae6f2933e00a1219f2c971bfba245f96e0729fcdc",
+        "src/vector.rs": "e787c4ed2f499802e90910f7aedc7ca41acea39c8ef416b19d6d572c1a540422"
+      },
+      "package": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+    }
+  },
+  "identities": {
+    "packages": [
+      {
+        "name": "memchr",
+        "version": "2.7.6",
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/local-memchr#memchr@2.7.6",
+        "source": null,
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/fixture/local-memchr/Cargo.toml"
+      },
+      {
+        "name": "memchr",
+        "version": "2.7.6",
+        "id": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/vendor/memchr-2.7.6/Cargo.toml"
+      },
+      {
+        "name": "path-child",
+        "version": "0.1.0",
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-child#0.1.0",
+        "source": null,
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/fixture/path-child/Cargo.toml"
+      },
+      {
+        "name": "path-owner",
+        "version": "0.1.0",
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-owner#0.1.0",
+        "source": null,
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/fixture/path-owner/Cargo.toml"
+      },
+      {
+        "name": "probe-root",
+        "version": "0.1.0",
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/root#probe-root@0.1.0",
+        "source": null,
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/fixture/root/Cargo.toml"
+      },
+      {
+        "name": "registry-owner",
+        "version": "0.1.0",
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/registry-owner#0.1.0",
+        "source": null,
+        "manifest_path": "/home/brittonr/mantle-lock-source-20261106/fixture/registry-owner/Cargo.toml"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/local-memchr#memchr@2.7.6",
+        "dependencies": [
+          "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-child#0.1.0"
+        ],
+        "deps": [
+          {
+            "name": "path_child",
+            "pkg": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-child#0.1.0",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6",
+        "dependencies": [],
+        "deps": [],
+        "features": [
+          "alloc",
+          "default",
+          "std"
+        ]
+      },
+      {
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-child#0.1.0",
+        "dependencies": [],
+        "deps": [],
+        "features": []
+      },
+      {
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-owner#0.1.0",
+        "dependencies": [
+          "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/local-memchr#memchr@2.7.6"
+        ],
+        "deps": [
+          {
+            "name": "memchr",
+            "pkg": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/local-memchr#memchr@2.7.6",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/root#probe-root@0.1.0",
+        "dependencies": [
+          "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-owner#0.1.0",
+          "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/registry-owner#0.1.0"
+        ],
+        "deps": [
+          {
+            "name": "path_owner",
+            "pkg": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/path-owner#0.1.0",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          },
+          {
+            "name": "registry_owner",
+            "pkg": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/registry-owner#0.1.0",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "path+file:///home/brittonr/mantle-lock-source-20261106/fixture/registry-owner#0.1.0",
+        "dependencies": [
+          "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6"
+        ],
+        "deps": [
+          {
+            "name": "memchr",
+            "pkg": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      }
+    ]
+  },
+  "token_results": [
+    {
+      "case": "baseline-locked",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/baseline-locked",
+      "from": null,
+      "to": null,
+      "returncode": 0,
+      "lock_unchanged": true,
+      "stderr": ""
+    },
+    {
+      "case": "path-name-only",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/path-name-only",
+      "from": "memchr 2.7.6",
+      "to": "memchr",
+      "returncode": 0,
+      "lock_unchanged": true,
+      "stderr": ""
+    },
+    {
+      "case": "registry-source-omitted",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-source-omitted",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-source-omitted/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-name-only",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-name-only",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-name-only/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "path-forced-registry",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/path-forced-registry",
+      "from": "memchr 2.7.6",
+      "to": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/path-forced-registry/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-source-no-version",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-source-no-version",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr (registry+https://github.com/rust-lang/crates.io-index)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-source-no-version/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-wrong-source",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-wrong-source",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 (registry+https://example.invalid/index)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-wrong-source/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-sparse-source",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-sparse-source",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 (sparse+https://index.crates.io/)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-sparse-source/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-bare-url-source",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-bare-url-source",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 (https://github.com/rust-lang/crates.io-index)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: failed to parse lock file at: /home/brittonr/mantle-lock-source-20261106/cases/registry-bare-url-source/Cargo.lock\n\nCaused by:\n  TOML parse error at line 40, column 16\n     |\n  40 | dependencies = [\n     |                ^\n  invalid source `https://github.com/rust-lang/crates.io-index`\n"
+    },
+    {
+      "case": "registry-extra-token",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-extra-token",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index) extra",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: failed to parse lock file at: /home/brittonr/mantle-lock-source-20261106/cases/registry-extra-token/Cargo.lock\n\nCaused by:\n  TOML parse error at line 40, column 16\n     |\n  40 | dependencies = [\n     |                ^\n  invalid serialied PackageId\n"
+    },
+    {
+      "case": "registry-malformed-version",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-malformed-version",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr banana (registry+https://github.com/rust-lang/crates.io-index)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/registry-malformed-version/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    },
+    {
+      "case": "registry-missing-close",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-missing-close",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: failed to parse lock file at: /home/brittonr/mantle-lock-source-20261106/cases/registry-missing-close/Cargo.lock\n\nCaused by:\n  TOML parse error at line 40, column 16\n     |\n  40 | dependencies = [\n     |                ^\n  invalid serialied PackageId\n"
+    },
+    {
+      "case": "registry-source-empty",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/registry-source-empty",
+      "from": "memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+      "to": "memchr 2.7.6 ()",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: failed to parse lock file at: /home/brittonr/mantle-lock-source-20261106/cases/registry-source-empty/Cargo.lock\n\nCaused by:\n  TOML parse error at line 40, column 16\n     |\n  40 | dependencies = [\n     |                ^\n  invalid source ``\n"
+    },
+    {
+      "case": "path-explicit-path-source",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/path-explicit-path-source",
+      "from": "memchr 2.7.6",
+      "to": "memchr 2.7.6 (path+file:///explicit-path-not-the-fixture)",
+      "returncode": 101,
+      "lock_unchanged": true,
+      "stderr": "error: cannot update the lock file /home/brittonr/mantle-lock-source-20261106/cases/path-explicit-path-source/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n"
+    }
+  ],
+  "unique_registry_control": [
+    {
+      "case": "generate",
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/registry-only",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--format-version",
+        "1"
+      ],
+      "returncode": 0,
+      "stderr": "     Locking 1 package to latest compatible version\n"
+    },
+    {
+      "case": "locked",
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/unique-registry-name-version",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--format-version",
+        "1",
+        "--locked"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "lock_unchanged": true
+    },
+    {
+      "case": "locked",
+      "cwd": "/home/brittonr/mantle-lock-source-20261106/cases/unique-registry-full-source",
+      "argv": [
+        "/home/brittonr/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "metadata",
+        "--offline",
+        "--format-version",
+        "1",
+        "--locked"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "lock_unchanged": true
+    }
+  ],
+  "observed_summary": "Host Cargo source-identity diagnostic (offline metadata only)\n\nTool: cargo 1.97.1 (c980f4866 2026-06-30), host x86_64-unknown-linux-gnu.\nThe executable and rustc were selected explicitly from the installed stable toolchain because cargo was absent from the shell PATH. No network fetch, product build/test, or repository modification was performed.\n\nAuthentic registry input:\n  archive: /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.94.1.tar.gz\n  member prefix: rustc-1.94.1-src/vendor/memchr-2.7.6/\n  Original vendor contents, including .cargo-checksum.json, extracted unchanged to vendor/memchr-2.7.6/.\n  Registry package checksum: f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273\n  Source replacement maps crates-io to this directory; CARGO_HOME is isolated, CARGO_NET_OFFLINE=true, and every metadata invocation uses --offline.\n\nDual-identity fixture:\n  path-owner -> local memchr 2.7.6 -> path-child 0.1.0\n  registry-owner -> authentic registry memchr 2.7.6 -> no enabled children\n  probe-root -> both owners\n\nCargo generated these distinct lock dependency strings:\n  path-owner:     \"memchr 2.7.6\"\n  registry-owner: \"memchr 2.7.6 (registry+https://github.com/rust-lang/crates.io-index)\"\nThe local package record has no source. The registry package record has source registry+https://github.com/rust-lang/crates.io-index and the original checksum.\nMetadata reports local source=null with a path+file: package ID, versus registry source=registry+https://github.com/rust-lang/crates.io-index. Directory source replacement does not collapse the registry identity to a path identity. Local and registry transitive child sets remain distinct.\n\n--locked mutation diagnostics:\n  Success, lock unchanged: generated baseline; reducing the local edge to bare \"memchr\".\n  Refused because lock needs update: omitting registry source (with or without version), forcing the local edge to registry source, registry source without version, different registry URL, sparse crates.io source, malformed version text, explicit mismatching path source.\n  Parse failure: bare URL source without registry+; trailing extra token; missing closing source parenthesis; empty source parentheses. Detailed Cargo diagnostics retained per case.\nA lock-update refusal is not asserted to be a grammar parse failure.\n\nUnique-registry control:\n  With only registry memchr present, Cargo generates the dependency \"memchr\".\n  --locked also accepts \"memchr 2.7.6\" and the fully source-qualified spelling, without rewriting.\nTherefore omitted source is NOT universally a local/path marker. The dual-identity behavior above is contextual. These host observations do not replace reading the protected Cargo version's exact lock-decoder implementation and are not protected-build/provider proof.\n\nEvidence paths relative to this directory:\n  commands.json                         baseline command, environment, exit codes\n  cargo-version.stdout                  complete host Cargo version\n  archive-provenance.json                original checksum table and archive provenance\n  fixture/Cargo.lock                    generated dual-identity lock\n  baseline.stdout / baseline.stderr    full Cargo metadata and stderr\n  identity-summary.json                 package identities and resolve nodes\n  token-results.json                    token changes, commands, statuses, lock preservation\n  cases/*/{input.Cargo.lock,Cargo.lock,metadata.stdout,metadata.stderr}\n  registry-only/generated.Cargo.lock   unique-registry generated lock\n  unique-registry-results.json          control commands and statuses\n  cases/unique-registry-*/locked.{stdout,stderr}\n  inventory.py, probe.py, run-metadata.py, token-probes.py, unique-registry.py\n                                        retained source/invocation scripts\n\nInitial probe.py reached source/fixture creation, then failed because bare cargo was not found. Successful setup was not repeated; run-metadata.py resumes only Cargo invocation with explicit installed binary paths.\n",
+  "non_claims": [
+    "host offline Cargo metadata diagnostic, not the protected toolchain",
+    "no product build or tests",
+    "not Cargo-free/provider/fixed-point/release evidence"
+  ]
+}

@@ -341,6 +341,15 @@ Vendored dependencies' own lockfiles/workspaces cannot select their transitive
 registry identities. A missing consuming lock is not replaced by a dependency
 lock or a parent workspace's lock; mixed-workspace goal groups are rejected.
 Retain the exact source diagnostic rather than guessing a substitute version.
+Lock dependency source qualifiers remain part of identity
+([ADR 0145](../adr/0145-retain-source-qualified-consuming-lock-identities.md)).
+Same-name/version local and registry packages are not interchangeable. Version
+omission first requires a unique version; source omission then prefers a unique
+local/path record or requires a unique remaining identity. Explicit source must
+match exactly. Transitive children stay bound to that selected lock owner through
+feature revisits. Malformed qualifiers, unresolved ambiguity and conflicting
+owner identities remain errors, never table-order choices or source fallbacks.
+
 For the fixed `x86_64-unknown-linux-musl` target, successor dependency predicates
 classify atomic widths `8`, `16`, `32`, `64` and `ptr` from the original target's
 64-bit atomic ceiling. A 128-bit atomic dependency is not selected. Only target

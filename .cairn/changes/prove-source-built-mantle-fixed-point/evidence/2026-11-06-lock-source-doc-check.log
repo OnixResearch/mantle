@@ -1,0 +1,6 @@
+Command: rustfmt --check --edition 2024 --config skip_children=true src/source_built_rust_resolve.rs src/source_built_rust_resolve_tests.rs
+Observed exit: 0 (no output)
+Command: nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-operator-proof-guide.rs
+Observed exit: 0
+Stdout:
+operator proof guide drift check passed

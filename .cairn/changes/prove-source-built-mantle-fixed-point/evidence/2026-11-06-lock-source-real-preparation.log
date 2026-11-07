@@ -1,0 +1,14 @@
++ date -Is
+2026-11-06T19:59:16-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-cold-20261105/prep.sh
+f7256b337ddf68b1f2db80c65190bc7450766d88edafcc5a3c199c543caea165  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh
++ /home/brittonr/mantle-cold-20261105/prep.sh
+{"error":"source recipe: non-normalized relative path \"x86_64-linux-musl/lib/\"","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-06T20:08:38-05:00
++ exit 1

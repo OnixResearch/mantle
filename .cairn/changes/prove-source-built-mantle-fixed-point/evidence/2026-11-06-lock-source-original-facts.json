@@ -1,0 +1,329 @@
+{
+  "source_profile_manifest_blake3": "29273e879992b713cec8414772afc4dc99d1454efef158cb86827083401d0820",
+  "archive_identities_blake3": "4e4e95776c2fd2b28dac941674e34da3bec25122ab7b688ecd2f4d50401602e7  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.90.0.tar.gz\n96cc9cc21d016c667d41186184def2a6760a764099312f2de896656b48fcf5a6  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.91.1.tar.gz\nab0e0f3c9b95aadfec79aa7425eeaaa86a705488975216a10615da4f80b62199  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.92.0.tar.gz\n98e64f6b6a4ab9cfff69062d0906de5c17579517bd6721c518f2979a49f9209a  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.93.1.tar.gz\n7ee35c7033f5cd067650f0aaa794254162a0331aa3face0062164abdbd33b46f  /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-3038838/inputs/rust-source-archives/rust-1.94.1.tar.gz\n",
+  "cohorts": {
+    "1.90.0": {
+      "Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "compiletest",
+            "version": "0.0.0",
+            "source": null,
+            "home_edges": [
+              "home"
+            ]
+          }
+        ]
+      },
+      "library/Cargo.lock": {
+        "home_packages": [],
+        "consuming_edges": []
+      },
+      "src/tools/cargo/Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          },
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "dependencies": [
+              "windows-sys 0.60.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "cargo",
+            "version": "0.91.0",
+            "source": null,
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          },
+          {
+            "name": "gix-path",
+            "version": "0.10.19",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          }
+        ]
+      }
+    },
+    "1.91.1": {
+      "Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "compiletest",
+            "version": "0.0.0",
+            "source": null,
+            "home_edges": [
+              "home"
+            ]
+          }
+        ]
+      },
+      "src/tools/cargo/Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          },
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "dependencies": [
+              "windows-sys 0.60.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "cargo",
+            "version": "0.92.0",
+            "source": null,
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          },
+          {
+            "name": "gix-path",
+            "version": "0.10.20",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          }
+        ]
+      },
+      "library/Cargo.lock": {
+        "home_packages": [],
+        "consuming_edges": []
+      }
+    },
+    "1.92.0": {
+      "Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "compiletest",
+            "version": "0.0.0",
+            "source": null,
+            "home_edges": [
+              "home"
+            ]
+          }
+        ]
+      },
+      "src/tools/cargo/Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.11",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf",
+            "dependencies": [
+              "windows-sys 0.59.0"
+            ]
+          },
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "dependencies": [
+              "windows-sys 0.61.1"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "cargo",
+            "version": "0.93.0",
+            "source": null,
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          },
+          {
+            "name": "gix-path",
+            "version": "0.10.20",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "home_edges": [
+              "home 0.5.11"
+            ]
+          }
+        ]
+      },
+      "library/Cargo.lock": {
+        "home_packages": [],
+        "consuming_edges": []
+      }
+    },
+    "1.93.1": {
+      "Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "compiletest",
+            "version": "0.0.0",
+            "source": null,
+            "home_edges": [
+              "home"
+            ]
+          }
+        ]
+      },
+      "src/tools/cargo/Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          },
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "cargo",
+            "version": "0.94.0",
+            "source": null,
+            "home_edges": [
+              "home 0.5.12 (registry+https://github.com/rust-lang/crates.io-index)"
+            ]
+          }
+        ]
+      },
+      "library/Cargo.lock": {
+        "home_packages": [],
+        "consuming_edges": []
+      }
+    },
+    "1.94.1": {
+      "Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "compiletest",
+            "version": "0.0.0",
+            "source": null,
+            "home_edges": [
+              "home"
+            ]
+          }
+        ]
+      },
+      "src/tools/cargo/Cargo.lock": {
+        "home_packages": [
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          },
+          {
+            "name": "home",
+            "version": "0.5.12",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d",
+            "dependencies": [
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "consuming_edges": [
+          {
+            "name": "cargo",
+            "version": "0.95.0",
+            "source": null,
+            "home_edges": [
+              "home 0.5.12 (registry+https://github.com/rust-lang/crates.io-index)"
+            ]
+          }
+        ]
+      },
+      "library/Cargo.lock": {
+        "home_packages": [],
+        "consuming_edges": []
+      }
+    }
+  },
+  "diagnostic_non_claims": [
+    "source archive/lock observations only",
+    "not Cargo-free execution, provider construction or fixed-point proof"
+  ]
+}

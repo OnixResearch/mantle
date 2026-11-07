@@ -1,0 +1,6 @@
+Base commit: 7cd4e9cbb289eaf4277d223a67b5d40ea0e55c0a
+Local source-authoring cohort, not a frozen provider/proof cohort.
+be4253c464b97ca656d256c99f465e4a274440ef9ea771e99dcd2cd5a09d526e  src/source_built_rust_resolve.rs
+236e26be688055dd6860e0e90afb772660968f4952298683a5c0c9732059d8af  src/source_built_rust_resolve_tests.rs
+f7256b337ddf68b1f2db80c65190bc7450766d88edafcc5a3c199c543caea165  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh

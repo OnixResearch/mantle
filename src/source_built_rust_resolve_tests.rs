@@ -321,3 +321,192 @@ fn enabled_cargo_feature_does_not_populate_global_target_cfg() {
     assert!(!topology.packages.keys().any(|key| key.manifest == "absent/Cargo.toml"));
     assert!(cfg("cfg(unreviewed_target_flag = \"alloc\")").is_err());
 }
+
+const REGISTRY_SOURCE: &str = "registry+https://github.com/rust-lang/crates.io-index";
+
+fn source_identity_fixture() -> Sources {
+    let mut sources = fixture();
+    package(&mut sources, "vendor/helper/Cargo.toml", "helper", "1.0.0", "home = '0.5.12'");
+    package(&mut sources, "vendor/home/Cargo.toml", "home", "0.5.12", "memchr = '2'");
+    package(&mut sources, "local/home/Cargo.toml", "home", "0.5.12", "memchr = '2'");
+    sources.locks.insert(
+        "Cargo.lock".into(),
+        format!(
+            r#"
+        [[package]]
+        name = 'helper'
+        version = '1.0.0'
+        dependencies = ['home 0.5.12 ({REGISTRY_SOURCE})']
+        [[package]]
+        name = 'home'
+        version = '0.5.12'
+        dependencies = ['memchr 2.7.4']
+        [[package]]
+        name = 'home'
+        version = '0.5.12'
+        source = '{REGISTRY_SOURCE}'
+        dependencies = ['memchr 2.7.5']
+        [[package]]
+        name = 'memchr'
+        version = '2.7.4'
+        source = '{REGISTRY_SOURCE}'
+        [[package]]
+        name = 'memchr'
+        version = '2.7.5'
+        source = '{REGISTRY_SOURCE}'
+    "#
+        )
+        .parse()
+        .unwrap(),
+    );
+    sources
+}
+
+fn home_dependency(topology: &Topology) -> (&Package, &Edge) {
+    let home = topology.packages.values().find(|package| package.name == "home").unwrap();
+    let child = home.dependencies.iter().find(|edge| edge.name == "memchr").unwrap();
+    (home, child)
+}
+
+#[test]
+fn source_qualified_edge_retains_exact_transitive_lock_owner() {
+    let sources = source_identity_fixture();
+    let topology = resolve(&sources, &[("app/Cargo.toml", &[])]).unwrap();
+    let (home, child) = home_dependency(&topology);
+    assert_eq!(home.key.manifest, "vendor/home/Cargo.toml");
+    assert_eq!(child.key.manifest, "vendor/memchr-2.7.5/Cargo.toml");
+    assert!(!topology.packages.values().any(|package| package.name == "memchr" && package.version == "2.7.4"));
+}
+
+#[test]
+fn local_path_owner_is_not_replaced_by_same_version_registry_record() {
+    let mut sources = source_identity_fixture();
+    package(&mut sources, "vendor/helper/Cargo.toml", "helper", "1.0.0", "home = { path = '../../local/home' }");
+    sources
+        .locks
+        .get_mut("Cargo.lock")
+        .unwrap()
+        .get_mut("package")
+        .unwrap()
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    let topology = resolve(&sources, &[("app/Cargo.toml", &[])]).unwrap();
+    let (home, child) = home_dependency(&topology);
+    assert_eq!(home.key.manifest, "local/home/Cargo.toml");
+    assert_eq!(child.key.manifest, "vendor/memchr-2.7.4/Cargo.toml");
+    assert!(!topology.packages.values().any(|package| package.name == "memchr" && package.version == "2.7.5"));
+}
+
+fn replace_home_edge(sources: &mut Sources, edge: &str) {
+    let packages = sources.locks.get_mut("Cargo.lock").unwrap().get_mut("package").unwrap().as_array_mut().unwrap();
+    let helper = packages
+        .iter_mut()
+        .find(|package| package.get("name").and_then(toml::Value::as_str) == Some("helper"))
+        .unwrap();
+    helper
+        .as_table_mut()
+        .unwrap()
+        .insert("dependencies".into(), toml::Value::Array(vec![toml::Value::String(edge.into())]));
+}
+
+#[test]
+fn qualified_lock_source_must_match_without_source_fallback() {
+    let mut sources = source_identity_fixture();
+    replace_home_edge(&mut sources, "home 0.5.12 (registry+https://wrong.invalid/index)");
+    assert!(resolve(&sources, &[("app/Cargo.toml", &[])]).is_err());
+}
+
+#[test]
+fn duplicate_exact_qualified_lock_identity_is_rejected() {
+    let mut sources = source_identity_fixture();
+    let packages = sources.locks.get_mut("Cargo.lock").unwrap().get_mut("package").unwrap().as_array_mut().unwrap();
+    let duplicate = packages
+        .iter()
+        .find(|package| {
+            package.get("name").and_then(toml::Value::as_str) == Some("home") && package.get("source").is_some()
+        })
+        .unwrap()
+        .clone();
+    packages.push(duplicate);
+    assert!(resolve(&sources, &[("app/Cargo.toml", &[])]).is_err());
+}
+
+#[test]
+fn malformed_or_trailing_source_qualifiers_do_not_select_unique_names() {
+    for edge in [
+        format!("home 0.5.12 {REGISTRY_SOURCE}"),
+        format!("home 0.5.12 ({REGISTRY_SOURCE}) extra"),
+    ] {
+        let mut sources = source_identity_fixture();
+        sources
+            .locks
+            .get_mut("Cargo.lock")
+            .unwrap()
+            .get_mut("package")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .retain(|package| {
+                package.get("name").and_then(toml::Value::as_str) != Some("home") || package.get("source").is_some()
+            });
+        replace_home_edge(&mut sources, &edge);
+        assert!(
+            resolve(&sources, &[("app/Cargo.toml", &[])]).is_err(),
+            "unconsumed lock edge data selected a package: {edge}"
+        );
+    }
+}
+
+#[test]
+fn source_omission_admits_version_before_unique_local_precedence() {
+    let mut sources = source_identity_fixture();
+    let packages = sources.locks.get_mut("Cargo.lock").unwrap().get_mut("package").unwrap().as_array_mut().unwrap();
+    let selected = locked_package(packages, "home", None, None).unwrap();
+    assert_eq!(selected.get("version").and_then(toml::Value::as_str), Some("0.5.12"));
+    assert!(selected.get("source").is_none());
+    packages.retain(|package| {
+        package.get("name").and_then(toml::Value::as_str) != Some("home") || package.get("source").is_some()
+    });
+    assert_eq!(
+        locked_package(packages, "home", None, None).unwrap().get("source").and_then(toml::Value::as_str),
+        Some(REGISTRY_SOURCE)
+    );
+    let other_source: toml::Value =
+        "name = 'home'\nversion = '0.5.12'\nsource = 'registry+https://other.invalid/index'"
+            .parse()
+            .unwrap();
+    packages.push(other_source);
+    assert!(locked_package(packages, "home", Some("0.5.12"), None).is_err());
+    assert_eq!(
+        locked_package(packages, "home", Some("0.5.12"), Some(REGISTRY_SOURCE))
+            .unwrap()
+            .get("source")
+            .and_then(toml::Value::as_str),
+        Some(REGISTRY_SOURCE)
+    );
+    packages.push("name = 'home'\nversion = '0.5.13'".parse().unwrap());
+    assert!(locked_package(packages, "home", None, None).is_err());
+}
+
+#[test]
+fn one_manifest_cannot_merge_local_and_registry_lock_authorities() {
+    let mut sources = source_identity_fixture();
+    package(
+        &mut sources,
+        "app/Cargo.toml",
+        "app",
+        "1.0.0",
+        "helper = { path = '../vendor/helper' }\nother = { path = '../other' }",
+    );
+    package(&mut sources, "vendor/helper/Cargo.toml", "helper", "1.0.0", "home = { path = '../home' }");
+    package(&mut sources, "other/Cargo.toml", "other", "1.0.0", "home = '0.5.12'");
+    replace_home_edge(&mut sources, "home 0.5.12");
+    let packages = sources.locks.get_mut("Cargo.lock").unwrap().get_mut("package").unwrap().as_array_mut().unwrap();
+    packages.push(
+        format!("name = 'other'\nversion = '1.0.0'\ndependencies = ['home 0.5.12 ({REGISTRY_SOURCE})']")
+            .parse()
+            .unwrap(),
+    );
+    assert!(resolve(&sources, &[("app/Cargo.toml", &[])]).is_err());
+}

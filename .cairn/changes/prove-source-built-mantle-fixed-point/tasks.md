@@ -97,3 +97,16 @@ prior pre-LLVM recipe-capacity boundary and now rejects `ambiguous original
 locked identity home` in successor resolution. Pins, source reservations and
 resource ceilings were unchanged. No prepared profile, provider execution or
 fixed-point proof is accepted; I3–I5 and V1–V3 remain unchecked.
+
+## Source-qualified lock checkpoint (2026-11-06)
+
+Exact source qualifiers and borrowed owner identities now remain bound through
+transitive resolution and feature revisits. Original Cargo decoder inspection,
+offline host metadata, failing-before regressions and 22 passing focused tests
+are retained in [source-qualified lock resolution](evidence/2026-11-06-source-qualified-lock-resolution.md).
+Focused release Clippy and CLI build passed. Unchanged-pin real preparation in
+Pueue 38 passed the `home` ambiguity and now rejects the typed relative operand
+`x86_64-linux-musl/lib/`. Normalized path admission must remain strict while the
+original directory suffix is preserved through its existing typed separator.
+No prepared profile, provider or fixed-point proof is accepted; I3–I5 and
+V1–V3 remain unchecked.

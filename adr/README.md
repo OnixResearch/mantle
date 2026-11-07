@@ -142,3 +142,4 @@ compatibility surface, crate name, or historical decision.
 | [0142](0142-bind-native-cfg-classification-to-sealed-source-profiles.md) | Bind native cfg classification to sealed source profiles | Accepted |
 | [0143](0143-keep-source-identity-data-separate-from-recipe-labels.md) | Keep source identity data separate from recipe labels | Accepted |
 | [0144](0144-keep-native-script-reservations-inside-shared-source-controllers.md) | Keep native script reservations inside shared source controllers | Accepted |
+| [0145](0145-retain-source-qualified-consuming-lock-identities.md) | Retain source-qualified consuming-lock package identities | Accepted |

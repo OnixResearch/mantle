@@ -207,6 +207,102 @@ struct ResolutionContext<'a> {
     lock: Option<&'a toml::Value>,
     patches: Option<&'a toml::Value>,
 }
+
+struct DependencySelection<'a> {
+    key: Key,
+    features: Vec<String>,
+    defaults: bool,
+    optional: bool,
+    owner: Option<&'a toml::Value>,
+}
+
+struct FeatureRequest<'a> {
+    features: BTreeSet<String>,
+    owner: Option<&'a toml::Value>,
+}
+
+fn locked_edge(text: &str) -> Result<(&str, Option<&str>, Option<&str>), RunError> {
+    let mut words = text.splitn(3, ' ');
+    let name = words.next().filter(|name| !name.is_empty()).ok_or_else(|| error("empty original locked edge"))?;
+    let version = words.next();
+    let source = words
+        .next()
+        .map(|word| {
+            let source = word
+                .strip_prefix('(')
+                .and_then(|word| word.strip_suffix(')'))
+                .ok_or_else(|| error("malformed original locked source qualifier"))?;
+            let (kind, url) = source.split_once('+').ok_or_else(|| error("missing original locked source kind"))?;
+            if !matches!(kind, "registry" | "sparse" | "git" | "path") {
+                return Err(error("unsupported original locked source kind"));
+            }
+            url::Url::parse(url).map_err(|_| error("invalid original locked source URL"))?;
+            Ok(source)
+        })
+        .transpose()?;
+    debug_assert!(!name.is_empty());
+    debug_assert!(source.is_none() || version.is_some());
+    Ok((name, version, source))
+}
+
+fn locked_package<'a>(
+    packages: &'a [toml::Value],
+    name: &str,
+    version: Option<&str>,
+    source: Option<&str>,
+) -> Result<&'a toml::Value, RunError> {
+    let ambiguous = || error(format!("ambiguous original locked identity {name}"));
+    let mut candidate = None;
+    let mut multiple = false;
+    let mut local = None;
+    let mut multiple_local = false;
+    let mut observed_version = None;
+    for package in packages {
+        if package.get("name").and_then(toml::Value::as_str) != Some(name) {
+            continue;
+        }
+        let package_version = package
+            .get("version")
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| error("locked package lacks version"))?;
+        if version.is_some_and(|version| version != package_version) {
+            continue;
+        }
+        if version.is_none() {
+            if observed_version.is_some_and(|previous| previous != package_version) {
+                return Err(ambiguous());
+            }
+            observed_version = Some(package_version);
+        }
+        let package_source = package
+            .get("source")
+            .map(|source| source.as_str().ok_or_else(|| error("invalid original locked package source")))
+            .transpose()?;
+        if source.is_some_and(|source| package_source != Some(source)) {
+            continue;
+        }
+        if candidate.replace(package).is_some() {
+            multiple = true;
+        }
+        if package_source.is_none() && local.replace(package).is_some() {
+            multiple_local = true;
+        }
+    }
+    debug_assert!(local.is_none() || candidate.is_some());
+    if source.is_none() {
+        if multiple_local {
+            return Err(ambiguous());
+        }
+        if let Some(local) = local {
+            return Ok(local);
+        }
+    }
+    debug_assert!(!multiple || candidate.is_some());
+    if multiple {
+        return Err(ambiguous());
+    }
+    candidate.ok_or_else(ambiguous)
+}
 impl Sources {
     pub(crate) fn workspace(&self, manifest: &str) -> Option<(&str, &toml::Value)> {
         let mut path = PathBuf::from(directory(manifest));
@@ -313,14 +409,15 @@ impl Sources {
             script,
         })
     }
-    fn resolve_dependency(
+    fn resolve_dependency<'a>(
         &self,
         package: &Package,
-        context: &ResolutionContext<'_>,
+        context: &ResolutionContext<'a>,
+        selected_owner: Option<&'a toml::Value>,
         alias: &str,
         value: &toml::Value,
         host: bool,
-    ) -> Result<(Key, Vec<String>, bool, bool), RunError> {
+    ) -> Result<DependencySelection<'a>, RunError> {
         let mut value = value.clone();
         let mut base = package.directory.clone();
         if value.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
@@ -351,72 +448,69 @@ impl Sources {
             base = workspace_dir.into();
         }
         let name = value.get("package").and_then(toml::Value::as_str).unwrap_or(alias);
-        let path = if let Some(path) = value.get("path").and_then(toml::Value::as_str) {
-            format!("{}/Cargo.toml", normalize(&base, path)?)
+        let (path, owner) = if let Some(path) = value.get("path").and_then(toml::Value::as_str) {
+            (format!("{}/Cargo.toml", normalize(&base, path)?), None)
         } else if let Some(patch) = context.patches.and_then(|patches| patches.get(name)) {
             let path = patch
                 .get("path")
                 .and_then(toml::Value::as_str)
                 .ok_or_else(|| error("nonlocal original dependency patch"))?;
-            format!("{}/Cargo.toml", normalize(context.directory, path)?)
+            (format!("{}/Cargo.toml", normalize(context.directory, path)?), None)
         } else {
             let lock = context.lock.ok_or_else(|| error(format!("no original lockfile for {}", package.name)))?;
             let locked = lock
                 .get("package")
                 .and_then(toml::Value::as_array)
                 .ok_or_else(|| error("missing original lock package table"))?;
-            let owner = locked
-                .iter()
-                .find(|v| {
-                    v.get("name").and_then(toml::Value::as_str) == Some(&package.name)
-                        && v.get("version").and_then(toml::Value::as_str) == Some(&package.version)
-                })
-                .ok_or_else(|| error(format!("original lock lacks {} {}", package.name, package.version)))?;
-            let matches = strings(owner.get("dependencies"))
+            let owner = match selected_owner {
+                Some(owner) => owner,
+                None => locked_package(locked, &package.name, Some(&package.version), None)?,
+            };
+            debug_assert_eq!(owner.get("name").and_then(toml::Value::as_str), Some(package.name.as_str()));
+            debug_assert_eq!(owner.get("version").and_then(toml::Value::as_str), Some(package.version.as_str()));
+            let mut edges = owner
+                .get("dependencies")
+                .and_then(toml::Value::as_array)
                 .into_iter()
-                .filter(|v| v.split_whitespace().next() == Some(name))
-                .collect::<Vec<_>>();
-            if matches.len() != 1 {
-                return Err(error(format!("ambiguous locked edge {} -> {name}: {matches:?}", package.name)));
+                .flatten()
+                .filter_map(toml::Value::as_str)
+                .filter(|edge| edge.split(' ').next() == Some(name));
+            let edge = edges.next().ok_or_else(|| error(format!("missing locked edge {} -> {name}", package.name)))?;
+            if edges.next().is_some() {
+                return Err(error(format!("ambiguous locked edge {} -> {name}", package.name)));
             }
-            let explicit_version = matches[0].split_whitespace().nth(1);
-            let candidates = locked
-                .iter()
-                .filter(|v| {
-                    v.get("name").and_then(toml::Value::as_str) == Some(name)
-                        && explicit_version
-                            .is_none_or(|version| v.get("version").and_then(toml::Value::as_str) == Some(version))
-                })
-                .collect::<Vec<_>>();
-            if candidates.len() != 1 {
-                return Err(error(format!("ambiguous original locked identity {name}")));
-            }
-            let version = candidates[0]
+            let (_, version, source) = locked_edge(edge)?;
+            let selected = locked_package(locked, name, version, source)?;
+            let version = selected
                 .get("version")
                 .and_then(toml::Value::as_str)
                 .ok_or_else(|| error("locked package lacks version"))?;
-            let candidates = self
+            let mut candidates = self
                 .manifests
                 .iter()
-                .filter(|(path, v)| {
+                .filter(|(path, value)| {
                     path.starts_with("vendor/")
-                        && v.get("package").and_then(|v| v.get("name")).and_then(toml::Value::as_str) == Some(name)
-                        && v.get("package").and_then(|v| v.get("version")).and_then(toml::Value::as_str)
+                        && value.get("package").and_then(|package| package.get("name")).and_then(toml::Value::as_str)
+                            == Some(name)
+                        && value.get("package").and_then(|package| package.get("version")).and_then(toml::Value::as_str)
                             == Some(version)
                 })
-                .map(|(path, _)| path.clone())
-                .collect::<Vec<_>>();
-            if candidates.len() != 1 {
+                .map(|(path, _)| path);
+            let path = candidates
+                .next()
+                .ok_or_else(|| error(format!("original vendor identity {name} {version} is not unique")))?;
+            if candidates.next().is_some() {
                 return Err(error(format!("original vendor identity {name} {version} is not unique")));
             }
-            candidates[0].clone()
+            (path.clone(), Some(selected))
         };
-        Ok((
-            Key { manifest: path, host },
-            strings(value.get("features")),
-            value.get("default-features").and_then(toml::Value::as_bool).unwrap_or(true),
-            value.get("optional").and_then(toml::Value::as_bool).unwrap_or(false),
-        ))
+        Ok(DependencySelection {
+            key: Key { manifest: path, host },
+            features: strings(value.get("features")),
+            defaults: value.get("default-features").and_then(toml::Value::as_bool).unwrap_or(true),
+            optional: value.get("optional").and_then(toml::Value::as_bool).unwrap_or(false),
+            owner,
+        })
     }
 }
 
@@ -523,16 +617,29 @@ pub(crate) fn resolve_with_scripts(
     let mut packages = BTreeMap::new();
     let mut pending = VecDeque::new();
     for ((_, features), key) in goals.iter().zip(&roots) {
-        pending.push_back((key.clone(), features.iter().map(|v| (*v).to_string()).collect::<Vec<_>>(), true));
+        pending.push_back((key.clone(), features.iter().map(|v| (*v).to_string()).collect::<Vec<_>>(), true, None));
     }
-    let mut feature_requests: BTreeMap<Key, BTreeSet<String>> = BTreeMap::new();
-    while let Some((key, features, defaults)) = pending.pop_front() {
+    let mut feature_requests: BTreeMap<Key, FeatureRequest<'_>> = BTreeMap::new();
+    while let Some((key, features, defaults, owner)) = pending.pop_front() {
         if packages.len() > 4096 {
             return Err(error("source package graph exceeds bound"));
         }
-        let mut package = packages.remove(&key).unwrap_or(sources.package(&key)?);
-        let before = feature_requests.get(&key).cloned();
-        let requested = feature_requests.entry(key.clone()).or_default();
+        let mut package = match packages.remove(&key) {
+            Some(package) => package,
+            None => sources.package(&key)?,
+        };
+        let before = feature_requests.get(&key).map(|request| request.features.clone());
+        let request = feature_requests.entry(key.clone()).or_insert_with(|| FeatureRequest {
+            features: BTreeSet::new(),
+            owner,
+        });
+        if request.owner.map(std::ptr::from_ref) != owner.map(std::ptr::from_ref) {
+            return Err(error(format!(
+                "original manifest selected with different locked identities: {}",
+                key.manifest
+            )));
+        }
+        let requested = &mut request.features;
         requested.extend(features);
         if defaults && table(&package.manifest, "features").is_some_and(|features| features.contains_key("default")) {
             requested.insert("default".into());
@@ -607,9 +714,16 @@ pub(crate) fn resolve_with_scripts(
             if value.get("optional").and_then(toml::Value::as_bool) == Some(true) && !optional.contains(&alias) {
                 continue;
             }
-            let (mut dependency, mut features, defaults, is_optional) = sources.resolve_dependency(
+            let DependencySelection {
+                key: mut dependency,
+                mut features,
+                defaults,
+                optional: is_optional,
+                owner,
+            } = sources.resolve_dependency(
                 &package,
                 context.as_ref().expect("pending packages have consuming roots"),
+                owner,
                 &alias,
                 &value,
                 key.host || kind == "build-dependencies",
@@ -639,7 +753,7 @@ pub(crate) fn resolve_with_scripts(
             } else {
                 package.build_dependencies.push(edge);
             }
-            pending.push_back((dependency, features, defaults));
+            pending.push_back((dependency, features, defaults, owner));
         }
         packages.insert(key, package);
     }
