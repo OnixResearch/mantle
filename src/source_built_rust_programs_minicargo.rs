@@ -1023,7 +1023,7 @@ fn graph(
                 let script_tree = c.script_world(&format!("{id}.script-world"), stdlib, Some(dep_env))?;
                 let mut inputs = package_inputs.clone();
                 inputs.extend(c.runtime.clone());
-                for name in ["llvm-config", "llvm-native-controller", "llvm-native-helper"] {
+                for name in ["llvm-config", "llvm-native-controller"] {
                     inputs.insert(
                         name.into(),
                         c.llvm.get(name).ok_or_else(|| error(format!("missing exact LLVM export {name}")))?.clone(),
@@ -1208,7 +1208,7 @@ fn mrustc_proc_manifest(request: &AuthoringRequest<'_>) -> Result<(toml::Value, 
 }
 /// `source_tree` is the cold patched full-top Rust tree. `mrustc_source` is the
 /// cold patched full-top mrustc tree, preserving original overrides/proc_macro.
-/// LLVM exports: llvm-config, llvm-native-controller and llvm-native-helper
+/// LLVM exports: llvm-config and llvm-native-controller
 /// executables; llvm-root is the installed bin/include/lib prefix.
 /// The authenticated policy reserves resources, not claimed command counts or
 /// expansion bounds. Exact overrides use `{translation_id}.macro` and
@@ -1235,12 +1235,7 @@ pub(crate) fn author(
     ] {
         require(r)?;
     }
-    for name in [
-        "llvm-config",
-        "llvm-root",
-        "llvm-native-controller",
-        "llvm-native-helper",
-    ] {
+    for name in ["llvm-config", "llvm-root", "llvm-native-controller"] {
         require(llvm_exports.get(name).ok_or_else(|| error(format!("missing exact LLVM export {name}")))?)?;
     }
     let native_runtime = runtime_members.get("tree").ok_or_else(|| error("missing source runtime tree"))?.clone();

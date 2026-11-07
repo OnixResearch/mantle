@@ -3,53 +3,77 @@
 pub(super) const SOURCE: &str = r###"
 fn status(path:&Path)->io::Result<i32>{let s=std::fs::read_to_string(path)?;let code=s.strip_suffix('\n').ok_or_else(||io::Error::other("unterminated producer status"))?.parse::<i32>().map_err(io::Error::other)?;if !(0..=255).contains(&code)||s!=format!("{code}\n"){return Err(io::Error::other("noncanonical producer status"));}Ok(code)}
 fn envelope_output<'a>(envelope:&'a Path,name:&str)->PathBuf{envelope.join("outputs").join(name)}
-fn classify(args:&[String])->io::Result<i32>{
-    // Input is an authenticated ObservePhase envelope, not script assertions.
-    let envelope=Path::new(&args[1]);let result=Path::new(&args[2]);
-    std::fs::create_dir_all(result)?;
-    let logical_out=std::fs::read_to_string(&args[4])?;let relative_out=logical_out.strip_prefix("/tmp/").ok_or_else(||io::Error::other("original output root is outside temporary workspace"))?;safe(relative_out)?;
-    let state=envelope.join("state");
-    let code_path=envelope_output(envelope,"exit-status");
-    if !code_path.try_exists()?{
-        // A skipped resume preserves its previously completed state. The
-        // selector's completion marker was made only after an actual exit 0.
-        let prior=Path::new(&args[3]);if !prior.join("out-dir").join(relative_out).join(".mantle-successor-completed").is_file(){return Err(io::Error::other("skipped unfinished original script"));}
-        copy(prior,result,&mut 0)?;return Ok(0);
-    }
-    copy(&state,&result.join("out-dir"),&mut 0)?;
-    std::fs::write(result.join("logical-out"),&logical_out)?;
-    match status(&code_path)?{
-        0=>{
-            std::fs::write(result.join("out-dir").join(relative_out).join(".mantle-successor-completed"),b"actual-script-exit-zero\n")?;
-            copy(&envelope_output(envelope,"stdout"),&result.join("stdout"),&mut 0)?;
-            Ok(0)
-        },
-        75=>{
-            let path=state.join(relative_out).join(".mantle-successor-request");
-            copy(&path,&result.join("request"),&mut 0)?;
-            // The shared controller resolves the authentic image/PATH and
-            // validates every descriptor. No package-specific command family
-            // or source-invented GCC flag inventory chooses execution here.
-            Ok(1)
-        },
-        code=>Err(io::Error::other(format!("original script failed with actual exit {code}"))),
-    }
-}
 fn quote_response(words:&[String])->String{let mut out=String::new();for word in words{out.push('"');for c in word.chars(){if c=='"'||c=='\\'{out.push('\\');}out.push(c);}out.push_str("\"\n");}out}
-fn merge_reply(args:&[String])->io::Result<i32> {
-    let state=Path::new(&args[1]);let prior=Path::new(&args[2]);let out=Path::new(&args[3]);let ordinal=&args[4];copy(prior,out,&mut 0)?;
-    let logical=std::fs::read_to_string(state.join("logical-out"))?;let relative=logical.strip_prefix("/tmp/").ok_or_else(||io::Error::other("invalid original output root"))?;safe(relative)?;let root=Path::new(&args[6]);let status_path=envelope_output(root,"exit-status");
-    if state.join("out-dir").join(relative).join(".mantle-successor-completed").is_file(){if status_path.try_exists()?{return Err(io::Error::other("native command executed after original script completion"));}return Ok(0);}
-    if args[5]!="shared-result"{return Err(io::Error::other("original request lacks shared source result"));}let actual=status(&status_path)?;let shared=envelope_output(root,"native-request");if status(&shared.join("exit-status"))?!=actual{return Err(io::Error::other("shared source result disagrees with actual protected exit"));}
-    let reply=out.join(ordinal);std::fs::create_dir_all(&reply)?;copy(&state.join("request"),&reply.join("request"),&mut 0)?;copy(&envelope_output(root,"native-files"),&reply.join("workspace"),&mut 0)?;copy(&shared.join("positions"),&reply.join("positions"),&mut 0)?;copy(&shared.join("workspace-times"),&reply.join("workspace-times"),&mut 0)?;
-    for index in 0..64{let name=format!("descriptor-{index}");let path=shared.join(&name);if path.try_exists()?{copy(&path,&reply.join(name),&mut 0)?;}}
-    copy(&envelope_output(root,"stdout"),&reply.join("stdout"),&mut 0)?;copy(&envelope_output(root,"stderr"),&reply.join("stderr"),&mut 0)?;std::fs::write(reply.join("status"),format!("{actual}\n"))?;Ok(1)
+fn script_frame(args:&[String])->io::Result<()> {
+    let root=Path::new(&args[1]);std::fs::create_dir_all(root)?;
+    copy(Path::new(&args[2]),&root.join("script"),&mut 0)?;
+    let mut frame=std::fs::File::create(root.join("environment"))?;
+    let mut seen=std::collections::BTreeSet::new();let mut cwd=None;
+    for pair in args[3..].chunks_exact(2) {
+        let key=&pair[0];let value=&pair[1];
+        if key.is_empty()||key.contains(['=','\0'])||value.contains('\0')||key.len()>64*1024*1024||value.len()>64*1024*1024||!seen.insert(key){return Err(io::Error::other("invalid script environment pair"));}
+        if key=="CARGO_MANIFEST_DIR" {if !Path::new(value).is_absolute(){return Err(io::Error::other("script cwd is not absolute"));}cwd=Some(value);}
+        for value in [key,value] {write!(frame,"{}:",value.len())?;frame.write_all(value.as_bytes())?;frame.write_all(b",")?;}
+    }
+    let cwd=cwd.ok_or_else(||io::Error::other("script environment lacks Cargo manifest directory"))?;
+    std::fs::write(root.join("cwd"),cwd)
 }
-fn finish_script(args:&[String])->io::Result<()> {
-    let state=Path::new(&args[1]);let logical_out=std::fs::read_to_string(state.join("logical-out"))?;let relative_out=logical_out.strip_prefix("/tmp/").ok_or_else(||io::Error::other("invalid completed logical output"))?;safe(relative_out)?;let directory=state.join("out-dir").join(relative_out);if !directory.join(".mantle-successor-completed").is_file(){return Err(io::Error::other("original script exhausted source-authored resource reservation"));}
-    copy(&directory,Path::new(&args[2]),&mut 0)?;
-    copy(&state.join("out-dir"),Path::new(&args[3]),&mut 0)?;
-    for root in [PathBuf::from(&args[2]),Path::new(&args[3]).join(relative_out)]{for name in [".mantle-successor-completed",".mantle-successor-request",".mantle-cc-random"]{let path=root.join(name);match std::fs::symlink_metadata(&path){Ok(metadata)=>{if metadata.is_dir(){std::fs::remove_dir_all(path)?;}else{std::fs::remove_file(path)?;}},Err(error)if error.kind()==io::ErrorKind::NotFound=>(),Err(error)=>return Err(error)}}}
-    let bytes=std::fs::read(state.join("stdout"))?;io::stdout().write_all(&bytes)
+fn finish_compact_script(args:&[String])->io::Result<()> {
+    let checkpoint=Path::new(&args[1]);
+    if std::fs::read(checkpoint.join("state"))?!=b"done\n"||status(&checkpoint.join("exit-status"))?!=0{return Err(io::Error::other("original script did not complete successfully"));}
+    let logical_out=std::fs::read_to_string(&args[2])?;
+    let relative=logical_out.strip_prefix("/tmp/").ok_or_else(||io::Error::other("invalid completed logical output"))?;safe(relative)?;
+    let tmp=checkpoint.join("workspace/tmp");copy(&tmp.join(relative),Path::new(&args[3]),&mut 0)?;
+    copy(&tmp,Path::new(&args[4]),&mut 0)?;
+    for root in [PathBuf::from(&args[3]),Path::new(&args[4]).join(relative)] {
+        for name in [".mantle-successor-request",".mantle-cc-random"] {
+            let path=root.join(name);match std::fs::symlink_metadata(&path) {
+                Ok(meta)=>if meta.is_dir(){std::fs::remove_dir_all(path)?;}else{std::fs::remove_file(path)?;},
+                Err(error)if error.kind()==io::ErrorKind::NotFound=>(),Err(error)=>return Err(error),
+            }
+        }
+    }
+    io::copy(&mut std::fs::File::open(checkpoint.join("stdout"))?,&mut io::stdout())?;Ok(())
+}
+#[cfg(test)]
+mod native_helper_protocol_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64,Ordering};
+    static NEXT:AtomicU64=AtomicU64::new(0);
+    struct Root(PathBuf);
+    impl Drop for Root {fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
+    fn root()->Root {let path=std::env::temp_dir().join(format!("mantle-native-helper-{}-{}",std::process::id(),NEXT.fetch_add(1,Ordering::Relaxed)));std::fs::create_dir(&path).unwrap();Root(path)}
+    #[test]
+    fn environment_frame_requires_unique_pairs_and_manifest_cwd() {
+        let root=root();let target=root.0.join("frame");let script=root.0.join("script");std::fs::write(&script,b"fixture image").unwrap();
+        let mut args=vec!["--script-frame".into(),target.to_str().unwrap().into(),script.to_str().unwrap().into(),"CARGO_MANIFEST_DIR".into(),"/inputs/package/crate".into(),"FLAGS".into(),"a b\n/c".into()];
+        script_frame(&args).unwrap();
+        assert_eq!(std::fs::read(target.join("cwd")).unwrap(),b"/inputs/package/crate");
+        assert_eq!(std::fs::read(target.join("environment")).unwrap(),b"18:CARGO_MANIFEST_DIR,21:/inputs/package/crate,5:FLAGS,6:a b\n/c,");
+        args.extend(["FLAGS".into(),"changed".into()]);assert!(script_frame(&args).is_err());
+        args.truncate(3);assert!(script_frame(&args).is_err());
+    }
+    #[test]
+    fn completion_carries_all_tmp_without_publishing_protocol_state() {
+        let root=root();let checkpoint=root.0.join("checkpoint");let tmp=checkpoint.join("workspace/tmp");
+        let out=tmp.join("mantle-rust/unit/out");std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("generated.rs"),b"actual generated source").unwrap();
+        std::fs::write(out.join(".mantle-successor-request"),b"request").unwrap();
+        std::fs::create_dir(out.join(".mantle-cc-random")).unwrap();
+        std::fs::write(tmp.join("transitive-state"),[0,255,1]).unwrap();
+        std::fs::create_dir(checkpoint.join("workspace/.mantle-rust-controller")).unwrap();
+        std::fs::write(checkpoint.join("state"),b"done\n").unwrap();std::fs::write(checkpoint.join("exit-status"),b"0\n").unwrap();
+        std::fs::write(checkpoint.join("stdout"),b"").unwrap();let logical=root.0.join("logical");std::fs::write(&logical,"/tmp/mantle-rust/unit/out").unwrap();
+        let destination=root.0.join("out");let generated=root.0.join("generated");
+        let args=vec!["--finish-compact-script".into(),checkpoint.to_str().unwrap().into(),logical.to_str().unwrap().into(),destination.to_str().unwrap().into(),generated.to_str().unwrap().into()];
+        finish_compact_script(&args).unwrap();
+        assert_eq!(std::fs::read(destination.join("generated.rs")).unwrap(),b"actual generated source");
+        assert_eq!(std::fs::read(generated.join("transitive-state")).unwrap(),[0,255,1]);
+        for path in [destination.join(".mantle-successor-request"),generated.join("mantle-rust/unit/out/.mantle-cc-random"),generated.join(".mantle-rust-controller")] {assert!(!path.exists());}
+        for (state,status) in [("active\n","0\n"),("done\n","75\n"),("done\n","1\n")] {
+            std::fs::write(checkpoint.join("state"),state).unwrap();std::fs::write(checkpoint.join("exit-status"),status).unwrap();
+            assert!(finish_compact_script(&args).is_err());
+        }
+    }
 }
 "###;

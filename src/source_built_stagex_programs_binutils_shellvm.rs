@@ -23,6 +23,9 @@ pub(crate) fn source() -> Result<String, RunError> {
 pub(crate) fn library_source() -> Result<String, RunError> {
     let mut source =
         format!("{}\n{}", include_str!("source_built_stagex_programs_controller_paths.c"), super::ldscripts::ENGINE);
+    // Status 1 is reserved for genuine controller completion, not a fatal
+    // parser/evaluator error inherited from the standalone ld generator.
+    replace_section(&mut source, "static void die(", "static void *alloc(", CONTROLLER_FAILURE)?;
     replace_section(&mut source, "typedef struct Var Var;", "/* POSIX BRE sed subset", SHELL)?;
     replace_section(&mut source, "static int builtin(Env *e,Args *a)", "/* Read the configured Makefile", EVALUATOR)?;
     replace_section(&mut source, "static Node *source_program(", "static void transfer(", SOURCE_PROGRAM)?;
@@ -49,6 +52,9 @@ pub(crate) fn library_source() -> Result<String, RunError> {
     );
     Ok(source)
 }
+
+const CONTROLLER_FAILURE: &str = r#"static void die(const char *fmt, ...) { va_list a; va_start(a,fmt); vfprintf(stderr,fmt,a); va_end(a); fputc('\n',stderr); exit(2); }
+"#;
 
 fn replace_section(source: &mut String, start: &str, end: &str, replacement: &str) -> Result<(), RunError> {
     let begin = source.find(start).ok_or_else(|| error(format!("binutils shell engine missing {start}")))?;

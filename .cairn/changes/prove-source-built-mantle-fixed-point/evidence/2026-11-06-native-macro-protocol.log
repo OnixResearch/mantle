@@ -1,0 +1,12 @@
+
+running 7 tests
+test macro_protocol_tests::exact_images_reject_drift_and_escaping_basenames ... ok
+test macro_protocol_tests::workspace_times_use_sorted_child_first_executor_order ... ok
+test macro_protocol_tests::malformed_history_and_workspace_time_frames_fail_closed ... ok
+test macro_protocol_tests::observed_envelopes_reject_forged_skips_and_unlisted_outputs ... ok
+test macro_protocol_tests::prepare_refreshes_translation_preserves_tmp_times_and_skips_macro ... ok
+test macro_protocol_tests::failed_missing_double_and_wrong_commands_never_complete ... ok
+test macro_protocol_tests::compiler_actual_zero_finishes_with_binary_tmp_and_observed_times ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.66s
+

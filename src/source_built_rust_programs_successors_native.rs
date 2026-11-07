@@ -17,16 +17,11 @@ use crate::source_built_program_authoring::AuthoringRequest;
 use crate::source_built_recipe::ArtifactKind;
 use crate::source_built_recipe::ArtifactRef;
 use crate::source_built_recipe::RecipeExitPolicy;
-use crate::source_built_recipe::RecipeGuard;
-use crate::source_built_recipe::RecipeGuardCondition;
-use crate::source_built_recipe::RecipeInvocation;
 use crate::source_built_recipe::RecipeOperation;
 use crate::source_built_recipe::RecipeOutput;
-use crate::source_built_recipe::RecipePhaseState;
 use crate::source_built_recipe::RecipePreparation;
 use crate::source_built_recipe::RecipeStep;
 use crate::source_built_recipe::RecipeWord;
-use crate::source_built_recipe::RecipeWorkspaceMount;
 use crate::source_built_recipe::SourceRecipe;
 use crate::source_built_recipe::WordPart;
 
@@ -42,53 +37,14 @@ pub(crate) fn out_directory(id: &str) -> String {
 }
 /// Source-authored reservations bound suspended requests, never predict exits.
 pub(crate) fn reservation_slots_max(remaining_steps: usize) -> Result<u32, RunError> {
-    let slots = remaining_steps
-        .checked_sub(9)
-        .ok_or_else(|| error("no remaining source continuation layout capacity"))?
-        / 11;
-    u32::try_from(slots).map_err(|_| error("native continuation capacity exceeds u32"))
-}
-fn guarded(status: &str, codes: Vec<i32>) -> RecipeGuard {
-    RecipeGuard {
-        conditions: vec![RecipeGuardCondition {
-            status_input: status.into(),
-            accepted_codes: codes,
-        }],
+    if remaining_steps < DECLARATION_STEPS_MAX {
+        return Err(error("compact native script needs eleven fixed declarations"));
     }
+    let commands = crate::source_built_recipe::controller::CONTROLLER_COMMANDS_MAX;
+    debug_assert!(commands > 1);
+    Ok((commands - 1) / 2)
 }
-fn exec(
-    id: &str,
-    executable: ArtifactRef,
-    mut inputs: BTreeMap<String, ArtifactRef>,
-    arguments: Vec<RecipeWord>,
-    environment: BTreeMap<String, RecipeWord>,
-    declared: BTreeMap<String, RecipeOutput>,
-    guard: Option<RecipeGuard>,
-    exit_policy: RecipeExitPolicy,
-    runtime: BTreeMap<String, String>,
-) -> RecipeStep {
-    inputs.insert("executable".into(), executable);
-    RecipeStep {
-        id: id.into(),
-        inputs,
-        outputs: declared,
-        operation: RecipeOperation::Exec {
-            executable_input: "executable".into(),
-            arguments,
-            environment,
-            runtime_mounts: runtime,
-            cwd_input: None,
-            cwd_output: None,
-            stdin_input: None,
-            output_seeds: BTreeMap::new(),
-            command_state: None,
-            guard,
-            exit_policy,
-            merge_stderr: false,
-            invocation_input: None,
-        },
-    }
-}
+const DECLARATION_STEPS_MAX: usize = 11;
 fn helper_exec(
     id: &str,
     helper: ArtifactRef,
@@ -99,39 +55,32 @@ fn helper_exec(
     exit_policy: RecipeExitPolicy,
 ) -> RecipeStep {
     inputs.insert("rust-runtime".into(), runtime_tree);
-    exec(
-        id,
-        helper,
-        inputs,
-        arguments,
-        BTreeMap::from([("LD_LIBRARY_PATH".into(), RecipeWord {
-            parts: vec![WordPart::Runtime {
-                mount: "/mantle-rust-runtime".into(),
-                path: String::new(),
-            }],
-        })]),
-        declared,
-        None,
-        exit_policy,
-        BTreeMap::from([("/mantle-rust-runtime".into(), "rust-runtime".into())]),
-    )
-}
-fn observe(steps: &mut Vec<RecipeStep>, id: &str, phase: &str, state: ArtifactRef) -> ArtifactRef {
-    steps.push(RecipeStep {
+    inputs.insert("executable".into(), helper);
+    RecipeStep {
         id: id.into(),
-        inputs: BTreeMap::from([("previous-state".into(), state)]),
-        outputs: BTreeMap::from([("observation".into(), super::spec(ArtifactKind::Tree))]),
-        operation: RecipeOperation::ObservePhase {
-            phase: phase.into(),
-            output: "observation".into(),
-            state: Some(RecipePhaseState {
-                output: "out-dir".into(),
-                skipped_input: "previous-state".into(),
-                skipped_path: String::new(),
-            }),
+        inputs,
+        outputs: declared,
+        operation: RecipeOperation::Exec {
+            executable_input: "executable".into(),
+            arguments,
+            environment: BTreeMap::from([("LD_LIBRARY_PATH".into(), RecipeWord {
+                parts: vec![WordPart::Runtime {
+                    mount: "/mantle-rust-runtime".into(),
+                    path: String::new(),
+                }],
+            })]),
+            runtime_mounts: BTreeMap::from([("/mantle-rust-runtime".into(), "rust-runtime".into())]),
+            cwd_input: None,
+            cwd_output: None,
+            stdin_input: None,
+            output_seeds: BTreeMap::new(),
+            command_state: None,
+            guard: None,
+            exit_policy,
+            merge_stderr: false,
+            invocation_input: None,
         },
-    });
-    product(id, "observation")
+    }
 }
 /// Install complete source-built host runtime roots before source PATH lookup.
 pub(crate) fn extend_world(
@@ -210,12 +159,6 @@ pub(crate) fn schedule(
     let controller = inputs
         .remove("llvm-native-controller")
         .ok_or_else(|| error("native source controller lacks its exact LLVM-produced image"))?;
-    let controller_helper = inputs
-        .remove("llvm-native-helper")
-        .ok_or_else(|| error("native source controller lacks its exact LLVM-produced I/O helper"))?;
-    let world = super::super::llvm::native_command_world(request)?;
-    let mut runtime = world.runtime_mounts.clone();
-    runtime.insert("/mantle-rust-runtime".into(), "rust-runtime".into());
     let runtime_tree = inputs
         .get("rust-runtime")
         .or_else(|| inputs.get("native-runtime"))
@@ -225,237 +168,69 @@ pub(crate) fn schedule(
     let llvm_config = inputs.remove("llvm-config");
     inputs.insert("rust-runtime".into(), runtime_tree.clone());
     inputs.insert("package".into(), package);
-    inputs.extend(world.inputs.clone());
+    inputs.insert("script".into(), executable.clone());
+    let world = super::super::llvm::native_command_world(request)?;
+    inputs.extend(world.inputs);
+    let mut runtime = world.runtime_mounts;
+    runtime.insert("/mantle-rust-runtime".into(), "rust-runtime".into());
     let logical_out = out_directory(id);
-    let relative_out = logical_out.strip_prefix("/tmp/").expect("fixed logical output root");
-    environment.insert("OUT_DIR".into(), RecipeWord {
-        parts: vec![WordPart::Workspace {
-            mount: "/tmp".into(),
-            path: relative_out.into(),
-        }],
-    });
-    environment.insert("MANTLE_CC_REQUEST".into(), RecipeWord {
-        parts: vec![WordPart::Workspace {
-            mount: "/tmp".into(),
-            path: format!("{relative_out}/.mantle-successor-request"),
-        }],
-    });
     let policy_root = request
         .source_roots
         .get(&crate::source_built_fixed_point::SourceAuthorityRole::MantleSource)
         .ok_or_else(|| error("native continuation policy source is absent"))?;
     let policy = crate::source_built_program_authoring::read_continuation_policy(policy_root)?;
-    let commands_max = crate::source_built_recipe::controller::reserve_native_commands(
+    let per_request = crate::source_built_recipe::controller::reserve_native_commands(
         &policy,
         &format!("{id}.native"),
-        u32::try_from(slots).map_err(|_| error("native source reservation hint exceeds u32"))?,
+        u32::try_from(slots).map_err(|_| error("native reservation exceeds u32"))?,
         crate::source_built_recipe::STEP_COUNT_MAX,
     )?;
-    let mut recipe=SourceRecipe{schema:crate::source_built_recipe::SCHEMA.into(),stage_id:STAGE.into(),preparation:RecipePreparation{tool:"original-rust-standard-process".into(),provenance:"Original std Command output buffers use declared measured capture-file ports; inherited descriptors retain genuine file/null/OFD state. Native descendants use original source controller algorithms.".into()},steps:Vec::new(),timeout_groups:Vec::new(),roots:Vec::new(),exports:BTreeMap::new(),semantic_roots:BTreeMap::new()};
-    let initial = format!("{id}.empty");
-    recipe.steps.push(helper_exec(
-        &initial,
+    let commands_max = command_budget(slots, per_request)?;
+    let mut recipe = SourceRecipe {
+        schema: crate::source_built_recipe::SCHEMA.into(), stage_id: STAGE.into(),
+        preparation: RecipePreparation { tool: "original-rust-standard-process".into(),
+            provenance: "Shared source controller with original std Command requests, exact Produced native images, descriptor observations and bounded replay.".into() },
+        steps: Vec::new(), timeout_groups: Vec::new(), roots: Vec::new(), exports: BTreeMap::new(), semantic_roots: BTreeMap::new(),
+    };
+    let initial = initial_workspace(&mut recipe, id, helper.clone(), runtime_tree.clone(), &logical_out, generated)?;
+    let (frame, logical) = script_frame(
+        &mut recipe,
+        id,
         helper.clone(),
         runtime_tree.clone(),
-        BTreeMap::new(),
-        vec![lit("--empty"), output("tree")],
-        outputs("tree", ArtifactKind::Tree),
-        RecipeExitPolicy::Exact { code: 0 },
-    ));
-    let logical_id = format!("{id}.logical-out");
-    recipe.steps.push(RecipeStep {
-        id: logical_id.clone(),
-        inputs: BTreeMap::new(),
-        outputs: BTreeMap::from([("root".into(), super::spec(ArtifactKind::Text))]),
-        operation: RecipeOperation::WriteText {
-            output: "root".into(),
-            text: logical_out.clone(),
-        },
-    });
-    inputs.insert("logical-out".into(), product(&logical_id, "root"));
-    let seed = format!("{id}.initial-tmp");
-    let mut seed_inputs = BTreeMap::from([("own".into(), product(&initial, "tree"))]);
-    let mut entries = BTreeMap::from([(relative_out.to_string(), "own".into())]);
-    for (index, (root, tree)) in generated.iter().enumerate() {
-        require(tree)?;
-        let path = root
-            .strip_prefix("/tmp/")
-            .ok_or_else(|| error("captured source output is outside original tmp workspace"))?;
-        crate::source_built_recipe::relative(path, false)?;
-        let alias = format!("root-{index}");
-        seed_inputs.insert(alias.clone(), tree.clone());
-        entries.insert(path.into(), alias);
+        &mut inputs,
+        &mut environment,
+        &logical_out,
+        slots,
+        per_request,
+    )?;
+    inputs.insert("script-frame".into(), frame.clone());
+    let readonly = inputs.keys().cloned().collect();
+    let mut inventory = world.inventory;
+    inventory.extend([("script".into(), executable), ("rustc".into(), compiler)]);
+    if let Some(config) = llvm_config {
+        inventory.push(("llvm-config".into(), config));
     }
-    recipe.steps.push(RecipeStep {
-        id: seed.clone(),
-        inputs: seed_inputs,
-        outputs: BTreeMap::from([("tree".into(), super::spec(ArtifactKind::Tree))]),
-        operation: RecipeOperation::AssembleTree {
-            output: "tree".into(),
-            entries,
+    let result = super::super::llvm::append_native_source_script(
+        request,
+        &mut recipe,
+        controller,
+        super::super::llvm::NativeSourceScript {
+            id: id.into(),
+            script: ":".into(),
+            initial_workspace: initial,
+            initial_cwd: String::new(),
+            initial_cwd_input: Some((frame.clone(), "cwd".into())),
+            original_zero: "/inputs/script-frame/script".into(),
+            environment: BTreeMap::new(),
+            environment_input: Some((frame, "environment".into())),
+            inputs,
+            readonly_inputs: readonly,
+            runtime_mounts: runtime,
+            inventory,
+            commands_max,
         },
-    });
-    inputs.insert("initial-tmp".into(), product(&seed, "tree"));
-    let mut state = product(&initial, "tree");
-    let mut replies = state.clone();
-    let mut previous = state.clone();
-    let mut pending: Option<ArtifactRef> = None;
-    for slot in 0..=slots {
-        if recipe.steps.len() > crate::source_built_recipe::STEP_COUNT_MAX {
-            return Err(error("original generator continuation exceeds recipe action ceiling"));
-        }
-        let prefix = format!("{id}.slot-{slot:04}");
-        let run = format!("{prefix}.script");
-        let mut run_inputs = inputs.clone();
-        run_inputs.insert("cc-replies".into(), replies.clone());
-        run_inputs.insert("cc-state".into(), previous.clone());
-        let mut env = environment.clone();
-        env.insert("MANTLE_CC_REPLIES".into(), input("cc-replies", ""));
-        env.insert("MANTLE_CC_PHASE_STATE".into(), input("cc-state", relative_out));
-        let guard = if let Some(status) = &pending {
-            run_inputs.insert("pending".into(), status.clone());
-            guarded("pending", vec![1])
-        } else {
-            run_inputs.insert("initial-status".into(), product(&initial, "exit-status"));
-            guarded("initial-status", vec![0])
-        };
-        let invocation = RecipeInvocation {
-            arguments: Vec::new(),
-            environment: env,
-            cwd: environment.get("CARGO_MANIFEST_DIR").cloned(),
-            argv0: None,
-            executable_path: None,
-            workspace_mounts: BTreeMap::from([("/tmp".into(), RecipeWorkspaceMount {
-                output: "out-dir".into(),
-                path: String::new(),
-            })]),
-            readonly_input_roots: vec!["package".into()],
-            process_attributes: None,
-            descriptors: None,
-        };
-        let text = serde_json::to_string(&invocation)
-            .map_err(|reason| error(format!("original script invocation: {reason}")))?;
-        let frame = format!("{run}.invocation");
-        recipe.steps.push(RecipeStep {
-            id: frame.clone(),
-            inputs: BTreeMap::new(),
-            outputs: BTreeMap::from([("invocation".into(), super::spec(ArtifactKind::Text))]),
-            operation: RecipeOperation::WriteText {
-                output: "invocation".into(),
-                text,
-            },
-        });
-        run_inputs.insert("invocation".into(), product(&frame, "invocation"));
-        let mut step = exec(
-            &run,
-            executable.clone(),
-            run_inputs,
-            Vec::new(),
-            BTreeMap::new(),
-            outputs("out-dir", ArtifactKind::Tree),
-            Some(guard),
-            RecipeExitPolicy::OneOf { codes: vec![0, 75] },
-            runtime.clone(),
-        );
-        if let RecipeOperation::Exec {
-            invocation_input,
-            output_seeds,
-            ..
-        } = &mut step.operation
-        {
-            *invocation_input = Some("invocation".into());
-            output_seeds.insert("out-dir".into(), "initial-tmp".into());
-        }
-        recipe.steps.push(step);
-        let observed = observe(&mut recipe.steps, &format!("{prefix}.script-observe"), &run, previous.clone());
-        let classify = format!("{prefix}.classify");
-        recipe.steps.push(helper_exec(
-            &classify,
-            helper.clone(),
-            runtime_tree.clone(),
-            BTreeMap::from([
-                ("script-phase".into(), observed),
-                ("previous".into(), state.clone()),
-                ("logical-out".into(), product(&logical_id, "root")),
-            ]),
-            vec![
-                lit("--classify"),
-                input("script-phase", ""),
-                output("state"),
-                input("previous", ""),
-                input("logical-out", ""),
-            ],
-            outputs("state", ArtifactKind::Tree),
-            RecipeExitPolicy::OneOf { codes: vec![0, 1] },
-        ));
-        state = product(&classify, "state");
-        let selected = format!("{prefix}.out-dir");
-        recipe.steps.push(helper_exec(
-            &selected,
-            helper.clone(),
-            runtime_tree.clone(),
-            BTreeMap::from([("state".into(), state.clone())]),
-            vec![lit("--select"), input("state", "out-dir"), output("selected")],
-            outputs("selected", ArtifactKind::Tree),
-            RecipeExitPolicy::Exact { code: 0 },
-        ));
-        previous = product(&selected, "selected");
-        if slot == slots {
-            break;
-        }
-        let mut command_inputs = world.inputs.clone();
-        for name in ["package", "rust-runtime"] {
-            command_inputs.insert(name.into(), inputs[name].clone());
-        }
-        let readonly_inputs = command_inputs.keys().cloned().collect::<BTreeSet<_>>();
-        let mut inventory = world.inventory.clone();
-        inventory.push(("rustc".into(), compiler.clone()));
-        if let Some(config) = &llvm_config {
-            inventory.push(("llvm-config".into(), config.clone()));
-        }
-        let outcome = super::super::llvm::append_native_command(
-            request,
-            &mut recipe,
-            controller.clone(),
-            controller_helper.clone(),
-            super::super::llvm::NativeCommandSpec {
-                id: format!("{prefix}.native"),
-                captured_request: state.clone(),
-                captured_request_path: "request".into(),
-                whole_tmp: previous.clone(),
-                inputs: command_inputs,
-                readonly_inputs,
-                runtime_mounts: runtime.clone(),
-                inventory,
-                predicates: vec![(product(&classify, "exit-status"), vec![1])],
-                commands_max,
-            },
-        )?;
-        let merge = format!("{prefix}.reply");
-        recipe.steps.push(helper_exec(
-            &merge,
-            helper.clone(),
-            runtime_tree.clone(),
-            BTreeMap::from([
-                ("state".into(), state.clone()),
-                ("prior-replies".into(), replies),
-                ("outcome".into(), outcome),
-            ]),
-            vec![
-                lit("--merge-reply"),
-                input("state", ""),
-                input("prior-replies", ""),
-                output("replies"),
-                lit(slot.to_string()),
-                lit("shared-result"),
-                input("outcome", ""),
-            ],
-            outputs("replies", ArtifactKind::Tree),
-            RecipeExitPolicy::OneOf { codes: vec![0, 1] },
-        ));
-        replies = product(&merge, "replies");
-        pending = Some(product(&merge, "exit-status"));
-    }
+    )?;
     let finish = format!("{id}.complete");
     let mut declared = outputs("out-dir", ArtifactKind::Tree);
     declared.insert("generated-tmp".into(), super::spec(ArtifactKind::Tree));
@@ -463,16 +238,22 @@ pub(crate) fn schedule(
         &finish,
         helper,
         runtime_tree,
-        BTreeMap::from([("state".into(), state)]),
+        BTreeMap::from([
+            ("checkpoint".into(), result.checkpoint),
+            ("logical-out".into(), logical),
+        ]),
         vec![
-            lit("--finish-script"),
-            input("state", ""),
+            lit("--finish-compact-script"),
+            input("checkpoint", ""),
+            input("logical-out", ""),
             output("out-dir"),
             output("generated-tmp"),
         ],
         declared,
         RecipeExitPolicy::Exact { code: 0 },
     ));
+    debug_assert!(recipe.steps.len() <= DECLARATION_STEPS_MAX);
+    debug_assert!(matches!(result.workspace, ArtifactRef::Produced { .. }));
     Ok(ScriptRun {
         steps: recipe.steps,
         stdout: product(&finish, "stdout"),
@@ -480,4 +261,172 @@ pub(crate) fn schedule(
         logical_out,
         generated_tmp: product(&finish, "generated-tmp"),
     })
+}
+
+fn command_budget(slots: usize, per_request: usize) -> Result<usize, RunError> {
+    let source_bound = slots
+        .checked_mul(per_request)
+        .and_then(|commands| commands.checked_add(slots))
+        .and_then(|commands| commands.checked_add(1))
+        .ok_or_else(|| error("native script command reservation overflow"))?;
+    let ceiling = crate::source_built_recipe::controller::CONTROLLER_COMMANDS_MAX as usize;
+    if per_request == 0 || slots > (ceiling - 1) / 2 {
+        return Err(error("native script reservation exceeds command ceiling"));
+    }
+    // The source request and per-request bounds remain intact. The pre-existing
+    // global execution ceiling is an independent intersection, never an override.
+    debug_assert!(source_bound > 0);
+    debug_assert!(ceiling > 1);
+    Ok(source_bound.min(ceiling))
+}
+
+fn initial_workspace(
+    recipe: &mut SourceRecipe,
+    id: &str,
+    helper: ArtifactRef,
+    runtime: ArtifactRef,
+    logical_out: &str,
+    generated: &BTreeMap<String, ArtifactRef>,
+) -> Result<ArtifactRef, RunError> {
+    let empty = format!("{id}.empty");
+    recipe.steps.push(helper_exec(
+        &empty,
+        helper,
+        runtime,
+        BTreeMap::new(),
+        vec![lit("--empty"), output("tree")],
+        outputs("tree", ArtifactKind::Tree),
+        RecipeExitPolicy::Exact { code: 0 },
+    ));
+    let relative = logical_out.strip_prefix("/tmp/").ok_or_else(|| error("script output must be in tmp"))?;
+    let mut inputs = BTreeMap::from([("own".into(), product(&empty, "tree"))]);
+    let mut entries = BTreeMap::from([(relative.into(), "own".into())]);
+    for (index, (path, tree)) in generated.iter().enumerate() {
+        require(tree)?;
+        let path = path.strip_prefix("/tmp/").ok_or_else(|| error("generated script state is outside tmp"))?;
+        crate::source_built_recipe::relative(path, false)?;
+        let alias = format!("root-{index}");
+        inputs.insert(alias.clone(), tree.clone());
+        entries.insert(path.into(), alias);
+    }
+    let seed = format!("{id}.initial-tmp");
+    recipe.steps.push(RecipeStep {
+        id: seed.clone(),
+        inputs,
+        outputs: BTreeMap::from([("tree".into(), super::spec(ArtifactKind::Tree))]),
+        operation: RecipeOperation::AssembleTree {
+            output: "tree".into(),
+            entries,
+        },
+    });
+    let root = format!("{id}.initial-workspace");
+    recipe.steps.push(RecipeStep {
+        id: root.clone(),
+        inputs: BTreeMap::from([("tmp".into(), product(&seed, "tree"))]),
+        outputs: BTreeMap::from([("tree".into(), super::spec(ArtifactKind::Tree))]),
+        operation: RecipeOperation::AssembleTree {
+            output: "tree".into(),
+            entries: BTreeMap::from([("tmp".into(), "tmp".into())]),
+        },
+    });
+    debug_assert!(recipe.steps.len() >= 3);
+    Ok(product(&root, "tree"))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn script_frame(
+    recipe: &mut SourceRecipe,
+    id: &str,
+    helper: ArtifactRef,
+    runtime: ArtifactRef,
+    inputs: &mut BTreeMap<String, ArtifactRef>,
+    environment: &mut BTreeMap<String, RecipeWord>,
+    logical_out: &str,
+    slots: usize,
+    per_request: usize,
+) -> Result<(ArtifactRef, ArtifactRef), RunError> {
+    let data = |text: String| RecipeWord {
+        parts: vec![WordPart::LiteralData { text }],
+    };
+    for (key, word) in [
+        ("OUT_DIR", data(logical_out.into())),
+        ("MANTLE_CC_REQUEST", data(format!("{logical_out}/.mantle-successor-request"))),
+        ("MANTLE_RUST_SCRIPT_IMAGE", data("/inputs/script-frame/script".into())),
+        ("MANTLE_RUST_SCRIPT_SLOTS", lit(slots.to_string())),
+        ("MANTLE_RUST_NATIVE_COMMANDS_MAX", lit(per_request.to_string())),
+    ] {
+        environment.insert(key.into(), word);
+    }
+    let logical = format!("{id}.logical-out");
+    recipe.steps.push(RecipeStep {
+        id: logical.clone(),
+        inputs: BTreeMap::new(),
+        outputs: BTreeMap::from([("root".into(), super::spec(ArtifactKind::Text))]),
+        operation: RecipeOperation::WriteText {
+            output: "root".into(),
+            text: logical_out.into(),
+        },
+    });
+    let frame = format!("{id}.script-frame");
+    let mut args = vec![lit("--script-frame"), output("frame"), input("script", "")];
+    let mut referenced = BTreeSet::from(["script".to_owned()]);
+    let mut direct = BTreeSet::new();
+    for (key, value) in std::mem::take(environment) {
+        for part in &value.parts {
+            match part {
+                WordPart::Input { name, .. } => {
+                    direct.insert(name.clone());
+                    referenced.insert(name.clone());
+                }
+                WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
+                    referenced.insert(name.clone());
+                }
+                WordPart::Literal { .. } | WordPart::LiteralData { .. } | WordPart::Runtime { .. } => {}
+                _ => return Err(error("script environment must not refer to an unbound mutable workspace")),
+            }
+        }
+        args.extend([lit(key), value]);
+    }
+    let frame_inputs = referenced
+        .iter()
+        .map(|name| {
+            let value = inputs.get(name).ok_or_else(|| error(format!("script environment input is absent: {name}")))?;
+            Ok((name.clone(), value.clone()))
+        })
+        .collect::<Result<BTreeMap<_, _>, RunError>>()?;
+    for name in referenced.difference(&direct) {
+        inputs.remove(name);
+    }
+    recipe.steps.push(helper_exec(
+        &frame,
+        helper,
+        runtime,
+        frame_inputs,
+        args,
+        outputs("frame", ArtifactKind::Tree),
+        RecipeExitPolicy::Exact { code: 0 },
+    ));
+    debug_assert!(recipe.steps.len() >= 2);
+    Ok((product(&frame, "frame"), product(&logical, "root")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_reservations_use_runtime_ceiling_not_expanded_declarations() {
+        let max = reservation_slots_max(DECLARATION_STEPS_MAX).unwrap();
+        assert_eq!(reservation_slots_max(crate::source_built_recipe::STEP_COUNT_MAX).unwrap(), max);
+        assert!(reservation_slots_max(DECLARATION_STEPS_MAX - 1).is_err());
+        assert_eq!(command_budget(0, 8).unwrap(), 1);
+        assert_eq!(command_budget(12, 56).unwrap(), 685);
+        assert_eq!(
+            command_budget(max as usize, 8).unwrap(),
+            crate::source_built_recipe::controller::CONTROLLER_COMMANDS_MAX as usize
+        );
+        assert!(command_budget(max as usize + 1, 8).is_err());
+        assert!(command_budget(1, 0).is_err());
+        assert!(command_budget(usize::MAX, usize::MAX).is_err());
+    }
 }

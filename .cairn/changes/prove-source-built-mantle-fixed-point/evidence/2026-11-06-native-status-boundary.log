@@ -1,0 +1,137 @@
++ date -Is
+2026-11-06T18:45:21-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home CARGO_NET_OFFLINE=true
++ CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home
++ CARGO_NET_OFFLINE=true
++ export CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ export MANTLE_MACRO_SMOKE_RUSTC=/nix/store/iy93ls6kxapwixmar6gyj9lqv3mbim8k-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08/bin/rustc
++ MANTLE_MACRO_SMOKE_RUSTC=/nix/store/iy93ls6kxapwixmar6gyj9lqv3mbim8k-mantle-cargo-unit-compiler-1.96.0-nightly-2026-04-08/bin/rustc
++ export MANTLE_MACRO_SMOKE_LINKER=/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc
++ MANTLE_MACRO_SMOKE_LINKER=/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc
++ export MANTLE_PROTECTED_BWRAP=/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ MANTLE_PROTECTED_BWRAP=/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ export MANTLE_NATIVE_SMOKE_CC=/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc
++ MANTLE_NATIVE_SMOKE_CC=/nix/store/wkjvdr824xgvwinsdx4yybzkhg12mfx1-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc
++ export MANTLE_NATIVE_SMOKE_ROOT=/home/brittonr/mantle-native-20261106/protected-v4
++ MANTLE_NATIVE_SMOKE_ROOT=/home/brittonr/mantle-native-20261106/protected-v4
++ export MANTLE_MACRO_SMOKE_ROOT=/home/brittonr/mantle-native-20261106/macro-regression-v1
++ MANTLE_MACRO_SMOKE_ROOT=/home/brittonr/mantle-native-20261106/macro-regression-v1
++ b3sum src/source_built_rust_programs_successors_native.rs src/source_built_rust_programs_successors_controller.c src/source_built_rust_programs_native_smoke_tests.rs src/source_built_stagex_programs_binutils_shellvm.rs
+452a9c89a6c0a852d2cc4b14f38a1e65faa2180090d5f1c5545ee6d9b23171d9  src/source_built_rust_programs_successors_native.rs
+8334edddc59d306131622a0f2b26273c79e541c4d39b9bcae9464fc20047285b  src/source_built_rust_programs_successors_controller.c
+2930bcfb5450f481a005051ef82e1e7b01e5b3aec78675588201025b6d0335d0  src/source_built_rust_programs_native_smoke_tests.rs
+3973b40c609388a728cafe3d8ef6d5357c524e1130d034e00e173d3dcbc7ed63  src/source_built_stagex_programs_binutils_shellvm.rs
++ cargo test --release -p mantle --bin mantle successors::native::tests:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 4m 21s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 1 test
+test source_built_rust_programs::successors::native::tests::source_reservations_use_runtime_ceiling_not_expanded_declarations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2928 filtered out; finished in 0.00s
+
++ cargo test --release -p mantle --bin mantle compact_native_protected_smoke -- --ignored --nocapture --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 1.83s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 1 test
+test source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke ... protected native case /home/brittonr/mantle-native-20261106/protected-v4/early: accepted=true, script75=0, native23=0
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/nonzero-replay: accepted=true, script75=2, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/exhausted: accepted=false, script75=2, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/wrong-image: accepted=false, script75=1, native23=0
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/native-bound: accepted=false, script75=1, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/history-corruption: accepted=false, script75=1, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v4/script-failure: accepted=false, script75=0, native23=0
+
+thread 'source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke' (1121613) panicked at src/source_built_rust_programs_native_smoke_tests.rs:529:13:
+assertion failed: events.iter().any(|event|
+        event.action_id == "stagex-transition/smoke.native-controller/start"
+            && event.normal_exit_code == Some(2))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2928 filtered out; finished in 12.78s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`

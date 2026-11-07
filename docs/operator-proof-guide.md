@@ -381,6 +381,24 @@ and checks direct/controller output namespaces, mismatched declarations and
 unknown namespaces. Its compiler/plugin fixture is not an original Rust compiler,
 a provider, or a bootstrap proof; missing prerequisites fail loudly.
 
+Native Rust build-script suspensions also use the shared compact source
+controller ([ADR 0144](../adr/0144-keep-native-script-reservations-inside-shared-source-controllers.md)).
+Source-owned request and per-request native reservations are unchanged; eleven
+fixed declarations replace the expanded request layout. Script and native images
+remain independently measured protected leaves. Native nonzero results are
+acknowledged to the original script; only its genuine final zero can complete.
+Readonly history inputs and comparison of their writable workspace duplicates
+prevent modified replay records from authorizing completion. Exhaustion, image
+drift, original script failure and malformed startup remain failures.
+
+Run `cargo test -p mantle --bin mantle compact_native_protected_smoke --
+--ignored --nocapture --test-threads=1` in the checked-in shell with explicit
+`MANTLE_NATIVE_SMOKE_CC` (a static C compiler), `MANTLE_PROTECTED_BWRAP`, and a
+fresh absolute `MANTLE_NATIVE_SMOKE_ROOT`. Its separate C script/native protocol
+fixtures exercise real protected execution and action reconciliation, not an
+original Rust compiler, provider construction or a fixed-point proof. Missing
+prerequisites fail loudly.
+
 Preparation does not execute a provider or prove a fixed point. Review and
 freeze its `source-program-preparation.json` and `source-profile.json`. The
 report's `output_profile_blake3` binds the new cohort. Use that reviewed value

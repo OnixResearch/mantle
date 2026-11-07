@@ -137,9 +137,8 @@ fn main()->io::Result<()> {
         Some("--cargo-metadata") if matches!(args.len(),3|4) => cargo_metadata(&args),
         Some("--native-sdk") if args.len()>=2 => std::fs::write(&args[1],quote_response(&args[2..])),
         Some("--runtime-libraries") if args.len()==3 => runtime_libraries(&args),
-        Some("--classify") if args.len()>=5 && args.len()%2==1 => {let code=classify(&args)?;std::process::exit(code)},
-        Some("--merge-reply") if args.len()>=5 => {let code=merge_reply(&args)?;std::process::exit(code)},
-        Some("--finish-script") if args.len()==4 => finish_script(&args),
+        Some("--script-frame") if args.len()>=3 && args.len()%2==1 => script_frame(&args),
+        Some("--finish-compact-script") if args.len()==5 => finish_compact_script(&args),
         Some("--materialize-overlay") if args.len()==5 => {safe(&args[3])?;copy(Path::new(&args[1]),Path::new(&args[4]),&mut 0)?;std::fs::copy(Path::new(&args[2]).join("transformed.rs"),Path::new(&args[4]).join(&args[3]))?;Ok(())},
         Some("--assemble") if args.len()>=4 && args.len()%2==0 => {
             let out=Path::new(&args[1]);std::fs::create_dir_all(out)?;

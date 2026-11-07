@@ -1,0 +1,26 @@
+Retained excerpt from `pueue wait 46 && pueue log --full 46`, delivered by bg_472.
+The daemon later reported no finished task for ID 46; this is not a full transcript.
+
+Task 46: failed with exit code 101
+Command: nix develop --offline --no-write-lock-file -c /home/brittonr/mantle-native-20261106/checks.sh
+Label: compact-native-history-runtime-before
+Start: Fri, 6 Nov 2026 18:36:27 -0500
+End: Fri, 6 Nov 2026 18:40:45 -0500
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2928 filtered out; finished in 0.00s
+
+protected native case /home/brittonr/mantle-native-20261106/protected-v3/early: accepted=true, script75=0, native23=0
+protected native case /home/brittonr/mantle-native-20261106/protected-v3/nonzero-replay: accepted=true, script75=2, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v3/exhausted: accepted=false, script75=2, native23=1
+protected native case /home/brittonr/mantle-native-20261106/protected-v3/wrong-image: accepted=false, script75=1, native23=0
+protected native case /home/brittonr/mantle-native-20261106/protected-v3/native-bound: accepted=false, script75=1, native23=1
+
+thread 'source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke' (656230) panicked at src/source_built_rust_programs_native_smoke_tests.rs:515:36:
+invalid native continuation admitted
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2928 filtered out; finished in 11.83s
+
+The final scenario changed history/0/status from the actual 23 to 0 through the
+mutable workspace duplicate and returned script zero. Before the history-fact
+comparison repair, the controller admitted completion. Protocol artifacts and
+actual events remain under the protected-v3 evidence root.

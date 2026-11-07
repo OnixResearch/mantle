@@ -193,4 +193,5 @@ pub(crate) fn append_target_wrappers(
             commands_max,
         },
     )
+    .map(|result| result.workspace)
 }

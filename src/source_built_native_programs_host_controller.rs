@@ -20,6 +20,7 @@ pub(crate) fn controller_library_source(extensions: &[ControllerHooks<'_>]) -> R
     source.push_str(include_str!("source_built_native_programs_host_nested.c"));
     source.push_str(include_str!("source_built_native_programs_host_timeout.c"));
     source.push_str(include_str!("source_built_rust_programs_llvm_controller.c"));
+    source.push_str(include_str!("source_built_rust_programs_successors_controller.c"));
     source.push_str(&crate::source_built_rust_programs::llvm::controller_hooks_source());
     source.push_str(&crate::source_built_native_programs::final_gnu::perl_controller_source());
     for extension in extensions {

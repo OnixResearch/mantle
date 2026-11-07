@@ -635,12 +635,3 @@ pub(crate) fn append_controller(
 ) -> Result<ControllerResult, RunError> {
     crate::source_built_recipe::controller::append(recipe, specification)
 }
-
-/// One actual prior-status decision skips the whole controller honestly.
-pub(crate) fn append_guarded_controller(
-    recipe: &mut SourceRecipe,
-    specification: ControllerSpec,
-    predicates: Vec<(ArtifactRef, Vec<i32>)>,
-) -> Result<ControllerResult, RunError> {
-    crate::source_built_recipe::controller::append_guarded(recipe, specification, predicates)
-}

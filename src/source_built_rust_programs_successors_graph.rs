@@ -555,7 +555,7 @@ impl Context<'_, '_> {
                     let script_generated = executable.generated.clone();
                     let mut runtime_inputs = extra.clone();
                     runtime_inputs.insert("rust-runtime".into(), self.runtime["tree"].clone());
-                    for name in ["llvm-config", "llvm-native-controller", "llvm-native-helper"] {
+                    for name in ["llvm-config", "llvm-native-controller"] {
                         runtime_inputs.insert(
                             name.into(),
                             self.llvm

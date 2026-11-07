@@ -18,6 +18,7 @@ use crate::source_built_recipe::RecipeWord;
 use crate::source_built_recipe::SourceRecipe;
 use crate::source_built_recipe::WordPart;
 use crate::source_built_stagex_programs::controller::ControllerExecutable;
+use crate::source_built_stagex_programs::controller::ControllerResult;
 use crate::source_built_stagex_programs::controller::ControllerSlot;
 use crate::source_built_stagex_programs::controller::ControllerSpec;
 use crate::source_built_stagex_programs::controller::append_controller;
@@ -1022,7 +1023,6 @@ pub(crate) fn author(
             ("llvm-root".into(), produced(&finish, "root")),
             ("llvm-config".into(), produced(&finish, "llvm-config")),
             ("llvm-native-controller".into(), controller),
-            ("llvm-native-helper".into(), collector),
         ]),
     })
 }
@@ -1151,204 +1151,6 @@ pub(crate) fn native_command_world(request: &AuthoringRequest<'_>) -> Result<Nat
     Ok(world)
 }
 
-pub(crate) struct NativeCommandSpec {
-    pub id: String,
-    /// Shared MANTLE-SHELL-2 directory, including actual cwd/zero and timestamps.
-    pub captured_request: ArtifactRef,
-    pub captured_request_path: String,
-    pub whole_tmp: ArtifactRef,
-    /// Data references, including authenticated fixed sources. Recipe admission
-    /// validates their paths/digests/kinds; executable inventory stays Produced.
-    pub inputs: BTreeMap<String, ArtifactRef>,
-    pub readonly_inputs: BTreeSet<String>,
-    pub runtime_mounts: BTreeMap<String, String>,
-    pub inventory: Vec<(String, ArtifactRef)>,
-    pub predicates: Vec<(ArtifactRef, Vec<i32>)>,
-    pub commands_max: usize,
-}
-fn native_predicates(
-    inputs: &mut BTreeMap<String, ArtifactRef>,
-    predicates: &[(ArtifactRef, Vec<i32>)],
-) -> Result<crate::source_built_recipe::RecipeGuard, RunError> {
-    let mut conditions = Vec::new();
-    for (index, (reference, codes)) in predicates.iter().enumerate() {
-        require(reference)?;
-        let name = format!("native-command-predicate-{index}");
-        if inputs.insert(name.clone(), reference.clone()).is_some() {
-            return Err(error("native command predicate input collision"));
-        }
-        conditions.push(crate::source_built_recipe::RecipeGuardCondition {
-            status_input: name,
-            accepted_codes: codes.clone(),
-        });
-    }
-    if conditions.is_empty() {
-        return Err(error("captured command requires its genuine source classification predicate"));
-    }
-    Ok(crate::source_built_recipe::RecipeGuard { conditions })
-}
-/// Return the actual ObservePhase envelope. outputs/native-files is the entire
-/// resulting /tmp; outputs/native-request is the shared write_result directory
-/// with every descriptor snapshot/alias/offset and genuine normal exit status.
-pub(crate) fn append_native_command(
-    request: &AuthoringRequest<'_>,
-    recipe: &mut SourceRecipe,
-    controller: ArtifactRef,
-    helper: ArtifactRef,
-    specification: NativeCommandSpec,
-) -> Result<ArtifactRef, RunError> {
-    let NativeCommandSpec {
-        id,
-        captured_request,
-        captured_request_path,
-        whole_tmp,
-        inputs: mut command_inputs,
-        readonly_inputs,
-        runtime_mounts,
-        inventory,
-        predicates,
-        commands_max,
-    } = specification;
-    for reference in [&controller, &helper, &captured_request, &whole_tmp] {
-        require(reference)?;
-    }
-    for (_, reference) in &inventory {
-        require(reference)?;
-    }
-    crate::source_built_recipe::relative(&captured_request_path, true)?;
-    let disk = request.proof.resource_bounds.disk_bytes_max;
-    let limit = disk.min(64 * 1024 * 1024);
-    let roots = native_command_roots(&command_inputs, &readonly_inputs, &runtime_mounts)?;
-    let roots = text(recipe, format!("{id}.roots"), roots);
-    if command_inputs.insert("command-roots".into(), roots.clone()).is_some() {
-        return Err(error("native command roots input collision"));
-    }
-    let prepare = format!("{id}.entry");
-    let mut prepare_inputs = BTreeMap::from([
-        ("captured-request".into(), captured_request),
-        ("whole-tmp".into(), whole_tmp),
-    ]);
-    let guard = native_predicates(&mut prepare_inputs, &predicates)?;
-    let mut step = exec(
-        prepare.clone(),
-        helper.clone(),
-        prepare_inputs,
-        vec![
-            lit("native-seed"),
-            input("captured-request", &captured_request_path),
-            input("whole-tmp", ""),
-            output("entry", ""),
-        ],
-        BTreeMap::from([("entry".into(), spec(ArtifactKind::Tree, disk))]),
-    );
-    if let RecipeOperation::Exec { guard: binding, .. } = &mut step.operation {
-        *binding = Some(guard);
-    }
-    recipe.steps.push(step);
-    let entry = produced(&prepare, "entry");
-    let controller_id = format!("{id}.original");
-    let inputs = BTreeMap::from([("entry".into(), entry), ("controller-roots".into(), roots)]);
-    let start_arguments = vec![
-        lit("--mantle-source-shell"),
-        lit("run"),
-        input("entry", ""),
-        lit("native-command"),
-        input("entry", "environment"),
-        lit("-"),
-        lit("-"),
-        input("entry", "initial"),
-        output("checkpoint", ""),
-    ];
-    let slots = vec![
-        ControllerSlot {
-            id: "native-command".into(),
-            executable: ControllerExecutable::Inventory(inventory),
-            inputs: command_inputs.clone(),
-            runtime_mounts: runtime_mounts.clone(),
-            exit_policy: RecipeExitPolicy::Normal,
-            merge_stderr: false,
-            generated_outputs: true,
-        },
-        ControllerSlot {
-            id: "native-generated".into(),
-            executable: ControllerExecutable::RequestOutput {
-                producer_slots: vec!["native-command".into()],
-            },
-            inputs: command_inputs,
-            runtime_mounts,
-            exit_policy: RecipeExitPolicy::Normal,
-            merge_stderr: false,
-            generated_outputs: true,
-        },
-    ];
-    let result = crate::source_built_stagex_programs::controller::append_guarded_controller(
-        recipe,
-        ControllerSpec {
-            id: controller_id,
-            controller,
-            inputs,
-            controller_runtime_mounts: BTreeMap::new(),
-            start_arguments,
-            environment: BTreeMap::from([
-                ("MANTLE_CONTROLLER_ROOTS".into(), input("controller-roots", "")),
-                ("MANTLE_CONTROLLER_INITIAL_CWD".into(), input("entry", "cwd")),
-                ("MANTLE_SHELL_ORIGINAL_ZERO".into(), input("entry", "zero")),
-                ("MANTLE_NATIVE_CAPTURED_REQUEST".into(), input("entry", "request")),
-            ]),
-            restart_indices: [5, 6, 8],
-            slots,
-            commands_max,
-            exit_policy: RecipeExitPolicy::Normal,
-            file_bytes_max: limit,
-            tree_bytes_max: disk,
-        },
-        predicates.clone(),
-    )?;
-    let projection = format!("{id}.result");
-    let mut inputs = BTreeMap::from([("checkpoint".into(), result.checkpoint)]);
-    let guard = native_predicates(&mut inputs, &predicates)?;
-    let mut step = exec(
-        projection.clone(),
-        helper,
-        inputs,
-        vec![
-            lit("native-result"),
-            input("checkpoint", ""),
-            output("native-files", ""),
-            output("native-request", ""),
-        ],
-        BTreeMap::from([
-            ("native-files".into(), spec(ArtifactKind::Tree, disk)),
-            ("native-request".into(), spec(ArtifactKind::Tree, disk)),
-            ("stdout".into(), spec(ArtifactKind::Object, limit)),
-            ("stderr".into(), spec(ArtifactKind::Text, limit)),
-            ("exit-status".into(), spec(ArtifactKind::Text, 4)),
-        ]),
-    );
-    if let RecipeOperation::Exec {
-        guard: binding,
-        exit_policy,
-        ..
-    } = &mut step.operation
-    {
-        *binding = Some(guard);
-        *exit_policy = RecipeExitPolicy::Normal;
-    }
-    recipe.steps.push(step);
-    let observation = format!("{id}.observe");
-    recipe.steps.push(RecipeStep {
-        id: observation.clone(),
-        inputs: BTreeMap::new(),
-        outputs: BTreeMap::from([("observation".into(), spec(ArtifactKind::Tree, disk))]),
-        operation: RecipeOperation::ObservePhase {
-            phase: projection,
-            output: "observation".into(),
-            state: None,
-        },
-    });
-    Ok(produced(&observation, "observation"))
-}
-
 fn native_command_roots(
     inputs: &BTreeMap<String, ArtifactRef>,
     readonly: &BTreeSet<String>,
@@ -1402,7 +1204,7 @@ pub(crate) fn append_native_source_script(
     recipe: &mut SourceRecipe,
     controller: ArtifactRef,
     specification: NativeSourceScript,
-) -> Result<ArtifactRef, RunError> {
+) -> Result<ControllerResult, RunError> {
     let NativeSourceScript {
         id,
         script,
@@ -1498,7 +1300,7 @@ pub(crate) fn append_native_source_script(
             generated_outputs: true,
         },
     ];
-    let result = append_controller(recipe, ControllerSpec {
+    append_controller(recipe, ControllerSpec {
         id: format!("{id}.original"),
         controller,
         inputs,
@@ -1515,6 +1317,5 @@ pub(crate) fn append_native_source_script(
         exit_policy: RecipeExitPolicy::Exact { code: 0 },
         file_bytes_max: disk.min(64 * 1024 * 1024),
         tree_bytes_max: disk,
-    })?;
-    Ok(result.workspace)
+    })
 }

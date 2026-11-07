@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/home/brittonr/mantle-native-20261106/macro-regression-v1/macro-fixture",
+    "--finish-compact-script",
+    "/home/brittonr/mantle-native-20261106/protected-v5/nonzero-replay/runtime/smoke.native-controller/outputs/checkpoint",
+    "/home/brittonr/mantle-native-20261106/finish-smoke/logical-out",
+    "/home/brittonr/mantle-native-20261106/finish-smoke/out",
+    "/home/brittonr/mantle-native-20261106/finish-smoke/generated"
+  ],
+  "exit_code": 0,
+  "stdout_hex": "7363726970742d636f6d706c65746500fe0a",
+  "stderr_hex": "",
+  "copied_products_blake3": "8dd29cd4005570d376be48f0961774a97095127c4b64eb23976adef01deae4f0  /home/brittonr/mantle-native-20261106/protected-v5/nonzero-replay/runtime/smoke.native-controller/outputs/checkpoint/workspace/tmp/final.bin\n8dd29cd4005570d376be48f0961774a97095127c4b64eb23976adef01deae4f0  /home/brittonr/mantle-native-20261106/finish-smoke/generated/final.bin\n21cc7c4217df96d9fcfbabce3b0993e1d8734a6df9f8ee6cc1351f206f6bbb11  /home/brittonr/mantle-native-20261106/finish-smoke/generated/native-side-0\n21cc7c4217df96d9fcfbabce3b0993e1d8734a6df9f8ee6cc1351f206f6bbb11  /home/brittonr/mantle-native-20261106/protected-v5/nonzero-replay/runtime/smoke.native-controller/outputs/checkpoint/workspace/tmp/native-side-0\n",
+  "protocol_members_absent": true,
+  "non_claims": [
+    "bounded actual completion utility over real protected protocol-fixture outputs",
+    "not original Rust compiler or provider construction",
+    "not fixed-point or release evidence"
+  ]
+}

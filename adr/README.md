@@ -141,3 +141,4 @@ compatibility surface, crate name, or historical decision.
 | [0141](0141-bind-successor-resolution-to-consuming-workspace.md) | Bind successor resolution to the consuming workspace | Accepted |
 | [0142](0142-bind-native-cfg-classification-to-sealed-source-profiles.md) | Bind native cfg classification to sealed source profiles | Accepted |
 | [0143](0143-keep-source-identity-data-separate-from-recipe-labels.md) | Keep source identity data separate from recipe labels | Accepted |
+| [0144](0144-keep-native-script-reservations-inside-shared-source-controllers.md) | Keep native script reservations inside shared source controllers | Accepted |

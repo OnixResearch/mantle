@@ -1,0 +1,14 @@
++ date -Is
+2026-11-06T19:14:59-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-cold-20261105/prep.sh
+b831321311fb68aa67d73919046606f8361ffff69cb5878a6f787b231a29ff9c  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh
++ /home/brittonr/mantle-cold-20261105/prep.sh
+{"error":"Rust successor source topology: ambiguous original locked identity home","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-06T19:26:41-05:00
++ exit 1

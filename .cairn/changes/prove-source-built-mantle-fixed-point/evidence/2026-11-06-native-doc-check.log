@@ -1,0 +1,4 @@
+Command: nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-operator-proof-guide.rs
+Observed exit: 0
+Stdout:
+operator proof guide drift check passed

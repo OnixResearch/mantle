@@ -1,0 +1,112 @@
++ date -Is
+2026-11-06T19:01:51-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home CARGO_NET_OFFLINE=true
++ CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home
++ CARGO_NET_OFFLINE=true
++ export CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ b3sum src/source_built_rust_programs_llvm.rs src/source_built_rust_programs_successors_native.rs src/source_built_rust_programs_successors_wrappers.rs src/source_built_rust_programs_translation.rs
+46ba2bbbc8b5a8ba8e6851d9889ead924a3551d15032af01dce7568f9786c844  src/source_built_rust_programs_llvm.rs
+a584f5cce3e0cb2f37846800ff3ce2302e0828347e125c9e34a3a7dbde2ee846  src/source_built_rust_programs_successors_native.rs
+cd78adb4f28a8e5bf3a0f51fe42ff295ba5edfcb087a9d5107923c3faa536fa3  src/source_built_rust_programs_successors_wrappers.rs
+7dbbdea3721481af98f219f47a96a4690c7121edcd232cbc61062865550e2d48  src/source_built_rust_programs_translation.rs
++ cargo test --release -p mantle --bin mantle successors::native::tests:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 5m 53s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 1 test
+test source_built_rust_programs::successors::native::tests::source_reservations_use_runtime_ceiling_not_expanded_declarations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2928 filtered out; finished in 0.00s
+
++ cargo clippy --release -p mantle --bin mantle --no-deps -- -D warnings
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo clippy --fix --lib -p crunch-nix-gateway -- --no-deps -D warnings` to apply 1 suggestion)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 2m 08s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
++ cargo build --release -p mantle --bin mantle
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 4m 59s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
++ b3sum /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
+b831321311fb68aa67d73919046606f8361ffff69cb5878a6f787b231a29ff9c  /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
++ date -Is
+2026-11-06T19:14:59-05:00

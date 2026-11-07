@@ -98,7 +98,7 @@ static int final_gnu_bison(Env *e,Args *a)
         macro.in=macro.fd[0]=muscles;macro.out=macro.fd[1]=expanded;macro.err=macro.fd[2]=child_errors;
         macro.fd_flags[0]=O_RDONLY;macro.fd_flags[1]=macro.fd_flags[2]=O_WRONLY;
         macro.fd_cloexec[0]=macro.fd_cloexec[1]=macro.fd_cloexec[2]=0;
-        int child_status=mantle_source_external_hook?mantle_source_external_hook(&macro,&child):mantle_native_external(&macro,&child);final_gnu_environment_free(&macro);native_gcc_args_free(&child);
+        int child_status=mantle_source_external_hook?mantle_source_external_hook(&macro,&child):mantle_native_external(&macro,&child);final_gnu_environment_free(&macro);llvm_free_args(&child);
         final_gnu_save_stream(e,result,expanded);final_gnu_save_stream(e,diagnostic,child_errors);final_gnu_save_status(e,status_file,child_status);
         final_gnu_close(expanded);final_gnu_close(child_errors);
         if(e->in&&fseek(e->in,input_position,SEEK_SET))die("original Bison replay input");
@@ -122,7 +122,7 @@ static int final_gnu_filter(Env *e,const char *image,const char *mode,const char
     phase.fd_flags[0]=O_RDONLY;phase.fd_flags[1]=O_WRONLY;phase.fd_cloexec[0]=phase.fd_cloexec[1]=0;
     if(header)native_gcc_export(&phase,"MANTLE_FLEX_HEADER",header);
     Args args={0};arg(&args,dup(image));arg(&args,dup(mode));arg(&args,dup(state));
-    final_gnu_rewind(in);int status=mantle_shell_external(&phase,&args);native_gcc_args_free(&args);final_gnu_environment_free(&phase);return status;
+    final_gnu_rewind(in);int status=mantle_shell_external(&phase,&args);llvm_free_args(&args);final_gnu_environment_free(&phase);return status;
 }
 static int final_gnu_m4(Env *e,Args *command,FILE *in,FILE *out)
 {
@@ -166,7 +166,7 @@ static int final_gnu_flex(Env *e,Args *a)
             final_gnu_close(expanded);final_gnu_close(filtered);if(part)final_gnu_close(stream);
         }
         if(status)status=1; /* Original flex_main converts any filter child failure to 1. */
-        native_gcc_args_free(&macro);final_gnu_close(code);free(output);free(header);
+        llvm_free_args(&macro);final_gnu_close(code);free(output);free(header);
     }
     final_gnu_close(raw);final_gnu_close(errors);free(state_path);free(header_path);free(response_path);final_gnu_remove(e,root);return status;
 }

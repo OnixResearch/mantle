@@ -813,7 +813,8 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
             inventory: world.inventory,
             commands_max: invocation.native_commands_max,
         },
-    )?;
+    )?
+    .workspace;
     let collect = format!("{}.native-products", invocation.id);
     let artifact_kind = if invocation.kind == TranslationKind::Rlib {
         ArtifactKind::Text
@@ -1160,7 +1161,8 @@ pub(crate) fn append_link_response(
             inventory: world.inventory,
             commands_max,
         },
-    )?;
+    )?
+    .workspace;
     let finish = format!("{id}.native-products");
     let mut declared = outputs(output_name, output_kind);
     declared.insert("generated-tmp".into(), RecipeOutput {
@@ -1204,3 +1206,7 @@ pub(crate) fn append_link_response(
 #[cfg(test)]
 #[path = "source_built_rust_programs_macro_smoke_tests.rs"]
 mod smoke_tests;
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_native_smoke_tests.rs"]
+mod native_smoke_tests;

@@ -84,3 +84,16 @@ admission boundaries and now stops at `source recipe capacity exhausted before
 original LLVM graph`. Existing bounds, reservations and profile pins were not
 weakened. No prepared profile or provider/fixed-point acceptance is implied;
 I3–I5 and V1–V3 remain unchecked.
+
+## Compact native continuation checkpoint (2026-11-06)
+
+The shared controller now retains native script reservations at runtime through
+eleven fixed declarations. Protected request/replay, native nonzero results,
+exhaustion, exact images, immutable history and fatal-status boundaries have
+executed evidence in [compact native continuations](evidence/2026-11-06-compact-native-continuations.md).
+Macro/helper regressions, actual completion-utility execution, final focused
+Clippy and the release CLI build passed. Real preparation in Pueue 31 passed the
+prior pre-LLVM recipe-capacity boundary and now rejects `ambiguous original
+locked identity home` in successor resolution. Pins, source reservations and
+resource ceilings were unchanged. No prepared profile, provider execution or
+fixed-point proof is accepted; I3–I5 and V1–V3 remain unchecked.

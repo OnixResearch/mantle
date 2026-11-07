@@ -142,7 +142,7 @@ static void mpc_request_free(struct mpc_request *request)
         if(j==i)mpc_close(request->inherited[i]);
     }
     for(i=0;i<MP_DESCRIPTORS;i++)if(request->descriptors.aliases[i]==i)free(request->descriptors.members[i]);
-    clearvars(&request->env);free(request->env.cwd);native_gcc_args_free(&request->command);free(request->original_zero);free(request->operation);
+    clearvars(&request->env);free(request->env.cwd);llvm_free_args(&request->command);free(request->original_zero);free(request->operation);
 }
 static void mpc_save_descriptors(const char *root,const char *reply,struct mpc_request *request)
 {

@@ -99,35 +99,14 @@ pub(crate) fn validate(step: &RecipeStep, s: &ControllerSpec) -> Result<(), RunE
 }
 
 pub(crate) fn append(recipe: &mut SourceRecipe, s: ControllerSpec) -> Result<ControllerResult, RunError> {
-    append_guarded(recipe, s, Vec::new())
-}
-pub(crate) fn append_guarded(
-    recipe: &mut SourceRecipe,
-    s: ControllerSpec,
-    predicates: Vec<(ArtifactRef, Vec<i32>)>,
-) -> Result<ControllerResult, RunError> {
-    let mut inputs = inputs(&s);
-    let mut conditions = Vec::with_capacity(predicates.len());
-    for (index, (reference, accepted_codes)) in predicates.into_iter().enumerate() {
-        let status_input = format!("controller-guard-{index}");
-        inputs.insert(status_input.clone(), reference);
-        conditions.push(RecipeGuardCondition {
-            status_input,
-            accepted_codes,
-        });
-    }
-    let guard = if conditions.is_empty() {
-        None
-    } else {
-        Some(RecipeGuard { conditions })
-    };
+    let inputs = inputs(&s);
     let step = RecipeStep {
         id: s.id.clone(),
         inputs,
         outputs: outputs(&s),
         operation: RecipeOperation::Controller {
             specification: s,
-            guard,
+            guard: None,
         },
     };
     let RecipeOperation::Controller { specification, .. } = &step.operation else {
