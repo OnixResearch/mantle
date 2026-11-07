@@ -1,0 +1,14 @@
++ date -Is
+2026-11-06T20:25:52-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-cold-20261105/prep.sh
+5ec4d879149146d8c249415f2628b9d1c297ccedfa072e49c8bd0a226cee97ff  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh
++ /home/brittonr/mantle-cold-20261105/prep.sh
+{"error":"source recipe: command llvm-1.90.0.original-project must publish actual bounded stdout","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-06T20:36:23-05:00
++ exit 1

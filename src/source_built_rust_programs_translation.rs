@@ -502,6 +502,8 @@ impl Native {
         let runtime = |path: &str| {
             if self.inputs.contains_key("rust-runtime") {
                 input("rust-runtime", path)
+            } else if path.is_empty() {
+                input("native-sysroot", "x86_64-linux-musl/lib")
             } else {
                 input("native-sysroot", &format!("x86_64-linux-musl/lib/{path}"))
             }

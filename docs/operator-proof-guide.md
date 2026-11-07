@@ -335,6 +335,12 @@ The successor cc helper consumes the canonical native overlay descriptors;
 changed original source boundaries reject rather than selecting an unpatched
 fallback. Retain the failing task log and private staging directory.
 
+Native source recipes bind the CRT library directory itself when no library
+filename is requested; an empty filename must not create a trailing slash in a
+relative member. This is path composition, not permission to trim original
+operands or relax lexical admission. Required original trailing separators
+remain explicit typed directory separators.
+
 Successor source topologies bind one consuming workspace's lockfile and local
 registry patches ([ADR 0141](../adr/0141-bind-successor-resolution-to-consuming-workspace.md)).
 Vendored dependencies' own lockfiles/workspaces cannot select their transitive

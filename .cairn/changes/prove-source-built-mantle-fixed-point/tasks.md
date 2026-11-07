@@ -106,7 +106,19 @@ offline host metadata, failing-before regressions and 22 passing focused tests
 are retained in [source-qualified lock resolution](evidence/2026-11-06-source-qualified-lock-resolution.md).
 Focused release Clippy and CLI build passed. Unchanged-pin real preparation in
 Pueue 38 passed the `home` ambiguity and now rejects the typed relative operand
-`x86_64-linux-musl/lib/`. Normalized path admission must remain strict while the
-original directory suffix is preserved through its existing typed separator.
+`x86_64-linux-musl/lib/`. Subsequent attribution found an empty-filename join,
+not an original directory suffix; normalized path admission remains strict.
 No prepared profile, provider or fixed-point proof is accepted; I3–I5 and
 V1–V3 remain unchecked.
+
+## CRT operand checkpoint (2026-11-06)
+
+The native SDK author now binds the CRT directory directly for an empty library
+filename, matching the existing mrustc SDK convention. Pueue 53 passed all 27
+recipe tests, leaf rustfmt, focused strict release Clippy and the release build.
+Unchanged-pin real preparation in Pueue 54 passed the malformed relative member
+and now rejects the LLVM original-project command's missing bounded stdout.
+Logs and source attribution are retained under
+[CRT directory operand correction](evidence/2026-11-06-source-qualified-lock-resolution.md#crt-directory-operand-correction).
+No prepared profile, provider execution or fixed-point proof is accepted;
+I3–I5 and V1–V3 remain unchecked.

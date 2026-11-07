@@ -100,9 +100,10 @@ Preparation passed the prior `home` lock ambiguity and reached:
 {"error":"source recipe: non-normalized relative path \"x86_64-linux-musl/lib/\"","code":1,"kind":"build"}
 ```
 
-This is a separate typed-operand boundary. The directory suffix must be retained
-using the existing typed separator contract, not admitted by weakening normalized
-relative-path validation or silently rewriting the original environment value.
+This is a separate typed-operand boundary. Subsequent source attribution found
+the slash in an empty-filename join in `translation::Native::environment()`, not
+in an original environment value. The CRT operand correction below preserves
+strict normalized-path admission; it does not require a typed separator.
 No prepared profile or provider/fixed-point acceptance is implied.
 
 ## Lifecycle check
@@ -111,4 +112,48 @@ Pinned-shell Cairn validation returned exit 0, `valid: true`, with no issues or
 findings; the full report is `2026-11-06-lock-source-cairn-validate.json`.
 Structural validation is not implementation/proof acceptance or archive authority.
 Temporary parent validation/preparation launch scripts were removed after capture.
+
+## CRT directory operand correction
+
+`MANTLE_GCC_LINK_CRT` selects the library directory itself. Before a Rust runtime
+exists, `runtime("")` previously appended `/` to `x86_64-linux-musl/lib`, creating
+the rejected relative member. The author now binds that directory directly for
+an empty filename, matching `source_built_rust_programs_mrustc.rs`. Nonempty
+library members and the produced Rust-runtime root branch are unchanged. No
+original environment spelling, path-admission rule, source pin, reservation or
+resource ceiling was rewritten. Mantle's source-authoring shell owns this repair.
+
+Pueue 53 (`crt-directory-checks`) completed successfully. Captured output is
+`2026-11-06-crt-directory-checks.log`:
+
+```text
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 2909 filtered out; finished in 0.03s
+```
+
+Leaf rustfmt, focused release Clippy with `-D warnings`, and the release CLI
+build passed in the pinned shell. The existing recipe tests retain typed
+separator and lexical-path rejection coverage. No isolated test was added to
+pin an environment-map copy; the real preparation exercises the affected author.
+
+Pueue 54 (`crt-directory-real-preparation`, 20:25:52–20:36:23 -0500), exit 1,
+ran the unchanged authenticated cold-preparation launcher. The new CLI BLAKE3 is
+`5ec4d879149146d8c249415f2628b9d1c297ccedfa072e49c8bd0a226cee97ff`.
+`2026-11-06-crt-directory-preparation.log` retains that identity, the unchanged
+launcher identity and the next rejection:
+
+```json
+{"error":"source recipe: command llvm-1.90.0.original-project must publish actual bounded stdout","code":1,"kind":"build"}
+```
+
+The real author passed the previous malformed-directory boundary. Preparation
+has not succeeded; this is neither provider execution nor a fixed-point proof.
+I3–I5 and V1–V3 remain unchecked.
+
+
+The operator proof guide drift check passed. Pinned-shell Cairn validation
+returned exit 0 and `valid: true`, with no issues or findings; the full outputs
+are `2026-11-06-crt-directory-doc-check.log` and
+`2026-11-06-crt-directory-cairn-validate.json`. These are documentation and
+structural checks, not proof acceptance. Temporary CRT check/preparation
+launchers were removed after capture; failed preparation staging is retained.
 
