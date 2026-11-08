@@ -722,6 +722,7 @@ pub(crate) fn admit_source_action(action: &SourceAction) -> SourceCommandAdmissi
             SourceBundleAction::Plan { .. }
             | SourceBundleAction::BootstrapProfile { .. }
             | SourceBundleAction::RefreshMantleSource { .. }
+            | SourceBundleAction::RefreshVendorInputs { .. }
             | SourceBundleAction::List { .. }
             | SourceBundleAction::Import { .. }
             | SourceBundleAction::ImportStorePath { .. }

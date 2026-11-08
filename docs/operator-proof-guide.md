@@ -351,6 +351,15 @@ as the same canonical full-size chunk sequence the bundle observer produces, and
 hydration concatenates it back to one file. The admitted payload byte bound and
 per-chunk validation are unchanged.
 
+A git-sourced lock package must resolve inside a captured repository tree at
+`<vendor root>/git-repositories/<host>/<path>`, so intra-repository path
+dependencies keep their real layout
+([ADR 0146](../adr/0146-resolve-git-packages-inside-captured-repository-trees.md)).
+`scripts/capture-git-repositories.py` materialises those trees from `Cargo.lock`
+at the locked revisions, and `mantle source bundle refresh-vendor-inputs`
+replaces only the `vendored-cargo-inputs` record of a verified profile. A missing
+member or revision is a named planning blocker, never a substituted source.
+
 Successor source topologies bind one consuming workspace's lockfile and local
 registry patches ([ADR 0141](../adr/0141-bind-successor-resolution-to-consuming-workspace.md)).
 Vendored dependencies' own lockfiles/workspaces cannot select their transitive

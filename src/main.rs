@@ -3486,6 +3486,24 @@ pub enum SourceBundleAction {
         #[arg(long)]
         to: std::path::PathBuf,
     },
+    /// Replace only the vendored Cargo input record in a verified source-built profile
+    RefreshVendorInputs {
+        /// Existing source-built fixed-point profile
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Vendored Cargo input tree to bind into the refreshed profile
+        #[arg(long = "vendor-inputs")]
+        vendor_inputs: std::path::PathBuf,
+
+        /// Materialized fetch-source bundle to add; repeat for multiple bundles
+        #[arg(long = "include-bundle")]
+        include_bundles: Vec<std::path::PathBuf>,
+
+        /// New profile output path, which must not exist
+        #[arg(long)]
+        to: std::path::PathBuf,
+    },
     /// List a source bundle without mutating state
     List {
         /// Bundle input path
@@ -4515,6 +4533,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
         SourceBundleAction::Export { .. } => "source.bundle.export",
         SourceBundleAction::BootstrapProfile { .. } => "source.bundle.bootstrap-profile",
         SourceBundleAction::RefreshMantleSource { .. } => "source.bundle.refresh-mantle-source",
+        SourceBundleAction::RefreshVendorInputs { .. } => "source.bundle.refresh-vendor-inputs",
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
         SourceBundleAction::ImportStorePath { .. } => "source.bundle.import-store-path",

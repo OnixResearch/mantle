@@ -728,7 +728,14 @@ trait SourceBundleEffectPort {
         prefix: &str,
     ) -> Result<SourceBundleManifest, RunError>;
     fn supplementary(&mut self, paths: &[PathBuf], refresh: bool) -> Result<Vec<SourceRecord>, RunError>;
-    fn refreshed_record(&mut self, path: &Path, identity: &str, prefix: &str) -> Result<SourceRecord, RunError>;
+    fn refreshed_record(
+        &mut self,
+        path: &Path,
+        kind: SourceRecordKind,
+        identity: &str,
+        class: &str,
+        prefix: &str,
+    ) -> Result<SourceRecord, RunError>;
     fn published_bytes(&mut self, path: &Path) -> Result<u64, RunError>;
     fn confirm_bundle(&mut self, path: &Path, expected: &SourceBundleManifest) -> Result<u64, RunError>;
     fn confirm_state(
@@ -864,8 +871,23 @@ impl SourceBundleEffectPort for SourceBundleFilePort {
             read_supplemental_bundle_records(paths)
         }
     }
-    fn refreshed_record(&mut self, path: &Path, identity: &str, prefix: &str) -> Result<SourceRecord, RunError> {
-        source_built_mantle_source_record(path, identity, prefix)
+    fn refreshed_record(
+        &mut self,
+        path: &Path,
+        kind: SourceRecordKind,
+        identity: &str,
+        class: &str,
+        prefix: &str,
+    ) -> Result<SourceRecord, RunError> {
+        bootstrap_profile_record(BootstrapProfileRecordRequest {
+            kind,
+            identity: identity.to_string(),
+            path,
+            mode: BootstrapSourceBundleMode::SourceBuiltFixedPoint,
+            class,
+            provider_metadata: None,
+            store_prefix: prefix,
+        })
     }
     fn published_bytes(&mut self, path: &Path) -> Result<u64, RunError> {
         fs::metadata(path)
@@ -1488,9 +1510,42 @@ pub fn plan_source_built_mantle_source_refresh(
     replacement: SourceRecord,
     supplemental_records: Vec<SourceRecord>,
 ) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
+    plan_source_built_profile_record_refresh(
+        manifest,
+        replacement,
+        supplemental_records,
+        SourceRecordKind::LocalPath,
+        BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+    )
+}
+
+/// Replace exactly one classified profile record while preserving every other
+/// record byte-for-byte. The vendor input record is refreshed by the same
+/// machinery that refreshes the Mantle source record.
+pub fn plan_source_built_vendor_inputs_refresh(
+    manifest: SourceBundleManifest,
+    replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
+) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
+    plan_source_built_profile_record_refresh(
+        manifest,
+        replacement,
+        supplemental_records,
+        SourceRecordKind::PackageMirror,
+        BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
+    )
+}
+
+fn plan_source_built_profile_record_refresh(
+    manifest: SourceBundleManifest,
+    replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
+    kind: SourceRecordKind,
+    class: &str,
+) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
     validate_source_built_refresh_profile(&manifest)?;
-    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?.clone();
-    validate_mantle_source_replacement(&original, &replacement)?;
+    let original = require_single_profile_record(&manifest, class)?.clone();
+    validate_profile_record_replacement(&original, &replacement, kind, class)?;
     let input_manifest_blake3 = manifest.manifest_blake3.clone();
     let store_prefix = manifest.store_prefix.clone();
     let original_record_count = manifest.records.len();
@@ -1610,7 +1665,12 @@ fn validate_source_built_refresh_profile(manifest: &SourceBundleManifest) -> Res
     Ok(())
 }
 
-fn validate_mantle_source_replacement(original: &SourceRecord, replacement: &SourceRecord) -> Result<(), RunError> {
+fn validate_profile_record_replacement(
+    original: &SourceRecord,
+    replacement: &SourceRecord,
+    kind: SourceRecordKind,
+    class: &str,
+) -> Result<(), RunError> {
     validate_source_record(replacement, ManifestPayloadValidation::VerifyPayloads)?;
     if replacement.kind != original.kind
         || replacement.identity != original.identity
@@ -1619,20 +1679,18 @@ fn validate_mantle_source_replacement(original: &SourceRecord, replacement: &Sou
         || replacement.metadata != original.metadata
     {
         return Err(RunError::Internal(
-            "Mantle source refresh replacement changes profile authority metadata".to_string(),
+            "profile record refresh replacement changes profile authority metadata".to_string(),
         ));
     }
     if replacement.files.is_empty() {
-        return Err(RunError::Internal("Mantle source refresh replacement has no files".to_string()));
+        return Err(RunError::Internal("profile record refresh replacement has no files".to_string()));
     }
-    assert_eq!(replacement.kind, SourceRecordKind::LocalPath);
-    assert_eq!(
-        replacement.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str),
-        Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
-    );
+    assert_eq!(replacement.kind, kind);
+    assert_eq!(replacement.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str), Some(class));
     Ok(())
 }
 
+#[cfg(test)]
 fn source_built_mantle_source_record(
     source_path: &Path,
     identity: &str,
@@ -6380,9 +6438,73 @@ fn observe_bootstrap_profile_effects(
     Ok((observations, preflight))
 }
 
+type ProfileRecordRefresh = fn(
+    SourceBundleManifest,
+    SourceRecord,
+    Vec<SourceRecord>,
+) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError>;
+
 fn cmd_refresh_mantle_source(
     from: &Path,
     mantle_source: &Path,
+    include_bundles: &[PathBuf],
+    to: &Path,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    cmd_refresh_profile_record(
+        from,
+        mantle_source,
+        SourceRecordRefreshProfile {
+            kind: SourceRecordKind::LocalPath,
+            class: BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+            planner: plan_source_built_mantle_source_refresh,
+        },
+        include_bundles,
+        to,
+        context,
+        plan,
+        port,
+    )
+}
+
+fn cmd_refresh_vendor_inputs(
+    from: &Path,
+    vendor_inputs: &Path,
+    include_bundles: &[PathBuf],
+    to: &Path,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    cmd_refresh_profile_record(
+        from,
+        vendor_inputs,
+        SourceRecordRefreshProfile {
+            kind: SourceRecordKind::PackageMirror,
+            class: BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
+            planner: plan_source_built_vendor_inputs_refresh,
+        },
+        include_bundles,
+        to,
+        context,
+        plan,
+        port,
+    )
+}
+
+struct SourceRecordRefreshProfile {
+    kind: SourceRecordKind,
+    class: &'static str,
+    planner: ProfileRecordRefresh,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_refresh_profile_record(
+    from: &Path,
+    replacement_path: &Path,
+    profile: SourceRecordRefreshProfile,
     include_bundles: &[PathBuf],
     to: &Path,
     context: &SourceBundleCliContext<'_>,
@@ -6394,10 +6516,16 @@ fn cmd_refresh_mantle_source(
     }
     let (manifest, input_bytes) = port.read(from)?;
     let input = source_manifest_observation(&manifest, Some(input_bytes))?;
-    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
-    let replacement = port.refreshed_record(mantle_source, &original.identity, &manifest.store_prefix)?;
+    let original = require_single_profile_record(&manifest, profile.class)?;
+    let replacement = port.refreshed_record(
+        replacement_path,
+        profile.kind.clone(),
+        &original.identity,
+        profile.class,
+        &manifest.store_prefix,
+    )?;
     let supplemental_records = port.supplementary(include_bundles, true)?;
-    let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement, supplemental_records)?;
+    let (refreshed, report) = (profile.planner)(manifest, replacement, supplemental_records)?;
     port.publish(to, &refreshed, false)?;
     let bytes = port.published_bytes(to)?;
     let published = source_observation(
@@ -6561,7 +6689,8 @@ fn source_action_declaration(
                     .count(),
                 ),
         ),
-        crate::SourceBundleAction::RefreshMantleSource { include_bundles, .. } => {
+        crate::SourceBundleAction::RefreshMantleSource { include_bundles, .. }
+        | crate::SourceBundleAction::RefreshVendorInputs { include_bundles, .. } => {
             (Action::Refresh, 2usize.saturating_add(include_bundles.len()))
         }
         crate::SourceBundleAction::List { .. } => (Action::List, 1),
@@ -6755,6 +6884,12 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             include_bundles,
             to,
         } => cmd_refresh_mantle_source(&from, &mantle_source, &include_bundles, &to, context, &plan, &mut port),
+        crate::SourceBundleAction::RefreshVendorInputs {
+            from,
+            vendor_inputs,
+            include_bundles,
+            to,
+        } => cmd_refresh_vendor_inputs(&from, &vendor_inputs, &include_bundles, &to, context, &plan, &mut port),
         crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context, &plan, &mut port),
         crate::SourceBundleAction::Import { from, pin } => {
             cmd_import_source_bundle(&from, pin, context, &plan, &mut port)
@@ -9063,6 +9198,56 @@ mod tests {
                 .content_blake3,
             replacement.content_blake3
         );
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_vendor_inputs_refresh_replaces_only_the_vendor_record() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let original_records = manifest.records.clone();
+        let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS).unwrap().clone();
+        assert_eq!(original.kind, SourceRecordKind::PackageMirror);
+        let replacement_root = temp.path().join("replacement-vendor-inputs");
+        fs::create_dir_all(replacement_root.join("redb-3.1.3")).unwrap();
+        fs::write(replacement_root.join("redb-3.1.3/Cargo.toml"), "[package]\nname = \"redb\"\nversion = \"3.1.3\"\n")
+            .unwrap();
+        fs::create_dir_all(replacement_root.join("git-repositories/github.com/cachix/turso/core")).unwrap();
+        fs::write(
+            replacement_root.join("git-repositories/github.com/cachix/turso/core/Cargo.toml"),
+            "[package]\nname = \"turso_core\"\nversion = \"0.8.0-pre.7\"\n",
+        )
+        .unwrap();
+        let replacement = bootstrap_profile_record(BootstrapProfileRecordRequest {
+            kind: SourceRecordKind::PackageMirror,
+            identity: original.identity.clone(),
+            path: &replacement_root,
+            mode: BootstrapSourceBundleMode::SourceBuiltFixedPoint,
+            class: BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
+            provider_metadata: None,
+            store_prefix: &manifest.store_prefix,
+        })
+        .unwrap();
+
+        let (refreshed, report) =
+            plan_source_built_vendor_inputs_refresh(manifest.clone(), replacement.clone(), Vec::new()).unwrap();
+
+        assert_ne!(report.input_manifest_blake3, report.output_manifest_blake3);
+        assert_eq!(report.replacement_mantle_source_blake3, replacement.content_blake3);
+        assert_eq!(report.added_record_count, 0);
+        assert_eq!(
+            require_single_profile_record(&refreshed, BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+                .unwrap()
+                .content_blake3,
+            replacement.content_blake3
+        );
+        for record in original_records.iter().filter(|record| record.identity != original.identity) {
+            assert!(refreshed.records.contains(record));
+        }
+        // A Mantle source replacement cannot stand in for the vendor record.
+        let mantle = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        assert!(plan_source_built_vendor_inputs_refresh(manifest, mantle, Vec::new()).is_err());
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]

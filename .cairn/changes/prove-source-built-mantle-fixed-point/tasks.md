@@ -143,3 +143,21 @@ both intra-repository path dependencies inside vendored git sources
 vendoring does not preserve repository layout. Resolving that is an
 input-cohort decision, not a planner repair. No prepared profile, provider
 execution or fixed-point proof is accepted; I3–I5 and V1–V3 remain unchecked.
+
+## Captured git repository checkpoint (2026-11-08)
+
+The operator chose captured repository trees and adopted the refreshed
+source-profile identity. Git-sourced packages now resolve inside
+`<vendor root>/git-repositories/<host>/<path>`
+([ADR 0146](../../adr/0146-resolve-git-packages-inside-captured-repository-trees.md));
+`scripts/capture-git-repositories.py` captured 11 repositories at their locked
+revisions, and `mantle source bundle refresh-vendor-inputs` replaced only the
+vendor record of profile `e2f0191b…`, producing `a6174213…`. Focused tests,
+leaf formatting, strict release Clippy and the release build passed. The two
+intra-repository path-dependency blockers are gone; the package/target layer now
+names seven concrete blockers (inherited `serde`/`tokio` workspace options, one
+missing captured member manifest for `bounded-tree-core`, and one git reference
+mismatch for `transactional-reconciliation-core`). Details are retained in
+[captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
+No prepared profile, provider execution or fixed-point proof is accepted;
+I3–I5 and V1–V3 remain unchecked.

@@ -3060,13 +3060,30 @@ fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPack
     if !matches!(kind, SourceKind::Registry | SourceKind::Git) {
         return None;
     }
-    let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-        vendor_roots,
-        name: &package.name,
-        version: &package.version,
-    })
-    .map(|path| normalize_path_string(&path))
-    .unwrap_or_default();
+    // A git-sourced package resolves inside its captured repository tree when
+    // one is present, so intra-repository path dependencies keep their real
+    // relative layout. Per-crate vendored copies are the fallback for
+    // registry-sourced packages and older git captures.
+    let captured = if kind == SourceKind::Git {
+        locate_captured_git_manifest(CapturedGitManifestInputs {
+            vendor_roots,
+            source,
+            name: &package.name,
+            version: &package.version,
+        })
+    } else {
+        None
+    };
+    let manifest_path = captured
+        .or_else(|| {
+            locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
+                vendor_roots,
+                name: &package.name,
+                version: &package.version,
+            })
+        })
+        .map(|path| normalize_path_string(&path))
+        .unwrap_or_default();
     Some(CargoPackage {
         id: cargo_source_package_id(CargoSourcePackageIdInputs {
             source,
@@ -3109,6 +3126,146 @@ fn native_git_cargo_packages_from_lock(lock_source_packages: &[CargoPackage]) ->
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
     packages
+}
+
+/// Directory under a vendor root that holds captured git repositories with
+/// their original repository layout.
+const CAPTURED_GIT_REPOSITORY_DIR: &str = "git-repositories";
+
+struct CapturedGitManifestInputs<'a> {
+    vendor_roots: &'a [PathBuf],
+    source: &'a str,
+    name: &'a str,
+    version: &'a str,
+}
+
+struct CapturedGitRepositoryRootInputs<'a> {
+    source: &'a str,
+}
+
+/// Deterministic repository directory for a lock source: strip the cargo
+/// prefix, any `?rev`/`?branch`/`?tag` query and `#fragment`, drop a trailing
+/// `.git`, then split the remaining host and path into directories.
+fn captured_git_repository_root(inputs: CapturedGitRepositoryRootInputs<'_>) -> Option<PathBuf> {
+    let source = inputs.source.strip_prefix("git+")?;
+    let without_fragment = source.split('#').next().unwrap_or(source);
+    let without_query = without_fragment.split('?').next().unwrap_or(without_fragment);
+    let without_scheme = without_query
+        .strip_prefix("https://")
+        .or_else(|| without_query.strip_prefix("http://"))
+        .or_else(|| without_query.strip_prefix("ssh://git@"))
+        .or_else(|| without_query.strip_prefix("ssh://"))
+        .or_else(|| without_query.strip_prefix("git://"))?;
+    let without_user = without_scheme.strip_prefix("git@").unwrap_or(without_scheme);
+    let without_suffix = without_user.strip_suffix(".git").unwrap_or(without_user);
+    let mut path = PathBuf::new();
+    for component in without_suffix.split('/').filter(|component| !component.is_empty()) {
+        if component == "." || component == ".." || component.contains('\\') || component.contains('\0') {
+            return None;
+        }
+        path.push(component);
+    }
+    if path.as_os_str().is_empty() {
+        return None;
+    }
+    Some(path)
+}
+
+/// Effective package version of a captured member: a literal, or the nearest
+/// ancestor workspace's inherited `[workspace.package] version`, bounded by the
+/// repository root.
+fn captured_git_package_version(
+    manifest_path: &Path,
+    repository_root: &Path,
+    version: &NativeManifestInheritedString,
+) -> Option<String> {
+    const { assert!(MAX_SOURCE_TREE_ENTRIES > 0) };
+    if !version.workspace {
+        return version.value.clone();
+    }
+    let mut current = manifest_path.parent();
+    let mut visited = 0usize;
+    while let Some(directory) = current {
+        visited = visited.saturating_add(1);
+        if visited > MAX_SOURCE_TREE_ENTRIES {
+            return None;
+        }
+        let manifest_path = directory.join("Cargo.toml");
+        if manifest_path.is_file() {
+            let text = fs::read_to_string(&manifest_path).ok()?;
+            let manifest: toml::Value = toml::from_str(&text).ok()?;
+            if let Some(value) = manifest
+                .get("workspace")
+                .and_then(|workspace| workspace.get("package"))
+                .and_then(|package| package.get("version"))
+                .and_then(toml::Value::as_str)
+            {
+                return Some(value.to_string());
+            }
+        }
+        if directory == repository_root {
+            return None;
+        }
+        current = directory.parent();
+    }
+    None
+}
+
+/// Locate the member manifest of a git package inside its captured repository
+/// tree. Exactly one manifest may declare this package name and version;
+/// several matches or none leave the package unresolved instead of choosing by
+/// traversal order. Traversal is deterministic and bounded.
+fn locate_captured_git_manifest(inputs: CapturedGitManifestInputs<'_>) -> Option<PathBuf> {
+    const { assert!(MAX_SOURCE_TREE_ENTRIES > 0) };
+    let relative = captured_git_repository_root(CapturedGitRepositoryRootInputs { source: inputs.source })?;
+    for vendor_root in inputs.vendor_roots {
+        let root = vendor_root.join(CAPTURED_GIT_REPOSITORY_DIR).join(&relative);
+        if !root.is_dir() {
+            continue;
+        }
+        let mut pending = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+        pending.push(root.clone());
+        let mut visited = 0usize;
+        let mut matches = Vec::with_capacity(UNIQUE_CANDIDATE_COUNT);
+        while let Some(directory) = pending.pop() {
+            visited = visited.saturating_add(1);
+            if visited > MAX_SOURCE_TREE_ENTRIES {
+                return None;
+            }
+            let entries = fs::read_dir(&directory).ok()?;
+            let mut children = Vec::new();
+            for entry in entries.flatten() {
+                let file_type = entry.file_type().ok()?;
+                if file_type.is_dir() {
+                    let name = entry.file_name();
+                    if name == ".git" || name == "target" {
+                        continue;
+                    }
+                    children.push(entry.path());
+                    continue;
+                }
+                if entry.file_name() == "Cargo.toml" && file_type.is_file() {
+                    let manifest = read_native_manifest(&entry.path()).ok()?;
+                    if manifest.package.as_ref().is_some_and(|package| {
+                        package.name == inputs.name
+                            && captured_git_package_version(&entry.path(), &root, &package.version).as_deref()
+                                == Some(inputs.version)
+                    }) {
+                        matches.push(entry.path());
+                        if matches.len() > UNIQUE_CANDIDATE_COUNT {
+                            return None;
+                        }
+                    }
+                }
+            }
+            children.sort();
+            pending.extend(children.into_iter().rev());
+        }
+        if matches.len() == UNIQUE_CANDIDATE_COUNT {
+            return matches.pop();
+        }
+    }
+    None
 }
 
 struct DeclaredVendorManifestInputs<'a> {
@@ -5536,6 +5693,7 @@ fn native_package_dependencies(
     let dev_dependencies = native_dev_dependencies(
         inputs.source_root,
         &inputs.manifest.dev_dependencies,
+        package_id.clone(),
         inputs.manifest_inputs.registry_sources,
         inputs.manifest_inputs.git_sources,
     )?;
@@ -5560,7 +5718,6 @@ fn native_package_from_manifest(
 ) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let workspace_root = inputs.workspace_root;
     let manifest_path = inputs.manifest_path;
     let manifest = read_native_manifest(manifest_path).map_err(|message| {
         native_blocker(NativePackageBlockerInputs {
@@ -5569,6 +5726,17 @@ fn native_package_from_manifest(
             message: &message,
         })
     })?;
+    // A captured member inherits from its own repository workspace, not from
+    // the planning root. Registry and path members keep inheriting from the
+    // planning root unless they declare a nearer [workspace] manifest, so every
+    // workspace-derived fact below (package version, edition, environment and
+    // workspace dependency inheritance) uses the same root.
+    let effective_root = effective_workspace_root(manifest_path, inputs.workspace_root);
+    let inputs = NativePackageManifestInputs {
+        workspace_root: effective_root.as_path(),
+        ..inputs
+    };
+    let workspace_root = inputs.workspace_root;
     let Some(package) = manifest.package.as_ref() else {
         return Err(native_blocker(NativePackageBlockerInputs {
             package_id: None,
@@ -5781,6 +5949,33 @@ fn native_package_edition(
             message: &blocker.message,
         })
     })
+}
+
+/// Nearest ancestor manifest declaring `[workspace]`, bounded by the planning
+/// root. Falling back to the planning root keeps ordinary path members exact.
+fn effective_workspace_root(manifest_path: &Path, planning_root: &Path) -> PathBuf {
+    const { assert!(MAX_SOURCE_TREE_ENTRIES > 0) };
+    let mut current = manifest_path.parent();
+    let mut visited = 0usize;
+    while let Some(directory) = current {
+        visited = visited.saturating_add(1);
+        if visited > MAX_SOURCE_TREE_ENTRIES {
+            return planning_root.to_path_buf();
+        }
+        if directory == planning_root {
+            return planning_root.to_path_buf();
+        }
+        let candidate = directory.join("Cargo.toml");
+        if candidate.is_file()
+            && let Ok(text) = fs::read_to_string(&candidate)
+            && let Ok(manifest) = toml::from_str::<toml::Value>(&text)
+            && manifest.get("workspace").is_some()
+        {
+            return directory.to_path_buf();
+        }
+        current = directory.parent();
+    }
+    planning_root.to_path_buf()
 }
 
 fn native_package_version(
@@ -6097,6 +6292,7 @@ fn native_build_dependencies(
 fn native_dev_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
+    package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
@@ -6113,13 +6309,21 @@ fn native_dev_dependencies(
         } else {
             match native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning) {
                 Ok(Some(source)) => PathBuf::from(source),
-                // A test-only requirement stays outside build-mode facts. The
+                Ok(None) => continue,
+                // Absent test-only material stays outside build-mode facts: the
                 // dedicated dev-test rail selects and validates the dev
-                // dependencies it actually needs, so an unresolvable test-only
-                // requirement (for example a vendored crate pinning an exact
-                // dev version the vendor set does not carry) cannot block
-                // ordinary package/target planning.
-                Ok(None) | Err(_) => continue,
+                // dependencies it actually needs, so a vendored crate pinning an
+                // exact dev version the vendor set does not carry cannot block
+                // ordinary planning. A contradiction between the declared and
+                // captured source identity still blocks.
+                Err(error) if dev_dependency_absence(error.class) => continue,
+                Err(error) => {
+                    return Err(native_blocker(NativePackageBlockerInputs {
+                        package_id: package_id.clone(),
+                        class: error.class,
+                        message: &error.message,
+                    }));
+                }
             }
         };
         if !manifest_path.is_file() {
@@ -6133,6 +6337,13 @@ fn native_dev_dependencies(
     summaries.sort();
     summaries.dedup();
     Ok(summaries)
+}
+
+/// Absence of test-only material, as opposed to a contradiction between
+/// declared and captured identities.
+fn dev_dependency_absence(class: &str) -> bool {
+    debug_assert!(!class.is_empty());
+    class.starts_with("missing-") || class.ends_with("-not-ready") || class == "native-git-source-planning-blocked"
 }
 
 fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
@@ -26018,7 +26229,7 @@ unix_dep = { path = "../unix-dep" }
             toml::from_str("version = \"=2.6.0\"\npackage = \"redb\"").unwrap(),
         )]);
 
-        let resolved = native_dev_dependencies(dir.path(), &dev, &registry, &git).unwrap();
+        let resolved = native_dev_dependencies(dir.path(), &dev, None, &registry, &git).unwrap();
 
         assert!(resolved.is_empty());
         // The same unsatisfiable exact requirement still rejects a real build edge.
@@ -26807,6 +27018,92 @@ unix_dep = { path = "../unix-dep" }
         assert!(package_planning.ready, "{:#?}", package_planning.blockers);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&git_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn captured_git_repository_layout_resolves_member_manifests_uniquely() {
+        let dir = TempDir::new().unwrap();
+        let vendor = dir.path().join("vendor-deps");
+        let repository = vendor.join("git-repositories").join("github.com").join("cachix").join("turso");
+        std::fs::create_dir_all(repository.join("core")).unwrap();
+        std::fs::create_dir_all(repository.join("sdk")).unwrap();
+        std::fs::write(
+            repository.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"core\", \"sdk\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"0.8.0-pre.7\"\n",
+        )
+        .unwrap();
+        // The member inherits the workspace version, exactly as the captured
+        // turso repository does.
+        std::fs::write(
+            repository.join("core/Cargo.toml"),
+            "[package]\nname = \"turso_core\"\nversion.workspace = true\n\n[dependencies.turso]\npath = \"../sdk\"\n",
+        )
+        .unwrap();
+        std::fs::write(repository.join("sdk/Cargo.toml"), "[package]\nname = \"turso\"\nversion = \"0.8.0-pre.7\"\n")
+            .unwrap();
+        let source = "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c";
+        let roots = vec![vendor.clone()];
+
+        // A member inside a captured repository inherits from that repository's
+        // workspace; a package without a nearer workspace keeps the planning
+        // root.
+        assert_eq!(effective_workspace_root(&repository.join("core/Cargo.toml"), &vendor), repository);
+        let core = native_lock_source_cargo_package(&roots, &LockPackage {
+            name: "turso_core".to_string(),
+            version: "0.8.0-pre.7".to_string(),
+            source: Some(source.to_string()),
+            checksum: None,
+        })
+        .unwrap();
+        let sdk = native_lock_source_cargo_package(&roots, &LockPackage {
+            name: "turso".to_string(),
+            version: "0.8.0-pre.7".to_string(),
+            source: Some(source.to_string()),
+            checksum: None,
+        })
+        .unwrap();
+
+        assert_eq!(core.manifest_path, normalize_path_string(&repository.join("core/Cargo.toml")));
+        assert_eq!(sdk.manifest_path, normalize_path_string(&repository.join("sdk/Cargo.toml")));
+        // The intra-repository path dependency now resolves beside its member.
+        let manifest = read_native_manifest(&repository.join("core/Cargo.toml")).unwrap();
+        let path_dependencies =
+            native_manifest_path_dependency_manifests(&repository.join("core/Cargo.toml"), &manifest);
+        assert_eq!(path_dependencies.len(), 1);
+        assert_eq!(
+            std::fs::canonicalize(&path_dependencies[0]).unwrap(),
+            std::fs::canonicalize(repository.join("sdk").join("Cargo.toml")).unwrap()
+        );
+        // A registry package still resolves through the per-crate vendor layout.
+        std::fs::create_dir_all(vendor.join("redb-3.1.3")).unwrap();
+        assert_eq!(effective_workspace_root(&vendor.join("redb-3.1.3/Cargo.toml"), &vendor), vendor);
+        std::fs::write(vendor.join("redb-3.1.3/Cargo.toml"), "[package]\nname = \"redb\"\nversion = \"3.1.3\"\n")
+            .unwrap();
+        let registry = native_lock_source_cargo_package(&roots, &LockPackage {
+            name: "redb".to_string(),
+            version: "3.1.3".to_string(),
+            source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
+            checksum: None,
+        })
+        .unwrap();
+        assert_eq!(registry.manifest_path, normalize_path_string(&vendor.join("redb-3.1.3/Cargo.toml")));
+        // A duplicate member identity leaves the package unresolved rather than
+        // selecting by traversal order.
+        std::fs::create_dir_all(repository.join("duplicate")).unwrap();
+        std::fs::write(
+            repository.join("duplicate/Cargo.toml"),
+            "[package]\nname = \"turso\"\nversion = \"0.8.0-pre.7\"\n",
+        )
+        .unwrap();
+        assert!(
+            locate_captured_git_manifest(CapturedGitManifestInputs {
+                vendor_roots: &roots,
+                source,
+                name: "turso",
+                version: "0.8.0-pre.7",
+            })
+            .is_none()
+        );
     }
 
     #[test]
