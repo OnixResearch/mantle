@@ -266,20 +266,7 @@ fn package_programs(
         ("hash_mode".into(), "recursive".into()),
         ("unpack".into(), "1".into()),
     ]);
-    let files = files
-        .into_iter()
-        .map(|(path, text)| SourceFileEntry {
-            path,
-            file_type: SourceFileType::Regular,
-            executable: false,
-            size: text.len() as u64,
-            content_hex: Some(data_encoding::HEXLOWER.encode(text.as_bytes())),
-            symlink_target: None,
-            chunk_index: None,
-            chunk_count: None,
-            blake3: blake3::hash(text.as_bytes()).to_hex().to_string(),
-        })
-        .collect::<Vec<_>>();
+    let files = authored_source_entries(files)?;
     let content_blake3 =
         crate::source_bundle::digest_source_record_content(&SourceRecordKind::FixedUrl, &metadata, &files)?;
     assert!(!files.is_empty());
@@ -297,6 +284,66 @@ fn package_programs(
     })
 }
 
+fn authored_source_entry(path: String, content: &[u8], chunk: Option<(u32, u32)>) -> SourceFileEntry {
+    let size = u64::try_from(content.len()).expect("authored source chunk length fits in u64");
+    let (chunk_index, chunk_count) = chunk.map_or((None, None), |(index, count)| (Some(index), Some(count)));
+    SourceFileEntry {
+        path,
+        file_type: SourceFileType::Regular,
+        executable: false,
+        size,
+        content_hex: Some(data_encoding::HEXLOWER.encode(content)),
+        symlink_target: None,
+        chunk_index,
+        chunk_count,
+        blake3: blake3::hash(content).to_hex().to_string(),
+    }
+}
+
+/// Authored members keep the bundle's canonical regular-file layout. A member
+/// above the single-file ceiling is carried as the same full-size chunk
+/// sequence the bundle observer produces, so hydration concatenates it back to
+/// exactly one file; the logical byte bound is unchanged.
+fn authored_source_entries(files: BTreeMap<String, String>) -> Result<Vec<SourceFileEntry>, RunError> {
+    let chunk_bytes = usize::try_from(crate::source_bundle::MAX_SOURCE_FILE_BYTES)
+        .map_err(|_| proof_error("authored source chunk size does not fit in usize".into()))?;
+    authored_source_entries_with_ceiling(files, chunk_bytes)
+}
+
+fn authored_source_entries_with_ceiling(
+    files: BTreeMap<String, String>,
+    chunk_bytes: usize,
+) -> Result<Vec<SourceFileEntry>, RunError> {
+    if chunk_bytes == 0 {
+        return Err(proof_error("authored source chunk size is zero".into()));
+    }
+    let mut entries = Vec::new();
+    for (path, text) in files {
+        let content = text.as_bytes();
+        if content.len() <= chunk_bytes {
+            entries.push(authored_source_entry(path, content, None));
+            continue;
+        }
+        let chunk_count = u32::try_from(content.len().div_ceil(chunk_bytes))
+            .map_err(|_| proof_error(format!("authored source chunk count overflow: {path}")))?;
+        if chunk_count < 2 {
+            return Err(proof_error(format!("authored source chunk count is not canonical: {path}")));
+        }
+        for (index, chunk) in content.chunks(chunk_bytes).enumerate() {
+            let index = u32::try_from(index)
+                .map_err(|_| proof_error(format!("authored source chunk index overflow: {path}")))?;
+            entries.push(authored_source_entry(path.clone(), chunk, Some((index, chunk_count))));
+        }
+        if entries.last().map(|entry| entry.path.as_str()) != Some(path.as_str()) {
+            return Err(proof_error(format!("authored source chunk sequence is incomplete: {path}")));
+        }
+    }
+    if entries.is_empty() {
+        return Err(proof_error("authored source program has no member entries".into()));
+    }
+    Ok(entries)
+}
+
 fn validate_source_files(files: &BTreeMap<String, String>, bytes_max: u64) -> Result<u64, RunError> {
     if files.is_empty() || files.len() > crate::source_bundle::MAX_SOURCE_FILES_PER_RECORD {
         return Err(proof_error("authored source program file count is outside its bound".into()));
@@ -306,9 +353,6 @@ fn validate_source_files(files: &BTreeMap<String, String>, bytes_max: u64) -> Re
         recipe::relative(path, false)?;
         recipe::validate_text(text)?;
         let bytes = text.len() as u64;
-        if bytes > crate::source_bundle::MAX_SOURCE_FILE_BYTES {
-            return Err(proof_error(format!("authored source member is too large: {path}")));
-        }
         total = total.checked_add(bytes).ok_or_else(|| proof_error("authored source byte count overflow".into()))?;
         if total > bytes_max {
             return Err(proof_error("authored source program exceeds the admitted byte bound".into()));
@@ -470,6 +514,37 @@ mod tests {
             crate::source_bundle::materialize_source_record_for_offline_use(&altered, &temp.path().join("altered"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn authored_members_use_canonical_chunk_sequences() {
+        let small = BTreeMap::from([("helpers/main.c".to_string(), "small\n".to_string())]);
+        let entries = authored_source_entries_with_ceiling(small, 8).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].chunk_index.is_none() && entries[0].chunk_count.is_none());
+
+        let text = "0123456789abcdefghij".to_string();
+        let entries =
+            authored_source_entries_with_ceiling(BTreeMap::from([("member".to_string(), text.clone())]), 8).unwrap();
+        assert_eq!(entries.len(), 3);
+        let mut rebuilt = Vec::new();
+        for (index, entry) in entries.iter().enumerate() {
+            assert_eq!(entry.path, "member");
+            assert_eq!(entry.chunk_index, Some(u32::try_from(index).unwrap()));
+            assert_eq!(entry.chunk_count, Some(3));
+            let content = data_encoding::HEXLOWER.decode(entry.content_hex.as_ref().unwrap().as_bytes()).unwrap();
+            assert_eq!(u64::try_from(content.len()).unwrap(), entry.size);
+            assert_eq!(blake3::hash(&content).to_hex().to_string(), entry.blake3);
+            if index < 2 {
+                assert_eq!(entry.size, 8);
+            } else {
+                assert!(entry.size < 8);
+            }
+            rebuilt.extend(content);
+        }
+        assert_eq!(String::from_utf8(rebuilt).unwrap(), text);
+        assert!(authored_source_entries_with_ceiling(BTreeMap::new(), 8).is_err());
+        assert!(authored_source_entries_with_ceiling(BTreeMap::from([("member".to_string(), text)]), 0).is_err());
     }
 
     #[test]

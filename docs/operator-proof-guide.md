@@ -341,6 +341,16 @@ relative member. This is path composition, not permission to trim original
 operands or relax lexical admission. Required original trailing separators
 remain explicit typed directory separators.
 
+Every authored source action output is an execution obligation: the recipe root
+set names all produced outputs, not only requested products. Package worlds,
+crate directories, controller protocol leaves, and tool trees therefore cannot
+become unreachable merely because no exported compiler product names them.
+
+An authored member larger than the bundle's single-file ceiling is transported
+as the same canonical full-size chunk sequence the bundle observer produces, and
+hydration concatenates it back to one file. The admitted payload byte bound and
+per-chunk validation are unchanged.
+
 Successor source topologies bind one consuming workspace's lockfile and local
 registry patches ([ADR 0141](../adr/0141-bind-successor-resolution-to-consuming-workspace.md)).
 Vendored dependencies' own lockfiles/workspaces cannot select their transitive

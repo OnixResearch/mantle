@@ -122,3 +122,20 @@ Logs and source attribution are retained under
 [CRT directory operand correction](evidence/2026-11-06-source-qualified-lock-resolution.md#crt-directory-operand-correction).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.
+
+## Source program obligation checkpoint (2026-11-08)
+
+Bounded command streams, whole-program action obligations, canonical chunk
+transport for oversized authored members, and staged Cargo target sources now
+have focused execution evidence in
+[source program obligations](evidence/2026-11-08-source-program-obligations.md).
+The staged-source repair required refreshing only the Mantle source record from
+the same frozen revision; the refreshed profile identity is
+`e2f0191b78a6715e7c12394166aae1fc07b0fa6b79a9567cb2d4d54754ce5020`, which changes
+the reviewed source-profile pin and is not adopted here. With that profile,
+preparation hydrated the complete source, authored both program sets, and
+reached the Cargo-free plan for Mantle itself, where the Cargo-free topology gate
+blocked. Test-only registry requirements no longer resolve into build-mode facts;
+git-sourced `turso` facts and the vendored `basalt` `vendor/ucan` extraction
+remain open. No prepared profile, provider execution or fixed-point proof is
+accepted; I3–I5 and V1–V3 remain unchecked.

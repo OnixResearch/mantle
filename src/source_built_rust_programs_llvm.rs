@@ -25,6 +25,7 @@ use crate::source_built_stagex_programs::controller::append_controller;
 const STAGE: &str = "full-source-rust-provider";
 const HELPER_PATH: &str = "mantle-source-authoring/rust-llvm-products.c";
 const CONTROLLER_PATH: &str = "mantle-source-authoring/rust-llvm-controller.c";
+const COMMAND_LOG_BYTES_MAX: u64 = 64 * 1024 * 1024;
 pub(crate) struct Fragment {
     pub steps: Vec<RecipeStep>,
     pub files: BTreeMap<String, String>,
@@ -84,9 +85,13 @@ fn exec(
     image: ArtifactRef,
     mut inputs: BTreeMap<String, ArtifactRef>,
     arguments: Vec<RecipeWord>,
-    declared: BTreeMap<String, RecipeOutput>,
+    mut declared: BTreeMap<String, RecipeOutput>,
 ) -> RecipeStep {
     inputs.insert("executable".into(), image);
+    declared.extend([
+        ("stdout".into(), spec(ArtifactKind::Text, COMMAND_LOG_BYTES_MAX)),
+        ("stderr".into(), spec(ArtifactKind::Text, COMMAND_LOG_BYTES_MAX)),
+    ]);
     RecipeStep {
         id,
         inputs,
@@ -152,11 +157,7 @@ pub(crate) fn append_cmake_source(
             input("header", ""),
             output("source", ""),
         ],
-        BTreeMap::from([
-            ("source".into(), spec(ArtifactKind::Tree, request.proof.resource_bounds.disk_bytes_max)),
-            ("stdout".into(), spec(ArtifactKind::Text, 64 * 1024 * 1024)),
-            ("stderr".into(), spec(ArtifactKind::Text, 64 * 1024 * 1024)),
-        ]),
+        BTreeMap::from([("source".into(), spec(ArtifactKind::Tree, request.proof.resource_bounds.disk_bytes_max))]),
     );
     let result = ArtifactRef::Produced {
         action_id: format!("{}/{id}", recipe.stage_id),

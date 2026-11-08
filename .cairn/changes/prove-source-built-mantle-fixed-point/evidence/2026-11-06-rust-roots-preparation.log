@@ -1,0 +1,14 @@
++ date -Is
+2026-11-08T03:18:42-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-cold-20261105/prep.sh
+22b0a3da2040c2ff7fb9d027f2c9b03c67914f7a892a2bab5f62ce18ad6022db  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh
++ /home/brittonr/mantle-cold-20261105/prep.sh
+{"error":"Cargo-free native target planning failed: target `generate-operator-command-contract` source /home/brittonr/mantle-cold-20261105/.prepared-cohort.source-built-fixed-point-staging-2042343/inputs/mantle-source/tools/generate_operator_command_contract.rs is not readable","code":3,"kind":"internal"}
++ status=3
++ printf 'preparation_exit_code=%s\n' 3
+preparation_exit_code=3
++ date -Is
+2026-11-08T03:30:56-05:00
++ exit 3

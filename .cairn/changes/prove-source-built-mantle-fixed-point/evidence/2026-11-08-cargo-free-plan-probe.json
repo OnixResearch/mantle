@@ -1,0 +1,237 @@
+{
+  "schema": "mantle-cargo-free-plan-probe-excerpt-v1",
+  "command": "mantle --json rust-plan --root <hydrated mantle-source copy with declared vendor inputs> --no-cargo-oracle --profile release",
+  "exit_code": 0,
+  "full_log_blake3": "20879b266a1f0b1061c05d195fd56848ec4b0b4f48bc8d92aee93b0ff0196a7a",
+  "full_log_bytes": 5297907,
+  "readiness": {
+    "source_closure": true,
+    "native_package_target_planning": false,
+    "native_unit_graph_planning": false,
+    "native_host_unit_graph_planning": false,
+    "unit_derivation_graph": false
+  },
+  "cargo_mode_blockers": [
+    "native-host-unit-graph-planning-blocked",
+    "native-package-target-planning-blocked",
+    "native-unit-graph-planning-blocked",
+    "unit-derivation-graph-blocked"
+  ],
+  "source_closure_blockers": [],
+  "native_package_target_blockers": [
+    {
+      "package_id": "git+https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb1cfb3d83f2233715448dfefe913f5fd1#casita@0.1.0",
+      "class": "missing-captured-git-source-fact",
+      "message": "git dependency `turso` has no captured source fact for package `turso` at https://github.com/cachix/turso.git"
+    },
+    {
+      "package_id": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e919b4573a7865559db2dc98a99c0c58144#basalt@0.1.0",
+      "class": "missing-path-dependency-manifest",
+      "message": "dependency `ucan` manifest /home/brittonr/mantle-refreshed-profile-20261108/.prepared-cohort.source-built-fixed-point-staging-3716868/inputs/vendor-deps/basalt/vendor/ucan/Cargo.toml is not readable"
+    },
+    {
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#redb@3.1.3",
+      "class": "missing-registry-dependency-version",
+      "message": "registry dependency `redb2_6` requested `redb` version `2.6.0` but available versions are 2.6.4, 3.1.3"
+    }
+  ],
+  "native_unit_graph_blockers": [
+    {
+      "unit_id": null,
+      "package_id": null,
+      "class": "native-package-target-planning-blocked",
+      "message": "native unit graph planning requires ready native package/target facts"
+    },
+    {
+      "unit_id": null,
+      "package_id": "path+native#crunch-store@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `casita` has no native package fact"
+    },
+    {
+      "unit_id": null,
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": null,
+      "package_id": "path+native#snix-castore@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": null,
+      "package_id": "path+native#snix-store@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `redb` has no native package fact"
+    }
+  ],
+  "native_host_unit_graph_blockers": [
+    {
+      "unit_id": null,
+      "package_id": null,
+      "class": "native-package-target-planning-blocked",
+      "message": "native host-unit graph planning requires ready native package/target facts"
+    },
+    {
+      "unit_id": null,
+      "package_id": null,
+      "class": "native-unit-graph-planning-blocked",
+      "message": "native host-unit graph planning requires ready native target unit facts"
+    },
+    {
+      "unit_id": "native:04931ce311cfe1efa8da27d0b9c834c2e7f13110952ac665c05beb3437aad8b3:path+native#snix-castore@0.1.0:snix-castore:lib:build",
+      "package_id": "path+native#snix-castore@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native:3d7c9ab041e9ad9922fcf3efe8402b11e27b1f39953a52f28786354b3bb89082:path+native#mantle@0.1.0:mantle:lib:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:62c2a4ba455ab4c35e72975449424ff614edbcfe29eb3603fe2bbbf56b01c5ef:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:77675cce2367469216cfdaec48426de88e883b8744a98b4bf78a8aaae1f0688d:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:b0ea41d94d7b34659d734fa19e53d2cdb5078bc2a688d4c9a78d1ab24118ddf3:path+native#crunch-store@0.1.0:crunch-store:lib:build",
+      "package_id": "path+native#crunch-store@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `casita` has no native package fact"
+    },
+    {
+      "unit_id": "native:c51ca3e7106abb075372fdbbef881a1a031db04c0564be95685218d531435701:path+native#mantle@0.1.0:crunch:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:c9060b68ddea5575ea638df956b3bb3fd6aadc6f0337a0c492323fc0eba4875f:path+native#snix-store@0.1.0:snix-store:lib:build",
+      "package_id": "path+native#snix-store@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native:ce5d9e83953d90fe1fdf95226965bc5679a3f62306ecdf7cb80c2b2911390c16:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:ed6f284091421b1dd93f8e7db4f3a57b6da6bc02df530fb857f53a790727da12:path+native#mantle@0.1.0:mantle:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    }
+  ],
+  "unit_derivation_graph_blockers": [
+    {
+      "unit_id": "native-host-unit-graph",
+      "package_id": null,
+      "class": "native-package-target-planning-blocked",
+      "message": "native host-unit graph planning requires ready native package/target facts"
+    },
+    {
+      "unit_id": "native-host-unit-graph",
+      "package_id": null,
+      "class": "native-unit-graph-planning-blocked",
+      "message": "native host-unit graph planning requires ready native target unit facts"
+    },
+    {
+      "unit_id": "native-unit-graph",
+      "package_id": null,
+      "class": "native-package-target-planning-blocked",
+      "message": "native unit graph planning requires ready native package/target facts"
+    },
+    {
+      "unit_id": "native-unit-graph",
+      "package_id": "path+native#crunch-store@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `casita` has no native package fact"
+    },
+    {
+      "unit_id": "native-unit-graph",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native-unit-graph",
+      "package_id": "path+native#snix-castore@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native-unit-graph",
+      "package_id": "path+native#snix-store@0.1.0",
+      "class": "unresolved-path-dependency-edge",
+      "message": "path dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native:04931ce311cfe1efa8da27d0b9c834c2e7f13110952ac665c05beb3437aad8b3:path+native#snix-castore@0.1.0:snix-castore:lib:build",
+      "package_id": "path+native#snix-castore@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native:3d7c9ab041e9ad9922fcf3efe8402b11e27b1f39953a52f28786354b3bb89082:path+native#mantle@0.1.0:mantle:lib:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:62c2a4ba455ab4c35e72975449424ff614edbcfe29eb3603fe2bbbf56b01c5ef:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:77675cce2367469216cfdaec48426de88e883b8744a98b4bf78a8aaae1f0688d:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:b0ea41d94d7b34659d734fa19e53d2cdb5078bc2a688d4c9a78d1ab24118ddf3:path+native#crunch-store@0.1.0:crunch-store:lib:build",
+      "package_id": "path+native#crunch-store@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `casita` has no native package fact"
+    },
+    {
+      "unit_id": "native:c51ca3e7106abb075372fdbbef881a1a031db04c0564be95685218d531435701:path+native#mantle@0.1.0:crunch:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:c9060b68ddea5575ea638df956b3bb3fd6aadc6f0337a0c492323fc0eba4875f:path+native#snix-store@0.1.0:snix-store:lib:build",
+      "package_id": "path+native#snix-store@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `redb` has no native package fact"
+    },
+    {
+      "unit_id": "native:ce5d9e83953d90fe1fdf95226965bc5679a3f62306ecdf7cb80c2b2911390c16:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    },
+    {
+      "unit_id": "native:ed6f284091421b1dd93f8e7db4f3a57b6da6bc02df530fb857f53a790727da12:path+native#mantle@0.1.0:mantle:bin:build",
+      "package_id": "path+native#mantle@0.1.0",
+      "class": "unresolved-host-consumer-edge",
+      "message": "target dependency `basalt` has no native package fact"
+    }
+  ],
+  "non_claim": "a blocked planning excerpt; not provider execution, stage equality, fixed point, determinism or release eligibility"
+}

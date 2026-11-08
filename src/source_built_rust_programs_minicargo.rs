@@ -30,6 +30,8 @@ use resolve::Sources;
 use resolve::Topology;
 const STAGE: &str = "full-source-rust-provider";
 const TRIPLE: &str = "x86_64-unknown-linux-musl";
+/// Bounded actual stream capture for cold helper commands that publish files.
+const COMMAND_LOG_BYTES_MAX: u64 = 64 * 1024 * 1024;
 pub(crate) const HELPER_PATH: &str = "mantle-source-authoring/rust-minicargo.c";
 pub(crate) const HELPER_SOURCE: &str = include_str!("source_built_rust_programs_minicargo_helper.c");
 pub(crate) const STD_PROCESS_DESCRIPTOR_PATH: &str = "mantle-source-authoring/rust-minicargo-std-process.patch";
@@ -137,7 +139,16 @@ pub(crate) fn package_fields(
         input("source", manifest),
         workspace.map_or_else(|| lit("-"), |p| input("source", p)),
     ];
-    let mut declared = BTreeMap::new();
+    let mut declared = BTreeMap::from([
+        ("stdout".into(), RecipeOutput {
+            kind: ArtifactKind::Text,
+            bytes_max: COMMAND_LOG_BYTES_MAX,
+        }),
+        ("stderr".into(), RecipeOutput {
+            kind: ArtifactKind::Text,
+            bytes_max: COMMAND_LOG_BYTES_MAX,
+        }),
+    ]);
     let mut exports = BTreeMap::new();
     for (env, name) in fields {
         declared.insert(name.into(), RecipeOutput {

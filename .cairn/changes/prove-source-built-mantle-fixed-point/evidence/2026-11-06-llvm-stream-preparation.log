@@ -1,0 +1,14 @@
++ date -Is
+2026-11-06T20:50:36-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-cold-20261105/prep.sh
+779c71590251fd8d8e32f7dc2801f88a772cfb9a5f61f0f45acf848be2175a72  target/self-hosting-proof/work/cargo-target/release/mantle
+63f59f236b538db0466aa3ca01de5660d99c677ada5dabcb9fb49c01343c85c0  /home/brittonr/mantle-cold-20261105/prep.sh
++ /home/brittonr/mantle-cold-20261105/prep.sh
+{"error":"source recipe: command minicargo.package-metadata.0 must publish actual bounded stdout","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-06T20:59:44-05:00
++ exit 1

@@ -1,0 +1,14 @@
++ date -Is
+2026-11-08T04:14:35-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-refreshed-profile-20261108/prep.sh
+4ac162498e6114c4bd43c30d6fc49325e24431677fe3a57e7c43f3c43b45685a  target/self-hosting-proof/work/cargo-target/release/mantle
+6cf4ff2b3063d3172c2ba400f505b27a71780b01fce27a174ad39b47274770dd  /home/brittonr/mantle-refreshed-profile-20261108/prep.sh
++ /home/brittonr/mantle-refreshed-profile-20261108/prep.sh
+{"error":"Cargo-free source topology is blocked: [\"native-host-unit-graph-planning-blocked\", \"native-package-target-planning-blocked\", \"native-unit-graph-planning-blocked\", \"unit-derivation-graph-blocked\"]","code":3,"kind":"internal"}
++ status=3
++ printf 'preparation_exit_code=%s\n' 3
+preparation_exit_code=3
++ date -Is
+2026-11-08T04:30:18-05:00
++ exit 3

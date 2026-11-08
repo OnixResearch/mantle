@@ -576,7 +576,6 @@ pub(crate) fn author(
         .clone();
     program.exports.insert("toolchain-closure".into(), receipt);
     program.exports.insert("rust-runtime".into(), runtime_members["tree"].clone());
-    program.roots = program.exports.values().cloned().collect::<std::collections::BTreeSet<_>>().into_iter().collect();
     for step in &mut program.steps {
         if matches!(step.operation, RecipeOperation::Exec { .. }) {
             step.outputs.entry("exit-status".into()).or_insert(RecipeOutput {
@@ -585,6 +584,15 @@ pub(crate) fn author(
             });
         }
     }
+    // Every authored action output is an execution obligation, matching the
+    // StageX transition and native-provider authors. Crate directories, package
+    // worlds, controller protocol leaves, and LLVM tool trees must not become
+    // unreachable merely because no requested compiler product names them.
+    program.roots = program
+        .steps
+        .iter()
+        .flat_map(|step| step.outputs.keys().map(|output| produced(&step.id, output)))
+        .collect();
     program.semantic_roots.insert(STAGE.into(), vec![final_provider]);
     crate::source_built_recipe::validate_source_recipe(&program)?;
     let index = serde_json::json!({ "schema": "mantle-rust-source-expansion-v1", "recipe_path": RECIPE_MEMBER, "route_path": PACKAGED_ROUTE_PATH, "archives": archives, "stages": stages });

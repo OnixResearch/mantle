@@ -1,0 +1,46 @@
++ date -Is
+2026-11-08T02:42:40-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home CARGO_NET_OFFLINE=true
++ CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home
++ CARGO_NET_OFFLINE=true
++ export CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ cargo build --release -p mantle --bin mantle
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 3m 46s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
++ b3sum /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
+c9282bf0f93c20264f2bcd25be75043cbbde7bffd54caf789d9d560cae115cb5  /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
++ /home/brittonr/mantle-cold-20261105/prep.sh
+mantle-diagnostic rust-recipe-bytes=259890409 steps=63882 roots=232254 exports=13
+{"error":"source-built fixed-point blocked: authored source member is too large: source-built/rust/program.json","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-08T02:58:27-05:00
++ exit 0

@@ -1,0 +1,222 @@
++ date -Is
+2026-11-08T02:12:10-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home CARGO_NET_OFFLINE=true
++ CARGO_HOME=/home/brittonr/mantle-nonix-selfhost/cargo-home
++ CARGO_NET_OFFLINE=true
++ export CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ CARGO_TARGET_DIR=/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ b3sum src/source_built_rust_programs.rs src/source_built_rust_programs_minicargo.rs src/source_built_rust_programs_llvm.rs
+dd4c2abfec0de583680a72dec332586ec329b138ade03102d466773c77eccd7e  src/source_built_rust_programs.rs
+786707e54e50e72a2a97d69cd5485a9eacbee65474edbb7e58433b7471de3679  src/source_built_rust_programs_minicargo.rs
+c9b1e7fe8c6f30177af27148dbfc4d6ece4e4a8135620dbfbdf45e3a22a45e0d  src/source_built_rust_programs_llvm.rs
++ rustfmt --check --edition 2024 --config skip_children=true src/source_built_rust_programs.rs src/source_built_rust_programs_minicargo.rs src/source_built_rust_programs_llvm.rs
++ cargo test --release -p mantle --bin mantle source_built_recipe::tests:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 9m 10s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 27 tests
+test source_built_recipe::tests::canonical_invocation_preserves_typed_operands_and_rejects_alternative_encodings ... ok
+test source_built_recipe::tests::directory_separator_requires_typed_tree_directory_boundary_and_keeps_negative_members_lexical ... ok
+test source_built_recipe::tests::generated_workspace_and_actual_status_have_bounded_declared_outputs ... ok
+test source_built_recipe::tests::guarded_compile_assemble_link_and_exact_binary_require_dominating_predicates ... ok
+test source_built_recipe::tests::inherited_descriptor_tables_reject_missing_slots_alias_divergence_and_readonly_root_writes ... ok
+test source_built_recipe::tests::installed_image_path_is_only_a_readonly_produced_tree_member_not_an_image_selector ... ok
+test source_built_recipe::tests::invocation_admission_rejects_static_override_or_imported_request_and_executable ... ok
+test source_built_recipe::tests::invocation_cannot_invent_paths_names_control_reads_or_unused_dependencies ... ok
+test source_built_recipe::tests::invocation_cwd_field_is_canonical_and_empty_extension_is_omitted ... ok
+test source_built_recipe::tests::invocation_cwd_requires_one_typed_tree_path_and_rejects_static_conflicts ... ok
+test source_built_recipe::tests::output_seed_admission_preserves_produced_kind_and_declared_bound ... ok
+test source_built_recipe::tests::phase_state_projection_source_accepts_only_normalized_relative_members ... ok
+test source_built_recipe::tests::preparation_rejects_source_timeout_above_global_proof_cap ... ok
+test source_built_recipe::tests::prior_stage_output_requires_its_canonical_producer ... ok
+test source_built_recipe::tests::probe_exit_policy_requires_a_bounded_sorted_normal_exit_set ... ok
+test source_built_recipe::tests::readonly_input_catalog_accounts_only_declared_produced_trees ... ok
+test source_built_recipe::tests::readonly_input_catalog_keeps_uncatalogued_inputs_rejected_and_names_sorted ... ok
+test source_built_recipe::tests::relative_source_operands_require_cwd_authority_without_changing_original_spelling ... ok
+test source_built_recipe::tests::runtime_destinations_reject_duplicate_ancestor_and_reserved_namespaces ... ok
+test source_built_recipe::tests::runtime_tree_prepare_requires_the_authenticated_configured_store_prefix ... ok
+test source_built_recipe::tests::source_creation_masks_reject_bits_outside_permissions ... ok
+test source_built_recipe::tests::source_program_import_cannot_hide_unadmitted_bytes_behind_a_symlink ... ok
+test source_built_recipe::tests::source_program_imports_must_stay_in_the_authenticated_tree ... ok
+test source_built_recipe::tests::source_program_path_labels_reject_dot_components ... ok
+test source_built_recipe::tests::source_timeout_spans_accept_nested_arenas_and_reject_crossing_unknown_or_reversed_endpoints ... ok
+test source_built_recipe::tests::typed_text_slices_and_runtime_words_preserve_declared_authority ... ok
+test source_built_recipe::tests::workspace_mounts_preserve_only_declared_output_tree_namespaces ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 2909 filtered out; finished in 0.05s
+
++ cargo test --release -p mantle --bin mantle source_built_rust_programs:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 2.26s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 41 tests
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+test source_built_rust_programs::resolve::tests::atomic_predicates_follow_the_original_fixed_target ... ok
+test source_built_rust_programs::resolve::tests::atomic_target_dependencies_select_only_supported_edges ... ok
+test source_built_rust_programs::resolve::tests::cargo_feature_does_not_enable_global_tracing_mode ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... ok
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... ok
+test source_built_rust_programs::resolve::tests::duplicate_exact_qualified_lock_identity_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::enabled_cargo_feature_does_not_populate_global_target_cfg ... ok
+test source_built_rust_programs::resolve::tests::local_path_owner_is_not_replaced_by_same_version_registry_record ... ok
+test source_built_rust_programs::resolve::tests::malformed_or_trailing_source_qualifiers_do_not_select_unique_names ... ok
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... ok
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::one_manifest_cannot_merge_local_and_registry_lock_authorities ... ok
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... ok
+test source_built_rust_programs::resolve::tests::qualified_lock_source_must_match_without_source_fallback ... ok
+test source_built_rust_programs::resolve::tests::sealed_native_profile_selects_rustix_linux_raw_backend ... ok
+test source_built_rust_programs::resolve::tests::selected_dependency_kinds_still_reject_unclassified_predicates ... ok
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... ok
+test source_built_rust_programs::resolve::tests::source_omission_admits_version_before_unique_local_precedence ... ok
+test source_built_rust_programs::resolve::tests::source_qualified_edge_retains_exact_transitive_lock_owner ... ok
+test source_built_rust_programs::resolve::tests::target_optional_features_classify_predicates_only_when_selected ... ok
+test source_built_rust_programs::resolve::tests::unselected_dependency_kinds_do_not_require_target_classification ... ok
+test source_built_rust_programs::resolve::tests::unset_getrandom_override_selects_linux_default_dependencies ... ok
+test source_built_rust_programs::successors::graph::tests::build_metadata_and_prerelease_versions_keep_distinct_admitted_producers ... ok
+test source_built_rust_programs::successors::graph::tests::combined_crate_types_and_literal_escape_tokens_do_not_alias ... ok
+test source_built_rust_programs::successors::native::tests::source_reservations_use_runtime_ceiling_not_expanded_declarations ... ok
+test source_built_rust_programs::translation::macros::tests::macro_5612_slots_use_constant_declarations_and_exact_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_config_preserves_typed_operands_environment_cwd_and_metadata ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_output_cwd_and_referenced_executable_alias_remain_typed ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_rejects_conflicting_continuation_state ... ok
+test source_built_rust_programs::translation::macros::tests::macro_inventory_rejects_non_basenames_and_non_produced_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_reservations_obey_command_ceiling_not_expansion_size ... ok
+test source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke ... ignored, requires explicit static C compiler, reviewed bwrap and fresh evidence root
+test source_built_rust_programs::translation::smoke_tests::compact_macro_protected_smoke ... ignored, requires explicit pinned musl compiler/linker, reviewed bwrap and fresh evidence root
+
+test result: ok. 39 passed; 0 failed; 2 ignored; 0 measured; 2895 filtered out; finished in 0.03s
+
++ cargo clippy --release -p mantle --bin mantle --no-deps -- -D warnings
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo clippy --fix --lib -p crunch-nix-gateway -- --no-deps -D warnings` to apply 1 suggestion)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 1m 03s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
++ cargo build --release -p mantle --bin mantle
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 5m 17s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
++ b3sum /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
+12852960f0b944bc6bf00c5e8951d46b766630e1980627335bec47fa8ed241f7  /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
++ date -Is
+2026-11-08T02:27:49-05:00

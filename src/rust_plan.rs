@@ -2035,8 +2035,9 @@ pub(crate) fn plan_cargo_free_unit_topology(
     let inputs = plan_cargo_free_source_inputs(options, Some(vendor_roots))?;
     if !inputs.source_closure.ready || !inputs.cargo_mode.blockers.is_empty() {
         return Err(RunError::Internal(format!(
-            "Cargo-free source topology is blocked: {:?}",
-            inputs.cargo_mode.blockers
+            "Cargo-free source topology is blocked: {:?}{}",
+            inputs.cargo_mode.blockers,
+            cargo_free_blocker_detail(&inputs)
         )));
     }
     let graph = inputs.native_layers.derivations;
@@ -2401,6 +2402,77 @@ fn build_captured_rust_plan_without_cargo(
     let mut inputs = plan_cargo_free_source_inputs(options, None)?;
     inputs.rustc_version_verbose = rustc_version_verbose.trim().to_string();
     build_rust_plan_receipt(options, inputs)
+}
+
+/// Readiness class names alone cannot identify a blocked unit. Project the
+/// first concrete blockers from every planned layer, bounded so a large broken
+/// graph cannot flood diagnostics.
+fn cargo_free_blocker_detail(inputs: &RustPlanReceiptInputs) -> String {
+    const BLOCKERS_MAX: usize = 8;
+    const DETAIL_BYTES_MAX: usize = 4096;
+    let mut detail = String::new();
+    let mut push = |label: &str, entries: Vec<String>| {
+        for entry in entries.into_iter().take(BLOCKERS_MAX) {
+            if detail.len() >= DETAIL_BYTES_MAX {
+                detail.push_str(" | detailed blockers truncated");
+                return;
+            }
+            detail.push_str(&format!(" | {label}: {entry}"));
+        }
+    };
+    push(
+        "source-closure",
+        inputs
+            .source_closure
+            .blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect(),
+    );
+    push(
+        "package-targets",
+        inputs
+            .native_layers
+            .package_targets
+            .blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect(),
+    );
+    push(
+        "units",
+        inputs
+            .native_layers
+            .units
+            .blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect(),
+    );
+    push(
+        "host-units",
+        inputs
+            .native_layers
+            .host_units
+            .blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect(),
+    );
+    push(
+        "derivations",
+        inputs
+            .native_layers
+            .derivations
+            .blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect(),
+    );
+    if detail.len() > DETAIL_BYTES_MAX {
+        detail.truncate(DETAIL_BYTES_MAX);
+    }
+    detail
 }
 
 // Source topology does not depend on an executable compiler. Keeping this
@@ -5464,7 +5536,6 @@ fn native_package_dependencies(
     let dev_dependencies = native_dev_dependencies(
         inputs.source_root,
         &inputs.manifest.dev_dependencies,
-        package_id.clone(),
         inputs.manifest_inputs.registry_sources,
         inputs.manifest_inputs.git_sources,
     )?;
@@ -6026,7 +6097,6 @@ fn native_build_dependencies(
 fn native_dev_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
-    package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
@@ -6043,14 +6113,13 @@ fn native_dev_dependencies(
         } else {
             match native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning) {
                 Ok(Some(source)) => PathBuf::from(source),
-                Ok(None) => continue,
-                Err(err) => {
-                    return Err(native_blocker(NativePackageBlockerInputs {
-                        package_id: package_id.clone(),
-                        class: err.class,
-                        message: &err.message,
-                    }));
-                }
+                // A test-only requirement stays outside build-mode facts. The
+                // dedicated dev-test rail selects and validates the dev
+                // dependencies it actually needs, so an unresolvable test-only
+                // requirement (for example a vendored crate pinning an exact
+                // dev version the vendor set does not carry) cannot block
+                // ordinary package/target planning.
+                Ok(None) | Err(_) => continue,
             }
         };
         if !manifest_path.is_file() {
@@ -25928,6 +25997,27 @@ unix_dep = { path = "../unix-dep" }
         assert!(err.message.contains("thiserror-impl"));
         assert!(err.message.contains("1.0.69"));
         assert!(err.message.contains("2.0.18"));
+    }
+
+    #[test]
+    fn build_mode_dev_dependency_requirements_do_not_block_package_facts() {
+        let dir = TempDir::new().unwrap();
+        let mut registry = empty_registry_planning();
+        registry.sources = vec![
+            test_registry_source("redb", "2.6.4", &dir.path().join("redb-2.6.4/Cargo.toml")),
+            test_registry_source("redb", "3.1.3", &dir.path().join("redb-3.1.3/Cargo.toml")),
+        ];
+        let git = empty_git_planning();
+        let dev = BTreeMap::from([(
+            "redb2_6".to_string(),
+            toml::from_str("version = \"=2.6.0\"\npackage = \"redb\"").unwrap(),
+        )]);
+
+        let resolved = native_dev_dependencies(dir.path(), &dev, &registry, &git).unwrap();
+
+        assert!(resolved.is_empty());
+        // The same unsatisfiable exact requirement still rejects a real build edge.
+        assert!(native_dependency_source("redb2_6", &dev["redb2_6"], &registry, &git).is_err());
     }
 
     #[test]

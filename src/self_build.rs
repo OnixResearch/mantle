@@ -88,6 +88,11 @@ const MAX_STAGEX_BOOTSTRAP_TOOL_DIGESTS: usize = 256;
 const MAX_STAGEX_ELIGIBILITY_FAILURES: usize = 400_005;
 
 /// Top-level repo entries included in the staged source tree.
+///
+/// Every declared Cargo target must have its source inside this set: the
+/// root package declares bins under `tools`, explicitly listed examples, and
+/// auto-discovered integration tests. Omitting one makes Cargo-free planning
+/// reject a declared target instead of planning the workspace.
 pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     ".cargo",
     "Cargo.lock",
@@ -96,9 +101,12 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "builders",
     "config",
     "crates",
+    "examples",
     "lib",
     "rust-toolchain.toml",
     "src",
+    "tests",
+    "tools",
     "vendor",
     "vendor-deps",
 ];
@@ -3569,8 +3577,11 @@ mod tests {
         std::fs::create_dir_all(dir.join("builders")).unwrap();
         std::fs::create_dir_all(dir.join("config").join("action-result-policy").join("generated")).unwrap();
         std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
+        std::fs::create_dir_all(dir.join("examples")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("tests")).unwrap();
+        std::fs::create_dir_all(dir.join("tools")).unwrap();
         std::fs::create_dir_all(dir.join("vendor").join("patched")).unwrap();
         let vendor_dep = dir.join("vendor-deps").join("dep-a");
         std::fs::create_dir_all(&vendor_dep).unwrap();
@@ -3598,6 +3609,9 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("crates").join("crate-a").join("lib.rs"), "pub fn x() {}\n").unwrap();
+        std::fs::write(dir.join("examples").join("demo.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.join("tests").join("smoke.rs"), "fn smoke() {}\n").unwrap();
+        std::fs::write(dir.join("tools").join("tool.rs"), "fn main() {}\n").unwrap();
         std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
         std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(dir.join("vendor").join("patched").join("README"), "vendor patch\n").unwrap();
@@ -4011,6 +4025,11 @@ mod tests {
         assert!(stage.path().join("vendor").join("patched").join("README").is_file());
         assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
         assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
+        // Declared Cargo targets must keep their sources; planning rejects a
+        // target whose source the staged tree omits.
+        assert!(stage.path().join("examples").join("demo.rs").is_file());
+        assert!(stage.path().join("tests").join("smoke.rs").is_file());
+        assert!(stage.path().join("tools").join("tool.rs").is_file());
         assert!(!stage.path().join("target").exists());
         assert!(!stage.path().join("scratch.txt").exists());
         assert!(!stage.path().join("vendor").join(".pi").exists());
