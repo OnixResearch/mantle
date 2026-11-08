@@ -6453,8 +6453,10 @@ fn native_workspace_dependency(
     // decision.
     let member_default_features = dependency_default_features(inputs.value)?;
     let inherited_default_features = dependency_default_features(inputs.inherited)?;
+    // Cargo only rejects a contradiction: a member value with no inherited
+    // decision is ignored, matching its own inheritance diagnostics.
     if let Some(member_default_features) = member_default_features
-        && Some(member_default_features) != inherited_default_features
+        && inherited_default_features.is_some_and(|inherited| inherited != member_default_features)
     {
         return Err(native_blocker(NativePackageBlockerInputs {
             package_id: inputs.planning.package_id.clone(),
@@ -26304,10 +26306,32 @@ unix_dep = { path = "../unix-dep" }
         })
         .unwrap();
         assert_eq!(local_selected[0].manifest_path, normalize_path_string(&dir.path().join("crates/Cargo.toml")));
-        // A member may not contradict the inherited default-feature decision.
-        let contradictory = BTreeMap::from([(
+        // A member value without an inherited decision is ignored, so it is not
+        // a contradiction.
+        let local_default = BTreeMap::from([(
             "serde".to_string(),
             toml::from_str("workspace = true\ndefault-features = false").unwrap(),
+        )]);
+        let (_, local_selected_default) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+            workspace_root: dir.path(),
+            source_root: &member,
+            member_package_id: "path+file:///member#member@0.1.0",
+            dependencies: &local_default,
+            package_id: Some("path+file:///member#member@0.1.0".to_string()),
+            registry_sources: &registry,
+            git_sources: &git,
+        })
+        .unwrap();
+        assert_eq!(local_selected_default.len(), 1);
+        // A member may not contradict the inherited default-feature decision.
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"member\"]\n\n[workspace.dependencies]\nserde = { version = \"1.0\", features = [\"derive\"], default-features = false }\n",
+        )
+        .unwrap();
+        let contradictory = BTreeMap::from([(
+            "serde".to_string(),
+            toml::from_str("workspace = true\ndefault-features = true").unwrap(),
         )]);
         let error = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
             workspace_root: dir.path(),

@@ -97,11 +97,20 @@ Cargo's documented behavior for captured members:
 - a `[workspace.dependencies]` `path` resolves relative to the workspace root,
   never to the inheriting member.
 
-After them the package/target layer names four blockers:
-`unsupported-target-cfg-surface` for `cfg(antithesis)` and `cfg(__ui_tests)`,
-`unsupported-workspace-dependency-options` for `chrono`'s inherited
-default-features decision, and the `transactional-reconciliation-core` git
-reference mismatch. Those are the next slice; none is a missing source.
+Two further admissions followed. Cargo sets no `--cfg` for this build, so a
+bare flag name in a target table is unset and therefore false; malformed atoms
+and unrecognized `key = value` predicates remain unadmitted
+(`cfg(antithesis)`, `cfg(__ui_tests)` and mixed `all`/`not` expressions now
+evaluate, while `cfg(target_osx = "linux")` still rejects). A member
+`default-features` value with no inherited decision is ignored, matching Cargo,
+and only a genuine contradiction rejects.
+
+The package/target layer now names three blockers:
+`unsupported-workspace-dependency-options` for one inherited `chrono`
+default-features contradiction, `git-dependency-reference-mismatch` for
+`transactional-reconciliation-core`, and `unsupported-target-cfg-surface` for a
+predicate over `target_feature = "aes"`, which this plan does not model. Those
+are the next slice; none is a missing source.
 
 ## Checks
 
@@ -110,6 +119,8 @@ reference mismatch. Those are the next slice; none is a missing source.
 ```text
 captured repository layout + capture binding   2 passed
 git source planning and resolution            6 passed
+inherited feature/optionality/path handling   1 passed
+cfg admission                                 1 passed
 vendor input record refresh                   1 passed
 Mantle source record refresh                  4 passed
 dev-dependency build-mode regression          1 passed
@@ -118,8 +129,8 @@ dev-dependency build-mode regression          1 passed
 Leaf `rustfmt --check`, `python3 -c ast.parse` of the capture script, strict
 release Clippy with `-D warnings` and the release CLI build passed. The final
 build identity is
-`ef8e07a937e578e7a61fd61b3d7ae0623785f541fbfc95cb99fe9acff5d9377d`.
+`fa59be46eb39145c95506248eb2911cb28653e2573eaaa1f399cbfb1f4717d6a`.
 The probe excerpt now records the four-blocker state with full log BLAKE3
-`69251837934e3b1e…`.
+`e0206f9ee3aa94e2…`.
 No prepared profile, provider execution, stage equality, fixed point,
 determinism receipt or release eligibility is claimed.

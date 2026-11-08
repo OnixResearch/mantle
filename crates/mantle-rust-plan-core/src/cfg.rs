@@ -262,7 +262,7 @@ fn evaluate_atom(atom: &str, target: NativeTargetClassification<'_>) -> Option<b
         };
         return Some(is_target_match);
     }
-    matches!(
+    if matches!(
         atom,
         "loom"
             | "miri"
@@ -276,8 +276,16 @@ fn evaluate_atom(atom: &str, target: NativeTargetClassification<'_>) -> Option<b
             | "windows_raw_dylib"
             | "rustix_use_libc"
             | "rustix_use_experimental_asm"
-    )
-    .then_some(false)
+    ) {
+        return Some(false);
+    }
+    // Cargo sets no `--cfg` flags for this build, so any other bare flag name
+    // is unset and therefore false. Malformed atoms (including `key = value`
+    // with an unrecognized key) remain unadmitted rather than implicitly false.
+    let mut characters = atom.chars();
+    let is_identifier = characters.next().is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && characters.all(|character| character.is_ascii_alphanumeric() || character == '_');
+    is_identifier.then_some(false)
 }
 
 #[cfg(test)]
@@ -296,6 +304,12 @@ mod tests {
         assert_eq!(evaluate("cfg(any())"), Some(false));
         assert_eq!(evaluate("cfg(all())"), Some(true));
         assert_eq!(evaluate("cfg(any(target_os = \"linux))"), None);
+        // Unset flags are false; unrecognized `key = value` atoms are not.
+        assert_eq!(evaluate("cfg(antithesis)"), Some(false));
+        assert_eq!(evaluate("cfg(__ui_tests)"), Some(false));
+        assert_eq!(evaluate("cfg(all(unix, not(antithesis)))"), Some(true));
+        assert_eq!(evaluate("cfg(target_osx = \"linux\")"), None);
+        assert_eq!(evaluate("cfg(9lives)"), None);
         assert_eq!(evaluate("cfg(any(unix, not(windows)"), None);
     }
 

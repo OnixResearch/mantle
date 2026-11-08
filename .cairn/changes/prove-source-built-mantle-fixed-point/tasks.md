@@ -157,9 +157,11 @@ leaf formatting, strict release Clippy and the release build passed. The two
 intra-repository path-dependency blockers are gone; the package/target layer now
 names seven concrete blockers. Additive member features, inherited optionality
 and workspace-root-relative path dependencies are now admitted per Cargo
-semantics, which leaves four: `unsupported-target-cfg-surface` for two test-only
-predicates, one inherited default-features contradiction (`chrono`), and one git
-reference mismatch (`transactional-reconciliation-core`). Details are retained in
+semantics, unset bare cfg flags evaluate false as Cargo does, and only a genuine
+default-features contradiction rejects. That leaves three: one inherited
+default-features contradiction (`chrono`), one git reference mismatch
+(`transactional-reconciliation-core`), and one `target_feature = "aes"` cfg
+predicate the plan does not model. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.

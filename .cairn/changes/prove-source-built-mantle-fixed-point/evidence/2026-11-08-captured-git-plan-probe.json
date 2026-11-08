@@ -2,9 +2,9 @@
   "schema": "mantle-cargo-free-plan-probe-excerpt-v1",
   "command": "mantle --json rust-plan --root <hydrated mantle-source copy with captured vendor inputs> --no-cargo-oracle --profile release",
   "exit_code": 0,
-  "full_log_blake3": "69251837934e3b1eee8d79c214656526fc57b7e00bd7701327c319959563e2a1",
-  "full_log_bytes": 5159374,
-  "binary_blake3": "ef8e07a937e578e7a61fd61b3d7ae0623785f541fbfc95cb99fe9acff5d9377d",
+  "full_log_blake3": "e0206f9ee3aa94e248a1f6bcd5a391c6cbed887be348e2fa1a4505081dd63754",
+  "full_log_bytes": 5390041,
+  "binary_blake3": "fa59be46eb39145c95506248eb2911cb28653e2573eaaa1f399cbfb1f4717d6a",
   "readiness": {
     "source_closure": true,
     "native_package_target_planning": false,
@@ -20,11 +20,6 @@
   ],
   "native_package_target_blockers": [
     {
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
-      "class": "unsupported-target-cfg-surface",
-      "message": "target cfg `cfg(antithesis)` is outside the bounded native target-cfg fragment"
-    },
-    {
       "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_ext@0.8.0-pre.7",
       "class": "unsupported-workspace-dependency-options",
       "message": "workspace dependency `chrono` contradicts its inherited default-features decision"
@@ -35,9 +30,9 @@
       "message": "git dependency `transactional-reconciliation-core` requested source identity not present in captured source facts"
     },
     {
-      "package_id": "registry+https://github.com/rust-lang/crates.io-index#time@0.3.47",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#aegis@0.9.8",
       "class": "unsupported-target-cfg-surface",
-      "message": "target cfg `cfg(__ui_tests)` is outside the bounded native target-cfg fragment"
+      "message": "target cfg `cfg(not(any(all(target_arch = \"aarch64\", target_feature = \"aes\"),all(target_arch = \"x86_64\", target_feature = \"aes\"),all(target_arch = \"x86\", target_feature = \"aes\"))))` is outside the bounded native target-cfg fragment"
     }
   ],
   "native_unit_graph_blockers": [
@@ -49,15 +44,15 @@
     },
     {
       "unit_id": null,
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
+      "message": "path dependency `aegis` has no native package fact"
     },
     {
       "unit_id": null,
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
+      "message": "path dependency `turso_ext` has no native package fact"
     },
     {
       "unit_id": null,
@@ -67,27 +62,9 @@
     },
     {
       "unit_id": null,
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": null,
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": null,
       "package_id": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e919b4573a7865559db2dc98a99c0c58144#basalt@0.1.0",
       "class": "unresolved-path-dependency-edge",
       "message": "path dependency `ucan` has no native package fact"
-    },
-    {
-      "unit_id": null,
-      "package_id": "registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `time` has no native package fact"
     }
   ],
   "native_host_unit_graph_blockers": [
@@ -110,40 +87,22 @@
       "message": "target dependency `ucan` has no native package fact"
     },
     {
-      "unit_id": "native:9fac67b9ebde5e361a691839fb17935a337e693d4231f6f61663d399d4ec3666:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7:turso_sync_sdk_kit:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:d910ddd545834cb1e0dec11bfb58358bf6f104cbf17ea6ae3d1c73969771bd99:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:d910ddd545834cb1e0dec11bfb58358bf6f104cbf17ea6ae3d1c73969771bd99:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
+      "unit_id": "native:a616296e8b784bcf5d4357ccba7ff41b4a5ab8d2d26d38acd8bddd133f1597c7:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
       "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
       "message": "target dependency `turso_ext` has no native package fact"
     },
     {
-      "unit_id": "native:e4fa872dcd8cf0d6fea6b990e2f0e00ec42ae3abc9f89b2e42f3bdd8548b02ab:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7:turso:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7",
+      "unit_id": "native:d11b86a29e4082ed033f3ca49ba747bdfe6e59ce45091196d2e3ccc9ba015418:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7:turso_core:lib:build",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
+      "message": "target dependency `aegis` has no native package fact"
     },
     {
-      "unit_id": "native:e66138816e0555216ebaea08393d18e6228aa1d0fe1462930cc771aa078af116:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7:turso_sync_engine:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7",
+      "unit_id": "native:d11b86a29e4082ed033f3ca49ba747bdfe6e59ce45091196d2e3ccc9ba015418:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7:turso_core:lib:build",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:f6e76c10edcc9a41f3d6f25f7169e8495acaa1db952f1efcdc7fbee059cb49d2:registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5:tracing_appender:lib:build",
-      "package_id": "registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `time` has no native package fact"
+      "message": "target dependency `turso_ext` has no native package fact"
     }
   ],
   "unit_derivation_graph_blockers": [
@@ -167,15 +126,15 @@
     },
     {
       "unit_id": "native-unit-graph",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
+      "message": "path dependency `aegis` has no native package fact"
     },
     {
       "unit_id": "native-unit-graph",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
+      "message": "path dependency `turso_ext` has no native package fact"
     },
     {
       "unit_id": "native-unit-graph",
@@ -185,27 +144,9 @@
     },
     {
       "unit_id": "native-unit-graph",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native-unit-graph",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native-unit-graph",
       "package_id": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e919b4573a7865559db2dc98a99c0c58144#basalt@0.1.0",
       "class": "unresolved-path-dependency-edge",
       "message": "path dependency `ucan` has no native package fact"
-    },
-    {
-      "unit_id": "native-unit-graph",
-      "package_id": "registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5",
-      "class": "unresolved-path-dependency-edge",
-      "message": "path dependency `time` has no native package fact"
     },
     {
       "unit_id": "native:6cb63afad9da27b68c3320766fbbba139e6be1b5c92025a0a4363a1f91699bc1:git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e919b4573a7865559db2dc98a99c0c58144#basalt@0.1.0:basalt:lib:build",
@@ -214,40 +155,22 @@
       "message": "target dependency `ucan` has no native package fact"
     },
     {
-      "unit_id": "native:9fac67b9ebde5e361a691839fb17935a337e693d4231f6f61663d399d4ec3666:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7:turso_sync_sdk_kit:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:d910ddd545834cb1e0dec11bfb58358bf6f104cbf17ea6ae3d1c73969771bd99:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:d910ddd545834cb1e0dec11bfb58358bf6f104cbf17ea6ae3d1c73969771bd99:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
+      "unit_id": "native:a616296e8b784bcf5d4357ccba7ff41b4a5ab8d2d26d38acd8bddd133f1597c7:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7:turso_sdk_kit:lib:build",
       "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sdk_kit@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
       "message": "target dependency `turso_ext` has no native package fact"
     },
     {
-      "unit_id": "native:e4fa872dcd8cf0d6fea6b990e2f0e00ec42ae3abc9f89b2e42f3bdd8548b02ab:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7:turso:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso@0.8.0-pre.7",
+      "unit_id": "native:d11b86a29e4082ed033f3ca49ba747bdfe6e59ce45091196d2e3ccc9ba015418:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7:turso_core:lib:build",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
+      "message": "target dependency `aegis` has no native package fact"
     },
     {
-      "unit_id": "native:e66138816e0555216ebaea08393d18e6228aa1d0fe1462930cc771aa078af116:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7:turso_sync_engine:lib:build",
-      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_sync_engine@0.8.0-pre.7",
+      "unit_id": "native:d11b86a29e4082ed033f3ca49ba747bdfe6e59ce45091196d2e3ccc9ba015418:git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7:turso_core:lib:build",
+      "package_id": "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c#turso_core@0.8.0-pre.7",
       "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `turso_core` has no native package fact"
-    },
-    {
-      "unit_id": "native:f6e76c10edcc9a41f3d6f25f7169e8495acaa1db952f1efcdc7fbee059cb49d2:registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5:tracing_appender:lib:build",
-      "package_id": "registry+https://github.com/rust-lang/crates.io-index#tracing-appender@0.2.5",
-      "class": "unresolved-host-consumer-edge",
-      "message": "target dependency `time` has no native package fact"
+      "message": "target dependency `turso_ext` has no native package fact"
     }
   ],
   "non_claim": "a blocked planning excerpt; not provider execution, stage equality, fixed point, determinism or release eligibility"
