@@ -6392,7 +6392,9 @@ fn workspace_dependency_manifest_path(
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let manifest_path = if let Some(path) = dependency_path(inputs.inherited) {
-        inputs.planning.source_root.join(path).join("Cargo.toml")
+        // `[workspace.dependencies]` paths are relative to the workspace root,
+        // never to the member that inherits them.
+        inputs.planning.workspace_root.join(path).join("Cargo.toml")
     } else {
         native_dependency_source(
             inputs.name,
@@ -6442,14 +6444,30 @@ fn native_workspace_dependency(
         return Err(native_blocker(NativePackageBlockerInputs {
             package_id: inputs.planning.package_id.clone(),
             class: "unsupported-workspace-dependency-options",
+            message: &format!("workspace dependency `{}` uses unsupported inherited platform behavior", inputs.name),
+        }));
+    }
+    let mut inherited_features = dependency_features(inputs.inherited)?;
+    // A member may add features to an inherited dependency; the effective set
+    // is the union. A member may not contradict the inherited default-feature
+    // decision.
+    let member_default_features = dependency_default_features(inputs.value)?;
+    let inherited_default_features = dependency_default_features(inputs.inherited)?;
+    if let Some(member_default_features) = member_default_features
+        && Some(member_default_features) != inherited_default_features
+    {
+        return Err(native_blocker(NativePackageBlockerInputs {
+            package_id: inputs.planning.package_id.clone(),
+            class: "unsupported-workspace-dependency-options",
             message: &format!(
-                "workspace dependency `{}` uses unsupported inherited feature/default-feature/platform behavior",
+                "workspace dependency `{}` contradicts its inherited default-features decision",
                 inputs.name
             ),
         }));
     }
-    let inherited_features = dependency_features(inputs.inherited)?;
-    let inherited_default_features = dependency_default_features(inputs.inherited)?;
+    inherited_features.extend(dependency_features(inputs.value)?);
+    inherited_features.sort();
+    inherited_features.dedup();
     let manifest_path = workspace_dependency_manifest_path(&inputs)?;
     let normalized_manifest_path = normalize_path_string(&manifest_path);
     let summary = NativeWorkspaceDependencySummary {
@@ -6536,7 +6554,9 @@ fn dependency_has_unsupported_workspace_member_options(value: &toml::Value) -> b
     let Some(table) = value.as_table() else {
         return false;
     };
-    ["features", "default-features", "optional", "target"].iter().any(|key| table.contains_key(*key))
+    // Additive features, a matching default-features decision and optionality
+    // are supported; platform selection is not.
+    ["target"].iter().any(|key| table.contains_key(*key))
 }
 
 fn dependency_has_unsupported_workspace_inherited_options(value: &toml::Value) -> bool {
@@ -26213,6 +26233,93 @@ unix_dep = { path = "../unix-dep" }
         assert!(err.message.contains("thiserror-impl"));
         assert!(err.message.contains("1.0.69"));
         assert!(err.message.contains("2.0.18"));
+    }
+
+    #[test]
+    fn inherited_workspace_dependency_features_are_additive() {
+        let dir = TempDir::new().unwrap();
+        let member = dir.path().join("member");
+        std::fs::create_dir_all(&member).unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"member\"]\n\n[workspace.dependencies]\nserde = { version = \"1.0\", features = [\"derive\"] }\n",
+        )
+        .unwrap();
+        let mut registry = empty_registry_planning();
+        let serde_manifest = dir.path().join("serde-1.0.228/Cargo.toml");
+        std::fs::create_dir_all(serde_manifest.parent().unwrap()).unwrap();
+        std::fs::write(&serde_manifest, "[package]\nname = \"serde\"\nversion = \"1.0.228\"\n").unwrap();
+        registry.sources = vec![test_registry_source("serde", "1.0.228", &serde_manifest)];
+        let git = empty_git_planning();
+        let dependencies = BTreeMap::from([(
+            "serde".to_string(),
+            toml::from_str("workspace = true\nfeatures = [\"alloc\"]").unwrap(),
+        )]);
+
+        let (summaries, selected) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+            workspace_root: dir.path(),
+            source_root: &member,
+            member_package_id: "path+file:///member#member@0.1.0",
+            dependencies: &dependencies,
+            package_id: Some("path+file:///member#member@0.1.0".to_string()),
+            registry_sources: &registry,
+            git_sources: &git,
+        })
+        .unwrap();
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(summaries[0].inherited_features, vec!["alloc".to_string(), "derive".to_string()]);
+        // Optionality and platform selection follow Cargo: a member may mark an
+        // inherited dependency optional, but may not select a platform.
+        let optional =
+            BTreeMap::from([("serde".to_string(), toml::from_str("workspace = true\noptional = true").unwrap())]);
+        let (_, optional_selected) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+            workspace_root: dir.path(),
+            source_root: &member,
+            member_package_id: "path+file:///member#member@0.1.0",
+            dependencies: &optional,
+            package_id: Some("path+file:///member#member@0.1.0".to_string()),
+            registry_sources: &registry,
+            git_sources: &git,
+        })
+        .unwrap();
+        assert_eq!(optional_selected.len(), 1);
+        std::fs::create_dir_all(dir.path().join("crates")).unwrap();
+        std::fs::write(dir.path().join("crates/Cargo.toml"), "[package]\nname = \"dep\"\nversion = \"1.0.0\"\n")
+            .unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"member\"]\n\n[workspace.dependencies]\nserde = { version = \"1.0\", features = [\"derive\"] }\nlocal = { path = \"crates\" }\n",
+        )
+        .unwrap();
+        let local = BTreeMap::from([("local".to_string(), toml::from_str("workspace = true").unwrap())]);
+        let (_, local_selected) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+            workspace_root: dir.path(),
+            source_root: &member,
+            member_package_id: "path+file:///member#member@0.1.0",
+            dependencies: &local,
+            package_id: Some("path+file:///member#member@0.1.0".to_string()),
+            registry_sources: &registry,
+            git_sources: &git,
+        })
+        .unwrap();
+        assert_eq!(local_selected[0].manifest_path, normalize_path_string(&dir.path().join("crates/Cargo.toml")));
+        // A member may not contradict the inherited default-feature decision.
+        let contradictory = BTreeMap::from([(
+            "serde".to_string(),
+            toml::from_str("workspace = true\ndefault-features = false").unwrap(),
+        )]);
+        let error = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+            workspace_root: dir.path(),
+            source_root: &member,
+            member_package_id: "path+file:///member#member@0.1.0",
+            dependencies: &contradictory,
+            package_id: Some("path+file:///member#member@0.1.0".to_string()),
+            registry_sources: &registry,
+            git_sources: &git,
+        })
+        .unwrap_err();
+        assert_eq!(error.class, "unsupported-workspace-dependency-options");
     }
 
     #[test]

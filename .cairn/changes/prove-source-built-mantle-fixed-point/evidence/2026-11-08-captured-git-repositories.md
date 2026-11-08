@@ -86,6 +86,23 @@ are the propagated consequence of those package facts, plus
 admitted (`turso`, `ucan`, `artifact-auth-core`, `bounded-tree-cap`). No source
 was substituted and no bound was lowered to reach this state.
 
+Three workspace-inheritance repairs followed from those readings, each matching
+Cargo's documented behavior for captured members:
+
+- additive member `features` on an inherited dependency are unioned with the
+  inherited set, and a member `default-features` decision may not contradict the
+  inherited one (`inherited_workspace_dependency_features_are_additive`);
+- a member may mark an inherited dependency `optional`; only platform selection
+  remains unsupported;
+- a `[workspace.dependencies]` `path` resolves relative to the workspace root,
+  never to the inheriting member.
+
+After them the package/target layer names four blockers:
+`unsupported-target-cfg-surface` for `cfg(antithesis)` and `cfg(__ui_tests)`,
+`unsupported-workspace-dependency-options` for `chrono`'s inherited
+default-features decision, and the `transactional-reconciliation-core` git
+reference mismatch. Those are the next slice; none is a missing source.
+
 ## Checks
 
 `2026-11-08-captured-git-checks.log` is the combined focused run:
@@ -99,8 +116,10 @@ dev-dependency build-mode regression          1 passed
 ```
 
 Leaf `rustfmt --check`, `python3 -c ast.parse` of the capture script, strict
-release Clippy with `-D warnings` and the release CLI build passed. The build
-identity is
-`340c6b852f7b5574571a93a37bfde6c32909e06b2638f03c1e5f672b1977258e`.
+release Clippy with `-D warnings` and the release CLI build passed. The final
+build identity is
+`ef8e07a937e578e7a61fd61b3d7ae0623785f541fbfc95cb99fe9acff5d9377d`.
+The probe excerpt now records the four-blocker state with full log BLAKE3
+`69251837934e3b1e…`.
 No prepared profile, provider execution, stage equality, fixed point,
 determinism receipt or release eligibility is claimed.

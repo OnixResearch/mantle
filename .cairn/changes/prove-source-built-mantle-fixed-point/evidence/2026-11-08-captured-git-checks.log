@@ -1,5 +1,5 @@
 + date -Is
-2026-11-08T14:41:45-05:00
+2026-11-08T15:20:18-05:00
 + cd /home/brittonr/git/OnixResearch/mantle
 + export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
 + PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
@@ -11,7 +11,7 @@
 + export SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
 + SNIX_BUILD_SANDBOX_SHELL=/nix/store/aflblv48yhibafwyvh2qfl0r1xx41d6v-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
 + b3sum src/rust_plan.rs src/source_bundle.rs src/main.rs src/command_input.rs scripts/capture-git-repositories.py
-b48526c5b119e6b240d454037ca4e86079c9d2958d5b7a706758a88a5a58cfb3  src/rust_plan.rs
+7e609aa16c67f2434abb72dc120c00c2f630844710b9a26f65203ee7b765b76b  src/rust_plan.rs
 d07a3599d7f3ae52207aa2b8288e355b16795be60d591422047270ac226150d4  src/source_bundle.rs
 ff4b43db7b10105171566a0c77119b8806eddc9ee6bf040169263f7a736939ef  src/main.rs
 02cd45335a60ee3e3d2eb26754eae660a4a163511e67d3253f8b9d6a9c935aa7  src/command_input.rs
@@ -53,7 +53,7 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 4m 32s
+    Finished `release` profile [optimized] target(s) in 5m 11s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
@@ -62,7 +62,7 @@ running 2 tests
 test rust_plan::tests::captured_git_repository_layout_resolves_member_manifests_uniquely ... ok
 test rust_plan::tests::no_cargo_capture_binds_captured_git_source ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2939 filtered out; finished in 0.21s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2940 filtered out; finished in 0.08s
 
 + cargo test --release -p mantle --bin mantle effective_workspace_root -- --test-threads=1
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -98,14 +98,14 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 18.08s
+    Finished `release` profile [optimized] target(s) in 2.82s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
 
 running 0 tests
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2941 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2942 filtered out; finished in 0.00s
 
 + cargo test --release -p mantle --bin mantle native_git_ -- --test-threads=1
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -141,7 +141,7 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 7.15s
+    Finished `release` profile [optimized] target(s) in 1.66s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
@@ -154,7 +154,51 @@ test rust_plan::tests::native_git_dev_dependency_resolution_blocks_mismatched_re
 test rust_plan::tests::native_git_source_planning_binds_captured_source_and_resolves_dependency_edge ... ok
 test rust_plan::tests::native_git_source_planning_blocks_missing_captured_manifest ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2935 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2936 filtered out; finished in 0.01s
+
++ cargo test --release -p mantle --bin mantle inherited_workspace_dependency_features_are_additive -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/crunch-nix-gateway/src/api.rs:594:14
+    |
+594 |             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+594 -             .fetch_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+594 +             .try_update(AcqRel, Acquire, |value| (value < core::MAX_CONCURRENT_OPERATIONS).then(|| value + 1))
+    |
+
+warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
+warning: unused import: `crunch_nix_gateway::api::Authorization`
+  --> src/nix_gateway/api_host_tests.rs:17:5
+   |
+17 | use crunch_nix_gateway::api::Authorization as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::os::unix::fs::PermissionsExt`
+  --> src/remote_build/tests/attenuated_admission_tests.rs:10:5
+   |
+10 | use std::os::unix::fs::PermissionsExt as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 1.60s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
+
+running 1 test
+test rust_plan::tests::inherited_workspace_dependency_features_are_additive ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2941 filtered out; finished in 0.00s
 
 + cargo test --release -p mantle --bin mantle source_built_vendor_inputs_refresh_ -- --test-threads=1
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -190,7 +234,7 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 2.14s
+    Finished `release` profile [optimized] target(s) in 1.71s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
@@ -198,7 +242,7 @@ note: to see what the problems were, use the option `--future-incompat-report`, 
 running 1 test
 test source_bundle::tests::source_built_vendor_inputs_refresh_replaces_only_the_vendor_record ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2940 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2941 filtered out; finished in 0.01s
 
 + cargo test --release -p mantle --bin mantle source_built_mantle_source_refresh_ -- --test-threads=1
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -234,7 +278,7 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 1.90s
+    Finished `release` profile [optimized] target(s) in 1.71s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
@@ -245,7 +289,7 @@ test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_an
 test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
 test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2937 filtered out; finished in 0.04s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2938 filtered out; finished in 0.02s
 
 + cargo test --release -p mantle --bin mantle build_mode_dev_dependency_requirements_do_not_block_package_facts -- --test-threads=1
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -281,7 +325,7 @@ warning: unused import: `std::os::unix::fs::PermissionsExt`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `mantle` (bin "mantle" test) generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 3.04s
+    Finished `release` profile [optimized] target(s) in 1.59s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
      Running unittests src/main.rs (target/self-hosting-proof/work/cargo-target/release/deps/mantle-3b0d695a421352ac)
@@ -289,7 +333,7 @@ note: to see what the problems were, use the option `--future-incompat-report`, 
 running 1 test
 test rust_plan::tests::build_mode_dev_dependency_requirements_do_not_block_package_facts ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2940 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2941 filtered out; finished in 0.00s
 
 + cargo clippy --release -p mantle --bin mantle --no-deps -- -D warnings
 warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
@@ -311,7 +355,7 @@ help: replace the use of the deprecated method
 
 warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo clippy --fix --lib -p crunch-nix-gateway -- --no-deps -D warnings` to apply 1 suggestion)
     Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
-    Finished `release` profile [optimized] target(s) in 1m 13s
+    Finished `release` profile [optimized] target(s) in 1m 02s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
 + cargo build --release -p mantle --bin mantle
@@ -334,10 +378,10 @@ help: replace the use of the deprecated method
 
 warning: `crunch-nix-gateway` (lib) generated 1 warning (run `cargo fix --lib -p crunch-nix-gateway` to apply 1 suggestion)
    Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
-    Finished `release` profile [optimized] target(s) in 4m 46s
+    Finished `release` profile [optimized] target(s) in 3m 06s
 warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
 + b3sum /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
-340c6b852f7b5574571a93a37bfde6c32909e06b2638f03c1e5f672b1977258e  /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
+ef8e07a937e578e7a61fd61b3d7ae0623785f541fbfc95cb99fe9acff5d9377d  /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/release/mantle
 + date -Is
-2026-11-08T14:53:09-05:00
+2026-11-08T15:30:00-05:00

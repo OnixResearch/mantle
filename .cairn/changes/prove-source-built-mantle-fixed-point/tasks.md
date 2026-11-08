@@ -155,9 +155,11 @@ revisions, and `mantle source bundle refresh-vendor-inputs` replaced only the
 vendor record of profile `e2f0191b…`, producing `a6174213…`. Focused tests,
 leaf formatting, strict release Clippy and the release build passed. The two
 intra-repository path-dependency blockers are gone; the package/target layer now
-names seven concrete blockers (inherited `serde`/`tokio` workspace options, one
-missing captured member manifest for `bounded-tree-core`, and one git reference
-mismatch for `transactional-reconciliation-core`). Details are retained in
+names seven concrete blockers. Additive member features, inherited optionality
+and workspace-root-relative path dependencies are now admitted per Cargo
+semantics, which leaves four: `unsupported-target-cfg-surface` for two test-only
+predicates, one inherited default-features contradiction (`chrono`), and one git
+reference mismatch (`transactional-reconciliation-core`). Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.
