@@ -5011,7 +5011,7 @@ fn summarize_native_package_target_planning_from_inputs(
             break;
         }
         let normalized_manifest_path = normalize_path_string(&manifest_path);
-        if !visited_manifest_paths.insert(normalized_manifest_path) {
+        if !visited_manifest_paths.insert(normalized_manifest_path.clone()) {
             continue;
         }
         match native_package_from_manifest(NativePackageManifestInputs {
@@ -5022,6 +5022,7 @@ fn summarize_native_package_target_planning_from_inputs(
             registry_sources: native_registry_source_planning,
             git_sources: native_git_source_planning,
             selected_features_by_package: &selected_features_by_package,
+            workspace_members: &workspace_member_set,
         }) {
             Ok(package) => {
                 let mut context = DependencyFeatureQueueContext {
@@ -5540,6 +5541,9 @@ struct NativePackageManifestInputs<'a> {
     registry_sources: &'a NativeRegistrySourcePlanningSummary,
     git_sources: &'a NativeGitSourcePlanningSummary,
     selected_features_by_package: &'a BTreeMap<String, Vec<String>>,
+    /// Package identities of the planning root's own workspace. Cargo resolves
+    /// their dev dependencies even when no test target is built.
+    workspace_members: &'a BTreeSet<String>,
 }
 
 struct NativeManifestPackageIdInputs<'a> {
@@ -5690,12 +5694,17 @@ fn native_package_dependencies(
         registry_sources: inputs.manifest_inputs.registry_sources,
         git_sources: inputs.manifest_inputs.git_sources,
     })?;
+    // Cargo resolves dev dependencies of the planning workspace's own members,
+    // so their material stays strict; a dev dependency of a captured dependency
+    // is inert for build-mode facts.
+    let strict_dev_material = inputs.manifest_inputs.workspace_members.contains(inputs.package_id);
     let dev_dependencies = native_dev_dependencies(
         inputs.source_root,
         &inputs.manifest.dev_dependencies,
         package_id.clone(),
         inputs.manifest_inputs.registry_sources,
         inputs.manifest_inputs.git_sources,
+        strict_dev_material,
     )?;
     let (workspace_dependencies, selected_workspace_dependencies) =
         native_package_workspace_dependencies(&inputs, package_id)?;
@@ -6295,6 +6304,7 @@ fn native_dev_dependencies(
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
+    strict_material: bool,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
@@ -6316,7 +6326,9 @@ fn native_dev_dependencies(
                 // exact dev version the vendor set does not carry cannot block
                 // ordinary planning. A contradiction between the declared and
                 // captured source identity still blocks.
-                Err(error) if dev_dependency_absence(error.class) => continue,
+                // Inert dev material never blocks build-mode facts; a package
+                // that owns a bounded dev test keeps it strict.
+                Err(_) if !strict_material => continue,
                 Err(error) => {
                     return Err(native_blocker(NativePackageBlockerInputs {
                         package_id: package_id.clone(),
@@ -6337,13 +6349,6 @@ fn native_dev_dependencies(
     summaries.sort();
     summaries.dedup();
     Ok(summaries)
-}
-
-/// Absence of test-only material, as opposed to a contradiction between
-/// declared and captured identities.
-fn dev_dependency_absence(class: &str) -> bool {
-    debug_assert!(!class.is_empty());
-    class.starts_with("missing-") || class.ends_with("-not-ready") || class == "native-git-source-planning-blocked"
 }
 
 fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
@@ -6453,20 +6458,9 @@ fn native_workspace_dependency(
     // decision.
     let member_default_features = dependency_default_features(inputs.value)?;
     let inherited_default_features = dependency_default_features(inputs.inherited)?;
-    // Cargo only rejects a contradiction: a member value with no inherited
-    // decision is ignored, matching its own inheritance diagnostics.
-    if let Some(member_default_features) = member_default_features
-        && inherited_default_features.is_some_and(|inherited| inherited != member_default_features)
-    {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: inputs.planning.package_id.clone(),
-            class: "unsupported-workspace-dependency-options",
-            message: &format!(
-                "workspace dependency `{}` contradicts its inherited default-features decision",
-                inputs.name
-            ),
-        }));
-    }
+    // A member `default-features` value takes precedence over the inherited one,
+    // exactly as Cargo resolves an inherited dependency override.
+    let effective_default_features = member_default_features.or(inherited_default_features);
     inherited_features.extend(dependency_features(inputs.value)?);
     inherited_features.sort();
     inherited_features.dedup();
@@ -6478,7 +6472,7 @@ fn native_workspace_dependency(
         dependency_key: inputs.name.to_string(),
         inherited_package_name: dependency_package_name(inputs.name, inputs.inherited).to_string(),
         inherited_features,
-        inherited_default_features,
+        inherited_default_features: effective_default_features,
         decision: "selected".to_string(),
         manifest_path: Some(normalized_manifest_path.clone()),
         blocker_class: None,
@@ -26306,44 +26300,29 @@ unix_dep = { path = "../unix-dep" }
         })
         .unwrap();
         assert_eq!(local_selected[0].manifest_path, normalize_path_string(&dir.path().join("crates/Cargo.toml")));
-        // A member value without an inherited decision is ignored, so it is not
-        // a contradiction.
-        let local_default = BTreeMap::from([(
-            "serde".to_string(),
-            toml::from_str("workspace = true\ndefault-features = false").unwrap(),
-        )]);
-        let (_, local_selected_default) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
-            workspace_root: dir.path(),
-            source_root: &member,
-            member_package_id: "path+file:///member#member@0.1.0",
-            dependencies: &local_default,
-            package_id: Some("path+file:///member#member@0.1.0".to_string()),
-            registry_sources: &registry,
-            git_sources: &git,
-        })
-        .unwrap();
-        assert_eq!(local_selected_default.len(), 1);
-        // A member may not contradict the inherited default-feature decision.
+        // A member `default-features` value takes precedence over the inherited
+        // one, matching Cargo's inherited-dependency override.
         std::fs::write(
             dir.path().join("Cargo.toml"),
             "[workspace]\nmembers = [\"member\"]\n\n[workspace.dependencies]\nserde = { version = \"1.0\", features = [\"derive\"], default-features = false }\n",
         )
         .unwrap();
-        let contradictory = BTreeMap::from([(
+        let overridden = BTreeMap::from([(
             "serde".to_string(),
             toml::from_str("workspace = true\ndefault-features = true").unwrap(),
         )]);
-        let error = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
+        let (summaries, selected_override) = native_workspace_dependencies(NativeWorkspaceDependenciesInputs {
             workspace_root: dir.path(),
             source_root: &member,
             member_package_id: "path+file:///member#member@0.1.0",
-            dependencies: &contradictory,
+            dependencies: &overridden,
             package_id: Some("path+file:///member#member@0.1.0".to_string()),
             registry_sources: &registry,
             git_sources: &git,
         })
-        .unwrap_err();
-        assert_eq!(error.class, "unsupported-workspace-dependency-options");
+        .unwrap();
+        assert_eq!(selected_override.len(), 1);
+        assert_eq!(summaries[0].inherited_default_features, Some(true));
     }
 
     #[test]
@@ -26360,7 +26339,10 @@ unix_dep = { path = "../unix-dep" }
             toml::from_str("version = \"=2.6.0\"\npackage = \"redb\"").unwrap(),
         )]);
 
-        let resolved = native_dev_dependencies(dir.path(), &dev, None, &registry, &git).unwrap();
+        let resolved = native_dev_dependencies(dir.path(), &dev, None, &registry, &git, false).unwrap();
+        // A planning-workspace member keeps its dev material strict, so the same
+        // absence is rejected there.
+        assert!(native_dev_dependencies(dir.path(), &dev, None, &registry, &git, true).is_err());
 
         assert!(resolved.is_empty());
         // The same unsatisfiable exact requirement still rejects a real build edge.

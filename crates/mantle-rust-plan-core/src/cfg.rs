@@ -248,6 +248,9 @@ fn evaluate_atom(atom: &str, target: NativeTargetClassification<'_>) -> Option<b
             "target_abi" => value == target.abi,
             "target_endian" => value == target.endian,
             "target_pointer_width" => value == target.pointer_width,
+            // The plan passes no `-C target-feature`, so no optional target
+            // feature is enabled. Explicitly requested features stay false.
+            "target_feature" => false,
             "target_has_atomic" => {
                 let pointer_width = target.pointer_width.parse::<u32>().unwrap_or(0);
                 if value == "ptr" {
@@ -310,6 +313,8 @@ mod tests {
         assert_eq!(evaluate("cfg(all(unix, not(antithesis)))"), Some(true));
         assert_eq!(evaluate("cfg(target_osx = \"linux\")"), None);
         assert_eq!(evaluate("cfg(9lives)"), None);
+        assert_eq!(evaluate("cfg(target_feature = \"aes\")"), Some(false));
+        assert_eq!(evaluate("cfg(not(any(all(target_arch = \"x86_64\", target_feature = \"aes\"))))"), Some(true));
         assert_eq!(evaluate("cfg(any(unix, not(windows)"), None);
     }
 

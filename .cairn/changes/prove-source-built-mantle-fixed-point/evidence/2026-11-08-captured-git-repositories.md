@@ -101,16 +101,30 @@ Two further admissions followed. Cargo sets no `--cfg` for this build, so a
 bare flag name in a target table is unset and therefore false; malformed atoms
 and unrecognized `key = value` predicates remain unadmitted
 (`cfg(antithesis)`, `cfg(__ui_tests)` and mixed `all`/`not` expressions now
-evaluate, while `cfg(target_osx = "linux")` still rejects). A member
-`default-features` value with no inherited decision is ignored, matching Cargo,
-and only a genuine contradiction rejects.
+evaluate, while `cfg(target_osx = "linux")` still rejects).
 
-The package/target layer now names three blockers:
-`unsupported-workspace-dependency-options` for one inherited `chrono`
-default-features contradiction, `git-dependency-reference-mismatch` for
-`transactional-reconciliation-core`, and `unsupported-target-cfg-surface` for a
-predicate over `target_feature = "aes"`, which this plan does not model. Those
-are the next slice; none is a missing source.
+Further admissions followed. `target_feature` predicates are false because
+the plan passes no `-C target-feature`; a member `default-features` value
+overrides the inherited one, matching Cargo's inherited-dependency override; and
+only dev dependencies of the planning workspace's own members stay strict, so a
+captured dependency's dev pin cannot block build-mode facts.
+
+With those, **all four Cargo-free planning layers report ready** over the
+captured-repository cohort: `source closure`, `native package/target planning`,
+`native unit graph planning`, `native host-unit graph planning` and the
+`unit derivation graph` have no blockers
+(`2026-11-08-captured-git-plan-probe.json`).
+
+Real authenticated preparation then advanced past planning and rejected a recipe
+member path at the authoring boundary:
+
+```json
+{"error":"source recipe: non-normalized relative path \"crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/build.rs\"","code":1,"kind":"build"}
+```
+
+That is the next slice: a plan-derived dependency chain reaches recipe authoring
+without lexical normalization. The strict member-path admission is correct and
+was not relaxed.
 
 ## Checks
 
@@ -129,8 +143,8 @@ dev-dependency build-mode regression          1 passed
 Leaf `rustfmt --check`, `python3 -c ast.parse` of the capture script, strict
 release Clippy with `-D warnings` and the release CLI build passed. The final
 build identity is
-`fa59be46eb39145c95506248eb2911cb28653e2573eaaa1f399cbfb1f4717d6a`.
-The probe excerpt now records the four-blocker state with full log BLAKE3
-`e0206f9ee3aa94e2…`.
+`fa8112468982f18a7e9c5d31d21cce53ab366575482610d92c4c1ac6ca157128`.
+The probe excerpt now records the ready plan state with full log BLAKE3
+`33df1cceeec45d9b…`.
 No prepared profile, provider execution, stage equality, fixed point,
 determinism receipt or release eligibility is claimed.

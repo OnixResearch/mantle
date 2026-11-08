@@ -1,0 +1,14 @@
++ date -Is
+2026-11-08T16:41:08-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-captured-git-20261108/prep.sh
+fa8112468982f18a7e9c5d31d21cce53ab366575482610d92c4c1ac6ca157128  target/self-hosting-proof/work/cargo-target/release/mantle
+8e6be0bba7aa8ad4ebf9aa0229c1864b253bcbca51414f7614a917454545c261  /home/brittonr/mantle-captured-git-20261108/prep.sh
++ /home/brittonr/mantle-captured-git-20261108/prep.sh
+{"error":"source recipe: non-normalized relative path \"crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/build.rs\"","code":1,"kind":"build"}
++ status=1
++ printf 'preparation_exit_code=%s\n' 1
+preparation_exit_code=1
++ date -Is
+2026-11-08T16:55:18-05:00
++ exit 1

@@ -157,11 +157,12 @@ leaf formatting, strict release Clippy and the release build passed. The two
 intra-repository path-dependency blockers are gone; the package/target layer now
 names seven concrete blockers. Additive member features, inherited optionality
 and workspace-root-relative path dependencies are now admitted per Cargo
-semantics, unset bare cfg flags evaluate false as Cargo does, and only a genuine
-default-features contradiction rejects. That leaves three: one inherited
-default-features contradiction (`chrono`), one git reference mismatch
-(`transactional-reconciliation-core`), and one `target_feature = "aes"` cfg
-predicate the plan does not model. Details are retained in
+semantics, unset bare cfg flags and `target_feature` predicates evaluate false as
+Cargo does, a member `default-features` value overrides the inherited one, and
+only planning-workspace members keep strict dev material. All four Cargo-free
+planning layers then report ready. Real preparation advanced past planning and
+now rejects a non-normalized recipe member path
+(`crates/…/../vendor/snix-build/build.rs`) at authoring; that is the next slice. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.
