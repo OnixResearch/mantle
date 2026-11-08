@@ -135,7 +135,11 @@ the same frozen revision; the refreshed profile identity is
 the reviewed source-profile pin and is not adopted here. With that profile,
 preparation hydrated the complete source, authored both program sets, and
 reached the Cargo-free plan for Mantle itself, where the Cargo-free topology gate
-blocked. Test-only registry requirements no longer resolve into build-mode facts;
-git-sourced `turso` facts and the vendored `basalt` `vendor/ucan` extraction
-remain open. No prepared profile, provider execution or fixed-point proof is
-accepted; I3–I5 and V1–V3 remain unchecked.
+blocked. Test-only registry requirements no longer resolve into build-mode facts,
+and a git edge version is now a requirement rather than an identity, so the
+captured `turso` fact binds. Repeating the probe leaves exactly two blockers,
+both intra-repository path dependencies inside vendored git sources
+(`turso_core`'s `core/` sibling and `basalt`'s generated `vendor/ucan`): per-crate
+vendoring does not preserve repository layout. Resolving that is an
+input-cohort decision, not a planner repair. No prepared profile, provider
+execution or fixed-point proof is accepted; I3–I5 and V1–V3 remain unchecked.

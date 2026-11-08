@@ -6922,8 +6922,13 @@ fn git_source_identity_matches(source: &NativeGitSourceSummary, selector: &GitDe
     if source.name != selector.package_name {
         return false;
     }
+    // A declared edge version is a requirement, not an identity. Only an exact
+    // `=x` requirement can narrow the captured fact; a bare or range
+    // requirement leaves identity bound by name, URL and the selected
+    // revision, exactly as Cargo treats these git requirements.
     if let Some(package_version) = selector.package_version
-        && source.version != package_version
+        && package_version.starts_with('=')
+        && source.version != dependency_exact_version(package_version)
     {
         return false;
     }
@@ -26802,6 +26807,52 @@ unix_dep = { path = "../unix-dep" }
         assert!(package_planning.ready, "{:#?}", package_planning.blockers);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&git_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn native_git_dependency_edges_treat_versions_as_requirements() {
+        let dir = TempDir::new().unwrap();
+        let mut git_planning = empty_git_planning();
+        let git_dir = dir.path().join("turso");
+        std::fs::create_dir_all(git_dir.join("src")).unwrap();
+        std::fs::write(git_dir.join("Cargo.toml"), "[package]\nname = \"turso\"\nversion = \"0.8.0-pre.7\"\n").unwrap();
+        let source = "git+https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c";
+        git_planning.sources = vec![NativeGitSourceSummary {
+            package_id: format!("{source}#turso@0.8.0-pre.7"),
+            name: "turso".to_string(),
+            version: "0.8.0-pre.7".to_string(),
+            source: source.to_string(),
+            source_class: "git".to_string(),
+            resolved_revision: "dca55133caa690f90dcdd58d3c4329fb0703659c".to_string(),
+            source_root: normalize_path_string(&git_dir),
+            manifest_path: normalize_path_string(&git_dir.join("Cargo.toml")),
+            source_digest: test_source_digest("turso-0.8.0-pre.7"),
+            lockfile_identity: LockPackageIdentity {
+                name: "turso".to_string(),
+                version: "0.8.0-pre.7".to_string(),
+                source: Some(source.to_string()),
+                checksum: None,
+            },
+        }];
+        let registry = empty_registry_planning();
+        let exact = toml::from_str(
+            "version = \"=0.8.0-pre.7\"\ngit = \"https://github.com/cachix/turso.git\"\nrev = \"dca55133caa690f90dcdd58d3c4329fb0703659c\"",
+        )
+        .unwrap();
+        let bare = toml::from_str(
+            "version = \"0.8.0-pre.7\"\ngit = \"https://github.com/cachix/turso.git\"\nrev = \"dca55133caa690f90dcdd58d3c4329fb0703659c\"",
+        )
+        .unwrap();
+        let wrong_exact =
+            toml::from_str("version = \"=0.7.0\"\ngit = \"https://github.com/cachix/turso.git\"").unwrap();
+
+        assert_eq!(
+            native_dependency_source("turso", &exact, &registry, &git_planning).unwrap(),
+            Some(git_dir.join("Cargo.toml").to_str().unwrap())
+        );
+        assert!(native_dependency_source("turso", &bare, &registry, &git_planning).unwrap().is_some());
+        let err = native_dependency_source("turso", &wrong_exact, &registry, &git_planning).unwrap_err();
+        assert_eq!(err.class, "missing-captured-git-source-fact");
     }
 
     #[test]

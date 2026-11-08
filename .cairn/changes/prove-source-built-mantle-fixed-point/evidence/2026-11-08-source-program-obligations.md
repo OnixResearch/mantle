@@ -139,7 +139,31 @@ The dev-dependency strictness is repaired: a test-only requirement no longer
 resolves into build-mode package facts, while the same unsatisfiable exact
 requirement still rejects a real build edge.
 `build_mode_dev_dependency_requirements_do_not_block_package_facts` pins both
-sides. The vendored-git-source and `basalt` extraction gaps remain open.
+sides. A git edge version is likewise a requirement, not an identity: only an
+exact `=x` requirement narrows a captured fact, so `casita`'s
+`turso = { version = "=0.8.0-pre.7", git = …, rev = … }` now binds the captured
+`turso` fact instead of reporting a missing one.
+`native_git_dependency_edges_treat_versions_as_requirements` pins that, and the
+`2026-11-08-final-checks.log`/`2026-11-08-git-edge-checks.log` runs retain the
+focused suites.
+
+Repeating the probe after those repairs leaves exactly two package/target
+blockers, both inside vendored git sources:
+
+```text
+missing-path-dependency-manifest  `turso_core` → vendor-deps/turso/../../core/Cargo.toml
+missing-path-dependency-manifest  `ucan`      → vendor-deps/basalt/vendor/ucan/Cargo.toml
+```
+
+`2026-11-08-cargo-free-plan-probe.json` retains that reading (source closure
+ready, the four later layers blocked, two package/target blockers). Both are
+intra-repository path dependencies whose layout per-crate vendoring does not
+preserve: the `turso` repository's `core/` sibling and `basalt`'s generated
+`vendor/ucan` tree. The planner rejects rather than inventing either source. A
+source-built proof therefore needs a captured git tree that keeps repository
+layout, or a vendor generation that rewrites intra-repository path dependencies
+the way `cargo vendor` does; that is an input-cohort decision, not a planner
+repair, and it is left open here.
 
 ## Checks
 
