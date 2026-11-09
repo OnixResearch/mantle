@@ -168,8 +168,21 @@ inherited compiler inputs instead of colliding. `--extern` producers are now
 resolved across host-artifact and registry-artifact spellings, crate-name and
 target-name spellings, host-dependency role and build-script units. Preparation
 now stops at a workspace path package with two non-host producers
-(`crunch-rustc-wrapper@0.1.0`), whose plan entry carries no producer link; that is
-the next slice. Details are retained in
+(`crunch-rustc-wrapper@0.1.0`), whose plan entry carries no producer link. That
+is repaired by mirroring the planner's own first-target-lib selection, and the
+authored fetch record now uses the bundle's store-prefix rule.
+
+## Preparation completion checkpoint (2026-11-09)
+
+Authenticated source-program preparation now succeeds: Pueue 29 exited 0 and
+produced a cohort binding `input_profile_blake3 a6174213…` and
+`output_profile_blake3 e5f4f916a1e07d5aa25f4ca53c609f7ab424adbb5cfd4a3907895bb283e56022`,
+with four inert program records. The report keeps its own non-claim. Details,
+identities and the cleared boundaries are retained in
+[preparation completes](evidence/2026-11-09-preparation-completes.md). A prepared
+cohort is not an accepted profile, a provider, a stage comparison, a fixed point
+or release eligibility; I3–I5 and V1–V3 remain unchecked and the cohort still
+needs independent review before a proof launch pins it. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.

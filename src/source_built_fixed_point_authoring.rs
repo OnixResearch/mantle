@@ -274,7 +274,9 @@ fn package_programs(
     Ok(SourceRecord {
         kind: SourceRecordKind::FixedUrl,
         identity: identity.into(),
-        store_prefix: Some(LOGICAL_STORE_PREFIX.into()),
+        // The bundle admits a store prefix only for provider-manifest and
+        // toolchain-source-root records; a fetch record carries none.
+        store_prefix: crate::source_bundle::record_store_prefix(&SourceRecordKind::FixedUrl, LOGICAL_STORE_PREFIX),
         adapter: None,
         metadata,
         payload_bytes,

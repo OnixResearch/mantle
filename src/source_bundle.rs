@@ -4083,7 +4083,7 @@ fn validate_adapter_metadata(adapter: Option<&SourceAdapterMetadata>) -> Result<
     Ok(())
 }
 
-fn record_store_prefix(kind: &SourceRecordKind, store_prefix: &str) -> Option<String> {
+pub(crate) fn record_store_prefix(kind: &SourceRecordKind, store_prefix: &str) -> Option<String> {
     match kind {
         SourceRecordKind::ProviderManifest | SourceRecordKind::ToolchainSourceRoot => Some(store_prefix.to_string()),
         _ => None,

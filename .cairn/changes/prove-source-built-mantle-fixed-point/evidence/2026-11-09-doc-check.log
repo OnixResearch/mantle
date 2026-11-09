@@ -1,0 +1,7 @@
+Command: nix develop --offline --no-write-lock-file -c cargo -Zscript scripts/check-operator-proof-guide.rs
+Exit: 0
+Stdout:
+operator proof guide drift check passed
+
+Stderr:
+building '/nix/store/181rgl399n0nvcprh20svjasl3x485mz-nix-shell-env.drv'...

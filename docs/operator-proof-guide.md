@@ -436,7 +436,11 @@ prerequisites fail loudly.
 Preparation does not execute a provider or prove a fixed point. Review and
 freeze its `source-program-preparation.json` and `source-profile.json`. The
 report's `output_profile_blake3` binds the new cohort. Use that reviewed value
-as `PREPARED_PROFILE_BLAKE3`, never the original profile identity:
+as `PREPARED_PROFILE_BLAKE3`, never the original profile identity. An authored
+fetch record carries no store prefix; the bundle admits one only for
+provider-manifest and toolchain-source-root records. A dependency whose plan
+entry names no producer binds the planner's own first target-lib unit for that
+package, so the recipe and the plan agree on one producer:
 
 ```bash
 CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \

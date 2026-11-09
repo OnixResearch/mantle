@@ -383,6 +383,7 @@ pub(super) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
             runtime_root: request.scratch_root.join("cargo-free-fixed-point").join(ordinal).join("recipe"),
             steps: Vec::new(),
             products: BTreeMap::new(),
+            lib_producers: BTreeMap::new(),
             semantic_roots: BTreeMap::new(),
             runtime_bindings,
             runtime_aliases,
@@ -428,6 +429,9 @@ fn lower(stage: &mut Stage<'_>, topology: &CargoFreeUnitTopology) -> Result<(), 
                 .unwrap_or(&source.package_name),
             _ => &source.package_name,
         };
+        if unit.target_kind == "lib" && !unit.unit_id.ends_with(crate::rust_plan::HOST_DEPENDENCY_UNIT_ID_SUFFIX) {
+            stage.lib_producers.entry(unit.package_id.clone()).or_insert_with(|| unit.unit_id.clone());
+        }
         let (metadata_inputs, metadata_bindings) = stage.metadata_inputs(unit, &generators)?;
         let mut compiler_inputs = BTreeMap::new();
         if unit.target_kind == "custom-build" {

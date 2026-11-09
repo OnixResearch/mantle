@@ -107,6 +107,9 @@ pub(super) struct Stage<'a> {
     pub steps: Vec<RecipeStep>,
     pub timeout_groups: Vec<crate::source_built_recipe::RecipeTimeoutGroup>,
     pub products: BTreeMap<String, UnitProduct>,
+    /// First target lib producer per package, mirroring the planner's own
+    /// `lib_producers` selection when a dependency entry names no producer.
+    pub lib_producers: BTreeMap<String, String>,
     pub semantic_roots: BTreeMap<String, Vec<ArtifactRef>>,
     pub runtime_bindings: BTreeMap<String, ArtifactRef>,
     pub runtime_aliases: BTreeMap<String, String>,
@@ -431,10 +434,14 @@ impl Stage<'_> {
                 } else {
                     let (name, artifact) =
                         operand.split_once('=').ok_or_else(|| error("malformed --extern operand"))?;
-                    let dependency_id = unit
+                    let matching_artifacts = unit
                         .dependency_artifacts
                         .iter()
                         .filter(|dependency| dependency.name == name && dependency.artifact == artifact)
+                        .collect::<Vec<_>>();
+                    let dependency_package = matching_artifacts.first().map(|dependency| &dependency.package_id);
+                    let dependency_id = matching_artifacts
+                        .iter()
                         .filter_map(|dependency| dependency.producer_unit_id.as_ref())
                         .chain(
                             // A host-built dependency (a proc macro, for
@@ -453,11 +460,20 @@ impl Stage<'_> {
                                 .filter_map(|dependency| dependency.producer_unit_id.as_ref()),
                         )
                         .collect::<BTreeSet<_>>();
+                    let planned_producer = dependency_package.and_then(|package| self.lib_producers.get(package));
                     let producer = if dependency_id.len() == 1 {
                         let producer = *dependency_id.first().expect("one producer");
                         self.products
                             .get(producer)
                             .ok_or_else(|| error(format!("unlowered exact extern producer {operand}")))?
+                    } else if dependency_id.is_empty()
+                        && let Some(planned) = planned_producer
+                        && let Some(product) = self.products.get(planned)
+                    {
+                        // The planner selects the first target lib unit for the
+                        // package; use that exact producer rather than guessing
+                        // between several units that build the same package.
+                        product
                     } else if dependency_id.is_empty()
                         && let Some(product) = self.extern_artifact_producer(unit, artifact)
                     {
