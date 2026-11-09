@@ -31,7 +31,7 @@ with a copy of the resolved content, because the bundle's symlink contract admit
 no `..` component.
 
 Captured in this session (`vendor-inputs/git-repositories-capture.json`,
-BLAKE3 `08750f74c1c6364ddb460d268b7ab46612390de862a1bb0f95119e25fef3234d`):
+BLAKE3 `6568294d6f9f76ccc85eef31873c5547786bcaa7bdcc8a9f3fdb7133d4bd6111`):
 11 repositories, 10,298 files, 14 materialized symlinks. Ten came from local
 repository databases; `github.com/cachix/turso` was fetched at
 `dca55133caa690f90dcdd58d3c4329fb0703659c`.
@@ -63,7 +63,7 @@ added_record_count      0
 
 The new profile is
 `/datapool/mantle-store/cold-inputs-20261030/profile/source-built-fixed-point-sources-refreshed-20261108-vendor-git.json`
-(file BLAKE3 `9839769d886b39d8945cdf3eb0d0db62dd677779096c3bf09c6a2a3bac528472`).
+(file BLAKE3 `6568294d6f9f76ccc85eef31873c5547786bcaa7bdcc8a9f3fdb7133d4bd6111`).
 The operator adopted `e2f0191b…` for the Mantle source record in this session;
 `a6174213…` extends it with the captured repositories. The StageX lineage and
 native-provider pins were not changed.
@@ -133,14 +133,26 @@ admission:
    rejected over-constraint: an imported source tree is the legitimate package
    authority for a script metadata frame.
 
-Preparation now stops at the next authoring boundary:
+4. `ambiguous exact extern producer rustversion=…`, then `proc_macro_hack=…`,
+   then `serde_core=…`, `block_buffer=…` and `pki_types=…` — the author resolved
+   an `--extern` operand only through the consumer's recorded artifact strings.
+   Two spellings of one producer identity are in play: a host artifact identity
+   (`host-artifact:<unit>:proc-macro:<crate>`) and a registry artifact identity
+   (`artifact:<package identity>`), and unit IDs carry target names while
+   artifact identities carry crate names. The author now matches host artifacts
+   by crate-name spelling and resolves an unproduced dependency entry by its
+   package identity (`name@version`) against already-produced units, honouring
+   the host-dependency role and excluding build-script units.
+
+Preparation now stops at:
 
 ```json
-{"error":"Mantle source authoring: ambiguous exact extern producer rustversion=artifact:registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22:rustversion","code":1,"kind":"build"}
+{"error":"Mantle source authoring: ambiguous exact extern producer crunch_rustc_wrapper=artifact:path+native#crunch-rustc-wrapper@0.1.0:crunch_rustc_wrapper","code":1,"kind":"build"}
 ```
 
-That is the next slice: two producers claim the same extern artifact identity.
-No source was substituted and no bound was lowered.
+That is the next slice: two non-host units produce the same workspace path
+package, so identity alone no longer selects one producer and the plan's
+dependency entry carries no producer link.
 
 ## Checks
 
@@ -159,7 +171,7 @@ dev-dependency build-mode regression          1 passed
 Leaf `rustfmt --check`, `python3 -c ast.parse` of the capture script, strict
 release Clippy with `-D warnings` and the release CLI build passed. The final
 build identity is
-`0a46408d41aba8aeab751ab7552c6191d4274bdd76c98e6577574542336a4ea8`.
+`6568294d6f9f76ccc85eef31873c5547786bcaa7bdcc8a9f3fdb7133d4bd6111`.
 The probe excerpt now records the ready plan state with full log BLAKE3
 `33df1cceeec45d9b…`.
 No prepared profile, provider execution, stage equality, fixed point,

@@ -213,6 +213,45 @@ impl Stage<'_> {
         Err(error(format!("source operand is outside both admitted source roles: {value}")))
     }
 
+    /// Resolve an `artifact:<identity>` extern operand against the products this
+    /// stage has already produced. The identity appears verbatim in a producer
+    /// unit ID, and a producer built for the host-dependency role must not serve
+    /// a target consumer (or the reverse).
+    fn extern_artifact_producer<'a>(
+        &'a self,
+        unit: &RustUnitDerivationSummary,
+        artifact: &str,
+    ) -> Option<&'a UnitProduct> {
+        let identity = artifact.strip_prefix("artifact:")?;
+        // Unit IDs carry target names (`block-buffer`), while artifact
+        // identities carry crate names (`block_buffer`, possibly renamed). Bind
+        // on the package identity (`name@version`) after the repository
+        // fragment, with hyphens folded.
+        let identity_tail = identity.rsplit('#').next().unwrap_or(identity);
+        let package_tail = identity_tail.split(':').next().unwrap_or(identity_tail).replace('-', "_");
+        let host_consumer = unit.unit_id.ends_with(crate::rust_plan::HOST_DEPENDENCY_UNIT_ID_SUFFIX);
+        let mut matches = self
+            .products
+            .iter()
+            .filter(|(unit_id, _)| {
+                let is_host_producer = unit_id.ends_with(crate::rust_plan::HOST_DEPENDENCY_UNIT_ID_SUFFIX);
+                // A package's build script shares its package identity but never
+                // produces a linkable dependency artifact.
+                let is_artifact_producer = !unit_id.contains(":custom-build");
+                let tail_matches = unit_id
+                    .rsplit('#')
+                    .next()
+                    .is_some_and(|tail| tail.replace('-', "_").starts_with(package_tail.as_str()));
+                is_artifact_producer && is_host_producer == host_consumer && tail_matches
+            })
+            .map(|(_, product)| product);
+        let first = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some(first)
+    }
+
     pub fn unit_source(&self, unit: &RustUnitDerivationSummary) -> Result<UnitSource, RunError> {
         let primary = unit
             .derivation
@@ -398,20 +437,39 @@ impl Stage<'_> {
                         .filter(|dependency| dependency.name == name && dependency.artifact == artifact)
                         .filter_map(|dependency| dependency.producer_unit_id.as_ref())
                         .chain(
+                            // A host-built dependency (a proc macro, for
+                            // example) names its producer through the host
+                            // artifact, whose identity differs from the
+                            // registry artifact spelling in the extern operand.
                             unit.consumed_host_artifacts
                                 .iter()
-                                .filter(|dependency| dependency.artifact == artifact)
+                                .filter(|dependency| {
+                                    // Extern names use crate-name spelling, while a
+                                    // host target name keeps the package spelling.
+                                    dependency.target_name.replace('-', "_") == name
+                                        || dependency.target_name == name
+                                        || dependency.artifact == artifact
+                                })
                                 .filter_map(|dependency| dependency.producer_unit_id.as_ref()),
                         )
                         .collect::<BTreeSet<_>>();
-                    if dependency_id.len() != 1 {
+                    let producer = if dependency_id.len() == 1 {
+                        let producer = *dependency_id.first().expect("one producer");
+                        self.products
+                            .get(producer)
+                            .ok_or_else(|| error(format!("unlowered exact extern producer {operand}")))?
+                    } else if dependency_id.is_empty()
+                        && let Some(product) = self.extern_artifact_producer(unit, artifact)
+                    {
+                        // A dependency whose plan entry names no producer is
+                        // resolved by its artifact identity, preferring the
+                        // producer built for this consumer's own role (a
+                        // target lib rather than its host-dependency copy).
+                        product
+                    } else {
                         return Err(error(format!("ambiguous exact extern producer {operand}")));
-                    }
-                    let product = self
-                        .products
-                        .get(*dependency_id.first().expect("one producer"))
-                        .ok_or_else(|| error(format!("unlowered exact extern producer {operand}")))?;
-                    arguments.push(prefixed(&format!("{name}="), input(&product.filename, &product.member)));
+                    };
+                    arguments.push(prefixed(&format!("{name}="), input(&producer.filename, &producer.member)));
                 }
                 cursor += 2;
                 continue;

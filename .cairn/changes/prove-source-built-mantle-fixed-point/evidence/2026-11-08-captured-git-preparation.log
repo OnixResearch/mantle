@@ -1,14 +1,14 @@
 + date -Is
-2026-11-08T19:18:21-05:00
+2026-11-08T23:43:02-05:00
 + cd /home/brittonr/git/OnixResearch/mantle
 + b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-captured-git-20261108/prep.sh
-0a46408d41aba8aeab751ab7552c6191d4274bdd76c98e6577574542336a4ea8  target/self-hosting-proof/work/cargo-target/release/mantle
+6568294d6f9f76ccc85eef31873c5547786bcaa7bdcc8a9f3fdb7133d4bd6111  target/self-hosting-proof/work/cargo-target/release/mantle
 8e6be0bba7aa8ad4ebf9aa0229c1864b253bcbca51414f7614a917454545c261  /home/brittonr/mantle-captured-git-20261108/prep.sh
 + /home/brittonr/mantle-captured-git-20261108/prep.sh
-{"error":"Mantle source authoring: ambiguous exact extern producer rustversion=artifact:registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22:rustversion","code":1,"kind":"build"}
+{"error":"Mantle source authoring: ambiguous exact extern producer crunch_rustc_wrapper=artifact:path+native#crunch-rustc-wrapper@0.1.0:crunch_rustc_wrapper","code":1,"kind":"build"}
 + status=1
 + printf 'preparation_exit_code=%s\n' 1
 preparation_exit_code=1
 + date -Is
-2026-11-08T19:35:03-05:00
+2026-11-09T00:06:58-05:00
 + exit 1
