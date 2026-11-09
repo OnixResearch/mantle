@@ -206,8 +206,13 @@ was prepared (`output_profile_blake3
 10d75988e3f285885a6aa5243c7b205b1150bf92ab02f7d2d6948b2fd71050e4`,
 profile BLAKE3 `b98816e9…`) and launched on Leviathan as Pueue `1515`. Details in
 [program placement and second cohort](evidence/2026-11-09-program-placement-and-second-cohort.md).
-Stage equality, action reconciliation, the v2 receipt, release evidence and
-independent review remain outstanding; I3–I5 and V1–V3 stay unchecked. Details are retained in
+The second launch then rejected a StageX runtime mount (`/mantle/stagex/bison-data`)
+outside the admitted namespaces; the generator now derives that destination from
+the plan's logical store prefix. A third cohort
+(`output_profile_blake3 82b8a7ca127af82c7c8718e2ad60728f13db7a6a15d86d226fec64bcad951703`,
+profile BLAKE3 `db03fdf0…`) was prepared and launched on Leviathan as Pueue
+`1516`. Stage equality, action reconciliation, the v2 receipt, release evidence
+and independent review remain outstanding; I3–I5 and V1–V3 stay unchecked. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.

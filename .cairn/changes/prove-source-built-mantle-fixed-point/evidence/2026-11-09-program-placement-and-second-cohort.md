@@ -80,6 +80,47 @@ Post-transfer parity was exact (`bin/mantle-v2 e7983e2e…`,
 `--jobs 16`, a 200 GB disk bound on a filesystem with 583 GiB free, and explicit
 `bwrap`/static-busybox paths.
 
+## Second launch outcome and the next repair
+
+Pueue `1515` ran 21 minutes and failed closed at a different boundary:
+
+```json
+{"error":"source-built fixed-point proof failed closed: error: build failed\nsource recipe: runtime mount lies outside library/admitted logical-store runtime namespaces; preserved_attempt=/home/brittonr/sbfp-20261109/.proof-v2.source-built-fixed-point-staging-1968545","code":1,"kind":"build"}
+```
+
+The authored StageX transition mounted the Bison runtime data at
+`/mantle/stagex/bison-data`, which the recipe validator does not admit: runtime
+mounts must be library paths, under the plan's logical store prefix, or the one
+Rust runtime mount. The generator author now derives the destination from the
+plan's own logical store prefix
+(`<prefix>/stagex-bison-2.3-runtime-data`) and uses the same value for
+`BISON_PKGDATADIR`; the fixed `/mantle/stagex/...` spelling is gone.
+
+## Third cohort
+
+`preparation_exit_code=0` (log `2026-11-09-preparation-v3.log`), CLI
+`0b0e8e0f054cc6cd27e216f08c0a769f64b8e37a4782610a4b852c876519c03f`:
+
+```text
+output_profile_blake3   82b8a7ca127af82c7c8718e2ad60728f13db7a6a15d86d226fec64bcad951703
+source-profile.json     BLAKE3 db03fdf02e919c09b7931c05bf4c4e0d065800d2523a44a13712e3b355bb6a81
+source-program-preparation.json BLAKE3 ba21158e8f9d17c9d469831cbc640c02c1078c6e94912ae8c7f012033cc7eefc
+fixed-point-native-source-program 3d241dbb79d7ff306280b4aa40be65c9e4102dcac9d38f1b7d01b2ac80979488
+```
+
+The authored StageX transition now carries only
+`/mantle/store/stagex-bison-2.3-runtime-data` (3 steps). Cohort retained at
+`/datapool/mantle-store/sbfp-20261109/prepared-cohort-v3`; the earlier v2 cohort
+stays at `.../prepared-cohort`.
+
+## Third launch
+
+Post-transfer parity exact (`bin/mantle-v3 0b0e8e0f…`, `profile-v3` profile
+`db03fdf0…`, report `ba21158e…`). Pueue `1516` (`sbfp-proof-v3`) started at
+2026-11-09T14:25:58-05:00 with `--expected-source-profile-blake3 82b8a7ca…`,
+unchanged StageX/native pins, `--jobs 16`, a 200 GB bound on a filesystem with
+482 GiB free, and explicit sandbox paths.
+
 ## Non-claims
 
 A launched proof is not a proof. Stage equality, planned-versus-observed action

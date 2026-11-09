@@ -429,6 +429,7 @@ fn bison_prepare(
     let mut arguments: Vec<_> = args.iter().map(|s| literal(s)).collect();
     arguments.push(input("grammar", path));
     let name = grammar_filename(path, args, "y");
+    let bison_data = format!("{}/stagex-bison-2.3-runtime-data", b.logical_store_prefix);
     let result = fresh_command(
         b,
         tool,
@@ -437,7 +438,7 @@ fn bison_prepare(
         BTreeMap::from([("grammar".into(), grammar), ("data".into(), data), ("m4".into(), m4)]),
         arguments,
         BTreeMap::from([
-            ("BISON_PKGDATADIR".into(), literal("/mantle/stagex/bison-data")),
+            ("BISON_PKGDATADIR".into(), literal(bison_data.as_str())),
             ("M4".into(), input("m4", "")),
             ("MANTLE_GRAMMAR_NAME".into(), literal(&name)),
             ("MANTLE_BISON_STATE".into(), output("generated", "state")),
@@ -448,7 +449,7 @@ fn bison_prepare(
     if let Some(step) = b.recipe.steps.last_mut()
         && let RecipeOperation::Exec { runtime_mounts, .. } = &mut step.operation
     {
-        runtime_mounts.insert("/mantle/stagex/bison-data".into(), "data".into());
+        runtime_mounts.insert(bison_data, "data".into());
     }
     Ok(result)
 }
@@ -465,6 +466,7 @@ pub(super) fn bison_generate(
     args: &[&str],
 ) -> Result<ArtifactRef, RunError> {
     let prepared = bison_prepare(b, tool, id, grammar, grammar_path, args, 0)?;
+    let bison_data = format!("{}/stagex-bison-2.3-runtime-data", b.logical_store_prefix);
     let m4 = b.artifact("m4-1.4.7")?;
     let data = b.artifact("bison-2.3-runtime-data")?;
     let expanded = command(
@@ -481,7 +483,7 @@ pub(super) fn bison_generate(
     if let Some(step) = b.recipe.steps.last_mut()
         && let RecipeOperation::Exec { runtime_mounts, .. } = &mut step.operation
     {
-        runtime_mounts.insert("/mantle/stagex/bison-data".into(), "data".into());
+        runtime_mounts.insert(bison_data, "data".into());
     }
     let program = b.artifact("bison-2.3")?;
     let resumed = fresh_command(

@@ -34,7 +34,11 @@ pub(crate) const TINYCC_STAGEX_PATCH_ID: &str = "tinycc-0.9.27-stagex-patch";
 const LEGACY_TINYCC_PATCH_SOURCE_ID: &str = "tinycc-0.9.27-patch-source";
 
 pub(crate) fn canonical_original_source_id(id: &str) -> &str {
-    if id == LEGACY_TINYCC_PATCH_SOURCE_ID { TINYCC_STAGEX_PATCH_ID } else { id }
+    if id == LEGACY_TINYCC_PATCH_SOURCE_ID {
+        TINYCC_STAGEX_PATCH_ID
+    } else {
+        id
+    }
 }
 
 #[path = "source_built_stagex_programs_binutils.rs"]
@@ -132,6 +136,9 @@ pub(super) struct TransitionBuilder {
     original_tool_inputs: BTreeMap<String, Vec<String>>,
     original_tool_outputs: BTreeMap<String, Vec<String>>,
     graph_edges: Vec<(String, String)>,
+    /// Logical store prefix this plan admits, so authored runtime mounts use the
+    /// same namespace the recipe validator accepts.
+    logical_store_prefix: String,
 }
 impl TransitionBuilder {
     pub fn source(&self, id: &str) -> Result<ArtifactRef, RunError> {
@@ -514,6 +521,7 @@ pub(crate) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
             .iter()
             .map(|tool| (tool.id.clone(), tool.output_artifact_ids.clone()))
             .collect(),
+        logical_store_prefix: request.proof.logical_store_prefix.trim_end_matches('/').to_string(),
         graph_edges: lineage
             .stage_graph
             .iter()
