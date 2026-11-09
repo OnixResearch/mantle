@@ -728,6 +728,9 @@ fn lower(stage: &mut Stage<'_>, topology: &CargoFreeUnitTopology) -> Result<(), 
                 )?
             }
         } else {
+            // The metadata leaf binds the unit's own package tree as `package`;
+            // the compiler's provider package entry is not part of that frame.
+            script_inputs.remove("package");
             metadata::original_script_run(
                 &stage.id,
                 &id,

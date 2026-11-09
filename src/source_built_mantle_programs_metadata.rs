@@ -78,6 +78,15 @@ fn insert(inputs: &mut BTreeMap<String, ArtifactRef>, name: &str, reference: Art
     Ok(())
 }
 
+/// Bind a name this metadata frame owns. A compiler-input binding inherited from
+/// the caller (for example the provider compiler under `rustc`, or the provider
+/// package tree under `package`) is superseded by the frame's own source
+/// authority; names derived from data keep the strict `insert` check.
+fn bind_frame_input(inputs: &mut BTreeMap<String, ArtifactRef>, name: &str, reference: ArtifactRef) {
+    debug_assert!(!name.is_empty());
+    inputs.insert(name.into(), reference);
+}
+
 pub(crate) struct ScriptRun {
     pub(crate) step: RecipeStep,
     pub(crate) stdout: ArtifactRef,
@@ -102,8 +111,11 @@ pub(crate) fn original_script_run(
     runtime_mounts: BTreeMap<String, String>,
 ) -> Result<ScriptRun, RunError> {
     require_produced(&executable, "original build-script executable")?;
-    insert(&mut extra_inputs, "script", executable)?;
-    insert(&mut extra_inputs, "package", package_tree)?;
+    bind_frame_input(&mut extra_inputs, "script", executable);
+    // `CARGO_MANIFEST_DIR` must name this unit's own package. A compiler
+    // provider package entry inherited from the caller is superseded rather than
+    // treated as a collision.
+    bind_frame_input(&mut extra_inputs, "package", package_tree);
     environment.insert("OUT_DIR".into(), output("out-dir"));
     environment.insert("CARGO_MANIFEST_DIR".into(), input("package", ""));
     Ok(ScriptRun {
@@ -233,7 +245,7 @@ pub(crate) fn metadata_response(
 ) -> Result<MetadataProducts, RunError> {
     require_produced(&executable, "metadata phase helper")?;
     let mut inputs = runtime_inputs;
-    insert(&mut inputs, "metadata-helper", executable)?;
+    bind_frame_input(&mut inputs, "metadata-helper", executable);
     let mut generated_inputs = BTreeMap::new();
     let mut arguments = vec![output("metadata")];
     for (index, metadata) in metadata_inputs.iter().enumerate() {
@@ -348,9 +360,9 @@ pub(crate) fn rustc_request(
     require_produced(&helper_executable, "compiler request helper")?;
     require_produced(&original_request, "original script compiler request")?;
     require_produced(&compiler, "source compiler query executable")?;
-    insert(&mut runtime_inputs, "metadata-helper", helper_executable)?;
-    insert(&mut runtime_inputs, "request", original_request)?;
-    insert(&mut runtime_inputs, "rustc", compiler)?;
+    bind_frame_input(&mut runtime_inputs, "metadata-helper", helper_executable);
+    bind_frame_input(&mut runtime_inputs, "request", original_request);
+    bind_frame_input(&mut runtime_inputs, "rustc", compiler);
     let mut arguments = vec![
         literal("--rustc-request"),
         input("request", ""),
@@ -461,7 +473,7 @@ fn unprepared_library_overlays(
     if sources.is_empty() {
         return Err(error("library overlay requires original sources"));
     }
-    insert(&mut runtime_inputs, "metadata-helper", executable)?;
+    bind_frame_input(&mut runtime_inputs, "metadata-helper", executable);
     let mut arguments = vec![literal("--library-overlays"), output("source-overlay")];
     for (index, source) in sources.iter().enumerate() {
         if !matches!(&source.original, ArtifactRef::Source { .. } | ArtifactRef::ManifestSource { .. }) {

@@ -115,16 +115,32 @@ captured-repository cohort: `source closure`, `native package/target planning`,
 `unit derivation graph` have no blockers
 (`2026-11-08-captured-git-plan-probe.json`).
 
-Real authenticated preparation then advanced past planning and rejected a recipe
-member path at the authoring boundary:
+Real authenticated preparation then advanced past planning and through four
+authoring boundaries, each fixed in its own layer rather than by relaxing
+admission:
+
+1. `non-normalized relative path "crates/crunch-pipeline/../…/vendor/snix-build/build.rs"`
+   — plan-derived dependency chains carry `..` segments. Source operands are now
+   resolved lexically before an admitted source root is stripped, so member
+   labels stay canonical and an escape past the root still fails that strip
+   (`plan_derived_source_operands_normalize_lexically`).
+2. `metadata input name collision: package` and `… : rustc` — a metadata frame
+   binds its own source authority (`script`, `package`, `metadata-helper`,
+   `request`, `rustc`). Those names now supersede a compiler-input binding
+   inherited from the caller instead of colliding; names derived from data keep
+   the strict collision check.
+3. `original build-script package tree must have compiled source ancestry` was a
+   rejected over-constraint: an imported source tree is the legitimate package
+   authority for a script metadata frame.
+
+Preparation now stops at the next authoring boundary:
 
 ```json
-{"error":"source recipe: non-normalized relative path \"crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/build.rs\"","code":1,"kind":"build"}
+{"error":"Mantle source authoring: ambiguous exact extern producer rustversion=artifact:registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22:rustversion","code":1,"kind":"build"}
 ```
 
-That is the next slice: a plan-derived dependency chain reaches recipe authoring
-without lexical normalization. The strict member-path admission is correct and
-was not relaxed.
+That is the next slice: two producers claim the same extern artifact identity.
+No source was substituted and no bound was lowered.
 
 ## Checks
 
@@ -143,7 +159,7 @@ dev-dependency build-mode regression          1 passed
 Leaf `rustfmt --check`, `python3 -c ast.parse` of the capture script, strict
 release Clippy with `-D warnings` and the release CLI build passed. The final
 build identity is
-`fa8112468982f18a7e9c5d31d21cce53ab366575482610d92c4c1ac6ca157128`.
+`0a46408d41aba8aeab751ab7552c6191d4274bdd76c98e6577574542336a4ea8`.
 The probe excerpt now records the ready plan state with full log BLAKE3
 `33df1cceeec45d9b…`.
 No prepared profile, provider execution, stage equality, fixed point,

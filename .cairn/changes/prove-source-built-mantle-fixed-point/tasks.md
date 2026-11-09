@@ -161,8 +161,11 @@ semantics, unset bare cfg flags and `target_feature` predicates evaluate false a
 Cargo does, a member `default-features` value overrides the inherited one, and
 only planning-workspace members keep strict dev material. All four Cargo-free
 planning layers then report ready. Real preparation advanced past planning and
-now rejects a non-normalized recipe member path
-(`crates/…/../vendor/snix-build/build.rs`) at authoring; that is the next slice. Details are retained in
+through four authoring boundaries: plan-derived source operands are now
+normalized lexically before admitted-root stripping, and a metadata frame's own
+`script`/`package`/`metadata-helper`/`request`/`rustc` bindings supersede
+inherited compiler inputs instead of colliding. Preparation now stops at an
+ambiguous exact extern producer (`rustversion@1.0.22`); that is the next slice. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.

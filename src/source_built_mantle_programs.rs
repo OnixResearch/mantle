@@ -2,6 +2,7 @@
 //! No compiler, Cargo executable, or previously generated build output is read.
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -114,6 +115,27 @@ pub(super) struct Stage<'a> {
     pub reservations: &'a crate::source_built_program_authoring::ContinuationReservationPolicy,
 }
 
+/// Resolve `.` and `..` components lexically. Plan-derived dependency chains
+/// can carry `..` segments; normalization happens before an admitted source root
+/// is stripped, so a member label stays canonical while an escape past the root
+/// still fails that strip.
+fn lexically_normalized(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    debug_assert!(normalized.components().count() <= path.components().count());
+    normalized
+}
+
 impl Stage<'_> {
     pub fn produced(&self, step: &str, output_id: &str) -> ArtifactRef {
         ArtifactRef::Produced {
@@ -152,7 +174,8 @@ impl Stage<'_> {
     }
 
     pub fn source_word(&self, value: &str) -> Result<RecipeWord, RunError> {
-        let path = Path::new(value);
+        let normalized = lexically_normalized(Path::new(value));
+        let path = normalized.as_path();
         let absolute;
         let path = if let Ok(member) = path.strip_prefix("/mantle/release/source") {
             absolute = self
@@ -802,5 +825,26 @@ impl Stage<'_> {
             exports: BTreeMap::from([(self.id, binary), ("mantle-smoke".into(), smoke)]),
             semantic_roots: self.semantic_roots,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plan_derived_source_operands_normalize_lexically() {
+        assert_eq!(
+            lexically_normalized(Path::new("crates/crunch-pipeline/../crunch-build/../../vendor/snix-build/build.rs")),
+            PathBuf::from("vendor/snix-build/build.rs")
+        );
+        assert_eq!(lexically_normalized(Path::new("./vendor/./a/../b.rs")), PathBuf::from("vendor/b.rs"));
+        // An escape beyond the root keeps its leading parent components, so the
+        // following admitted-root strip still rejects it.
+        assert_eq!(lexically_normalized(Path::new("../outside.rs")), PathBuf::from("../outside.rs"));
+        assert_eq!(
+            lexically_normalized(Path::new("/mantle/release/source/./src/../src/lib.rs")),
+            PathBuf::from("/mantle/release/source/src/lib.rs")
+        );
     }
 }
