@@ -182,7 +182,32 @@ identities and the cleared boundaries are retained in
 [preparation completes](evidence/2026-11-09-preparation-completes.md). A prepared
 cohort is not an accepted profile, a provider, a stage comparison, a fixed point
 or release eligibility; I3–I5 and V1–V3 remain unchecked and the cohort still
-needs independent review before a proof launch pins it. Details are retained in
+needs independent review before a proof launch pins it.
+
+## Cold proof launch checkpoint (2026-11-09)
+
+The prepared cohort and the current CLI were transferred to Leviathan with exact
+post-transfer parity (`mantle e8770dbe…`, profile `6ef987ad…`, report
+`bd9afba3…`), and Pueue task `1514` launched the promoted cold proof there with
+`PREPARED_PROFILE_BLAKE3 e5f4f916…`, the unchanged StageX/native pins, explicit
+bwrap/static-shell paths and a 200 GB disk bound. Launch inputs, host facts and
+non-claims are retained in
+[cold proof launch](evidence/2026-11-09-cold-proof-launch.md). A launched proof
+is not a proof: stage equality, action reconciliation, the v2 receipt, release
+evidence and independent review remain outstanding, and I3–I5 and V1–V3 stay
+unchecked until that evidence exists.
+
+The first launch failed closed in ten minutes: the authored cold route named one
+role (`native-source-bundle`) for selectors whose consumers authenticate distinct
+roles. Preparation now places the StageX program in the StageX source-bundle
+closure, the Rust program beside the Rust source archives, and names
+`stagex-source-bundle` / `rust-source-archive-set` in the route. A second cohort
+was prepared (`output_profile_blake3
+10d75988e3f285885a6aa5243c7b205b1150bf92ab02f7d2d6948b2fd71050e4`,
+profile BLAKE3 `b98816e9…`) and launched on Leviathan as Pueue `1515`. Details in
+[program placement and second cohort](evidence/2026-11-09-program-placement-and-second-cohort.md).
+Stage equality, action reconciliation, the v2 receipt, release evidence and
+independent review remain outstanding; I3–I5 and V1–V3 stay unchecked. Details are retained in
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.

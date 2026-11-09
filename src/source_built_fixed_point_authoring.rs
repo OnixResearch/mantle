@@ -81,6 +81,39 @@ fn prepare_source_profile(
     append_program_records(&mut native_records, &programs, options.source_records_max)?;
     let native = assemble_source_bundle(native_records, &profile.store_prefix)?;
     crate::source_bundle::write_source_bundle(native_path, &native)?;
+    // Each consumer resolves its program from the role it authenticates: the
+    // StageX actions read the StageX source-bundle closure, and the Rust actions
+    // read the Rust source-archive root. Both placements are captured below so
+    // the proof's role digests stay exact.
+    let stagex_path = &roots[&SourceAuthorityRole::StagexSourceBundle];
+    let stagex_identity = selected.stagex_source_bundle.identity.clone();
+    let stagex = crate::source_bundle::read_source_bundle(stagex_path)?;
+    let mut stagex_records = stagex.records;
+    let stagex_program = programs
+        .iter()
+        .find(|record| record.identity == crate::source_built_stagex_programs::PROGRAM_RECORD)
+        .ok_or_else(|| proof_error("authored StageX program record is missing".into()))?;
+    append_program_records(&mut stagex_records, std::slice::from_ref(stagex_program), options.source_records_max)?;
+    let stagex = assemble_source_bundle(stagex_records, &profile.store_prefix)?;
+    crate::source_bundle::write_source_bundle(stagex_path, &stagex)?;
+    let rust_root = &roots[&SourceAuthorityRole::RustSourceArchiveSet];
+    let rust_identity = selected.rust_source_archive_set.identity.clone();
+    let rust_program = programs
+        .iter()
+        .find(|record| record.identity == crate::source_built_rust_programs::RECORD_IDENTITY)
+        .ok_or_else(|| proof_error("authored Rust program record is missing".into()))?;
+    // The archive-set root already holds the Rust source archives, so the
+    // authored program is materialized beside them rather than over them.
+    let rust_program_staging = tempfile::tempdir().map_err(|error| proof_error(error.to_string()))?;
+    crate::source_bundle::materialize_source_record_payload(rust_program, rust_program_staging.path())?;
+    for file in &rust_program.files {
+        let source = rust_program_staging.path().join(&file.path);
+        let destination = rust_root.join(&file.path);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(|error| proof_error(error.to_string()))?;
+        }
+        fs::copy(&source, &destination).map_err(|error| proof_error(error.to_string()))?;
+    }
     write_source_files(&prepared.source_root, &mantle_files, options.disk_bytes_max)?;
     write_selector(&prepared.source_root)?;
     for record in &mut profile.records {
@@ -88,6 +121,10 @@ fn prepare_source_profile(
             crate::source_bundle::recapture_source_record_payload(record, &prepared.source_root)?;
         } else if record.identity == native_identity {
             crate::source_bundle::recapture_source_record_payload(record, native_path)?;
+        } else if record.identity == stagex_identity {
+            crate::source_bundle::recapture_source_record_payload(record, stagex_path)?;
+        } else if record.identity == rust_identity {
+            crate::source_bundle::recapture_source_record_payload(record, rust_root)?;
         }
     }
     append_program_records(&mut profile.records, &programs, options.source_records_max)?;
@@ -426,21 +463,27 @@ fn write_program_archive(path: &Path, files: &BTreeMap<String, String>) -> Resul
 }
 
 fn write_selector(root: &Path) -> Result<(), RunError> {
-    let manifest = |identity: &str, member: &str| ArtifactRef::ManifestSource {
-        role: SourceAuthorityRole::NativeSourceBundle,
-        record_identity: identity.into(),
+    // StageX actions authenticate against the StageX source-bundle closure; the
+    // native and Rust actions read their own role's authority. The selectors
+    // mirror those exact authorities rather than one shared role.
+    let stagex = |member: &str| ArtifactRef::ManifestSource {
+        role: SourceAuthorityRole::StagexSourceBundle,
+        record_identity: crate::source_built_stagex_programs::PROGRAM_RECORD.into(),
         member: member.into(),
     };
     let route = serde_json::json!({
         "schema": "mantle-source-built-cold-route-v1",
-        "stagex_transition": manifest(crate::source_built_stagex_programs::PROGRAM_RECORD, "stagex-transition.json"),
-        "stagex_publication": manifest(crate::source_built_stagex_programs::PROGRAM_RECORD, "stagex-provider-publication.json"),
+        "stagex_transition": stagex("stagex-transition.json"),
+        "stagex_publication": stagex("stagex-provider-publication.json"),
         "native": {
             "record_identity": crate::source_built_native_programs::RECORD_IDENTITY,
             "recipe_member": crate::source_built_native_programs::RECIPE_MEMBER,
             "index_member": crate::source_built_native_programs::INDEX_MEMBER,
         },
-        "rust_provider": manifest(crate::source_built_rust_programs::RECORD_IDENTITY, crate::source_built_rust_programs::RECIPE_MEMBER),
+        "rust_provider": ArtifactRef::Source {
+            role: SourceAuthorityRole::RustSourceArchiveSet,
+            path: crate::source_built_rust_programs::RECIPE_MEMBER.into(),
+        },
         "mantle_recipes": ["bootstrap/source-built/mantle-stage1.json", "bootstrap/source-built/mantle-stage2.json"],
     });
     let path = source_destination(root, SELECTOR)?;

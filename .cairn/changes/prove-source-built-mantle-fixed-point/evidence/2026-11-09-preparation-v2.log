@@ -1,0 +1,27 @@
++ date -Is
+2026-11-09T12:34:54-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum target/self-hosting-proof/work/cargo-target/release/mantle /home/brittonr/mantle-captured-git-20261108/prep-v2.sh
+e7983e2eff36ac5f41ad0d2f47d46a78b938ae6b075b754ac1f5d31ded328ca4  target/self-hosting-proof/work/cargo-target/release/mantle
+3b8963b86853e4bc87b92600e49ec29d9020de71f0e1f821645be895cf6cd4a2  /home/brittonr/mantle-captured-git-20261108/prep-v2.sh
++ /home/brittonr/mantle-captured-git-20261108/prep-v2.sh
+{
+  "schema": "mantle-source-built-source-programs-v1",
+  "input_profile_blake3": "a6174213ff6b336e251175ee6afbf452178502209d8773f2eb4cb09ba4e368e0",
+  "input_plan_blake3": "ae8cdf6fa70a7bb20e92665fabad6394c218f5be804081f9a3df730674b91c1e",
+  "output_profile_blake3": "10d75988e3f285885a6aa5243c7b205b1150bf92ab02f7d2d6948b2fd71050e4",
+  "source_profile": "/datapool/mantle-store/sbfp-20261109/prepared-cohort/source-profile.json",
+  "program_records": {
+    "fixed-point-native-source-program": "d39673abd56ac0f98afd65ab1be8201155b307734aac8d2a1d7046e03e629888",
+    "fixed-point-rust-source-program": "e85ae4435ad5d6399bef4db035479333ff9ad4c58ac30b97b78cea5de2b24dd9",
+    "source-built-mantle-programs": "20a9d6e9832fce14b1c50f7b757830bd45b3c851bf2710799942a57dcb40b0d7",
+    "source-built-stagex-programs": "a40f6c5f255680b2c33524bade3afd06715f6bf8d715345a12f235cdf2f523e3"
+  },
+  "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+}
++ status=0
++ printf 'preparation_exit_code=%s\n' 0
+preparation_exit_code=0
++ date -Is
+2026-11-09T12:59:44-05:00
++ exit 0

@@ -1,0 +1,21 @@
++ date -Is
+2026-11-09T10:08:01-05:00
++ export CRUNCH_NO_FUSE=1
++ CRUNCH_NO_FUSE=1
++ BWRAP=/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ BUSYBOX=/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ MANTLE=/home/brittonr/sbfp-20261109/bin/mantle
++ b3sum /home/brittonr/sbfp-20261109/bin/mantle /home/brittonr/sbfp-20261109/profile/source-profile.json /home/brittonr/sbfp-20261109/profile/source-program-preparation.json
+/home/brittonr/sbfp-20261109/proof.sh: line 11: b3sum: command not found
++ rm -rf /home/brittonr/sbfp-20261109/proof
++ /home/brittonr/sbfp-20261109/bin/mantle --json self-build --source-built-fixed-point --source-profile /home/brittonr/sbfp-20261109/profile/source-profile.json --expected-source-profile-blake3 e5f4f916a1e07d5aa25f4ca53c609f7ab424adbb5cfd4a3907895bb283e56022 --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261109/proof
+{"error":"source-built fixed-point proof failed closed: error: build failed\nStageX source actions: source program selector must be ManifestSource StagexSourceBundle; preserved_attempt=/home/brittonr/sbfp-20261109/.proof.source-built-fixed-point-staging-1541732","code":1,"kind":"build"}
++ status=1
++ printf 'proof_exit_code=%s\n' 1
+proof_exit_code=1
++ date -Is
+2026-11-09T10:17:49-05:00
++ '[' 1 -eq 0 ']'
++ date -Is
+2026-11-09T10:17:49-05:00
++ exit 1
