@@ -2057,7 +2057,7 @@ pub(crate) fn prepare_from_reference(
         _ => return Err(error("recipe program cannot be a generated or externally supplied plan")),
     };
     if !stage.inputs.contains(&StageAuthorityInput::Source { role: recipe_role }) {
-        return Err(error("recipe source role is not admitted to this stage"));
+        return Err(error(format!("recipe source role {recipe_role:?} is not admitted to stage {stage_id}")));
     }
     let cache = tempfile::tempdir().map_err(|e| error(e.to_string()))?;
     let path = hydrate_reference(proof, paths.source_roots, cache.path(), recipe_source)?;

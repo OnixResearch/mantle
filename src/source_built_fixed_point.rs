@@ -520,6 +520,7 @@ fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
             output_authority(ProofOutputRole::StagexTransition),
             source_authority(SourceAuthorityRole::StagexLineage),
             source_authority(SourceAuthorityRole::StagexSourceBundle),
+            source_authority(SourceAuthorityRole::NativeSourceBundle),
             policy_authority(ProofPolicyRole::ProtectedExecution),
             policy_authority(ProofPolicyRole::Hermeticity),
         ],

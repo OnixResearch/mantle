@@ -153,3 +153,17 @@ failed with `external-batch-process-output-limit-exceeded` while preparation
 ran concurrently, and passes in isolation (1 passed, 0.18 s). A clean-host rerun
 is in flight; the flake is not yet claimed as fixed or as a regression.
 
+## Publication stage authority and the twelfth launch
+
+The eleventh launch (Pueue `1524`) accepted all twelve authored dispositions —
+the previous eleven omissions are gone — and then failed after 1 h 43 m at
+`source recipe: recipe source role is not admitted to this stage`. The
+publication recipe is authored in the same `source-built-stagex-programs`
+record as the transition recipe, referenced through
+`NativeSourceBundle`, but `stagex-provider-publication` did not admit that
+source authority while `stagex-transition` did. The stage plan now admits
+`NativeSourceBundle` for publication, and the rejection names the stage and
+role. The plan unit suite passes (11 passed), including
+`publication_requires_its_authenticated_source_program_authority`. No stage
+equality, reconciliation, receipt, or release evidence exists.
+
