@@ -25,6 +25,8 @@ use crate::source_built_recipe::{self as recipe};
 const TRANSITION: &str = "stagex-transition";
 const PUBLICATION: &str = "stagex-provider-publication";
 const INDEX_SCHEMA: &str = "mantle-stagex-source-expansion-v1";
+const BINUTILS_FREE_TOOL_EXPORTS: usize = 3;
+const BINUTILS_LAUNCHES: [&str; 4] = ["as-positive", "ld-positive", "as-negative", "positive-execution"];
 const TOOL_EXPORTS: [&str; 14] = [
     "tcc",
     "tcc-selfhost",
@@ -77,7 +79,12 @@ struct TransitionIndex {
 struct PublicationIndex {
     schema: String,
     recipe_member: String,
-    /// The fixed provider launch inventory, mapped to concrete local steps.
+    /// Whether the active transition lineage admitted the binutils sources and
+    /// therefore the assembler/linker smoke and execution launches.
+    #[serde(default)]
+    binutils_admitted: bool,
+    /// The provider launch inventory this expansion authored, mapped to
+    /// concrete local steps.
     validation_commands: BTreeMap<String, String>,
 }
 
@@ -455,13 +462,21 @@ fn validate_publication(
     prepared: &PreparedRecipe,
 ) -> Result<(), RunError> {
     require_export(prepared, "stagex-provider", ArtifactKind::Tree, Some("stagex-provider"))?;
-    for role in TOOL_EXPORTS {
+    let tool_exports: &[&str] = if index.binutils_admitted {
+        &TOOL_EXPORTS
+    } else {
+        &TOOL_EXPORTS[..BINUTILS_FREE_TOOL_EXPORTS]
+    };
+    for role in tool_exports {
         require_export(prepared, role, ArtifactKind::Executable, None)?;
     }
     for role in ["musl.headers", "musl.libraries"] {
         require_export(prepared, role, ArtifactKind::Tree, None)?;
     }
-    let launches = crate::stagex_provider::provider_validation_launches();
+    let launches = crate::stagex_provider::provider_validation_launches()
+        .into_iter()
+        .filter(|(id, _)| index.binutils_admitted || !BINUTILS_LAUNCHES.contains(id))
+        .collect::<Vec<_>>();
     let expected = launches.iter().map(|(id, _)| id.to_string()).collect::<BTreeSet<_>>();
     if index.validation_commands.keys().ne(expected.iter()) {
         return Err(error("publication omits original runtime supplement/positive/negative validation commands"));
@@ -531,7 +546,7 @@ fn validate_publication(
     if !depends_on(prepared.source_recipe(), product, &transition.export(TRANSITION)?.reference) {
         return Err(error("publication canonical tree drops its actual transition producer"));
     }
-    for role in TOOL_EXPORTS {
+    for role in tool_exports {
         if !depends_on(prepared.source_recipe(), product, &prepared.export(role)?.reference) {
             return Err(error(format!("provider tree omits individual tool {role}")));
         }

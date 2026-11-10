@@ -407,12 +407,15 @@ pub(super) fn extend(
         })
         .collect();
     recipe::validate_source_recipe(&p.recipe)?;
+    // Only launches this expansion actually authored may be claimed; the
+    // binutils smoke and execution launches exist only when that source is
+    // admitted by the active transition lineage.
     let validation_commands = crate::stagex_provider::provider_validation_launches()
         .into_iter()
+        .filter(|(id, _)| p.recipe.steps.iter().any(|step| step.id == *id))
         .map(|(id, _)| (id, id))
         .collect::<BTreeMap<_, _>>();
-    let index =
-        serde_json::json!({"schema":INDEX_SCHEMA,"recipe_member":MEMBER,"validation_commands":validation_commands});
+    let index = serde_json::json!({"schema":INDEX_SCHEMA,"recipe_member":MEMBER,"binutils_admitted":binutils_admitted,"validation_commands":validation_commands});
     b.files.insert(
         format!("{MEMBER}.expansion.json"),
         serde_json::to_string_pretty(&index).map_err(|e| error(e.to_string()))?,
