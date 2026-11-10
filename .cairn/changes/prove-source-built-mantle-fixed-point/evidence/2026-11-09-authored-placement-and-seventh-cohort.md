@@ -66,6 +66,37 @@ Pueue `1522` (`sbfp-proof-v9`, started 2026-11-09T21:25:42-05:00) runs the same
 cohort with CLI `4bd6f81febcc69d59ed8be1381bab54b3d6ffd57817a9983daf67933a24913cf`
 and the aggregate diagnostic, to enumerate the omitted dependencies.
 
+## Enumerated frontier
+
+Pueue `1522` (CLI
+`4bd6f81febcc69d59ed8be1381bab54b3d6ffd57817a9983daf67933a24913cf`, same
+cohort) ran 1 h 44 m and returned the complete list the aggregate diagnostic was
+added for:
+
+```text
+expanded commands omit 11 original source/bootstrap dependencies [
+ "stage0-mini-kaem-exec:kaem-0",
+ "mes-m2-kaem-exec:stage0-kaem",
+ "tinycc-mes-exec:mescc-entrypoint",
+ "tinycc-runtime-exec:mes-crt1",
+ "tinycc-runtime-exec:mes-libc-tcc",
+ "tinycc-final-exec:tcc-boot0",
+ "tinycc-final-exec:tcc-mes",
+ "tinycc27-runtime-exec:tinycc-crt1", ...]
+```
+
+Staging `.proof-v8.source-built-fixed-point-staging-669818` is preserved. The
+list splits into two classes that need separate decisions:
+
+- Script-interpreter images (`kaem-0`, `stage0-kaem`): the expansion replaces the
+  interpreter with one leaf command per original script line, so the image is
+  never an operand. Suppressing it must be explicit in the authored index rather
+  than a silent omission.
+- Materialization/derived artifacts that the authored leaves appear to omit
+  (`mescc-entrypoint`, `mes-crt1`, `mes-libc-tcc`, `tcc-boot0`, `tcc-mes`,
+  `tinycc-crt1`, `tinycc-libtcc1`): these look like real authoring gaps and need
+  the original command's operands, not an exemption.
+
 ## Non-claims
 
 No stage equality, action reconciliation, v2 receipt, release evidence or

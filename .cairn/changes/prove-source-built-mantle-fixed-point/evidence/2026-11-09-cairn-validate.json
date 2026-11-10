@@ -14,7 +14,7 @@
     "source": "legacy_default"
   },
   "profile_issues": [],
-  "receipt_hash": "1702bf1caa7c0623f001c1fc8319510b9e218949675b3bbf11750adc19614d41",
+  "receipt_hash": "cc5b94cbce33dc5a1614a149c95ba0c3630a8491652749c316e5d7e3d6972ca9",
   "resolution": {
     "diagnostics": [],
     "locator_consulted": false,
@@ -1841,7 +1841,7 @@
       "path": "./.cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 186,
+      "substantive_lines": 194,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 8,
       "task_done": 2,

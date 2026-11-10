@@ -230,3 +230,12 @@ the complete list. Details are retained in
 [authored placement and seventh cohort](evidence/2026-11-09-authored-placement-and-seventh-cohort.md).
 No stage equality, action reconciliation, v2 receipt or release evidence exists;
 I3–I5 and V1–V3 remain unchecked.
+
+The enumerated run (Pueue `1522`) then reported all eleven omitted lineage
+dependencies at once. They split into replaced script-interpreter images
+(`kaem-0`, `stage0-kaem`), which need an explicit replaced-input declaration in
+the authored index rather than a silent omission, and apparent authoring gaps in
+the mes/tinycc linking leaves (`mescc-entrypoint`, `mes-crt1`, `mes-libc-tcc`,
+`tcc-boot0`, `tcc-mes`, `tinycc-crt1`, `tinycc-libtcc1`), which need the original
+operands. That audit is the next slice; no stage equality, reconciliation, v2
+receipt or release evidence exists, and I3–I5 and V1–V3 remain unchecked.
