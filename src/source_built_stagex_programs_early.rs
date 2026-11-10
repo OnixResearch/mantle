@@ -358,6 +358,13 @@ fn stage0(b: &mut TransitionBuilder) -> Result<(), RunError> {
     let mini = b.read_source("stage0-posix-amd64-source", "mescc-tools-mini-kaem.kaem")?;
     let mut index = 0;
     kaem(b, MINI, &mini, &mut files, &mut String::new(), &mut BTreeMap::new(), &mut index)?;
+    // The expansion runs the script's commands directly; the original kaem-0
+    // interpreter image that ran the script is not executed.
+    b.dispose_input(
+        MINI,
+        "kaem-0",
+        "expansion runs the script commands directly instead of executing the kaem-0 interpreter image",
+    );
     for expected in crate::stagex_stage0::STAGE0_EXPECTED_EXECUTABLES {
         if expected.artifact_id != "stage0-hex0-copy" {
             b.publish(
@@ -379,6 +386,13 @@ fn stage0(b: &mut TransitionBuilder) -> Result<(), RunError> {
     ]);
     let full = b.read_source("stage0-posix-amd64-source", "mescc-tools-full-kaem.kaem")?;
     kaem(b, FULL, &full, &mut files, &mut String::new(), &mut vars, &mut index)?;
+    // The expansion runs the script's commands directly; the stage0 kaem image
+    // that interpreted it is not executed.
+    b.dispose_input(
+        FULL,
+        "stage0-kaem",
+        "expansion runs the script commands directly instead of executing the stage0 kaem image",
+    );
     for expected in crate::stagex_stage0_full::STAGE0_FULL_EXPECTED_EXECUTABLES {
         if expected.artifact_id.starts_with("stage0-full-")
             && let Some(reference) = files.get(expected.relative_path)
@@ -707,6 +721,13 @@ fn mes_bootstrap(b: &mut TransitionBuilder) -> Result<Files, RunError> {
         ("srcdest".into(), String::new()),
     ]);
     kaem(b, MES, &script, &mut files, &mut String::new(), &mut vars, &mut 0)?;
+    // The expansion runs the script's commands directly; the stage0 kaem image
+    // that interpreted it is not executed.
+    b.dispose_input(
+        MES,
+        "stage0-kaem",
+        "expansion runs the kaem.run lines directly instead of executing the stage0 kaem image",
+    );
     for (id, path) in [("mes-m2", "bin/mes-m2"), ("mes", "bin/mes")] {
         b.publish(MES, id, files.get(path).cloned().ok_or_else(|| error(format!("missing Mes output {path}")))?)?;
     }
@@ -1427,6 +1448,11 @@ fn tinycc26(b: &mut TransitionBuilder, modules: ArtifactRef) -> Result<(), RunEr
     let tcc_tree = tree(b, "tinycc-mes-exec", "tinycc26-source-tree", &tcc)?;
     let compiler = mes_tcc(b, "tinycc-mes-exec", "tcc-mes", modules.clone(), tcc_tree, libc_tcc.clone())?;
     b.publish("tinycc-mes-exec", "tcc-mes", compiler.clone())?;
+    b.dispose_input(
+        "tinycc-mes-exec",
+        "mescc-entrypoint",
+        "the expansion compiles tcc through the modelled Mes module pipeline instead of executing the original mescc entry-point script",
+    );
     observe(
         b,
         "tinycc-mes-exec",
@@ -1509,6 +1535,26 @@ fn tinycc26(b: &mut TransitionBuilder, modules: ArtifactRef) -> Result<(), RunEr
         0,
     )?;
     b.publish("tinycc-boot0-exec", "tcc-boot0", boot)?;
+    b.dispose_input(
+        "tinycc-runtime-exec",
+        "mes-crt1",
+        "the runtime builds its own crt1 from the tinycc sources; the Mes runtime crt1 is not linked into the tinycc runtime objects",
+    );
+    b.dispose_input(
+        "tinycc-runtime-exec",
+        "mes-libc-tcc",
+        "the Mes libc+tcc archive is consumed by the tcc-mes node that links that compiler; this runtime node links its own objects",
+    );
+    b.dispose_input(
+        "tinycc-final-exec",
+        "tcc-boot0",
+        "the final tcc is rebuilt from the same 0.9.26 sources through the Mes module pipeline; the boot0 compiler is not run as a driver",
+    );
+    b.dispose_input(
+        "tinycc-final-exec",
+        "tcc-mes",
+        "the final tcc is rebuilt from the same 0.9.26 sources through the Mes module pipeline; the Mes tcc executable is not run as a driver",
+    );
     let tcc_tree = tree(b, "tinycc-final-exec", "tinycc26-final-source-tree", &tcc)?;
     let final_tcc = mes_tcc(b, "tinycc-final-exec", "tinycc26-final", modules, tcc_tree, libc_tcc)?;
     observe(
@@ -1659,6 +1705,16 @@ fn observe(
 
 fn tinycc27(b: &mut TransitionBuilder) -> Result<(), RunError> {
     let tool = "tinycc27-runtime-exec";
+    b.dispose_input(
+        tool,
+        "tinycc-crt1",
+        "the runtime stages crt1 into the source map and the tinycc27-build-exec node consumes it through that source tree",
+    );
+    b.dispose_input(
+        tool,
+        "tinycc-libtcc1",
+        "the runtime stages libtcc1 into the source map and the tinycc27-build-exec node consumes it through that source tree",
+    );
     let mut mes = mes_sources(b, tool, "tinycc-mes-0.27.1-source", "tinycc27-mes")?;
     let header = b.authored(
         "helpers/tinycc27-stdarg.h",

@@ -1533,6 +1533,16 @@ fn bzip_core_bash(m: &mut Middle<'_>) -> Result<(), RunError> {
     m.publish(smoke_tool, "coreutils-smoke", smoke)?;
 
     let tool = "oyacc-patch-exec";
+    m.b.dispose_input(
+        tool,
+        "oyacc-smoke-grammar-source",
+        "the grammar fixture is consumed by the authored oyacc-smoke-exec node that generates a parser",
+    );
+    m.b.dispose_input(
+        tool,
+        "oyacc-malformed-grammar-source",
+        "the malformed grammar fixture is consumed by the authored oyacc-smoke-exec node that rejects it",
+    );
     let mut source = m.archive_source(tool, "oyacc-6.6-source", "main.c")?;
     let empty = m.source("oyacc-empty-config-source")?;
     source = m.install(tool, "oyacc-empty-config", source, empty, "config.h")?;

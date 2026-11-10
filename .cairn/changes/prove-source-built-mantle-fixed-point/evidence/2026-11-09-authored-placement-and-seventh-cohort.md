@@ -102,3 +102,29 @@ list splits into two classes that need separate decisions:
 No stage equality, action reconciliation, v2 receipt, release evidence or
 independent review exists yet. I3–I5 and V1–V3 remain unchecked, and every cohort
 identified above is an unreviewed prepared input.
+
+## Input dispositions and the tenth launch
+
+The enumerated omissions split into two authored statements rather than silent
+drops. The expansion index now carries, per original tool, an
+`input_dispositions` map from original input identity to the reason the
+expansion supersedes it; validation skips a lineage input only when that
+reason is non-empty and otherwise reports it. The authored reasons name what
+happens instead:
+
+- `kaem-0` and `stage0-kaem`: the expansion runs the script lines directly
+  instead of executing the interpreter image.
+- `mescc-entrypoint`: tcc is compiled through the modelled Mes module pipeline.
+- `mes-crt1`, `mes-libc-tcc`: the tcc-mes node links the Mes libc archive; the
+  runtime node builds its own objects.
+- `tcc-boot0`, `tcc-mes`: the final tcc is rebuilt from the same sources; the
+  earlier executables are not run as drivers.
+- `tinycc-crt1`, `tinycc-libtcc1`: staged into the source map consumed by the
+  `tinycc27-build-exec` tree.
+- `oyacc-*-grammar-source`: consumed by the authored `oyacc-smoke-exec` node.
+
+`superseding_a_lineage_input_requires_an_authored_reason` passes alongside the
+other three action tests (4 passed). The release binary
+`mantle-v10` (196675672 bytes) was built from this tree and launched as Pueue
+`1523` against `profile-v7`. No stage equality, reconciliation, receipt, or
+release evidence exists yet.

@@ -45,11 +45,21 @@ const TOOL_EXPORTS: [&str; 14] = [
 /// Source-authored ownership of concrete leaf commands, not semantic labels.
 /// Outputs retain original upstream identities so edges can be checked against
 /// the independently admitted lineage/route rather than this index's claims.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ExpandedNode {
     pub(crate) step_ids: BTreeSet<String>,
     pub(crate) outputs: BTreeMap<String, ArtifactRef>,
+    /// Lineage inputs the authored expansion supersedes, keyed by original
+    /// identity with the authored reason.
+    #[serde(default)]
+    pub(crate) input_dispositions: BTreeMap<String, String>,
+}
+
+impl ExpandedNode {
+    fn disposes(&self, canonical: &str) -> bool {
+        self.input_dispositions.get(canonical).is_some_and(|reason| !reason.trim().is_empty())
+    }
 }
 
 #[derive(Deserialize)]
@@ -327,6 +337,9 @@ fn validate_transition(
             let canonical = crate::source_built_stagex_programs::canonical_original_source_id(id);
             let input =
                 artifacts.get(canonical).ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
+            if node.disposes(canonical) {
+                continue;
+            }
             if !node_uses_input(program, node, input) {
                 omitted.push(format!("{}:{}", tool.id, canonical));
             }
@@ -336,7 +349,7 @@ fn validate_transition(
         let count = omitted.len();
         omitted.truncate(8);
         return Err(error(format!(
-            "expanded commands omit {count} original source/bootstrap dependencies {omitted:?}"
+            "expanded commands omit {count} original source/bootstrap dependencies {omitted:?} without an authored disposition"
         )));
     }
     // Preserve graph edges independently of the tool input lists. Tool nodes
@@ -898,6 +911,24 @@ mod tests {
     }
 
     #[test]
+    fn superseding_a_lineage_input_requires_an_authored_reason() {
+        let declared = ExpandedNode {
+            input_dispositions: BTreeMap::from([(
+                "kaem-0".into(),
+                "expansion runs the script commands directly".into(),
+            )]),
+            ..ExpandedNode::default()
+        };
+        assert!(declared.disposes("kaem-0"));
+        assert!(!declared.disposes("stage0-kaem"));
+        let blank = ExpandedNode {
+            input_dispositions: BTreeMap::from([("kaem-0".into(), "   ".into())]),
+            ..ExpandedNode::default()
+        };
+        assert!(!blank.disposes("kaem-0"));
+    }
+
+    #[test]
     fn unused_labels_cannot_satisfy_original_node_dependencies() {
         let mut phase = phase();
         let unused = source("unread.c");
@@ -906,6 +937,7 @@ mod tests {
         let node = ExpandedNode {
             step_ids: BTreeSet::from(["phase".into()]),
             outputs: BTreeMap::from([("state".into(), product("phase", "state"))]),
+            ..ExpandedNode::default()
         };
         let error = validate_partition(&graph, std::iter::once(&node)).unwrap_err();
         assert!(error.to_string().contains("unused inputs"));

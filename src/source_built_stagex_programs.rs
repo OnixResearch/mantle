@@ -109,6 +109,10 @@ pub(super) fn program(stage: &str) -> SourceRecipe {
 pub(super) struct ExpandedTool {
     pub step_ids: BTreeSet<String>,
     pub outputs: BTreeMap<String, ArtifactRef>,
+    /// Lineage inputs this node deliberately does not bind as an operand,
+    /// each with the authored reason the expansion supersedes it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub input_dispositions: BTreeMap<String, &'static str>,
 }
 #[derive(Serialize)]
 struct TransitionIndex<'a> {
@@ -438,6 +442,11 @@ impl TransitionBuilder {
         self.tools.entry(tool.into()).or_default().step_ids.insert(step.id.clone());
         self.recipe.steps.push(step);
         Ok(refs)
+    }
+    /// Declare that the authored expansion supersedes a lineage input instead
+    /// of binding it as an operand, with the reason recorded in the expansion.
+    pub fn dispose_input(&mut self, tool: &str, id: &str, reason: &'static str) {
+        self.tools.entry(tool.into()).or_default().input_dispositions.insert(id.into(), reason);
     }
     pub fn publish(&mut self, tool: &str, id: &str, reference: ArtifactRef) -> Result<(), RunError> {
         if self.artifacts.contains_key(id) {
