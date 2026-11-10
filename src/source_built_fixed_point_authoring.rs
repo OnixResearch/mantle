@@ -81,21 +81,10 @@ fn prepare_source_profile(
     append_program_records(&mut native_records, &programs, options.source_records_max)?;
     let native = assemble_source_bundle(native_records, &profile.store_prefix)?;
     crate::source_bundle::write_source_bundle(native_path, &native)?;
-    // Each consumer resolves its program from the role it authenticates: the
-    // StageX actions read the StageX source-bundle closure, and the Rust actions
-    // read the Rust source-archive root. Both placements are captured below so
-    // the proof's role digests stay exact.
-    let stagex_path = &roots[&SourceAuthorityRole::StagexSourceBundle];
-    let stagex_identity = selected.stagex_source_bundle.identity.clone();
-    let stagex = crate::source_bundle::read_source_bundle(stagex_path)?;
-    let mut stagex_records = stagex.records;
-    let stagex_program = programs
-        .iter()
-        .find(|record| record.identity == crate::source_built_stagex_programs::PROGRAM_RECORD)
-        .ok_or_else(|| proof_error("authored StageX program record is missing".into()))?;
-    append_program_records(&mut stagex_records, std::slice::from_ref(stagex_program), options.source_records_max)?;
-    let stagex = assemble_source_bundle(stagex_records, &profile.store_prefix)?;
-    crate::source_bundle::write_source_bundle(stagex_path, &stagex)?;
+    // The Rust actions read the authored program from the Rust source-archive
+    // root; its record is captured below so the proof's role digest stays exact.
+    // The StageX closure keeps its canonical manifest identity: it is pinned by
+    // the lineage, so authored programs never rewrite it.
     let rust_root = &roots[&SourceAuthorityRole::RustSourceArchiveSet];
     let rust_identity = selected.rust_source_archive_set.identity.clone();
     let rust_program = programs
@@ -121,8 +110,6 @@ fn prepare_source_profile(
             crate::source_bundle::recapture_source_record_payload(record, &prepared.source_root)?;
         } else if record.identity == native_identity {
             crate::source_bundle::recapture_source_record_payload(record, native_path)?;
-        } else if record.identity == stagex_identity {
-            crate::source_bundle::recapture_source_record_payload(record, stagex_path)?;
         } else if record.identity == rust_identity {
             crate::source_bundle::recapture_source_record_payload(record, rust_root)?;
         }
@@ -463,11 +450,11 @@ fn write_program_archive(path: &Path, files: &BTreeMap<String, String>) -> Resul
 }
 
 fn write_selector(root: &Path) -> Result<(), RunError> {
-    // StageX actions authenticate against the StageX source-bundle closure; the
-    // native and Rust actions read their own role's authority. The selectors
-    // mirror those exact authorities rather than one shared role.
+    // Authored program records are carried by the native source-authority
+    // closure; the Rust actions read the authored program from the Rust source
+    // archive root. The selectors mirror those exact authorities.
     let stagex = |member: &str| ArtifactRef::ManifestSource {
-        role: SourceAuthorityRole::StagexSourceBundle,
+        role: SourceAuthorityRole::NativeSourceBundle,
         record_identity: crate::source_built_stagex_programs::PROGRAM_RECORD.into(),
         member: member.into(),
     };

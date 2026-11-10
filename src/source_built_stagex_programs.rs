@@ -341,15 +341,18 @@ impl TransitionBuilder {
         } else {
             self.files.insert(path.into(), text);
         }
+        // Authored helper/policy/original bytes are carried by the native
+        // source-authority closure; the canonical StageX closure keeps the
+        // identity its lineage pins.
         Ok(ArtifactRef::ManifestSource {
-            role: SourceAuthorityRole::StagexSourceBundle,
+            role: SourceAuthorityRole::NativeSourceBundle,
             record_identity: PROGRAM_RECORD.into(),
             member: path.into(),
         })
     }
     pub fn helper_source(&self) -> ArtifactRef {
         ArtifactRef::ManifestSource {
-            role: SourceAuthorityRole::StagexSourceBundle,
+            role: SourceAuthorityRole::NativeSourceBundle,
             record_identity: PROGRAM_RECORD.into(),
             member: "helpers/stagex-source-transform.c".into(),
         }

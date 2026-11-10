@@ -216,3 +216,17 @@ and independent review remain outstanding; I3–I5 and V1–V3 stay unchecked. D
 [captured git repositories](evidence/2026-11-08-captured-git-repositories.md).
 No prepared profile, provider execution or fixed-point proof is accepted;
 I3–I5 and V1–V3 remain unchecked.
+
+The first promoted run then exposed three authoring boundaries, each now fixed:
+the canonical StageX closure must keep the manifest identity its lineage pins
+(authored bytes live in the native closure instead), lineage-declared inputs must
+be consumed (the empty after-hook and the StageX patch source are consumed as
+standard input), and StageX runtime mounts derive from the plan's logical store
+prefix. A seventh cohort
+(`output_profile_blake3 205503813fb8256f02c07fd59c93579965f12340bfbf5a373d3f88204b4140cc`)
+ran for 1 h 41 m before the partition validator reported an omitted lineage
+dependency; the validator now enumerates every omission so the next run yields
+the complete list. Details are retained in
+[authored placement and seventh cohort](evidence/2026-11-09-authored-placement-and-seventh-cohort.md).
+No stage equality, action reconciliation, v2 receipt or release evidence exists;
+I3–I5 and V1–V3 remain unchecked.

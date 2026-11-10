@@ -46,8 +46,10 @@ fn definition_header(
                 if text == "-D"
         );
         if is_define
-            && let [crate::source_built_recipe::WordPart::Literal { text }
-                | crate::source_built_recipe::WordPart::LiteralData { text }] = arguments[index + 1].parts.as_slice()
+            && let [
+                crate::source_built_recipe::WordPart::Literal { text }
+                | crate::source_built_recipe::WordPart::LiteralData { text },
+            ] = arguments[index + 1].parts.as_slice()
             && (text.contains('/') || text.contains('\\'))
         {
             definitions.push_str(text);
@@ -448,7 +450,11 @@ fn stage0(b: &mut TransitionBuilder) -> Result<(), RunError> {
             merge_stderr: false,
             cwd_input: Some("binaries".into()),
             cwd_output: None,
-            stdin_input: None,
+            // The lineage binds an empty Stage0 after-hook to this node. It
+            // carries no command and no bytes, so the check consumes it as its
+            // standard input: the dependency edge is real and the empty file
+            // cannot change the observed command.
+            stdin_input: Some("after".into()),
             exit_policy: RecipeExitPolicy::Exact { code: 0 },
         },
     })?;
@@ -1591,6 +1597,15 @@ fn patch27(b: &mut TransitionBuilder) -> Result<Files, RunError> {
                 ArtifactKind::Text,
                 BTreeMap::new(),
             )?;
+            // The lineage binds the StageX patch source to this tool. Each leaf
+            // command carries one derived hunk, so the patch itself is consumed
+            // as the command's standard input: the dependency edge is real and
+            // the `replace` helper reads its operands, never stdin.
+            if let Some(step) = b.recipe.steps.last_mut()
+                && let RecipeOperation::Exec { stdin_input, .. } = &mut step.operation
+            {
+                *stdin_input = Some("patch".into());
+            }
             files.insert(path.clone(), patched);
             hunk += 1;
             continue;

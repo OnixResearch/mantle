@@ -163,17 +163,19 @@ fn index_source(
     reference: &ArtifactRef,
     paths: &RecipePaths<'_>,
 ) -> Result<(String, Vec<u8>), RunError> {
+    // Authored StageX program records are carried by the native source-authority
+    // closure; the canonical StageX closure keeps the identity its lineage pins.
     let ArtifactRef::ManifestSource {
-        role: SourceAuthorityRole::StagexSourceBundle,
+        role: SourceAuthorityRole::NativeSourceBundle,
         record_identity,
         member,
     } = reference
     else {
-        return Err(error("source program selector must be ManifestSource StagexSourceBundle"));
+        return Err(error("source program selector must be ManifestSource NativeSourceBundle"));
     };
     validate_program_record(proof, paths, record_identity)?;
     let index_member = format!("{member}.expansion.json");
-    let bytes = recipe::read_manifest_source_member(proof, SourceAuthorityRole::StagexSourceBundle, record_identity, &index_member, paths)
+    let bytes = recipe::read_manifest_source_member(proof, SourceAuthorityRole::NativeSourceBundle, record_identity, &index_member, paths)
         .map_err(|failure| error(format!("missing authenticated leaf source-program input {record_identity}:{index_member}; retain all original generators as individually produced tools, not transition reports or imported binaries: {failure}")))?;
     Ok((member.clone(), bytes))
 }
@@ -185,15 +187,15 @@ fn validate_program_record(
 ) -> Result<(), RunError> {
     let manifest_path = paths
         .source_roots
-        .get(&SourceAuthorityRole::StagexSourceBundle)
-        .ok_or_else(|| error("missing StageX source bundle path"))?;
+        .get(&SourceAuthorityRole::NativeSourceBundle)
+        .ok_or_else(|| error("missing native source authority path"))?;
     let authority = proof
         .source_inputs
         .iter()
-        .find(|input| input.role == SourceAuthorityRole::StagexSourceBundle)
-        .ok_or_else(|| error("missing StageX source bundle authority"))?;
+        .find(|input| input.role == SourceAuthorityRole::NativeSourceBundle)
+        .ok_or_else(|| error("missing native source authority"))?;
     if recipe::digest(manifest_path)?.1 != authority.digest_blake3 {
-        return Err(error("StageX source bundle identity drift"));
+        return Err(error("native source authority identity drift"));
     }
     let manifest = crate::source_bundle::read_source_bundle(manifest_path)?;
     let mut records = manifest.records.iter().filter(|record| record.identity == identity);
@@ -318,15 +320,24 @@ fn validate_transition(
             return Err(error(format!("missing original generated artifact {}", generated.id)));
         }
     }
+    let mut omitted = Vec::new();
     for tool in &lineage.transition_tools {
         let node = &index.tools[&tool.id];
         for id in tool.source_artifact_ids.iter().chain(&tool.input_artifact_ids) {
             let canonical = crate::source_built_stagex_programs::canonical_original_source_id(id);
-            let input = artifacts
-                .get(canonical)
-                .ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
-            require_node_input(program, node, input)?;
+            let input =
+                artifacts.get(canonical).ok_or_else(|| error(format!("unknown original input {}", canonical)))?;
+            if !node_uses_input(program, node, input) {
+                omitted.push(format!("{}:{}", tool.id, canonical));
+            }
         }
+    }
+    if !omitted.is_empty() {
+        let count = omitted.len();
+        omitted.truncate(8);
+        return Err(error(format!(
+            "expanded commands omit {count} original source/bootstrap dependencies {omitted:?}"
+        )));
     }
     // Preserve graph edges independently of the tool input lists. Tool nodes
     // expand to their concrete outputs, never success labels or report digests.
@@ -400,6 +411,22 @@ fn require_source_digest(
             || record.content_blake3 != digest.hex_value
         {
             return Err(error("original source record identity drift"));
+        }
+        return Ok(());
+    }
+    // The lineage pins the canonical StageX closure by its manifest identity, and
+    // its provenance says that identity is loaded and validated before Stage0
+    // execution. Comparing the closure file's byte hash would name a different
+    // value, so the manifest identity is the authenticated fact here.
+    if let ArtifactRef::Source {
+        role: SourceAuthorityRole::StagexSourceBundle,
+        path,
+    } = reference
+        && path.is_empty()
+    {
+        let manifest = crate::source_bundle::read_source_bundle(&binding.path)?;
+        if manifest.manifest_blake3 != digest.hex_value {
+            return Err(error("original StageX source closure manifest identity drift"));
         }
         return Ok(());
     }
@@ -678,18 +705,38 @@ pub(crate) fn depends_on(program: &SourceRecipe, output: &ArtifactRef, input: &A
     false
 }
 
+pub(crate) fn node_uses_input(program: &SourceRecipe, node: &ExpandedNode, input: &ArtifactRef) -> bool {
+    program
+        .steps
+        .iter()
+        .filter(|step| node.step_ids.contains(&step.id))
+        .any(|step| used_inputs(step).contains(input))
+}
+
 pub(crate) fn require_node_input(
     program: &SourceRecipe,
     node: &ExpandedNode,
     input: &ArtifactRef,
 ) -> Result<(), RunError> {
-    if !program
-        .steps
-        .iter()
-        .filter(|step| node.step_ids.contains(&step.id))
-        .any(|step| used_inputs(step).contains(input))
-    {
-        return Err(error("expanded commands omit an original source/bootstrap dependency"));
+    let steps = program.steps.iter().filter(|step| node.step_ids.contains(&step.id)).collect::<Vec<_>>();
+    if !node_uses_input(program, node, input) {
+        let described = match input {
+            ArtifactRef::Source { role, path } => format!("Source {{ role: {role:?}, path: {path:?} }}"),
+            ArtifactRef::ManifestSource {
+                role,
+                record_identity,
+                member,
+            } => format!("ManifestSource {{ role: {role:?}, record: {record_identity}, member: {member:?} }}"),
+            ArtifactRef::Produced { action_id, output_id } => {
+                format!("Produced {{ action: {action_id}, output: {output_id} }}")
+            }
+        };
+        let bound = steps.iter().flat_map(|step| step.inputs.values()).collect::<BTreeSet<_>>().len();
+        return Err(error(format!(
+            "expanded commands omit an original source/bootstrap dependency: no step among {} uses {described}; {} distinct inputs are bound",
+            steps.len(),
+            bound
+        )));
     }
     Ok(())
 }
@@ -728,8 +775,20 @@ pub(crate) fn validate_partition<'a>(
         return Err(error("unclassified source/generator/command leaf steps"));
     }
     for step in &program.steps {
-        if used_inputs(step).len() != step.inputs.values().collect::<BTreeSet<_>>().len() {
-            return Err(error("unused inputs cannot stand in for original command dependencies"));
+        let used = used_inputs(step);
+        if used.len() != step.inputs.values().collect::<BTreeSet<_>>().len() {
+            let mut unused = step
+                .inputs
+                .iter()
+                .filter(|(_, reference)| !used.contains(*reference))
+                .map(|(name, _)| name.as_str())
+                .take(6)
+                .collect::<Vec<_>>();
+            unused.sort_unstable();
+            return Err(error(format!(
+                "step {} binds unused inputs {unused:?} that cannot stand in for original command dependencies",
+                step.id
+            )));
         }
     }
     Ok(())
