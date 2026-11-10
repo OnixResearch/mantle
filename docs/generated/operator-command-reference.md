@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `6f801737505795d7761b617fc35f5b76f9673f421feeeceb9b0cdf57eb7720fc`
+Catalog BLAKE3: `ac8411ec99aa2192c48894ca96ee7b7d2e0e97752fe0f8d30b623393664dcdcb`
 
 ## Daily commands
 
@@ -1656,6 +1656,15 @@ Compare build-root source requirements with imported source state before buildin
 ### `mantle source bundle refresh-mantle-source`
 
 Replace only the Mantle source record in a verified source-built profile
+
+- Mutation: `project-files`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle source bundle refresh-vendor-inputs`
+
+Replace only the vendored Cargo input record in a verified source-built profile
 
 - Mutation: `project-files`
 - Network: `required`

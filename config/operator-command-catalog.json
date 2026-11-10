@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "6f801737505795d7761b617fc35f5b76f9673f421feeeceb9b0cdf57eb7720fc",
+  "identity_blake3": "ac8411ec99aa2192c48894ca96ee7b7d2e0e97752fe0f8d30b623393664dcdcb",
   "entries": [
     {
       "descriptor": {
@@ -12851,6 +12851,75 @@
           "--store-backend",
           "--store-prefix",
           "--to",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "source bundle refresh-vendor-inputs",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--include-bundle",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--to",
+          "--vendor-inputs",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Replace only the vendored Cargo input record in a verified source-built profile",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "source bundle refresh-vendor-inputs",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "project-files",
+        "network": "required",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--include-bundle",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--remote-binding-config",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--to",
+          "--vendor-inputs",
           "--verbose",
           "-h",
           "-v"

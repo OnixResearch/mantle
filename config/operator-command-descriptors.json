@@ -4674,6 +4674,31 @@
     "supports_json": true
   },
   {
+    "path": "source bundle refresh-vendor-inputs",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--from",
+      "--help",
+      "--include-bundle",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--remote-binding-config",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--to",
+      "--vendor-inputs",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Replace only the vendored Cargo input record in a verified source-built profile",
+    "supports_json": true
+  },
+  {
     "path": "source bundle verify",
     "aliases": [],
     "flags": [

@@ -8483,6 +8483,48 @@
       ]
     },
     {
+      "canonical": "source bundle refresh-vendor-inputs",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--from",
+        "--help",
+        "--include-bundle",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--remote-binding-config",
+        "--state-dir",
+        "--store",
+        "--store-backend",
+        "--store-prefix",
+        "--to",
+        "--vendor-inputs",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-command-json-v1",
+      "migration_reference": null,
+      "mutation": "project-files",
+      "network": "required",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "public-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
       "canonical": "source bundle verify",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
