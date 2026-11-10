@@ -1694,6 +1694,9 @@ const POOL_TICKET_FD_B: i32 = 8;
 /// Pool mode: two admitted endpoints execute a real diamond through ordinary
 /// Worker scheduling: one shared dependency, two branches, one join.
 struct PoolDiamondOutcome {
+    // The worker stores live under this root; the outcome must retain it for as
+    // long as callers inspect the worker stores and reported outputs.
+    _root: tempfile::TempDir,
     report: Value,
     worker_a_store: PathBuf,
     worker_b_store: PathBuf,
@@ -1851,6 +1854,7 @@ fn run_two_worker_pool_build(
         panic!("pool diamond status={:?} stderr={stderr} failed={} log={log}", output.status, report["failed"]);
     }
     PoolDiamondOutcome {
+        _root: root,
         report: serde_json::from_slice(&output.stdout).expect("pool diamond JSON report"),
         worker_a_store,
         worker_b_store,
