@@ -56,20 +56,14 @@ fn add(
         inputs,
         outputs: BTreeMap::from([
             ("result".into(), RecipeOutput { kind, bytes_max: limit }),
-            (
-                "stdout".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Text,
-                    bytes_max: 64 * 1024 * 1024,
-                },
-            ),
-            (
-                "stderr".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Text,
-                    bytes_max: 64 * 1024 * 1024,
-                },
-            ),
+            ("stdout".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
+            ("stderr".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
         ]),
         operation: RecipeOperation::Exec {
             executable_input: executable.into(),

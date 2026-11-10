@@ -101,8 +101,14 @@ fn project(
         inputs: Files::from([("tool".into(), projector.clone()), ("tree".into(), from)]),
         outputs: BTreeMap::from([
             ("result".into(), RecipeOutput { kind, bytes_max }),
-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("stdout".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
+            ("stderr".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
         ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),
@@ -143,8 +149,14 @@ fn project_executable(
                 kind: ArtifactKind::Executable,
                 bytes_max,
             }),
-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("stdout".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
+            ("stderr".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
         ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),

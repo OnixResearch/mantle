@@ -368,7 +368,9 @@ fn provider(request: &NativeNodeRequest<'_, '_>) -> Result<NativeNodeProgram, Ru
         BTreeMap::new(),
         members,
         BTreeMap::new(),
-        &[crate::source_built_native_programs::final_gnu::controller_hooks(&callbacks)],
+        &[crate::source_built_native_programs::final_gnu::controller_hooks(
+            &callbacks,
+        )],
     )?;
     // The shell-stage contract names the normalized provider tree
     // `full-source-native-provider`, not the derivation's generic `out`.

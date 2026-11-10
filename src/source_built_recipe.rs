@@ -862,11 +862,9 @@ fn validate_control_edges(
         }
     }
     if let RecipeOperation::ObservePhase { phase, state, .. } = &step.operation {
-        let producer = preceding
-            .get(&action_id(stage, phase))
-            .ok_or_else(|| {
-                error(format!("phase observation {} requires a prior local guarded command {phase}", step.id))
-            })?;
+        let producer = preceding.get(&action_id(stage, phase)).ok_or_else(|| {
+            error(format!("phase observation {} requires a prior local guarded command {phase}", step.id))
+        })?;
         if operation_guard(&producer.operation).is_none() {
             return Err(error(format!("phase observation {} requires a guarded command for {phase}", step.id)));
         }
@@ -1109,10 +1107,7 @@ fn validate_word_scoped(
                 // All filesystem paths are typed. This also rejects response-file
                 // paths and embedded -I/host or --sysroot=/host spellings.
                 if text.contains('/') || text.contains('\\') || text.contains('\0') {
-                    return Err(error(format!(
-                        "untyped filesystem path in literal command word for step {}",
-                        step.id
-                    )));
+                    return Err(error(format!("untyped filesystem path in literal command word for step {}", step.id)));
                 }
             }
             WordPart::LiteralData { text } => {

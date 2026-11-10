@@ -349,10 +349,10 @@ fn seed_stage(
     fn retarget(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(fields) => {
-                if let Some(serde_json::Value::String(id)) = fields.get_mut("action_id") {
-                    if let Some(rest) = id.strip_prefix("full-source-rust-provider/") {
-                        *id = format!("stagex-transition/{rest}");
-                    }
+                if let Some(serde_json::Value::String(id)) = fields.get_mut("action_id")
+                    && let Some(rest) = id.strip_prefix("full-source-rust-provider/")
+                {
+                    *id = format!("stagex-transition/{rest}");
                 }
                 for value in fields.values_mut() {
                     retarget(value);

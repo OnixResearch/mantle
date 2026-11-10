@@ -128,3 +128,28 @@ other three action tests (4 passed). The release binary
 `mantle-v10` (196675672 bytes) was built from this tree and launched as Pueue
 `1523` against `profile-v7`. No stage equality, reconciliation, receipt, or
 release evidence exists yet.
+
+## Prepared-profile boundary and the eleventh launch
+
+The tenth launch (Pueue `1523`, `mantle-v10`, `profile-v7`) failed closed after
+1 h 46 m with the same eleven omissions and the new wording, proving the
+promoted proof never re-authors programs: it consumes the prepared profile's
+`source-built-*` records. Authoring changes therefore require a fresh
+preparation, executed locally against the original unexpanded profile
+`source-built-fixed-point-sources-refreshed-20261108-vendor-git.json`
+(`a6174213ff6b336e251175ee6afbf452178502209d8773f2eb4cb09ba4e368e0`).
+
+A local `--prepare-source-programs` run (`preparation_exit_code=0`,
+2026-11-10T02:10:11-05:00) produced `prepared-cohort-v8` with profile digest
+`8242b0bea1e4d415a692162ae0afc5a2697bed58be7d67ca3abe228345ef2edd` and StageX
+program record `a215c026dac98ab20e5e5574a4dba15a2d0168ea4b572d5f97bbdb86d6356bc6`.
+Its authored expansion carries twelve disposition entries across eight tools,
+covering all eleven reported pairs. The eleventh cold launch is Pueue `1524`
+against that profile.
+
+The ordinary gate reached `2848 passed; 1 failed` on the previous run:
+`remote_build::tests::real_slurm_accept_then_response_save_failure_reconciles_only_exact_dispatch_after_restart`
+failed with `external-batch-process-output-limit-exceeded` while preparation
+ran concurrently, and passes in isolation (1 passed, 0.18 s). A clean-host rerun
+is in flight; the flake is not yet claimed as fixed or as a regression.
+

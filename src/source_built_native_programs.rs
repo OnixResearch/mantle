@@ -100,23 +100,17 @@ pub(crate) fn logical_prefixes(
                 Some(path) => path.to_absolute_path_with_prefix(prefix),
                 None => {
                     let provisional = node.derivation.environment.get(name).ok_or_else(|| {
-                        error(&format!(
-                            "content-addressed native output {drv}:{name} has no provisional path"
-                        ))
+                        error(&format!("content-addressed native output {drv}:{name} has no provisional path"))
                     })?;
                     let provisional = std::str::from_utf8(provisional.as_ref()).map_err(|_| {
-                        error(&format!(
-                            "content-addressed native output {drv}:{name} has a non-UTF-8 provisional path"
-                        ))
+                        error(&format!("content-addressed native output {drv}:{name} has a non-UTF-8 provisional path"))
                     })?;
                     nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
                         provisional.as_bytes(),
                         prefix,
                     )
                     .map_err(|_| {
-                        error(&format!(
-                            "content-addressed native output {drv}:{name} has an invalid provisional path"
-                        ))
+                        error(&format!("content-addressed native output {drv}:{name} has an invalid provisional path"))
                     })?;
                     provisional.to_string()
                 }
@@ -210,27 +204,18 @@ pub(crate) fn append_stagex_c_helper(
         id: id.into(),
         inputs,
         outputs: BTreeMap::from([
-            (
-                "tool".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Executable,
-                    bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
-                },
-            ),
-            (
-                "stdout".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Text,
-                    bytes_max: 64 * 1024 * 1024,
-                },
-            ),
-            (
-                "stderr".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Text,
-                    bytes_max: 64 * 1024 * 1024,
-                },
-            ),
+            ("tool".into(), RecipeOutput {
+                kind: ArtifactKind::Executable,
+                bytes_max: request.proof.resource_bounds.disk_bytes_max.min(64 * 1024 * 1024),
+            }),
+            ("stdout".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
+            ("stderr".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
         ]),
         operation: RecipeOperation::Exec {
             executable_input: "tcc".into(),
@@ -365,15 +350,18 @@ pub(crate) fn append_gcc10_collect2_source(
             ("metadata".into(), source("collect2-driver-metadata.inc")),
         ]),
         outputs: BTreeMap::from([
-            (
-                "source".into(),
-                RecipeOutput {
-                    kind: ArtifactKind::Text,
-                    bytes_max: 8 * 1024 * 1024,
-                },
-            ),
-            ("stdout".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
-            ("stderr".into(), RecipeOutput { kind: ArtifactKind::Text, bytes_max: 64 * 1024 * 1024 }),
+            ("source".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 8 * 1024 * 1024,
+            }),
+            ("stdout".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
+            ("stderr".into(), RecipeOutput {
+                kind: ArtifactKind::Text,
+                bytes_max: 64 * 1024 * 1024,
+            }),
         ]),
         operation: RecipeOperation::Exec {
             executable_input: "tool".into(),
@@ -1061,12 +1049,18 @@ fn export_original_products(
                     .cloned()
             })
         }))
-        .chain(recipe.exports.values().filter(|reference| {
-            matches!(
-                reference,
-                ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
-            )
-        }).cloned())
+        .chain(
+            recipe
+                .exports
+                .values()
+                .filter(|reference| {
+                    matches!(
+                        reference,
+                        ArtifactRef::Produced { action_id, .. } if action_id.starts_with(&local_prefix)
+                    )
+                })
+                .cloned(),
+        )
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
