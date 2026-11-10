@@ -2882,7 +2882,7 @@ fn rust_plan_cli_executes_workspace_dependency_vendored_registry_dependency_in_u
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_workspace_dependency_vendored_registry_topology_before_rustc() {
+fn rust_plan_cli_admits_workspace_dependency_topology_with_member_features() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_workspace_dependency_vendored_registry_fixture(&dir, true);
 
@@ -2897,18 +2897,29 @@ fn rust_plan_cli_blocks_unsupported_workspace_dependency_vendored_registry_topol
         .output()
         .expect("rust-plan workspace-dependency registry topology CLI should run");
 
-    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
+    assert!(output.status.success(), "{output:?}");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers
+        !package_blockers
             .iter()
             .any(|blocker| blocker["class"] == "unsupported-workspace-dependency-options"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    let units = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(units.len(), 2, "{receipt:#?}");
+    assert!(
+        units.iter().any(|unit| unit["package_id"].as_str().unwrap().contains("demo-ws-leaf")),
+        "{receipt:#?}"
+    );
+    assert!(
+        units
+            .iter()
+            .any(|unit| unit["package_id"].as_str().unwrap().contains("registry-workspace-dependency-topology-app")),
+        "{receipt:#?}"
+    );
     assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
 }
 
@@ -2965,7 +2976,7 @@ fn rust_plan_cli_executes_explicit_workspace_dependency_vendored_registry_topolo
 }
 
 #[test]
-fn rust_plan_cli_blocks_explicit_workspace_dependency_topology_before_rustc() {
+fn rust_plan_cli_admits_member_feature_additions_on_workspace_dependencies() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_workspace_dependency_vendored_registry_fixture(&dir, true);
 
@@ -2980,19 +2991,28 @@ fn rust_plan_cli_blocks_explicit_workspace_dependency_topology_before_rustc() {
         .output()
         .expect("explicit workspace-dependency registry topology CLI should run");
 
-    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
+    assert!(output.status.success(), "{output:?}");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers
+        !package_blockers
             .iter()
             .any(|blocker| blocker["class"] == "unsupported-workspace-dependency-options"),
         "{receipt:#?}"
     );
     let execution = &receipt["native_registry_workspace_dependency_topology_execution"];
-    assert_eq!(execution["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(execution["blocker"]["class"], "workspace-dependency-planning-not-ready", "{receipt:#?}");
-    assert_eq!(execution["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(execution["execution_status"], "success", "{receipt:#?}");
+    let units = execution["unit_executions"].as_array().unwrap();
+    assert!(
+        units.iter().any(|unit| unit["package_id"].as_str().unwrap().contains("demo-ws-leaf")),
+        "{receipt:#?}"
+    );
+    assert!(
+        units
+            .iter()
+            .any(|unit| unit["package_id"].as_str().unwrap().contains("registry-workspace-dependency-topology-app")),
+        "{receipt:#?}"
+    );
 }
 
 #[test]
@@ -3441,7 +3461,7 @@ fn rust_plan_cli_executes_target_cfg_vendored_registry_dependency_in_unified_top
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_target_cfg_vendored_registry_topology_before_rustc() {
+fn rust_plan_cli_admits_inactive_target_cfg_dependency_before_rustc() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_target_cfg_vendored_registry_fixture(&dir, true);
 
@@ -3456,17 +3476,25 @@ fn rust_plan_cli_blocks_unsupported_target_cfg_vendored_registry_topology_before
         .output()
         .expect("rust-plan target-cfg registry topology CLI should run");
 
-    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
+    assert!(!output.status.success(), "an inactive dependency must surface its rustc failure: {output:?}");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-target-cfg-surface"),
+        !package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-target-cfg-surface"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
-    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["blocker"]["class"], "rustc-failed", "{receipt:#?}");
+    assert!(topology["blocker"]["message"].as_str().unwrap().contains("demo_cfg_leaf"), "{receipt:#?}");
+    let units = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(units.len(), 1, "{receipt:#?}");
+    assert!(units[0]["package_id"].as_str().unwrap().contains("demo-cfg-mid"), "{receipt:#?}");
+    assert_eq!(units[0]["execution_status"], "failed", "{receipt:#?}");
+    assert!(
+        !units.iter().any(|unit| unit["package_id"].as_str().unwrap().contains("demo-cfg-leaf")),
+        "an undefined cfg selector must not activate its dependency: {receipt:#?}"
+    );
 }
 
 #[test]
