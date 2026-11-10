@@ -167,3 +167,28 @@ role. The plan unit suite passes (11 passed), including
 `publication_requires_its_authenticated_source_program_authority`. No stage
 equality, reconciliation, receipt, or release evidence exists.
 
+## Provider claims and the fourteenth launch
+
+The thirteenth launch (`1526`) died in preflight because the host had only
+198 628 425 728 bytes of the required 200 000 000 000; deleting superseded
+37 GB staging attempts restored 576 GB. The relaunch (`1527`, 13:04) reached
+`publication omits original runtime supplement/positive/negative validation
+commands` after 1 h 39 m: the prepared cohort's publication index claimed all
+eight provider launches while the expansion only authored them when binutils
+sources are admitted, and this lineage does not admit them.
+
+The publication expansion now records `binutils_admitted` and claims only the
+launches it authored; the validator requires the three TCC exports and the four
+non-binutils launches when that flag is false. A fresh preparation
+(`prepared-cohort-v9`, `preparation_exit_code=0`, 2026-11-10T16:05:55-05:00)
+produced profile digest
+`74565ada1bb6a96965e60b064fced4eef8e210cbcb5f52520351d2e7839cdb85` with
+`binutils_admitted=false`, commands `runtime-supplement`, `tcc-execution`,
+`tcc-negative`, `tcc-positive`, all of which exist as authored steps. The
+fourteenth launch is Pueue `1528` against that profile.
+
+Two operational facts bound this transcript. The source-built proof consumes
+the prepared profile verbatim, so any authoring change requires a fresh
+preparation; and the host datapool filled to zero bytes during this run, which
+stalled the Nix GC lock and blocked local builds until space was reclaimed.
+
