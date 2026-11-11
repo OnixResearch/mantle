@@ -1895,8 +1895,17 @@ fn lower_step(
             let original_store = destination
                 .strip_prefix(proof.logical_store_prefix.as_str())
                 .is_some_and(|tail| tail.starts_with('/') && tail.len() > 1);
-            if !library && !original_store && destination != "/mantle-rust-runtime" {
-                return Err(error("runtime mount lies outside library/admitted logical-store runtime namespaces"));
+            // The native bootstrap provider intentionally presents its own
+            // private tool, runtime, header, library, and busybox root
+            // namespaces; they are named here so every other destination stays
+            // rejected.
+            let native_bootstrap = destination == "/bin"
+                || destination.starts_with("/bin/")
+                || destination.starts_with("/__mantle_native_bootstrap");
+            if !library && !original_store && !native_bootstrap && destination != "/mantle-rust-runtime" {
+                return Err(error(format!(
+                    "runtime mount {destination:?} lies outside library/admitted logical-store runtime namespaces"
+                )));
             }
         }
         if let Some(name) = invocation_input
@@ -3037,6 +3046,10 @@ mod tests {
             ("/custom/store", "/custom/store", false),
             ("/custom/store", "/usr/lib/provider", true),
             ("/custom/store", "/mantle-rust-runtime", true),
+            ("/custom/store", "/__mantle_native_bootstrap_tools", true),
+            ("/custom/store", "/__mantle_native_bootstrap-runtime", true),
+            ("/custom/store", "/bin", true),
+            ("/custom/store", "/__mantle_ambient_root", false),
             ("/tmp/store", "/tmp/store/provider", false),
         ] {
             let root = tempfile::tempdir().unwrap();
