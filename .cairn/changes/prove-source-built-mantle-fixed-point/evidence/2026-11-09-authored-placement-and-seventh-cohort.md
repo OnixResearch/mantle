@@ -192,3 +192,24 @@ the prepared profile verbatim, so any authoring change requires a fresh
 preparation; and the host datapool filled to zero bytes during this run, which
 stalled the Nix GC lock and blocked local builds until space was reclaimed.
 
+## Native bootstrap namespaces and the fifteenth launch
+
+The fourteenth launch (`1528`) reached `runtime mount lies outside
+library/admitted logical-store runtime namespaces` after 2 h 05 m. Scanning
+every prepared recipe found 148 distinct mount destinations; five failed the
+predicate: the native provider's `/__mantle_native_bootstrap_tools`,
+`-runtime`, `-headers`, `-libraries` roots and the busybox `/bin` root. The
+validator now admits those named namespaces explicitly (and still rejects every
+other destination, covered by five added table cases; the recipe suite passes,
+27 passed). The rescan reports zero rejected destinations. The fifteenth launch
+is Pueue `1529`; at 2 h 23 m it is still executing, past the previous failure
+point.
+
+Three ordinary-gate defects outside the proof surfaced and were repaired:
+three rust-plan tests pinned pre-change rejection behavior that the planner
+now implements per Cargo (member feature unions, inactive cfg dependencies),
+one core fixture expected `None` where an unset cfg now evaluates `false`, and
+three production-pool tests inspected worker stores after the owning `TempDir`
+was dropped. Each repaired suite passes: rust-plan admits 3 passed,
+mantle-rust-plan-core 26 passed, production pool 21 passed.
+
