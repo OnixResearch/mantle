@@ -554,6 +554,10 @@ fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             output_authority(ProofOutputRole::FullSourceNativeProvider),
             source_authority(SourceAuthorityRole::RustSourceArchiveSet),
+            // The Rust provider's helper programs and compatibility sources are
+            // members of the native source authority, exactly as the native
+            // provider itself consumes them.
+            source_authority(SourceAuthorityRole::NativeSourceBundle),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
