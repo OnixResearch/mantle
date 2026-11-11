@@ -56,6 +56,11 @@ pub(crate) mod controller;
 
 pub(crate) const SCHEMA: &str = "mantle-source-recipe-v1";
 pub(super) const RECIPE_BYTES_MAX: u64 = 64 * 1024 * 1024;
+/// A full Rust provider program enumerates every planned unit as a leaf: the
+/// measured program for this stack is 63 882 steps and 259 852 969 bytes. The
+/// structural bound remains `STEP_COUNT_MAX`; this bound admits that document
+/// while still rejecting unbounded input.
+pub(super) const RECIPE_SOURCE_BYTES_MAX: u64 = 512 * 1024 * 1024;
 pub(crate) const STEP_COUNT_MAX: usize = 100_000;
 pub(super) const WORD_BYTES_MAX: usize = 65_536;
 
@@ -2071,7 +2076,7 @@ pub(crate) fn prepare_from_reference(
     let cache = tempfile::tempdir().map_err(|e| error(e.to_string()))?;
     let path = hydrate_reference(proof, paths.source_roots, cache.path(), recipe_source)?;
     let metadata = fs::symlink_metadata(&path).map_err(|e| error(e.to_string()))?;
-    if !metadata.is_file() || metadata.len() > RECIPE_BYTES_MAX {
+    if !metadata.is_file() || metadata.len() > RECIPE_SOURCE_BYTES_MAX {
         let kind = if metadata.file_type().is_dir() {
             "a directory"
         } else if metadata.file_type().is_symlink() {
