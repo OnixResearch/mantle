@@ -213,3 +213,17 @@ three production-pool tests inspected worker stores after the owning `TempDir`
 was dropped. Each repaired suite passes: rust-plan admits 3 passed,
 mantle-rust-plan-core 26 passed, production pool 21 passed.
 
+## Rust provider program bound and the seventeenth launch
+
+The fifteenth launch (`1529`) reached `source recipe is not bounded regular
+source data` after 2 h 42 m. The sixteenth launch (`1530` equivalent, started
+detached) named the cause: `full-source-rust-provider` reads
+`source-built/rust/program.json`, which this stack's plan renders as
+259 852 969 bytes across 63 882 steps. The 64 MiB source-document bound
+rejected it while the structural `STEP_COUNT_MAX` (100 000) still held.
+
+The source-document bound is now `RECIPE_SOURCE_BYTES_MAX` (512 MiB) with the
+measured size recorded in the constant; invocation requests and manifest
+members keep the 64 MiB bound. The recipe suite passes (27 passed). The
+seventeenth launch is `proof-v17` with `mantle-v17`.
+
