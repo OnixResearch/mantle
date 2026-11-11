@@ -2072,7 +2072,19 @@ pub(crate) fn prepare_from_reference(
     let path = hydrate_reference(proof, paths.source_roots, cache.path(), recipe_source)?;
     let metadata = fs::symlink_metadata(&path).map_err(|e| error(e.to_string()))?;
     if !metadata.is_file() || metadata.len() > RECIPE_BYTES_MAX {
-        return Err(error("source recipe is not bounded regular source data"));
+        let kind = if metadata.file_type().is_dir() {
+            "a directory"
+        } else if metadata.file_type().is_symlink() {
+            "a symbolic link"
+        } else if metadata.is_file() {
+            "larger than the recipe bound"
+        } else {
+            "not a regular file"
+        };
+        return Err(error(format!(
+            "source recipe for stage {stage_id} from {recipe_source:?} resolved to {kind} at {}",
+            path.display()
+        )));
     }
     let bytes = fs::read(&path).map_err(|e| error(e.to_string()))?;
     let recipe: SourceRecipe =
