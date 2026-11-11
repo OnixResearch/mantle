@@ -263,3 +263,19 @@ policy, requires `terminate_sent` and a reaped timeout for both behaviors, and
 asserts `kill_sent` only for the fixture that ignores SIGTERM
 (6 consecutive passing runs).
 
+## Repreparation with the assembler fix and the twentieth launch
+
+The nineteenth launch (`proof-v19`) still reported the input-subpath rejection
+because it consumed `prepared-cohort-v9`, whose Rust program predates the
+mrustc operand fix. Scanning that program found exactly 139 offending words
+(`rust-*.assemble.specs` naming `mrustc-query-object` inside the Text compile
+output); the corrected preparation (`prepared-cohort-v10`,
+`preparation_exit_code=0`, 2026-11-11T14:38:50-05:00, profile
+`ec0f43531fa5ba52f546288ebb17e150a9d8c95ebf710f6de4afd0d882d05552`) has none:
+the only unresolved subpaths are cross-stage native-provider references whose
+tree kind is bound by the prior prepared recipe. The twentieth launch is
+`proof-v20` against that profile.
+
+The ordinary gate is green on the tree through `21df4a985` and its evidence
+commit (`gate_exit=0`, final target `86 passed`).
+
