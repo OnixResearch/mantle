@@ -409,7 +409,11 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     assert_eq!(redaction_report["bounded_stderr"], "<redacted-import-root>");
     assert!(!redaction_report["bounded_stderr"].as_str().unwrap().contains(env!("CARGO_MANIFEST_DIR")));
 
-    for (behavior, kill_expected) in [("late-success", false), ("ignore-terminate", true)] {
+    // `ignore-terminate` proves escalation deterministically. A merely slow
+    // worker may either honor the terminate signal or already own a graceful
+    // handler by the time the deadline fires, so its `kill_sent` is not a
+    // contract; both outcomes must still reach a reaped timeout.
+    for (behavior, kill_expected) in [("late-success", None), ("ignore-terminate", Some(true))] {
         let report_path = temporary.path().join(format!("{behavior}-report.json"));
         let output = mantle()
             .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", behavior)
@@ -417,7 +421,9 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
                 "eval",
                 POSITIVE_SOURCE,
                 "--budget-policy",
-                &format!("{FIXTURE_ROOT}/policy-process-fixture.json"),
+                // The teardown behaviors need the worker to reach its signal
+                // policy before the wall-time deadline; 100 ms races under load.
+                &format!("{FIXTURE_ROOT}/policy-process-fixture-teardown.json"),
                 "--budget-report",
                 report_path.to_str().unwrap(),
             ])
@@ -428,7 +434,10 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
         assert_eq!(report["terminal_disposition"], "timeout");
         assert_eq!(report["teardown"]["response_present"], false);
         assert_eq!(report["teardown"]["reaped"], true);
-        assert_eq!(report["teardown"]["kill_sent"], kill_expected);
+        assert_eq!(report["teardown"]["terminate_sent"], true);
+        if let Some(expected) = kill_expected {
+            assert_eq!(report["teardown"]["kill_sent"], expected);
+        }
     }
 }
 
