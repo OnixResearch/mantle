@@ -511,10 +511,13 @@ fn compile(
         lit("-c"),
         input("assembly", ""),
         lit("-o"),
-        input("assembly", "mrustc-query-object"),
+        // The mapped output token belongs to a declared Tree (the phase tool
+        // tree), exactly as the C translation assembler phase expresses it; an
+        // input subpath into a Text artifact is not an admissible operand.
+        input("phase-tools", "mrustc-query-object"),
     ]);
     let mut map = tools.mappings(&inputs);
-    map.insert("/inputs/assembly/mrustc-query-object".into(), "/outputs/object".into());
+    map.insert("/inputs/phase-tools/mrustc-query-object".into(), "/outputs/object".into());
     let expansion = append_gcc_invocation(program, GccInvocation {
         id: format!("{id}.assemble"),
         driver: tools.driver.clone(),
