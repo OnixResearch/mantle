@@ -842,12 +842,14 @@ fn cfg_dependencies_use_selected_triple_once_and_optional_feature_edges() {
         }),
         Some(false)
     );
+    // An unrecognized predicate is not a planning blocker: Cargo evaluates an
+    // unset cfg as false for the selected target.
     assert_eq!(
         evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
             expression: "cfg(unrecognized_predicate)",
             active_target: linux,
         }),
-        None
+        Some(false)
     );
     assert_eq!(
         evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
