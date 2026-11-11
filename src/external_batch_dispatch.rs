@@ -579,10 +579,13 @@ fn read_bounded_output(mut reader: impl Read, limit_bytes: usize) -> Result<Vec<
     let buffer_size_bytes = u64::try_from(PROCESS_OUTPUT_BUFFER_BYTES)
         .map_err(|_| "external-batch-output-buffer-size-invalid".to_string())?;
     assert!(buffer_size_bytes > 0, "external batch read buffer conversion must stay positive");
-    let read_attempt_count_max = bounded_read_attempt_count(BoundedReadAttemptFacts {
-        total_bytes: read_limit_bytes,
-        buffer_bytes: buffer_size_bytes,
-    })?;
+    // A pipe read returns whatever bytes are available, so chunking may be far
+    // smaller than the buffer. Every successful read consumes at least one byte
+    // and EOF is one further read; bounding attempts by the byte limit (not by
+    // limit/buffer) cannot reject an in-bound stream however it is chunked.
+    let read_attempt_count_max = read_limit_bytes
+        .checked_add(2)
+        .ok_or_else(|| "external-batch-read-attempt-count-overflow".to_string())?;
     let mut output = Vec::with_capacity(limit_bytes.min(PROCESS_OUTPUT_BUFFER_BYTES));
     let mut buffer = [0_u8; PROCESS_OUTPUT_BUFFER_BYTES];
     let mut is_complete = false;
@@ -1103,6 +1106,28 @@ mod tests {
         assert_eq!(flood_error, "external-batch-process-output-limit-exceeded");
         assert_eq!(timeout_error, "external-batch-process-timeout");
         assert_eq!(disabled_error, "external-batch-operation-not-allowed");
+    }
+
+    #[test]
+    fn chunked_pipe_output_within_the_bound_is_accepted() {
+        struct Chunked {
+            remaining: usize,
+        }
+        impl std::io::Read for Chunked {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if self.remaining == 0 || buffer.is_empty() {
+                    return Ok(0);
+                }
+                buffer[0] = b'a';
+                self.remaining -= 1;
+                Ok(1)
+            }
+        }
+        assert_eq!(read_bounded_output(Chunked { remaining: 8 }, 8).unwrap(), b"aaaaaaaa");
+        assert_eq!(
+            read_bounded_output(Chunked { remaining: 9 }, 8).unwrap_err(),
+            "external-batch-process-output-limit-exceeded"
+        );
     }
 
     #[test]
