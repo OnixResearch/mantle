@@ -227,3 +227,20 @@ measured size recorded in the constant; invocation requests and manifest
 members keep the 64 MiB bound. The recipe suite passes (27 passed). The
 seventeenth launch is `proof-v17` with `mantle-v17`.
 
+## Ordinary gate green and the eighteenth launch
+
+`./scripts/check-first-party-quality.sh` completed with `gate_exit=0` on the
+tree through `30aea7885`: fmt clean, strict clippy clean, and the serialized
+workspace lib/tests run passed (final target `86 passed`). Two defects found by
+that rail were repaired rather than waived: a flaky external-batch read bound
+(rejected chunked but in-bound provider output as a flood; the reader now
+bounds attempts by bytes and a one-byte-chunk regression test passes) and the
+provider-launch claims described above.
+
+The seventeenth launch (`proof-v17`) passed the Rust program document bound and
+then failed at `undeclared source role in recipe` after 2 h 36 m: the Rust
+provider program references `native-source-bundle` members 83 times, but the
+`full-source-rust-provider` stage plan did not admit that source authority. The
+plan now admits it (11 plan tests pass), and the eighteenth launch is
+`proof-v18` with `mantle-v18`.
+
