@@ -244,3 +244,22 @@ provider program references `native-source-bundle` members 83 times, but the
 plan now admits it (11 plan tests pass), and the eighteenth launch is
 `proof-v18` with `mantle-v18`.
 
+## Rust stage authority, assembler operands, and the nineteenth launch
+
+The eighteenth launch (`proof-v18`) failed after 2 h 38 m at `input subpath
+requires a declared tree artifact`: the mrustc assembler phase passed
+`-o input("assembly", "mrustc-query-object")` while `assembly` binds the
+compiler's Text output, and the invocation decoder requires any non-empty input
+subpath to name a Tree. The operand now follows the proven C-translation shape:
+the mapped token is `input("phase-tools", "mrustc-query-object")` into the
+declared phase tool tree, with the same `/inputs/phase-tools/...` to
+`/outputs/object` mapping. The nineteenth launch is `proof-v19`.
+
+The ordinary gate exposed one further non-deterministic expectation:
+`evaluator_budget_cli` asserted `kill_sent == false` for a merely slow worker,
+but whether terminate is honored depends on when the worker installs its signal
+policy relative to the deadline. The test now uses a dedicated 3 s fixture
+policy, requires `terminate_sent` and a reaped timeout for both behaviors, and
+asserts `kill_sent` only for the fixture that ignores SIGTERM
+(6 consecutive passing runs).
+
