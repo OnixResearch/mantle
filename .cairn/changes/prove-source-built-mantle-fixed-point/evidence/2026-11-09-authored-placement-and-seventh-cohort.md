@@ -297,3 +297,29 @@ sources are now retained, and a fresh preparation
 scan of every prepared program reports zero local input-subpath violations. The
 twenty-first launch is `proof-v21` with `mantle-v22`.
 
+## Phase operand scoping and the rejection of a looser decoder
+
+The twenty-first launch (`proof-v21`) failed after 2 h 47 m at
+`rust-source-phase-helper.compile.split binds unused inputs
+["helper-source","linux-headers","native-provider","native-sysroot"]`. Three
+leaf shapes needed separate treatment.
+
+A first attempt exempted every response-driven leaf from the one-to-one input
+rule in both the source partition check and the runtime invocation decoder. The
+existing recipe suite rejected that: three tests already pin the rule, one of
+them named `invocation_cannot_invent_paths_names_control_reads_or_unused_dependencies`.
+The exemptions were reverted and the invariant kept.
+
+Instead, authoring now scopes every leaf to the operands it can address:
+
+- GCC specs queries and splitter leaves declare only the inputs their own words,
+  runtime mount sources, cwd, request and guard reference.
+- A GCC phase additionally declares the inputs its authenticated path map can
+  address: each `/inputs/<name>/...` mapping source names one operand the
+  original command emitted. Words, phase runtime mounts, output seeds, cwd and
+  guard status inputs are kept; everything else is dropped.
+
+The recipe suite passes with the strict rule in force (27 passed), and a new
+ADR (`adr/0147`) records the separate source-document bound and this scoping
+rule. A fresh preparation with `mantle-v24` is in flight.
+
