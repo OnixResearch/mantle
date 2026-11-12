@@ -342,3 +342,18 @@ Every phase leaf therefore declares:
 The recipe suite passes (27 passed) and the last construction sites pass an
 empty invocation-level set because their phases already carry the operands.
 
+## Verification environment while the store recovers
+
+The host Nix store reached zero free bytes and was then garbage-collected
+down; the daemon's `min-free` (100 GiB) still exceeded the 76 GiB free, so
+every `nix develop` queued on the GC lock, and the configured Tailscale
+substituters (100.100.103.95:39400 and :5000) time out. The ordinary gate was
+therefore executed with the checked-in script unchanged against the same
+pinned cohort toolchain taken directly from the store
+(`rustc`/`cargo` 1.96.0-nightly-2026-04-08, the 1.96 rustfmt build that the
+tree is formatted with, clang/mold/pkg-config from the shell closure), with
+`RUSTC_BOOTSTRAP=1` because `branches` needs the nightly gate without a nix
+shell, and a clean target directory to clear stale read-only registry copies.
+Proof execution is unaffected: it runs on the remote host with its own
+reviewed binaries.
+
