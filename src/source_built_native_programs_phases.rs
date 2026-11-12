@@ -735,6 +735,7 @@ fn append_response_steps_guarded(
         let map_input = format!("gcc-phase-map-{ordinal}");
         let response_output = format!("response-{ordinal}");
         let mut phase_inputs = invocation.inputs.clone();
+        let declared_phase_inputs = phase.inputs.keys().cloned().collect::<BTreeSet<_>>();
         for (name, reference) in phase.inputs {
             insert_input(&mut phase_inputs, name, reference)?;
         }
@@ -924,6 +925,9 @@ fn append_response_steps_guarded(
         let mut phase_used = std::collections::BTreeSet::new();
         phase_used.extend(mapped_inputs);
         phase_used.extend(authored_inputs.iter().cloned());
+        // Inputs a phase declares itself are its own operands, including the
+        // produced edges that connect it to an earlier phase.
+        phase_used.extend(declared_phase_inputs);
         for word in phase_environment.values() {
             for part in &word.parts {
                 match part {
