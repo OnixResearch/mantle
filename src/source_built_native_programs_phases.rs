@@ -793,6 +793,10 @@ fn append_response_steps_guarded(
                 return Err(error(format!("phase environment shadows original driver policy {name}")));
             }
         }
+        // Typed phases publish this environment through the splitter overlay, so
+        // the phase leaf must still bind every input those words name.
+        let environment_inputs =
+            referenced_input_names(phase_environment.values().cloned(), &phase.runtime_mounts, &BTreeMap::new());
         let mapped_inputs = phase
             .path_mappings
             .keys()
@@ -928,6 +932,7 @@ fn append_response_steps_guarded(
         // Inputs a phase declares itself are its own operands, including the
         // produced edges that connect it to an earlier phase.
         phase_used.extend(declared_phase_inputs);
+        phase_used.extend(environment_inputs);
         for word in phase_environment.values() {
             for part in &word.parts {
                 match part {
