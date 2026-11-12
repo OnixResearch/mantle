@@ -630,10 +630,18 @@ pub(crate) fn used_inputs(step: &RecipeStep) -> BTreeSet<&ArtifactRef> {
             names.extend(runtime_mounts.values().map(String::as_str));
             names.extend(output_seeds.values().map(String::as_str));
             names.extend(invocation_input.iter().map(String::as_str));
-            if invocation_input.is_some() {
-                // Actual words do not exist at source admission. The executor
-                // authenticates the produced invocation and requires every
-                // declared input name to be consumed before launching a leaf.
+            // A response-driven leaf (`@<request>` or an authenticated
+            // invocation input) carries its real operands in data, not in the
+            // source words. Every declared input is available to that response
+            // through the authenticated path map, so none of them can be
+            // classified as an unused source declaration here.
+            let response_driven = invocation_input.is_some()
+                || arguments.iter().any(|word| {
+                    word.parts.len() == 2
+                        && matches!(&word.parts[0], WordPart::Literal { text } if text == "@")
+                        && matches!(&word.parts[1], WordPart::Input { .. })
+                });
+            if response_driven {
                 names.extend(step.inputs.keys().map(String::as_str));
             }
             if let Some(guard) = guard {

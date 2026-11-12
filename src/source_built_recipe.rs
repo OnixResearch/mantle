@@ -1350,6 +1350,25 @@ pub(super) fn validate_workspace_mounts(
 /// Dynamic dependency declarations are conditional promises, discharged before
 /// each active leaf: every input needs an explicit typed use or readonly catalog.
 /// Skipped leaves never decode a request or claim to consume absent inputs.
+/// A leaf whose operands are fixed source words, as opposed to a response-driven
+/// invocation that authenticates its operands from produced data.
+fn is_static_exec(step: &RecipeStep) -> bool {
+    let RecipeOperation::Exec {
+        invocation_input,
+        arguments,
+        ..
+    } = &step.operation
+    else {
+        return false;
+    };
+    invocation_input.is_none()
+        && !arguments.iter().any(|word| {
+            word.parts.len() == 2
+                && matches!(&word.parts[0], WordPart::Literal { text } if text == "@")
+                && matches!(&word.parts[1], WordPart::Input { .. })
+        })
+}
+
 pub(super) fn decode_invocation(
     step: &RecipeStep,
     bytes: &[u8],
@@ -1566,7 +1585,11 @@ pub(super) fn decode_invocation(
             return Err(error("invalid environment name"));
         }
     }
-    if step.inputs.keys().any(|name| !used.contains(name.as_str())) {
+    // A decoded invocation authenticates its actual operands; declared inputs
+    // stay bound for the authenticated path map even when this particular
+    // response does not spell them. Only undecoded static leaves require an
+    // exact one-to-one input use.
+    if is_static_exec(step) && step.inputs.keys().any(|name| !used.contains(name.as_str())) {
         return Err(error("dynamic invocation has an unused declared input name"));
     }
     drop(used);

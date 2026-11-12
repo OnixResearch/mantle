@@ -215,6 +215,52 @@ fn validate_mapping_destination(
 /// pipeline atomically. Callers retain original source/configuration/generator
 /// inputs; this function never invents flags, sysroots, objects or runtimes.
 ///
+/// Keep only the inputs this command can actually read: its executable,
+/// argument/environment words, runtime mount sources, cwd, authenticated
+/// invocation and guard status inputs. Later phases receive their own inputs.
+fn retain_referenced_exec_inputs(
+    inputs: &mut BTreeMap<String, ArtifactRef>,
+    executable_input: &str,
+    arguments: &[RecipeWord],
+    environment: &BTreeMap<String, RecipeWord>,
+    runtime_mounts: &BTreeMap<String, String>,
+    cwd_input: Option<&String>,
+    invocation_input: Option<&String>,
+    guard: Option<&RecipeGuard>,
+) {
+    let mut used = std::collections::BTreeSet::new();
+    for word in arguments.iter().chain(environment.values()) {
+        for part in &word.parts {
+            match part {
+                crate::source_built_recipe::WordPart::Input { name, .. }
+                | crate::source_built_recipe::WordPart::TextInput { name }
+                | crate::source_built_recipe::WordPart::TextSlice { name, .. } => {
+                    used.insert(name.clone());
+                }
+                crate::source_built_recipe::WordPart::Runtime { mount, .. } => {
+                    if let Some(name) = runtime_mounts.get(mount) {
+                        used.insert(name.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    used.extend(runtime_mounts.values().cloned());
+    if let Some(name) = cwd_input {
+        used.insert(name.clone());
+    }
+    if let Some(name) = invocation_input {
+        used.insert(name.clone());
+    }
+    if let Some(guard) = guard {
+        for condition in &guard.conditions {
+            used.insert(condition.status_input.clone());
+        }
+    }
+    inputs.retain(|name, _| used.contains(name) || name == executable_input);
+}
+
 /// `collect2` is deliberately not accepted as `ld`: if the original driver
 /// chooses collect2, its real source-owned phases require separate expansion.
 pub(crate) fn append_gcc_invocation(
@@ -254,42 +300,18 @@ fn append_gcc_invocation_inner(
     if request_input.is_none() {
         arguments.push(literal("-###"));
     }
-    // Declare only the inputs this query command can actually read. Later phases
-    // receive their own inputs; an unused declaration here would claim an
-    // original-command dependency the query never touches.
-    let mut query_used = std::collections::BTreeSet::new();
-    for word in arguments.iter().chain(invocation.environment.values()) {
-        for part in &word.parts {
-            match part {
-                crate::source_built_recipe::WordPart::Input { name, .. }
-                | crate::source_built_recipe::WordPart::TextInput { name }
-                | crate::source_built_recipe::WordPart::TextSlice { name, .. } => {
-                    query_used.insert(name.clone());
-                }
-                crate::source_built_recipe::WordPart::Runtime { mount, .. } => {
-                    if let Some(name) = invocation.runtime_mounts.get(mount) {
-                        query_used.insert(name.clone());
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    if let Some(name) = invocation.cwd_input.as_ref() {
-        query_used.insert(name.clone());
-    }
-    if let Some(name) = request_input.as_ref() {
-        query_used.insert(name.clone());
-    }
-    if let Some(guard) = query_guard.as_ref() {
-        for condition in &guard.conditions {
-            query_used.insert(condition.status_input.clone());
-        }
-    }
-    // A runtime mount exposes its source input even when no argument word names
-    // it; dropping that input would leave the mount dangling.
-    query_used.extend(invocation.runtime_mounts.values().cloned());
-    query_inputs.retain(|name, _| query_used.contains(name) || name == "gcc-specs-driver");
+    // Declare only the inputs this query command can actually read; inputs for
+    // later phases are declared by those phases.
+    retain_referenced_exec_inputs(
+        &mut query_inputs,
+        "gcc-specs-driver",
+        &arguments,
+        &invocation.environment,
+        &invocation.runtime_mounts,
+        invocation.cwd_input.as_ref(),
+        request_input.as_ref(),
+        query_guard.as_ref(),
+    );
     steps.push(RecipeStep {
         id: specs_id.clone(),
         inputs: query_inputs,
@@ -851,6 +873,19 @@ fn append_response_steps_guarded(
     }
     split_outputs.insert("stdout".into(), text_output(LOG_BYTES_MAX));
     split_outputs.insert("stderr".into(), text_output(LOG_BYTES_MAX));
+    // The splitter only reads the captured log, the optional source request,
+    // the per-phase maps/images/environments and its own mounts. Phase operands
+    // stay declared on the phase leaves that execute them.
+    retain_referenced_exec_inputs(
+        &mut split_inputs,
+        "gcc-phase-splitter",
+        &split_arguments,
+        &BTreeMap::new(),
+        &split_runtime_mounts,
+        None,
+        None,
+        split_guard.as_ref(),
+    );
     steps.push(RecipeStep {
         id: split_id,
         inputs: split_inputs,
