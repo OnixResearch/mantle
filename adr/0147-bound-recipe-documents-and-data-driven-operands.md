@@ -1,4 +1,4 @@
-# 0147. Bound recipe documents separately and admit data-driven operands
+# 0147. Bound recipe documents separately and scope data-driven operands to their map
 
 Status: Accepted
 
@@ -32,13 +32,13 @@ Two bounds exist. `RECIPE_SOURCE_BYTES_MAX` (512 MiB) admits a stage program
 document and records the measured program size; `RECIPE_BYTES_MAX` (64 MiB)
 continues to bound invocation requests and manifest members.
 
-Static leaves declare exactly the inputs they can read: authoring trims GCC
+Every leaf declares exactly the inputs it can address. Authoring trims GCC
 specs-query and splitter leaves to the inputs their own words, runtime mounts,
-cwd and guard reference, while later phases declare their own inputs.
-
-Response-driven leaves keep every declared input bound and are exempt from the
-one-to-one use rule, because their operands are authenticated data and the path
-map may address any bound name.
+cwd and guard reference. A response-driven phase additionally declares the
+inputs its authenticated path map can address: each `/inputs/<name>/...`
+mapping source names one input the original command emitted, so the response
+can address it, while inputs with neither a word nor a mapping source are
+dropped. The runtime one-to-one rule stays in force for every leaf.
 
 ## Consequences
 
@@ -46,6 +46,6 @@ map may address any bound name.
   step bound; larger documents fail closed.
 - Authoring must trim each new static leaf; an unused declaration on a static
   leaf is a build error naming the step and labels.
-- The runtime invocation decoder no longer rejects unused bindings on
-  response-driven leaves, and the source partition check treats them as fully
-  consumed.
+- The runtime invocation decoder still rejects any declared binding the decoded
+  invocation does not consume; authoring must therefore scope each phase to
+  its words and mapping sources.

@@ -144,4 +144,4 @@ compatibility surface, crate name, or historical decision.
 | [0144](0144-keep-native-script-reservations-inside-shared-source-controllers.md) | Keep native script reservations inside shared source controllers | Accepted |
 | [0145](0145-retain-source-qualified-consuming-lock-identities.md) | Retain source-qualified consuming-lock package identities | Accepted |
 | [0146](0146-resolve-git-packages-inside-captured-repository-trees.md) | Resolve git-sourced packages inside captured repository trees | Accepted |
-| [0147](0147-bound-recipe-documents-and-data-driven-operands.md) | Bound recipe documents separately and admit data-driven operands | Accepted |
+| [0147](0147-bound-recipe-documents-and-data-driven-operands.md) | Bound recipe documents separately and scope data-driven operands to their map | Accepted |
