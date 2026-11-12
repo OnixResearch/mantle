@@ -266,7 +266,10 @@ fn validate_expansion(
         }
     }
     let product = &prepared.export(STAGE)?.reference;
-    require_export(prepared, STAGE, ArtifactKind::Tree, Some(STAGE))?;
+    // The provider export is the stage's own assembled `tree` output; its
+    // output label is authored by the successor graph, not forced to equal the
+    // stage identity. The produced-identity and stage-prefix checks still apply.
+    require_export(prepared, STAGE, ArtifactKind::Tree, None)?;
     require_export(prepared, "rustc", ArtifactKind::Executable, None)?;
     require_export(prepared, "toolchain-closure", ArtifactKind::Text, None)?;
     let final_stage = route.stages.last().ok_or_else(|| error("empty original Rust route"))?;
