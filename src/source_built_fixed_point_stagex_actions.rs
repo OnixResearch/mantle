@@ -630,10 +630,17 @@ pub(crate) fn used_inputs(step: &RecipeStep) -> BTreeSet<&ArtifactRef> {
             names.extend(runtime_mounts.values().map(String::as_str));
             names.extend(output_seeds.values().map(String::as_str));
             names.extend(invocation_input.iter().map(String::as_str));
-            if invocation_input.is_some() {
-                // Actual words do not exist at source admission. The executor
-                // authenticates the produced invocation and requires every
-                // declared input name to be consumed before launching a leaf.
+            // Actual words do not exist at source admission. The executor
+            // authenticates the produced invocation and requires every declared
+            // input name to be consumed before launching a leaf. A `@<request>`
+            // operand is the same shape: the response file carries the real
+            // operands, and every declared input stays addressable by it.
+            let response_argument = arguments.iter().any(|word| {
+                word.parts.len() == 2
+                    && matches!(&word.parts[0], WordPart::Literal { text } if text == "@")
+                    && matches!(&word.parts[1], WordPart::Input { .. })
+            });
+            if invocation_input.is_some() || response_argument {
                 names.extend(step.inputs.keys().map(String::as_str));
             }
             if let Some(guard) = guard {
