@@ -279,3 +279,21 @@ tree kind is bound by the prior prepared recipe. The twentieth launch is
 The ordinary gate is green on the tree through `21df4a985` and its evidence
 commit (`gate_exit=0`, final target `86 passed`).
 
+## Specs-query declarations and the twenty-first launch
+
+The twentieth launch (`proof-v20`) reached
+`rust-source-phase-helper.compile.specs binds unused inputs ["linux-headers"]`
+after 2 h 45 m: every GCC specs query inherited the full invocation input set,
+including inputs only later phases read. The query now declares exactly the
+inputs its own words reference — argument/environment words, runtime mount
+sources, cwd, request and guard status inputs, plus the specs driver — and the
+C translation keeps its mounted trees. A first attempt dropped runtime mount
+sources as well and preparation failed at `unknown input bundle`; the mount
+sources are now retained, and a fresh preparation
+(`prepared-cohort-v11`, `preparation_exit_code=0`,
+2026-11-11T20:57:05-05:00, profile
+`bbb738d6b011b1e61ae5e8535584fe4e4d6dc3284a683abd07a09fe2ac45f88e`) authors a
+`rust-source-phase-helper.compile.specs` without `linux-headers`. A preflight
+scan of every prepared program reports zero local input-subpath violations. The
+twenty-first launch is `proof-v21` with `mantle-v22`.
+
