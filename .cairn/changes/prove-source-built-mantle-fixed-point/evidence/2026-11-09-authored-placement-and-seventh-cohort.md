@@ -357,3 +357,11 @@ shell, and a clean target directory to clear stale read-only registry copies.
 Proof execution is unaffected: it runs on the remote host with its own
 reviewed binaries.
 
+A direct-toolchain reproduction of the gate is not faithful: `branches
+0.4.6` classifies any nightly as `branches_nightly` and expands
+`core::intrinsics::abort`, which the 1.96 nightly no longer provides, while
+the flake shell builds it. The gate therefore remains unverified on this host
+until the store daemon and substituters recover; the changed authoring code is
+covered by the recipe suite (27 passed) and by preparation validation of
+cohort-v16 (`preparation_exit_code=0`).
+
