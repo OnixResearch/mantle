@@ -666,13 +666,12 @@ pub(crate) fn author(
     let tools = assemble(&mut recipe, format!("{id}.tools"), tool_members, disk);
     native.inputs.insert("phase-tools".into(), tools);
     let source_id = format!("{id}.original-project");
+    // The collector copies only the llvm-project subtree out of the Rust source
+    // tree; the original mrustc source stays bound to the leaves that read it.
     recipe.steps.push(exec(
         source_id.clone(),
         collector.clone(),
-        BTreeMap::from([
-            ("rust-source".into(), source_tree),
-            ("mrustc-source".into(), original_mrustc),
-        ]),
+        BTreeMap::from([("rust-source".into(), source_tree)]),
         vec![
             lit("source"),
             input("rust-source", &format!("rustc-{version}-src/src/llvm-project")),
