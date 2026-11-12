@@ -395,3 +395,20 @@ checked inside the same `nix develop` shell: `cargo fmt --check -p mantle` and
 `cargo clippy -p mantle --no-deps -- -D warnings` both pass, and the recipe
 (27 passed) and phase-scoping (2 passed) suites pass on the updated source.
 
+## Response-file leaves and the LLVM source collector
+
+The twenty-fourth launch (`proof-v24`) cleared the phase leaves and then
+reported `llvm-1.90.0.original-project binds unused inputs ["mrustc-source"]`.
+Two fixes followed. A `@<request>` leaf is now recognized as data-driven by the
+source partition check and the invocation decoder — narrowly, only for the
+`@` operand form, so the pinned `invocation_cannot_invent_paths_names_control_reads_or_unused_dependencies`
+test still holds. And the LLVM source collector no longer binds the mrustc
+source: the collector copies only the llvm-project subtree, while the mrustc
+artifact keeps its thirteen other consuming leaves.
+
+A fresh preparation with `mantle-v29` (`preparation_exit_code=0`,
+2026-11-12T11:52:25-05:00, profile
+`1356a6f82664526d6b873560d07018a61e45681985443b92325b23752bd94f60`) authors
+`llvm-*.original-project` with exactly `executable` and `rust-source`. The
+twenty-fifth launch is `proof-v25` against that profile.
+
