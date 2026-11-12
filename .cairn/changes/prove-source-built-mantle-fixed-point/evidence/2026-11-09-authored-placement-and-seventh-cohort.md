@@ -323,3 +323,22 @@ The recipe suite passes with the strict rule in force (27 passed), and a new
 ADR (`adr/0147`) records the separate source-document bound and this scoping
 rule. A fresh preparation with `mantle-v24` is in flight.
 
+## Phase scoping keeps authored operands and topology
+
+The first scoping attempt dropped phase inputs that no phase word or map source
+named. Preparation rejected the result at `unreachable or omitted command
+topology`: an assembler phase's `assembly` binding exists only in the authored
+invocation (`-c input("assembly","")`), and dropping it also dropped the only
+edge to its compile phase. The decoder invariant stays as the recipe suite
+requires; authoring now retains the authored operand names as well.
+
+Every phase leaf therefore declares:
+
+- the names its authored invocation arguments and environment address,
+- the names its path-map sources can address,
+- its runtime mount sources, output seeds, cwd, guard status inputs, tool and
+  response bindings.
+
+The recipe suite passes (27 passed) and the last construction sites pass an
+empty invocation-level set because their phases already carry the operands.
+
