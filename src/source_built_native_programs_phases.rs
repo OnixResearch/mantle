@@ -1035,3 +1035,70 @@ fn append_response_steps_guarded(
         phase_outputs,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reference(id: &str) -> ArtifactRef {
+        ArtifactRef::Produced {
+            action_id: "full-source-native-provider/producer".into(),
+            output_id: id.into(),
+        }
+    }
+
+    fn input(name: &str) -> RecipeWord {
+        RecipeWord {
+            parts: vec![WordPart::Input {
+                name: name.into(),
+                path: String::new(),
+            }],
+        }
+    }
+
+    #[test]
+    fn exec_input_retention_keeps_every_addressable_operand_and_drops_labels() {
+        let mut inputs = BTreeMap::from([
+            ("tool".to_string(), reference("tool")),
+            ("data".to_string(), reference("data")),
+            ("mounted".to_string(), reference("mounted")),
+            ("cwd".to_string(), reference("cwd")),
+            ("request".to_string(), reference("request")),
+            ("status".to_string(), reference("status")),
+            ("unused".to_string(), reference("unused")),
+        ]);
+        let mounts = BTreeMap::from([("/lib".to_string(), "mounted".to_string())]);
+        let guard = RecipeGuard {
+            conditions: vec![RecipeGuardCondition {
+                status_input: "status".into(),
+                accepted_codes: vec![0],
+            }],
+        };
+        retain_referenced_exec_inputs(
+            &mut inputs,
+            "tool",
+            &[input("data")],
+            &BTreeMap::new(),
+            &mounts,
+            Some(&"cwd".to_string()),
+            Some(&"request".to_string()),
+            Some(&guard),
+        );
+        assert_eq!(inputs.keys().cloned().collect::<Vec<_>>(), vec![
+            "cwd", "data", "mounted", "request", "status", "tool"
+        ]);
+    }
+
+    #[test]
+    fn referenced_names_include_words_and_mount_sources_only() {
+        let mounts = BTreeMap::from([("/lib".to_string(), "libraries".to_string())]);
+        let environment = BTreeMap::from([("CPATH".to_string(), RecipeWord {
+            parts: vec![WordPart::Runtime {
+                mount: "/lib".into(),
+                path: String::new(),
+            }],
+        })]);
+        let names = referenced_input_names([input("headers")], &mounts, &environment);
+        assert_eq!(names.into_iter().collect::<Vec<_>>(), vec!["headers", "libraries"]);
+    }
+}
