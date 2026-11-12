@@ -375,3 +375,18 @@ authoring surface changed here is covered by the 27-test recipe suite and by
 `preparation_exit_code=0` for cohort-v16, and the previous full gate runs were
 green on the same suites.
 
+## Canonical gate green on a healthy host
+
+The local store's remote builder and substituters (`aspen1.local` =
+100.100.103.95) are unreachable, so the checked-in gate was run on the healthy
+host: the tree at `46ec1ea40` was synced to `mantle-gate`, `nix flake archive`
+copied every flake input (including the private git inputs) into that host's
+store, and `scripts/check-first-party-quality.sh` ran unchanged inside
+`nix develop` there. Result: `gate_exit=0` after the bridge probe, package
+rustfmt, strict clippy, and the serialized workspace lib/tests run (220
+`test result: ok` lines, final target `86 passed; 0 failed`).
+
+Two later changes are not covered by that transcript because they landed after
+the sync: the `@<request>` data-driven exemption and its fixture tidy, both
+covered by the 27-test recipe suite.
+
