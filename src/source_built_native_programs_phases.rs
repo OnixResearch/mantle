@@ -728,6 +728,14 @@ fn append_response_steps_guarded(
                 return Err(error(format!("phase environment shadows original driver policy {name}")));
             }
         }
+        let mapped_inputs = phase
+            .path_mappings
+            .keys()
+            .filter_map(|source| source.strip_prefix("/inputs/"))
+            .filter_map(|tail| tail.split('/').next())
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
         let mut map_text = String::new();
         for (source, destination) in phase.path_mappings {
             let source_relative = source
@@ -846,6 +854,42 @@ fn append_response_steps_guarded(
         let mut phase_outputs_map = phase.outputs;
         phase_outputs_map.entry("stdout".into()).or_insert_with(|| text_output(LOG_BYTES_MAX));
         phase_outputs_map.entry("stderr".into()).or_insert_with(|| text_output(LOG_BYTES_MAX));
+        // A phase response can only address the operands its authenticated path
+        // map and its own words name; every other label would be an unused
+        // original-command dependency.
+        let mut phase_used = std::collections::BTreeSet::new();
+        phase_used.extend(mapped_inputs);
+        for word in phase_environment.values() {
+            for part in &word.parts {
+                match part {
+                    WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
+                        phase_used.insert(name.clone());
+                    }
+                    WordPart::Runtime { mount, .. } => {
+                        if let Some(name) = phase.runtime_mounts.get(mount) {
+                            phase_used.insert(name.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        phase_used.extend(phase.runtime_mounts.values().cloned());
+        phase_used.extend(phase.output_seeds.values().cloned());
+        if let Some(name) = invocation.cwd_input.as_ref() {
+            phase_used.insert(name.clone());
+        }
+        if let Some(guard) = phase.guard.as_ref() {
+            for condition in &guard.conditions {
+                phase_used.insert(condition.status_input.clone());
+            }
+        }
+        phase_used.insert("gcc-phase-tool".into());
+        phase_used.insert("gcc-phase-response".into());
+        if typed_invocation {
+            phase_used.insert("gcc-phase-data".into());
+        }
+        phase_inputs.retain(|name, _| phase_used.contains(name));
         phase_steps.push(RecipeStep {
             id: phase_id,
             inputs: phase_inputs,
