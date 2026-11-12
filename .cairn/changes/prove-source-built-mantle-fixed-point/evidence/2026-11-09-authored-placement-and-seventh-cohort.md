@@ -431,3 +431,9 @@ Offline prechecks of the prepared program show the three Rust exports
 text) and every native role reference intact. The twenty-sixth launch is
 `proof-v26` with `mantle-v30` against the unchanged cohort-v18 profile.
 
+`proof-v26` passed every source-validation frontier that stopped the previous
+launches and, at 2 h 48 m, is executing the Rust stage (three live bwrap
+sandboxes, 37 GB staging) rather than failing closed. This is the first run to
+enter real provider construction; no stage equality, reconciliation, receipt,
+or release evidence exists yet.
+
