@@ -657,6 +657,7 @@ fn link(
     let mut map = tools.mappings(&inputs);
     map.insert("/inputs/phase-tools/mrustc-query-executable".into(), "/outputs/executable".into());
     let expansion = append_gcc_response_phases(program, GccResponseInvocation {
+        authored_inputs: std::collections::BTreeSet::new(),
         id: format!("{id}.link"),
         splitter: tools.splitter.clone(),
         inputs,

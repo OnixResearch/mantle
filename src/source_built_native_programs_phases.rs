@@ -67,6 +67,9 @@ pub(crate) struct GccInvocation {
 /// Response-producing original generator phases, such as collect2's guarded
 /// non-collecting first-link query, feed this pipeline without inventing argv.
 pub(crate) struct GccResponseInvocation {
+    /// Input names the authored operands address; every phase response may
+    /// reference them even when the phase declares no word of its own.
+    pub authored_inputs: BTreeSet<String>,
     pub id: String,
     pub splitter: ArtifactRef,
     pub inputs: BTreeMap<String, ArtifactRef>,
@@ -261,6 +264,30 @@ fn retain_referenced_exec_inputs(
     inputs.retain(|name, _| used.contains(name) || name == executable_input);
 }
 
+fn referenced_input_names(
+    words: impl IntoIterator<Item = RecipeWord>,
+    runtime_mounts: &BTreeMap<String, String>,
+    environment: &BTreeMap<String, RecipeWord>,
+) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for word in words.into_iter().chain(environment.values().cloned()) {
+        for part in &word.parts {
+            match part {
+                WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
+                    names.insert(name.clone());
+                }
+                WordPart::Runtime { mount, .. } => {
+                    if let Some(name) = runtime_mounts.get(mount) {
+                        names.insert(name.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    names
+}
+
 /// `collect2` is deliberately not accepted as `ld`: if the original driver
 /// chooses collect2, its real source-owned phases require separate expansion.
 pub(crate) fn append_gcc_invocation(
@@ -296,6 +323,13 @@ fn append_gcc_invocation_inner(
         inherit_guard_inputs(&mut query_inputs, phase, query_guard.as_ref())?;
     }
     insert_input(&mut query_inputs, "gcc-specs-driver".into(), invocation.driver)?;
+    // The authored operands are the source of every name the phase response can
+    // address; capture them before the query consumes the argument words.
+    let authored_inputs = referenced_input_names(
+        invocation.arguments.iter().cloned(),
+        &invocation.runtime_mounts,
+        &invocation.environment,
+    );
     let mut arguments = invocation.arguments;
     if request_input.is_none() {
         arguments.push(literal("-###"));
@@ -341,6 +375,7 @@ fn append_gcc_invocation_inner(
         phase_inputs.remove(request);
     }
     let response = GccResponseInvocation {
+        authored_inputs,
         id: invocation.id,
         splitter: invocation.splitter,
         inputs: phase_inputs,
@@ -529,6 +564,7 @@ fn append_gcc_probe_invocation_inner(
     let mut expansion = append_response_steps_guarded(
         program,
         GccResponseInvocation {
+            authored_inputs: std::collections::BTreeSet::new(),
             id: invocation.id,
             splitter: invocation.splitter,
             inputs: invocation.inputs,
@@ -587,6 +623,34 @@ fn append_response_steps_guarded(
     split_guard: Option<RecipeGuard>,
     environment_source: Option<ArtifactRef>,
 ) -> Result<GccExpansion, RunError> {
+    // Phase-authored operands: every phase word, runtime mount source, output
+    // seed and path-map source names an input the response may address.
+    let mut authored_inputs = invocation.authored_inputs.clone();
+    for phase in &invocation.phases {
+        authored_inputs.extend(referenced_input_names(
+            phase.environment.values().cloned(),
+            &phase.runtime_mounts,
+            &BTreeMap::new(),
+        ));
+        authored_inputs.extend(phase.runtime_mounts.values().cloned());
+        authored_inputs.extend(phase.output_seeds.values().cloned());
+        authored_inputs.extend(
+            phase
+                .path_mappings
+                .keys()
+                .filter_map(|source| source.strip_prefix("/inputs/"))
+                .filter_map(|tail| tail.split('/').next())
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned),
+        );
+        if let Some(guard) = phase.guard.as_ref() {
+            authored_inputs.extend(guard.conditions.iter().map(|c| c.status_input.clone()));
+        }
+        if let Some(name) = phase.invocation_input.as_ref() {
+            authored_inputs.insert(name.clone());
+        }
+    }
+    let authored_inputs = authored_inputs;
     require_produced(&invocation.splitter)?;
     require_produced(&invocation.log)?;
     if invocation.phases.is_empty() || invocation.phases.len() > 64 {
@@ -859,6 +923,7 @@ fn append_response_steps_guarded(
         // original-command dependency.
         let mut phase_used = std::collections::BTreeSet::new();
         phase_used.extend(mapped_inputs);
+        phase_used.extend(authored_inputs.iter().cloned());
         for word in phase_environment.values() {
             for part in &word.parts {
                 match part {

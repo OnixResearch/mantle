@@ -627,6 +627,7 @@ pub(crate) fn lower(request: &NativeNodeRequest<'_, '_>) -> Result<NativeNodePro
     );
     let mut r = recipe(&mut b.program);
     let linked = append_gcc_response_phases(&mut r, GccResponseInvocation {
+        authored_inputs: std::collections::BTreeSet::new(),
         id: format!("{id}.ld"),
         splitter: request.gcc_splitter.clone(),
         inputs,

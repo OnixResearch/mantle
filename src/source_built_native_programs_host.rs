@@ -420,6 +420,7 @@ impl<'a, 'b, 'c> Host<'a, 'b, 'c> {
             linker_map,
         );
         let expansion = append_gcc_response_phases(&mut self.recipe, GccResponseInvocation {
+            authored_inputs: std::collections::BTreeSet::new(),
             id: format!("{id}.ld"),
             splitter: self.request.gcc_splitter.clone(),
             inputs,

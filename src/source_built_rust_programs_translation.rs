@@ -1009,6 +1009,7 @@ pub(crate) fn append_c_helper(
     let mut mappings = n.mappings(&inputs);
     mappings.insert("/inputs/phase-tools/helper-query-executable".into(), "/outputs/executable".into());
     let expansion = append_gcc_response_phases(program, GccResponseInvocation {
+        authored_inputs: std::collections::BTreeSet::new(),
         id: format!("{id}.link"),
         splitter: n.splitter.clone(),
         inputs,
