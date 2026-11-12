@@ -365,3 +365,13 @@ until the store daemon and substituters recover; the changed authoring code is
 covered by the recipe suite (27 passed) and by preparation validation of
 cohort-v16 (`preparation_exit_code=0`).
 
+Gate reproduction attempts with a direct store toolchain all stop in
+dependencies, not in this repository: `branches 0.4.6` expands
+`core::intrinsics::abort` on every nightly (the intrinsic is gone in 1.96), and
+`cargo clippy` refuses a version-masking `RUSTC` because clippy-driver treats
+the wrapper path as an input file. The checked-in gate therefore stays
+unverified on this host until `nix develop` can realize its shell again; the
+authoring surface changed here is covered by the 27-test recipe suite and by
+`preparation_exit_code=0` for cohort-v16, and the previous full gate runs were
+green on the same suites.
+
