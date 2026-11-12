@@ -1074,14 +1074,16 @@ mod tests {
                 accepted_codes: vec![0],
             }],
         };
+        let cwd = "cwd".to_string();
+        let request = "request".to_string();
         retain_referenced_exec_inputs(
             &mut inputs,
             "tool",
             &[input("data")],
             &BTreeMap::new(),
             &mounts,
-            Some(&"cwd".to_string()),
-            Some(&"request".to_string()),
+            Some(&cwd),
+            Some(&request),
             Some(&guard),
         );
         assert_eq!(inputs.keys().cloned().collect::<Vec<_>>(), vec![
