@@ -412,3 +412,7 @@ A fresh preparation with `mantle-v29` (`preparation_exit_code=0`,
 `llvm-*.original-project` with exactly `executable` and `rust-source`. The
 twenty-fifth launch is `proof-v25` against that profile.
 
+The same targeted checks pass again on the final commit (`9d16277ac`): package
+rustfmt, strict clippy, and the 27-test recipe suite inside `nix develop` on
+the healthy host.
+
