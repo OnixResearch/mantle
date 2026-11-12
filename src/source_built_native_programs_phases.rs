@@ -254,6 +254,42 @@ fn append_gcc_invocation_inner(
     if request_input.is_none() {
         arguments.push(literal("-###"));
     }
+    // Declare only the inputs this query command can actually read. Later phases
+    // receive their own inputs; an unused declaration here would claim an
+    // original-command dependency the query never touches.
+    let mut query_used = std::collections::BTreeSet::new();
+    for word in arguments.iter().chain(invocation.environment.values()) {
+        for part in &word.parts {
+            match part {
+                crate::source_built_recipe::WordPart::Input { name, .. }
+                | crate::source_built_recipe::WordPart::TextInput { name }
+                | crate::source_built_recipe::WordPart::TextSlice { name, .. } => {
+                    query_used.insert(name.clone());
+                }
+                crate::source_built_recipe::WordPart::Runtime { mount, .. } => {
+                    if let Some(name) = invocation.runtime_mounts.get(mount) {
+                        query_used.insert(name.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if let Some(name) = invocation.cwd_input.as_ref() {
+        query_used.insert(name.clone());
+    }
+    if let Some(name) = request_input.as_ref() {
+        query_used.insert(name.clone());
+    }
+    if let Some(guard) = query_guard.as_ref() {
+        for condition in &guard.conditions {
+            query_used.insert(condition.status_input.clone());
+        }
+    }
+    // A runtime mount exposes its source input even when no argument word names
+    // it; dropping that input would leave the mount dangling.
+    query_used.extend(invocation.runtime_mounts.values().cloned());
+    query_inputs.retain(|name, _| query_used.contains(name) || name == "gcc-specs-driver");
     steps.push(RecipeStep {
         id: specs_id.clone(),
         inputs: query_inputs,
