@@ -390,3 +390,8 @@ Two later changes are not covered by that transcript because they landed after
 the sync: the `@<request>` data-driven exemption and its fixture tidy, both
 covered by the 27-test recipe suite.
 
+On that host, the two commits that landed after the full gate run were then
+checked inside the same `nix develop` shell: `cargo fmt --check -p mantle` and
+`cargo clippy -p mantle --no-deps -- -D warnings` both pass, and the recipe
+(27 passed) and phase-scoping (2 passed) suites pass on the updated source.
+
