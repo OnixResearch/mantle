@@ -416,3 +416,18 @@ The same targeted checks pass again on the final commit (`9d16277ac`): package
 rustfmt, strict clippy, and the 27-test recipe suite inside `nix develop` on
 the healthy host.
 
+## Provider export label and the twenty-sixth launch
+
+The twenty-fifth launch (`proof-v25`) reached `invalid source-produced export
+full-source-rust-provider` after 2 h 44 m: the successor graph assembles the
+provider tree as its own `tree` output, while `require_export` demanded the
+output label equal the stage identity. The export check now requires an
+individually produced stage output of the right kind and keeps the
+stage-prefix test; the canonical label requirement remains for the StageX
+provider, whose authoring names that output explicitly.
+
+Offline prechecks of the prepared program show the three Rust exports
+(`full-source-rust-provider` tree, `rustc` executable, `toolchain-closure`
+text) and every native role reference intact. The twenty-sixth launch is
+`proof-v26` with `mantle-v30` against the unchanged cohort-v18 profile.
+
