@@ -437,3 +437,12 @@ sandboxes, 37 GB staging) rather than failing closed. This is the first run to
 enter real provider construction; no stage equality, reconciliation, receipt,
 or release evidence exists yet.
 
+The response-file exemption is now pinned where it is actually read: the
+invocation decoder only accepts steps with an authenticated `invocation_input`,
+so the `@`-form branch added there was unreachable and is removed. The source
+partition check is the sole consumer of the `@`-operand rule, and a new test
+(`response_file_leaves_keep_every_declared_input`) shows a response-file leaf
+keeps every declared input addressable while a static leaf still reports an
+unused label. Suite result: 5 passed in the action tests, 27 passed in the
+recipe tests.
+
