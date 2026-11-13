@@ -574,6 +574,63 @@ pub(crate) fn require_export(
 }
 
 /// Check actual operand references, not merely declared-but-unused input labels.
+/// Declared input names an operation addresses by name. Authoring uses this to
+/// bind stage-wide exact artifacts where a shared environment word references
+/// them; `used_inputs` resolves the same names to their references.
+pub(crate) fn referenced_input_names(step: &RecipeStep) -> BTreeSet<&str> {
+    let mut names = BTreeSet::<&str>::new();
+    match &step.operation {
+        RecipeOperation::Controller { .. }
+        | RecipeOperation::CopyText { .. }
+        | RecipeOperation::ExtractArchive { .. }
+        | RecipeOperation::AssembleTree { .. }
+        | RecipeOperation::MaterializeFetcher { .. }
+        | RecipeOperation::ObservePhase { .. }
+        | RecipeOperation::WriteText { .. }
+        | RecipeOperation::MaterializeRecord { .. } => {}
+        RecipeOperation::Exec {
+            executable_input,
+            arguments,
+            environment,
+            runtime_mounts,
+            cwd_input,
+            stdin_input,
+            guard,
+            output_seeds,
+            invocation_input,
+            ..
+        } => {
+            names.insert(executable_input);
+            names.extend(cwd_input.iter().map(String::as_str));
+            names.extend(stdin_input.iter().map(String::as_str));
+            names.extend(runtime_mounts.values().map(String::as_str));
+            names.extend(output_seeds.values().map(String::as_str));
+            names.extend(invocation_input.iter().map(String::as_str));
+            if let Some(guard) = guard {
+                names.extend(guard.conditions.iter().map(|condition| condition.status_input.as_str()));
+            }
+            for word in arguments.iter().chain(environment.values()) {
+                for part in &word.parts {
+                    match part {
+                        WordPart::Input { name, .. }
+                        | WordPart::TextInput { name }
+                        | WordPart::TextSlice { name, .. } => {
+                            names.insert(name);
+                        }
+                        WordPart::Runtime { mount, .. } => {
+                            if let Some(name) = runtime_mounts.get(mount) {
+                                names.insert(name);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    names
+}
+
 pub(crate) fn used_inputs(step: &RecipeStep) -> BTreeSet<&ArtifactRef> {
     let mut names = BTreeSet::<&str>::new();
     match &step.operation {

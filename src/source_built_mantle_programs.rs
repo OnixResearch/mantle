@@ -800,9 +800,25 @@ impl Stage<'_> {
             },
         });
         let host = crate::source_built_rust_programs::source_route(self.request.source_roots)?.host_triple;
+        let stage_inputs = self.compiler_inputs()?;
         let mut program = self.take_program();
         let steps = std::mem::take(&mut program.steps);
         for mut step in steps {
+            // Shared original environment words address stage-wide exact
+            // artifacts (for example the produced Rust provider). Bind every
+            // name the operation addresses from the stage inventory so a step
+            // only declares the artifacts its own words consume.
+            let referenced = crate::source_built_fixed_point_stagex_actions::referenced_input_names(&step)
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            for name in referenced {
+                if let std::collections::btree_map::Entry::Vacant(slot) = step.inputs.entry(name.clone())
+                    && let Some(reference) = stage_inputs.get(&name)
+                {
+                    slot.insert(reference.clone());
+                }
+            }
             if let RecipeOperation::Exec {
                 environment,
                 runtime_mounts,
