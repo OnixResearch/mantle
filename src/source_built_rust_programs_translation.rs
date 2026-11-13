@@ -1081,15 +1081,27 @@ pub(crate) fn append_link_response(
     };
     let logical_data = source_data(program, &format!("{id}.logical-output"), logical_output.into());
     let prepare = format!("{id}.native-entry");
+    // The prepare leaf receives the compiler's authenticated cwd as an operand;
+    // every input that operand names must be bound on the leaf itself.
+    let mut prepare_inputs = BTreeMap::from([
+        ("helper".into(), native_helper.clone()),
+        ("package".into(), package),
+        ("link-work".into(), link_work),
+        ("prior-tmp".into(), prior),
+        ("logical-output".into(), logical_data.clone()),
+    ]);
+    for part in &cwd.parts {
+        let name = match part {
+            WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => name,
+            _ => continue,
+        };
+        let reference =
+            inputs.get(name).ok_or_else(|| error(format!("native linker cwd names unbound input {name}")))?;
+        prepare_inputs.entry(name.clone()).or_insert_with(|| reference.clone());
+    }
     program.steps.push(RecipeStep {
         id: prepare.clone(),
-        inputs: BTreeMap::from([
-            ("helper".into(), native_helper.clone()),
-            ("package".into(), package),
-            ("link-work".into(), link_work),
-            ("prior-tmp".into(), prior),
-            ("logical-output".into(), logical_data.clone()),
-        ]),
+        inputs: prepare_inputs,
         outputs: BTreeMap::from([
             ("workspace".into(), RecipeOutput {
                 kind: ArtifactKind::Tree,
