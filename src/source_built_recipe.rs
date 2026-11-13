@@ -2772,7 +2772,7 @@ mod tests {
             (ArtifactKind::Text, 63, false),
         ] {
             let root = tempfile::tempdir().unwrap();
-            let (original, mut sources) = stage_binding_fixture(root.path());
+            let (original, mut sources) = stage_binding_fixture(root.path(), "full-source-rust-provider");
             let seed = fs::canonicalize(env!("SNIX_BUILD_SANDBOX_SHELL")).unwrap();
             sources.insert(SourceAuthorityRole::StagexSeed, seed);
             let mut recipe = text_recipe("stagex-transition", "prior", "data", "unused");
@@ -3114,7 +3114,7 @@ mod tests {
             ("/tmp/store", "/tmp/store/provider", false),
         ] {
             let root = tempfile::tempdir().unwrap();
-            let (original, mut sources) = stage_binding_fixture(root.path());
+            let (original, mut sources) = stage_binding_fixture(root.path(), "full-source-rust-provider");
             sources
                 .insert(SourceAuthorityRole::StagexSeed, fs::canonicalize(env!("SNIX_BUILD_SANDBOX_SHELL")).unwrap());
             let mut recipe = text_recipe("stagex-transition", "data", "text", "unused");
@@ -3372,7 +3372,7 @@ mod tests {
     fn preparation_rejects_source_timeout_above_global_proof_cap() {
         for oversized in [false, true] {
             let root = tempfile::tempdir().unwrap();
-            let (original, sources) = stage_binding_fixture(root.path());
+            let (original, sources) = stage_binding_fixture(root.path(), "full-source-rust-provider");
             let path = &sources[&SourceAuthorityRole::StagexLineage];
             let mut recipe: SourceRecipe = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
             recipe.timeout_groups = vec![RecipeTimeoutGroup {
