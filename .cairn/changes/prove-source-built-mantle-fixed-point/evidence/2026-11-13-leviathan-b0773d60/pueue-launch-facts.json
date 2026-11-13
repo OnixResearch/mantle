@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1540,
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-final-source.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/source-checkout",
+    "status": {
+      "Running": {
+        "enqueued_at": "2026-11-13T15:38:28.573793703-05:00",
+        "start": "2026-11-13T15:38:28.653603779-05:00"
+      }
+    }
+  },
+  {
+    "id": 1541,
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-run.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/source-checkout",
+    "status": {
+      "Running": {
+        "enqueued_at": "2026-11-13T15:38:29.338566799-05:00",
+        "start": "2026-11-13T15:38:29.407120593-05:00"
+      }
+    }
+  }
+]

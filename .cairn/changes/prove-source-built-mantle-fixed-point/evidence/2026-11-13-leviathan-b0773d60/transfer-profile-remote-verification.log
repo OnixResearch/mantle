@@ -1,0 +1,25 @@
++ date --iso-8601=seconds --utc
+2026-11-13T20:24:40+00:00
++ printf '%s\n' 'BASELINE ONLY: earlier Mantle 51b3da0e... snapshot, not final current source or proof.'
+BASELINE ONLY: earlier Mantle 51b3da0e... snapshot, not final current source or proof.
++ printf '%s\n' 'Provided baseline manifest: de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c (66 identities). No manifest revalidation or adoption as final performed.'
+Provided baseline manifest: de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c (66 identities). No manifest revalidation or adoption as final performed.
++ stat -c '%s bytes %n' /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json
+11094548410 bytes /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json
+++ stat -c %s /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json
++ ACTUAL_SIZE=11094548410
++ test 11094548410 = 11094548410
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json
++ ACTUAL_HASH=6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec
++ printf 'remote_raw_json_blake3=%s\n' 6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec
+remote_raw_json_blake3=6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec
++ test 6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec = 6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec
++ printf 'baseline_transfer_size_and_blake3_parity=verified\n'
+baseline_transfer_size_and_blake3_parity=verified
++ date --iso-8601=seconds --utc
+2026-11-13T20:24:40+00:00
++ status=0
++ printf 'remote_transfer_verification_exit=%s\n' 0
+remote_transfer_verification_exit=0
++ printf '%s\n' 0
++ exit 0

@@ -312,6 +312,13 @@ Regenerate plans carrying the old aggregate value; do not weaken source-closure
 membership or substitute another declared source
 ([ADR 0148](../adr/0148-bind-receipt-source-to-mantle-source-root.md)).
 
+Bind the runner's build to the frozen source tree before launch: retain its
+source/archive identity, exact compiler and build command, and unchanged
+pre/post build source identities. A checksum after transfer or `--version`
+proves executable-byte identity or version output, not which source was built.
+Rebuild an unbound mutable-checkout artifact from the frozen tree rather than
+promoting it on version or transfer parity alone.
+
 Run on Leviathan only, in a fresh absent output directory, with a verified
 current Mantle executable and explicit bubblewrap/static-shell paths. Keep
 SSH, rsync, and pueue outside the protected execution boundary; do not use

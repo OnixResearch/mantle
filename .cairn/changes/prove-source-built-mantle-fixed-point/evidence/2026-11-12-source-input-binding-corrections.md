@@ -274,3 +274,77 @@ repeatable receipt boundary. The earlier `de163b8d…` profile and the old
 `24a193a8…` executable are not this final source/executable pair. A fresh source
 snapshot, profile refresh, program preparation and independently verified cold
 proof on Leviathan are still required. I3–I5 and V1–V3 remain unchecked.
+
+## Frozen source and canonical Leviathan launch
+
+The verified fixes are pushed as `a0f82178c` (machine contracts) and
+`b0773d60f2a63e6f21f4627d0d97dcff4b4a9211` (source-built authority and receipt
+boundaries). The latter is the frozen code revision for this attempt. Its Git
+archive BLAKE3 is
+`fd6d174d090d0ad42930597311d78c9968ed62f4318200168cd52ecec98d3d87`;
+Leviathan independently checked that archive and the `9f82ff2e…` runner after
+transfer. The real transferred executable reports `mantle 0.1.0`.
+
+Exact baseline, host, sandbox-tool, launch and command facts are retained under
+[`2026-11-13-leviathan-b0773d60/`](2026-11-13-leviathan-b0773d60/).
+The 11,094,548,410-byte baseline transferred with raw BLAKE3 `6254f87f…` is
+still the earlier source profile, not the new frozen source. Pueue 1540 now
+refreshes only Mantle's record and authors a fresh program cohort on Leviathan.
+Its 200 GB / 86,400 second / 16 job policy matches proof v27; the StageX
+`e477ab39…` and independently supplied native-output `f36d3759…` pins remain
+unchanged. This is not a promotion of a same-run native output into a pin.
+
+Pueue 1541 runs the required current-source checks inside the unchanged pinned
+`nix develop` shell, with remote builders disabled and the shell's own immutable
+Crane source map. The earlier tooling-only shell probe succeeded in task 1539;
+that older snapshot did not qualify the current source. The selected BusyBox
+also executed successfully in a minimal namespace root containing only that
+executable; this is a tool smoke, not a kernel-isolation or proof claim.
+
+The cached Nix input transport is a bounded one-time operator exception to
+missing remote private-Git credentials and the stalled local Nix route. It
+preserves exact locked Git objects and NAR identities without transferring
+credentials, rewriting URLs/pins, editing SQLite records, or bypassing GC/cache
+policy. It is not a new dependency-fetch service. The Mantle operator owns this
+run-local cache; a changed lock or evicted input triggers fresh admission, not
+silent reuse. Its non-claim is tooling availability only.
+
+Both launched jobs and independent acceptance reviews are still pending at this
+checkpoint. A reviewed fresh cohort and an actual cold v2 fixed point remain
+required; I3–I5 and V1–V3 are not accepted from transfer or launch facts.
+
+## Independent prelaunch review corrections
+
+The independent V1 review mapped every named criterion to behavioral assertions
+and found no further substantive coverage gap. Its report does not count the
+old `stagex_native_handoff_uses_only_the_fresh_reserved_provider_path` test:
+that test inspected Nickel source text rather than executing an authority
+transition. The incidental test is removed, not repinned; normalized-provider
+admission and mismatched replay-payload rejection retain behavioral coverage.
+The changed test source requires a new final source identity before promotion.
+
+The independent prelaunch review also found a real provenance gap: the
+`9f82ff2e…` executable was built from a mutable checkout before `b0773d60` was
+committed. Transfer equality and `--version` alone do not bind it to that
+revision. No mismatch was observed, but it cannot yet authorize a current-source
+runner claim. The correction is a separate build from an exact frozen-archive
+extraction, with retained pre/post source-tree identities and canonical build
+output, before any cold-proof launch. Earlier preparation remains unpromoted.
+
+Both full review reports are retained in `2026-11-13-leviathan-b0773d60/`.
+They are review evidence, not completion authority; real current-source checks,
+the final prepared cohort, and independently verified v2 execution remain
+required.
+
+The incidental-test removal was checked in local Pueue 26
+(`behavioral-handoff-coverage-20261113`, a later task than the earlier task 26).
+Its exact command, timestamps and output are retained in
+`2026-11-13-leviathan-b0773d60/behavioral-handoff-coverage.log`:
+
+```text
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2958 filtered out; finished in 0.00s
+```
+
+These tests exercise normalized-provider admission and replay-payload mismatch;
+the leaf formatter also passed. This does not add a new proof result or qualify
+an old source identity as the changed final tree.

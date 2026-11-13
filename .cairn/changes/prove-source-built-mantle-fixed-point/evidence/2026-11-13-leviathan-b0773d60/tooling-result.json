@@ -1,0 +1,96 @@
+{
+  "purpose": "TOOLING ONLY: observed canonical pinned-shell prerequisite success, NOT current-source qualification or proof",
+  "observedSuccess": {
+    "pueueId": 1539,
+    "exit": 0,
+    "completedAt": "2026-11-13T15:22:12-05:00",
+    "snapshotRevision": "d03d7a9fcd934d6ad5cbe0448be4803a20cb96d0",
+    "script": "/home/brittonr/sbfp-20261113-berdKH/tooling-canonical-shell-probe-3.sh",
+    "log": "/home/brittonr/sbfp-20261113-berdKH/tooling-canonical-shell-probe-3.log",
+    "exitFile": "/home/brittonr/sbfp-20261113-berdKH/tooling-canonical-shell-probe-3.exit",
+    "command": "XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c true"
+  },
+  "toolingFileSha256BeforeAndAfter": {
+    "flake.nix": "7c844b91f3de684d02aa6a89a8faeb997c91252140e6a7faf0ec43c9f30e5ba6",
+    "flake.lock": "7d5643fdab2dffe3ab19916632bd23b225af11726488cdf035cb622fd75bec3d",
+    "rust-toolchain.toml": "e33bcc2c0642b4a60b955634663302d8d56493b89d3addbc7442b70fe33f5dfb"
+  },
+  "priorAttemptsRetained": [
+    {
+      "pueueId": 1530,
+      "exit": 1,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/tooling-preflight.log",
+      "failure": "Private onix-artifact fetch: absent SSH identity"
+    },
+    {
+      "pueueId": 1534,
+      "exit": 1,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/tooling-canonical-shell-probe.log",
+      "failure": "Original locked bounded-exec HTTP URL returned 530",
+      "correctionJob": 1535
+    },
+    {
+      "pueueId": 1537,
+      "exit": 1,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/tooling-canonical-shell-probe-2.log",
+      "failure": "Missing immutable mantle Git revision in isolated cache; no SSH identity",
+      "correctionJob": 1538
+    }
+  ],
+  "registrationJobs": [
+    {
+      "id": 1531,
+      "exit": 1,
+      "notes": "Four exact NARs registered; tigerstyle restore collision retained"
+    },
+    {
+      "id": 1532,
+      "exit": 0,
+      "notes": "Corrected tigerstyle NAR registration"
+    },
+    {
+      "id": 1533,
+      "exit": 0,
+      "notes": "Initial private exact Git bundles"
+    },
+    {
+      "id": 1535,
+      "exit": 0,
+      "notes": "Original bounded-exec URL cache exact commit 29dac88ecded94457572db3fdfaaaab95fa91525 + locked NAR verified"
+    },
+    {
+      "id": 1536,
+      "exit": 0,
+      "notes": "Remaining exact public lock Git bundles; Turso raw blob bytes independently verified"
+    },
+    {
+      "id": 1538,
+      "exit": 0,
+      "notes": "Remaining exact private lock Git bundles; locked mantle 0bbab77e23ab95caa4e4184b9945cfaa5c8040e2 + NAR independently verified"
+    }
+  ],
+  "provenanceFiles": [
+    "/home/brittonr/sbfp-20261113-berdKH/tooling-pinned-inputs/tooling-pinned-inputs.json",
+    "/home/brittonr/sbfp-20261113-berdKH/tooling-pinned-inputs/tooling-git-bundles.json",
+    "/home/brittonr/sbfp-20261113-berdKH/tooling-pinned-inputs/tooling-public-git-bundles.json",
+    "/home/brittonr/sbfp-20261113-berdKH/tooling-pinned-inputs/tooling-remaining-private-git-bundles.json"
+  ],
+  "finalCurrentCheckoutUsage": {
+    "cwd": "Parent-owned final current checkout on Leviathan, not tooling-checkout",
+    "env": {
+      "XDG_CACHE_HOME": "/home/brittonr/sbfp-20261113-berdKH/tooling-cache"
+    },
+    "prefix": "/run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c",
+    "qualification": "Must be run by parent against final current checkout; this tooling snapshot success is prerequisite evidence only."
+  },
+  "constraints": {
+    "repoEdits": false,
+    "credentialsOrAgentForwarding": false,
+    "sqliteCacheMutations": false,
+    "urlsOrPinsOverridden": false,
+    "existingCacheReplacement": false,
+    "fakeBranchOrTimestampMetadata": false,
+    "mantleProductBuildOrTestsLaunched": false
+  },
+  "localScratch": "/tmp/mantle-tooling-inputs-g3ww1d6x"
+}

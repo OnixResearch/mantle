@@ -1,0 +1,38 @@
++ date -Is
+2026-11-13T16:02:38-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0 TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo test --release -p mantle --bin mantle source_built_fixed_point_shell::tests::stagex_provider_ -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 5m 15s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 2 tests
+test source_built_fixed_point_shell::tests::stagex_provider_cache_reuses_only_the_same_normalized_payload ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_handoff_accepts_only_expected_normalized_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2958 filtered out; finished in 0.00s
+
++ /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustfmt --edition 2024 --check --config skip_children=true src/source_built_fixed_point_shell.rs
++ date -Is
+2026-11-13T16:07:55-05:00
++ status=0
++ printf 'verification_exit=%s\n' 0
+verification_exit=0
++ printf '%s\n' 0
++ exit 0

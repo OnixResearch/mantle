@@ -1,0 +1,45 @@
+{
+  "captured_at_utc": "2026-11-13T19:55:49+00:00",
+  "capture_completed_at_utc": "2026-11-13T19:55:51+00:00",
+  "hostname": "leviathan",
+  "os": "NixOS 26.11 (Zokor)",
+  "os_build_id": "26.11.20261111.d4f25a3",
+  "architecture": "x86_64",
+  "kernel": "6.18.44",
+  "cpu_model": "AMD EPYC 7763 64-Core Processor",
+  "cpu_sockets": 2,
+  "cores_per_socket": 64,
+  "threads_per_core": 2,
+  "online_logical_cpus": 256,
+  "numa_nodes": 8,
+  "memory_total_bytes": 269809577984,
+  "memory_available_bytes_at_capture": 242528210944,
+  "swap_total_bytes": 137438949376,
+  "run_filesystem": {
+    "device": "/dev/nvme0n1p1",
+    "type": "ext4",
+    "total_bytes": 3936818806784,
+    "available_bytes_at_capture": 1298576994304
+  },
+  "b3sum": {
+    "path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+    "version": "1.8.7",
+    "blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157"
+  },
+  "pueue": {
+    "path": "/nix/store/4z1iyki9hc367lda8cd086k88xblvixw-pueue-4.0.1/bin/pueue",
+    "version": "4.0.1",
+    "blake3": "351b4d00145002fd3b95212e889c748deb12aab6e1d6588ff40effe5572a474e"
+  },
+  "bubblewrap_and_static_busybox": {
+    "inventory_and_digests": "host-facts-baseline.log",
+    "bubblewrap_paths_count": 10,
+    "static_busybox_package_paths_count": 4,
+    "path_visible_bwrap_or_busybox": false,
+    "selected_for_qualification": false,
+    "note": "Existing store candidates only; static labels are package names. Neither file nor readelf was PATH-visible. No sandbox execution or readiness claim."
+  },
+  "capture_exit": 0,
+  "baseline_is_final_current_source": false,
+  "qualification_or_proof_performed": false
+}

@@ -1,0 +1,16 @@
++ date -Is
+2026-11-13T15:41:49-05:00
++ BWRAP=/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ BUSYBOX=/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --version
+bubblewrap 0.12.0
++ env -i /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts --die-with-parent --new-session --ro-bind /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox /busybox --chdir / -- /busybox true
++ printf '%s\n' 'Selected BusyBox executed in a minimal root containing only that executable; this is a tool prerequisite smoke, not proof or a kernel-isolation claim.'
+Selected BusyBox executed in a minimal root containing only that executable; this is a tool prerequisite smoke, not proof or a kernel-isolation claim.
++ date -Is
+2026-11-13T15:41:49-05:00
++ s=0
++ printf 'sandbox_tool_smoke_exit=%s\n' 0
+sandbox_tool_smoke_exit=0
++ printf '%s\n' 0
++ exit 0

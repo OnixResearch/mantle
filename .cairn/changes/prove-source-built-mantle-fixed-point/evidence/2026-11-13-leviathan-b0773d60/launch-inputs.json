@@ -1,0 +1,19 @@
+{
+  "frozen_source_revision": "b0773d60f2a63e6f21f4627d0d97dcff4b4a9211",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source_archive_blake3": "fd6d174d090d0ad42930597311d78c9968ed62f4318200168cd52ecec98d3d87",
+  "runner_blake3": "9f82ff2e5e4e92cb62479bbbed437eb8214edca635e63ce7940e34dd16826a4f",
+  "baseline_raw_json_blake3": "6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec",
+  "preparation_task": 1540,
+  "canonical_checks_task": 1541,
+  "preparation_script": "/home/brittonr/sbfp-20261113-berdKH/prepare-final-source.sh",
+  "canonical_checks_script": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-run.sh",
+  "proof_resource_policy": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "protected_exec_events_max": 524288,
+    "source_records_max": 65536,
+    "jobs": 16
+  },
+  "non_claim": "Queued preparation and current-source qualification only; no provider, stage comparison, fixed-point, parity or release acceptance."
+}

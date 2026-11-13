@@ -3345,19 +3345,6 @@ mod tests {
     }
 
     #[test]
-    fn stagex_native_handoff_uses_only_the_fresh_reserved_provider_path() {
-        const INPUT: &str = include_str!("../bootstrap/stagex-provider-proof-input.ncl");
-        const HANDOFF: &str = include_str!("../bootstrap/tcc-musl-native.ncl");
-
-        assert!(INPUT.contains(STAGEX_PROVIDER_LOGICAL_PATH));
-        assert!(HANDOFF.contains("stagex-provider-proof-input.ncl"));
-        assert!(HANDOFF.contains("inputs = [stagex_provider]"));
-        assert!(!HANDOFF.contains("seed-full-admitted.ncl"));
-        assert!(!HANDOFF.contains("tinycc-mes.ncl"));
-        assert!(!HANDOFF.contains("tcc-musl-selfhost.ncl"));
-    }
-
-    #[test]
     fn disk_capacity_accepts_sufficient_space_and_rejects_shortfall() {
         const AVAILABLE_BYTES: u64 = 2;
         const REQUIRED_BYTES: u64 = 1;

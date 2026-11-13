@@ -1,0 +1,32 @@
++ date -Is
+2026-11-13T15:37:19-05:00
++ ARCHIVE=/home/brittonr/sbfp-20261113-berdKH/incoming/source-b0773d60f2a63e6f21f4627d0d97dcff4b4a9211.tar
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/source-b0773d60f2a63e6f21f4627d0d97dcff4b4a9211.tar
++ test fd6d174d090d0ad42930597311d78c9968ed62f4318200168cd52ecec98d3d87 = fd6d174d090d0ad42930597311d78c9968ed62f4318200168cd52ecec98d3d87
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/mantle-final
++ test 9f82ff2e5e4e92cb62479bbbed437eb8214edca635e63ce7940e34dd16826a4f = 9f82ff2e5e4e92cb62479bbbed437eb8214edca635e63ce7940e34dd16826a4f
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/source-checkout
++ mkdir /home/brittonr/sbfp-20261113-berdKH/source-checkout
++ tar --extract --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/source-b0773d60f2a63e6f21f4627d0d97dcff4b4a9211.tar --directory /home/brittonr/sbfp-20261113-berdKH/source-checkout
++ install -m 755 /home/brittonr/sbfp-20261113-berdKH/incoming/mantle-final /home/brittonr/sbfp-20261113-berdKH/bin/mantle-final
++ printf '%s\n' b0773d60f2a63e6f21f4627d0d97dcff4b4a9211
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/incoming/source-b0773d60f2a63e6f21f4627d0d97dcff4b4a9211.tar /home/brittonr/sbfp-20261113-berdKH/bin/mantle-final
+fd6d174d090d0ad42930597311d78c9968ed62f4318200168cd52ecec98d3d87  /home/brittonr/sbfp-20261113-berdKH/incoming/source-b0773d60f2a63e6f21f4627d0d97dcff4b4a9211.tar
+9f82ff2e5e4e92cb62479bbbed437eb8214edca635e63ce7940e34dd16826a4f  /home/brittonr/sbfp-20261113-berdKH/bin/mantle-final
++ /home/brittonr/sbfp-20261113-berdKH/bin/mantle-final --version
+mantle 0.1.0
++ test -x /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test -x /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece  /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
+ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc  /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ df -B1 /home/brittonr/sbfp-20261113-berdKH
+Filesystem         1B-blocks          Used     Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2476009394176 1260753383424  67% /
++ date -Is
+2026-11-13T15:37:21-05:00
++ s=0
++ printf 'final_input_parity_exit=%s\n' 0
+final_input_parity_exit=0
++ printf '%s\n' 0
++ exit 0
