@@ -18,7 +18,6 @@ use crate::source_built_recipe::RecipeOperation;
 use crate::source_built_recipe::RecipePaths;
 use crate::source_built_recipe::RecipeRun;
 use crate::source_built_recipe::RecipeStep;
-use crate::source_built_recipe::RecipeWord;
 use crate::source_built_recipe::SourceRecipe;
 use crate::source_built_recipe::WordPart;
 use crate::source_built_recipe::{self as recipe};
@@ -833,6 +832,7 @@ pub(crate) fn validate_partition<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_built_recipe::RecipeWord;
 
     fn source(path: &str) -> ArtifactRef {
         ArtifactRef::Source {
