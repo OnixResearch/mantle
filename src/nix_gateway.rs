@@ -1,5 +1,6 @@
 //! Private Nix gateway host projections. Read-only service remains the default;
 //! mutating callers require explicit current remote admission and host policy.
+// machine-artifact-public: gateway.private-artifacts
 
 #[cfg(target_os = "linux")]
 use std::fs;

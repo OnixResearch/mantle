@@ -11,8 +11,15 @@ let MAX_AST_GREP_TEXT_BYTES = 4096 in
 let MAX_AST_GREP_VERSION_BYTES = 128 in
 let MAX_BLOCKED_ROOT_PRESSURE = 256 in
 let MAX_BUILD_REPORT_ROWS = 65536 in
+let MAX_BUILD_REPORT_SOURCE_SUBPATH_BYTES = 4096 in
+let MAX_FINISH_GATE_COMMAND_ARGS = 16 in
+let MAX_FINISH_GATE_COMMAND_ARG_BYTES = 4096 in
+let MAX_FINISH_GATE_EXCERPT_BYTES = 160 in
+let MAX_FINISH_GATE_OPTIONAL_SONAMES = 32 in
+let MAX_FINISH_GATE_REFERENCE_FINDINGS = 128 in
 let MAX_KNOWN_CRITICAL_PATH_WORK_UNITS = 80000 in
 let MAX_OVERLAY_BASE_LAYERS = 8 in
+let MAX_POOL_GOAL_OBSERVATIONS = 4096 in
 let MAX_PRIORITY_DECISIONS = 10000 in
 let MAX_READY_GOALS = 10000 in
 let MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES = 4096 in
@@ -41,6 +48,7 @@ let MIN_LOG_CHUNKS = 1 in
 let MIN_LOG_CURSOR = 0 in
 let MIN_LOG_RECORDS = 0 in
 let MIN_OVERLAY_BASE_LAYER_INDEX = 1 in
+let MIN_POOL_GENERATION = 0 in
 let MIN_PROTECTED_AFTER_EPOCHS = 2 in
 let MIN_READY_GOAL_COUNT = 1 in
 let MIN_RETAINED_LOG_BYTES = 0 in
@@ -433,8 +441,25 @@ let is_divergence = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "status" (value))))))
   && (std.record.has_field "surface" (value) && (((std.is_string (std.record.get "surface" (value))
   && C.IsNonEmptyString (std.record.get "surface" (value)))))))) in
+let is_native_source_slice = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["admitted_store_path","declared_nar_blake3","disposition","observed_nar_blake3","producer_output","source_id","subpath"]) (std.record.fields (value))
+  && (std.record.has_field "admitted_store_path" (value) && ((((std.record.get "admitted_store_path" (value)) == null || ((std.is_string (std.record.get "admitted_store_path" (value))
+  && C.IsSafeReference (std.record.get "admitted_store_path" (value))))))))
+  && (std.record.has_field "declared_nar_blake3" (value) && (((std.is_string (std.record.get "declared_nar_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "declared_nar_blake3" (value))))))
+  && (std.record.has_field "disposition" (value) && (((std.is_string (std.record.get "disposition" (value))
+  && C.IsNonEmptyString (std.record.get "disposition" (value))))))
+  && (std.record.has_field "observed_nar_blake3" (value) && ((((std.record.get "observed_nar_blake3" (value)) == null || ((std.is_string (std.record.get "observed_nar_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "observed_nar_blake3" (value))))))))
+  && (std.record.has_field "producer_output" (value) && (((std.is_string (std.record.get "producer_output" (value))
+  && C.IsNonEmptyString (std.record.get "producer_output" (value))))))
+  && (std.record.has_field "source_id" (value) && (((std.is_string (std.record.get "source_id" (value))
+  && C.IsNonEmptyString (std.record.get "source_id" (value))))))
+  && (std.record.has_field "subpath" (value) && (((std.is_string (std.record.get "subpath" (value))
+  && C.Utf8ByteLength (std.record.get "subpath" (value)) <= MAX_BUILD_REPORT_SOURCE_SUBPATH_BYTES
+  && C.IsRedactionSafe (std.record.get "subpath" (value)))))))) in
 let is_dynamic_plan = fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["accepted_unit_ids","canonical_plan_digest","mode","output_name","plan_artifact_path","producer_key","raw_artifact_digest","rejection_reason","scheduler_action"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["accepted_unit_ids","canonical_plan_digest","mode","output_name","plan_artifact_path","producer_key","raw_artifact_digest","rejection_reason","scheduler_action","source_slices"]) (std.record.fields (value))
   && (std.record.has_field "accepted_unit_ids" (value) && (is_string_array (std.record.get "accepted_unit_ids" (value))))
   && (std.record.has_field "canonical_plan_digest" (value) && ((((std.record.get "canonical_plan_digest" (value)) == null || ((std.is_string (std.record.get "canonical_plan_digest" (value))
   && C.IsMantleDigest (std.record.get "canonical_plan_digest" (value))))))))
@@ -451,7 +476,10 @@ let is_dynamic_plan = fun value => ((std.is_record (value)
   && (std.record.has_field "rejection_reason" (value) && ((((std.record.get "rejection_reason" (value)) == null || ((std.is_string (std.record.get "rejection_reason" (value))
   && C.IsRedactionSafe (std.record.get "rejection_reason" (value))))))))
   && (std.record.has_field "scheduler_action" (value) && (((std.is_string (std.record.get "scheduler_action" (value))
-  && C.IsNonEmptyString (std.record.get "scheduler_action" (value)))))))) in
+  && C.IsNonEmptyString (std.record.get "scheduler_action" (value))))))
+  && (!std.record.has_field "source_slices" (value) || (((std.is_array (std.record.get "source_slices" (value))
+  && std.array.length (std.record.get "source_slices" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_native_source_slice (item_2)) (std.record.get "source_slices" (value)))))))) in
 let is_rejection = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["class","diagnostic","redacted","variable"]) (std.record.fields (value))
   && (std.record.has_field "class" (value) && (((std.is_string (std.record.get "class" (value))
@@ -568,6 +596,49 @@ let is_failure = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "root" (value))))))
   && (!std.record.has_field "saved_log_path" (value) || ((((std.record.get "saved_log_path" (value)) == null || ((std.is_string (std.record.get "saved_log_path" (value))
   && C.IsSafeReference (std.record.get "saved_log_path" (value)))))))))) in
+let is_finish_reference_finding = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["denied","excerpt","file","output","reference"]) (std.record.fields (value))
+  && (std.record.has_field "denied" (value) && (((std.is_bool (std.record.get "denied" (value))))))
+  && (std.record.has_field "excerpt" (value) && (((std.is_string (std.record.get "excerpt" (value))
+  && C.Utf8ByteLength (std.record.get "excerpt" (value)) <= MAX_FINISH_GATE_EXCERPT_BYTES
+  && C.IsRedactionSafe (std.record.get "excerpt" (value))))))
+  && (std.record.has_field "file" (value) && (((std.is_string (std.record.get "file" (value))
+  && C.IsSafeReference (std.record.get "file" (value))))))
+  && (std.record.has_field "output" (value) && (((std.is_string (std.record.get "output" (value))
+  && C.IsNonEmptyString (std.record.get "output" (value))))))
+  && (std.record.has_field "reference" (value) && (((std.is_string (std.record.get "reference" (value))
+  && C.IsSafeReference (std.record.get "reference" (value)))))))) in
+let is_finish_gate = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["audit_error","command","derivation","dlopen","expected","missing_sonames","optional_sonames","reference_findings","reference_leak","relocation","schema","version"]) (std.record.fields (value))
+  && (!std.record.has_field "audit_error" (value) || (((std.is_string (std.record.get "audit_error" (value))
+  && C.IsRedactionSafe (std.record.get "audit_error" (value))))))
+  && (std.record.has_field "command" (value) && ((((std.record.get "command" (value)) == null || ((std.is_array (std.record.get "command" (value))
+  && std.array.length (std.record.get "command" (value)) <= MAX_FINISH_GATE_COMMAND_ARGS
+  && std.array.all (fun item_2 => ((std.is_string (item_2)
+  && C.Utf8ByteLength (item_2) <= MAX_FINISH_GATE_COMMAND_ARG_BYTES
+  && C.IsRedactionSafe (item_2)))) (std.record.get "command" (value))))))))
+  && (std.record.has_field "derivation" (value) && (((std.is_string (std.record.get "derivation" (value))
+  && C.IsSafeReference (std.record.get "derivation" (value))))))
+  && (std.record.has_field "dlopen" (value) && (((std.is_string (std.record.get "dlopen" (value))
+  && C.IsNonEmptyString (std.record.get "dlopen" (value))))))
+  && (std.record.has_field "expected" (value) && ((((std.record.get "expected" (value)) == null || ((std.is_string (std.record.get "expected" (value))
+  && C.IsRedactionSafe (std.record.get "expected" (value))))))))
+  && (std.record.has_field "missing_sonames" (value) && (is_string_array (std.record.get "missing_sonames" (value))))
+  && (std.record.has_field "optional_sonames" (value) && (((std.is_array (std.record.get "optional_sonames" (value))
+  && std.array.length (std.record.get "optional_sonames" (value)) <= MAX_FINISH_GATE_OPTIONAL_SONAMES
+  && std.array.all (fun item_2 => ((std.is_string (item_2)
+  && C.IsSafeReference (item_2)))) (std.record.get "optional_sonames" (value))))))
+  && (std.record.has_field "reference_findings" (value) && (((std.is_array (std.record.get "reference_findings" (value))
+  && std.array.length (std.record.get "reference_findings" (value)) <= MAX_FINISH_GATE_REFERENCE_FINDINGS
+  && std.array.all (fun item_2 => is_finish_reference_finding (item_2)) (std.record.get "reference_findings" (value))))))
+  && (std.record.has_field "reference_leak" (value) && (((std.is_string (std.record.get "reference_leak" (value))
+  && C.IsNonEmptyString (std.record.get "reference_leak" (value))))))
+  && (std.record.has_field "relocation" (value) && (((std.is_string (std.record.get "relocation" (value))
+  && C.IsNonEmptyString (std.record.get "relocation" (value))))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-derivation-finish-gate-report-v1"
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (std.record.has_field "version" (value) && (((std.is_string (std.record.get "version" (value))
+  && C.IsNonEmptyString (std.record.get "version" (value)))))))) in
 let is_fixed_output = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["hash","mode","retry_policy","url"]) (std.record.fields (value))
   && (std.record.has_field "hash" (value) && ((((std.record.get "hash" (value)) == null || ((std.is_string (std.record.get "hash" (value))
@@ -728,6 +799,49 @@ let is_persistence_failure = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "label" (value))))))))
   && (std.record.has_field "operation" (value) && (((std.is_string (std.record.get "operation" (value))
   && C.IsNonEmptyString (std.record.get "operation" (value)))))))) in
+let is_plan_output_binding = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["consumer_drv_key","failure_reason","name","output_path","plan_digest","plan_output","producer_drv_path","root","root_drv_path","status","unit_output"]) (std.record.fields (value))
+  && (std.record.has_field "consumer_drv_key" (value) && (((std.is_string (std.record.get "consumer_drv_key" (value))
+  && C.IsSafeReference (std.record.get "consumer_drv_key" (value))))))
+  && (std.record.has_field "failure_reason" (value) && ((((std.record.get "failure_reason" (value)) == null || ((std.is_string (std.record.get "failure_reason" (value))
+  && C.IsRedactionSafe (std.record.get "failure_reason" (value))))))))
+  && (std.record.has_field "name" (value) && (((std.is_string (std.record.get "name" (value))
+  && C.IsNonEmptyString (std.record.get "name" (value))))))
+  && (std.record.has_field "output_path" (value) && ((((std.record.get "output_path" (value)) == null || ((std.is_string (std.record.get "output_path" (value))
+  && C.IsSafeReference (std.record.get "output_path" (value))))))))
+  && (std.record.has_field "plan_digest" (value) && ((((std.record.get "plan_digest" (value)) == null || ((std.is_string (std.record.get "plan_digest" (value))
+  && C.IsMantleDigest (std.record.get "plan_digest" (value))))))))
+  && (std.record.has_field "plan_output" (value) && (((std.is_string (std.record.get "plan_output" (value))
+  && C.IsNonEmptyString (std.record.get "plan_output" (value))))))
+  && (std.record.has_field "producer_drv_path" (value) && (((std.is_string (std.record.get "producer_drv_path" (value))
+  && C.IsSafeReference (std.record.get "producer_drv_path" (value))))))
+  && (std.record.has_field "root" (value) && (((std.is_string (std.record.get "root" (value))
+  && C.IsNonEmptyString (std.record.get "root" (value))))))
+  && (std.record.has_field "root_drv_path" (value) && ((((std.record.get "root_drv_path" (value)) == null || ((std.is_string (std.record.get "root_drv_path" (value))
+  && C.IsSafeReference (std.record.get "root_drv_path" (value))))))))
+  && (std.record.has_field "status" (value) && (((std.is_string (std.record.get "status" (value))
+  && C.IsNonEmptyString (std.record.get "status" (value))))))
+  && (std.record.has_field "unit_output" (value) && (((std.is_string (std.record.get "unit_output" (value))
+  && C.IsNonEmptyString (std.record.get "unit_output" (value)))))))) in
+let is_pool_goal_observation = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["attempt_id","drv_key","endpoint_id","fence_generation","job_id","trusted_output_key_names","worker_generation"]) (std.record.fields (value))
+  && (std.record.has_field "attempt_id" (value) && (((std.is_string (std.record.get "attempt_id" (value))
+  && C.IsNonEmptyString (std.record.get "attempt_id" (value))))))
+  && (std.record.has_field "drv_key" (value) && (((std.is_string (std.record.get "drv_key" (value))
+  && C.IsSafeReference (std.record.get "drv_key" (value))))))
+  && (std.record.has_field "endpoint_id" (value) && (((std.is_string (std.record.get "endpoint_id" (value))
+  && C.IsNonEmptyString (std.record.get "endpoint_id" (value))))))
+  && (std.record.has_field "fence_generation" (value) && (((std.is_number (std.record.get "fence_generation" (value))
+  && std.number.is_integer (std.record.get "fence_generation" (value))
+  && (std.record.get "fence_generation" (value)) >= MIN_POOL_GENERATION
+  && (std.record.get "fence_generation" (value)) <= MAX_U64))))
+  && (std.record.has_field "job_id" (value) && (((std.is_string (std.record.get "job_id" (value))
+  && C.IsNonEmptyString (std.record.get "job_id" (value))))))
+  && (std.record.has_field "trusted_output_key_names" (value) && (is_string_array (std.record.get "trusted_output_key_names" (value))))
+  && (std.record.has_field "worker_generation" (value) && (((std.is_number (std.record.get "worker_generation" (value))
+  && std.number.is_integer (std.record.get "worker_generation" (value))
+  && (std.record.get "worker_generation" (value)) >= MIN_POOL_GENERATION
+  && (std.record.get "worker_generation" (value)) <= MAX_U64)))))) in
 let is_priority_candidate = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["age_epochs","blocked_root_count","blocked_root_count_saturated","content_locality_class","goal_key_blake3","known_critical_path_nodes","known_critical_path_work_units","operator_policy_class","resource_fit_class","starvation_class","transfer_cost_class"]) (std.record.fields (value))
   && (std.record.has_field "age_epochs" (value) && (((std.is_number (std.record.get "age_epochs" (value))
@@ -985,7 +1099,7 @@ let is_workspace = fun value => ((std.is_record (value)
   && (std.record.has_field "workspace_id" (value) && ((((std.record.get "workspace_id" (value)) == null || ((std.is_string (std.record.get "workspace_id" (value))
   && C.Utf8ByteLength (std.record.get "workspace_id" (value)) <= MAX_WORKSPACE_ID_BYTES)))))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["action_result_reports","ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","overlay_base_generations","overlay_plan_blake3","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","store_layer_selections","workspace_reports"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["action_result_reports","ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","finish_gates","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","overlay_base_generations","overlay_plan_blake3","plan_output_bindings","pool_goal_observations","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","store_layer_selections","workspace_reports"]) (std.record.fields (value))
   && (!std.record.has_field "action_result_reports" (value) || (((std.is_array (std.record.get "action_result_reports" (value))
   && std.array.length (std.record.get "action_result_reports" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_action_result_report (item_2)) (std.record.get "action_result_reports" (value))))))
@@ -1031,6 +1145,9 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun item_2 => is_failure (item_2)) (std.record.get "failed" (value))))))
   && (std.record.has_field "file" (value) && (((std.is_string (std.record.get "file" (value))
   && C.IsSafeReference (std.record.get "file" (value))))))
+  && (!std.record.has_field "finish_gates" (value) || (((std.is_array (std.record.get "finish_gates" (value))
+  && std.array.length (std.record.get "finish_gates" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_finish_gate (item_2)) (std.record.get "finish_gates" (value))))))
   && (std.record.has_field "fod_mismatches" (value) && (((std.is_array (std.record.get "fod_mismatches" (value))
   && std.array.length (std.record.get "fod_mismatches" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_fod (item_2)) (std.record.get "fod_mismatches" (value))))))
@@ -1058,6 +1175,12 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun item_2 => is_overlay_base_generation (item_2)) (std.record.get "overlay_base_generations" (value))))))
   && (!std.record.has_field "overlay_plan_blake3" (value) || ((((std.record.get "overlay_plan_blake3" (value)) == null || ((std.is_string (std.record.get "overlay_plan_blake3" (value))
   && C.IsBlake3Hex (std.record.get "overlay_plan_blake3" (value))))))))
+  && (!std.record.has_field "plan_output_bindings" (value) || (((std.is_array (std.record.get "plan_output_bindings" (value))
+  && std.array.length (std.record.get "plan_output_bindings" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_plan_output_binding (item_2)) (std.record.get "plan_output_bindings" (value))))))
+  && (!std.record.has_field "pool_goal_observations" (value) || (((std.is_array (std.record.get "pool_goal_observations" (value))
+  && std.array.length (std.record.get "pool_goal_observations" (value)) <= MAX_POOL_GOAL_OBSERVATIONS
+  && std.array.all (fun item_2 => is_pool_goal_observation (item_2)) (std.record.get "pool_goal_observations" (value))))))
   && (!std.record.has_field "remote_observability" (value) || (((std.is_array (std.record.get "remote_observability" (value))
   && std.array.length (std.record.get "remote_observability" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_remote_observability (item_2)) (std.record.get "remote_observability" (value))))))

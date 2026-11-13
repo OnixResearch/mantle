@@ -231,6 +231,586 @@
         "failed": [],
         "fod_mismatches": []
       }
+    },
+    {
+      "id": "finish-gate-unknown-schema",
+      "issue_class": "version",
+      "expected_path": "/finish_gates/0/schema",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": [
+            "known-graph",
+            "resource-fit",
+            "locality-transfer"
+          ],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "workspace_reports": [],
+        "action_result_reports": [
+          {
+            "schema": "mantle-action-result-runtime-report-v1",
+            "phase": "discovery",
+            "action_ref": "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "disposition": "reused",
+            "selected_result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "selected_source_id": "local-action-results",
+            "selected_source_class": "local",
+            "trust_basis": [
+              "record-signature-verified:fixture-key-1"
+            ],
+            "conflict_class": null,
+            "candidate_decisions": [
+              {
+                "result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "source_id": "local-action-results",
+                "source_class": "local",
+                "admitted": true,
+                "diagnostics": [],
+                "trust_basis": [
+                  "record-signature-verified:fixture-key-1"
+                ],
+                "output_set_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            ],
+            "publication_result_refs": [],
+            "diagnostics": [],
+            "non_claims": [
+              "index-presence-is-not-output-trust"
+            ]
+          }
+        ],
+        "native_dynamic_plans": [],
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
+        "scheduler_priority_decisions": [
+          {
+            "schema": "mantle-priority-decision-v1",
+            "policy_id": "mantle-lazy-priority-v1",
+            "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+            "scheduling_epoch": 1,
+            "selected_goal_key_blake3": "bd6d0e2ef32237b9b0bca09a6d69868e72d8f9aa55bc070820c34ea17f3cdebd",
+            "competing_goal_count": 2,
+            "candidate_snapshot_digest_blake3": "c4ac4f849f3cc899881669fb1acdb3958247083cd05bce3f922ad98247c7b838",
+            "runner_up": {
+              "goal_key_blake3": "b6e559b16f0e7a948cac97aaf1d19f757f4df8a0ee126f9f9e894b120bea649d",
+              "operator_policy_class": "ordinary",
+              "starvation_class": "fresh",
+              "age_epochs": 1,
+              "known_critical_path_nodes": 1,
+              "known_critical_path_work_units": 1,
+              "blocked_root_count": 1,
+              "blocked_root_count_saturated": false,
+              "resource_fit_class": "unknown",
+              "content_locality_class": "unknown",
+              "transfer_cost_class": "unknown"
+            },
+            "known_graph_basis": "known-graph",
+            "history_basis": "structural-fallback-missing",
+            "history_snapshot_digest_blake3": null,
+            "operator_policy_class": "ordinary",
+            "starvation_class": "fresh",
+            "age_epochs": 1,
+            "known_critical_path_nodes": 2,
+            "known_critical_path_work_units": 2,
+            "blocked_root_count": 1,
+            "blocked_root_count_saturated": false,
+            "resource_fit_class": "unknown",
+            "content_locality_class": "unknown",
+            "transfer_cost_class": "unknown",
+            "selection_reason": "known-graph-pressure",
+            "stable_tie_break_class": "stable-goal-key",
+            "claim_scope": "configured-known-fact-ordering",
+            "non_claims": [
+              "global-optimality",
+              "future-graph-knowledge",
+              "execution-success",
+              "output-trust",
+              "release-reproducibility"
+            ]
+          }
+        ],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+          "succeeded_total": 0,
+          "built_total": 0,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": [],
+        "finish_gates": [
+          {
+            "schema": "mantle-derivation-finish-gate-report-v999",
+            "derivation": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "version": "opted-out",
+            "command": null,
+            "expected": null,
+            "reference_leak": "reported",
+            "reference_findings": [
+              {
+                "output": "out",
+                "file": "bin/fixture",
+                "reference": "/mantle/store",
+                "excerpt": "fixture reference",
+                "denied": false
+              }
+            ],
+            "relocation": "opted-out",
+            "dlopen": "opted-out",
+            "optional_sonames": [],
+            "missing_sonames": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan-output-binding-invalid-digest",
+      "issue_class": "digest",
+      "expected_path": "/plan_output_bindings/0/plan_digest",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": [
+            "known-graph",
+            "resource-fit",
+            "locality-transfer"
+          ],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "workspace_reports": [],
+        "action_result_reports": [
+          {
+            "schema": "mantle-action-result-runtime-report-v1",
+            "phase": "discovery",
+            "action_ref": "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "disposition": "reused",
+            "selected_result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "selected_source_id": "local-action-results",
+            "selected_source_class": "local",
+            "trust_basis": [
+              "record-signature-verified:fixture-key-1"
+            ],
+            "conflict_class": null,
+            "candidate_decisions": [
+              {
+                "result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "source_id": "local-action-results",
+                "source_class": "local",
+                "admitted": true,
+                "diagnostics": [],
+                "trust_basis": [
+                  "record-signature-verified:fixture-key-1"
+                ],
+                "output_set_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            ],
+            "publication_result_refs": [],
+            "diagnostics": [],
+            "non_claims": [
+              "index-presence-is-not-output-trust"
+            ]
+          }
+        ],
+        "native_dynamic_plans": [],
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
+        "scheduler_priority_decisions": [
+          {
+            "schema": "mantle-priority-decision-v1",
+            "policy_id": "mantle-lazy-priority-v1",
+            "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+            "scheduling_epoch": 1,
+            "selected_goal_key_blake3": "bd6d0e2ef32237b9b0bca09a6d69868e72d8f9aa55bc070820c34ea17f3cdebd",
+            "competing_goal_count": 2,
+            "candidate_snapshot_digest_blake3": "c4ac4f849f3cc899881669fb1acdb3958247083cd05bce3f922ad98247c7b838",
+            "runner_up": {
+              "goal_key_blake3": "b6e559b16f0e7a948cac97aaf1d19f757f4df8a0ee126f9f9e894b120bea649d",
+              "operator_policy_class": "ordinary",
+              "starvation_class": "fresh",
+              "age_epochs": 1,
+              "known_critical_path_nodes": 1,
+              "known_critical_path_work_units": 1,
+              "blocked_root_count": 1,
+              "blocked_root_count_saturated": false,
+              "resource_fit_class": "unknown",
+              "content_locality_class": "unknown",
+              "transfer_cost_class": "unknown"
+            },
+            "known_graph_basis": "known-graph",
+            "history_basis": "structural-fallback-missing",
+            "history_snapshot_digest_blake3": null,
+            "operator_policy_class": "ordinary",
+            "starvation_class": "fresh",
+            "age_epochs": 1,
+            "known_critical_path_nodes": 2,
+            "known_critical_path_work_units": 2,
+            "blocked_root_count": 1,
+            "blocked_root_count_saturated": false,
+            "resource_fit_class": "unknown",
+            "content_locality_class": "unknown",
+            "transfer_cost_class": "unknown",
+            "selection_reason": "known-graph-pressure",
+            "stable_tie_break_class": "stable-goal-key",
+            "claim_scope": "configured-known-fact-ordering",
+            "non_claims": [
+              "global-optimality",
+              "future-graph-knowledge",
+              "execution-success",
+              "output-trust",
+              "release-reproducibility"
+            ]
+          }
+        ],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+          "succeeded_total": 0,
+          "built_total": 0,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": [],
+        "plan_output_bindings": [
+          {
+            "consumer_drv_key": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "name": "fixture.bound",
+            "producer_drv_path": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "plan_output": "plan",
+            "root": "unit.build",
+            "unit_output": "out",
+            "plan_digest": "not-a-digest",
+            "root_drv_path": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "output_path": "/mantle/store/00000000000000000000000000000000-fixture",
+            "status": "bound",
+            "failure_reason": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "pool-goal-negative-worker-generation",
+      "issue_class": "bounds",
+      "expected_path": "/pool_goal_observations/0/worker_generation",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": [
+            "known-graph",
+            "resource-fit",
+            "locality-transfer"
+          ],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "workspace_reports": [],
+        "action_result_reports": [
+          {
+            "schema": "mantle-action-result-runtime-report-v1",
+            "phase": "discovery",
+            "action_ref": "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "disposition": "reused",
+            "selected_result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "selected_source_id": "local-action-results",
+            "selected_source_class": "local",
+            "trust_basis": [
+              "record-signature-verified:fixture-key-1"
+            ],
+            "conflict_class": null,
+            "candidate_decisions": [
+              {
+                "result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "source_id": "local-action-results",
+                "source_class": "local",
+                "admitted": true,
+                "diagnostics": [],
+                "trust_basis": [
+                  "record-signature-verified:fixture-key-1"
+                ],
+                "output_set_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            ],
+            "publication_result_refs": [],
+            "diagnostics": [],
+            "non_claims": [
+              "index-presence-is-not-output-trust"
+            ]
+          }
+        ],
+        "native_dynamic_plans": [],
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
+        "scheduler_priority_decisions": [
+          {
+            "schema": "mantle-priority-decision-v1",
+            "policy_id": "mantle-lazy-priority-v1",
+            "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+            "scheduling_epoch": 1,
+            "selected_goal_key_blake3": "bd6d0e2ef32237b9b0bca09a6d69868e72d8f9aa55bc070820c34ea17f3cdebd",
+            "competing_goal_count": 2,
+            "candidate_snapshot_digest_blake3": "c4ac4f849f3cc899881669fb1acdb3958247083cd05bce3f922ad98247c7b838",
+            "runner_up": {
+              "goal_key_blake3": "b6e559b16f0e7a948cac97aaf1d19f757f4df8a0ee126f9f9e894b120bea649d",
+              "operator_policy_class": "ordinary",
+              "starvation_class": "fresh",
+              "age_epochs": 1,
+              "known_critical_path_nodes": 1,
+              "known_critical_path_work_units": 1,
+              "blocked_root_count": 1,
+              "blocked_root_count_saturated": false,
+              "resource_fit_class": "unknown",
+              "content_locality_class": "unknown",
+              "transfer_cost_class": "unknown"
+            },
+            "known_graph_basis": "known-graph",
+            "history_basis": "structural-fallback-missing",
+            "history_snapshot_digest_blake3": null,
+            "operator_policy_class": "ordinary",
+            "starvation_class": "fresh",
+            "age_epochs": 1,
+            "known_critical_path_nodes": 2,
+            "known_critical_path_work_units": 2,
+            "blocked_root_count": 1,
+            "blocked_root_count_saturated": false,
+            "resource_fit_class": "unknown",
+            "content_locality_class": "unknown",
+            "transfer_cost_class": "unknown",
+            "selection_reason": "known-graph-pressure",
+            "stable_tie_break_class": "stable-goal-key",
+            "claim_scope": "configured-known-fact-ordering",
+            "non_claims": [
+              "global-optimality",
+              "future-graph-knowledge",
+              "execution-success",
+              "output-trust",
+              "release-reproducibility"
+            ]
+          }
+        ],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+          "succeeded_total": 0,
+          "built_total": 0,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": [],
+        "pool_goal_observations": [
+          {
+            "drv_key": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "endpoint_id": "fixture-endpoint",
+            "worker_generation": -1,
+            "job_id": "fixture-job",
+            "attempt_id": "fixture-attempt",
+            "fence_generation": 1,
+            "trusted_output_key_names": [
+              "fixture-builder-key"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "native-source-slice-invalid-nar-digest",
+      "issue_class": "digest",
+      "expected_path": "/native_dynamic_plans/0/source_slices/0/declared_nar_blake3",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": [
+            "known-graph",
+            "resource-fit",
+            "locality-transfer"
+          ],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "workspace_reports": [],
+        "action_result_reports": [
+          {
+            "schema": "mantle-action-result-runtime-report-v1",
+            "phase": "discovery",
+            "action_ref": "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "disposition": "reused",
+            "selected_result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "selected_source_id": "local-action-results",
+            "selected_source_class": "local",
+            "trust_basis": [
+              "record-signature-verified:fixture-key-1"
+            ],
+            "conflict_class": null,
+            "candidate_decisions": [
+              {
+                "result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "source_id": "local-action-results",
+                "source_class": "local",
+                "admitted": true,
+                "diagnostics": [],
+                "trust_basis": [
+                  "record-signature-verified:fixture-key-1"
+                ],
+                "output_set_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            ],
+            "publication_result_refs": [],
+            "diagnostics": [],
+            "non_claims": [
+              "index-presence-is-not-output-trust"
+            ]
+          }
+        ],
+        "native_dynamic_plans": [
+          {
+            "mode": "native",
+            "producer_key": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "output_name": "plan",
+            "plan_artifact_path": "/mantle/store/00000000000000000000000000000000-fixture/plan.json",
+            "raw_artifact_digest": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "canonical_plan_digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "accepted_unit_ids": [
+              "unit.build"
+            ],
+            "source_slices": [
+              {
+                "source_id": "fixture-source",
+                "producer_output": "sources",
+                "subpath": "",
+                "declared_nar_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "observed_nar_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "admitted_store_path": "/mantle/store/00000000000000000000000000000000-fixture-sources",
+                "disposition": "admitted"
+              }
+            ],
+            "rejection_reason": null,
+            "scheduler_action": "registered-roots"
+          }
+        ],
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
+        "scheduler_priority_decisions": [
+          {
+            "schema": "mantle-priority-decision-v1",
+            "policy_id": "mantle-lazy-priority-v1",
+            "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+            "scheduling_epoch": 1,
+            "selected_goal_key_blake3": "bd6d0e2ef32237b9b0bca09a6d69868e72d8f9aa55bc070820c34ea17f3cdebd",
+            "competing_goal_count": 2,
+            "candidate_snapshot_digest_blake3": "c4ac4f849f3cc899881669fb1acdb3958247083cd05bce3f922ad98247c7b838",
+            "runner_up": {
+              "goal_key_blake3": "b6e559b16f0e7a948cac97aaf1d19f757f4df8a0ee126f9f9e894b120bea649d",
+              "operator_policy_class": "ordinary",
+              "starvation_class": "fresh",
+              "age_epochs": 1,
+              "known_critical_path_nodes": 1,
+              "known_critical_path_work_units": 1,
+              "blocked_root_count": 1,
+              "blocked_root_count_saturated": false,
+              "resource_fit_class": "unknown",
+              "content_locality_class": "unknown",
+              "transfer_cost_class": "unknown"
+            },
+            "known_graph_basis": "known-graph",
+            "history_basis": "structural-fallback-missing",
+            "history_snapshot_digest_blake3": null,
+            "operator_policy_class": "ordinary",
+            "starvation_class": "fresh",
+            "age_epochs": 1,
+            "known_critical_path_nodes": 2,
+            "known_critical_path_work_units": 2,
+            "blocked_root_count": 1,
+            "blocked_root_count_saturated": false,
+            "resource_fit_class": "unknown",
+            "content_locality_class": "unknown",
+            "transfer_cost_class": "unknown",
+            "selection_reason": "known-graph-pressure",
+            "stable_tie_break_class": "stable-goal-key",
+            "claim_scope": "configured-known-fact-ordering",
+            "non_claims": [
+              "global-optimality",
+              "future-graph-knowledge",
+              "execution-success",
+              "output-trust",
+              "release-reproducibility"
+            ]
+          }
+        ],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+          "succeeded_total": 0,
+          "built_total": 0,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": []
+      }
     }
   ]
 }

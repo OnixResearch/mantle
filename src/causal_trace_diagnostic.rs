@@ -1,5 +1,6 @@
 //! Filesystem boundary for opt-in causal build diagnostics, never a receipt.
 //! r[impl mantle.operator_diagnostics.causal_trace_bounds]
+// machine-artifact-public: build.causal-trace-diagnostic
 
 use std::fs::OpenOptions;
 use std::io::Write;

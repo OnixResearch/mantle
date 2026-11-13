@@ -1,0 +1,11 @@
+# Exact command and machine-contract test excerpt from retained v1-source-binding.log; later Clippy failure is not a passing gate.
++ cargo test --release -p mantle --test release_cli --test bootstrap_parity_cli --test machine_schema_contracts -- --test-threads=1
+     Running tests/machine_schema_contracts.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/machine_schema_contracts-895feb058cd02665)
+
+running 4 tests
+test generated_contracts_accept_positive_and_reject_adversarial_fixtures ... ok
+test inventory_is_typed_nickel_data ... ok
+test shared_oci_identity_predicates_are_callable_and_fail_closed ... ok
+test shared_string_bounds_count_utf8_bytes_exactly ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.08s

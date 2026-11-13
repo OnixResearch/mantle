@@ -57,6 +57,14 @@ from the DTOs and negative fixtures. Contract conformance does not grant
 registry trust, authorization, tag immutability, signature verification, or
 release eligibility.
 
+The `crunch-build-report-v1` contract also covers optional `finish_gates`,
+`plan_output_bindings`, and `pool_goal_observations`, plus native dynamic-plan
+`source_slices`. Empty optional collections remain omitted by the Rust producer;
+the base and populated fixtures cover both compatible forms. Adversarial fixtures
+reject unknown finish-gate schema versions, malformed plan/source digests, and
+negative worker generations. These are report-shape checks, not finish-gate,
+output-binding, worker-trust, or execution authority.
+
 Full-source provider promotion has a contracted
 `mantle-full-source-provider-admission-v2` report. It binds the normalized
 provider tree, provider metadata, and complete materialized source closure to

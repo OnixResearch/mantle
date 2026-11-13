@@ -1,4 +1,5 @@
 //! Supported explicit-target package profiles; no resolution or PATH mutation.
+// machine-artifact-public: user-profile.command-reports
 mod admission;
 mod publication;
 #[cfg(test)]
