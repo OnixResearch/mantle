@@ -291,7 +291,7 @@ pub(super) fn append(
             "tree",
             disk,
         ));
-        product(&empty, "tree")
+        product(&program.stage_id, &empty, "tree")
     };
     let config_id = format!("{id}.macro-compiler-config");
     program.steps.push(RecipeStep {
@@ -306,7 +306,7 @@ pub(super) fn append(
             text: config,
         },
     });
-    inputs.insert("compiler-config".into(), product(&config_id, "invocation"));
+    inputs.insert("compiler-config".into(), product(&program.stage_id, &config_id, "invocation"));
     inputs.insert("initial-tmp".into(), tmp);
     let macro_slot = ControllerSlot {
         id: "macro".into(),
@@ -344,7 +344,10 @@ pub(super) fn append(
             disk,
         ));
     }
-    Ok((product(&format!("{id}.macro-translation"), "tree"), product(&format!("{id}.macro-tmp"), "tree")))
+    Ok((
+        product(&program.stage_id, &format!("{id}.macro-translation"), "tree"),
+        product(&program.stage_id, &format!("{id}.macro-tmp"), "tree"),
+    ))
 }
 
 #[cfg(test)]

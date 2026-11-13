@@ -361,6 +361,13 @@ set names all produced outputs, not only requested products. Package worlds,
 crate directories, controller protocol leaves, and tool trees therefore cannot
 become unreachable merely because no exported compiler product names them.
 
+Shared Rust translation and native-link authoring bind every produced reference
+to the owning recipe's stage, including Mantle stage1 and stage2. A Rust-provider
+prefix is not a valid replacement for a Mantle-local producer. The published Rust
+provider itself declares the canonical `full-source-rust-provider` output ID;
+the prior-stage consumer rejects a generic `tree` output even when its export
+name is correct.
+
 An authored member larger than the bundle's single-file ceiling is transported
 as the same canonical full-size chunk sequence the bundle observer produces, and
 hydration concatenates it back to one file. The admitted payload byte bound and

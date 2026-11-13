@@ -54,7 +54,8 @@ pub(crate) enum TranslationKind {
     Rlib,
     Bin,
     ProcMacro,
-    // Pending wiring in the source-only preparation path (Cairn prove-source-built-mantle-fixed-point I3).
+    // Pending wiring in the source-only preparation path (Cairn
+    // prove-source-built-mantle-fixed-point I3).
     #[allow(dead_code)]
     Dylib,
     BuildScript,
@@ -152,7 +153,7 @@ fn source_data(program: &mut SourceRecipe, id: &str, text: String) -> ArtifactRe
             text,
         },
     });
-    product(id, "data")
+    product(&program.stage_id, id, "data")
 }
 fn attached(prefix: &str, n: &str, p: &str) -> RecipeWord {
     RecipeWord {
@@ -162,9 +163,9 @@ fn attached(prefix: &str, n: &str, p: &str) -> RecipeWord {
         }],
     }
 }
-fn product(id: &str, n: &str) -> ArtifactRef {
+fn product(stage_id: &str, id: &str, n: &str) -> ArtifactRef {
     ArtifactRef::Produced {
-        action_id: format!("{STAGE}/{id}"),
+        action_id: format!("{stage_id}/{id}"),
         output_id: n.into(),
     }
 }
@@ -251,7 +252,7 @@ pub(crate) fn captured_tmp(
             entries,
         },
     });
-    Ok(Some(product(&id, "tree")))
+    Ok(Some(product(&program.stage_id, &id, "tree")))
 }
 
 pub(crate) fn bind_tmp_step(
@@ -327,7 +328,7 @@ pub(crate) fn bind_tmp_step(
             text,
         },
     });
-    insert(&mut step.inputs, "workspace-invocation", product(&frame_id, "invocation"))?;
+    insert(&mut step.inputs, "workspace-invocation", product(&program.stage_id, &frame_id, "invocation"))?;
     *invocation_input = Some("workspace-invocation".into());
     let mut used = std::collections::BTreeSet::from([executable_input.clone(), "workspace-invocation".into()]);
     used.extend(runtime_mounts.values().cloned());
@@ -411,12 +412,14 @@ pub(crate) struct Native {
     pub(crate) inputs: BTreeMap<String, ArtifactRef>,
     prefixes: BTreeMap<String, String>,
     pub(crate) gcc: ArtifactRef,
-    // Pending wiring in the source-only preparation path (Cairn prove-source-built-mantle-fixed-point I3).
+    // Pending wiring in the source-only preparation path (Cairn
+    // prove-source-built-mantle-fixed-point I3).
     #[allow(dead_code)]
     pub(crate) gxx: ArtifactRef,
     pub(crate) splitter: ArtifactRef,
     pub(crate) cc1: ArtifactRef,
-    // Pending wiring in the source-only preparation path (Cairn prove-source-built-mantle-fixed-point I3).
+    // Pending wiring in the source-only preparation path (Cairn
+    // prove-source-built-mantle-fixed-point I3).
     #[allow(dead_code)]
     pub(crate) cc1plus: ArtifactRef,
     pub(crate) assembler: ArtifactRef,
@@ -642,7 +645,7 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
                 exit_policy: RecipeExitPolicy::Exact { code: 0 },
             },
         });
-        captured = Some(product(&id, "tree"));
+        captured = Some(product(&p.stage_id, &id, "tree"));
     }
     let tid = format!("{}.translate", invocation.id);
     let mut inputs = invocation.inputs;
@@ -699,7 +702,7 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
     let (translation, native_tmp) = if invocation.proc_macro_executables.is_empty() {
         let compiler = bind_tmp_step(&mut p, compiler, captured.expect("seeded actual tmp"), disk)?;
         p.steps.push(compiler);
-        (product(&tid, "translation"), product(&tid, "generated-tmp"))
+        (product(&p.stage_id, &tid, "translation"), product(&p.stage_id, &tid, "generated-tmp"))
     } else {
         macros::append(
             &mut p,
@@ -796,27 +799,23 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
     }
     let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     let response = format!("/tmp/{}_cmd.txt", invocation.logical_output);
-    let workspace = super::llvm::append_native_source_script(
-        request,
-        &mut p,
-        invocation.native_controller,
-        super::llvm::NativeSourceScript {
-            id: format!("{}.native", invocation.id),
-            script: format!("exec {} @{}\n", quote(&invocation.native_wrapper_path), quote(&response)),
-            initial_workspace: product(&prepare, "workspace"),
-            initial_cwd: format!("/inputs/{cwd_name}"),
-            initial_cwd_input: None,
-            original_zero: format!("/tmp/{}-codegen.sh", invocation.logical_output),
-            environment: BTreeMap::new(),
-            environment_input: Some((product(&prepare, "environment"), String::new())),
-            inputs: command_inputs,
-            readonly_inputs,
-            runtime_mounts,
-            inventory: world.inventory,
-            commands_max: invocation.native_commands_max,
-        },
-    )?
-    .workspace;
+    let script = super::llvm::NativeSourceScript {
+        id: format!("{}.native", invocation.id),
+        script: format!("exec {} @{}\n", quote(&invocation.native_wrapper_path), quote(&response)),
+        initial_workspace: product(&p.stage_id, &prepare, "workspace"),
+        initial_cwd: format!("/inputs/{cwd_name}"),
+        initial_cwd_input: None,
+        original_zero: format!("/tmp/{}-codegen.sh", invocation.logical_output),
+        environment: BTreeMap::new(),
+        environment_input: Some((product(&p.stage_id, &prepare, "environment"), String::new())),
+        inputs: command_inputs,
+        readonly_inputs,
+        runtime_mounts,
+        inventory: world.inventory,
+        commands_max: invocation.native_commands_max,
+    };
+    let workspace =
+        super::llvm::append_native_source_script(request, &mut p, invocation.native_controller, script)?.workspace;
     let collect = format!("{}.native-products", invocation.id);
     let artifact_kind = if invocation.kind == TranslationKind::Rlib {
         ArtifactKind::Text
@@ -864,21 +863,21 @@ pub(crate) fn author(request: &AuthoringRequest<'_>, invocation: TranslationInvo
         },
     });
     for (name, reference) in [
-        ("artifact", product(&collect, "artifact")),
-        ("bundle", product(&collect, "bundle")),
-        ("generated-tmp", product(&collect, "generated-tmp")),
+        ("artifact", product(&p.stage_id, &collect, "artifact")),
+        ("bundle", product(&p.stage_id, &collect, "bundle")),
+        ("generated-tmp", product(&p.stage_id, &collect, "generated-tmp")),
         ("translation", translation),
-        ("c", product(&prepare, "generated-c")),
-        ("command", product(&prepare, "command")),
-        ("native-command", product(&prepare, "native-command")),
+        ("c", product(&p.stage_id, &prepare, "generated-c")),
+        ("command", product(&p.stage_id, &prepare, "command")),
+        ("native-command", product(&p.stage_id, &prepare, "native-command")),
     ] {
         p.exports.insert(format!("{}.{name}", invocation.id), reference);
     }
     if invocation.kind.metadata() {
-        p.exports.insert(format!("{}.metadata", invocation.id), product(&prepare, "metadata"));
+        p.exports.insert(format!("{}.metadata", invocation.id), product(&p.stage_id, &prepare, "metadata"));
     }
     p.exports
-        .insert(format!("{}.{}", invocation.id, invocation.kind.name()), product(&collect, "artifact"));
+        .insert(format!("{}.{}", invocation.id, invocation.kind.name()), product(&p.stage_id, &collect, "artifact"));
     Ok(Fragment {
         steps: p.steps,
         files: BTreeMap::new(),
@@ -1077,7 +1076,7 @@ pub(crate) fn append_link_response(
                 exit_policy: RecipeExitPolicy::Exact { code: 0 },
             },
         });
-        product(&empty, "tree")
+        product(&program.stage_id, &empty, "tree")
     };
     let logical_data = source_data(program, &format!("{id}.logical-output"), logical_output.into());
     let prepare = format!("{id}.native-entry");
@@ -1150,34 +1149,29 @@ pub(crate) fn append_link_response(
     }
     insert(&mut inputs, "rust-runtime", native_runtime)?;
     readonly.insert("rust-runtime".into());
-    insert(&mut inputs, "native-entry", product(&prepare, "entry"))?;
+    insert(&mut inputs, "native-entry", product(&program.stage_id, &prepare, "entry"))?;
     readonly.insert("native-entry".into());
     for (root, name) in world.runtime_mounts {
         if runtime_mounts.insert(root, name.clone()).is_some_and(|previous| previous != name) {
             return Err(error("native original runtime root collision"));
         }
     }
-    let workspace = super::llvm::append_native_source_script(
-        request,
-        program,
-        native_controller,
-        super::llvm::NativeSourceScript {
-            id: format!("{id}.native"),
-            script: ". /inputs/native-entry/command.sh\n".into(),
-            initial_workspace: product(&prepare, "workspace"),
-            initial_cwd: String::new(),
-            initial_cwd_input: Some((product(&prepare, "entry"), "cwd".into())),
-            original_zero: format!("/tmp/{logical_output}"),
-            environment: BTreeMap::new(),
-            environment_input: Some((product(&prepare, "entry"), "environment".into())),
-            inputs,
-            readonly_inputs: readonly,
-            runtime_mounts,
-            inventory: world.inventory,
-            commands_max,
-        },
-    )?
-    .workspace;
+    let script = super::llvm::NativeSourceScript {
+        id: format!("{id}.native"),
+        script: ". /inputs/native-entry/command.sh\n".into(),
+        initial_workspace: product(&program.stage_id, &prepare, "workspace"),
+        initial_cwd: String::new(),
+        initial_cwd_input: Some((product(&program.stage_id, &prepare, "entry"), "cwd".into())),
+        original_zero: format!("/tmp/{logical_output}"),
+        environment: BTreeMap::new(),
+        environment_input: Some((product(&program.stage_id, &prepare, "entry"), "environment".into())),
+        inputs,
+        readonly_inputs: readonly,
+        runtime_mounts,
+        inventory: world.inventory,
+        commands_max,
+    };
+    let workspace = super::llvm::append_native_source_script(request, program, native_controller, script)?.workspace;
     let finish = format!("{id}.native-products");
     let mut declared = outputs(output_name, output_kind);
     declared.insert("generated-tmp".into(), RecipeOutput {
@@ -1214,8 +1208,10 @@ pub(crate) fn append_link_response(
             exit_policy: RecipeExitPolicy::Exact { code: 0 },
         },
     });
-    program.exports.insert(format!("{id}.generated-tmp"), product(&finish, "generated-tmp"));
-    Ok(product(&finish, output_name))
+    program
+        .exports
+        .insert(format!("{id}.generated-tmp"), product(&program.stage_id, &finish, "generated-tmp"));
+    Ok(product(&program.stage_id, &finish, output_name))
 }
 
 #[cfg(test)]

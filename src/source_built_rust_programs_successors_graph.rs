@@ -1053,15 +1053,25 @@ pub(crate) fn author_version(
         BTreeMap::from([("mantle-rust-provider/receipts".into(), installed_receipt)]),
     );
     let provider_libs = context.select(&format!("{prefix}.provider-libs"), provider, "lib", ArtifactKind::Tree);
-    let final_provider = context.tree(
-        &format!("{prefix}.provider"),
-        BTreeMap::from([
+    let publication = format!("{prefix}.provider");
+    context.steps.push(RecipeStep {
+        id: publication.clone(),
+        inputs: BTreeMap::from([
             ("bin".into(), bin),
             ("lib".into(), provider_libs),
             ("share".into(), share),
         ]),
-    );
-    exports.insert("provider".into(), final_provider);
+        outputs: BTreeMap::from([(STAGE.into(), super::spec(ArtifactKind::Tree))]),
+        operation: RecipeOperation::AssembleTree {
+            output: STAGE.into(),
+            entries: BTreeMap::from([
+                ("bin".into(), "bin".into()),
+                ("lib".into(), "lib".into()),
+                ("share".into(), "share".into()),
+            ]),
+        },
+    });
+    exports.insert("provider".into(), product(&publication, STAGE));
     exports.insert(
         "native-controller".into(),
         context

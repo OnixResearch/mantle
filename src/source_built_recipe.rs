@@ -528,7 +528,8 @@ pub(crate) struct PreparedRecipe {
 pub(crate) struct RecipeRun {
     pub outputs: BTreeMap<ArtifactRef, (PathBuf, String)>,
     pub completions: Vec<crate::source_built_recipe_exec::RecipeCompletion>,
-    // Pending wiring in the source-only preparation path (Cairn prove-source-built-mantle-fixed-point I3).
+    // Pending wiring in the source-only preparation path (Cairn
+    // prove-source-built-mantle-fixed-point I3).
     #[allow(dead_code)]
     pub phase_outcomes: BTreeMap<String, crate::source_built_fixed_point_action_trust::PhaseOutcome>,
 }
@@ -2301,7 +2302,10 @@ mod tests {
     }
 
     // These source-only structural programs never execute or certify a bootstrap.
-    fn stage_binding_fixture(directory: &Path) -> (SourceBuiltFixedPointPlan, BTreeMap<SourceAuthorityRole, PathBuf>) {
+    fn stage_binding_fixture(
+        directory: &Path,
+        rust_output: &str,
+    ) -> (SourceBuiltFixedPointPlan, BTreeMap<SourceAuthorityRole, PathBuf>) {
         let mut transition = text_recipe("stagex-transition", "transition", "stagex-transition", "stagex-transition");
         let helper = text_recipe("stagex-transition", "helper", "stagex-provider", "helper");
         transition.steps.extend(helper.steps);
@@ -2316,6 +2320,10 @@ mod tests {
             (
                 SourceAuthorityRole::NativeSourceBundle,
                 text_recipe("full-source-native-provider", "native", "full-source-native-provider", "native.provider"),
+            ),
+            (
+                SourceAuthorityRole::RustSourceArchiveSet,
+                text_recipe("full-source-rust-provider", "rust", rust_output, "full-source-rust-provider"),
             ),
         ];
         let mut sources = BTreeMap::new();
@@ -2394,7 +2402,7 @@ mod tests {
     #[test]
     fn prior_stage_output_requires_its_canonical_producer() {
         let directory = tempfile::tempdir().unwrap();
-        let (proof, sources) = stage_binding_fixture(directory.path());
+        let (proof, sources) = stage_binding_fixture(directory.path(), "full-source-rust-provider");
         let transition = prepare_binding_fixture(
             &proof,
             &sources,
@@ -2447,6 +2455,42 @@ mod tests {
             action_id: "stagex-transition/helper".into(),
             output_id: "stagex-provider".into()
         }));
+    }
+
+    #[test]
+    fn rust_provider_handoff_rejects_a_noncanonical_bound_output() {
+        const STAGE: &str = "full-source-rust-provider";
+        for output in [STAGE, "tree"] {
+            let directory = tempfile::tempdir().unwrap();
+            let (proof, sources) = stage_binding_fixture(directory.path(), output);
+            let mut prepared = Vec::new();
+            for (stage, role) in [
+                ("stagex-transition", SourceAuthorityRole::StagexLineage),
+                ("stagex-provider-publication", SourceAuthorityRole::StagexSourceBundle),
+                ("full-source-native-provider", SourceAuthorityRole::NativeSourceBundle),
+                (STAGE, SourceAuthorityRole::RustSourceArchiveSet),
+            ] {
+                let recipe = prepare_binding_fixture(
+                    &proof,
+                    &sources,
+                    &directory.path().join(stage),
+                    stage,
+                    role,
+                    &prepared.iter().collect::<Vec<_>>(),
+                )
+                .unwrap();
+                prepared.push(recipe);
+            }
+            let selected = prior_stage_output(&proof, &[&prepared[3]], ProofOutputRole::FullSourceRustProvider);
+            if output == STAGE {
+                assert_eq!(selected.unwrap(), ArtifactRef::Produced {
+                    action_id: format!("{STAGE}/rust"),
+                    output_id: STAGE.into(),
+                });
+            } else {
+                assert!(selected.unwrap_err().to_string().contains("canonical produced output"));
+            }
+        }
     }
 
     #[test]

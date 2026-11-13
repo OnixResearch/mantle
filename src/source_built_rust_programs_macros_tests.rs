@@ -5,7 +5,7 @@ use crate::source_built_recipe::RecipePreparation;
 const DISK: u64 = 64 * 1024 * 1024;
 
 fn reference(name: &str) -> ArtifactRef {
-    product(name, "artifact")
+    product("stagex-transition", name, "artifact")
 }
 
 fn recipe() -> SourceRecipe {
@@ -135,8 +135,8 @@ fn macro_5612_slots_use_constant_declarations_and_exact_images() {
     assert_eq!(spec.slots[1].inputs["package"], reference("package"));
     assert_eq!(spec.slots[1].runtime_mounts, spec.slots[0].runtime_mounts);
     assert!(spec.slots.iter().all(|slot| slot.inputs.keys().all(|name| !spec.inputs.contains_key(name))));
-    assert_eq!(translation, product("crate.macro-translation", "tree"));
-    assert_eq!(tmp, product("crate.macro-tmp", "tree"));
+    assert_eq!(translation, product(&program.stage_id, "crate.macro-translation", "tree"));
+    assert_eq!(tmp, product(&program.stage_id, "crate.macro-tmp", "tree"));
     for (step, member) in program.steps.iter().rev().take(2).zip(["tmp", "translation"]) {
         let RecipeOperation::Exec { arguments, .. } = &step.operation else {
             panic!("normal extraction leaf")
@@ -167,6 +167,19 @@ fn macro_reservations_obey_command_ceiling_not_expansion_size() {
     append_fixture(&mut program, compiler(), max as usize, Some(reference("prior-tmp"))).unwrap();
     assert_eq!(program.steps.len(), DECLARATION_STEPS_MAX - 1);
     assert_eq!(specification(&program).inputs["initial-tmp"], reference("prior-tmp"));
+}
+
+#[test]
+fn macro_graphs_admit_actual_stage_roots_and_reject_cross_stage_roots() {
+    for stage in ["full-source-rust-provider", "mantle-stage1", "mantle-stage2"] {
+        let mut program = recipe();
+        program.stage_id = stage.into();
+        let (translation, tmp) = append_fixture(&mut program, compiler(), 1, None).unwrap();
+        program.roots = vec![translation, tmp];
+        crate::source_built_recipe::validate_source_recipe(&program).unwrap();
+        program.roots[0] = product("stagex-transition", "crate.macro-translation", "tree");
+        assert!(crate::source_built_recipe::validate_source_recipe(&program).is_err());
+    }
 }
 
 #[test]
