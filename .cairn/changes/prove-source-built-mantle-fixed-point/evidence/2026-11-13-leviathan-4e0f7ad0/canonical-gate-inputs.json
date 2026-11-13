@@ -1,0 +1,9 @@
+{
+  "source_revision": "4e0f7ad0f228773710e57ea8938e1d70d73fdc20",
+  "qualification_task": 1548,
+  "canonical_task": 1550,
+  "pueue_group": "mantle-sbfp-4e0f7ad0-cli",
+  "source_copy": "/home/brittonr/sbfp-20261113-berdKH/canonical-source-4e0f7ad0",
+  "immutable_proof_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-4e0f7ad0",
+  "non_claim": "Canonical CLI, contract and lifecycle gates only; a passing gate is not a cold fixed point, real parity or release-evidence verification."
+}

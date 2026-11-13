@@ -1,0 +1,290 @@
++ date -Is
+2026-11-13T18:07:42-05:00
++ ARCHIVE=/home/brittonr/sbfp-20261113-berdKH/incoming/source-07ccbf782ca5f60114222b19222ee944bdcd4cba.tar.gz
++ SOURCE=/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/source-07ccbf782ca5f60114222b19222ee944bdcd4cba.tar.gz
++ test 5a4987b7f26f59d698018d764ba154d6214fec92c5524b861f78de1189cb0eeb = 5a4987b7f26f59d698018d764ba154d6214fec92c5524b861f78de1189cb0eeb
+++ gzip --decompress --stdout /home/brittonr/sbfp-20261113-berdKH/incoming/source-07ccbf782ca5f60114222b19222ee944bdcd4cba.tar.gz
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ test 6f6223e3c4da94c8338093ba9e158df40baa02db3d2ae82087f6374dffd018c1 = 6f6223e3c4da94c8338093ba9e158df40baa02db3d2ae82087f6374dffd018c1
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78
++ mkdir /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78 /home/brittonr/sbfp-20261113-berdKH/runner-tmp-07ccbf78
++ tar --extract --gzip --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/source-07ccbf782ca5f60114222b19222ee944bdcd4cba.tar.gz --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78
+++ source_digest
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78 .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_BEFORE=b5b47f3da2eb840941069d328e8473ad5418be9dd5995089db311dbbc973baf3
++ printf 'frozen_source_revision=%s\nsource_tree_before_blake3=%s\n' 07ccbf782ca5f60114222b19222ee944bdcd4cba b5b47f3da2eb840941069d328e8473ad5418be9dd5995089db311dbbc973baf3
+frozen_source_revision=07ccbf782ca5f60114222b19222ee944bdcd4cba
+source_tree_before_blake3=b5b47f3da2eb840941069d328e8473ad5418be9dd5995089db311dbbc973baf3
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-07ccbf78 XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-07ccbf78
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo -V; cargo fmt --check -p mantle -v; cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings; cargo build --release --locked --offline -p mantle --bin mantle'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/onix-artifact.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/mantle.git', using 'master'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/shared-action-result-roundtrip/publish.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/resource_evidence_check.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/resource_policy_replay.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/bin/mantle-protected-build-runner.rs"
+[lib (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/lib.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/main.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_apk.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_sources.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_sources_offline.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_build_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/causal_build_trace.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/demand_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/elf_dynamic_reference_scanner.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/elf_dynamic_relocation.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/finish_gates.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/gateway_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/integration.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/profile_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/release_gauntlet_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_hexagon_v2_parity.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/resource_gateway_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/retention_interest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_eval_backends.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_eval_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_lazy_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_scheduler_priority.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/benchmark_suite.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/distributed_eval_assess.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/hardware_simulation_plan.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/picolibc_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/delta-substitution/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/release-witness-handoff/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/resource_evidence_check.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/examples/resource_policy_replay.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/bin/mantle-protected-build-runner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/lib.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/main.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_apk.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_sources.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/android_sources_offline.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/attest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/audit_support.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/benchmark_harness.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_parity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/bootstrap_validate_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_build_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_free_self_build_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/cargo_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/causal_build_trace.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/composition_root_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/demand_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/elf_dynamic_reference_scanner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/elf_dynamic_relocation.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/evaluator_budget_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/example_projects.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_inventory.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/examples_workflow_gallery.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/finish_gates.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/foreign_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/freshness_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/gateway_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/identity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/integration.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/integration_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernel_bundle_oci_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/kernelscript_experiment.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/lock_importer_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/machine_schema_contracts.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/nix_free_demo_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/offline_build_runbook_docs.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/offline_cargo_project.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/operator_diagnostics.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/pin_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/profile_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_build_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/project_refresh_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/release_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/release_gauntlet_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_credentials_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_hexagon_v2_parity.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_rail_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_stdio_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/remote_transfer_production.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/removed_system_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/resource_gateway_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/retention_interest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/retention_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/rust_compatibility_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/rust_plan_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/scheduling_policy.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/self_hosting.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/source_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/source_bundle_hydration_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/stdlib_tests.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/store_archive_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/store_gc_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/transactional_reconciliation_pilot.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/transcript_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/trust_policy_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tests/wasm_component_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tools/generate_operator_command_contract.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/tools/generate_portable_platform_profiles.rs
+warning: /home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling nix-compat v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/nix-compat)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/fuse-backend-rs)
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-attestation-core)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/snix-castore)
+   Compiling snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/snix-tracing)
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/vendor/snix-build)
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-rust-plan-core)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-action-result-core)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-composition-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-gc-core)
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-attestation)
+   Compiling crunch-nar v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-nar)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-overlay-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-repair-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-rust-cache-core)
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-rust-differential-core)
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-remote-core)
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-build)
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-spacewasm-core)
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-causal-trace-core)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-glue)
+   Compiling crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-store)
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-test-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-wasm-component-core)
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-test-app)
+   Compiling crunch-eval v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-eval)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-project-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-source-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-evaluation-stream-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-shell-core)
+   Compiling crunch-watch-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-watch-core)
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-delta-core)
+   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-nix-gateway-core)
+   Compiling crunch-project v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-project)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-shell)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-wasm-component)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-release-core)
+   Compiling crunch-test v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-test)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-remote-app)
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-rust-plan-app)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-cargo-build-bundle-core)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-application-contract)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-delta)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantlepkgs-core)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-rustc-wrapper)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-hardware-simulation-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-bootstrap-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-build-contract)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-eval-budget-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-portable-client-core)
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-service-readiness-core)
+   Compiling mantle-lock-vendor-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-lock-vendor-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-hardware-simulation)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-kernelscript-core)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-android-core)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-pipeline)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78/crates/crunch-nix-gateway)
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-07ccbf78)
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+    --> src/source_built_recipe.rs:2775:43
+     |
+2775 |             let (original, mut sources) = stage_binding_fixture(root.path());
+     |                                           ^^^^^^^^^^^^^^^^^^^^^------------- argument #2 of type `&str` is missing
+     |
+note: function defined here
+    --> src/source_built_recipe.rs:2305:8
+     |
+2305 |     fn stage_binding_fixture(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+2306 |         directory: &Path,
+2307 |         rust_output: &str,
+     |         -----------------
+help: provide the argument
+     |
+2775 |             let (original, mut sources) = stage_binding_fixture(root.path(), /* &str */);
+     |                                                                            ++++++++++++
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+    --> src/source_built_recipe.rs:3117:43
+     |
+3117 |             let (original, mut sources) = stage_binding_fixture(root.path());
+     |                                           ^^^^^^^^^^^^^^^^^^^^^------------- argument #2 of type `&str` is missing
+     |
+note: function defined here
+    --> src/source_built_recipe.rs:2305:8
+     |
+2305 |     fn stage_binding_fixture(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+2306 |         directory: &Path,
+2307 |         rust_output: &str,
+     |         -----------------
+help: provide the argument
+     |
+3117 |             let (original, mut sources) = stage_binding_fixture(root.path(), /* &str */);
+     |                                                                            ++++++++++++
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+    --> src/source_built_recipe.rs:3375:39
+     |
+3375 |             let (original, sources) = stage_binding_fixture(root.path());
+     |                                       ^^^^^^^^^^^^^^^^^^^^^------------- argument #2 of type `&str` is missing
+     |
+note: function defined here
+    --> src/source_built_recipe.rs:2305:8
+     |
+2305 |     fn stage_binding_fixture(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+2306 |         directory: &Path,
+2307 |         rust_output: &str,
+     |         -----------------
+help: provide the argument
+     |
+3375 |             let (original, sources) = stage_binding_fixture(root.path(), /* &str */);
+     |                                                                        ++++++++++++
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `mantle` (bin "mantle" test) due to 3 previous errors
++ s=101
++ printf 'qualification_07ccbf78_exit=%s\n' 101
+qualification_07ccbf78_exit=101
++ printf '%s\n' 101
++ exit 101

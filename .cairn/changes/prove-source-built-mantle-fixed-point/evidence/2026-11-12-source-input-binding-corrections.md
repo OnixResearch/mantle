@@ -413,3 +413,136 @@ decompression preserves the identities above without rewriting captured output.
 The serial Cairn checklist stays unchecked until its
 preceding actual provider/stage/receipt obligations are accepted; passing V1
 checks alone do not close I3–I5, V2 or release-evidence requirements.
+
+## Canonical CLI, focused compatibility and lifecycle gates
+
+Leviathan Pueue 1541 exited 0 on its frozen `b0773d60` supporting source. Its
+complete byte-exact raw log is retained as
+`2026-11-13-leviathan-b0773d60/canonical-checks.log.gz`; decompressed BLAKE3
+`3312047c57fc8842a2a510373286db1a9c30c9a5e8dbf210b50a47f69a4357fc`
+matches the Leviathan original. The source-built and library receipt legs overlap
+the final-source 1544 results and are not counted again here.
+
+| Executed canonical leg | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| `release_cli` | 154 | 0 | 0 |
+| `bootstrap_parity_cli` | 21 | 0 | 0 |
+| `machine_schema_contracts` | 4 | 0 | 0 |
+| `cargo_free_self_build::tests` | 59 | 0 | 0 |
+| `source_toolchain_closure::tests` | 52 | 0 | 0 |
+| `self_build::tests` | 172 | 0 | 0 |
+| release-core `determinism::tests` | 22 | 0 | 0 |
+| release-core `genuine_rebuild::tests` | 6 | 0 | 0 |
+
+Package formatting, strict root-package Clippy, and the machine-contract checker
+also passed. Canonical Cairn validation and proposal/design/tasks gates each
+reported `valid: true` and returned success. The pinned Nickel command reported
+1.17.0. These are current mechanism/CLI and structural gate observations over
+the pre-removal supporting source; final-source task 1544 independently covered
+the one test-only source change. They are not a real bootstrap-parity or
+release-bundle verification, and V3 remains open for the real proof evidence.
+
+The independent reviewer accepted the corrected runner-to-frozen-archive binding
+with no remaining actual runner-provenance correction. Its full response is
+retained as `2026-11-13-leviathan-72f6d21f/runner-provenance-review.log`.
+It explicitly keeps the final prepared-program cohort and cold proof unaccepted.
+
+## Final-source inert program cohort
+
+Leviathan preparation task 1543 exited 0. Its report binds input manifest
+`739b904eb559eadc1d1ea2bf697a819620ce1e0ccb6d3d386eebdeacdb6c9770` and
+input plan `a4787e32d83e5c8fa5c911d8e587eba69116c8e6bfbb789873707a4a6c16e17a`
+to the prepared output manifest
+`47c446b61809bc1f968a065969431af0bb3d7791227e8d18e0bacf95bcad6d77`.
+The four native/Rust/Mantle/StageX program-record identities and their inert-only
+non-claim are retained in `source-program-preparation.json` in the final-source
+evidence directory. This output manifest, not `739b904e…`, was the candidate
+cold-proof pin before the independent graph review rejected launch.
+
+The raw prepared profile JSON has BLAKE3
+`0b63f4bcacadf36f904559c63793836d2cf17003aad3faeec66f940573139372`;
+the raw preparation report has BLAKE3
+`ccb08afa9a223386dd3a8f8853068fb39f75c26f2ad43e2d9b3736b95ac1398a`.
+These byte checksums are not the semantic manifest identity. Pueue 1545 checked
+the retained runner and both files, then the real source-bundle verifier reported
+the prepared manifest `ready` with empty missing, stale, unsupported and
+untrusted record lists. It exited 0; its exact command and results are retained.
+
+The independent identity review accepted this exact inert profile's record and
+payload bindings, with the parent's successful source verifier covering its
+canonical manifest check. The independent graph review rejected cold launch:
+Mantle-local translation/link references incorrectly named the Rust-provider
+stage, and the final Rust-provider export declared output `tree` instead of the
+canonical `full-source-rust-provider` required by the unchanged prior-stage
+consumer. Both complete reviews are retained alongside the preparation evidence.
+
+No cold proof launched from this candidate. The retained cold-proof script is an
+unexecuted planned command, not execution evidence. This inert cohort is
+superseded for launch; source/program preparation and qualification must be
+repeated from the corrected frozen source before accepting a replacement pin.
+No provider, stage, receipt, parity or release acceptance follows from successful
+preparation or source availability.
+
+## Owning-stage and canonical-publication correction cohort
+
+Source revision `07ccbf782ca5f60114222b19222ee944bdcd4cba` fixes the two
+independent graph blockers without changing the prior-stage admission rule.
+Shared translation and macro/link helpers derive produced references from the
+owning recipe stage. Each final Rust-provider publication declares the canonical
+`full-source-rust-provider` output instead of a generic `tree`. Mantle owns these
+source-authoring invariants; the intended durable contribution is correct stage1
+and stage2 graph construction, not a provider or compiler correctness claim.
+
+The added regressions exercise local-root admission and cross-stage-root
+rejection for all three consuming stages, and canonical versus noncanonical
+bound Rust outputs through the actual prior-stage consumer. Their execution is
+not claimed at this checkpoint.
+
+The frozen raw tar BLAKE3 is
+`6f6223e3c4da94c8338093ba9e158df40baa02db3d2ae82087f6374dffd018c1`;
+the transferred gzip BLAKE3 is
+`5a4987b7f26f59d698018d764ba154d6214fec92c5524b861f78de1189cb0eeb`.
+Leviathan task 1546 is the source-bound qualification/build command; task 1547
+depends on its success and performs fresh source refresh, inert preparation and
+source verification. Their exact scripts and frozen inputs are retained in
+`2026-11-13-leviathan-07ccbf78/`. No replacement profile pin, cold execution,
+receipt, parity or release result is accepted until the corresponding results
+are inspected.
+
+Task 1546 returned 101 during test compilation: three pre-existing callers of
+the extended `stage_binding_fixture` lacked its explicit canonical-output
+argument. The full compiler output and terminal Pueue status are retained in
+the same evidence directory. No tests executed, no runner was installed, and
+task 1547 ended `DependencyFailed` without starting preparation. The three
+fixture callers are corrected for the next frozen-source qualification; no
+test or production admission rule was weakened.
+
+The complete fixture migration is frozen as
+`4e0f7ad0f228773710e57ea8938e1d70d73fdc20`. Its raw tar BLAKE3 is
+`88fc87d89af06757004943586df32b910330d745fb57b58b2793c784ec7212b8`;
+its transferred gzip BLAKE3 is
+`abecc71c89e6a0bba7d7fc19beeb29a062d6f64928ef9b986bf0972739609a7f`.
+Task 1548 qualifies/builds this exact source; task 1549 depends on its success
+for inert source-program preparation. Their retained commands and input binding
+are in `2026-11-13-leviathan-4e0f7ad0/`. These are submission facts, not
+successful-check or proof observations.
+
+Task 1548 completed successfully on Leviathan. The captured execution summary is
+`test result: ok. 255 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 6.70s`.
+The cross-stage macro graph regression and strict canonical Rust-provider
+handoff regression executed within that leg. The ignored protected smokes were
+not executed. Package formatting, strict root-package release Clippy and the
+locked offline release build also succeeded.
+
+The normalized source-tree identity before and after qualification is
+`0e14303c729cb55b11f082aab3285526fe52965e0e92a6b151f0c31ca3ef60a6`.
+The installed frozen runner's BLAKE3 is
+`57042f2b8048afd51e1151749a9d01aa63b99e958bbd151e035c3a62816abadf`.
+The exact compressed log is retained as `qualification-4e0f7ad0.log.gz`;
+its BLAKE3 `74f281c28b0ad481c354a1cd4bd8f74d069ac8e3a946cee3a7823b21671b5810`
+matches the remote compressed log. The remote uncompressed log BLAKE3 is
+`b30a3ae9aa95a4dc76a6a8a6036ffb88aabdad5fedf75074b682d6dc84fc7ccb`.
+These checks verify the source-authoring mechanism, not a provider or cold
+fixed point. Task 1549 prepares the replacement inert cohort; isolated task
+1550 covers the required CLI, contract and lifecycle legs without mutating the
+frozen proof source. Real parity, release evidence and I3–I5 remain outstanding.

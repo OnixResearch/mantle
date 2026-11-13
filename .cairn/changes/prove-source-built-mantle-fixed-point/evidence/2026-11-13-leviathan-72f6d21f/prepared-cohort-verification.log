@@ -1,0 +1,19 @@
++ date -Is
+2026-11-13T17:31:10-05:00
++ COHORT=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-72f6d21f
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-72f6d21f/source-profile.json
++ test 0b63f4bcacadf36f904559c63793836d2cf17003aad3faeec66f940573139372 = 0b63f4bcacadf36f904559c63793836d2cf17003aad3faeec66f940573139372
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-72f6d21f/source-program-preparation.json
++ test ccb08afa9a223386dd3a8f8853068fb39f75c26f2ad43e2d9b3736b95ac1398a = ccb08afa9a223386dd3a8f8853068fb39f75c26f2ad43e2d9b3736b95ac1398a
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --check /home/brittonr/sbfp-20261113-berdKH/frozen-runner-blake3.txt
+/home/brittonr/sbfp-20261113-berdKH/bin/mantle-frozen: OK
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-72f6d21f-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-72f6d21f-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-frozen --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-72f6d21f/source-profile.json
++ jq -e '.manifest_blake3 == "47c446b61809bc1f968a065969431af0bb3d7791227e8d18e0bacf95bcad6d77" and .ready_class == "ready" and .missing_records == [] and .stale_records == [] and .unsupported_records == [] and .untrusted_records == []' /home/brittonr/sbfp-20261113-berdKH/prepared-source-profile-verification.json
+true
++ date -Is
+2026-11-13T17:34:13-05:00
++ s=0
++ printf 'prepared_cohort_verification_exit=%s\n' 0
+prepared_cohort_verification_exit=0
++ printf '%s\n' 0
++ exit 0

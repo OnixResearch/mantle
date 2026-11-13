@@ -250,3 +250,20 @@ release build, current source-built tests, and CLI qualification passed. A new
 cohort and cold proof remain unaccepted. See
 [native probe state authority](evidence/2026-11-12-source-input-binding-corrections.md#native-probe-state-authority-2026-11-13).
 I3–I5 and V1–V3 remain unchecked; the preserved v27 failure is not a proof.
+
+## Owning-stage and canonical Rust handoff checkpoint (2026-11-13)
+
+Independent review rejected the inert `47c446…` cohort for cold launch: shared
+translation/link references named the Rust stage inside Mantle stage1/stage2,
+and the Rust provider published `tree` rather than the strict canonical output.
+Source `4e0f7ad0f228773710e57ea8938e1d70d73fdc20` fixes both without relaxing
+admission. Leviathan Pueue 1548 passed 255 source-built tests (27 protected smokes
+ignored), package formatting, strict release Clippy and a locked offline release
+build, retaining equal pre/post frozen source identities. Details and exact
+logs are in
+[source input corrections](evidence/2026-11-12-source-input-binding-corrections.md#owning-stage-and-canonical-publication-correction-cohort).
+
+Tasks 1549 and 1550 respectively prepare the replacement inert cohort and run
+isolated canonical CLI/contract/lifecycle gates. Neither submission accepts a
+profile, provider, stage comparison, receipt or release. The rejected cohort's
+cold-proof script was not executed. I3–I5 and real V2/V3 evidence remain open.

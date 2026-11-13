@@ -1,0 +1,32 @@
+{
+  "1546": {
+    "id": 1546,
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-07ccbf78.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-07ccbf78.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-13T18:07:42.043533426-05:00",
+        "start": "2026-11-13T18:07:42.244971748-05:00",
+        "end": "2026-11-13T18:11:52.174097467-05:00",
+        "result": {
+          "Failed": 101
+        }
+      }
+    }
+  },
+  "1547": {
+    "id": 1547,
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-07ccbf78.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-07ccbf78.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-13T18:08:57.720626275-05:00",
+        "start": "2026-11-13T18:11:52.204720870-05:00",
+        "end": "2026-11-13T18:11:52.204721752-05:00",
+        "result": "DependencyFailed"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "1548": {
+    "task": {
+      "id": 1548,
+      "created_at": "2026-11-13T18:15:10.446817553-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-4e0f7ad0.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-4e0f7ad0.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "default",
+      "dependencies": [],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-13T18:15:10.442823169-05:00",
+          "start": "2026-11-13T18:15:10.501604935-05:00",
+          "end": "2026-11-13T18:32:29.385231398-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

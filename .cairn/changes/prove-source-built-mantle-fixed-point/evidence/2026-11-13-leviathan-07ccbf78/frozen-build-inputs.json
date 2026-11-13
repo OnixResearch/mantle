@@ -1,0 +1,19 @@
+{
+  "source_revision": "07ccbf782ca5f60114222b19222ee944bdcd4cba",
+  "source_archive_blake3": "6f6223e3c4da94c8338093ba9e158df40baa02db3d2ae82087f6374dffd018c1",
+  "compressed_archive_blake3": "5a4987b7f26f59d698018d764ba154d6214fec92c5524b861f78de1189cb0eeb",
+  "source_archive_path": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-07ccbf782ca5f60114222b19222ee944bdcd4cba.tar.gz",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "qualification_task": 1546,
+  "qualification_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-07ccbf78.sh",
+  "required_evidence": [
+    "compressed and decoded archive BLAKE3 before extraction",
+    "canonical compiler and package formatting output",
+    "executed source_built_ binary tests including cross-stage roots and canonical Rust handoff rejection",
+    "strict root-package Clippy",
+    "locked offline release build",
+    "unchanged pre/post normalized source-tree BLAKE3",
+    "resulting executable BLAKE3 and real version output"
+  ],
+  "non_claim": "Queued source-bound qualification only. The earlier 47c446 prepared profile is rejected for cold launch; no replacement cohort or proof is accepted yet."
+}

@@ -1,0 +1,11 @@
+{
+  "revision": "4e0f7ad0f228773710e57ea8938e1d70d73fdc20",
+  "short": "4e0f7ad0",
+  "raw_archive_blake3": "88fc87d89af06757004943586df32b910330d745fb57b58b2793c784ec7212b8",
+  "compressed_archive_blake3": "abecc71c89e6a0bba7d7fc19beeb29a062d6f64928ef9b986bf0972739609a7f",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "qualification_task": 1548,
+  "preparation_task": 1549,
+  "non_claim": "Queued qualification and success-dependent inert preparation; no test, provider, fixed-point or release success is claimed."
+}
