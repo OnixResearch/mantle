@@ -1566,21 +1566,7 @@ pub(super) fn decode_invocation(
             return Err(error("invalid environment name"));
         }
     }
-    // A `@<request>` leaf authenticates its operands from the produced response;
-    // declared inputs stay bound for the addresses that response may name.
-    let response_argument = match &step.operation {
-        RecipeOperation::Exec {
-            arguments,
-            invocation_input: None,
-            ..
-        } => arguments.iter().any(|word| {
-            word.parts.len() == 2
-                && matches!(&word.parts[0], WordPart::Literal { text } if text == "@")
-                && matches!(&word.parts[1], WordPart::Input { .. })
-        }),
-        _ => false,
-    };
-    if !response_argument && step.inputs.keys().any(|name| !used.contains(name.as_str())) {
+    if step.inputs.keys().any(|name| !used.contains(name.as_str())) {
         return Err(error("dynamic invocation has an unused declared input name"));
     }
     drop(used);

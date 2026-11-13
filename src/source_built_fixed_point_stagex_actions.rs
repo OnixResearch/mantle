@@ -18,6 +18,7 @@ use crate::source_built_recipe::RecipeOperation;
 use crate::source_built_recipe::RecipePaths;
 use crate::source_built_recipe::RecipeRun;
 use crate::source_built_recipe::RecipeStep;
+use crate::source_built_recipe::RecipeWord;
 use crate::source_built_recipe::SourceRecipe;
 use crate::source_built_recipe::WordPart;
 use crate::source_built_recipe::{self as recipe};
@@ -948,6 +949,33 @@ mod tests {
             ..ExpandedNode::default()
         };
         assert!(!blank.disposes("kaem-0"));
+    }
+
+    #[test]
+    fn response_file_leaves_keep_every_declared_input() {
+        let mut response = phase();
+        response.id = "response".into();
+        response.inputs.insert("addressable".into(), source("addressable.c"));
+        let RecipeOperation::Exec { arguments, .. } = &mut response.operation else {
+            unreachable!()
+        };
+        *arguments = vec![RecipeWord {
+            parts: vec![WordPart::Literal { text: "@".into() }, WordPart::Input {
+                name: "tool".into(),
+                path: String::new(),
+            }],
+        }];
+        let used = used_inputs(&response);
+        assert!(used.contains(&source("addressable.c")), "response-file operands stay addressable");
+        assert!(used.contains(&response.inputs["status"]));
+
+        let mut static_step = response.clone();
+        static_step.id = "static".into();
+        let RecipeOperation::Exec { arguments, .. } = &mut static_step.operation else {
+            unreachable!()
+        };
+        *arguments = Vec::new();
+        assert!(!used_inputs(&static_step).contains(&source("addressable.c")));
     }
 
     #[test]
