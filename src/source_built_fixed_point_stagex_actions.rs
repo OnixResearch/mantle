@@ -889,6 +889,7 @@ pub(crate) fn validate_partition<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_built_recipe::RecipeExitPolicy;
     use crate::source_built_recipe::RecipeWord;
 
     fn source(path: &str) -> ArtifactRef {
@@ -1050,6 +1051,65 @@ mod tests {
         assert!(error.to_string().contains("unused inputs"));
         assert!(require_node_input(&graph, &node, &unused).unwrap_err().to_string().contains("omit"));
         assert!(!depends_on(&graph, &product("phase", "state"), &unused));
+    }
+
+    #[test]
+    fn referenced_names_cover_shared_environment_words_only() {
+        let step = RecipeStep {
+            id: "script".into(),
+            inputs: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+            operation: RecipeOperation::Exec {
+                executable_input: "helper".into(),
+                invocation_input: None,
+                arguments: vec![RecipeWord {
+                    parts: vec![WordPart::Literal { text: "--plain".into() }],
+                }],
+                environment: BTreeMap::from([("MANTLE_RUST_PROVIDER".into(), RecipeWord {
+                    parts: vec![WordPart::Input {
+                        name: "rust-provider".into(),
+                        path: String::new(),
+                    }],
+                })]),
+                runtime_mounts: BTreeMap::new(),
+                cwd_input: Some("source-package".into()),
+                cwd_output: None,
+                stdin_input: None,
+                output_seeds: BTreeMap::new(),
+                command_state: None,
+                guard: None,
+                merge_stderr: false,
+                exit_policy: recipe::RecipeExitPolicy::Exact { code: 0 },
+            },
+        };
+        let names = referenced_input_names(&step);
+        assert!(names.contains("helper"));
+        assert!(names.contains("rust-provider"));
+        assert!(names.contains("source-package"));
+        assert!(!names.contains("unbound"));
+        let literal_only = RecipeStep {
+            operation: RecipeOperation::Exec {
+                executable_input: "helper".into(),
+                invocation_input: None,
+                arguments: vec![RecipeWord {
+                    parts: vec![WordPart::Literal { text: "--plain".into() }],
+                }],
+                environment: BTreeMap::from([("LITERAL".into(), RecipeWord {
+                    parts: vec![WordPart::Literal { text: "value".into() }],
+                })]),
+                runtime_mounts: BTreeMap::new(),
+                cwd_input: None,
+                cwd_output: None,
+                stdin_input: None,
+                output_seeds: BTreeMap::new(),
+                command_state: None,
+                guard: None,
+                merge_stderr: false,
+                exit_policy: recipe::RecipeExitPolicy::Exact { code: 0 },
+            },
+            ..step
+        };
+        assert_eq!(referenced_input_names(&literal_only), BTreeSet::from(["helper"]));
     }
 
     #[test]
