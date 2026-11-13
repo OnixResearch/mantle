@@ -1,0 +1,8 @@
+{
+  "pueue_task": 1540,
+  "disposition": "superseded; operator-requested cancellation",
+  "reason": "Final frozen source changed to 72f6d21f290b7be6c885c98a2a3433416b7d03be and runner provenance was corrected by successful task1542. No b0773d60 preparation output may be promoted as the final cohort.",
+  "replacement_preparation_task": 1543,
+  "preserve": "All logs, partial outputs and private staging trees; no deletion.",
+  "non_claim": "Cancellation and preserved partial preparation are not test, provider or proof success."
+}

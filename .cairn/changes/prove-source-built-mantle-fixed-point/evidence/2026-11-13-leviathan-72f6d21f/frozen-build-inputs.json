@@ -1,0 +1,15 @@
+{
+  "source_revision": "72f6d21f290b7be6c885c98a2a3433416b7d03be",
+  "source_archive_blake3": "6f5d2b2483b9f09884945d82cc09d7278fb42f5f5294f470b16edb2a84c85629",
+  "source_archive_path": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-72f6d21f290b7be6c885c98a2a3433416b7d03be.tar",
+  "pueue_task": 1542,
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/build-frozen-runner-72f6d21f.sh",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "required_evidence": [
+    "exact archive identity before extraction",
+    "canonical compiler/build invocation",
+    "unchanged pre/post normalized source-tree BLAKE3",
+    "resulting executable BLAKE3 and real version output"
+  ],
+  "non_claim": "Queued source-bound build only; earlier b0773d60 preparation and checks are not the final 72f6d21f cohort or proof."
+}

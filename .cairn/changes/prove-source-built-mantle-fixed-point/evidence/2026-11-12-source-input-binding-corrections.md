@@ -348,3 +348,68 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2958 filtered out; f
 These tests exercise normalized-provider admission and replay-payload mismatch;
 the leaf formatter also passed. This does not add a new proof result or qualify
 an old source identity as the changed final tree.
+
+## Source-bound runner for the final revision
+
+The test-only correction and its evidence are pushed as
+`72f6d21f290b7be6c885c98a2a3433416b7d03be`. Its exact Git archive transferred
+with BLAKE3
+`6f5d2b2483b9f09884945d82cc09d7278fb42f5f5294f470b16edb2a84c85629`.
+Leviathan Pueue 1542 extracted that archive into a separate build source root,
+ran package formatting and a locked, offline release build inside the canonical
+pinned `nix develop` shell, and exited 0.
+
+The compiler was `rustc 1.96.0-nightly (c75612477 2026-04-07)`, exact commit
+`c756124775121dea0e640652c5ee3c89e3dd0eb4`, for
+`x86_64-unknown-linux-gnu`, LLVM 22.1.2. The normalized source-tree tar BLAKE3
+was unchanged before and after build:
+`d7ec503dbf044f929064aecbdcef6767ccb4b03c21045e721901382656ee56e9`.
+The retained runner is
+`e7bfd87c096cb569ce6488710ac7e58be5b981e9e6f3d8fd899d68a81ddd9247` and its
+actual version output is `mantle 0.1.0`. Full commands and captured output are
+retained under
+[`2026-11-13-leviathan-72f6d21f/`](2026-11-13-leviathan-72f6d21f/).
+
+Pueue 1543 prepares a separate final-source cohort with that runner. Pueue 1544
+checks the affected source-built/receipt tests and strict root-package Clippy
+under the canonical shell. The earlier preparation 1540 was explicitly
+cancelled as superseded; its transcript and cancellation reason are preserved,
+and none of its output is final-cohort authority. The earlier canonical test
+task 1541 remains separate supporting evidence for the pre-removal source.
+
+A successful conventional runner build is not a Cargo-free, source-built,
+fixed-point or release claim. Final cohort admission and actual cold execution
+remain outstanding; I3–I5 and V1–V3 remain unchecked.
+
+## Final-source canonical contract verification
+
+Leviathan Pueue 1544 exited 0 against the exact `72f6d21f` source in the
+canonical pinned shell. Its source-built leg records:
+
+```text
+test result: ok. 253 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 7.09s
+```
+
+The count is one lower than the earlier 254 because the incidental source-text
+test was removed. Library receipt tests then recorded:
+
+```text
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 0.54s
+```
+
+Strict release Clippy for the root package's binary and test targets also
+passed with `-D warnings`. The 27 ignored retained-input/protected smokes were
+not executed or counted as success. The independent V1 map and the previously
+captured focused Cargo-free, closure, self-build, release-core and CLI legs
+complete the focused proof-contract verification; none is actual cold execution.
+
+The byte-exact retrieved runner-build transcript has BLAKE3
+`a09e7562b100905cc9ebb1ee84a5c0424185929913ac992440b3fd746d265994`;
+the final contract transcript has BLAKE3
+`ec366512996cf72f4c6ab0f317f6cd9d77421ec7339d5c6457b2ce4f95dc5e71`.
+Both match their Leviathan originals. The raw transcripts retain SSH carriage
+returns in lossless `.log.gz` files in the final-source evidence directory;
+decompression preserves the identities above without rewriting captured output.
+The serial Cairn checklist stays unchecked until its
+preceding actual provider/stage/receipt obligations are accepted; passing V1
+checks alone do not close I3–I5, V2 or release-evidence requirements.

@@ -1,0 +1,14 @@
+{
+  "source_revision": "72f6d21f290b7be6c885c98a2a3433416b7d03be",
+  "archive_blake3": "6f5d2b2483b9f09884945d82cc09d7278fb42f5f5294f470b16edb2a84c85629",
+  "normalized_tree_before_blake3": "d7ec503dbf044f929064aecbdcef6767ccb4b03c21045e721901382656ee56e9",
+  "normalized_tree_after_blake3": "d7ec503dbf044f929064aecbdcef6767ccb4b03c21045e721901382656ee56e9",
+  "runner_blake3": "e7bfd87c096cb569ce6488710ac7e58be5b981e9e6f3d8fd899d68a81ddd9247",
+  "build_task": 1542,
+  "build_exit": 0,
+  "unexpanded_profile_manifest_blake3": "739b904eb559eadc1d1ea2bf697a819620ce1e0ccb6d3d386eebdeacdb6c9770",
+  "mantle_source_content_blake3": "72108ccd6f61ead0af8100179d33e353c8625012ce2ff329581a005c2591279c",
+  "preparation_task": 1543,
+  "final_source_tests_task": 1544,
+  "non_claim": "Runner build and unexpanded source availability only. Cold proof must use the separately reviewed preparation report output profile identity; this is not a prepared-program or fixed-point claim."
+}
