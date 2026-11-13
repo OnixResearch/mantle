@@ -446,3 +446,10 @@ keeps every declared input addressable while a static leaf still reports an
 unused label. Suite result: 5 passed in the action tests, 27 passed in the
 recipe tests.
 
+A second full gate attempt on the healthy host after the final commits did not
+start: another user's long-lived `nix develop` holds that store, and flake
+evaluation there blocks even with `--offline`. The evidence for the final
+commits remains the targeted shell checks (package rustfmt, strict clippy,
+recipe 27, action tests 5); the last full canonical gate run is green at
+`46ec1ea40`.
+
