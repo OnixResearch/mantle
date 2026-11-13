@@ -1,0 +1,113 @@
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0 TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo test --release -p mantle --bin mantle source_observation::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.49s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 5 tests
+test source_observation::tests::absent_record_plans_an_add ... ok
+test source_observation::tests::conflicting_record_rejects_and_leaves_state_unchanged ... ok
+test source_observation::tests::explicit_git_provenance_binds_revision_and_never_backfills_legacy_facts ... ok
+test source_observation::tests::identical_record_reuses_without_writing ... ok
+test source_observation::tests::invalid_explicit_provenance_rejects_before_existing_state_changes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2945 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.29s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::observation_binding_is_covered_by_release_manifest_identity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::git_observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.53s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::git_observation_rejects_revision_and_projection_drift ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::validate_rejects_stale_observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.28s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::validate_rejects_stale_observation_payload_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::validate_rejects_relabeled_content_digest_as_observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.25s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::validate_rejects_relabeled_content_digest_as_observation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::validate_rejects_unsupported_observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.25s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::validate_rejects_unsupported_observation_schema_and_version ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::validate_rejects_observation_kind -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.64s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::validate_rejects_observation_kind_and_profile_drift ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib manifest::tests::validate_rejects_malformed_observation -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.61s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 1 test
+test manifest::tests::validate_rejects_malformed_observation_digests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s

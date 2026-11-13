@@ -72,6 +72,8 @@ use crate::source_built_fixed_point_trust_report::verify_cold_provider;
 use crate::source_built_fixed_point_trust_report::verify_cold_stage_artifacts;
 use crate::source_built_fixed_point_trust_report::verify_source_built_fixed_point_receipt;
 
+pub(crate) const PROVIDER_KIND_LINKAGE_FILE: &str = "provider-kind-linkage.json";
+const RELEASE_INPUTS_FILE: &str = "release-evidence-inputs.json";
 pub(crate) const PROVIDER_LINKAGE_SCHEMA: &str = "mantle-self-build-provider-kind-linkage-v1";
 pub(crate) const RELEASE_INPUTS_SCHEMA: &str = "mantle-source-built-fixed-point-release-inputs-v1";
 pub(crate) const STAGE1_PERTURBATION: &str = "normalized-host-control-a";
@@ -566,7 +568,7 @@ fn deterministic_receipt(
         hermeticity_mode: HERMETICITY_MODE.to_string(),
         workflow_version: PROOF_WORKFLOW.to_string(),
         selected_provider_kind: PROOF_PROVIDER_KIND.to_string(),
-        source_blake3: plan.source_authority_digest_blake3.clone(),
+        source_blake3: plan.receipt_contract.source_blake3.clone(),
         vendor_blake3: plan.receipt_contract.vendor_blake3.clone(),
         toolchain_provider_identity,
         toolchain_stage_roots: vec![
@@ -706,19 +708,19 @@ fn write_provider_kind_linkage(proof_root: &Path, plan: &SourceBuiltFixedPointPl
         },
         source_built_plan_digest_blake3: &plan.plan_digest_blake3,
     };
-    write_json_create_new(&proof_root.join(crate::source_built_fixed_point_shell::PROVIDER_KIND_LINKAGE_FILE), &linkage)
+    write_json_create_new(&proof_root.join(PROVIDER_KIND_LINKAGE_FILE), &linkage)
 }
 
 fn write_release_inputs(proof_root: &Path, closure_path: &str) -> Result<(), RunError> {
     let inputs = ReleaseEvidenceInputs {
         schema: RELEASE_INPUTS_SCHEMA,
         deterministic_proof: FINAL_RECEIPT_FILE,
-        provider_kind_linkage: crate::source_built_fixed_point_shell::PROVIDER_KIND_LINKAGE_FILE,
+        provider_kind_linkage: PROVIDER_KIND_LINKAGE_FILE,
         source_built_plan: PROOF_PLAN_FILE,
         toolchain_closure: closure_path,
         proof_bundle_digest: FINAL_BUNDLE_DIGEST_FILE,
     };
-    write_json_create_new(&proof_root.join(crate::source_built_fixed_point_shell::RELEASE_INPUTS_FILE), &inputs)
+    write_json_create_new(&proof_root.join(RELEASE_INPUTS_FILE), &inputs)
 }
 
 fn write_extended_receipt(

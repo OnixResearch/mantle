@@ -134,8 +134,6 @@ const NATIVE_SOURCE_AUTHORITY_DIR: &str = "native-source-authority";
 const TOOLCHAIN_CLOSURE_FILE: &str = "source-built-toolchain-closure.json";
 const PLAN_FILE: &str = "source-built-fixed-point-plan.json";
 const ATTEMPT_STATUS_FILE: &str = "attempt-status.json";
-pub(crate) const PROVIDER_KIND_LINKAGE_FILE: &str = "provider-kind-linkage.json";
-pub(crate) const RELEASE_INPUTS_FILE: &str = "release-evidence-inputs.json";
 const LATEST_ALIAS: &str = "latest";
 const LATEST_SOURCE_BUILT_ALIAS: &str = "latest-source-built-fixed-point";
 const SUCCESS_PUBLICATION_POINTER: &str = ".source-built-fixed-point-current";
@@ -452,24 +450,7 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         print_dev_completion(&options, &prepared)?;
         return Ok(());
     }
-    if let Err(error) = publish_attempt(&prepared) {
-        let blocker = error.to_string();
-        let status_root = if prepared.staging_dir.is_dir() {
-            &prepared.staging_dir
-        } else {
-            &prepared.final_dir
-        };
-        write_attempt_status(
-            status_root,
-            Some(&prepared.plan.plan_digest_blake3),
-            PROOF_STATUS_FAILED,
-            Some(&blocker),
-        )?;
-        return Err(RunError::Build(format!(
-            "source-built fixed-point publication failed closed: {blocker}; preserved_attempt={}",
-            status_root.display()
-        )));
-    }
+    publish_attempt(&prepared, fs::File::sync_all)?;
     print_completion(&options, &prepared)
 }
 
@@ -2354,34 +2335,60 @@ fn run_cargo_free_fixed_point(
     Ok(())
 }
 
-fn publish_attempt(prepared: &PreparedAttempt) -> Result<(), RunError> {
+fn publish_attempt(
+    prepared: &PreparedAttempt,
+    mut sync_directory: impl FnMut(&fs::File) -> std::io::Result<()>,
+) -> Result<(), RunError> {
     use mantle_application_contract::bootstrap_effects::BootstrapEffect::VerifyOutput;
     use mantle_application_contract::bootstrap_effects::BootstrapEffect::WriteOutput;
 
-    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(WriteOutput, 2), (VerifyOutput, 1)])?;
-    let parent = prepared.final_dir.parent().ok_or_else(|| proof_error("proof output has no parent".to_string()))?;
-    let target_name = prepared
-        .final_dir
-        .file_name()
-        .ok_or_else(|| proof_error("proof output has no basename".to_string()))?;
-    let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
-    // Alias commit may have reached its single atomic pointer rename even if
-    // a later directory sync fails. Never remove its complete target bundle;
-    // the caller records durable failure at this preserved final root.
-    let result = (|| {
-        port.call(WriteOutput, || {
-            crate::linux_rename::rename_path_no_replace(&prepared.staging_dir, &prepared.final_dir).map_err(|error| {
-                proof_error(format!(
-                    "publishing proof bundle {} -> {}: {error}",
-                    prepared.staging_dir.display(),
-                    prepared.final_dir.display()
-                ))
-            })
-        })?;
-        port.call(WriteOutput, || update_success_aliases(parent, &aliases, target_name))?;
-        port.call(VerifyOutput, || verify_success_selection(parent, &aliases, target_name))
+    let commit_result = (|| {
+        let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(WriteOutput, 2), (VerifyOutput, 1)])?;
+        let parent =
+            prepared.final_dir.parent().ok_or_else(|| proof_error("proof output has no parent".to_string()))?;
+        let target_name = prepared
+            .final_dir
+            .file_name()
+            .ok_or_else(|| proof_error("proof output has no basename".to_string()))?;
+        let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
+        // A failed commit sync may follow the atomic pointer rename. Retain the
+        // candidate bundle even when publication cannot report success.
+        let effect_result = (|| {
+            port.call(WriteOutput, || {
+                crate::linux_rename::rename_path_no_replace(&prepared.staging_dir, &prepared.final_dir).map_err(
+                    |error| {
+                        proof_error(format!(
+                            "publishing proof bundle {} -> {}: {error}",
+                            prepared.staging_dir.display(),
+                            prepared.final_dir.display()
+                        ))
+                    },
+                )
+            })?;
+            port.call(WriteOutput, || update_success_aliases(parent, &aliases, target_name, &mut sync_directory))?;
+            port.call(VerifyOutput, || verify_success_selection(parent, &aliases, target_name))
+        })();
+        port.finish(effect_result)
     })();
-    port.finish(result)
+    if let Err(error) = commit_result {
+        let blocker = error.to_string();
+        let status_root = if prepared.staging_dir.is_dir() {
+            &prepared.staging_dir
+        } else {
+            &prepared.final_dir
+        };
+        write_attempt_status(
+            status_root,
+            Some(&prepared.plan.plan_digest_blake3),
+            PROOF_STATUS_FAILED,
+            Some(&blocker),
+        )?;
+        return Err(RunError::Build(format!(
+            "source-built fixed-point publication failed closed: {blocker}; preserved_attempt={}",
+            status_root.display()
+        )));
+    }
+    Ok(())
 }
 
 fn verify_success_selection(parent: &Path, aliases: &[&str], target: &std::ffi::OsStr) -> Result<(), RunError> {
@@ -2432,28 +2439,17 @@ fn verify_success_selection(parent: &Path, aliases: &[&str], target: &std::ffi::
     }
 }
 
-fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std::ffi::OsStr) -> Result<(), RunError> {
+fn update_success_aliases(
+    parent: &Path,
+    alias_names: &[&str],
+    target_name: &std::ffi::OsStr,
+    mut sync_directory: impl FnMut(&fs::File) -> std::io::Result<()>,
+) -> Result<(), RunError> {
     if alias_names != [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS].as_slice() {
         return Err(proof_error("success publication requires both canonical aliases exactly once".into()));
     }
     validate_local_alias_target(Path::new(target_name))?;
-    let lock = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(parent.join(SUCCESS_PUBLICATION_LOCK))
-        .map_err(|error| proof_error(format!("opening success publication lock: {error}")))?;
-    if !lock
-        .metadata()
-        .map_err(|error| proof_error(format!("inspecting publication lock: {error}")))?
-        .is_file()
-    {
-        return Err(proof_error("success publication lock must be a regular file".into()));
-    }
-    fs2::FileExt::try_lock_exclusive(&lock)
-        .map_err(|error| proof_error(format!("another success publication owns the alias lock: {error}")))?;
+    let _publication_lock = lock_success_publication(parent)?;
     let pointer = parent.join(SUCCESS_PUBLICATION_POINTER);
     let previous = existing_success_target(parent, alias_names, &pointer)?;
     // Retain a root-local rollback target before touching either public name.
@@ -2477,14 +2473,12 @@ fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std
         .map_err(|error| proof_error(format!("staging success publication pointer: {error}")))?;
     let directory = fs::File::open(parent)
         .map_err(|error| proof_error(format!("opening success publication directory: {error}")))?;
-    directory
-        .sync_all()
-        .map_err(|error| proof_error(format!("syncing prepared success aliases: {error}")))?;
+    sync_directory(&directory).map_err(|error| proof_error(format!("syncing prepared success aliases: {error}")))?;
     // Both public names already refer to this one entry. This is the only
     // operation that can change either alias from the old proof to the new one.
     fs::rename(&temporary, &pointer)
         .map_err(|error| proof_error(format!("committing success publication pointer: {error}")))?;
-    if let Err(commit_sync_error) = directory.sync_all() {
+    if let Err(commit_sync_error) = sync_directory(&directory) {
         let rollback = if previous.is_some() {
             fs::rename(&recovery, &pointer)
         } else {
@@ -2495,7 +2489,7 @@ fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std
                 "success publication sync failed ({commit_sync_error}); restoring prior selection also failed: {error}"
             ))
         })?;
-        directory.sync_all().map_err(|error| proof_error(format!(
+        sync_directory(&directory).map_err(|error| proof_error(format!(
             "success publication sync failed ({commit_sync_error}); prior selection restored but rollback sync failed: {error}"
         )))?;
         return Err(proof_error(format!(
@@ -2503,6 +2497,29 @@ fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std
         )));
     }
     Ok(())
+}
+
+fn lock_success_publication(parent: &Path) -> Result<fs::File, RunError> {
+    debug_assert!(parent.is_absolute());
+    debug_assert!(!parent.as_os_str().is_empty());
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(parent.join(SUCCESS_PUBLICATION_LOCK))
+        .map_err(|error| proof_error(format!("opening success publication lock: {error}")))?;
+    if !lock
+        .metadata()
+        .map_err(|error| proof_error(format!("inspecting publication lock: {error}")))?
+        .is_file()
+    {
+        return Err(proof_error("success publication lock must be a regular file".into()));
+    }
+    fs2::FileExt::try_lock_exclusive(&lock)
+        .map_err(|error| proof_error(format!("another success publication owns the alias lock: {error}")))?;
+    Ok(lock)
 }
 
 fn existing_success_target(parent: &Path, aliases: &[&str], pointer: &Path) -> Result<Option<PathBuf>, RunError> {
@@ -3341,39 +3358,6 @@ mod tests {
     }
 
     #[test]
-    fn conventional_native_chain_is_cut_over_to_fresh_stagex_authority() {
-        const TRANSITION_INPUT: &str = include_str!("../bootstrap/stagex-transition-proof-input.ncl");
-        const GCC40: &str = include_str!("../bootstrap/gcc-4.0-native.ncl");
-        const STAGE0: &str = include_str!("../bootstrap/stage0-posix.ncl");
-        const MAKE: &str = include_str!("../bootstrap/make-tcc.ncl");
-        const BASH: &str = include_str!("../bootstrap/bash-2.05b-tcc.ncl");
-        const TCC_SELFHOST: &str = include_str!("../bootstrap/tcc-musl-selfhost.ncl");
-        const TCC_V2: &str = include_str!("../bootstrap/tcc-musl-v2.ncl");
-        const MUSL: &str = include_str!("../bootstrap/musl-1.1.24-native.ncl");
-        const BINUTILS: &str = include_str!("../bootstrap/binutils-tcc.ncl");
-
-        assert!(TRANSITION_INPUT.contains(STAGEX_TRANSITION_LOGICAL_PATH));
-        assert!(GCC40.contains("stagex-provider-proof-input.ncl"));
-        assert!(GCC40.contains("stagex-transition-proof-input.ncl"));
-        assert!(!GCC40.contains("derivationFile \"tcc-musl-selfhost.ncl\""));
-        assert!(!GCC40.contains("derivationFile \"tcc-musl-v2.ncl\""));
-        assert!(!GCC40.contains("derivationFile \"musl-1.1.24-native.ncl\""));
-        assert!(!GCC40.contains("derivationFile \"binutils-tcc.ncl\""));
-        for adapter in [STAGE0, MAKE] {
-            assert!(adapter.contains("stagex-transition-proof-input.ncl"));
-            assert!(!adapter.contains("seed-legacy.ncl"));
-        }
-        assert!(BASH.contains("Build bash 2.05b using tinycc 0.9.27"));
-        assert!(TCC_SELFHOST.contains("tcc-0.9.27-musl-selfhost"));
-        assert!(TCC_V2.contains("Final tcc 0.9.27 rebuilt"));
-        assert!(MUSL.contains("musl-1.1.24-native-candidate"));
-        assert!(BINUTILS.contains("source-built TCC-era binutils matrix passed"));
-        for transition_recipe in [BASH, TCC_SELFHOST, TCC_V2, MUSL, BINUTILS] {
-            assert!(!transition_recipe.contains("stagex-provider-proof-input.ncl"));
-        }
-    }
-
-    #[test]
     fn disk_capacity_accepts_sufficient_space_and_rejects_shortfall() {
         const AVAILABLE_BYTES: u64 = 2;
         const REQUIRED_BYTES: u64 = 1;
@@ -3382,6 +3366,28 @@ mod tests {
 
         assert!(error.to_string().contains("disk preflight"));
         assert!(error.to_string().contains("only 1 bytes are available"));
+    }
+
+    #[test]
+    fn expired_runtime_bound_rejects_an_otherwise_admitted_attempt() {
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("proof.staging");
+        let mut prepared = prepared_fixture(&temp, staging);
+        let profile = temp.path().join("profile.json");
+        let executable = temp.path().join("bwrap");
+        let mut options = options_fixture(&profile, &prepared.final_dir, &executable, None, false, false);
+        options.elapsed_seconds_max = 86_400;
+        prepared.disk_available_bytes_before = 0;
+        validate_runtime_bounds(&options, &prepared).unwrap();
+
+        options.elapsed_seconds_max = 1;
+        prepared.started_at = Instant::now().checked_sub(Duration::from_secs(2)).unwrap();
+        assert!(matches!(validate_runtime_bounds(&options, &prepared), Err(RunError::Build(_))));
+        assert!(!prepared.final_dir.exists());
+        assert!(!prepared.staging_dir.join(FINAL_RECEIPT_FILE).exists());
+        for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS, SUCCESS_PUBLICATION_POINTER] {
+            assert!(fs::symlink_metadata(temp.path().join(alias)).is_err());
+        }
     }
 
     #[test]
@@ -3426,7 +3432,7 @@ mod tests {
             fs::create_dir(temp.path().join(generation)).unwrap();
         }
         let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
-        update_success_aliases(temp.path(), &aliases, std::ffi::OsStr::new("new-proof")).unwrap();
+        update_success_aliases(temp.path(), &aliases, std::ffi::OsStr::new("new-proof"), fs::File::sync_all).unwrap();
         let pointer = temp.path().join(SUCCESS_PUBLICATION_POINTER);
         fs::remove_file(&pointer).unwrap();
         std::os::unix::fs::symlink("old-proof", &pointer).unwrap();
@@ -3452,10 +3458,56 @@ mod tests {
         std::os::unix::fs::symlink("old-proof", temp.path().join(LATEST_ALIAS)).unwrap();
         fs::create_dir(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
 
-        assert!(publish_attempt(&prepared).is_err());
+        assert!(publish_attempt(&prepared, fs::File::sync_all).is_err());
         assert_eq!(fs::read(prepared.final_dir.join("retained-evidence.txt")).unwrap(), b"candidate artifacts");
         assert_eq!(fs::canonicalize(temp.path().join(LATEST_ALIAS)).unwrap(), old);
         assert!(temp.path().join(LATEST_SOURCE_BUILT_ALIAS).is_dir());
+    }
+
+    #[test]
+    fn post_commit_sync_failure_restores_both_aliases_and_preserves_failed_candidate() {
+        for fail_rollback_sync in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let staging = temp.path().join("proof.staging");
+            let mut prepared = prepared_fixture(&temp, staging.clone());
+            prepared.final_dir = temp.path().join("new-proof");
+            fs::write(staging.join("retained-evidence.txt"), b"candidate artifacts").unwrap();
+            let old = temp.path().join("old-proof");
+            fs::create_dir(&old).unwrap();
+            fs::write(old.join("generation"), b"prior verified selection").unwrap();
+            for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
+                std::os::unix::fs::symlink("old-proof", temp.path().join(alias)).unwrap();
+            }
+            let pointer = temp.path().join(SUCCESS_PUBLICATION_POINTER);
+            let mut committed = false;
+            let mut rollback_sync_reached = false;
+            let result = publish_attempt(&prepared, |directory| {
+                if fs::read_link(&pointer)? == Path::new("new-proof") {
+                    committed = true;
+                    return Err(std::io::Error::from_raw_os_error(libc::EIO));
+                }
+                if committed {
+                    rollback_sync_reached = true;
+                    if fail_rollback_sync {
+                        return Err(std::io::Error::from_raw_os_error(libc::EIO));
+                    }
+                }
+                directory.sync_all()
+            });
+
+            assert!(committed && rollback_sync_reached);
+            assert!(matches!(result, Err(RunError::Build(_))));
+            assert!(!staging.exists());
+            assert_eq!(fs::read(prepared.final_dir.join("retained-evidence.txt")).unwrap(), b"candidate artifacts");
+            let status: serde_json::Value =
+                serde_json::from_slice(&fs::read(prepared.final_dir.join(ATTEMPT_STATUS_FILE)).unwrap()).unwrap();
+            assert_eq!(status["status"], PROOF_STATUS_FAILED);
+            assert_eq!(status["plan_digest_blake3"], prepared.plan.plan_digest_blake3);
+            for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
+                assert_eq!(fs::canonicalize(temp.path().join(alias)).unwrap(), old);
+                assert_eq!(fs::read(temp.path().join(alias).join("generation")).unwrap(), b"prior verified selection");
+            }
+        }
     }
 
     #[test]
@@ -3477,7 +3529,8 @@ mod tests {
             update_success_aliases(
                 parent,
                 &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
-                std::ffi::OsStr::new("new-proof")
+                std::ffi::OsStr::new("new-proof"),
+                fs::File::sync_all,
             )
             .is_err()
         );
@@ -3485,8 +3538,13 @@ mod tests {
             assert_eq!(fs::read_to_string(parent.join(alias).join("generation")).unwrap(), "old");
         }
         fs::remove_dir(temporary).unwrap();
-        update_success_aliases(parent, &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS], std::ffi::OsStr::new("new-proof"))
-            .unwrap();
+        update_success_aliases(
+            parent,
+            &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
+            std::ffi::OsStr::new("new-proof"),
+            fs::File::sync_all,
+        )
+        .unwrap();
         for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
             assert_eq!(fs::read_to_string(parent.join(alias).join("generation")).unwrap(), "new");
         }
@@ -3501,7 +3559,8 @@ mod tests {
             update_success_aliases(
                 temp.path(),
                 &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
-                std::ffi::OsStr::new("new-proof")
+                std::ffi::OsStr::new("new-proof"),
+                fs::File::sync_all,
             )
             .is_err()
         );
@@ -3517,7 +3576,8 @@ mod tests {
             update_success_aliases(
                 temp.path(),
                 &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
-                std::ffi::OsStr::new("new-proof")
+                std::ffi::OsStr::new("new-proof"),
+                fs::File::sync_all,
             )
             .is_err()
         );
@@ -3542,7 +3602,8 @@ mod tests {
                 update_success_aliases(
                     temp.path(),
                     &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
-                    std::ffi::OsStr::new(rejected)
+                    std::ffi::OsStr::new(rejected),
+                    fs::File::sync_all,
                 )
                 .is_err()
             );

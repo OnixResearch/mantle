@@ -1,0 +1,190 @@
++ date -Is
+2026-11-13T15:05:46-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0 TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo clippy --release -p mantle --bin mantle --tests --no-deps -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 1m 12s
++ cargo test --release -p mantle --lib source_built_fixed_point_trust_report::receipt_tests:: -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 37.22s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-c50137f7df399767)
+
+running 18 tests
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_another_declared_source_as_mantle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 0.20s
+
++ cargo test --release -p mantle --bin mantle source_built_fixed_point_trust_report::receipt_tests:: -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 5m 12s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 18 tests
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_another_declared_source_as_mantle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2943 filtered out; finished in 0.19s
+
++ RUSTFMT=/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustfmt
++ cargo fmt --check -p mantle -v
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/projects/shared-action-result-roundtrip/publish.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/resource_evidence_check.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/examples/resource_policy_replay.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/src/bin/mantle-protected-build-runner.rs"
+[lib (2024)] "/home/brittonr/git/OnixResearch/mantle/src/lib.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/src/main.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/android_apk.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/android_sources.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/android_sources_offline.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/cargo_build_bundle_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/causal_build_trace.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/demand_runtime.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/elf_dynamic_reference_scanner.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/elf_dynamic_relocation.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/finish_gates.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/gateway_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/integration.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/profile_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/release_gauntlet_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/resource_gateway_runtime.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/retention_interest_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/smoke.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/git/OnixResearch/mantle/examples/benchmark_compare.rs /home/brittonr/git/OnixResearch/mantle/examples/benchmark_eval_backends.rs /home/brittonr/git/OnixResearch/mantle/examples/benchmark_eval_smoke.rs /home/brittonr/git/OnixResearch/mantle/examples/benchmark_lazy_eval.rs /home/brittonr/git/OnixResearch/mantle/examples/benchmark_scheduler_priority.rs /home/brittonr/git/OnixResearch/mantle/examples/benchmark_suite.rs /home/brittonr/git/OnixResearch/mantle/examples/distributed_eval_assess.rs /home/brittonr/git/OnixResearch/mantle/examples/hardware_simulation_plan.rs /home/brittonr/git/OnixResearch/mantle/examples/picolibc_compare.rs /home/brittonr/git/OnixResearch/mantle/examples/projects/delta-substitution/demo.rs /home/brittonr/git/OnixResearch/mantle/examples/projects/release-witness-handoff/demo.rs /home/brittonr/git/OnixResearch/mantle/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/git/OnixResearch/mantle/examples/resource_evidence_check.rs /home/brittonr/git/OnixResearch/mantle/examples/resource_policy_replay.rs /home/brittonr/git/OnixResearch/mantle/src/bin/mantle-protected-build-runner.rs /home/brittonr/git/OnixResearch/mantle/src/lib.rs /home/brittonr/git/OnixResearch/mantle/src/main.rs /home/brittonr/git/OnixResearch/mantle/tests/android_apk.rs /home/brittonr/git/OnixResearch/mantle/tests/android_sources.rs /home/brittonr/git/OnixResearch/mantle/tests/android_sources_offline.rs /home/brittonr/git/OnixResearch/mantle/tests/attest_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/audit_support.rs /home/brittonr/git/OnixResearch/mantle/tests/benchmark_harness.rs /home/brittonr/git/OnixResearch/mantle/tests/bootstrap_eval.rs /home/brittonr/git/OnixResearch/mantle/tests/bootstrap_parity_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/bootstrap_validate_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/cargo_build_bundle_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/cargo_free_self_build_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/cargo_import_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/causal_build_trace.rs /home/brittonr/git/OnixResearch/mantle/tests/composition_root_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/demand_runtime.rs /home/brittonr/git/OnixResearch/mantle/tests/elf_dynamic_reference_scanner.rs /home/brittonr/git/OnixResearch/mantle/tests/elf_dynamic_relocation.rs /home/brittonr/git/OnixResearch/mantle/tests/evaluator_budget_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/example_projects.rs /home/brittonr/git/OnixResearch/mantle/tests/examples_build.rs /home/brittonr/git/OnixResearch/mantle/tests/examples_eval.rs /home/brittonr/git/OnixResearch/mantle/tests/examples_inventory.rs /home/brittonr/git/OnixResearch/mantle/tests/examples_workflow_gallery.rs /home/brittonr/git/OnixResearch/mantle/tests/finish_gates.rs /home/brittonr/git/OnixResearch/mantle/tests/foreign_import_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/freshness_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/gateway_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/identity_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/integration.rs /home/brittonr/git/OnixResearch/mantle/tests/integration_build.rs /home/brittonr/git/OnixResearch/mantle/tests/kernel_bundle_oci_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/kernelscript_experiment.rs /home/brittonr/git/OnixResearch/mantle/tests/lock_importer_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/machine_schema_contracts.rs /home/brittonr/git/OnixResearch/mantle/tests/nix_free_demo_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/offline_build_runbook_docs.rs /home/brittonr/git/OnixResearch/mantle/tests/offline_cargo_project.rs /home/brittonr/git/OnixResearch/mantle/tests/operator_diagnostics.rs /home/brittonr/git/OnixResearch/mantle/tests/pin_import_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/profile_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/project_build_smoke.rs /home/brittonr/git/OnixResearch/mantle/tests/project_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/project_refresh_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/release_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/release_gauntlet_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/remote_credentials_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs /home/brittonr/git/OnixResearch/mantle/tests/remote_rail_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/remote_stdio_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/remote_transfer_production.rs /home/brittonr/git/OnixResearch/mantle/tests/removed_system_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/resource_gateway_runtime.rs /home/brittonr/git/OnixResearch/mantle/tests/retention_interest_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/retention_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/rust_compatibility_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/rust_plan_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/scheduling_policy.rs /home/brittonr/git/OnixResearch/mantle/tests/self_hosting.rs /home/brittonr/git/OnixResearch/mantle/tests/smoke.rs /home/brittonr/git/OnixResearch/mantle/tests/source_bundle_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/source_bundle_hydration_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/stdlib_tests.rs /home/brittonr/git/OnixResearch/mantle/tests/store_archive_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/transactional_reconciliation_pilot.rs /home/brittonr/git/OnixResearch/mantle/tests/transcript_cli.rs /home/brittonr/git/OnixResearch/mantle/tests/trust_policy_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/tests/wasm_component_cli.rs /home/brittonr/git/OnixResearch/mantle/tools/generate_operator_command_contract.rs /home/brittonr/git/OnixResearch/mantle/tools/generate_portable_platform_profiles.rs
++ cargo build --release -p mantle --bin mantle
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 4m 47s
++ b3sum /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle
+9f82ff2e5e4e92cb62479bbbed437eb8214edca635e63ce7940e34dd16826a4f  /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle
++ /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle --version
+mantle 0.1.0
++ date -Is
+2026-11-13T15:17:42-05:00
++ status=0
++ printf 'verification_exit=%s\n' 0
+verification_exit=0
++ printf '%s\n' 0
++ exit 0

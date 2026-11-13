@@ -1,0 +1,664 @@
++ date -Is
+2026-11-13T12:35:51-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ export TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo test --release -p mantle --bin mantle cargo_free_self_build::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-store)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation-core)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-kernelscript-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-build)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-nix-gateway)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 7m 15s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 59 tests
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_ambiguous_units ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_missing_identity ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_names_root_unit_package_role_triple_and_predecessor ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_surfaces_nested_planner_blocker ... ok
+test cargo_free_self_build::tests::bundle_local_path_keeps_external_paths_absolute ... ok
+test cargo_free_self_build::tests::child_blocker_accepts_successful_guarded_execution ... ok
+test cargo_free_self_build::tests::child_blocker_fails_when_cargo_guard_was_invoked ... ok
+test cargo_free_self_build::tests::compatibility_probe_failure_with_explicit_closure_fails_closed ... ok
+test cargo_free_self_build::tests::compatibility_probe_uses_receipt_bound_path_for_explicit_closure ... ok
+test cargo_free_self_build::tests::effective_closure_keeps_absent_non_claim_without_provider ... ok
+test cargo_free_self_build::tests::effective_closure_prefers_explicit_manifest_over_provider_status ... ok
+test cargo_free_self_build::tests::effective_closure_uses_provider_only_when_manifest_absent ... ok
+test cargo_free_self_build::tests::fixed_point_plan_describes_stage_paths_and_commands ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_bundle_inside_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_relative_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_threads_targets_into_stage_commands ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_records_bundle_local_execution_path ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_rejects_undeclared_external_rustc_wrapper ... ok
+test cargo_free_self_build::tests::fixed_point_status_accepts_matching_policy_digest ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_presence_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_summary_keeps_closure_non_claim_even_when_policy_matches ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_explicit_complete_closure_claims ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_provider_supplies_claim ... ok
+test cargo_free_self_build::tests::fixed_point_summary_records_bundle_local_stage_paths ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_rejects_null_source_digest ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_requires_source_digest ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_informational_proof_audit_events ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_valid_bounded_bundle ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rebases_copied_bundle_stage_paths ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_bounded_non_claims ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_enforced_closure ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_non_strict_hermeticity_modes ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_protected_env_and_host_tool_degradation ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_stage_digest_mismatch ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_unapproved_proof_audit_event ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_materializes_declared_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_ambiguous_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_missing_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rewrites_response_file_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_c_compiler_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_linker_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_pkg_config_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_runtime_library_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_sysroot_leakage ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_linker_for_collect2 ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_pkg_config_only ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_target_prefixed_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_member_name_conflict ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_undeclared_nix_profile_tools ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_unsafe_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_env_omits_ambient_path_entries ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_rejects_prebuilt_provider_metadata ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_uses_validated_provider_rustc ... ok
+test cargo_free_self_build::tests::rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback ... ok
+test cargo_free_self_build::tests::rustc_wrapper_runs_with_posix_shell_and_preserves_remaining_args ... ok
+test cargo_free_self_build::tests::rustc_wrapper_script_strips_link_self_contained_runtime_args ... ok
+test cargo_free_self_build::tests::safe_path_component_replaces_unsafe_path_bytes ... ok
+test cargo_free_self_build::tests::self_build_non_claims_omit_closure_non_claim_when_provider_supplies_claim ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2891 filtered out; finished in 0.04s
+
++ cargo test --release -p mantle --bin mantle source_toolchain_closure::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.51s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 52 tests
+test source_toolchain_closure::tests::absent_closure_status_preserves_current_non_claim ... ok
+test source_toolchain_closure::tests::c_compiler_route_selection_prefers_single_clang_route ... ok
+test source_toolchain_closure::tests::c_compiler_route_selection_records_receipt_bound_identity ... ok
+test source_toolchain_closure::tests::c_compiler_route_selection_rejects_ambiguous_non_clang_routes ... ok
+test source_toolchain_closure::tests::enforced_complete_closure_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::enforced_seed_exception_closure_status_keeps_non_claim ... ok
+test source_toolchain_closure::tests::enforcement_accepts_declared_observed_toolchain_inputs ... ok
+test source_toolchain_closure::tests::enforcement_rejects_declared_path_with_digest_mismatch ... ok
+test source_toolchain_closure::tests::enforcement_rejects_undeclared_host_linker_path ... ok
+test source_toolchain_closure::tests::enforcement_rejects_undeclared_host_pkg_config_path ... ok
+test source_toolchain_closure::tests::enforcement_rejects_undeclared_host_rustc_path ... ok
+test source_toolchain_closure::tests::json_fixture_parses_seed_exception_and_counts_source_built_members ... ok
+test source_toolchain_closure::tests::native_materialization_builds_zero_seed_manifest_from_complete_candidates ... ok
+test source_toolchain_closure::tests::native_materialization_rejects_missing_host_runtime_members ... ok
+test source_toolchain_closure::tests::native_materialization_rejects_missing_target_helper_members ... ok
+test source_toolchain_closure::tests::policy_digest_changes_when_seed_exception_reason_changes ... ok
+test source_toolchain_closure::tests::provided_rust_provider_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::rust_source_provider_accepts_matching_receipt_payload ... ok
+test source_toolchain_closure::tests::rust_source_provider_bootstrap_plan_rejects_host_target_rustlib_aliasing ... ok
+test source_toolchain_closure::tests::rust_source_provider_bootstrap_plan_rejects_prebuilt_policy ... ok
+test source_toolchain_closure::tests::rust_source_provider_bootstrap_plan_rejects_unknown_stage_source ... ok
+test source_toolchain_closure::tests::rust_source_provider_bootstrap_plan_requires_final_roles ... ok
+test source_toolchain_closure::tests::rust_source_provider_bootstrap_plan_requires_ordered_stage_predecessors ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_bad_receipt_schema ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_digest_mismatch_from_shell_observation ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_host_rustlib_satisfied_by_target_path ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_missing_target_rustlib_role ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_prebuilt_provenance ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_prebuilt_source_name ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_provider_receipt_digest_link_mismatch ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_receipt_artifact_mismatch ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_receipt_digest_mismatch ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_receipt_with_prebuilt_step ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_rustlib_outside_lib_dir ... ok
+test source_toolchain_closure::tests::rust_source_provider_rejects_target_rustlib_satisfied_by_host_path ... ok
+test source_toolchain_closure::tests::seed_exception_policy_digest_is_order_independent_and_accounted ... ok
+test source_toolchain_closure::tests::valid_manifest_yields_stable_order_independent_policy_digest ... ok
+test source_toolchain_closure::tests::valid_rust_source_provider_bootstrap_plan_yields_stable_digest ... ok
+test source_toolchain_closure::tests::valid_rust_source_provider_metadata_yields_stable_digest ... ok
+test source_toolchain_closure::tests::validated_closure_status_keeps_claim_disabled_until_enforcement_lands ... ok
+test source_toolchain_closure::tests::validator_accepts_explicit_seed_exception ... ok
+test source_toolchain_closure::tests::validator_allows_seed_reason_with_marker_letters_inside_larger_word ... ok
+test source_toolchain_closure::tests::validator_rejects_duplicate_member_identity ... ok
+test source_toolchain_closure::tests::validator_rejects_invalid_digest_shape ... ok
+test source_toolchain_closure::tests::validator_rejects_invalid_optional_receipt_on_seed_member ... ok
+test source_toolchain_closure::tests::validator_rejects_invalid_optional_source_on_seed_member ... ok
+test source_toolchain_closure::tests::validator_rejects_missing_required_role ... ok
+test source_toolchain_closure::tests::validator_rejects_placeholder_seed_exception_reason ... ok
+test source_toolchain_closure::tests::validator_rejects_seed_member_without_seed_exception ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_member_without_receipt ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_rustc_with_prebuilt_source_marker ... ok
+test source_toolchain_closure::tests::validator_rejects_unverified_seed_exception_name ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2898 filtered out; finished in 0.00s
+
++ cargo test --release -p mantle --bin mantle self_build::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.33s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 172 tests
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_ambiguous_units ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_missing_identity ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_names_root_unit_package_role_triple_and_predecessor ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_surfaces_nested_planner_blocker ... ok
+test cargo_free_self_build::tests::bundle_local_path_keeps_external_paths_absolute ... ok
+test cargo_free_self_build::tests::child_blocker_accepts_successful_guarded_execution ... ok
+test cargo_free_self_build::tests::child_blocker_fails_when_cargo_guard_was_invoked ... ok
+test cargo_free_self_build::tests::compatibility_probe_failure_with_explicit_closure_fails_closed ... ok
+test cargo_free_self_build::tests::compatibility_probe_uses_receipt_bound_path_for_explicit_closure ... ok
+test cargo_free_self_build::tests::effective_closure_keeps_absent_non_claim_without_provider ... ok
+test cargo_free_self_build::tests::effective_closure_prefers_explicit_manifest_over_provider_status ... ok
+test cargo_free_self_build::tests::effective_closure_uses_provider_only_when_manifest_absent ... ok
+test cargo_free_self_build::tests::fixed_point_plan_describes_stage_paths_and_commands ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_bundle_inside_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_relative_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_threads_targets_into_stage_commands ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_records_bundle_local_execution_path ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_rejects_undeclared_external_rustc_wrapper ... ok
+test cargo_free_self_build::tests::fixed_point_status_accepts_matching_policy_digest ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_presence_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_summary_keeps_closure_non_claim_even_when_policy_matches ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_explicit_complete_closure_claims ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_provider_supplies_claim ... ok
+test cargo_free_self_build::tests::fixed_point_summary_records_bundle_local_stage_paths ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_rejects_null_source_digest ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_requires_source_digest ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_informational_proof_audit_events ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_valid_bounded_bundle ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rebases_copied_bundle_stage_paths ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_bounded_non_claims ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_enforced_closure ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_non_strict_hermeticity_modes ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_protected_env_and_host_tool_degradation ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_stage_digest_mismatch ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_unapproved_proof_audit_event ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_materializes_declared_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_ambiguous_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_missing_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rewrites_response_file_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_c_compiler_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_linker_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_pkg_config_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_runtime_library_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_sysroot_leakage ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_linker_for_collect2 ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_pkg_config_only ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_target_prefixed_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_member_name_conflict ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_undeclared_nix_profile_tools ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_unsafe_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_env_omits_ambient_path_entries ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_rejects_prebuilt_provider_metadata ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_uses_validated_provider_rustc ... ok
+test cargo_free_self_build::tests::rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback ... ok
+test cargo_free_self_build::tests::rustc_wrapper_runs_with_posix_shell_and_preserves_remaining_args ... ok
+test cargo_free_self_build::tests::rustc_wrapper_script_strips_link_self_contained_runtime_args ... ok
+test cargo_free_self_build::tests::safe_path_component_replaces_unsafe_path_bytes ... ok
+test cargo_free_self_build::tests::self_build_non_claims_omit_closure_non_claim_when_provider_supplies_claim ... ok
+test self_build::tests::absolutize_path_makes_relative_path_absolute ... ok
+test self_build::tests::activate_bwrap_source_prepends_host_parent_dir ... ok
+test self_build::tests::bootstrap_gcc_ncl_records_deterministic_policy ... ok
+test self_build::tests::bootstrap_gcc_ncl_replaces_host_time_touches_with_deterministic_touches ... ok
+test self_build::tests::build_bwrap_path_entries_adds_wrapper_after_source ... ok
+test self_build::tests::build_bwrap_path_entries_deduplicates_wrapper ... ok
+test self_build::tests::bwrap_source_bin_dir_uses_parent_for_host_fallback ... ok
+test self_build::tests::bwrap_source_display_roundtrip_crunch_built ... ok
+test self_build::tests::bwrap_source_display_roundtrip_declared_seed ... ok
+test self_build::tests::bwrap_source_display_roundtrip_host_fallback ... ok
+test self_build::tests::bwrap_source_is_mantle_built_predicate ... ok
+test self_build::tests::bwrap_source_parse_rejects_garbage ... ok
+test self_build::tests::choose_host_bwrap_path_falls_back_to_path ... ok
+test self_build::tests::choose_host_bwrap_path_prefers_wrapper ... ok
+test self_build::tests::copy_selected_source_tree_copies_only_allowlisted_entries ... ok
+test self_build::tests::declared_seed_bootstrap_tools_reject_shell_digest_drift ... ok
+test self_build::tests::declared_seed_bootstrap_tools_select_inventory_bwrap_and_shell ... ok
+test self_build::tests::denied_seccomp_events_do_not_fail_eligibility ... ok
+test self_build::tests::dir_size_basic ... ok
+test self_build::tests::enforce_source_resolution_policy_rejects_checkout_fallback_in_strict_later_stage ... ok
+test self_build::tests::find_crunch_busybox_finds_executable ... ok
+test self_build::tests::find_crunch_busybox_ignores_wrong_suffix ... ok
+test self_build::tests::find_crunch_busybox_returns_none_for_empty_store ... ok
+test self_build::tests::find_crunch_bwrap_finds_executable_in_store ... ok
+test self_build::tests::find_crunch_bwrap_ignores_non_executable ... ok
+test self_build::tests::find_crunch_bwrap_ignores_wrong_name_suffix ... ok
+test self_build::tests::find_crunch_bwrap_returns_none_for_empty_store ... ok
+test self_build::tests::find_crunch_outputs_empty_store ... ok
+test self_build::tests::find_crunch_outputs_finds_matching_dirs ... ok
+test self_build::tests::find_crunch_outputs_skips_without_binary ... ok
+test self_build::tests::find_executable_on_path_finds_binary_in_tempdir ... ok
+test self_build::tests::find_executable_on_path_returns_none_for_nonexistent ... ok
+test self_build::tests::find_executable_on_path_skips_non_executable_in_tempdir ... ok
+test self_build::tests::generate_ncl_fails_missing_bootstrap_alias_before_cargo ... ok
+test self_build::tests::generate_ncl_has_all_bootstrap_deps ... ok
+test self_build::tests::generate_ncl_has_build_essentials ... ok
+test self_build::tests::generate_ncl_has_exact_bwrap_and_busybox_paths ... ok
+test self_build::tests::generate_ncl_has_source_path ... ok
+test self_build::tests::generate_ncl_keeps_cargo_visible_values_stable_across_tool_store_paths ... ok
+test self_build::tests::generate_ncl_respects_store_prefix ... ok
+test self_build::tests::generate_ncl_rustc_wrapper_remaps_paths_without_rewriting_build_script_io ... ok
+test self_build::tests::generate_ncl_source_is_plain_input ... ok
+test self_build::tests::generate_ncl_uses_exact_bootstrap_inputs_without_glob_discovery ... ok
+test self_build::tests::generate_ncl_uses_nix_store_env_var ... ok
+test self_build::tests::generate_ncl_uses_stable_bootstrap_aliases_for_cargo_visible_paths ... ok
+test self_build::tests::generate_ncl_uses_staged_vendor_config ... ok
+test self_build::tests::host_fallback_events_fail_eligibility ... ok
+test self_build::tests::host_gcc_in_seccomp_events_fails_eligibility ... ok
+test self_build::tests::invalidate_crunch_outputs_noop_on_empty_store ... ok
+test self_build::tests::invalidate_crunch_outputs_removes_dirs ... ok
+test self_build::tests::is_executable_false_for_plain_file ... ok
+test self_build::tests::is_executable_true_for_real_binary ... ok
+test self_build::tests::legacy_fetch_provider_fails_stagex_eligibility ... ok
+test self_build::tests::legacy_provider_exec_path_fails_eligibility ... ok
+test self_build::tests::missing_protected_transition_fails_eligibility ... ok
+test self_build::tests::missing_stagex_metadata_fails_eligibility ... ok
+test self_build::tests::nix_store_in_seccomp_events_fails_eligibility ... ok
+test self_build::tests::prepare_self_build_source_rejects_source_outside_store_dir ... ok
+test self_build::tests::prepare_self_build_source_reuses_exact_staged_source ... ok
+test self_build::tests::prepend_to_path_adds_dir_first ... ok
+test self_build::tests::prepend_to_path_handles_empty_path ... ok
+test self_build::tests::protected_phase_transition_hashes_selected_tools ... ok
+test self_build::tests::report_format_roundtrip_with_busybox ... ok
+test self_build::tests::report_format_roundtrip_with_declared_seed_bwrap ... ok
+test self_build::tests::report_format_roundtrip_with_protected_transition ... ok
+test self_build::tests::report_format_roundtrip_with_stagex_metadata ... ok
+test self_build::tests::report_format_roundtrip_without_busybox ... ok
+test self_build::tests::report_parse_ignores_non_report_proof_lines ... ok
+test self_build::tests::report_parse_rejects_false_zero_live_fetch_claim ... ok
+test self_build::tests::report_parse_returns_none_for_empty_input ... ok
+test self_build::tests::report_parse_returns_none_for_partial_input ... ok
+test self_build::tests::require_checked_vendor_inputs_accepts_git_package_without_registry_checksum ... ok
+test self_build::tests::require_checked_vendor_inputs_accepts_matching_vendor_tree ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_extra_vendored_package ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_file_checksum_mismatch ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_malformed_lock_quote_without_panic ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_missing_locked_package ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_missing_vendor_config ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_non_vendored_directory_target ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_package_checksum_mismatch ... ok
+test self_build::tests::require_checked_vendor_inputs_rejects_registry_package_without_lock_checksum ... ok
+test self_build::tests::required_tools_count_is_exact ... ok
+test self_build::tests::required_tools_includes_bwrap_and_busybox ... ok
+test self_build::tests::resolve_bwrap_source_errors_without_host_bwrap_on_controlled_path ... ok
+test self_build::tests::resolve_bwrap_source_falls_back_to_controlled_host_path ... ok
+test self_build::tests::resolve_bwrap_source_prefers_crunch_built ... ok
+test self_build::tests::resolve_bwrap_source_strict_rejects_host_fallback_once_bootstrap_root_exists ... ok
+test self_build::tests::resolve_explicit_bootstrap_busybox_path_ignores_stale_sibling ... ok
+test self_build::tests::resolve_explicit_bootstrap_busybox_path_rejects_path_outside_store ... ok
+test self_build::tests::resolve_explicit_bootstrap_bwrap_source_accepts_exact_store_binary ... ok
+test self_build::tests::resolve_explicit_bootstrap_bwrap_source_ignores_stale_sibling ... ok
+test self_build::tests::resolve_single_root_output_dir_rejects_multiple_matches ... ok
+test self_build::tests::resolve_single_root_output_dir_uses_root_labels ... ok
+test self_build::tests::resolve_store_entry_name_uses_exact_store_child ... ok
+test self_build::tests::run_cmd_reports_failure ... ok
+test self_build::tests::self_build_step_count_is_four ... ok
+test self_build::tests::source_root_provider_fails_stagex_eligibility ... ok
+test self_build::tests::staged_source_path_policy_matches_release_archive_policy ... ok
+test self_build::tests::staged_source_path_policy_rejects_unsafe_relative_paths ... ok
+test self_build::tests::stagex_eligible_report_passes_validation ... ok
+test self_build::tests::tree_fingerprint_changes_with_content ... ok
+test self_build::tests::tree_fingerprint_changes_with_mode_bits ... ok
+test self_build::tests::tree_fingerprint_changes_with_same_size_content ... ok
+test self_build::tests::tree_fingerprint_deterministic ... ok
+test self_build::tests::validate_bootstrap_tools_errors_on_missing_file ... ok
+test self_build::tests::validate_bootstrap_tools_errors_on_partial ... ok
+test self_build::tests::validate_bootstrap_tools_passes_when_present ... ok
+test self_build::tests::validate_staged_source_dir_rejects_missing_lib_dir ... ok
+test self_build::tests::validate_staged_source_dir_rejects_tampered_contents ... ok
+test self_build::tests::verify_tools_on_disk_error_names_bwrap_ncl ... ok
+test self_build::tests::verify_tools_on_disk_errors_on_empty_store ... ok
+test self_build::tests::verify_tools_on_disk_errors_without_busybox ... ok
+test self_build::tests::verify_tools_on_disk_succeeds_with_both ... ok
+
+test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2778 filtered out; finished in 0.06s
+
++ cargo test --release -p mantle --bin mantle source_built_fixed_point_action_trust::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.58s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 20 tests
+test source_built_fixed_point_action_trust::tests::accepted_failed_probe_grants_only_actual_outputs_and_rejects_status_drift ... ok
+test source_built_fixed_point_action_trust::tests::complete_producer_inventory_admits_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::guarded_actual_status_controls_execution_and_authenticated_phase_outcome ... ok
+test source_built_fixed_point_action_trust::tests::guarded_decision_rejects_forged_false_missing_duplicate_and_execution_claims ... ok
+test source_built_fixed_point_action_trust::tests::guarded_phase_outcome_cannot_be_forged_or_observed_before_decision ... ok
+test source_built_fixed_point_action_trust::tests::mandatory_stage_product_cannot_escape_coverage_through_a_guard ... ok
+test source_built_fixed_point_action_trust::tests::partial_producer_inventory_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::pending_producer_event_coverage_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::publication_without_a_child_requires_its_real_build_event_not_a_fictional_launch ... ok
+test source_built_fixed_point_action_trust::tests::reconciles_synthetic_six_action_graph_without_proof_claim ... ok
+test source_built_fixed_point_action_trust::tests::rejects_foreign_root_even_with_recomputed_action_plan_digest ... ok
+test source_built_fixed_point_action_trust::tests::rejects_incomplete_adapter_and_path_only_generated_authority ... ok
+test source_built_fixed_point_action_trust::tests::rejects_input_consumption_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_measured_source_and_generated_input_digest_drift ... ok
+test source_built_fixed_point_action_trust::tests::rejects_missing_producer_edges_nonlocal_actions_and_tampered_plan ... ok
+test source_built_fixed_point_action_trust::tests::rejects_repeated_outputs_before_and_after_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_live_event_identity_and_latches_failure ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_missing_drift_remote_cache_and_effect_events ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_output_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::requires_protected_and_build_events_for_supervised_action ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 2930 filtered out; finished in 0.01s
+
++ cargo test --release -p crunch-release-core --lib determinism::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling cc v1.2.59
+   Compiling serde_json v1.0.149
+   Compiling zeroize v1.9.0
+   Compiling subtle v2.6.1
+   Compiling signature v2.2.0
+   Compiling ed25519 v2.2.3
+   Compiling blake3 v1.8.5
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling memchr v2.8.0
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling quote v1.0.45
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling ed25519-dalek v2.2.0
+   Compiling serde v1.0.228
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-source-core)
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-release-core)
+    Finished `release` profile [optimized] target(s) in 45.45s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 22 tests
+test determinism::tests::deterministic_receipt_accepts_policy_informational_audit_events ... ok
+test determinism::tests::deterministic_receipt_accepts_strict_matching_runs ... ok
+test determinism::tests::deterministic_receipt_blocks_degraded_audit_even_when_effect_is_declared ... ok
+test determinism::tests::deterministic_receipt_blocks_impure_mode ... ok
+test determinism::tests::deterministic_receipt_blocks_missing_or_unsupported_normalization_controls ... ok
+test determinism::tests::deterministic_receipt_blocks_reused_output_store_identity ... ok
+test determinism::tests::deterministic_receipt_blocks_unknown_audit_events_closed_by_default ... ok
+test determinism::tests::deterministic_receipt_canonical_bytes_are_stable ... ok
+test determinism::tests::deterministic_receipt_rejects_digest_drift ... ok
+test determinism::tests::deterministic_receipt_rejects_missing_effect_observations ... ok
+test determinism::tests::deterministic_receipt_rejects_provider_kind_mismatch ... ok
+test determinism::tests::deterministic_receipt_rejects_undeclared_observed_effects ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_effect_policy ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_sandbox_profile ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_workflow_version ... ok
+test determinism::tests::deterministic_release_claim_rejects_failed_isolation_evidence ... ok
+test determinism::tests::deterministic_release_claim_rejects_missing_isolation_check ... ok
+test determinism::tests::deterministic_release_claim_rejects_profile_family_mismatch ... ok
+test determinism::tests::deterministic_release_claim_requires_exact_digest_set ... ok
+test determinism::tests::deterministic_release_claim_requires_isolation_evidence ... ok
+test determinism::tests::deterministic_sandbox_isolation_evidence_canonical_bytes_sort_checks ... ok
+test determinism::tests::legacy_path_bound_receipt_remains_parseable_but_non_promoting ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.00s
+
++ cargo test --release -p crunch-release-core --lib genuine_rebuild::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.28s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_release_core-9e59f14a418f6533)
+
+running 6 tests
+test genuine_rebuild::tests::authority_plan_accepts_declared_content_bound_inputs ... ok
+test genuine_rebuild::tests::authority_plan_blocks_reused_and_overlapping_roots ... ok
+test genuine_rebuild::tests::authority_plan_blocks_target_copy_alias_and_symlink ... ok
+test genuine_rebuild::tests::authority_plan_blocks_whole_bundle_prior_and_ordinary_outputs ... ok
+test genuine_rebuild::tests::descriptor_digest_changes_for_every_authority_identity_drift ... ok
+test genuine_rebuild::tests::descriptor_rejects_stale_argument_digest_and_single_run ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.00s
+
++ cargo test --release -p mantle --test release_cli -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 7m 01s
+     Running tests/release_cli.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/release_cli-4f4b1ef16f55abbb)
+
+running 154 tests
+test attest_key_show_explicit_signing_key_prints_trusted_public_key ... ok
+test attest_key_show_missing_signing_key_fails_without_generation ... ok
+test attest_key_show_uses_default_config_signing_key ... ok
+test attest_policy_init_force_atomically_replaces_compatibility_policy ... ok
+test attest_policy_init_optional_witness_writes_zero_threshold_policy ... ok
+test attest_policy_init_rejects_existing_policy_without_force ... ok
+test attest_policy_init_rejects_invalid_new_profile_parameters_without_files ... ok
+test attest_policy_init_self_proof_only_writes_policy_files ... ok
+test attest_policy_init_single_witness_writes_policy_files ... ok
+test attest_policy_init_witness_quorum_writes_explicit_threshold_and_selector ... ok
+test attest_release_show_prints_release_attestation_envelope ... ok
+test attest_release_verify_accepts_matching_agreement_attachment ... ok
+test attest_release_verify_classifies_invalid_optional_witness_without_policy_failure ... ok
+test attest_release_verify_classifies_invalid_signature_witness ... ok
+test attest_release_verify_classifies_malformed_witness_environment ... ok
+test attest_release_verify_classifies_revoked_witness ... ok
+test attest_release_verify_keeps_multiple_optional_witnesses_without_quorum_claim ... ok
+test attest_release_verify_rejects_duplicate_agreement_attachment ... ok
+test attest_release_verify_rejects_invalid_release_signature ... ok
+test attest_release_verify_rejects_mismatched_agreement_attachment ... ok
+test attest_release_verify_reports_optional_witness_quorum_not_required ... ok
+test attest_release_verify_reports_policy_insufficient_for_untrusted_witness_identity ... ok
+test attest_release_verify_reports_policy_insufficient_for_wrong_release_digest_witness ... ok
+test attest_release_verify_reports_two_independent_witness_agreement ... ok
+test attest_release_verify_reports_unsatisfied_for_same_host_class ... ok
+test attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_holds ... ok
+test attest_witness_create_prints_human_summary_without_json ... ok
+test attest_witness_create_rejects_rebuilt_binary_count_mismatch ... ok
+test attest_witness_create_rejects_too_long_identity ... ok
+test attest_witness_create_writes_signed_witness_attestation ... ok
+test attest_witness_show_and_release_verify_report_quorum_satisfied ... ok
+test bootstrap_capabilities_reports_honest_public_status ... ok
+test cross_machine_witness_handoff_reports_quorum_satisfied ... ok
+test function_address_binding_cli_accepts_optional_valence_without_kamacite ... ok
+test function_address_binding_cli_emits_cairn_ready_required_receipt ... ok
+test function_address_binding_cli_negative_fixture_matrix_fails_closed ... ok
+test function_address_binding_cli_preserves_overclaim_rejection_receipt ... ok
+test function_address_binding_cli_rejects_stale_kamacite_logical_link ... ok
+test function_address_binding_cli_rejects_stale_valence_bytes_before_output ... ok
+test function_address_preserves_binding_cli_accepts_optional_without_json_projection ... ok
+test function_address_preserves_binding_cli_emits_required_receipt ... ok
+test function_address_preserves_binding_cli_negative_fixture_matrix_fails_closed ... ok
+test onix_release_profile_accepts_measured_handoff_and_strict_deterministic_evidence ... ok
+test onix_release_profile_rejects_missing_cairn_and_strict_deterministic_evidence ... ok
+test onix_release_profile_rejects_practical_and_impure_deterministic_receipts ... ok
+test release_attest_honors_json_output ... ok
+test release_attest_writes_signed_release_attestation_and_default_dir ... ok
+test release_create_and_verify_cairn_handoff_through_cli ... ok
+test release_create_and_verify_external_evidence_sidecar ... ok
+test release_create_and_verify_stack_provenance_sidecar ... ok
+test release_create_can_package_optional_reproducibility_report ... ok
+test release_create_can_package_provider_fixed_point_proof ... ok
+test release_create_fails_when_proof_bundle_is_missing ... ok
+test release_create_records_git_source_metadata ... ok
+test release_create_rejects_conflicting_source_acquisition_flags ... ok
+test release_create_rejects_directory_symlink_escape_without_external_writes ... ok
+test release_create_rejects_git_source_url_without_commit ... ok
+test release_create_rejects_invalid_provider_fixed_point_proof ... ok
+test release_create_rejects_precreated_empty_destination_without_mutation ... ok
+test release_create_rejects_prerequisite_only_proof_bundle ... ok
+test release_create_without_reproducibility_report_stays_ordinary_bundle ... ok
+test release_manifest_schema_constant_matches_fixture_expectation ... ok
+test release_nix_witness_defaults_receipt_into_bundle_without_an_explicit_destination ... ok
+test release_nix_witness_keeps_legacy_path_bound_receipt_non_promoting ... ok
+test release_nix_witness_rejects_deterministic_proof_source_drift ... ok
+test release_nix_witness_rejects_missing_mantle_deterministic_proof ... ok
+test release_nix_witness_require_match_fails_closed_on_digest_mismatch ... ok
+test release_nix_witness_writes_match_receipt_from_located_nix_artifacts ... ok
+test release_nix_witness_writes_mismatch_receipt_without_promoting_proof_class ... ok
+test release_reproduce_fails_closed_without_deterministic_proof_sandbox ... ok
+test release_reproduce_fails_on_byte_length_drift ... ok
+test release_reproduce_fails_on_digest_drift ... ok
+test release_reproduce_fails_on_output_name_drift ... ok
+test release_reproduce_fails_when_rebuilt_artifact_is_missing ... ok
+test release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release ... ok
+test release_reproduce_rejects_copy_hardlink_and_symlink_target_aliases ... ok
+test release_reproduce_rejects_direct_target_copy_authority_before_proof ... ok
+test release_reproduce_rejects_matched_rebuild_with_oversized_output ... ok
+test release_reproduce_rejects_recipe_bundle_authority_before_sandbox ... ok
+test release_reproduce_rejects_unknown_workflow_version ... ok
+test release_reproduce_rejects_whole_bundle_prior_and_ordinary_output_inputs ... ok
+test release_reproduce_writes_deterministic_proof_from_repeated_clean_runs ... ok
+test release_reproduce_writes_matched_report_from_isolated_rebuild_output ... ok
+test release_verify_blocks_bundled_deterministic_proof_digest_mismatch ... ok
+test release_verify_fails_when_binary_artifact_is_missing ... ok
+test release_verify_fails_when_prerequisite_inventory_is_missing ... ok
+test release_verify_fails_when_proof_bundle_directory_is_missing ... ok
+test release_verify_fails_when_source_archive_is_missing ... ok
+test release_verify_human_rejects_missing_required_reproducibility_without_success_marker ... ok
+test release_verify_human_rejects_unsatisfied_stagex_without_success_marker ... ok
+test release_verify_json_rejects_external_role_count_above_fixed_limit ... ok
+test release_verify_json_rejects_missing_required_deterministic_proof_once ... ok
+test release_verify_json_rejects_missing_required_external_role_once ... ok
+test release_verify_json_rejects_missing_required_provider_proof_once ... ok
+test release_verify_json_rejects_missing_required_stack_provenance_once ... ok
+test release_verify_json_rejects_unsatisfied_stagex_policy_once ... ok
+test release_verify_json_reports_absent_reproducibility ... ok
+test release_verify_json_reports_matched_reproducibility ... ok
+test release_verify_json_reports_mismatched_reproducibility ... ok
+test release_verify_keeps_legacy_path_bound_receipt_non_promoting ... ok
+test release_verify_provider_fixed_point_external_override_reports_source ... ok
+test release_verify_rejects_claim_boundary_violation ... ok
+test release_verify_rejects_compiler_cache_receipts_as_deterministic_rebuild_evidence ... ok
+test release_verify_rejects_compiler_cache_receipts_as_provider_stage_execution ... ok
+test release_verify_rejects_corrupted_bundled_deterministic_proof_file ... ok
+test release_verify_rejects_fake_proof_bundle_even_if_manifest_digest_matches ... ok
+test release_verify_rejects_manifest_schema_mismatch ... ok
+test release_verify_rejects_missing_bundled_deterministic_proof_file ... ok
+test release_verify_rejects_missing_workflow_provenance ... ok
+test release_verify_rejects_non_canonical_reproducibility_report ... ok
+test release_verify_rejects_noncanonical_deterministic_isolation_evidence ... ok
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+test release_verify_rejects_reproducibility_report_artifact_set_mismatch ... ok
+test release_verify_rejects_reproducibility_report_linkage_mismatch ... ok
+test release_verify_rejects_stale_cairn_policy_through_cli ... ok
+test release_verify_rejects_tampered_cairn_handoff_through_cli ... ok
+test release_verify_reports_external_deterministic_override_source ... ok
+test release_verify_reports_matched_reproducibility_report ... ok
+test release_verify_reports_required_deterministic_release_from_artifacts ... ok
+test release_verify_require_deterministic_release_rejects_missing_isolation_evidence ... ok
+test release_verify_require_reproducible_accepts_matched_report ... ok
+test release_verify_require_reproducible_fails_when_report_absent ... ok
+test release_verify_required_provider_fixed_point_fails_when_missing ... ok
+test release_verify_required_provider_fixed_point_uses_bundled_proof ... ok
+test release_verify_required_stack_provenance_fails_when_missing ... ok
+test release_verify_requires_bundled_deterministic_artifacts_when_no_override_is_supplied ... ok
+test release_verify_source_review_is_optional_until_explicitly_required ... ok
+test release_verify_strict_requirement_coverage_accepts_typed_bundle_evidence ... ok
+test release_verify_strict_requirement_coverage_rejects_legacy_only_bundle ... ok
+test release_verify_succeeds_using_bundle_local_contents_only ... ok
+test release_verify_uses_bundle_local_deterministic_release_artifacts ... ok
+test witness_export_rejects_release_id_mismatch ... ok
+test witness_export_writes_request_directory ... ok
+test witness_import_accepts_directory_source_and_skips_exact_duplicates ... ok
+test witness_import_rejects_conflicting_duplicate_identity ... ok
+test witness_import_rejects_missing_signature_sidecar ... ok
+test witness_import_rejects_wrong_release_attestation_digest ... ok
+test witness_rebuild_cli_check_is_preflight_only ... ok
+test witness_rebuild_cli_happy_path_writes_sidecars_and_audit ... ok
+test witness_rebuild_cli_rejects_published_output_name_mismatch_before_running_driver ... ok
+test witness_rebuild_cli_rejects_request_paths_that_escape_request_dir ... ok
+test witness_rebuild_cli_rejects_symlinked_helper_owned_scratch_entry_before_launching_driver ... ok
+test witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver ... ok
+test witness_rebuild_cli_rejects_unmatched_rebuilt_output_digest ... ok
+test witness_rebuild_cli_rejects_unsupported_workflow_before_running_driver ... ok
+test witness_rebuild_helper_check_accepts_provider_bound_inputs ... ok
+test witness_rebuild_helper_check_is_preflight_only ... ok
+test witness_rebuild_helper_happy_path_writes_sidecars_and_audit ... ok
+test witness_rebuild_helper_provider_bound_driver_passes_default_target ... ok
+test witness_rebuild_helper_rejects_empty_provider_target ... ok
+test witness_rebuild_helper_rejects_incomplete_provider_bound_inputs ... ok
+test witnessed_self_hosting_rebuild_workflow_reports_quorum_satisfied ... ok
+test witnessed_self_hosting_release_workflow_reports_quorum_satisfied ... ok
+test witnessed_self_hosting_release_workflow_with_generated_keys_and_key_show_reports_quorum_satisfied ... ok
+
+test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.20s
+
++ cargo test --release -p mantle --test bootstrap_parity_cli -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 5.08s
+     Running tests/bootstrap_parity_cli.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/bootstrap_parity_cli-bd054267406a171d)
+
+running 21 tests
+test bootstrap_capabilities_report_missing_host_tools_without_process_path ... ok
+test bootstrap_parity_report_accepts_independently_receipted_early_native_rows ... ok
+test bootstrap_parity_report_emits_json_gap_report ... ok
+test bootstrap_parity_report_keeps_stale_final_native_evidence_partial ... ok
+test bootstrap_parity_report_preserves_absolute_missing_derivation_paths ... ok
+test bootstrap_parity_report_rejects_corrupt_predecessor_attestation ... ok
+test bootstrap_parity_report_rejects_cross_row_final_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_cross_row_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_forbidden_host_tool_discovery ... ok
+test bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes ... ok
+test bootstrap_parity_report_rejects_malformed_row_receipt ... ok
+test bootstrap_parity_report_rejects_missing_final_runtime_member ... ok
+test bootstrap_parity_report_rejects_missing_output_artifact_evidence ... ok
+test bootstrap_parity_report_rejects_stale_generated_artifact_status ... ok
+test bootstrap_parity_report_rejects_stale_row_source_digest ... ok
+test bootstrap_parity_report_rejects_state_pinned_final_source ... ok
+test bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint ... ok
+test bootstrap_parity_report_rejects_wrapper_delegation_marker ... ok
+test bootstrap_parity_report_require_fails_closed_on_gaps ... ok
+test bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_guix ... ok
+test bootstrap_parity_report_stagex_requires_lineage_seed_provider ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
++ cargo build --release -p mantle --bin mantle
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 4m 30s
++ b3sum /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle
+24a193a8b1ebf77aab12cb9fab1868f16ebf71ca6956fe2a170612f55d35ff07  /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle
++ /home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/mantle --version
+mantle 0.1.0
++ date -Is
+2026-11-13T12:55:46-05:00

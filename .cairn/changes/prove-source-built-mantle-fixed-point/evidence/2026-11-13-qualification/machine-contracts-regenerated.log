@@ -1,0 +1,14 @@
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tools-target TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp CARGO_BUILD_JOBS=2
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tools-target
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ CARGO_BUILD_JOBS=2
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ cargo -Zscript scripts/check-machine-schema-contracts.rs --generate
+machine schema contract generation: PASS (24 contracted, 65 classified)
++ cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (24 contracted, 65 classified)

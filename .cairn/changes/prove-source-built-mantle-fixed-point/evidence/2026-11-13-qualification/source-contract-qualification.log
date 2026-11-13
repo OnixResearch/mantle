@@ -1,0 +1,443 @@
++ date -Is
+2026-11-13T13:15:30-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ export TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo test --release -p mantle --test machine_schema_contracts generated_contracts_accept_positive_and_reject_adversarial_fixtures -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 2.67s
+     Running tests/machine_schema_contracts.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/machine_schema_contracts-895feb058cd02665)
+
+running 1 test
+test generated_contracts_accept_positive_and_reject_adversarial_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 6.58s
+
++ cargo test --release -p mantle --bin mantle source_built_ -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.36s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 270 tests
+test native_toolchain_closure::tests::native_host_metadata_accepts_matching_source_built_capability ... ok
+test native_toolchain_closure::tests::native_metadata_rejects_non_source_built_root ... ok
+test rust_plan::tests::source_built_c_compiler_route_json_rejects_non_compiler_route ... ok
+test rust_plan::tests::source_built_c_compiler_route_json_validates_receipt_bound_identity ... ok
+test source_built_fixed_point::tests::plan_is_stable_across_source_input_order ... ok
+test source_built_fixed_point::tests::plans_complete_source_built_fixed_point_authority ... ok
+test source_built_fixed_point::tests::publication_requires_its_authenticated_source_program_authority ... ok
+test source_built_fixed_point::tests::rejects_host_orchestration_for_stage2 ... ok
+test source_built_fixed_point::tests::rejects_imported_provider_as_source_authority ... ok
+test source_built_fixed_point::tests::rejects_invalid_expected_native_provider_digest ... ok
+test source_built_fixed_point::tests::rejects_missing_required_source_role ... ok
+test source_built_fixed_point::tests::rejects_nonempty_initial_output_authority ... ok
+test source_built_fixed_point::tests::rejects_out_of_range_resource_bounds ... ok
+test source_built_fixed_point::tests::rejects_practical_or_fallback_policy ... ok
+test source_built_fixed_point::tests::rejects_stale_plan_digest ... ok
+test source_built_fixed_point_action_trust::controller::tests::actual_event_budget_exhaustion_latches_and_matches_portable_replay ... ok
+test source_built_fixed_point_action_trust::controller::tests::actual_turns_have_unique_ids_and_bind_previous_producer_even_for_identical_bytes ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_catalog_rejects_static_shadowing_overflow_and_unknown_slot ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_binds_previous_checkpoint_done_outcome_and_real_image_hashes ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_covers_actual_turn_and_honest_skip_without_potential_completion ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_rejects_repetition_gaps_premature_finish_and_unfinished_roots ... ok
+test source_built_fixed_point_action_trust::controller::tests::controller_potential_events_charge_each_turn_phase_once_per_admitted_turn ... ok
+test source_built_fixed_point_action_trust::controller::tests::controller_requires_exactly_one_selected_original_command_per_active_turn ... ok
+test source_built_fixed_point_action_trust::controller::tests::large_conditional_catalog_accepts_actual_done_early_without_reserving_unexecuted_turns ... ok
+test source_built_fixed_point_action_trust::controller::tests::outer_controller_guard_skips_without_finish_authority_and_active_runs_real_finish ... ok
+test source_built_fixed_point_action_trust::controller::tests::selected_command_preserves_explicit_normal255_opt_in_and_actual_phase_status ... ok
+test source_built_fixed_point_action_trust::tests::accepted_failed_probe_grants_only_actual_outputs_and_rejects_status_drift ... ok
+test source_built_fixed_point_action_trust::tests::complete_producer_inventory_admits_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::guarded_actual_status_controls_execution_and_authenticated_phase_outcome ... ok
+test source_built_fixed_point_action_trust::tests::guarded_decision_rejects_forged_false_missing_duplicate_and_execution_claims ... ok
+test source_built_fixed_point_action_trust::tests::guarded_phase_outcome_cannot_be_forged_or_observed_before_decision ... ok
+test source_built_fixed_point_action_trust::tests::mandatory_stage_product_cannot_escape_coverage_through_a_guard ... ok
+test source_built_fixed_point_action_trust::tests::partial_producer_inventory_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::pending_producer_event_coverage_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::publication_without_a_child_requires_its_real_build_event_not_a_fictional_launch ... ok
+test source_built_fixed_point_action_trust::tests::reconciles_synthetic_six_action_graph_without_proof_claim ... ok
+test source_built_fixed_point_action_trust::tests::rejects_foreign_root_even_with_recomputed_action_plan_digest ... ok
+test source_built_fixed_point_action_trust::tests::rejects_incomplete_adapter_and_path_only_generated_authority ... ok
+test source_built_fixed_point_action_trust::tests::rejects_input_consumption_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_measured_source_and_generated_input_digest_drift ... ok
+test source_built_fixed_point_action_trust::tests::rejects_missing_producer_edges_nonlocal_actions_and_tampered_plan ... ok
+test source_built_fixed_point_action_trust::tests::rejects_repeated_outputs_before_and_after_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_live_event_identity_and_latches_failure ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_missing_drift_remote_cache_and_effect_events ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_output_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::requires_protected_and_build_events_for_supervised_action ... ok
+test source_built_fixed_point_dev_cache::tests::fast_fail_reports_exact_matched_prior_digest_or_proceeds ... ok
+test source_built_fixed_point_dev_cache::tests::ordered_policy_digests_are_distinct_and_stable ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_key_is_stable_and_digest_sensitive ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_lookup_accepts_only_exact_receipt_validated_entry ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_rejects_stale_or_mismatched_digests_as_hard_miss ... ok
+test source_built_fixed_point_dev_cache::tests::stage_marker_trusts_only_exact_plan_stage_and_digest_match ... ok
+test source_built_fixed_point_mantle_actions::tests::protected_orchestrator_preserves_identity_before_rejecting_drift ... ok
+test source_built_fixed_point_mantle_actions::tests::protected_orchestrator_records_actual_exec_before_program_output ... ok
+test source_built_fixed_point_mantle_actions::tests::replay_continuation_rejects_parent_refusal_and_missing_acknowledgement ... ok
+test source_built_fixed_point_resume::tests::a_fresh_directory_restores_every_validated_stage ... ok
+test source_built_fixed_point_resume::tests::duplicate_and_producer_mismatched_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::mutated_partial_and_malformed_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::policy_cohort_drift_is_rejected ... ok
+test source_built_fixed_point_resume::tests::promoted_paths_and_unknown_stages_are_rejected ... ok
+test source_built_fixed_point_resume::tests::stale_plan_source_and_policy_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::the_first_invalid_stage_and_every_later_stage_execute ... ok
+test source_built_fixed_point_resume_bundle::tests::bundle_recorded_under_another_plan_is_executed_instead_of_restored ... ok
+test source_built_fixed_point_resume_bundle::tests::missing_payload_is_reported_and_never_restored ... ok
+test source_built_fixed_point_resume_bundle::tests::promoted_alias_is_observed_and_reported ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_is_idempotent_for_identical_payloads ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_read_and_restore_round_trip_into_a_fresh_directory ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_rejects_a_missing_payload_directory ... ok
+test source_built_fixed_point_resume_bundle::tests::published_bundle_plans_as_a_restored_stage ... ok
+test source_built_fixed_point_resume_bundle::tests::restore_refuses_an_existing_destination ... ok
+test source_built_fixed_point_resume_bundle::tests::tampered_payload_changes_the_recomputed_digest ... ok
+test source_built_fixed_point_shell::authoring::tests::authored_members_use_canonical_chunk_sequences ... ok
+test source_built_fixed_point_shell::authoring::tests::packaged_source_round_trip_rejects_payload_tampering ... ok
+test source_built_fixed_point_shell::authoring::tests::source_writes_reject_escape_binary_payloads_and_symlinked_parents ... ok
+test source_built_fixed_point_shell::tests::adopt_cached_provider_subtrees_copies_and_returns_observation ... ok
+test source_built_fixed_point_shell::tests::alias_publication_failure_preserves_candidate_artifacts_and_prior_success ... ok
+test source_built_fixed_point_shell::tests::conventional_native_chain_is_cut_over_to_fresh_stagex_authority ... ok
+test source_built_fixed_point_shell::tests::dev_cache_adoption_requires_validated_entry_and_present_subtrees ... ok
+test source_built_fixed_point_shell::tests::dev_handoff_reuses_only_an_identical_persistent_tree ... ok
+test source_built_fixed_point_shell::tests::dev_resume_restores_into_a_different_fresh_attempt ... ok
+test source_built_fixed_point_shell::tests::disagreeing_success_aliases_cannot_authorize_a_new_publication ... ok
+test source_built_fixed_point_shell::tests::disk_capacity_accepts_sufficient_space_and_rejects_shortfall ... ok
+test source_built_fixed_point_shell::tests::every_development_mode_is_disqualified_before_cache_or_resume_execution ... ok
+test source_built_fixed_point_shell::tests::failed_status_update_preserves_last_complete_status ... ok
+test source_built_fixed_point_shell::tests::fixed_point_sandbox_shell_rejects_dynamic_linker_markers ... ok
+test source_built_fixed_point_shell::tests::ignored_unknown_observation_error_cannot_publish_filtered_success ... ok
+test source_built_fixed_point_shell::tests::interrupted_alias_migration_never_selects_part_of_the_new_generation ... ok
+test source_built_fixed_point_shell::tests::isolated_exec_worker_returns_values_and_reports_invalid_completion ... ok
+test source_built_fixed_point_shell::tests::last_published_source_digest_reads_latest_receipt_binding ... ok
+test source_built_fixed_point_shell::tests::materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches ... ok
+test source_built_fixed_point_shell::tests::missing_stagex_transition_handoff_input_leaves_destination_absent ... ok
+test source_built_fixed_point_shell::tests::native_build_child_is_strict_offline_and_rejects_backend_mismatch ... ok
+test source_built_fixed_point_shell::tests::native_build_failure_summary_preserves_offline_blockers_and_rejects_malformed_output ... ok
+test source_built_fixed_point_shell::tests::non_utf8_compiler_cache_variable_name_remains_disqualifying ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_child ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_is_enforced_in_a_subprocess ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_planning_is_bounded_and_fail_closed ... ok
+test source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests ... ok
+test source_built_fixed_point_shell::tests::partially_present_prior_aliases_are_rejected_without_creating_a_selection ... ok
+test source_built_fixed_point_shell::tests::policy_digests_are_domain_separated_and_stable ... ok
+test source_built_fixed_point_shell::tests::preparation_failure_status_preserves_blocker_without_inventing_plan_identity ... ok
+test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ignored, requires retained completed StageX transition
+test source_built_fixed_point_shell::tests::promoted_cold_environment_rejects_cache_and_scheduling_keys_without_reading_values ... ok
+test source_built_fixed_point_shell::tests::published_selection_readback_rejects_a_repointed_generation ... ok
+test source_built_fixed_point_shell::tests::stage_marker_write_read_and_reject_mutation ... ok
+test source_built_fixed_point_shell::tests::stagex_native_handoff_uses_only_the_fresh_reserved_provider_path ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_cache_reuses_only_the_same_normalized_payload ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_handoff_accepts_only_expected_normalized_identity ... ok
+test source_built_fixed_point_shell::tests::stagex_transition_handoff_projects_only_declared_runtime_outputs ... ok
+test source_built_fixed_point_shell::tests::store_seed_is_disabled_without_cache_flag ... ok
+test source_built_fixed_point_shell::tests::store_service_registration_adopts_real_provider_and_is_observable ... ok
+test source_built_fixed_point_shell::tests::success_aliases_cannot_publish_a_cycle_or_escape_the_root ... ok
+test source_built_fixed_point_stagex_actions::tests::fetcher_hydration_consumes_only_exact_manifest_and_selected_record_roots ... ok
+test source_built_fixed_point_stagex_actions::tests::phase_observation_retains_guard_seed_and_both_real_state_dependencies ... ok
+test source_built_fixed_point_stagex_actions::tests::referenced_names_cover_shared_environment_words_only ... ok
+test source_built_fixed_point_stagex_actions::tests::response_file_leaves_keep_every_declared_input ... ok
+test source_built_fixed_point_stagex_actions::tests::superseding_a_lineage_input_requires_an_authored_reason ... ok
+test source_built_fixed_point_stagex_actions::tests::unused_labels_cannot_satisfy_original_node_dependencies ... ok
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::tests::coverage_counts_each_event_kind_without_hiding_unknown_actions ... ok
+test source_built_fixed_point_trust_report::tests::evidence_reads_reject_absolute_parent_and_symlink_authority ... ok
+test source_built_fixed_point_trust_report::tests::journal_rejects_omitted_unknown_reordered_changed_or_truncated_records ... ok
+test source_built_fixed_point_trust_report::tests::missing_proof_is_blocked_not_zero_action_success ... ok
+test source_built_mantle_programs::native::tests::rejected_native_probes_retain_admitted_state_not_optional_outputs ... ok
+test source_built_mantle_programs::tests::plan_derived_source_operands_normalize_lexically ... ok
+test source_built_native_programs::phases::tests::exec_input_retention_keeps_every_addressable_operand_and_drops_labels ... ok
+test source_built_native_programs::phases::tests::referenced_names_include_words_and_mount_sources_only ... ok
+test source_built_program_authoring::tests::exact_override_precedes_source_hint_without_spending_above_budget ... ok
+test source_built_program_authoring::tests::reservations_reject_overflow_zero_and_invalid_phase_instead_of_clamping ... ok
+test source_built_recipe::tests::canonical_invocation_preserves_typed_operands_and_rejects_alternative_encodings ... ok
+test source_built_recipe::tests::directory_separator_requires_typed_tree_directory_boundary_and_keeps_negative_members_lexical ... ok
+test source_built_recipe::tests::generated_workspace_and_actual_status_have_bounded_declared_outputs ... ok
+test source_built_recipe::tests::guarded_compile_assemble_link_and_exact_binary_require_dominating_predicates ... ok
+test source_built_recipe::tests::inherited_descriptor_tables_reject_missing_slots_alias_divergence_and_readonly_root_writes ... ok
+test source_built_recipe::tests::installed_image_path_is_only_a_readonly_produced_tree_member_not_an_image_selector ... ok
+test source_built_recipe::tests::invocation_admission_rejects_static_override_or_imported_request_and_executable ... ok
+test source_built_recipe::tests::invocation_cannot_invent_paths_names_control_reads_or_unused_dependencies ... ok
+test source_built_recipe::tests::invocation_cwd_field_is_canonical_and_empty_extension_is_omitted ... ok
+test source_built_recipe::tests::invocation_cwd_requires_one_typed_tree_path_and_rejects_static_conflicts ... ok
+test source_built_recipe::tests::output_seed_admission_preserves_produced_kind_and_declared_bound ... ok
+test source_built_recipe::tests::phase_state_projection_source_accepts_only_normalized_relative_members ... ok
+test source_built_recipe::tests::preparation_rejects_source_timeout_above_global_proof_cap ... ok
+test source_built_recipe::tests::prior_stage_output_requires_its_canonical_producer ... ok
+test source_built_recipe::tests::probe_exit_policy_requires_a_bounded_sorted_normal_exit_set ... ok
+test source_built_recipe::tests::readonly_input_catalog_accounts_only_declared_produced_trees ... ok
+test source_built_recipe::tests::readonly_input_catalog_keeps_uncatalogued_inputs_rejected_and_names_sorted ... ok
+test source_built_recipe::tests::relative_source_operands_require_cwd_authority_without_changing_original_spelling ... ok
+test source_built_recipe::tests::runtime_destinations_reject_duplicate_ancestor_and_reserved_namespaces ... ok
+test source_built_recipe::tests::runtime_tree_prepare_requires_the_authenticated_configured_store_prefix ... ok
+test source_built_recipe::tests::source_creation_masks_reject_bits_outside_permissions ... ok
+test source_built_recipe::tests::source_program_import_cannot_hide_unadmitted_bytes_behind_a_symlink ... ok
+test source_built_recipe::tests::source_program_imports_must_stay_in_the_authenticated_tree ... ok
+test source_built_recipe::tests::source_program_path_labels_reject_dot_components ... ok
+test source_built_recipe::tests::source_timeout_spans_accept_nested_arenas_and_reject_crossing_unknown_or_reversed_endpoints ... ok
+test source_built_recipe::tests::typed_text_slices_and_runtime_words_preserve_declared_authority ... ok
+test source_built_recipe::tests::workspace_mounts_preserve_only_declared_output_tree_namespaces ... ok
+test source_built_recipe_exec::command_state::tests::descriptor_observation_uses_actual_shared_offsets_and_append_flags ... ok
+test source_built_recipe_exec::command_state::tests::descriptor_snapshot_keeps_workspace_inode_and_actual_original_offset ... ok
+test source_built_recipe_exec::command_state::tests::null_descriptor_preserves_device_semantics_and_rejects_regular_substitution ... ok
+test source_built_recipe_exec::command_state::tests::workspace_times_reject_changed_inventory_noncanonical_and_out_of_range_records ... ok
+test source_built_recipe_exec::command_state::tests::workspace_times_restore_exact_postorder_without_following_symlinks ... ok
+test source_built_recipe_exec::tests::archive_extraction_preserves_original_root_and_enforces_member_output_bounds ... ok
+test source_built_recipe_exec::tests::clone3_never_grants_authority_from_mutable_flags ... ok
+test source_built_recipe_exec::tests::installed_image_member_requires_same_real_regular_executable_without_symlink_projection ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_decodes_original_archive_and_verifies_recursive_pin ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_preserves_flat_bytes_and_rejects_wrong_pin_and_bound ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_manifest_drift_after_preparation ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_nonfetchers_wrong_kinds_unknown_records_and_undeclared_roles ... ok
+test source_built_recipe_exec::tests::nested_source_timeout_uses_tightest_original_deadline_not_a_per_leaf_cap ... ok
+test source_built_recipe_exec::tests::phase_state_projection_forwards_exact_prior_envelope_checkpoint_and_rejects_invalid_members ... ok
+test source_built_recipe_exec::tests::protected_filter_preserves_legacy_threads_without_clone3 ... ok
+test source_built_recipe_exec::tests::protected_initial_exec_decision_has_a_deadline ... ok
+test source_built_recipe_exec::tests::protected_listener_teardown_cancels_already_blocked_receive ... ok
+test source_built_recipe_exec::tests::protected_parallel_launch_timeout_does_not_cancel_another_listener ... ok
+test source_built_recipe_exec::tests::protected_recipe_smoke_actual_argv0_does_not_change_exact_image_authority ... ignored, requires parent-built libc-free ELF verify mode, reviewed bwrap --argv0 and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_cancellation ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_invocation_uses_exact_produced_executable ... ignored, requires parent-built libc-free ELF request/self-copy and probe0 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_workspace ... ignored, requires parent-built libc-free ELF with workspace mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_guarded_phase_and_immutable_output_seeds ... ignored, requires parent-built libc-free ELF with probe0/probe1/workspace modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_process_clone ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_second_exec ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_path_preserves_real_image_cwd_and_data_context ... ignored, requires parent-built libc-free ELF request/self-copy and image-context modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_rejects_wrong_member_and_forged_whole_tree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_merge_preserves_actual_descriptor_write_order ... ignored, requires parent-built libc-free ELF merged mode writing alternating descriptors, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_normal_probe_records_actual_non_whitelisted_exit ... ignored, requires parent-built libc-free ELF normal-probe mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_observes_actual_workspace_mtimes_and_seeked_stream_offsets ... ignored, requires parent-built libc-free ELF observation mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_original_creation_masks_do_not_mutate_parent ... ignored, requires parent-built libc-free ELF umask mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_preserves_sparse_64_fd_aliases_null_and_actual_status_flags ... ignored, requires parent-built libc-free ELF backing mode, reviewed bwrap/ADDFD and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_preserves_actual_zero_and_one ... ignored, requires parent-built libc-free ELF with probe0/probe1 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_rejects_unlisted_exit ... ignored, requires parent-built libc-free ELF with probe2 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_invocation_before_launch ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_status_before_conditional_launch ... ignored, requires parent-built libc-free ELF with probe1 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_success ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_reaches_nested_input_and_output_tree_consumers ... ignored, requires parent-built libc-free ELF request/self-copy and local modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_rejects_forged_noncanonical_unknown_conflicting_and_escape_requests ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_text_slices_and_runtime_tree_reach_actual_leaf ... ignored, requires parent-built libc-free ELF request/self-copy and data modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_captures_actual_original_tmp_write ... ignored, requires parent-built libc-free ELF request/self-copy and temporary modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_does_not_recreate_missing_subtree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::rooted_directory_selection_does_not_follow_symlinks_create_missing_members_or_accept_files ... ok
+test source_built_recipe_exec::tests::shared_timeout_arena_never_restarts_for_resumed_leaves_or_observation ... ok
+test source_built_recipe_exec::tests::text_operands_authenticate_whole_source_and_share_utf8_safe_snapshot ... ok
+test source_built_recipe_exec::tests::text_slice_rejects_forged_whole_frame_even_when_selected_bytes_match ... ok
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+test source_built_rust_programs::resolve::tests::atomic_predicates_follow_the_original_fixed_target ... ok
+test source_built_rust_programs::resolve::tests::atomic_target_dependencies_select_only_supported_edges ... ok
+test source_built_rust_programs::resolve::tests::cargo_feature_does_not_enable_global_tracing_mode ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... ok
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... ok
+test source_built_rust_programs::resolve::tests::duplicate_exact_qualified_lock_identity_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::enabled_cargo_feature_does_not_populate_global_target_cfg ... ok
+test source_built_rust_programs::resolve::tests::local_path_owner_is_not_replaced_by_same_version_registry_record ... ok
+test source_built_rust_programs::resolve::tests::malformed_or_trailing_source_qualifiers_do_not_select_unique_names ... ok
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... ok
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::one_manifest_cannot_merge_local_and_registry_lock_authorities ... ok
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... ok
+test source_built_rust_programs::resolve::tests::qualified_lock_source_must_match_without_source_fallback ... ok
+test source_built_rust_programs::resolve::tests::sealed_native_profile_selects_rustix_linux_raw_backend ... ok
+test source_built_rust_programs::resolve::tests::selected_dependency_kinds_still_reject_unclassified_predicates ... ok
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... ok
+test source_built_rust_programs::resolve::tests::source_omission_admits_version_before_unique_local_precedence ... ok
+test source_built_rust_programs::resolve::tests::source_qualified_edge_retains_exact_transitive_lock_owner ... ok
+test source_built_rust_programs::resolve::tests::target_optional_features_classify_predicates_only_when_selected ... ok
+test source_built_rust_programs::resolve::tests::unselected_dependency_kinds_do_not_require_target_classification ... ok
+test source_built_rust_programs::resolve::tests::unset_getrandom_override_selects_linux_default_dependencies ... ok
+test source_built_rust_programs::successors::graph::tests::build_metadata_and_prerelease_versions_keep_distinct_admitted_producers ... ok
+test source_built_rust_programs::successors::graph::tests::combined_crate_types_and_literal_escape_tokens_do_not_alias ... ok
+test source_built_rust_programs::successors::native::tests::source_reservations_use_runtime_ceiling_not_expanded_declarations ... ok
+test source_built_rust_programs::translation::macros::tests::macro_5612_slots_use_constant_declarations_and_exact_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_config_preserves_typed_operands_environment_cwd_and_metadata ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_output_cwd_and_referenced_executable_alias_remain_typed ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_rejects_conflicting_continuation_state ... ok
+test source_built_rust_programs::translation::macros::tests::macro_inventory_rejects_non_basenames_and_non_produced_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_reservations_obey_command_ceiling_not_expansion_size ... ok
+test source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke ... ignored, requires explicit static C compiler, reviewed bwrap and fresh evidence root
+test source_built_rust_programs::translation::smoke_tests::compact_macro_protected_smoke ... ignored, requires explicit pinned musl compiler/linker, reviewed bwrap and fresh evidence root
+test source_bundle::tests::source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor ... ok
+test source_bundle::tests::source_built_fixed_point_profile_carries_sources_without_provider_outputs ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_manifest_authority ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_source_closure ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_provider_manifest_substitution ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_preserves_every_other_record ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
+test source_bundle::tests::source_built_vendor_inputs_refresh_replaces_only_the_vendor_record ... ok
+test source_toolchain_closure::tests::enforced_complete_closure_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::json_fixture_parses_seed_exception_and_counts_source_built_members ... ok
+test source_toolchain_closure::tests::provided_rust_provider_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_member_without_receipt ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_rustc_with_prebuilt_source_marker ... ok
+test tests::self_build_cli_accepts_source_built_fixed_point_authority ... ok
+test tests::self_build_cli_rejects_source_built_and_legacy_cargo_free_modes_together ... ok
+test tests::source_program_preparation_requires_source_built_authority ... ok
+
+test result: ok. 243 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 3.37s
+
++ cargo test --release -p mantle --bin mantle source_bundle::tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 1.36s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 96 tests
+test source_bundle::tests::bootstrap_fetch_override_scratch_lives_until_plan_drop ... ok
+test source_bundle::tests::bootstrap_source_profile_exports_imports_and_preflights_ready ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_missing_vendor_for_self_build ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_provider_manifest_without_reduction ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_wrong_provider_kind ... ok
+test source_bundle::tests::cached_https_archive_keeps_its_upstream_identity_and_rejects_hash_drift ... ok
+test source_bundle::tests::connected_export_fetches_and_fixed_output_validates_missing_file_payload ... ok
+test source_bundle::tests::connected_export_rejects_fixed_output_hash_mismatch ... ok
+test source_bundle::tests::constructed_store_path_import_skips_only_identical_content ... ok
+test source_bundle::tests::exact_legacy_provider_fetch_is_a_case_sensitive_override_input ... ok
+test source_bundle::tests::explicit_empty_source_bundle_is_digest_bound_and_rejects_structure_tamper ... ok
+test source_bundle::tests::foreign_source_bundle_preserves_directory_links_and_modes_and_rejects_mode_tamper ... ok
+test source_bundle::tests::forged_store_root_attestation_requires_physical_signer ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_adds_materialized_fetches_without_widening_three_record_profile ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_rejects_missing_materialized_fetch_closure ... ok
+test source_bundle::tests::fresh_clone_source_profile_accepts_runtime_generated_provider_manifest ... ok
+test source_bundle::tests::fresh_clone_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::fresh_clone_source_profile_requires_vendor_but_not_unrelated_proof_inputs ... ok
+test source_bundle::tests::full_proof_source_override_plan_uses_pinned_fixed_point_profile ... ok
+test source_bundle::tests::hydration_readback_rejects_partial_vendor_and_missing_pin ... ok
+test source_bundle::tests::lock_vendor_hydration_rejects_output_or_checkout_lock_mismatch_before_publication ... ok
+test source_bundle::tests::lock_vendor_parent_identity_is_required_and_checked_before_hydration_publication ... ok
+test source_bundle::tests::lock_vendor_profile_omits_vendor_bytes_and_hydrates_fresh_checkout_with_verified_packages ... ok
+test source_bundle::tests::materialization_recanonicalizes_only_declared_chunked_records_with_chunk_support ... ok
+test source_bundle::tests::pinned_virtual_store_path_is_not_offline_ready ... ok
+test source_bundle::tests::self_build_hydration_materializes_valid_vendor_and_pins_provider_state ... ok
+test source_bundle::tests::self_build_hydration_preserves_existing_vendor_without_importing_state ... ok
+test source_bundle::tests::self_build_hydration_rejects_missing_vendor_record_without_outputs ... ok
+test source_bundle::tests::self_build_hydration_rejects_vendor_checksum_drift_before_publication ... ok
+test source_bundle::tests::self_build_hydration_rejects_wrong_manifest_identity_without_outputs ... ok
+test source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails ... ok
+test source_bundle::tests::source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor ... ok
+test source_bundle::tests::source_built_fixed_point_profile_carries_sources_without_provider_outputs ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_manifest_authority ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_source_closure ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_provider_manifest_substitution ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_preserves_every_other_record ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
+test source_bundle::tests::source_built_vendor_inputs_refresh_replaces_only_the_vendor_record ... ok
+test source_bundle::tests::source_bundle_accepts_bounded_legacy_provider_compiler_payload ... ok
+test source_bundle::tests::source_bundle_accepts_language_neutral_package_adapters ... ok
+test source_bundle::tests::source_bundle_accepts_single_file_payload_root ... ok
+test source_bundle::tests::source_bundle_allows_case_sensitive_kernel_headers_only_for_bootstrap_archives ... ok
+test source_bundle::tests::source_bundle_canonicalizes_equivalent_traversal ... ok
+test source_bundle::tests::source_bundle_covers_bootstrap_provider_toolchain_and_proof_records ... ok
+test source_bundle::tests::source_bundle_derives_fetcher_and_store_path_inputs_from_build_root ... ok
+test source_bundle::tests::source_bundle_derives_vcs_snapshot_from_git_fetcher ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_file_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_vcs_snapshot_without_dot_git ... ok
+test source_bundle::tests::source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata ... ok
+test source_bundle::tests::source_bundle_export_rejects_local_vcs_revision_mismatch ... ok
+test source_bundle::tests::source_bundle_export_rejects_remote_fetcher_without_local_payload ... ok
+test source_bundle::tests::source_bundle_export_uses_imported_state_for_remote_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_import_and_verify_are_idempotent ... ok
+test source_bundle::tests::source_bundle_no_replace_publication_preserves_existing_destination ... ok
+test source_bundle::tests::source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation ... ok
+test source_bundle::tests::source_bundle_rejects_file_below_symlink_record ... ok
+test source_bundle::tests::source_bundle_rejects_incomplete_adapter_metadata ... ok
+test source_bundle::tests::source_bundle_rejects_lazy_derivation_file_cycles ... ok
+test source_bundle::tests::source_bundle_rejects_malformed_roots_and_record_order ... ok
+test source_bundle::tests::source_bundle_rejects_payload_above_named_file_limit ... ok
+test source_bundle::tests::source_bundle_rejects_tampered_file_payload_and_store_prefix ... ok
+test source_bundle::tests::source_bundle_rejects_unfixed_builtin_fetcher_in_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_identity ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_symlink ... ok
+test source_bundle::tests::source_bundle_rejects_vcs_snapshot_without_revision_identity ... ok
+test source_bundle::tests::source_bundle_verify_reports_missing_state ... ok
+test source_bundle::tests::source_bundle_walks_lazy_derivation_files_without_recursive_expansion ... ok
+test source_bundle::tests::source_fetch_override_mapping_rejects_conflicting_payloads ... ok
+test source_bundle::tests::source_fetch_override_plan_deduplicates_identical_url_kind_payloads ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_pinned_file_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_tarball_and_vcs_payloads ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_wrong_vcs_revision_metadata ... ok
+test source_bundle::tests::source_fetch_override_plan_routes_synthetic_file_and_blocks_tool_on_drift ... ok
+test source_bundle::tests::source_file_chunk_layout_is_bounded_exact_and_has_no_empty_tail ... ok
+test source_bundle::tests::source_file_chunk_layout_rejects_zero_and_excessive_counts ... ok
+test source_bundle::tests::source_offline_preflight_accepts_pinned_imported_file_payload ... ok
+test source_bundle::tests::source_offline_preflight_allows_roots_without_source_requirements ... ok
+test source_bundle::tests::source_offline_preflight_rejects_unpinned_imported_source ... ok
+test source_bundle::tests::source_offline_preflight_reports_missing_local_source_state ... ok
+test source_bundle::tests::source_offline_preflight_reports_remote_network_requirement ... ok
+test source_bundle::tests::source_offline_preflight_reports_unsupported_adapter ... ok
+test source_bundle::tests::source_offline_preflight_reports_untrusted_adapter ... ok
+test source_bundle::tests::source_relative_path_accepts_double_dot_inside_safe_cargo_fixture_name ... ok
+test source_bundle::tests::source_relative_path_rejects_parent_and_empty_components ... ok
+test source_bundle::tests::streaming_manifest_digest_matches_canonical_compact_json ... ok
+test source_bundle::tests::structure_only_validation_accepts_valid_manifest ... ok
+test source_bundle::tests::structure_only_validation_skips_payload_digest_but_full_mode_rejects_it ... ok
+test source_bundle::tests::structure_only_validation_still_rejects_structural_violations ... ok
+test source_bundle::tests::supplemental_bundle_merge_deduplicates_exact_records_and_rejects_conflicts ... ok
+test source_bundle::tests::supplemental_bundle_reader_keeps_fetches_and_excludes_constructed_store_authorities ... ok
+
+test result: ok. 96 passed; 0 failed; 0 ignored; 0 measured; 2854 filtered out; finished in 0.50s
+
++ cargo test --release -p crunch-source-core --lib -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling constant_time_eq v0.4.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-source-core)
+    Finished `release` profile [optimized] target(s) in 7.99s
+     Running unittests src/lib.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/crunch_source_core-af7f6fbb86a492bb)
+
+running 1 test
+test ingest::tests::unavailable_reason_is_preserved ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
++ date -Is
+2026-11-13T13:15:56-05:00

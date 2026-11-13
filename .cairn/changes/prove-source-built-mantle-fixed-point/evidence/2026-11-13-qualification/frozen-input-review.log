@@ -1,0 +1,7 @@
+**Lock comparison complete; this narrows my earlier vendor concern.** I decoded the baseline profile’s recorded `Cargo.lock` and compared it with the frozen/current lock. Both are version 4 with 1,060 packages. All 974 registry/Git `(name, version, source, checksum)` tuples match; all package identity tuples and all non-Mantle dependency lists match. The **sole semantic delta** is that Mantle’s root dependency list adds `async-trait`; nothing is removed. The lock byte hashes differ (`44d2b9cd…` → `d0d6b77c…`), but no package identity, source, or checksum was added or changed. The vendor-record digest remains `719e1550…`. Thus the lock-byte change alone is **not evidence of a stale vendor package set**; I did not independently validate vendor payload bytes ag…
+
+Pin distinction: `e477ab39…` pins the raw StageX-lineage JSON bytes, which I did not rehash here. `f36d3759…` is the independently supplied **expected native output** identity: it cannot be derived from inert input bytes and must not be replaced by an output observed in this run. Both values remain in `prepare.sh`.
+
+The separate current-tree blocker remains: the frozen `src/source_built_fixed_point.rs` hash is `3a192386…`, versus `59f1aa5b…` after the captured `#[cfg(test)]` edits. A final-tree proof therefore needs a refreshed source identity and cohort; `de163b8d…` identifies the older snapshot. I did not inspect preparation 32 or claim preparation, provider execution, or proof success.
+
+[Some lines truncated to 768 chars. Use agent://ReviewFrozenSourceInput:raw:1-1 to read line 1 whole]

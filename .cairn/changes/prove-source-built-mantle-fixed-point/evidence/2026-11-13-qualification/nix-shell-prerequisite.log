@@ -1,0 +1,16 @@
++ date -Is
+2026-11-13T14:18:10-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ nix --version
+nix (Nix) 2.36.0
++ timeout 300s nix develop --offline --no-write-lock-file -c true
+running auto-GC to free 105211887616 bytes
+waiting for the big garbage collector lock...
+shutting down[Kerror: interrupted by the user
++ status=124
++ printf 'nix_shell_prerequisite_exit=%s\n' 124
+nix_shell_prerequisite_exit=124
++ printf '%s\n' 124
++ date -Is
+2026-11-13T14:23:10-05:00
++ exit 124

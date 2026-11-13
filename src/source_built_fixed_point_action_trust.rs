@@ -1433,6 +1433,30 @@ pub(crate) mod tests {
         (proof, adapters, events)
     }
 
+    #[test]
+    fn rejects_extra_globally_bound_input_and_latches_live_admission() {
+        let (proof, adapters, mut events) = fixture();
+        let plan = plan_actions(&proof, adapters).unwrap();
+        let action = &plan.adapters[0].actions[0];
+        let mut undeclared = events[0].clone();
+        let extra = ActionInput::Stage {
+            authority: StageAuthorityInput::Source {
+                role: SourceAuthorityRole::VendorInputs,
+            },
+        };
+        assert!(!action.inputs.contains(&extra));
+        let authority =
+            proof.source_inputs.iter().find(|input| input.role == SourceAuthorityRole::VendorInputs).unwrap();
+        undeclared.inputs.push(extra);
+        undeclared.input_digests_blake3.push(authority.digest_blake3.clone());
+
+        let mut live = ActionObservationState::default();
+        assert!(live.record(&proof, action, &undeclared).is_err());
+        assert!(live.record(&proof, action, &events[0]).is_err());
+        events[0] = undeclared;
+        assert!(reconcile_actions(&proof, &plan, &events).is_err());
+    }
+
     fn multi_output_producer_fixture(
         executable_dependency: bool,
     ) -> (SourceBuiltFixedPointPlan, Vec<StageActionAdapter>, Vec<ActionExecutionEvent>) {

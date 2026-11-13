@@ -1,0 +1,11 @@
++ date -Is
+2026-11-13T13:20:52-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ mkdir -p /datapool/mantle-store/sbfp-20261113.berdKH/home /datapool/mantle-store/sbfp-20261113.berdKH/tmp
++ b3sum /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle
+24a193a8b1ebf77aab12cb9fab1868f16ebf71ca6956fe2a170612f55d35ff07  /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle
++ env -i HOME=/datapool/mantle-store/sbfp-20261113.berdKH/home TMPDIR=/datapool/mantle-store/sbfp-20261113.berdKH/tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle --json source bundle refresh-mantle-source --from /datapool/mantle-store/cold-inputs-20261030/profile/source-built-fixed-point-sources-refreshed-20261108-vendor-git.json --mantle-source /home/brittonr/git/OnixResearch/mantle --to /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
++ b3sum /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
+6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec  /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
++ date -Is
+2026-11-13T13:24:17-05:00

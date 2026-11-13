@@ -78,23 +78,23 @@ pub(crate) fn plan_source_built_fixed_point(
     validate_resource_bounds(&input.resource_bounds)?;
     input.source_inputs.sort();
     let source_authority_digest_blake3 = digest_payload(SOURCE_AUTHORITY_DIGEST_CONTEXT, &input.source_inputs)?;
-    let vendor_blake3 = source_input_for_role(&input.source_inputs, SourceAuthorityRole::VendorInputs)?
+    let mantle_source_digest = source_input_for_role(&input.source_inputs, SourceAuthorityRole::MantleSource)?
         .digest_blake3
-        .clone();
+        .as_str();
+    let vendor_digest = source_input_for_role(&input.source_inputs, SourceAuthorityRole::VendorInputs)?
+        .digest_blake3
+        .as_str();
+    let source_contract = receipt_contract(&input.logical_store_prefix, mantle_source_digest, vendor_digest);
     let mut plan = SourceBuiltFixedPointPlan {
         schema: SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA.to_string(),
         proof_id: input.proof_id,
-        logical_store_prefix: input.logical_store_prefix.clone(),
-        source_authority_digest_blake3: source_authority_digest_blake3.clone(),
+        logical_store_prefix: input.logical_store_prefix,
+        source_authority_digest_blake3,
         source_inputs: input.source_inputs,
         policies: input.policies,
         resource_bounds: input.resource_bounds,
         stages: expected_stage_plans(),
-        receipt_contract: receipt_contract(
-            &input.logical_store_prefix,
-            &source_authority_digest_blake3,
-            &vendor_blake3,
-        ),
+        receipt_contract: source_contract,
         non_claims: fixed_point_non_claims(),
         plan_digest_blake3: String::new(),
     };

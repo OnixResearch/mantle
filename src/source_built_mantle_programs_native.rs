@@ -1012,7 +1012,13 @@ pub(crate) fn append_native_request(
                 stdout: product(&program.stage_id, &invoke_id, "stdout"),
                 stderr: product(&program.stage_id, &invoke_id, "stderr"),
                 status: product(&program.stage_id, &invoke_id, "exit-status"),
-                files: product(&program.stage_id, &invoke_id, "native-files"),
+                // A source-selected driver rejection has no new file authority.
+                // Forward its real stdio/status with the prior admitted OUT_DIR.
+                files: if archive {
+                    product(&program.stage_id, &invoke_id, "native-files")
+                } else {
+                    inputs["cc-work"].clone()
+                },
                 complete_state: true,
             }]
         }
@@ -1119,7 +1125,8 @@ pub(crate) fn append_native_request(
                     id: observation_id.clone(),
                     inputs: BTreeMap::from([(
                         "prior-files".into(),
-                        expansion.phase_outputs[0]["native-files"].clone(),
+                        // A rejected compiler cannot authorize its ordinary outputs.
+                        inputs["cc-work"].clone(),
                     )]),
                     outputs: BTreeMap::from([("phase".into(), RecipeOutput {
                         kind: ArtifactKind::Tree,
@@ -1330,3 +1337,75 @@ pub(crate) use schedules::library_overlays;
 pub(crate) use schedules::script_boundaries;
 pub(crate) use schedules::selected_schedule;
 pub(crate) use schedules::source_files;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_built_recipe::RecipePreparation;
+    use crate::source_built_recipe::SCHEMA;
+    use crate::source_built_recipe::validate_source_recipe;
+
+    fn probe_recipe(phase: NativeCommandPhase) -> SourceRecipe {
+        let prior = |name: &str| ArtifactRef::Produced {
+            action_id: format!("full-source-native-provider/{name}"),
+            output_id: "artifact".into(),
+        };
+        let mut recipe = SourceRecipe {
+            schema: SCHEMA.into(),
+            stage_id: "mantle-stage1".into(),
+            preparation: RecipePreparation {
+                tool: "native-probe-authoring-fixture".into(),
+                provenance: "graph admission only; no provider execution".into(),
+            },
+            steps: Vec::new(),
+            roots: Vec::new(),
+            exports: BTreeMap::new(),
+            semantic_roots: BTreeMap::new(),
+            timeout_groups: Vec::new(),
+        };
+        let tools = NativeRequestTools {
+            native: NativeToolchain {
+                driver: prior("driver"),
+                splitter: prior("splitter"),
+                cc1: prior("cc1"),
+                cc1_image: lit("cc1"),
+                assembler: prior("assembler"),
+                archiver: prior("archiver"),
+                inputs: BTreeMap::new(),
+                arguments: Vec::new(),
+                environment: BTreeMap::new(),
+                runtime_mounts: BTreeMap::new(),
+                assembler_arguments: Vec::new(),
+            },
+            helper: prior("helper"),
+            phase_helper: prior("phase-helper"),
+            package: prior("package"),
+            compiler_program: lit("gcc"),
+            archiver_program: lit("ar"),
+            assembler_image: lit("as"),
+        };
+        let products =
+            append_native_request(&mut recipe, &tools, phase, "probe", prior("request"), prior("files")).unwrap();
+        recipe.roots = vec![products.stdout, products.stderr, products.status, products.files];
+        recipe
+    }
+
+    #[test]
+    fn rejected_native_probes_retain_admitted_state_not_optional_outputs() {
+        for (phase, consumer, input_name, producer) in [
+            (NativeCommandPhase::DriverProbe, "probe.result", "final-files", "probe.invoke"),
+            (
+                NativeCommandPhase::CapabilityCompile,
+                "probe.assembler-observation",
+                "prior-files",
+                "probe.invoke.phase-0",
+            ),
+        ] {
+            let mut recipe = probe_recipe(phase);
+            validate_source_recipe(&recipe).unwrap();
+            let consumer = recipe.steps.iter_mut().find(|step| step.id == consumer).unwrap();
+            consumer.inputs.insert(input_name.into(), product("mantle-stage1", producer, "native-files"));
+            assert!(validate_source_recipe(&recipe).is_err());
+        }
+    }
+}

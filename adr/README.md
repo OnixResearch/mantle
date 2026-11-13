@@ -145,3 +145,4 @@ compatibility surface, crate name, or historical decision.
 | [0145](0145-retain-source-qualified-consuming-lock-identities.md) | Retain source-qualified consuming-lock package identities | Accepted |
 | [0146](0146-resolve-git-packages-inside-captured-repository-trees.md) | Resolve git-sourced packages inside captured repository trees | Accepted |
 | [0147](0147-bound-recipe-documents-and-data-driven-operands.md) | Bound recipe documents separately and scope data-driven operands to their map | Accepted |
+| [0148](0148-bind-receipt-source-to-mantle-source-root.md) | Bind the receipt source to Mantle's declared source root | Accepted |

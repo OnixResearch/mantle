@@ -880,7 +880,7 @@ fn validate_receipt_plan_binding(
         core.schema == PROOF_WORKFLOW,
         core.workflow_version == PROOF_WORKFLOW,
         core.selected_provider_kind == PROOF_PROVIDER_KIND,
-        core.source_blake3 == plan.source_authority_digest_blake3,
+        core.source_blake3 == plan.receipt_contract.source_blake3,
         core.vendor_blake3 == plan.receipt_contract.vendor_blake3,
         core.logical_store_prefix == plan.logical_store_prefix,
         core.derivation_identity == format!("source-built-plan:{}", plan.plan_digest_blake3),
@@ -2616,11 +2616,184 @@ pub(crate) fn receipt_error(message: String) -> RunError {
     RunError::Build(format!("source-built fixed-point receipt blocked: {message}"))
 }
 #[cfg(test)]
+#[path = "source_built_fixed_point_receipt_fixture.rs"]
+mod source_built_fixed_point_receipt_fixture;
+
+#[cfg(test)]
 mod receipt_tests {
     use super::*;
 
     pub(crate) const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     pub(crate) const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    use super::source_built_fixed_point_receipt_fixture::SyntheticReceiptFixture;
+    use super::source_built_fixed_point_receipt_fixture::write_json;
+
+    fn assert_receipt_rejected(fixture: &SyntheticReceiptFixture) {
+        assert!(matches!(
+            verify_source_built_fixed_point_receipt(fixture.root.path(), &fixture.root.path().join(FINAL_RECEIPT_FILE)),
+            Err(RunError::Build(_))
+        ));
+    }
+
+    fn refresh_manifest_bindings(fixture: &SyntheticReceiptFixture) {
+        let (mut stages, _) =
+            read_bound_json::<Vec<SourceBuiltStageEvidence>>(fixture.root.path(), STAGE_EVIDENCE_FILE).unwrap();
+        for stage in &mut stages {
+            if matches!(stage.output_role, ProofOutputRole::MantleStage1 | ProofOutputRole::MantleStage2) {
+                let (manifest, digest) =
+                    read_bound_json::<MantleStageManifest>(fixture.root.path(), &stage.transcript_path).unwrap();
+                stage.transcript_digest_blake3 = digest;
+                stage.executable_identity = format!("blake3:{}", manifest.orchestrator.executable_digest_blake3);
+            }
+        }
+        write_json(fixture.root.path(), STAGE_EVIDENCE_FILE, &stages);
+    }
+
+    #[test]
+    fn synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes() {
+        let fixture = SyntheticReceiptFixture::new();
+        let bundle =
+            verify_source_built_fixed_point_receipt(fixture.root.path(), &fixture.root.path().join(FINAL_RECEIPT_FILE))
+                .unwrap();
+        let (core, extension) = fixture.receipt();
+        let source = fixture
+            .proof
+            .source_inputs
+            .iter()
+            .find(|source| source.role == crate::source_built_fixed_point::SourceAuthorityRole::MantleSource)
+            .unwrap();
+        assert_eq!(core.source_blake3, source.digest_blake3);
+        assert_ne!(core.source_blake3, fixture.proof.source_authority_digest_blake3);
+        assert_eq!(core.verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
+        assert_eq!(bundle.digest_blake3, extension.final_proof_bundle_digest_blake3);
+        assert_eq!(core.runs[0].output_digests, core.runs[1].output_digests);
+        let stage2 = fixture
+            .events
+            .iter()
+            .find(|event| {
+                event.action_id == "mantle-stage2/orchestrator" && event.kind == ExecutionEventKind::ProtectedExec
+            })
+            .unwrap();
+        assert_eq!(stage2.executable_producer, Some(("mantle-stage1/action-4".into(), "mantle-stage1".into())));
+        assert_eq!(stage2.executable_digest_blake3, core.runs[0].output_digests[0].digest_blake3);
+        // These are supplied synthetic facts and measured fixture files, not
+        // observations of launched commands or real proof execution authority.
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_another_declared_source_as_mantle() {
+        let fixture = SyntheticReceiptFixture::new();
+        let (mut core, extension) = fixture.receipt();
+        let other = fixture
+            .proof
+            .source_inputs
+            .iter()
+            .find(|source| source.role == crate::source_built_fixed_point::SourceAuthorityRole::StagexSeed)
+            .unwrap();
+        assert_ne!(core.source_blake3, other.digest_blake3);
+        core.source_blake3 = other.digest_blake3.clone();
+        fixture.reseal_receipt(core, extension);
+
+        assert_receipt_rejected(&fixture);
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_v1_core_schema_and_extension_schema() {
+        for legacy_core in [true, false] {
+            let fixture = SyntheticReceiptFixture::new();
+            let (mut core, mut extension) = fixture.receipt();
+            if legacy_core {
+                core.schema = "mantle-deterministic-proof-receipt-v1".into();
+            } else {
+                extension.schema = "mantle-source-built-fixed-point-receipt-extension-v1".into();
+            }
+            fixture.reseal_receipt(core, extension);
+            assert_receipt_rejected(&fixture);
+        }
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest() {
+        let fixture = SyntheticReceiptFixture::new();
+        let (mut core, extension) = fixture.receipt();
+        core.workflow_version = "mantle-deterministic-proof-receipt-v1".into();
+        core.verdict = DeterministicBuildProofVerdict::UnsupportedWorkflow;
+        core.blocking_reasons = vec!["unsupported workflow_version mantle-deterministic-proof-receipt-v1".into()];
+        fixture.reseal_receipt(core, extension);
+        assert_receipt_rejected(&fixture);
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind() {
+        let fixture = SyntheticReceiptFixture::new();
+        let (mut core, mut extension) = fixture.receipt();
+        core.selected_provider_kind = "prebuilt".into();
+        core.toolchain_provider_identity =
+            core.toolchain_provider_identity
+                .replacen("provider-kind=full-source;", "provider-kind=prebuilt;", 1);
+        extension.provider_kind = "prebuilt".into();
+        let linkage_path = crate::source_built_fixed_point_receipt::PROVIDER_KIND_LINKAGE_FILE;
+        let (mut linkage, _) = read_bound_json::<serde_json::Value>(fixture.root.path(), linkage_path).unwrap();
+        for role in ["proof_identity", "proof_linkage", "prerequisites"] {
+            linkage[role]["selected_provider_kind"] = serde_json::json!("prebuilt");
+        }
+        write_json(fixture.root.path(), linkage_path, &linkage);
+        fixture.reseal_receipt(core, extension);
+        assert_receipt_rejected(&fixture);
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle() {
+        let fixture = SyntheticReceiptFixture::new();
+        let (core, extension) = fixture.receipt();
+        let (mut manifest, _) =
+            read_bound_json::<MantleStageManifest>(fixture.root.path(), MANTLE_STAGE2_MANIFEST).unwrap();
+        assert_ne!(manifest.closure_policy_digest_blake3, DIGEST_A);
+        manifest.closure_policy_digest_blake3 = DIGEST_A.into();
+        write_json(fixture.root.path(), MANTLE_STAGE2_MANIFEST, &manifest);
+        refresh_manifest_bindings(&fixture);
+        fixture.reseal_receipt(core, extension);
+        assert_receipt_rejected(&fixture);
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle() {
+        let fixture = SyntheticReceiptFixture::new();
+        let (core, extension) = fixture.receipt();
+        let closure = extension.cold_provider.toolchain_closure.path.clone();
+        fs::write(fixture.root.path().join(&closure), b"different nonempty synthetic closure text\n").unwrap();
+        fixture.reseal_receipt(core, extension);
+        assert_receipt_rejected(&fixture);
+    }
+
+    #[test]
+    fn full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests() {
+        use crate::source_built_fixed_point_action_trust::ActionExecutable;
+        let mut fixture = SyntheticReceiptFixture::new();
+        let (core, extension) = fixture.receipt();
+        assert_eq!(core.runs[0].output_digests, core.runs[1].output_digests);
+        let mut adapters = fixture.actions.adapters.clone();
+        let host = adapters[4].actions[1].executable.clone();
+        let host_digest = match &host {
+            ActionExecutable::Fixed { digest_blake3 } => digest_blake3.clone(),
+            _ => panic!("stage1 must have a supplied fixed host orchestrator"),
+        };
+        adapters[5].actions[1].executable = host;
+        fixture.actions = crate::source_built_fixed_point_planning::plan_actions(&fixture.proof, adapters).unwrap();
+        for event in fixture.events.iter_mut().filter(|event| event.action_id == "mantle-stage2/orchestrator") {
+            event.executable_producer = None;
+            event.executable_digest_blake3 = host_digest.clone();
+        }
+        // Keep the actual stage2 compile's explicit stage1 dependency. Only the
+        // separately observed orchestrator is host-supplied; reconciliation
+        // succeeds, so matching binaries cannot hide the wrong orchestrator.
+        fixture.seal_actions();
+        fixture.write_manifests();
+        refresh_manifest_bindings(&fixture);
+        fixture.reseal_receipt(core, extension);
+        assert_receipt_rejected(&fixture);
+    }
 
     #[test]
     fn stage_artifact_paths_cannot_escape_or_hide_noncanonical_components() {

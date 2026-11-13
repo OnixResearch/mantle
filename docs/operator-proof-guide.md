@@ -304,6 +304,14 @@ profile that lacks `bootstrap/source-built-cold-route.json` requires explicit
 source-program preparation; it is not a ready cold-proof input. Refreshing only
 the Mantle record does not author that selector or the programs it names.
 
+The v2 core receipt's `source_blake3` identifies the declared Mantle source
+record, not the aggregate source-authority-set digest. The plan and receipt
+extension retain `source_authority_digest_blake3` for the complete seven-role
+set, and the rebuild descriptor retains every individual source identity.
+Regenerate plans carrying the old aggregate value; do not weaken source-closure
+membership or substitute another declared source
+([ADR 0148](../adr/0148-bind-receipt-source-to-mantle-source-root.md)).
+
 Run on Leviathan only, in a fresh absent output directory, with a verified
 current Mantle executable and explicit bubblewrap/static-shell paths. Keep
 SSH, rsync, and pueue outside the protected execution boundary; do not use
@@ -432,6 +440,12 @@ fresh absolute `MANTLE_NATIVE_SMOKE_ROOT`. Its separate C script/native protocol
 fixtures exercise real protected execution and action reconciliation, not an
 original Rust compiler, provider construction or a fixed-point proof. Missing
 prerequisites fail loudly.
+
+Native driver rejection probes retain the pre-command admitted `OUT_DIR`
+alongside the real stdout, stderr, and exit status. A skipped assembler after
+a rejected compiler capability probe likewise observes the pre-compiler state,
+not the rejected compiler's optional output tree. Neither path grants file
+authority to a rejected command's ordinary outputs or invents a successful status.
 
 Preparation does not execute a provider or prove a fixed point. Review and
 freeze its `source-program-preparation.json` and `source-profile.json`. The

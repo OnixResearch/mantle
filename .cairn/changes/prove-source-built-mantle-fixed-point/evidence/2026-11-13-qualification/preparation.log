@@ -1,0 +1,12 @@
++ date -Is
+2026-11-13T13:28:41-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ b3sum /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
+24a193a8b1ebf77aab12cb9fab1868f16ebf71ca6956fe2a170612f55d35ff07  /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle
+6254f87f4bbb406cb8b905a03ac470aacd8bfc765bffc7d4ac7f2d4fd0d666ec  /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
++ df -B1 /datapool/mantle-store/sbfp-20261113.berdKH
+Filesystem               1B-blocks         Used   Available Use% Mounted on
+datapool/mantle-store 332701630464 290529476608 42172153856  88% /datapool/mantle-store
++ env -i HOME=/datapool/mantle-store/sbfp-20261113.berdKH/home TMPDIR=/datapool/mantle-store/sbfp-20261113.berdKH/tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle --json source bundle verify --from /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json
++ env -i HOME=/datapool/mantle-store/sbfp-20261113.berdKH/home TMPDIR=/datapool/mantle-store/sbfp-20261113.berdKH/tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /datapool/mantle-store/sbfp-20261113.berdKH/bin/mantle --json self-build --source-built-fixed-point --prepare-source-programs --source-profile /datapool/mantle-store/sbfp-20261113.berdKH/source-profile-input.json --expected-source-profile-blake3 de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 45000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --out /datapool/mantle-store/sbfp-20261113.berdKH/prepared-cohort
+{"error":"source-built fixed-point blocked: proof disk preflight requires 45000000000 bytes, only 41865969664 bytes are available","code":1,"kind":"build"}

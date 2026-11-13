@@ -435,7 +435,10 @@ fn validate_receipt_contract(plan: &SourceBuiltFixedPointPlan) -> Result<(), Sou
     let vendor_digest = source_input_for_role(&plan.source_inputs, SourceAuthorityRole::VendorInputs)?
         .digest_blake3
         .as_str();
-    let expected = receipt_contract(&plan.logical_store_prefix, &plan.source_authority_digest_blake3, vendor_digest);
+    let mantle_source_digest = source_input_for_role(&plan.source_inputs, SourceAuthorityRole::MantleSource)?
+        .digest_blake3
+        .as_str();
+    let expected = receipt_contract(&plan.logical_store_prefix, mantle_source_digest, vendor_digest);
     if contract != &expected {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidPlan,
@@ -639,16 +642,16 @@ fn policy_authority(role: ProofPolicyRole) -> StageAuthorityInput {
     StageAuthorityInput::Policy { role }
 }
 
-pub(super) fn receipt_contract<D: AsRef<str>>(
+pub(super) fn receipt_contract(
     logical_store_prefix: &str,
-    source_authority_digest_blake3: D,
+    mantle_source_digest_blake3: &str,
     vendor_blake3: &str,
 ) -> SourceBuiltFixedPointReceiptContract {
     let contract = SourceBuiltFixedPointReceiptContract {
         schema: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         workflow_version: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         selected_provider_kind: SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND.to_string(),
-        source_blake3: source_authority_digest_blake3.as_ref().to_string(),
+        source_blake3: mantle_source_digest_blake3.to_string(),
         vendor_blake3: vendor_blake3.to_string(),
         logical_store_prefix: logical_store_prefix.to_string(),
         effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
@@ -797,8 +800,23 @@ mod tests {
         assert_eq!(plan.stages[MANTLE_STAGE2_INDEX].orchestrator, ProofOrchestrator::Stage1Mantle);
         assert_eq!(plan.receipt_contract.schema, SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW);
         assert!(plan.receipt_contract.require_rebuild_authority_plan);
+        let source = source_input_for_role(&plan.source_inputs, SourceAuthorityRole::MantleSource).unwrap();
+        assert_eq!(plan.receipt_contract.source_blake3, source.digest_blake3);
+        assert_ne!(plan.receipt_contract.source_blake3, plan.source_authority_digest_blake3);
         assert_eq!(plan.plan_digest_blake3.len(), BLAKE3_HEX_LENGTH);
         assert!(validate_source_built_fixed_point_plan(&plan).is_ok());
+    }
+
+    #[test]
+    fn receipt_source_cannot_be_replaced_by_the_authority_set_digest() {
+        let mut plan = plan_source_built_fixed_point(valid_input()).unwrap();
+        plan.receipt_contract.source_blake3 = plan.source_authority_digest_blake3.clone();
+        plan.plan_digest_blake3 = plan_digest_blake3(&plan).unwrap();
+
+        assert_eq!(
+            validate_source_built_fixed_point_plan(&plan).unwrap_err().kind,
+            SourceBuiltFixedPointPlanErrorKind::InvalidPlan
+        );
     }
 
     #[test]
@@ -814,17 +832,23 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_required_source_role() {
-        let mut input = valid_input();
-        input.source_inputs.retain(|entry| entry.role != SourceAuthorityRole::VendorInputs);
-        let SourceBuiltFixedPointPlanningError::InvalidPlan(error) = plan_source_built_fixed_point(input).unwrap_err()
-        else {
-            panic!("missing source role must reject the plan contract");
-        };
+    fn rejects_each_missing_required_source_role() {
+        let valid = valid_input();
+        assert_eq!(valid.source_inputs.len(), REQUIRED_SOURCE_ROLE_COUNT);
+        for role in REQUIRED_SOURCE_ROLES {
+            assert_eq!(valid.source_inputs.iter().filter(|entry| entry.role == role).count(), 1);
+            let mut input = valid.clone();
+            input.source_inputs.retain(|entry| entry.role != role);
+            assert_eq!(input.source_inputs.len(), REQUIRED_SOURCE_ROLE_COUNT - 1);
+            assert!(input.source_inputs.iter().all(|entry| entry.role != role));
+            let SourceBuiltFixedPointPlanningError::InvalidPlan(error) =
+                plan_source_built_fixed_point(input).unwrap_err()
+            else {
+                panic!("missing {role:?} must reject the source-authority contract");
+            };
 
-        assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority);
-        assert!(error.message.contains("exactly"));
-        assert!(error.message.contains("inputs"));
+            assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority, "{role:?}");
+        }
     }
 
     #[test]
@@ -847,12 +871,33 @@ mod tests {
     }
 
     #[test]
-    fn rejects_nonempty_initial_output_authority() {
-        let mut input = valid_input();
-        input.initial_output_authority.native_provider_entries = 1;
-        let error = plan_source_built_fixed_point(input).unwrap_err();
+    fn requires_empty_initial_output_authority_for_every_output_class() {
+        type EntryCount = fn(&mut InitialOutputAuthorityState) -> &mut u32;
+        let cases: [(&str, EntryCount); 4] = [
+            ("stagex-transition", |state| &mut state.stagex_transition_entries),
+            ("native-provider", |state| &mut state.native_provider_entries),
+            ("rust-provider", |state| &mut state.rust_provider_entries),
+            ("mantle-output", |state| &mut state.mantle_output_entries),
+        ];
+        let empty_plan = plan_source_built_fixed_point(valid_input()).unwrap();
 
-        assert_eq!(error, SourceBuiltFixedPointPlanningError::NonEmptyOutputAuthority);
+        for (name, entry_count) in cases {
+            for count in [0, 1, u32::MAX] {
+                let mut input = valid_input();
+                *entry_count(&mut input.initial_output_authority) = count;
+                let result = plan_source_built_fixed_point(input);
+
+                if count == 0 {
+                    assert_eq!(result.unwrap(), empty_plan, "{name}: {count}");
+                } else {
+                    assert_eq!(
+                        result.unwrap_err(),
+                        SourceBuiltFixedPointPlanningError::NonEmptyOutputAuthority,
+                        "{name}: {count}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -890,27 +935,55 @@ mod tests {
     }
 
     #[test]
-    fn rejects_out_of_range_resource_bounds() {
-        let mut elapsed = valid_input();
-        elapsed.resource_bounds.elapsed_seconds_max = ELAPSED_SECONDS_MAX.saturating_add(1);
-        let SourceBuiltFixedPointPlanningError::InvalidPlan(elapsed_error) =
-            plan_source_built_fixed_point(elapsed).unwrap_err()
-        else {
-            panic!("elapsed bound must reject the plan contract");
-        };
-        let mut open_files = valid_input();
-        open_files.resource_bounds.open_file_descriptors_max =
-            SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX.saturating_add(1);
-        let SourceBuiltFixedPointPlanningError::InvalidPlan(open_files_error) =
-            plan_source_built_fixed_point(open_files).unwrap_err()
-        else {
-            panic!("descriptor bound must reject the plan contract");
-        };
+    fn enforces_every_resource_bound_at_zero_minimum_maximum_and_above_maximum() {
+        type SetBound = fn(&mut SourceBuiltFixedPointResourceBounds, u64);
+        let cases: [(&str, u64, SetBound); 5] = [
+            ("elapsed-seconds", ELAPSED_SECONDS_MAX, |bounds, value| bounds.elapsed_seconds_max = value),
+            ("disk-bytes", DISK_BYTES_MAX, |bounds, value| bounds.disk_bytes_max = value),
+            ("open-file-descriptors", SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX, |bounds, value| {
+                bounds.open_file_descriptors_max = value;
+            }),
+            (
+                "protected-exec-events",
+                u64::from(SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX),
+                |bounds, value| {
+                    bounds.protected_exec_events_max = u32::try_from(value).unwrap();
+                },
+            ),
+            ("source-records", u64::from(SOURCE_RECORD_COUNT_MAX), |bounds, value| {
+                bounds.source_records_max = u32::try_from(value).unwrap();
+            }),
+        ];
+        let baseline = plan_source_built_fixed_point(valid_input()).unwrap();
 
-        assert_eq!(elapsed_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
-        assert_eq!(open_files_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
-        assert!(elapsed_error.message.contains("resource bounds"));
-        assert!(open_files_error.message.contains("maxima"));
+        for (name, maximum, set_bound) in cases {
+            for value in [0, 1, maximum, maximum + 1] {
+                let mut input = valid_input();
+                set_bound(&mut input.resource_bounds, value);
+                let expected_bounds = input.resource_bounds.clone();
+                let result = plan_source_built_fixed_point(input);
+
+                if value == 0 || value > maximum {
+                    let SourceBuiltFixedPointPlanningError::InvalidPlan(error) = result.unwrap_err() else {
+                        panic!("{name}: {value} must reject the resource-bounds contract");
+                    };
+                    assert_eq!(
+                        error.kind,
+                        SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds,
+                        "{name}: {value}"
+                    );
+                } else {
+                    let plan = result.unwrap();
+                    assert_eq!(plan.resource_bounds, expected_bounds, "{name}: {value}");
+                    assert_eq!(plan.source_authority_digest_blake3, baseline.source_authority_digest_blake3);
+                    assert_eq!(plan.stages, baseline.stages);
+                    assert_eq!(plan.policies, baseline.policies);
+                    assert_eq!(plan.receipt_contract, baseline.receipt_contract);
+                    assert_eq!(plan.plan_digest_blake3, plan_digest_blake3(&plan).unwrap());
+                    assert_eq!(validate_source_built_fixed_point_plan(&plan), Ok(()), "{name}: {value}");
+                }
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,99 @@
++ date -Is
+2026-11-13T14:22:00-05:00
++ cd /home/brittonr/git/OnixResearch/mantle
++ export PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ PATH=/home/brittonr/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin:/usr/bin:/bin
++ export CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0 TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp RUSTC_BOOTSTRAP=1
++ CARGO_HOME=/home/brittonr/mantle-guard-check-20261113.6nAonq/cargo-home
++ CARGO_NET_OFFLINE=true
++ CARGO_TARGET_DIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/target
++ CARGO_BUILD_JOBS=4
++ CARGO_INCREMENTAL=0
++ TMPDIR=/home/brittonr/mantle-guard-check-20261113.6nAonq/tmp
++ RUSTC_BOOTSTRAP=1
++ export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER CARGO_ENCODED_RUSTFLAGS RUSTFLAGS
++ cargo test --release -p mantle --bin mantle source_built_fixed_point_trust_report::receipt_tests -- --test-threads=1
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `release` profile [optimized] target(s) in 5m 35s
+     Running unittests src/main.rs (/home/brittonr/mantle-guard-check-20261113.6nAonq/target/release/deps/mantle-ad84301f665b2ab1)
+
+running 17 tests
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest ... FAILED
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes ... FAILED
+
+failures:
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle' (2479812) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle' (2479821) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind' (2479822) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests' (2479823) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema' (2479824) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+---- source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest' (2479825) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+---- source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes stdout ----
+
+thread 'source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes' (2479832) panicked at src/source_built_fixed_point_receipt_fixture.rs:512:102:
+called `Result::unwrap()` on an `Err` value: Build("source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source")
+
+
+failures:
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema
+    source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest
+    source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes
+
+test result: FAILED. 10 passed; 7 failed; 0 ignored; 0 measured; 2942 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
++ status=101
++ printf 'verification_exit=%s\n' 101
+verification_exit=101
++ printf '%s\n' 101
++ exit 101

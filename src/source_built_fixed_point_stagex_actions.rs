@@ -889,7 +889,6 @@ pub(crate) fn validate_partition<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source_built_recipe::RecipeExitPolicy;
     use crate::source_built_recipe::RecipeWord;
 
     fn source(path: &str) -> ArtifactRef {

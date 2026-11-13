@@ -239,3 +239,14 @@ the mes/tinycc linking leaves (`mescc-entrypoint`, `mes-crt1`, `mes-libc-tcc`,
 `tcc-boot0`, `tcc-mes`, `tinycc-crt1`, `tinycc-libtcc1`), which need the original
 operands. That audit is the next slice; no stage equality, reconciliation, v2
 receipt or release evidence exists, and I3–I5 and V1–V3 remain unchecked.
+
+## Native probe state checkpoint (2026-11-13)
+
+Proof v27 rejected ordinary file authority from potentially failing native
+probes. Driver-result and skipped-assembler authoring now retain the prior
+admitted file state while preserving real command status and stdio. The
+positive/negative graph-admission regression, focused strict release Clippy,
+release build, current source-built tests, and CLI qualification passed. A new
+cohort and cold proof remain unaccepted. See
+[native probe state authority](evidence/2026-11-12-source-input-binding-corrections.md#native-probe-state-authority-2026-11-13).
+I3–I5 and V1–V3 remain unchecked; the preserved v27 failure is not a proof.
