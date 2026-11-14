@@ -242,7 +242,7 @@ fn perlasm(
             ("native-perl".into(), perl.clone()),
             ("package".into(), tools.package.clone()),
         ]),
-        outputs: outputs("authenticated", ArtifactKind::Object),
+        outputs: outputs("authenticated", ArtifactKind::Text),
         operation: RecipeOperation::Exec {
             command_state: None,
             merge_stderr: false,
@@ -270,7 +270,7 @@ fn perlasm(
         program,
         id,
         perl,
-        product(&program.stage_id, &authenticate_id, "authenticated"),
+        (product(&program.stage_id, &authenticate_id, "authenticated"), ""),
         tools.package.clone(),
         source,
         filename,

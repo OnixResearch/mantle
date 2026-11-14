@@ -1,0 +1,93 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef
+++ mktemp -d /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.XXXXXX
++ SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.EAV4q5
++ export GRAPH_OBLIGATION_SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.EAV4q5 GRAPH_OBLIGATION_RUN=/home/brittonr/sbfp-20261113-berdKH
++ GRAPH_OBLIGATION_SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.EAV4q5
++ GRAPH_OBLIGATION_RUN=/home/brittonr/sbfp-20261113-berdKH
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum src/source_built_mantle_programs.rs src/source_built_mantle_programs_native.rs src/source_built_mantle_programs_native_helper.rs src/source_built_mantle_programs_native_schedules.rs src/source_built_mantle_programs_aws.rs
+70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921  src/source_built_mantle_programs.rs
+825b16784805d18c65db9243227771b0e816dee14d33fa2f70cb7d4bf18eb122  src/source_built_mantle_programs_native.rs
+44f4bf3ddebf711cf51390879245bccaf63ed71e13f2a89f8fb3ca8f0a4cb550  src/source_built_mantle_programs_native_helper.rs
+7a7b1f7d83fbebc503eea28cc91c6817225176f865310e40e5635bfc02f05a85  src/source_built_mantle_programs_native_schedules.rs
+819c04cafb218205a6f56aabd5c6672e5e6637a6372841b7a3a722c0d860c904  src/source_built_mantle_programs_aws.rs
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4653ddef XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4653ddef
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo test --locked --offline -p mantle --bin mantle source_built_mantle_programs:: -- --test-threads=1; rustc --edition=2024 src/source_built_mantle_programs_native_helper.rs -o "$GRAPH_OBLIGATION_SCRATCH/ring-helper"; rustc --edition=2024 src/source_built_mantle_programs_aws_helper.rs -o "$GRAPH_OBLIGATION_SCRATCH/aws-helper"; /run/current-system/sw/bin/perl "$GRAPH_OBLIGATION_RUN/graph-obligation-perlasm-smoke.pl" "$GRAPH_OBLIGATION_SCRATCH/ring-helper" "$GRAPH_OBLIGATION_SCRATCH/aws-helper" "$GRAPH_OBLIGATION_RUN/graph-obligation-production-wrapper.pl" "$GRAPH_OBLIGATION_SCRATCH"'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/onix-artifact.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/mantle.git', using 'master'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+warning: /home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 59s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target/debug/deps/mantle-5aca9fbf2c5e1ed9)
+
+running 5 tests
+test source_built_mantle_programs::native::tests::perlasm_authentication_survives_input_pruning_and_rejects_substitution ... ok
+test source_built_mantle_programs::native::tests::rejected_native_probes_retain_admitted_state_not_optional_outputs ... ok
+test source_built_mantle_programs::tests::plan_derived_source_operands_normalize_lexically ... ok
+test source_built_mantle_programs::tests::selected_semantic_products_remain_execution_obligations ... ok
+test source_built_mantle_programs::tests::unselected_helpers_do_not_become_dummy_execution_roots ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2961 filtered out; finished in 0.00s
+
+PASS: ring authentication publishes exact checked source bytes; generator reads them and preserves logical path and both SHA basenames
+Error: Custom { kind: InvalidData, error: "original ring Perl cwd changed" }
+PASS: changed request cwd rejects before authenticated-source publication
+changed original PerlAsm pipe boundary at /home/brittonr/sbfp-20261113-berdKH/graph-obligation-production-wrapper.pl line 19.
+PASS: changed original pipe boundary rejects without raw output
+PASS: actual AWS source helper preserves its assembler-probe cut through the selected transformed member
+NON-CLAIM: bounded host helper/Perl fixtures only; no protected provider execution, original compiler, bootstrap or fixed-point proof
++ s=0
++ '[' -n /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.EAV4q5 ']'
++ rm -r -- /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.EAV4q5
++ printf 'graph_obligation_regressions_exit=%s\n' 0
+graph_obligation_regressions_exit=0
++ printf '%s\n' 0
++ exit 0

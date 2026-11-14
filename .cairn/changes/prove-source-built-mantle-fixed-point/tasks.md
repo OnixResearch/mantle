@@ -11,7 +11,7 @@
 ## Phase 2: Verification
 
 - [x] [serial] V1 Add positive pure-plan, action-trust, reconciliation, and receipt tests. Add negative tests for missing source records, nonempty initial provider/output authority, imported or cache-hit provider completion, incomplete action adapters, path-only generated authority, producerless generated executables, unknown or missing execution events, executable digest drift, producer drift, event-count overflow, remote or cache-only execution, undeclared input authority, v1 receipt, wrong provider kind, closure drift, Cargo invocation, live fetch, ambient tool/read, protected-exec violation, practical fallback, stage2 host orchestration, output mismatch, timeout, disk preflight failure, and partial alias publication. Run focused `cargo_free_self_build`, `source_toolchain_closure`, `self_build`, release determinism, and bootstrap parity tests. r[bootstrap_inventory.source_built_mantle_fixed_point]
-  - Evidence: the complete V1 boundary coverage and current source-bound qualification are retained in `evidence/2026-11-12-source-input-binding-corrections.md`; Leviathan tasks 1548 and 1550 passed the source-built, receipt, CLI, Cargo-free, closure, self-build and release-core legs on frozen source `4e0f7ad0f228773710e57ea8938e1d70d73fdc20`. These mechanism tests do not accept I3–I5, real bootstrap parity, release evidence or the cold fixed point.
+  - Evidence: complete V1 boundary coverage and source-bound qualification are retained in `evidence/2026-11-12-source-input-binding-corrections.md`; latest Leviathan tasks 1552 and 1554 passed 256 source-built tests plus the receipt, CLI, Cargo-free, closure, self-build and release-core legs on frozen source `4653ddef4edd196620f0a3337b2c7045c8cf4efd`. These mechanism tests do not accept I3–I5, real bootstrap parity, release evidence or the cold fixed point.
 - [ ] [serial] V2 Run the full proof on Leviathan (`leviathan.cymric-daggertooth.ts.net`) as the sole execution host. Use a fresh hydrated source root and set `CRUNCH_NO_FUSE=1`. Before launch, retain exact source and profile transfer parity. Also retain observed host, system, architecture, kernel, resource, sandbox-tool, and pueue-task facts. Use SSH, rsync, and pueue only for outer transfer, launch, observation, and evidence retrieval. Do not use Mantle `--builder`, Nix remote-action dispatch, split-host stages, or route-name trust. Preserve exact provider, closure, stage, smoke, action-trust, reconciliation, audit, v2 receipt, and BLAKE3 evidence. Require stage1/stage2 binary equality and complete planned-versus-observed action coverage. Require all proof actions to execute locally on Leviathan. Require zero unknown events, missing events, live fetches, Cargo invocations, or fallback events. Require strict hermeticity. r[bootstrap_inventory.source_built_mantle_fixed_point]
 
 - [ ] [serial] V3 Run `nix develop -c cargo test -p mantle --test release_cli`, `nix develop -c cargo test -p mantle --test bootstrap_parity_cli`, focused action-trust core and CLI tests, the machine-contract checker, `nix develop -c cargo fmt --check -p mantle -v`, focused first-party Clippy, `git diff --check`, release-evidence verification, Cairn validation, and all three gates; do not mark the proof complete from preflight, a partial trust report, provider smoke, one-shot build, or a mismatched fixed point. r[bootstrap_inventory.source_built_mantle_fixed_point]
@@ -280,3 +280,17 @@ environment/cwd inputs and a rejected foreign-stage producer. The actual cohort
 must still be regenerated and independently admitted; its prepared cold-proof
 script was never run. I3–I5 and proof-dependent V2/V3 remain open. See the same
 source-input correction evidence for both complete reviews and the focused run.
+
+## Selected topology and authenticated PerlAsm checkpoint (2026-11-13)
+
+The `11498fc8…` cohort's stage references are valid, but graph review rejected
+1,975 unreachable Mantle steps; semantic roots account for all but 12 unconsumed
+PerlAsm authentication results. Semantic products now remain execution roots,
+and PerlAsm reads a typed authenticated file/member while preserving logical
+pathname and AWS's source transformation. Strict reachability and input pruning
+are unchanged. Task 1556 passed five graph regressions plus actual bounded host
+ring/AWS helper and Perl-wrapper fixtures; the exact results and failed fixture
+compile from task 1555 are retained in the source-input correction evidence.
+ADR 0149 records ownership and the clean internal contract cutover. No cold
+proof launched from this graph-rejected cohort; I3–I5 and proof-dependent V2/V3
+remain open pending a new frozen cohort and actual execution.

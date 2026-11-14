@@ -356,10 +356,10 @@ relative member. This is path composition, not permission to trim original
 operands or relax lexical admission. Required original trailing separators
 remain explicit typed directory separators.
 
-Every authored source action output is an execution obligation: the recipe root
-set names all produced outputs, not only requested products. Package worlds,
-crate directories, controller protocol leaves, and tool trees therefore cannot
-become unreachable merely because no exported compiler product names them.
+Every authored source action is an execution obligation: recipe roots must cover
+the complete selected topology, not only the requested binary. Each declaration
+must lie in the dependency closure of genuine roots; unconsumed authentication
+or helper products cannot be hidden by omitting their actions or adding dummy roots.
 
 Shared Rust translation and native-link authoring bind every produced reference
 to the owning recipe's stage, including Mantle stage1 and stage2. A Rust-provider
@@ -370,6 +370,15 @@ name is correct.
 This includes the shared LLVM/native-script helper's text and assembled-tree
 products: script, roots, environment, cwd and original-zero records must remain
 local to the recipe that declares them, not merely its final binary export.
+
+Mantle roots include every selected Rust-unit/build-script semantic product plus
+the binary and smoke observation. PerlAsm generators read the exact produced
+source file or member while preserving the original logical pathname separately
+for `$0` and basename-dependent behavior. Ring request authentication publishes
+the checked script bytes, not the binary request. AWS selects its produced Perl
+tree, preserving the existing assembler-probe cut. Authentication must remain a
+genuinely consumed dependency after unused-input pruning
+([ADR 0149](../adr/0149-keep-semantic-and-authenticated-products-in-execution-closure.md)).
 
 An authored member larger than the bundle's single-file ceiling is transported
 as the same canonical full-size chunk sequence the bundle observer produces, and

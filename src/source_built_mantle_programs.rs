@@ -139,6 +139,27 @@ fn lexically_normalized(path: &Path) -> PathBuf {
     normalized
 }
 
+/// Execution obligations are selected semantic products, not every authored
+/// helper. The consumer still rejects helpers outside their dependency closure.
+fn execution_roots(
+    semantic_roots: &BTreeMap<String, Vec<ArtifactRef>>,
+    binary: &ArtifactRef,
+    smoke: &ArtifactRef,
+) -> Vec<ArtifactRef> {
+    let roots = semantic_roots
+        .values()
+        .flatten()
+        .chain([binary, smoke])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    debug_assert!(roots.contains(binary));
+    debug_assert!(roots.contains(smoke));
+    debug_assert!(!roots.windows(2).any(|pair| pair[0] == pair[1]));
+    roots
+}
+
 impl Stage<'_> {
     pub fn produced(&self, step: &str, output_id: &str) -> ArtifactRef {
         ArtifactRef::Produced {
@@ -910,7 +931,7 @@ impl Stage<'_> {
                 provenance: "source-only Cargo-free topology and original generator phases".into(),
             },
             steps: self.steps,
-            roots: vec![binary.clone(), smoke.clone()],
+            roots: execution_roots(&self.semantic_roots, &binary, &smoke),
             timeout_groups: program.timeout_groups,
             exports: BTreeMap::from([(self.id, binary), ("mantle-smoke".into(), smoke)]),
             semantic_roots: self.semantic_roots,
@@ -936,5 +957,65 @@ mod tests {
             lexically_normalized(Path::new("/mantle/release/source/./src/../src/lib.rs")),
             PathBuf::from("/mantle/release/source/src/lib.rs")
         );
+    }
+
+    fn selected_obligation_recipe() -> (SourceRecipe, ArtifactRef) {
+        let reference = |id: &str| ArtifactRef::Produced {
+            action_id: format!("mantle-stage1/{id}"),
+            output_id: "data".into(),
+        };
+        let binary = reference("binary");
+        let smoke = reference("smoke");
+        let library = reference("library");
+        let semantic_roots = BTreeMap::from([
+            ("rust-unit:mantle".into(), vec![binary.clone()]),
+            ("rust-unit:library".into(), vec![library.clone()]),
+            ("build-script:library".into(), vec![reference("build-script")]),
+        ]);
+        let recipe = SourceRecipe {
+            schema: crate::source_built_recipe::SCHEMA.into(),
+            stage_id: "mantle-stage1".into(),
+            preparation: RecipePreparation {
+                tool: "selected-obligation-fixture".into(),
+                provenance: "source graph admission only; no compiler or provider execution".into(),
+            },
+            steps: ["binary", "smoke", "library", "build-script"]
+                .into_iter()
+                .map(|id| RecipeStep {
+                    id: id.into(),
+                    inputs: BTreeMap::new(),
+                    outputs: BTreeMap::from([("data".into(), RecipeOutput {
+                        kind: ArtifactKind::Text,
+                        bytes_max: 32,
+                    })]),
+                    operation: RecipeOperation::WriteText {
+                        output: "data".into(),
+                        text: "selected source product".into(),
+                    },
+                })
+                .collect(),
+            roots: execution_roots(&semantic_roots, &binary, &smoke),
+            timeout_groups: Vec::new(),
+            exports: BTreeMap::from([("mantle-stage1".into(), binary)]),
+            semantic_roots,
+        };
+        (recipe, library)
+    }
+
+    #[test]
+    fn selected_semantic_products_remain_execution_obligations() {
+        let (mut recipe, library) = selected_obligation_recipe();
+        crate::source_built_recipe::validate_source_recipe(&recipe).unwrap();
+        recipe.roots.retain(|reference| reference != &library);
+        assert!(crate::source_built_recipe::validate_source_recipe(&recipe).is_err());
+    }
+
+    #[test]
+    fn unselected_helpers_do_not_become_dummy_execution_roots() {
+        let (mut recipe, _) = selected_obligation_recipe();
+        let mut helper = recipe.steps[0].clone();
+        helper.id = "unselected-helper".into();
+        recipe.steps.push(helper);
+        assert!(crate::source_built_recipe::validate_source_recipe(&recipe).is_err());
     }
 }

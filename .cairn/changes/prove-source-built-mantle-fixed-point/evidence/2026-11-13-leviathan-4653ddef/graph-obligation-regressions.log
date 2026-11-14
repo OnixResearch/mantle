@@ -1,0 +1,87 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef
+++ mktemp -d /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.XXXXXX
++ SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.VXVEVr
++ export GRAPH_OBLIGATION_SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.VXVEVr GRAPH_OBLIGATION_RUN=/home/brittonr/sbfp-20261113-berdKH
++ GRAPH_OBLIGATION_SCRATCH=/home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.VXVEVr
++ GRAPH_OBLIGATION_RUN=/home/brittonr/sbfp-20261113-berdKH
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum src/source_built_mantle_programs.rs src/source_built_mantle_programs_native.rs src/source_built_mantle_programs_native_helper.rs src/source_built_mantle_programs_native_schedules.rs src/source_built_mantle_programs_aws.rs
+70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921  src/source_built_mantle_programs.rs
+e8adf8d254f8dfb514e4bdcdd8f916e52375b61d58a7b02092362446a33b913d  src/source_built_mantle_programs_native.rs
+44f4bf3ddebf711cf51390879245bccaf63ed71e13f2a89f8fb3ca8f0a4cb550  src/source_built_mantle_programs_native_helper.rs
+7a7b1f7d83fbebc503eea28cc91c6817225176f865310e40e5635bfc02f05a85  src/source_built_mantle_programs_native_schedules.rs
+819c04cafb218205a6f56aabd5c6672e5e6637a6372841b7a3a722c0d860c904  src/source_built_mantle_programs_aws.rs
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4653ddef XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4653ddef
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo test --locked --offline -p mantle --bin mantle source_built_mantle_programs:: -- --test-threads=1; rustc --edition=2024 src/source_built_mantle_programs_native_helper.rs -o "$GRAPH_OBLIGATION_SCRATCH/ring-helper"; rustc --edition=2024 src/source_built_mantle_programs_aws_helper.rs -o "$GRAPH_OBLIGATION_SCRATCH/aws-helper"; /run/current-system/sw/bin/perl "$GRAPH_OBLIGATION_RUN/graph-obligation-perlasm-smoke.pl" "$GRAPH_OBLIGATION_SCRATCH/ring-helper" "$GRAPH_OBLIGATION_SCRATCH/aws-helper" "$GRAPH_OBLIGATION_RUN/graph-obligation-production-wrapper.pl" "$GRAPH_OBLIGATION_SCRATCH"'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/onix-artifact.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/mantle.git', using 'master'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+warning: /home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/canonical-source-4653ddef)
+error[E0502]: cannot borrow `step.inputs` as mutable because it is also borrowed as immutable
+    --> src/source_built_mantle_programs_native.rs:1475:13
+     |
+1474 |             let used = crate::source_built_fixed_point_stagex_actions::used_inputs(step);
+     |                                                                                    ---- immutable borrow occurs here
+1475 |             step.inputs.retain(|_, reference| used.contains(reference));
+     |             ^^^^^^^^^^^^------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |             |           |
+     |             |           immutable borrow later used by call
+     |             mutable borrow occurs here
+
+For more information about this error, try `rustc --explain E0502`.
+error: could not compile `mantle` (bin "mantle" test) due to 1 previous error
++ s=101
++ '[' -n /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.VXVEVr ']'
++ rm -r -- /home/brittonr/sbfp-20261113-berdKH/graph-obligation-smoke.VXVEVr
++ printf 'graph_obligation_regressions_exit=%s\n' 101
+graph_obligation_regressions_exit=101
++ printf '%s\n' 101
++ exit 101

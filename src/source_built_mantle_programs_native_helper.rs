@@ -97,7 +97,7 @@ fn ring_request(args: &[String]) -> io::Result<()> {
     if !request.bytes.is_empty() || environment.get("OUT_DIR").map(String::as_str) != Some("/outputs/out-dir") {
         return Err(invalid("original ring Perl environment changed"));
     }
-    fs::write(&args[6], bytes)
+    fs::copy(&args[4], &args[6]).map(|_| ())
 }
 fn capability_result(args: &[String]) -> io::Result<()> {
     let mut stdout = fs::read(&args[2])?;

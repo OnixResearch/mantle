@@ -470,7 +470,7 @@ pub(crate) fn append_schedule(
             program,
             &format!("{id}.perlasm-{ordinal}"),
             aws.perl.clone(),
-            aws.original_aws.clone(),
+            (perlasm.clone(), source),
             perlasm.clone(),
             source,
             basename,

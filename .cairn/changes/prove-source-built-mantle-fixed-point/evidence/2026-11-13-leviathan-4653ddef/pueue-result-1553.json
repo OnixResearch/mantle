@@ -1,0 +1,27 @@
+{
+  "1553": {
+    "task": {
+      "id": 1553,
+      "created_at": "2026-11-13T19:57:33.323473018-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-4653ddef.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-4653ddef.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "default",
+      "dependencies": [
+        1552
+      ],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-13T19:57:33.323420529-05:00",
+          "start": "2026-11-13T20:14:57.787674883-05:00",
+          "end": "2026-11-13T21:12:38.561757117-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

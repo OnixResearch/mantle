@@ -661,3 +661,80 @@ uncompressed `ebb0f3d6a89dec00a82f5401d433be1b815d9b30faaf62850b1a511461c79505`.
 This is source-authoring mechanism and runner-provenance evidence, not actual
 provider execution or a fixed point. Tasks 1553/1554 and replacement-cohort
 admission remain separate obligations.
+
+Task 1554 completed successfully on an isolated extraction of the exact
+`4653ddef…` archive. All nine executed test legs have the same passed/failed/
+ignored counts as the task-1550 table above; these are new current-source
+executions, not reused older logs. The machine-schema checker passed, pinned
+Nickel reported 1.17.0, and Cairn validation plus all three proposal/design/tasks
+gates returned success with `valid: true`. The source-bound formatting/Clippy
+leg remains the separate successful task 1552.
+
+The exact retained canonical log's BLAKE3 values match the remote originals:
+compressed `eca3edf13120cf88791e1b6e44250bf656b8ecd2d1054bb6ee2078c74efc36ef`,
+uncompressed `3eb8d80a2dae7536cb938c4d7c181f008cfcfdeac1d16bea44bc726853a835ce`.
+Current mechanism/CLI and structural gates do not replace inert-cohort graph
+admission, a real cold proof, real bootstrap parity or release-bundle evidence.
+
+## Current native-script corrected inert cohort
+
+Task 1553 completed successfully. The actual source-bundle verifier reported
+manifest `11498fc831f409ef59da7fa4bc8d78b43be04e00db0118dbfe210c1b7f8a0c9c`
+`ready`, with empty missing, stale, unsupported and untrusted record lists.
+Preparation binds refreshed input manifest
+`a54619c4769b1b2e65f72c9e16776c536ba5b1a5109ac583c3289a74315da76a` and
+input plan `5b585a63a3befc070b2af5886ccab1f79212a1ebf29a478a3f69cf9a4d7f26e7`.
+The four declared program identities are retained in the exact preparation
+report, alongside its inert-only non-claim, in `2026-11-13-leviathan-4653ddef/`.
+
+Raw prepared-profile BLAKE3:
+`49530bca341cafbc29fd8e1b4b4e9fae14c8ea952319a11c28005e223309a535`;
+raw preparation-report BLAKE3:
+`e9b9098ef6af3cc1d812b794f2fc97d2e041a8c84020162a65abeaabb09938a6`.
+These are byte identities, not the canonical profile manifest. The independent
+identity review accepted the exact inert payload/source bindings. The complete
+graph review confirmed all 740 native-script references per Mantle recipe are
+now stage-local, but rejected launch for a separate reachability boundary: only
+22,126 of 24,101 steps are reachable from binary/smoke roots; 1,975 selected
+topology steps are omitted. Semantic-product roots cover all but 12 PerlAsm
+authentication steps, whose unused request-artifact inputs are pruned.
+
+Both reviews are retained. The cold-proof script was never executed. The current
+repair roots the selected semantic products, not arbitrary unused helpers, and
+makes PerlAsm consume authenticated source bytes/members while preserving its
+logical pathname and AWS's source-owned probe transformation. No validator,
+guard, source pin or proof bound is weakened. No provider, stage, fixed-point,
+parity or release acceptance follows from the rejected source-ready profile.
+
+## Selected topology and authenticated PerlAsm repair
+
+Mantle now roots its selected semantic Rust-unit/build-script products alongside
+the binary and smoke observation, with deterministic deduplication. An unused
+helper still fails strict reachability. PerlAsm now consumes an exact produced
+file/member, preserving the logical source path separately. Ring's unchanged
+request checks publish the checked script bytes rather than the binary request;
+AWS consumes its produced transformed Perl tree, retaining the assembler-probe
+cut and original-source dependency. ADR 0149 records this contract and ownership.
+
+Task 1555 failed compiling a new regression fixture because its borrowed
+used-input set overlapped mutable pruning; no tests executed. That fixture now
+uses the same collect-unused-keys-before-removal pattern as `Stage::finish`.
+The preserved failure is not a production admission relaxation.
+
+Task 1556 passed
+`test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2961 filtered out; finished in 0.00s`.
+These exercise selected semantic obligations, rejection of dummy helper roots,
+authenticated file/tree-member dependencies after pruning and the earlier native
+probe-state invariant. The command also compiled the actual ring/AWS helpers and
+executed the production Perl wrapper with bounded host fixtures. Captured output
+confirmed exact authenticated script bytes, separate logical path and both SHA
+basenames; rejection of changed request cwd before publication; rejection of a
+changed source pipe boundary before raw output; and preservation of AWS's actual
+source-owned assembler-probe transformation.
+
+Exact commands, source-leaf hashes, terminal results, runtime fixture inputs and
+wrapper bytes are retained in `2026-11-13-leviathan-4653ddef/`. Owned temporary
+fixture scripts and binaries were removed after execution. These are mechanism
+and host-fixture observations only, not protected provider execution, an
+original compiler, a bootstrap fixed point, parity or release eligibility. A new
+frozen source, generated cohort and independent admission are still required.

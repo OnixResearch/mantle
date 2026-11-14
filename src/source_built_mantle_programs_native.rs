@@ -605,19 +605,23 @@ pub(crate) fn cc_library_overlays(
 /// genuine Perl leaves. Neither phase runs an assembler, shell or interpreter
 /// child. The original filename remains the generator's output argument, so
 /// SHA-256/SHA-512 basename-dependent selection remains original behavior.
+/// The authenticated source is an exact produced file (empty member) or a
+/// selected member of a produced source tree. Its logical pathname stays separate.
 pub(crate) fn append_x86_64_perlasm(
     program: &mut SourceRecipe,
     id: &str,
     perl: ArtifactRef,
-    original_script: ArtifactRef,
+    original_script: (ArtifactRef, &str),
     source_tree: ArtifactRef,
     source_path: &str,
     output_filename: &str,
     environment: BTreeMap<String, RecipeWord>,
     runtime_mounts: BTreeMap<String, String>,
 ) -> Result<ArtifactRef, RunError> {
+    let (original_script, original_member) = original_script;
     produced(&perl)?;
     produced(&original_script)?;
+    relative(original_member, true)?;
     relative(source_path, false)?;
     relative(output_filename, false)?;
     if output_filename.contains('/') || !output_filename.ends_with(".S") {
@@ -634,8 +638,8 @@ pub(crate) fn append_x86_64_perlasm(
     const PIPE_SOURCE: &str = r###"
 use strict;
 use warnings;
-my ($source, $raw, $filename) = @ARGV;
-open my $input, '<', $source or die "original PerlAsm source: $!";
+my ($authenticated, $source, $raw, $filename) = @ARGV;
+open my $input, '<', $authenticated or die "authenticated PerlAsm source: $!";
 my $text; { local $/; $text = <$input>; } close $input or die $!;
 my $count = 0;
 my @lines = split /\n/, $text, -1;
@@ -670,7 +674,7 @@ die $@ if $@;
     }];
     let inputs = BTreeMap::from([
         ("perl".into(), perl.clone()),
-        ("original-script".into(), original_script.clone()),
+        ("original-script".into(), original_script),
         ("source".into(), source_tree.clone()),
         ("pipe-source".into(), product(&program.stage_id, &helper_id, "source")),
     ]);
@@ -685,6 +689,7 @@ die $@ if $@;
             invocation_input: None,
             arguments: vec![
                 input("pipe-source", ""),
+                input("original-script", original_member),
                 input("source", source_path),
                 output("raw"),
                 lit(output_filename),
@@ -703,7 +708,6 @@ die $@ if $@;
         id: translate_id.clone(),
         inputs: BTreeMap::from([
             ("perl".into(), perl),
-            ("original-script".into(), original_script),
             ("source".into(), source_tree),
             ("raw".into(), product(&program.stage_id, &generate_id, "raw")),
         ]),
@@ -1405,6 +1409,92 @@ mod tests {
             validate_source_recipe(&recipe).unwrap();
             let consumer = recipe.steps.iter_mut().find(|step| step.id == consumer).unwrap();
             consumer.inputs.insert(input_name.into(), product("mantle-stage1", producer, "native-files"));
+            assert!(validate_source_recipe(&recipe).is_err());
+        }
+    }
+
+    fn authenticated_perlasm_recipe(tree_member: bool) -> SourceRecipe {
+        let mut recipe = SourceRecipe {
+            schema: SCHEMA.into(),
+            stage_id: "mantle-stage1".into(),
+            preparation: RecipePreparation {
+                tool: "authenticated-perlasm-fixture".into(),
+                provenance: "source graph admission only; no Perl or provider execution".into(),
+            },
+            steps: vec![RecipeStep {
+                id: "authenticated-script".into(),
+                inputs: BTreeMap::new(),
+                outputs: BTreeMap::from([("script".into(), RecipeOutput {
+                    kind: ArtifactKind::Text,
+                    bytes_max: 32,
+                })]),
+                operation: RecipeOperation::WriteText {
+                    output: "script".into(),
+                    text: "authenticated source fixture".into(),
+                },
+            }],
+            roots: Vec::new(),
+            exports: BTreeMap::new(),
+            semantic_roots: BTreeMap::new(),
+            timeout_groups: Vec::new(),
+        };
+        let mut original = product(&recipe.stage_id, "authenticated-script", "script");
+        let member = if tree_member {
+            recipe.steps.push(RecipeStep {
+                id: "authenticated-tree".into(),
+                inputs: BTreeMap::from([("script".into(), original)]),
+                outputs: BTreeMap::from([("tree".into(), RecipeOutput {
+                    kind: ArtifactKind::Tree,
+                    bytes_max: BYTES_MAX,
+                })]),
+                operation: RecipeOperation::AssembleTree {
+                    output: "tree".into(),
+                    entries: BTreeMap::from([("crypto/test.pl".into(), "script".into())]),
+                },
+            });
+            original = product(&recipe.stage_id, "authenticated-tree", "tree");
+            "crypto/test.pl"
+        } else {
+            ""
+        };
+        let prior = |name: &str| product("full-source-native-provider", name, "artifact");
+        let assembly = append_x86_64_perlasm(
+            &mut recipe,
+            "perlasm",
+            prior("perl"),
+            (original, member),
+            prior("source"),
+            "crypto/test.pl",
+            "test.S",
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        recipe.roots.push(assembly);
+        recipe
+    }
+
+    #[test]
+    fn perlasm_authentication_survives_input_pruning_and_rejects_substitution() {
+        for tree_member in [false, true] {
+            let mut recipe = authenticated_perlasm_recipe(tree_member);
+            for step in &mut recipe.steps {
+                let used = crate::source_built_fixed_point_stagex_actions::used_inputs(step);
+                let unused = step
+                    .inputs
+                    .iter()
+                    .filter(|(_, reference)| !used.contains(reference))
+                    .map(|(name, _)| name.clone())
+                    .collect::<Vec<_>>();
+                for name in unused {
+                    step.inputs.remove(&name);
+                }
+            }
+            validate_source_recipe(&recipe).unwrap();
+            let generator = recipe.steps.iter_mut().find(|step| step.id == "perlasm.generate").unwrap();
+            generator
+                .inputs
+                .insert("original-script".into(), product("full-source-native-provider", "unrelated", "artifact"));
             assert!(validate_source_recipe(&recipe).is_err());
         }
     }
