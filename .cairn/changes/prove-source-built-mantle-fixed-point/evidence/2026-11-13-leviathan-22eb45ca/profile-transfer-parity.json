@@ -1,0 +1,27 @@
+{
+  "format": "mantle-source-cohort-transfer-parity-v1",
+  "source_revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "source_archive": {
+    "compressed_blake3": "ecdd35a1099f16746496811c57d90115e3c57411828f9737173d98ce29cff7db",
+    "raw_blake3": "75622e1209102d6f1cdbaf5187688a05710e0380c9525d18e9d759ea8d93f0f0",
+    "remote_checks": "Successful source-bound qualification task 1557 checks both values against the frozen local archive identities before extraction and build",
+    "evidence": [
+      "frozen-build-inputs.json",
+      "qualification-22eb45ca.log.gz",
+      "pueue-result-1557.json"
+    ]
+  },
+  "prepared_profile": {
+    "manifest_blake3": "23c026be09632f990f8b8542300f1597cf4a106a09308057be32c421d0b3004e",
+    "remote_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/source-profile.json",
+    "remote_raw_blake3": "3d95ce0d8e50cc3a9a6f3c4c9a769c50d36628e7182c8474033a8a588e6258f4",
+    "received_raw_blake3": "3d95ce0d8e50cc3a9a6f3c4c9a769c50d36628e7182c8474033a8a588e6258f4",
+    "transfer_method": "Actual complete JSON byte stream over SSH to workstation b3sum stdin, with pipefail; full profile not persisted on workstation",
+    "transport_job": "bg_180",
+    "transport_result": "completed",
+    "elapsed_seconds": 291.17,
+    "matched": true
+  },
+  "retained_preparation_report_blake3": "827a50d0e947474f3a3b378d921b7423ffb207ed148ac56085c12e1a8eda0886",
+  "non_claim": "Transfer checks byte identity only. Canonical cohort admission additionally requires source verification and independent graph/authenticated-source review. No provider, stage equality, fixed point, compiler correctness or release acceptance."
+}

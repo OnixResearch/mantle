@@ -294,3 +294,14 @@ compile from task 1555 are retained in the source-input correction evidence.
 ADR 0149 records ownership and the clean internal contract cutover. No cold
 proof launched from this graph-rejected cohort; I3–I5 and proof-dependent V2/V3
 remain open pending a new frozen cohort and actual execution.
+
+## Source-ready semantic-closure checkpoint (2026-11-14)
+
+The source-bound `22eb45ca…` runner completed inert preparation in task 1560.
+Both actual bundle verifiers reported ready; exact program/report identities,
+the interrupted predecessor and cross-endpoint profile-byte parity are retained
+in `evidence/2026-11-13-leviathan-22eb45ca/`. Independent complete-graph and
+source-identity/PerlAsm-consumption reviews gate cold launch. Preparation and
+transfer do not complete I3–I5 or proof-dependent V2/V3. See the source-input
+correction evidence for the complete current handoff.
+

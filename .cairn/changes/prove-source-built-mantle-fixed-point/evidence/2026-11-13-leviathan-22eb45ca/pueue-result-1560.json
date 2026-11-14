@@ -1,0 +1,28 @@
+{
+  "1560": {
+    "task": {
+      "id": 1560,
+      "created_at": "2026-11-14T00:15:45.578367509-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/resume-preparation-22eb45ca.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/resume-preparation-22eb45ca.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "default",
+      "dependencies": [
+        1557,
+        1559
+      ],
+      "priority": 0,
+      "label": "mantle-22eb45ca-preparation-resumed",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-14T00:15:45.578317615-05:00",
+          "start": "2026-11-14T00:15:45.869134813-05:00",
+          "end": "2026-11-14T00:53:07.545220764-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

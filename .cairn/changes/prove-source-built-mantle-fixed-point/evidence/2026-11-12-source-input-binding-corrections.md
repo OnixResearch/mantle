@@ -825,3 +825,39 @@ only normal completion produced the completion marker. Results and the measured
 driver BLAKE3 are retained in `resumption-exit-guard-exercise.json`. Disposable
 files were removed and the live Leviathan task was not interrupted. This checks
 the operator driver's exit honesty, not source preparation or proof execution.
+
+## Verified semantic-closure inert cohort (2026-11-14)
+
+Task 1560 completed with Pueue result `Success` at
+`2026-11-14T00:53:07.545220764-05:00`. Its complete log contains the completion
+marker and exit value `0`; the actual input and prepared source-bundle verifiers
+both reported `ready`, with empty missing, stale, unsupported and untrusted
+record lists. The prepared manifest is
+`23c026be09632f990f8b8542300f1597cf4a106a09308057be32c421d0b3004e`.
+The retained preparation report binds input manifest
+`570d65093f49efbcbd4cb73af3b0bbb0783788c101d57cdc352b44e55eea0ebd`,
+input plan `985fb9bf2d870dac1be8104ca2c867d6b91b7206fcd197dc3b7c30b65d1797aa`
+and all four authored program-record identities.
+
+Input-profile bytes were unchanged before/after preparation at BLAKE3
+`617920eeea63f92d41cf4d2d9458fffd1bd915fd3fcc0aaaff10b5cbc34b99bb`.
+Prepared-profile raw-byte BLAKE3 is
+`3d95ce0d8e50cc3a9a6f3c4c9a769c50d36628e7182c8474033a8a588e6258f4`;
+preparation-report raw-byte BLAKE3 is
+`827a50d0e947474f3a3b378d921b7423ffb207ed148ac56085c12e1a8eda0886`.
+These byte identities are distinct from the canonical manifest identity.
+
+The terminal result, complete log, both verifier reports and preparation report
+are retained in `2026-11-13-leviathan-22eb45ca/`. Independent complete-graph and
+identity/authenticated-source reviews operate on the published physical cohort.
+An end-to-end SSH transfer hash check of the actual profile bytes also gates
+launch. Source readiness alone accepts no provider, Mantle stage, fixed point,
+bootstrap parity or release evidence; I3–I5 and proof-dependent V2/V3 remain open.
+
+The complete prepared-profile JSON byte stream was transferred over SSH to the
+workstation's BLAKE3 hasher. The received digest exactly matched the recorded
+Leviathan raw-byte digest above. `profile-transfer-parity.json` retains both
+endpoints, the actual transfer method and the source-archive qualification
+linkage. The locally retained preparation-report bytes also match Leviathan's
+recorded digest. This is byte-transfer evidence, not independent source or
+behavioral acceptance.

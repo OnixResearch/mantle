@@ -1,0 +1,9 @@
+{
+  "manifest_blake3": "570d65093f49efbcbd4cb73af3b0bbb0783788c101d57cdc352b44e55eea0ebd",
+  "ready_class": "ready",
+  "missing_records": [],
+  "stale_records": [],
+  "unsupported_records": [],
+  "untrusted_records": [],
+  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+}
