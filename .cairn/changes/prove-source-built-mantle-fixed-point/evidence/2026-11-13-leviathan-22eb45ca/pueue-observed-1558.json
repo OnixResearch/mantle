@@ -1,0 +1,27 @@
+{
+  "1558": {
+    "task": {
+      "id": 1558,
+      "created_at": "2026-11-13T21:59:09.021473875-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-22eb45ca.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-22eb45ca.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "default",
+      "dependencies": [
+        1557
+      ],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-13T21:59:09.021470418-05:00",
+          "start": "2026-11-13T22:17:19.944512860-05:00",
+          "end": "2026-11-13T22:28:01.096498734-05:00",
+          "result": "Killed"
+        }
+      }
+    },
+    "output": ""
+  }
+}

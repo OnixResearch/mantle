@@ -1,0 +1,27 @@
+{
+  "1559": {
+    "task": {
+      "id": 1559,
+      "created_at": "2026-11-13T21:59:10.445859882-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-22eb45ca-run.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-22eb45ca-run.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "mantle-sbfp-22eb45ca-cli",
+      "dependencies": [
+        1557
+      ],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-13T21:59:10.445844904-05:00",
+          "start": "2026-11-13T22:17:20.010550615-05:00",
+          "end": "2026-11-13T22:26:24.579699149-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "short": "22eb45ca",
+  "revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "base": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-13-leviathan-22eb45ca",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "driver": "/home/brittonr/sbfp-20261113-berdKH/resume-preparation-22eb45ca.sh",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed",
+  "interrupted_task": 1558,
+  "interrupted_result": "Killed",
+  "interrupted_exit_file_value": 0,
+  "interrupted_verification_bytes": 0,
+  "input_manifest_blake3": "570d65093f49efbcbd4cb73af3b0bbb0783788c101d57cdc352b44e55eea0ebd",
+  "task": 1560,
+  "driver_blake3": "ff2c8b1468ff1f0fa305eebc33d0a5f91a1561e33d2b29766f6ecee6e71655ad",
+  "submitted_with_pueue": "/nix/store/3l5fy0kn9fzq56dzsfj6j9vp2vzrw2sm-pueue-4.0.4/bin/pueue",
+  "submission_warning": "Pueue 4.0.4 reported server protocol 0.30.0 before returning task 1560; task was submitted once.",
+  "non_claim": "Detached resumption only. Task 1558 was Killed; its zero exit file is not successful verification. No prepared cohort, provider, stage comparison, fixed-point proof or release is accepted by submission."
+}

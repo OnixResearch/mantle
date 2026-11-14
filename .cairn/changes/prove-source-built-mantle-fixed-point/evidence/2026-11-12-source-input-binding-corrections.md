@@ -770,3 +770,50 @@ Retained qualification-log BLAKE3 values match Leviathan: compressed
 uncompressed `873ae5337bb8ccab2dcb9bd72cddb8edfcc4428e1f0232ffc81f0bbbe66ced28`.
 This verifies the corrected source-authoring mechanisms and exact runner build,
 not a prepared-profile graph, provider, stage comparison, fixed point or release.
+
+Task 1559 also completed successfully on an isolated extraction of the exact
+`22eb45ca…` archive. Its nine executed test legs have the same passed/failed/
+ignored counts as the task-1550 table above. These are current-source executions.
+The machine-schema checker passed, pinned Nickel reported 1.17.0, and Cairn
+validation plus proposal/design/tasks gates all returned success with
+`valid: true`. Formatting and strict root-package Clippy remain the successful
+source-bound task-1557 leg.
+
+Retained canonical-log BLAKE3 values match Leviathan: compressed
+`cc1e1f1385b96cd2a982a70bb236df6552cc350127c1e4813eebf361733ea7b3`,
+uncompressed `921191757047fd988295000687d33d4d399173b51b5695a654ba2e90e3f8fcc8`.
+Current mechanism, CLI and structural lifecycle checks do not accept a cold
+proof, real bootstrap parity or a successful release-evidence bundle.
+
+## Interrupted preparation and isolated resumption (2026-11-14)
+
+After the SSH completion observer disconnected, the retained Pueue result for
+task 1558 showed `Killed` at `2026-11-13T22:28:01.096498734-05:00`.
+Its shell trap had written exit value `0`, but source-profile verification
+produced an empty file and no prepared cohort existed. The Pueue result and
+incomplete artifacts take precedence over that exit file. No prepared profile
+or proof is accepted from this attempt. Its log, exit file, empty verification
+file and completed source-refresh report are retained with
+`pueue-observed-1558.json` in `2026-11-13-leviathan-22eb45ca/`.
+
+The completed refresh preserves 65 records, adds none, and binds input manifest
+`570d65093f49efbcbd4cb73af3b0bbb0783788c101d57cdc352b44e55eea0ebd`
+to replacement Mantle source
+`aa317a2b73be17013f08d35775ea99f0828b6f345b924d1ce6882a2d51b9b978`.
+Task 1560 resumes verification and preparation using that manifest, the same
+frozen runner and a new `prepared-cohort-22eb45ca-resumed` output root. Separate
+logs preserve the interrupted attempt. The resumption driver requires the
+recorded runner and normalized source-tree BLAKE3 values, a working namespace
+probe, verified input/output profiles and unchanged input-profile bytes; its
+exit guard rejects zero status before the completion marker. Signals HUP, INT
+and TERM produce nonzero statuses. Driver transfer parity is BLAKE3
+`ff2c8b1468ff1f0fa305eebc33d0a5f91a1561e33d2b29766f6ecee6e71655ad`.
+
+Current observed host facts include Linux `6.18.63`, `x86_64`,
+1,128,893,464,576 available filesystem bytes and 183,754,235,904 available memory
+bytes. The old Pueue client store path was absent. A native Pueue 4.0.4 client
+submitted task 1560 once but warned about server protocol `0.30.0`; subsequent
+inspection uses the available native 4.0.1 client matching that server. The
+daemon was not restarted. Exact paths, task acceptance and resumption inputs
+are retained in `preparation-resumption.json` and `pueue-submitted-1560.json`.
+Submission does not complete I3–I5, V2 or proof-dependent V3 gates.
