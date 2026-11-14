@@ -1,0 +1,25 @@
+{
+  "1551": {
+    "task": {
+      "id": 1551,
+      "created_at": "2026-11-13T19:51:20.056172999-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/native-script-stage-regression.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/native-script-stage-regression.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH",
+      "envs": {},
+      "group": "default",
+      "dependencies": [],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-13T19:51:20.056157389-05:00",
+          "start": "2026-11-13T19:51:20.237918866-05:00",
+          "end": "2026-11-13T19:54:46.787074176-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

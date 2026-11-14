@@ -55,9 +55,9 @@ fn output(name: &str, path: &str) -> RecipeWord {
         }],
     }
 }
-fn produced(id: &str, name: &str) -> ArtifactRef {
+fn produced(stage: &str, id: &str, name: &str) -> ArtifactRef {
     ArtifactRef::Produced {
-        action_id: format!("{STAGE}/{id}"),
+        action_id: format!("{stage}/{id}"),
         output_id: name.into(),
     }
 }
@@ -484,7 +484,7 @@ fn text(recipe: &mut SourceRecipe, id: String, value: String) -> ArtifactRef {
             text: value,
         },
     });
-    produced(&id, "text")
+    produced(&recipe.stage_id, &id, "text")
 }
 fn assemble(recipe: &mut SourceRecipe, id: String, values: BTreeMap<String, ArtifactRef>, disk: u64) -> ArtifactRef {
     let mut inputs = BTreeMap::new();
@@ -503,7 +503,7 @@ fn assemble(recipe: &mut SourceRecipe, id: String, values: BTreeMap<String, Arti
             entries,
         },
     });
-    produced(&id, "tree")
+    produced(&recipe.stage_id, &id, "tree")
 }
 fn netstring(to: &mut String, value: &str) {
     to.push_str(&format!("{}:{value},", value.len()));
@@ -679,7 +679,7 @@ pub(crate) fn author(
         ],
         BTreeMap::from([("source".into(), spec(ArtifactKind::Tree, disk))]),
     ));
-    let llvm_source = produced(&source_id, "source");
+    let llvm_source = produced(&recipe.stage_id, &source_id, "source");
     let store = request.proof.logical_store_prefix.trim_end_matches('/');
     let mut logical = BTreeMap::new();
     let mut command_inputs = BTreeMap::new();
@@ -1020,8 +1020,8 @@ pub(crate) fn author(
         steps: recipe.steps,
         files,
         exports: BTreeMap::from([
-            ("llvm-root".into(), produced(&finish, "root")),
-            ("llvm-config".into(), produced(&finish, "llvm-config")),
+            ("llvm-root".into(), produced(&recipe.stage_id, &finish, "root")),
+            ("llvm-config".into(), produced(&recipe.stage_id, &finish, "llvm-config")),
             ("llvm-native-controller".into(), controller),
         ]),
     })

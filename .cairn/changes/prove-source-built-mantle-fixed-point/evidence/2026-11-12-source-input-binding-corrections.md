@@ -546,3 +546,88 @@ These checks verify the source-authoring mechanism, not a provider or cold
 fixed point. Task 1549 prepares the replacement inert cohort; isolated task
 1550 covers the required CLI, contract and lifecycle legs without mutating the
 frozen proof source. Real parity, release evidence and I3–I5 remain outstanding.
+
+Task 1550 also completed successfully on an isolated extraction of the same
+`4e0f7ad0…` archive. Its executed test legs were:
+
+| Canonical leg | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| `release_cli` | 154 | 0 | 0 |
+| `bootstrap_parity_cli` | 21 | 0 | 0 |
+| `machine_schema_contracts` | 4 | 0 | 0 |
+| library `source_built_fixed_point_trust_report::receipt_tests::` | 18 | 0 | 0 |
+| `cargo_free_self_build::tests` | 59 | 0 | 0 |
+| `source_toolchain_closure::tests` | 52 | 0 | 0 |
+| `self_build::tests` | 172 | 0 | 0 |
+| release-core `determinism::tests` | 22 | 0 | 0 |
+| release-core `genuine_rebuild::tests` | 6 | 0 | 0 |
+
+The machine-schema checker reported `PASS (24 contracted, 65 classified)`.
+Pinned Nickel reported 1.17.0. Cairn validation and all three proposal/design/
+tasks gates returned success with `valid: true`. The terminal Pueue result and
+exact log are retained; compressed log BLAKE3
+`02ccf20570cd9928818b358e60c1308fb7170083884356645c5963639851444e`
+matches the remote copy, whose uncompressed BLAKE3 is
+`da76fe841a885afd0fd24243dc08d09839899bc215ae699e3dcbc44bf1ac3d10`.
+This completes current mechanism/CLI and structural qualification, including
+V1's focused verification. It does not execute real bootstrap parity or verify
+a successful release-evidence bundle; V3's proof-dependent evidence stays open.
+
+## Replacement inert cohort rejected by graph admission
+
+Leviathan task 1549 exited 0. Preparation binds refreshed input manifest
+`2d3baa300694dcd1fa9cb0221a368dfca1795371b07ddbae0ed71df20577164d` and
+input plan `9be4d9d54ab026ccd7cce90c12c9c826c029f3e9073f10f6255f87a9ef8895e3`
+to output manifest
+`4932432f6fddd92e0ecefcb96a4aff872e19af3d2e507f8d6112d1c0251a8e51`.
+The real source-bundle verifier reported this exact output manifest `ready`,
+with empty missing, stale, unsupported and untrusted record lists. The complete
+preparation command, terminal result, report, input plan and verifier results
+are retained in `2026-11-13-leviathan-4e0f7ad0/`.
+
+| Added inert program record | Declared record BLAKE3 |
+| --- | --- |
+| `fixed-point-native-source-program` | `aba4f5acd5d8e6318aebe515d13b39b7734bdb69c31b1ed868cedf4bbc98872f` |
+| `fixed-point-rust-source-program` | `fffa984ef1db0981dc0689bcf3a61109214570a01d951422fc6f15f10e346abd` |
+| `source-built-mantle-programs` | `586da96b7f26cf0137743e5e1f0e07c879efcecde6b847165ae09dc96f37cedb` |
+| `source-built-stagex-programs` | `0a211f5effe9e0eaa066467a166467a555f163324465ce5e1a31480d364d1b74` |
+
+The raw prepared-profile JSON BLAKE3 is
+`ffcc050da54bb5a05720e768be84e395759f6b0275e72566a86f3bce3189f3ec`;
+the raw preparation-report BLAKE3 is
+`00aa1dc381cec5251d8f8853a9c44e8548afa1ad6bba11ac199ec9b66b13cd1a`.
+Neither byte checksum substitutes for the canonical output manifest identity.
+The independent identity review accepted the exact inert profile bindings,
+including raw hashes, source/plan linkage, unchanged initial output authority,
+and all four program payload/fetch identities. All four record digests changed
+across cohort directories because their fetch URLs are part of record identity;
+the Rust program bytes also changed for canonical provider outputs. This is not
+graph admission. The independent graph review rejected cold launch: both Mantle
+recipes retain 740 input references each to nonexistent Rust-stage native-script
+products. The LLVM helper's `text` and `assemble` return values still used a
+hardcoded stage. The earlier focused regressions verified the corrected
+translation/macro helpers but did not cover this nested helper.
+
+Both complete reviews are retained. The cold-proof script was not executed.
+The remaining repair binds these LLVM/native-script products to the actual
+recipe stage and exercises whole native-script graph admission for Rust and
+both Mantle stages, with static and captured environment/cwd inputs. No aliases,
+source-pin changes or admission weakening are in scope. No provider, stage,
+receipt, parity or release claim follows from the rejected inert cohort.
+
+Current host/tool observations and a real minimal-root BusyBox/bwrap execution
+are retained in `current-host-sandbox-preflight.log`. They bind the frozen
+runner and exact sandbox tools and report sufficient output-filesystem space
+for the selected 200 GB bound. They are prerequisites, not proof execution or
+kernel-isolation evidence.
+
+Task 1551 exercised the real shared native-script authoring API after the LLVM
+product-constructor repair. It passed
+`test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2962 filtered out; finished in 0.03s`.
+That regression admits each owning Rust/Mantle stage with both static and
+captured environment/cwd bindings through `validate_source_recipe`, then rejects
+a cross-stage script-producer substitution. The exact two source-leaf hashes,
+compiler identity, command and terminal result are retained in the rejected
+cohort's evidence directory. This was a focused mechanism check in the mutable
+canonical-check copy, not a new frozen-runner build or replacement cohort.
+The current `4932432f…` profile remains rejected and unlaunched.

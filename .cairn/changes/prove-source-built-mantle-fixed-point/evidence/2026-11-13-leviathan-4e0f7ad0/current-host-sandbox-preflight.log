@@ -1,0 +1,29 @@
+Initial read-only host probe, observed before unsupported getconf PHYS_PAGES stopped it:
+observed_at=2026-11-13T19:18:09-05:00
+hostname=leviathan
+uname_srm=Linux 6.18.44 x86_64
+online_processors=256
+failed_query=getconf PHYS_PAGES: Unrecognized variable
+
+Remaining probe using Linux _PHYS_PAGES:
++ getconf _PHYS_PAGES
+65871479
++ getconf PAGE_SIZE
+4096
+1024
++ ulimit -n
++ df -B1 /home/brittonr/sbfp-20261113-berdKH
+Filesystem         1B-blocks          Used     Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2605771542528 1130991235072  70% /
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/proof-4e0f7ad0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+57042f2b8048afd51e1151749a9d01aa63b99e958bbd151e035c3a62816abadf  /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0
+9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece  /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
+ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc  /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 --version
+mantle 0.1.0
++ /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --version
+bubblewrap 0.12.0
++ env -i /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts --die-with-parent --new-session --ro-bind /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox /busybox --chdir / -- /busybox true
+non_claim=host observations and sandbox-tool prerequisite only; not provider execution, fixed point, or kernel isolation
++ printf '%s\n' 'non_claim=host observations and sandbox-tool prerequisite only; not provider execution, fixed point, or kernel isolation'

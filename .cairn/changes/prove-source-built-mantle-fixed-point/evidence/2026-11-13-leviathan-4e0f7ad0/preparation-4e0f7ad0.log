@@ -1,0 +1,36 @@
++ date -Is
+2026-11-13T18:32:29-05:00
+++ cat /home/brittonr/sbfp-20261113-berdKH/qualification-4e0f7ad0.exit
++ test 0 = 0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --check /home/brittonr/sbfp-20261113-berdKH/runner-blake3-4e0f7ad0.txt
+/home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0: OK
++ SOURCE=/home/brittonr/sbfp-20261113-berdKH/runner-source-4e0f7ad0
++ COHORT=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0
++ MANTLE=/home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-4e0f7ad0
++ mkdir -p /home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home /home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0
++ PROOF_HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home
++ PROOF_TMP=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 --json source bundle refresh-mantle-source --from /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json --mantle-source /home/brittonr/sbfp-20261113-berdKH/runner-source-4e0f7ad0 --to /home/brittonr/sbfp-20261113-berdKH/source-profile-4e0f7ad0.json
++ jq -e '.input_manifest_blake3 == "de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c" and .previous_mantle_source_blake3 == "51b3da0e5d3a15f690aec40a41763ff7b656eee03b2e399d97b5d705e6005194" and .preserved_record_count == 65 and .added_record_count == 0' /home/brittonr/sbfp-20261113-berdKH/source-refresh-4e0f7ad0.json
+true
+++ jq -er .output_manifest_blake3 /home/brittonr/sbfp-20261113-berdKH/source-refresh-4e0f7ad0.json
++ PROFILE_ID=2d3baa300694dcd1fa9cb0221a368dfca1795371b07ddbae0ed71df20577164d
++ [[ 2d3baa300694dcd1fa9cb0221a368dfca1795371b07ddbae0ed71df20577164d =~ ^[a-f0-9]{64}$ ]]
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/source-profile-4e0f7ad0.json
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 --json self-build --source-built-fixed-point --prepare-source-programs --source-profile /home/brittonr/sbfp-20261113-berdKH/source-profile-4e0f7ad0.json --expected-source-profile-blake3 2d3baa300694dcd1fa9cb0221a368dfca1795371b07ddbae0ed71df20577164d --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-4e0f7ad0-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-4e0f7ad0 --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0/source-profile.json
++ jq -e '.ready_class == "ready" and ([.missing_records, .stale_records, .unsupported_records, .untrusted_records] | all(length == 0))' /home/brittonr/sbfp-20261113-berdKH/prepared-source-profile-verification-4e0f7ad0.json
+true
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/source-profile-4e0f7ad0.json /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0/source-profile.json /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0/source-program-preparation.json
+b449e57286bb18c0a9de66c51961d5837e093c6cb9afb4fb1187c941308d0b8f  /home/brittonr/sbfp-20261113-berdKH/source-profile-4e0f7ad0.json
+ffcc050da54bb5a05720e768be84e395759f6b0275e72566a86f3bce3189f3ec  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0/source-profile.json
+00aa1dc381cec5251d8f8853a9c44e8548afa1ad6bba11ac199ec9b66b13cd1a  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-4e0f7ad0/source-program-preparation.json
++ date -Is
+2026-11-13T19:32:06-05:00
++ s=0
++ printf 'preparation_4e0f7ad0_exit=%s\n' 0
+preparation_4e0f7ad0_exit=0
++ printf '%s\n' 0
++ exit 0

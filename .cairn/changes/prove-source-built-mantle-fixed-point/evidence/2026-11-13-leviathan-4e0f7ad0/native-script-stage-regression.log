@@ -1,0 +1,72 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/canonical-source-4e0f7ad0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum src/source_built_rust_programs_llvm.rs src/source_built_rust_programs_native_smoke_tests.rs
+a7c0bae931e3f59aaeb1cbabf39fff143535b430ecfc1621d18ecf7d477dda7a  src/source_built_rust_programs_llvm.rs
+80847c4b5a40ee36dbc4554b91e34cdcc767a6efd627ed17cb776c6fe5a8abe2  src/source_built_rust_programs_native_smoke_tests.rs
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4e0f7ad0 XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-4e0f7ad0
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo test --locked --offline -p mantle --bin mantle native_script_graphs_admit_owning_stage_products_and_reject_cross_stage_inputs -- --test-threads=1'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/onix-artifact.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/mantle.git', using 'master'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+warning: /home/brittonr/sbfp-20261113-berdKH/canonical-source-4e0f7ad0/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/canonical-source-4e0f7ad0/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/canonical-source-4e0f7ad0)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 43s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target/debug/deps/mantle-5aca9fbf2c5e1ed9)
+
+running 1 test
+test source_built_rust_programs::translation::native_smoke_tests::native_script_graphs_admit_owning_stage_products_and_reject_cross_stage_inputs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2962 filtered out; finished in 0.03s
+
++ s=0
++ printf 'native_script_stage_regression_exit=%s\n' 0
+native_script_stage_regression_exit=0
++ printf '%s\n' 0
++ exit 0

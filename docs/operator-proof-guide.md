@@ -367,6 +367,9 @@ prefix is not a valid replacement for a Mantle-local producer. The published Rus
 provider itself declares the canonical `full-source-rust-provider` output ID;
 the prior-stage consumer rejects a generic `tree` output even when its export
 name is correct.
+This includes the shared LLVM/native-script helper's text and assembled-tree
+products: script, roots, environment, cwd and original-zero records must remain
+local to the recipe that declares them, not merely its final binary export.
 
 An authored member larger than the bundle's single-file ceiling is transported
 as the same canonical full-size chunk sequence the bundle observer produces, and

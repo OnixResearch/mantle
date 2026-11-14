@@ -1,4 +1,4 @@
-//! Opt-in protected regression for the compact Rust source-script C driver.
+//! Native-script graph admission and opt-in protected C-driver regression.
 //! Bounded C protocol producers are fixtures, not an original Rust compiler,
 //! Cargo build-script, native provider, or fixed-point proof.
 use std::fs;
@@ -169,6 +169,69 @@ fn reference(step: &str, output: &str) -> ArtifactRef {
     ArtifactRef::Produced {
         action_id: format!("stagex-transition/{step}"),
         output_id: output.into(),
+    }
+}
+
+fn source_script_recipe(stage: &str, captured: bool) -> SourceRecipe {
+    let proof = crate::source_built_fixed_point_action_trust::tests::fixture().0;
+    let request = crate::source_built_program_authoring::AuthoringRequest {
+        proof: &proof,
+        source_roots: &BTreeMap::new(),
+        predecessor_exports: &BTreeMap::new(),
+        scratch_root: Path::new("/unused"),
+        targets: &[],
+    };
+    let mut recipe = SourceRecipe {
+        schema: crate::source_built_recipe::SCHEMA.into(),
+        stage_id: stage.into(),
+        preparation: RecipePreparation {
+            tool: "native-script-stage-fixture".into(),
+            provenance: "structural source graph; no compiler or provider execution".into(),
+        },
+        steps: Vec::new(),
+        timeout_groups: Vec::new(),
+        roots: Vec::new(),
+        exports: BTreeMap::new(),
+        semantic_roots: BTreeMap::new(),
+    };
+    let result = crate::source_built_rust_programs::llvm::append_native_source_script(
+        &request,
+        &mut recipe,
+        reference("prerequisites", "controller"),
+        crate::source_built_rust_programs::llvm::NativeSourceScript {
+            id: "source-script".into(),
+            script: "exec cc source.c\n".into(),
+            initial_workspace: reference("prerequisites", "workspace"),
+            initial_cwd: if captured { String::new() } else { "/tmp".into() },
+            initial_cwd_input: captured.then(|| (reference("prerequisites", "entry"), "cwd".into())),
+            original_zero: "/tmp/source-script".into(),
+            environment: BTreeMap::new(),
+            environment_input: captured.then(|| (reference("prerequisites", "entry"), "environment".into())),
+            inputs: BTreeMap::from([("source".into(), reference("prerequisites", "source"))]),
+            readonly_inputs: BTreeSet::from(["source".into()]),
+            runtime_mounts: BTreeMap::new(),
+            inventory: vec![("cc".into(), reference("prerequisites", "cc"))],
+            commands_max: 2,
+        },
+    )
+    .unwrap();
+    recipe.roots.extend([result.checkpoint, result.workspace]);
+    recipe
+}
+
+#[test]
+fn native_script_graphs_admit_owning_stage_products_and_reject_cross_stage_inputs() {
+    for stage in ["full-source-rust-provider", "mantle-stage1", "mantle-stage2"] {
+        for captured in [false, true] {
+            let mut recipe = source_script_recipe(stage, captured);
+            crate::source_built_recipe::validate_source_recipe(&recipe).unwrap();
+            let scripts = recipe.steps.iter_mut().find(|step| step.id == "source-script.scripts").unwrap();
+            scripts.inputs.insert("member-0".into(), ArtifactRef::Produced {
+                action_id: "stagex-transition/source-script.program".into(),
+                output_id: "text".into(),
+            });
+            assert!(crate::source_built_recipe::validate_source_recipe(&recipe).is_err());
+        }
     }
 }
 
