@@ -1,0 +1,13 @@
+{
+  "revision": "4653ddef4edd196620f0a3337b2c7045c8cf4efd",
+  "short": "4653ddef",
+  "raw_archive_blake3": "75845ae712c685ca9a9aa2c2120c5f13934551845b65de9b329aec2868fae4a4",
+  "compressed_archive_blake3": "0030d50e5c78a90d325e969eec8848174c06cacbae561f1a3768a905c8792c14",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "qualification_task": 1552,
+  "preparation_task": 1553,
+  "canonical_qualification_task": 1554,
+  "focused_regression_task": 1551,
+  "non_claim": "Queued source-bound qualification and success-dependent preparation/canonical gates. Previous493 cohort remains graph-rejected and unlaunched; no replacement pin or provider/fixed-point/release acceptance."
+}

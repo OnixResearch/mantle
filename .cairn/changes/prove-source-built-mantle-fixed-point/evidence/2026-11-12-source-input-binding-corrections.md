@@ -631,3 +631,33 @@ compiler identity, command and terminal result are retained in the rejected
 cohort's evidence directory. This was a focused mechanism check in the mutable
 canonical-check copy, not a new frozen-runner build or replacement cohort.
 The current `4932432f…` profile remains rejected and unlaunched.
+
+## Nested native-script corrected source freeze
+
+Revision `4653ddef4edd196620f0a3337b2c7045c8cf4efd` contains the remaining
+LLVM/native-script owning-stage repair, its executed graph-admission regression
+and the reviewed-cohort rejection evidence. The raw archive BLAKE3 is
+`75845ae712c685ca9a9aa2c2120c5f13934551845b65de9b329aec2868fae4a4`;
+the transferred gzip BLAKE3 is
+`0030d50e5c78a90d325e969eec8848174c06cacbae561f1a3768a905c8792c14`.
+Leviathan task 1552 performs source-bound qualification/build. Task 1553 depends
+on its success for fresh inert preparation and actual source verification;
+isolated task 1554 runs the required CLI/contract/lifecycle legs. Commands and
+frozen inputs are retained in `2026-11-13-leviathan-4653ddef/`. Submission is not
+successful qualification, a replacement profile admission or a cold proof.
+
+Task 1552 completed successfully. The captured execution summary is
+`test result: ok. 256 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 6.26s`.
+The native-script, macro and canonical Rust-provider handoff regressions all
+executed. Package formatting, strict root-package release Clippy and the locked
+offline release build succeeded. Ignored protected smokes were not executed.
+The normalized source-tree BLAKE3 is unchanged before/after the build:
+`6f1ff45094ed34849af1434863ebb441234f4e67d216b0d9b9bd039fd428c1d7`.
+The resulting frozen runner's BLAKE3 is
+`b3ae319688efa1d1012caa794e49bfe7aeb0dd4cea3b909590f1d643d5734009`.
+Retained log BLAKE3 values match Leviathan: compressed
+`3c5c0395597bbc9c31545eebfbe5351798f78b49c29fa16bef7be36b8da63110`,
+uncompressed `ebb0f3d6a89dec00a82f5401d433be1b815d9b30faaf62850b1a511461c79505`.
+This is source-authoring mechanism and runner-provenance evidence, not actual
+provider execution or a fixed point. Tasks 1553/1554 and replacement-cohort
+admission remain separate obligations.
