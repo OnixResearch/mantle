@@ -817,3 +817,11 @@ inspection uses the available native 4.0.1 client matching that server. The
 daemon was not restarted. Exact paths, task acceptance and resumption inputs
 are retained in `preparation-resumption.json` and `pueue-submitted-1560.json`.
 Submission does not complete I3–I5, V2 or proof-dependent V3 gates.
+
+The exact transferred resumption header was also executed in disposable local
+workstation Bash processes for normal completion, an early zero exit, HUP, INT
+and TERM. Process status and the recorded exit file matched in all five cases;
+only normal completion produced the completion marker. Results and the measured
+driver BLAKE3 are retained in `resumption-exit-guard-exercise.json`. Disposable
+files were removed and the live Leviathan task was not interrupted. This checks
+the operator driver's exit honesty, not source preparation or proof execution.

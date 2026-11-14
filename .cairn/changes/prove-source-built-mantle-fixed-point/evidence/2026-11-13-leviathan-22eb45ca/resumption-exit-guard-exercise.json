@@ -1,0 +1,39 @@
+{
+  "format": "mantle-preparation-exit-guard-exercise-v1",
+  "driver_blake3": "ff2c8b1468ff1f0fa305eebc33d0a5f91a1561e33d2b29766f6ecee6e71655ad",
+  "shell": "/run/current-system/sw/bin/bash",
+  "execution_host": "local workstation",
+  "cases": [
+    {
+      "name": "completed",
+      "process_exit": 0,
+      "recorded_exit": 0,
+      "completion_marker": true
+    },
+    {
+      "name": "early-zero-exit",
+      "process_exit": 1,
+      "recorded_exit": 1,
+      "completion_marker": false
+    },
+    {
+      "name": "hangup",
+      "process_exit": 129,
+      "recorded_exit": 129,
+      "completion_marker": false
+    },
+    {
+      "name": "interrupt",
+      "process_exit": 130,
+      "recorded_exit": 130,
+      "completion_marker": false
+    },
+    {
+      "name": "terminate",
+      "process_exit": 143,
+      "recorded_exit": 143,
+      "completion_marker": false
+    }
+  ],
+  "non_claim": "Isolated execution of the retained driver exit/signal header with disposable output directories. No source preparation, provider execution, fixed point, compiler correctness or release acceptance."
+}
