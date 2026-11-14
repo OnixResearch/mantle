@@ -1,0 +1,13 @@
+{
+  "revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "short": "22eb45ca",
+  "raw_archive_blake3": "75622e1209102d6f1cdbaf5187688a05710e0380c9525d18e9d759ea8d93f0f0",
+  "compressed_archive_blake3": "ecdd35a1099f16746496811c57d90115e3c57411828f9737173d98ce29cff7db",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "qualification_task": 1557,
+  "preparation_task": 1558,
+  "canonical_qualification_task": 1559,
+  "focused_regression_task": 1556,
+  "non_claim": "Queued source-bound qualification and success-dependent preparation/canonical gates. Previous11498fc8 cohort remains graph-rejected and unlaunched; no replacement profile or provider/fixed-point/release acceptance."
+}

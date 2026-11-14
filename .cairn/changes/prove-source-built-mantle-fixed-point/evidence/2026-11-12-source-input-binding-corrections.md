@@ -738,3 +738,35 @@ fixture scripts and binaries were removed after execution. These are mechanism
 and host-fixture observations only, not protected provider execution, an
 original compiler, a bootstrap fixed point, parity or release eligibility. A new
 frozen source, generated cohort and independent admission are still required.
+
+## Semantic-closure corrected source freeze
+
+Revision `22eb45ca5321416fce3278a228a43224dd0026c5` freezes the selected
+semantic-product roots, typed authenticated PerlAsm source-member cutover,
+regressions, bounded host-smoke evidence and ADR 0149. The raw tar BLAKE3 is
+`75622e1209102d6f1cdbaf5187688a05710e0380c9525d18e9d759ea8d93f0f0`;
+the transferred gzip BLAKE3 is
+`ecdd35a1099f16746496811c57d90115e3c57411828f9737173d98ce29cff7db`.
+Task 1557 performs source-bound qualification/build; task 1558 depends on its
+success for fresh inert source-program preparation and actual source verification.
+Isolated task 1559 covers canonical CLI/contract/lifecycle gates. Their exact
+drivers and frozen input identities are retained in
+`2026-11-13-leviathan-22eb45ca/`. Submission is not acceptance of these checks,
+a prepared-profile launch pin, a provider or a fixed point.
+
+Task 1557 completed successfully. Its captured execution summary is
+`test result: ok. 259 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 6.25s`.
+The selected-semantic-product, unused-helper and authenticated PerlAsm pruning
+regressions executed in this source-bound leg. Package formatting, strict
+root-package release Clippy and the locked offline release build also passed;
+the ignored protected smokes were not executed.
+
+The normalized source-tree BLAKE3 is unchanged before/after qualification:
+`e090c7f6af61a943f047257c2c48df3abcb039828d0d4b56b384116829b28edf`.
+Frozen runner BLAKE3:
+`ebef9e67e8498b20ba843c6a8155b3156c89aa015dd240bfb17789b612bd8518`.
+Retained qualification-log BLAKE3 values match Leviathan: compressed
+`34b6a294cc6d882543fe0b7e9218af1d6ea94ac67e9c66db623c6b6ae0dda067`,
+uncompressed `873ae5337bb8ccab2dcb9bd72cddb8edfcc4428e1f0232ffc81f0bbbe66ced28`.
+This verifies the corrected source-authoring mechanisms and exact runner build,
+not a prepared-profile graph, provider, stage comparison, fixed point or release.
