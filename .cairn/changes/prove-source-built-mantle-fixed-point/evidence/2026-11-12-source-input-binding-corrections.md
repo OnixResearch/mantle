@@ -861,3 +861,97 @@ endpoints, the actual transfer method and the source-archive qualification
 linkage. The locally retained preparation-report bytes also match Leviathan's
 recorded digest. This is byte-transfer evidence, not independent source or
 behavioral acceptance.
+
+## Complete graph passes; original AWS source intake is required (2026-11-14)
+
+Independent graph inspection of all six published recipes reached all 125,355
+declared steps, with no unresolved output, cycle or omitted action. Each Mantle
+stage roots 1,241 distinct selected semantic products plus its genuine help
+smoke. The guard supplement found no guarded root/export/semantic exposure or
+invalid guarded input edge. Exact per-recipe counts, hashes, procedures and
+captured results are retained as `graph-review*` in
+`2026-11-13-leviathan-22eb45ca/`.
+
+The separate identity/PerlAsm review rejected launch: both Mantle recipes name
+`bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9`
+under Mantle source authority, but that original tree was absent from the frozen
+and published snapshots. The source-ready profile does not supply it. The four
+program-record bindings and all 479 recorded file entries matched; Ring consumes
+authenticated script bytes and the planned AWS flows preserve original-source
+and probe-observation dependencies. Those planned flows cannot authenticate
+absent originals. `identity-perl-review.json` and its executable procedures
+retain the concrete rejection. No cold proof was launched from this cohort.
+
+Task 1561 acquired the original from `https://github.com/aws/aws-lc.git` outside
+protected proof execution and completed `Success`. Its commit and tree checks
+match the upstream `aws-lc-rs` gitlink: commit
+`02561621ffa4cf17c0c4f70bc11a82df36b42ae9`, Git tree
+`969d75db5c0494de4a26bbb2dcbf6837058054c1`. The capture contains 10,427 tracked
+files, with no symlink or gitlink modes. Source archive BLAKE3 is
+`282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88`;
+normalized GNU-tar tree BLAKE3 is
+`8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89`.
+The upstream links, exact acquisition driver, captured log/report and Pueue
+result are retained in `2026-11-14-aws-original/`.
+
+The acquired source is suitable for intake, but code `22eb45ca…` is not a
+qualified runner for it. A subsequent source audit found four selected original
+AWS-LC invocations with a guarded two-line pipe statement that the frozen
+single-line-only wrapper rejects. Task 1562's source-complete assembly is retained
+as diagnostic input only; see `2026-11-14-leviathan-22eb45ca-aws/disposition.json`.
+The next complete snapshot must include the exact guarded-statement repair,
+then qualify its runner and regenerate an immutable cohort. The rejected cohort
+remains untouched; no vendored/generated substitute, provider output, relaxed
+guard or changed proof bound is admitted. Acquisition alone does not complete
+I3–I5 or the cold proof.
+
+## Original guarded PerlAsm pipe repair (2026-11-14)
+
+The source-selected wrapper now accepts exactly one original single-line pipe
+statement or the complete guarded two-line statement. It removes the entire
+matched pipe/error-handler boundary before evaluating the remaining original
+program, preserving the logical `$0`, ELF output basename and source line count.
+Changed handlers and duplicate supported boundaries reject before evaluation.
+The authenticated input remains immutable; no generator algorithm or source pin
+is substituted. Perl is now an explicit checked-in Nix test input.
+
+Leviathan Pueue 1568 completed successfully on the isolated validation snapshot.
+The captured native source leaf BLAKE3 is
+`5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403`;
+the flake leaf BLAKE3 is
+`6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e`.
+Its exact executed unit result is:
+
+```text
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2964 filtered out; finished in 0.03s
+```
+
+The same command completed package formatting and strict release Clippy for the
+root binary/tests. Runtime regressions exercise both original statement forms,
+basename-dependent assembly, immutable authenticated bytes, changed boundaries
+and duplicate boundaries without evaluating or publishing rejected source.
+
+Pueue 1569 independently compared all 38 selected original invocations: 12 Ring
+and 26 AWS-LC cases. Every original-pipe and split-generator/translator assembly
+pair is byte-identical and has equal BLAKE3 digests. The original AWS helper and
+the wrapper extracted from the pinned source leaf were actually executed; the
+assembler-probe cut consumes the fixture's recorded compiler observation.
+Exact case identities and digests are in
+`2026-11-14-pipe-boundary/original-source-equivalence.json`.
+
+Failed prerequisite attempts remain captured, not counted as successful tests:
+1563 stopped at a missing SSH identity during Nix Git-input fetching; 1565
+reached the restored pinned shell but failed replacing an owned read-only cached
+`bzip2-sys` header; 1564 and 1566 were dependency-failed without execution.
+The corrected command uses command-scoped HTTPS transport to the same pinned
+Git objects, without lockfile or global Git/SSH changes, and cleans only that
+owned package's release artifacts. Fixture task 1567 failed because its original
+pipe lacked `/bin/sh`; task 1569 adds the explicit static fixture shell rather
+than changing the original program or ignoring its nonzero status.
+
+Commands, exact terminal task records, logs and failed/successful fixture reports
+are retained in `2026-11-14-pipe-boundary/`. These are host-tool fixture and
+mechanism observations, not a source-built provider, protected action
+reconciliation, prepared-cohort acceptance, fixed point or release claim. The
+corrected complete source still requires a source-bound runner, fresh program
+preparation and independent physical-cohort review before cold launch.

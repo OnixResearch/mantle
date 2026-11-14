@@ -1,0 +1,9 @@
+{
+  "task": 1564,
+  "depends_on": 1563,
+  "validation_root": "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM",
+  "original_source_root": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original",
+  "selection_cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed",
+  "source_hash": "5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403",
+  "scope": "38 real selected original PerlAsm invocations versus split phases in fixture bwrap; no provider or cold-proof claim"
+}

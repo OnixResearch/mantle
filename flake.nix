@@ -604,6 +604,8 @@
             git
             cmake
             bash
+            # Regression tests execute the emitted PerlAsm source wrapper.
+            perl
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             pkgs.bubblewrap

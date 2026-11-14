@@ -1,0 +1,20 @@
+{
+  "scope": "Twelve physical authenticated Ring .pl source members of vendor-inputs/ring; same selected paths in both Mantle stages. Read-only physical BLAKE3 and frozen wrapper-normalized source pipe boundary counts.",
+  "inspection_script": "local://source22-ring-payload-review-script",
+  "scripts": [
+    {"ordinal":0,"path":"crypto/chacha/asm/chacha-x86_64.pl","output":"chacha-x86_64-elf.S","blake3":"8ec24e99ba7dd8aac31652b2e5b3c2ee9fcf2fc7b28b0c27cf7349e713b07439","size":46692,"pipe_boundary_count":1},
+    {"ordinal":1,"path":"crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl","output":"aes-gcm-avx2-x86_64-elf.S","blake3":"67176f5ad24afbc55024bd74af3be84ce8db9e30ee95d7d0a68f5c8bfdbcd9b5","size":42267,"pipe_boundary_count":1},
+    {"ordinal":2,"path":"crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl","output":"aesni-gcm-x86_64-elf.S","blake3":"607878718866b3672f44aac485d3a544c9d252212d8ef42209befeec896863e8","size":32033,"pipe_boundary_count":1},
+    {"ordinal":3,"path":"crypto/fipsmodule/aes/asm/aesni-x86_64.pl","output":"aesni-x86_64-elf.S","blake3":"97da62d6fc1533db255ffffc89d7f0c1b032768846121dc187ad6c186a2a9911","size":44616,"pipe_boundary_count":1},
+    {"ordinal":4,"path":"crypto/fipsmodule/aes/asm/ghash-x86_64.pl","output":"ghash-x86_64-elf.S","blake3":"fca6dea9bccbf1a56c983fe50153af38fa6555b2f5de4ef458697badececf28b","size":29711,"pipe_boundary_count":1},
+    {"ordinal":5,"path":"crypto/fipsmodule/aes/asm/vpaes-x86_64.pl","output":"vpaes-x86_64-elf.S","blake3":"56058492b2682b2a4a9ac074bea023ecc827210d7e972eae7337d85ddd5d8a1c","size":27318,"pipe_boundary_count":1},
+    {"ordinal":6,"path":"crypto/fipsmodule/bn/asm/x86_64-mont.pl","output":"x86_64-mont-elf.S","blake3":"fed94b06c9bd5c6eedd723db7ee6b1a70fa0ca3ad56549015e650de1cf0fb36c","size":32733,"pipe_boundary_count":1},
+    {"ordinal":7,"path":"crypto/fipsmodule/bn/asm/x86_64-mont5.pl","output":"x86_64-mont5-elf.S","blake3":"482e03daf2011ae4ad80c379da3b399b72ec870cc24fb5b98368135a0d65c912","size":76649,"pipe_boundary_count":1},
+    {"ordinal":8,"path":"crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl","output":"p256-x86_64-asm-elf.S","blake3":"96f377c7ef8a94c7f7d44e8baa1e7cec0db2f61d7cf48ec171e51507bf66d95b","size":92109,"pipe_boundary_count":1},
+    {"ordinal":9,"path":"crypto/fipsmodule/sha/asm/sha512-x86_64.pl","output":"sha512-x86_64-elf.S","blake3":"160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c","size":43633,"pipe_boundary_count":1},
+    {"ordinal":10,"path":"crypto/cipher/asm/chacha20_poly1305_x86_64.pl","output":"chacha20_poly1305_x86_64-elf.S","blake3":"f4089870141639aead541de1add20ecc5251aa68298e853320722ce7251e9f98","size":79830,"pipe_boundary_count":1},
+    {"ordinal":11,"path":"crypto/fipsmodule/sha/asm/sha512-x86_64.pl","output":"sha256-x86_64-elf.S","blake3":"160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c","size":43633,"pipe_boundary_count":1}
+  ],
+  "translator": {"path":"crypto/perlasm/x86_64-xlate.pl","blake3":"f42e8bb3a5d4149a976e588f89ceadd370b3ab74d46ef317aad4b4e9a2c289fd","size":59159},
+  "non_claim": "No generator or translator was executed; the AWS original .pl tree is missing and thus no AWS script bytes were attested."
+}

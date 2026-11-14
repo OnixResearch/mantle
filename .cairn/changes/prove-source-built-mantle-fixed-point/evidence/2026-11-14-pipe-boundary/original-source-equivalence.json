@@ -1,0 +1,392 @@
+{
+  "schema": "mantle-original-perlasm-split-equivalence-v1",
+  "status": "passed",
+  "counts": {
+    "ring": 12,
+    "aws": 26
+  },
+  "assembler_probe_exit": 0,
+  "cases": [
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-0.generate",
+      "source": "crypto/chacha/asm/chacha-x86_64.pl",
+      "filename": "chacha-x86_64-elf.S",
+      "assembly_bytes": 31065,
+      "original_blake3": "5c687481233d5ec322344f6d44f07f9b667b41c24d1cf7e079d08f0c2bf49610",
+      "split_blake3": "5c687481233d5ec322344f6d44f07f9b667b41c24d1cf7e079d08f0c2bf49610",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-1.generate",
+      "source": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl",
+      "filename": "aes-gcm-avx2-x86_64-elf.S",
+      "assembly_bytes": 25191,
+      "original_blake3": "8b10eb1b701ac78d69fd44817f5b00a46f644326db9c84235758097dbde9dd01",
+      "split_blake3": "8b10eb1b701ac78d69fd44817f5b00a46f644326db9c84235758097dbde9dd01",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-2.generate",
+      "source": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl",
+      "filename": "aesni-gcm-x86_64-elf.S",
+      "assembly_bytes": 19660,
+      "original_blake3": "9a3ce076d7347cfa43d9ae9ee0b5baca2d34f33cebd59ac7d9eea51574b7cbf2",
+      "split_blake3": "9a3ce076d7347cfa43d9ae9ee0b5baca2d34f33cebd59ac7d9eea51574b7cbf2",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-3.generate",
+      "source": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+      "filename": "aesni-x86_64-elf.S",
+      "assembly_bytes": 20965,
+      "original_blake3": "57b8d503bd57ea1d889189da93c05bd3102bd7a16c39ab1e71cb58e104697ead",
+      "split_blake3": "57b8d503bd57ea1d889189da93c05bd3102bd7a16c39ab1e71cb58e104697ead",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-4.generate",
+      "source": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl",
+      "filename": "ghash-x86_64-elf.S",
+      "assembly_bytes": 21961,
+      "original_blake3": "7be324d51fd0be6bc45368ff8942e29bd108ccbd455175832c21dcaba027a4bb",
+      "split_blake3": "7be324d51fd0be6bc45368ff8942e29bd108ccbd455175832c21dcaba027a4bb",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-5.generate",
+      "source": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+      "filename": "vpaes-x86_64-elf.S",
+      "assembly_bytes": 12170,
+      "original_blake3": "3ddbadae4911b19226e9380aef8d1e331cd5d52fc4a4bb767e52b3617665a217",
+      "split_blake3": "3ddbadae4911b19226e9380aef8d1e331cd5d52fc4a4bb767e52b3617665a217",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-6.generate",
+      "source": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+      "filename": "x86_64-mont-elf.S",
+      "assembly_bytes": 20463,
+      "original_blake3": "c428c3828ced7cbe279f03601607a31e1a9bcc9008db9e944438fda641f294fd",
+      "split_blake3": "c428c3828ced7cbe279f03601607a31e1a9bcc9008db9e944438fda641f294fd",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-7.generate",
+      "source": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+      "filename": "x86_64-mont5-elf.S",
+      "assembly_bytes": 51084,
+      "original_blake3": "28757bee860d91bb967e0e9d531e6de9ae55e135e001a462e785984cfdfc149b",
+      "split_blake3": "28757bee860d91bb967e0e9d531e6de9ae55e135e001a462e785984cfdfc149b",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-8.generate",
+      "source": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+      "filename": "p256-x86_64-asm-elf.S",
+      "assembly_bytes": 78605,
+      "original_blake3": "8ca216042bea83fdba2ef2926c30f0c8ec6f71f45ba9b84e14dc04219a1de997",
+      "split_blake3": "8ca216042bea83fdba2ef2926c30f0c8ec6f71f45ba9b84e14dc04219a1de997",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-9.generate",
+      "source": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+      "filename": "sha512-x86_64-elf.S",
+      "assembly_bytes": 48645,
+      "original_blake3": "a3fae15b2082d7fa5dc58ecf0cc7aaeffa8879e869e306584a8554fb5578a75a",
+      "split_blake3": "a3fae15b2082d7fa5dc58ecf0cc7aaeffa8879e869e306584a8554fb5578a75a",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-10.generate",
+      "source": "crypto/cipher/asm/chacha20_poly1305_x86_64.pl",
+      "filename": "chacha20_poly1305_x86_64-elf.S",
+      "assembly_bytes": 193289,
+      "original_blake3": "a89591f4a2aab17bdfdc9fcd70ff8c70e393adddcd10c6eb9892c5c13926185f",
+      "split_blake3": "a89591f4a2aab17bdfdc9fcd70ff8c70e393adddcd10c6eb9892c5c13926185f",
+      "equal": true
+    },
+    {
+      "family": "ring",
+      "id": "unit-00031-script.sources.perl-11.generate",
+      "source": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+      "filename": "sha256-x86_64-elf.S",
+      "assembly_bytes": 70675,
+      "original_blake3": "a6b4964e7882e3e3667e1416543911fbc63a0eccb30472e5597d456ab74805fc",
+      "split_blake3": "a6b4964e7882e3e3667e1416543911fbc63a0eccb30472e5597d456ab74805fc",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-0.generate",
+      "source": "crypto/chacha/asm/chacha-x86_64.pl",
+      "filename": "chacha-x86_64.S",
+      "assembly_bytes": 33571,
+      "original_blake3": "99b1615e603aef58ded071eb85874914807693435c68352da2620b4c579afb5d",
+      "split_blake3": "99b1615e603aef58ded071eb85874914807693435c68352da2620b4c579afb5d",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-1.generate",
+      "source": "crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl",
+      "filename": "aes128gcmsiv-x86_64.S",
+      "assembly_bytes": 67967,
+      "original_blake3": "6807a0c335bcfee512b3aa842324c66186ff3be0c9aee385e6dbe31f45db8001",
+      "split_blake3": "6807a0c335bcfee512b3aa842324c66186ff3be0c9aee385e6dbe31f45db8001",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-2.generate",
+      "source": "crypto/cipher_extra/asm/aesni-sha1-x86_64.pl",
+      "filename": "aesni-sha1-x86_64.S",
+      "assembly_bytes": 58628,
+      "original_blake3": "65a7357b6c4fd5736031c2e09995afafbd8a680b5c318c067360f951388e00ed",
+      "split_blake3": "65a7357b6c4fd5736031c2e09995afafbd8a680b5c318c067360f951388e00ed",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-3.generate",
+      "source": "crypto/cipher_extra/asm/aesni-sha256-x86_64.pl",
+      "filename": "aesni-sha256-x86_64.S",
+      "assembly_bytes": 91466,
+      "original_blake3": "1de06d85b1cc360e963fbf4d7b6f8124c738faaa9d65e054110c3e85eed4ffd7",
+      "split_blake3": "1de06d85b1cc360e963fbf4d7b6f8124c738faaa9d65e054110c3e85eed4ffd7",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-4.generate",
+      "source": "crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl",
+      "filename": "chacha20_poly1305_x86_64.S",
+      "assembly_bytes": 192912,
+      "original_blake3": "f6ab27e0dba662aa2727e95d3cd16d18bf43ea039d8ac45729eac2ae55295fa5",
+      "split_blake3": "f6ab27e0dba662aa2727e95d3cd16d18bf43ea039d8ac45729eac2ae55295fa5",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-5.generate",
+      "source": "crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl",
+      "filename": "aesni-gcm-avx512.S",
+      "assembly_bytes": 3299348,
+      "original_blake3": "506694939bd2203140e06df99f76ae9227c8f78ff05438ab5e2a5d0d9dcc5a84",
+      "split_blake3": "506694939bd2203140e06df99f76ae9227c8f78ff05438ab5e2a5d0d9dcc5a84",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-6.generate",
+      "source": "crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl",
+      "filename": "aesni-gcm-x86_64.S",
+      "assembly_bytes": 19720,
+      "original_blake3": "d82c5bd1f7675467dd7b0c4c7663d1aa4326a85be4e278aba490fd140efa4cb1",
+      "split_blake3": "d82c5bd1f7675467dd7b0c4c7663d1aa4326a85be4e278aba490fd140efa4cb1",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-7.generate",
+      "source": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+      "filename": "aesni-x86_64.S",
+      "assembly_bytes": 65579,
+      "original_blake3": "c65ff819e0e05b58276909d83ce71beec42d5e167f31db879eb8e475515c537b",
+      "split_blake3": "c65ff819e0e05b58276909d83ce71beec42d5e167f31db879eb8e475515c537b",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-8.generate",
+      "source": "crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl",
+      "filename": "aesni-xts-avx512.S",
+      "assembly_bytes": 120490,
+      "original_blake3": "132245d54dcc1588a2225af8b03b2b6afc1a71d5b98ca8b932ad33c1a08721e9",
+      "split_blake3": "132245d54dcc1588a2225af8b03b2b6afc1a71d5b98ca8b932ad33c1a08721e9",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-9.generate",
+      "source": "crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl",
+      "filename": "ghash-ssse3-x86_64.S",
+      "assembly_bytes": 5323,
+      "original_blake3": "471b5f1f6242022a9e335abcdbb22bbece5984c3f963caa2146ffb6eb96df2ce",
+      "split_blake3": "471b5f1f6242022a9e335abcdbb22bbece5984c3f963caa2146ffb6eb96df2ce",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-10.generate",
+      "source": "crypto/fipsmodule/modes/asm/ghash-x86_64.pl",
+      "filename": "ghash-x86_64.S",
+      "assembly_bytes": 23206,
+      "original_blake3": "e27e248a6ad6184e391ff5755d968d9a402e41156cbd2b1c6649678f3042f19c",
+      "split_blake3": "e27e248a6ad6184e391ff5755d968d9a402e41156cbd2b1c6649678f3042f19c",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-11.generate",
+      "source": "crypto/fipsmodule/md5/asm/md5-x86_64.pl",
+      "filename": "md5-x86_64.S",
+      "assembly_bytes": 12917,
+      "original_blake3": "f2137eedf1ce7129f07525483d1b8fcfc7dc0f0418b61b702964d329575f0f77",
+      "split_blake3": "f2137eedf1ce7129f07525483d1b8fcfc7dc0f0418b61b702964d329575f0f77",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-12.generate",
+      "source": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+      "filename": "p256-x86_64-asm.S",
+      "assembly_bytes": 78491,
+      "original_blake3": "09b70dd39f5e0b779d96262b8d980e18299b135616b0fe4ff08db543e77b1797",
+      "split_blake3": "09b70dd39f5e0b779d96262b8d980e18299b135616b0fe4ff08db543e77b1797",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-13.generate",
+      "source": "crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl",
+      "filename": "p256_beeu-x86_64-asm.S",
+      "assembly_bytes": 4858,
+      "original_blake3": "b2f3f9e5862336ea2eac5af8fc148178a15c110fc981bca15da7dcdc60f6980b",
+      "split_blake3": "b2f3f9e5862336ea2eac5af8fc148178a15c110fc981bca15da7dcdc60f6980b",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-14.generate",
+      "source": "crypto/fipsmodule/rand/asm/rdrand-x86_64.pl",
+      "filename": "rdrand-x86_64.S",
+      "assembly_bytes": 783,
+      "original_blake3": "66160f2deb382ba302ac0326d8772116bc637fff0ec2afbf2c660fadae33c580",
+      "split_blake3": "66160f2deb382ba302ac0326d8772116bc637fff0ec2afbf2c660fadae33c580",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-15.generate",
+      "source": "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl",
+      "filename": "rsaz-2k-avx512.S",
+      "assembly_bytes": 18899,
+      "original_blake3": "6deaa7d2c1da36e539f11bab7986cee1428b188e8f1c6ee84bb37155a3d32bcd",
+      "split_blake3": "6deaa7d2c1da36e539f11bab7986cee1428b188e8f1c6ee84bb37155a3d32bcd",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-16.generate",
+      "source": "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl",
+      "filename": "rsaz-3k-avx512.S",
+      "assembly_bytes": 30007,
+      "original_blake3": "21d4e7ef8d653bbab2c39c8b22a6fafc8aa47eea34c9b38399d11f8d87a40f51",
+      "split_blake3": "21d4e7ef8d653bbab2c39c8b22a6fafc8aa47eea34c9b38399d11f8d87a40f51",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-17.generate",
+      "source": "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl",
+      "filename": "rsaz-4k-avx512.S",
+      "assembly_bytes": 31817,
+      "original_blake3": "4b09053766bd54c7a9b2fae9a92483ed81826538ac49416fa88118f7d23b1d83",
+      "split_blake3": "4b09053766bd54c7a9b2fae9a92483ed81826538ac49416fa88118f7d23b1d83",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-18.generate",
+      "source": "crypto/fipsmodule/bn/asm/rsaz-avx2.pl",
+      "filename": "rsaz-avx2.S",
+      "assembly_bytes": 39466,
+      "original_blake3": "d543ca2daa681db36e8ade721efc6e5cfd862f94885d92da2d310af02c21d825",
+      "split_blake3": "d543ca2daa681db36e8ade721efc6e5cfd862f94885d92da2d310af02c21d825",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-19.generate",
+      "source": "crypto/fipsmodule/sha/asm/sha1-x86_64.pl",
+      "filename": "sha1-x86_64.S",
+      "assembly_bytes": 102042,
+      "original_blake3": "93af92617c48627a61c01640c0ce4f918972292ffbca6027993c729ff098bf33",
+      "split_blake3": "93af92617c48627a61c01640c0ce4f918972292ffbca6027993c729ff098bf33",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-20.generate",
+      "source": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+      "filename": "sha256-x86_64.S",
+      "assembly_bytes": 70861,
+      "original_blake3": "4f46db042fd80bba805e69f1349641437016ba8c5f426b9d4530ab6318df9d25",
+      "split_blake3": "4f46db042fd80bba805e69f1349641437016ba8c5f426b9d4530ab6318df9d25",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-21.generate",
+      "source": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+      "filename": "sha512-x86_64.S",
+      "assembly_bytes": 48667,
+      "original_blake3": "a4bc090cd39d19dd2ad9b716d759b1aed648d20c7eeacb9ba0633b48b7d90253",
+      "split_blake3": "a4bc090cd39d19dd2ad9b716d759b1aed648d20c7eeacb9ba0633b48b7d90253",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-22.generate",
+      "source": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+      "filename": "vpaes-x86_64.S",
+      "assembly_bytes": 19029,
+      "original_blake3": "61621915a865178dd1bfc1997808432a5f4bf344c11292f971003e816bdb53c1",
+      "split_blake3": "61621915a865178dd1bfc1997808432a5f4bf344c11292f971003e816bdb53c1",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-23.generate",
+      "source": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+      "filename": "x86_64-mont.S",
+      "assembly_bytes": 20665,
+      "original_blake3": "e43a6e746e0cc853f5672c133dfbad37452827aeace51e40d86c73cbc8428e0a",
+      "split_blake3": "e43a6e746e0cc853f5672c133dfbad37452827aeace51e40d86c73cbc8428e0a",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-24.generate",
+      "source": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+      "filename": "x86_64-mont5.S",
+      "assembly_bytes": 58880,
+      "original_blake3": "93cb4159667d5db8720407d5507f332d7cccce85d698f48347d96b7585c2bea1",
+      "split_blake3": "93cb4159667d5db8720407d5507f332d7cccce85d698f48347d96b7585c2bea1",
+      "equal": true
+    },
+    {
+      "family": "aws",
+      "id": "unit-00037-script.perlasm-25.generate",
+      "source": "crypto/test/asm/trampoline-x86_64.pl",
+      "filename": "trampoline-x86_64.S",
+      "assembly_bytes": 10961,
+      "original_blake3": "9d9a358f83c0f50e52ee6456282a30b511b0637541f4ac92e65489ff61f22a24",
+      "split_blake3": "9d9a358f83c0f50e52ee6456282a30b511b0637541f4ac92e65489ff61f22a24",
+      "equal": true
+    }
+  ],
+  "non_claim": "Original/split source-helper equivalence for the named inputs and observed host-tool probe inside a fixture bwrap. Host Perl/compiler tooling is not a source-built provider; no root action reconciliation, kernel isolation, bootstrap fixed point or release acceptance."
+}

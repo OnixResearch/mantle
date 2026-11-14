@@ -1,0 +1,62 @@
++ date -Is
+2026-11-14T02:42:29-05:00
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/source_built_mantle_programs_native.rs
++ test 5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403 = 5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/flake.nix
++ test 6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e = 6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e
++ mkdir /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp
++ cd /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo -V; perl --version; cargo test --release --locked --offline -p mantle --bin mantle source_built_mantle_programs::native::tests:: -- --test-threads=1; cargo fmt --check -p mantle -v; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings'
+copying path '/nix/store/9ypl7656d54kj4c8s2q7lzzfj9z976ir-source' from 'https://cache.nixos.org'...
+unpacking 'github:bytecodealliance/wasi-virt/19b174a3244f81ed9b91e067b6901f71665316a8?narHash=sha256-dj9FN941ejZXfbHsC2rxs7/2LSUeKQEf545aZ0QkEdI%3D' into the Git cache...
+unpacking 'github:OnixResearch/octet/f081ed9682d478e585f4cede89bb89b542755ab9?narHash=sha256-qYYOcF0P4JkVp4HGXu/ISRfOK4F1u3nYNwo8iKoNI3U%3D' into the Git cache...
+copying path '/nix/store/9qa4c94rswp05pi33cw8djmr481xfmsb-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/yizimqvgzppr2amr2ksbva0b37bqrci4-source' from 'https://nix-community.cachix.org'...
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+error:
+       … while calling the 'derivationStrict' builtin
+         at «nix-internal»/derivation-internal.nix:37:12:
+           36|
+           37|   strict = derivationStrict drvAttrs;
+             |            ^
+           38|
+
+       … while evaluating derivation 'nix-shell'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating attribute 'buildInputs' of derivation 'nix-shell'
+         at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:593:11:
+          592|           depsHostHost = elemAt (elemAt dependencies 1) 0;
+          593|           buildInputs = elemAt (elemAt dependencies 1) 1;
+             |           ^
+          594|           depsTargetTarget = elemAt (elemAt dependencies 2) 0;
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Failed to fetch git repository 'ssh://git@github.com/OnixResearch/onix-artifact.git'
++ status=1
++ '[' 1 -eq 0 ']'
++ printf 'pipe_validation_exit=%s\n' 1
+pipe_validation_exit=1
++ printf '%s\n' 1
++ exit 1

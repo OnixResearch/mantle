@@ -601,6 +601,42 @@ pub(crate) fn cc_library_overlays(
     ])
 }
 
+// This wrapper performs only the source-selected pipe cut. It evaluates
+// the admitted original program, not a translation of its algorithm.
+const PIPE_SOURCE: &str = r###"
+use strict;
+use warnings;
+my ($authenticated, $source, $raw, $filename) = @ARGV;
+open my $input, '<', $authenticated or die "authenticated PerlAsm source: $!";
+my $text; { local $/; $text = <$input>; } close $input or die $!;
+my $count = 0;
+my @lines = split /\n/, $text, -1;
+for (my $index = 0; $index < @lines; $index++) {
+    my $normalized = $lines[$index];
+    $normalized =~ s/^open OUT,\s*/open OUT,/;
+    $normalized =~ s/\s+$//;
+    if ($normalized eq q{open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\""}) {
+        my $continuation = $lines[$index + 1] // '';
+        $continuation =~ s/^\s+//;
+        $continuation =~ s/\s+$//;
+        die "changed original PerlAsm pipe boundary"
+            unless $continuation eq q{or die "can't call $xlate: $!";};
+        $lines[$index + 1] = '';
+    } elsif ($normalized ne q{open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";}) {
+        next;
+    }
+    $lines[$index] = q{open OUT, '>', $ENV{MANTLE_PERLASM_RAW} or die "raw PerlAsm output: $!";};
+    $count++;
+}
+$text = join "\n", @lines;
+die "changed original PerlAsm pipe boundary" unless $count == 1;
+$ENV{MANTLE_PERLASM_RAW} = $raw;
+@ARGV = ('elf', $filename);
+$0 = $source;
+my $result = eval "no strict; no warnings;\n" . $text;
+die $@ if $@;
+"###;
+
 /// Split the original x86_64 PerlAsm generator/translator pipe into two
 /// genuine Perl leaves. Neither phase runs an assembler, shell or interpreter
 /// child. The original filename remains the generator's output argument, so
@@ -633,33 +669,6 @@ pub(crate) fn append_x86_64_perlasm(
     if program.steps.iter().any(|step| [&helper_id, &generate_id, &translate_id].contains(&&step.id)) {
         return Err(error("PerlAsm phases collide with existing source steps"));
     }
-    // This wrapper performs only the source-selected pipe cut. It evaluates
-    // the admitted original program, not a translation of its algorithm.
-    const PIPE_SOURCE: &str = r###"
-use strict;
-use warnings;
-my ($authenticated, $source, $raw, $filename) = @ARGV;
-open my $input, '<', $authenticated or die "authenticated PerlAsm source: $!";
-my $text; { local $/; $text = <$input>; } close $input or die $!;
-my $count = 0;
-my @lines = split /\n/, $text, -1;
-for my $line (@lines) {
-    my $normalized = $line;
-    $normalized =~ s/^open OUT,\s*/open OUT,/;
-    $normalized =~ s/\s+$//;
-    if ($normalized eq q{open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";}) {
-        $line = q{open OUT, '>', $ENV{MANTLE_PERLASM_RAW} or die "raw PerlAsm output: $!";};
-        $count++;
-    }
-}
-$text = join "\n", @lines;
-die "changed original PerlAsm pipe boundary" unless $count == 1;
-$ENV{MANTLE_PERLASM_RAW} = $raw;
-@ARGV = ('elf', $filename);
-$0 = $source;
-my $result = eval "no strict; no warnings;\n" . $text;
-die $@ if $@;
-"###;
     let mut steps = vec![RecipeStep {
         id: helper_id.clone(),
         inputs: BTreeMap::new(),
@@ -1496,6 +1505,84 @@ mod tests {
                 .inputs
                 .insert("original-script".into(), product("full-source-native-provider", "unrelated", "artifact"));
             assert!(validate_source_recipe(&recipe).is_err());
+        }
+    }
+
+    const STANDALONE_PIPE: &str = r#"open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";"#;
+    const GUARDED_PIPE: &str = r#"open OUT, "| \"$^X\" \"$xlate\" $flavour \"$output\""
+  or die "can't call $xlate: $!";"#;
+    const GENERATOR_PREFIX: &str = r#"
+BEGIN {
+    open my $marker, '>', $ENV{MANTLE_TEST_PERLASM_MARKER} or die $!;
+    print $marker 'evaluated';
+    close $marker or die $!;
+}
+my ($flavour, $output) = @ARGV;
+die 'changed flavour' unless $flavour eq 'elf';
+die 'changed logical source' unless $0 eq 'crypto/sha512-x86_64.pl';
+my $xlate = 'translator-must-not-run.pl';
+"#;
+    const GENERATOR_SUFFIX: &str = r#"
+print OUT ".text\n.Lsquare_table:\n";
+my $rounds = $output =~ /sha256/ ? 2 : 4;
+for (my $index = 1; $index <= $rounds; $index++) {
+    printf OUT ".long %d\n", $index * $index;
+}
+close OUT or die $!;
+"#;
+
+    fn run_perlasm_pipe_fixture(pipe: &str, filename: &str) -> (tempfile::TempDir, std::process::Output) {
+        let root = tempfile::tempdir().unwrap();
+        let wrapper = root.path().join("wrapper.pl");
+        let source = root.path().join("authenticated.pl");
+        let raw = root.path().join("raw");
+        let fixture = [GENERATOR_PREFIX, pipe, GENERATOR_SUFFIX].concat();
+        std::fs::write(&wrapper, PIPE_SOURCE).unwrap();
+        std::fs::write(&source, &fixture).unwrap();
+        let output = std::process::Command::new("perl")
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("MANTLE_TEST_PERLASM_MARKER", root.path().join("evaluated"))
+            .arg(&wrapper)
+            .arg(&source)
+            .arg("crypto/sha512-x86_64.pl")
+            .arg(&raw)
+            .arg(filename)
+            .current_dir(root.path())
+            .output()
+            .expect("Perl is a required Nix test input");
+        assert!(output.status.code().is_some(), "PerlAsm wrapper must exit normally");
+        assert_eq!(std::fs::read(&source).unwrap(), fixture.as_bytes(), "authenticated source must stay immutable");
+        (root, output)
+    }
+
+    #[test]
+    fn perlasm_pipe_cut_executes_standalone_and_guarded_sources() {
+        for (pipe, filename, expected) in [
+            (
+                STANDALONE_PIPE,
+                "sha512-x86_64-elf.S",
+                ".text\n.Lsquare_table:\n.long 1\n.long 4\n.long 9\n.long 16\n",
+            ),
+            (GUARDED_PIPE, "sha256-x86_64-elf.S", ".text\n.Lsquare_table:\n.long 1\n.long 4\n"),
+        ] {
+            let (root, output) = run_perlasm_pipe_fixture(pipe, filename);
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(std::fs::read(root.path().join("raw")).unwrap(), expected.as_bytes());
+        }
+    }
+
+    #[test]
+    fn perlasm_pipe_cut_rejects_changed_or_duplicate_boundaries_before_eval() {
+        for pipe in [
+            STANDALONE_PIPE.replace("$xlate", "$other"),
+            GUARDED_PIPE.replace("can't call $xlate", "changed handler"),
+            [STANDALONE_PIPE, "\n", GUARDED_PIPE].concat(),
+        ] {
+            let (root, output) = run_perlasm_pipe_fixture(&pipe, "sha256-x86_64-elf.S");
+            assert!(!output.status.success());
+            assert!(!root.path().join("evaluated").exists(), "rejected source must not be evaluated");
+            assert!(!root.path().join("raw").exists(), "rejected source must not publish assembly");
         }
     }
 }

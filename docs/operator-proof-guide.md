@@ -312,6 +312,11 @@ Regenerate plans carrying the old aggregate value; do not weaken source-closure
 membership or substitute another declared source
 ([ADR 0148](../adr/0148-bind-receipt-source-to-mantle-source-root.md)).
 
+Freeze the complete Mantle input snapshot, including its declared original
+upstream source trees, before the runner build. A Git archive of tracked Mantle
+files alone is not complete when the recipe also requires external originals;
+follow the [original-source intake requirements](operator-workflows.md#source-built-fixed-point-source-authority).
+
 Bind the runner's build to the frozen source tree before launch: retain its
 source/archive identity, exact compiler and build command, and unchanged
 pre/post build source identities. A checksum after transfer or `--version`
@@ -379,6 +384,11 @@ the checked script bytes, not the binary request. AWS selects its produced Perl
 tree, preserving the existing assembler-probe cut. Authentication must remain a
 genuinely consumed dependency after unused-input pruning
 ([ADR 0149](../adr/0149-keep-semantic-and-authenticated-products-in-execution-closure.md)).
+
+The pipe cut accepts exactly one original single-line `open OUT` statement or
+the complete two-line `open OUT` / `or die` form. It rejects changed or duplicate
+boundaries before evaluating the original script; it does not leave a dangling
+error-handler continuation or replace the generator's algorithm.
 
 An authored member larger than the bundle's single-file ceiling is transported
 as the same canonical full-size chunk sequence the bundle observer produces, and

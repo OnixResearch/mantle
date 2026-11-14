@@ -1,0 +1,7 @@
+{
+  "schema": "mantle-original-perlasm-split-equivalence-v1",
+  "status": "failed",
+  "error": "original-pipe failed with 9: ['/nix/store/phnk1lwy8xs0yrbrcs6l2mb9yr9c2knp-perl-5.42.0/bin/perl', '/inputs/ring/crypto/chacha/asm/chacha-x86_64.pl', 'elf', 'chacha-x86_64-elf.S']; b'error closing STDOUT: Bad file descriptor at /inputs/ring/crypto/chacha/asm/chacha-x86_64.pl line 1854.\\n'",
+  "completed_cases": [],
+  "non_claim": "Failed helper fixture; no provider or cold fixed-point proof."
+}

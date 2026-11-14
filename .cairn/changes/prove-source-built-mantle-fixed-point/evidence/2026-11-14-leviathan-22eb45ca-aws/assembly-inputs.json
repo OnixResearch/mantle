@@ -1,0 +1,12 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "name": "22eb45ca-aws",
+  "base": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-14-leviathan-22eb45ca-aws",
+  "source_code_revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "driver": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-22eb45ca-aws.sh",
+  "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-22eb45ca-aws.tar",
+  "assembly": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-22eb45ca-aws",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "assembly_task": 1562
+}

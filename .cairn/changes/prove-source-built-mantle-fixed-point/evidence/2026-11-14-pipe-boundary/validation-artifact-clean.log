@@ -1,0 +1,231 @@
++ date -Is
+2026-11-14T03:15:29-05:00
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/source_built_mantle_programs_native.rs
++ test 5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403 = 5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/flake.nix
++ test 6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e = 6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e
++ test -d /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp
++ cd /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/tmp
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo -V; perl --version; cargo clean --release -p bzip2-sys; cargo test --release --locked --offline -p mantle --bin mantle source_built_mantle_programs::native::tests:: -- --test-threads=1; cargo fmt --check -p mantle -v; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+
+This is perl 5, version 42, subversion 0 (v5.42.0) built for x86_64-linux-thread-multi
+
+Copyright 1987-2025, Larry Wall
+
+Perl may be copied only under the terms of either the Artistic License or the
+GNU General Public License, which may be found in the Perl 5 source kit.
+
+Complete documentation for Perl, including FAQ lists, should be found on
+this system using "man perl" or "perldoc perl".  If you have access to the
+Internet, point your browser at https://www.perl.org/, the Perl Home Page.
+
+     Removed 35 files, 5.9MiB total
+warning: /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling aws-lc-rs v1.18.1
+   Compiling aws-lc-sys v0.45.0
+   Compiling rustls v0.23.46
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling xz2 v0.1.7
+   Compiling rustls-webpki v0.103.16
+   Compiling bzip2 v0.5.2
+   Compiling async-compression v0.4.19
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-transport v0.55.1
+   Compiling snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-tracing)
+   Compiling gix-protocol v0.59.0
+   Compiling gix v0.81.0
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-castore)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-store)
+   Compiling crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-rustc-wrapper)
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-build)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-pipeline)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-nix-gateway)
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source)
+    Finished `release` profile [optimized] target(s) in 6m 56s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target/release/deps/mantle-61d96712292a8e06)
+
+running 4 tests
+test source_built_mantle_programs::native::tests::perlasm_authentication_survives_input_pruning_and_rejects_substitution ... ok
+test source_built_mantle_programs::native::tests::perlasm_pipe_cut_executes_standalone_and_guarded_sources ... ok
+test source_built_mantle_programs::native::tests::perlasm_pipe_cut_rejects_changed_or_duplicate_boundaries_before_eval ... ok
+test source_built_mantle_programs::native::tests::rejected_native_probes_retain_admitted_state_not_optional_outputs ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2964 filtered out; finished in 0.03s
+
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/shared-action-result-roundtrip/publish.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/resource_evidence_check.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/resource_policy_replay.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/bin/mantle-protected-build-runner.rs"
+[lib (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/lib.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/main.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_apk.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_sources.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_sources_offline.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_build_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/causal_build_trace.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/demand_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/elf_dynamic_reference_scanner.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/elf_dynamic_relocation.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/finish_gates.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/gateway_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/integration.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/profile_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/release_gauntlet_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_hexagon_v2_parity.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/resource_gateway_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/retention_interest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_compare.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_eval_backends.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_eval_smoke.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_lazy_eval.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_scheduler_priority.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/benchmark_suite.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/distributed_eval_assess.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/hardware_simulation_plan.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/picolibc_compare.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/delta-substitution/demo.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/release-witness-handoff/demo.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/resource_evidence_check.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/examples/resource_policy_replay.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/bin/mantle-protected-build-runner.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/lib.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/main.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_apk.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_sources.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/android_sources_offline.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/attest_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/audit_support.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/benchmark_harness.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_eval.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_parity_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/bootstrap_validate_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_build_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_free_self_build_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/cargo_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/causal_build_trace.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/composition_root_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/demand_runtime.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/elf_dynamic_reference_scanner.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/elf_dynamic_relocation.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/evaluator_budget_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/example_projects.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_build.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_eval.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_inventory.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/examples_workflow_gallery.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/finish_gates.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/foreign_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/freshness_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/gateway_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/identity_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/integration.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/integration_build.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernel_bundle_oci_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/kernelscript_experiment.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/lock_importer_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/machine_schema_contracts.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/nix_free_demo_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/offline_build_runbook_docs.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/offline_cargo_project.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/operator_diagnostics.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/pin_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/profile_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_build_smoke.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/project_refresh_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/release_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/release_gauntlet_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_credentials_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_hexagon_v2_parity.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_rail_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_stdio_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/remote_transfer_production.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/removed_system_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/resource_gateway_runtime.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/retention_interest_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/retention_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/rust_compatibility_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/rust_plan_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/scheduling_policy.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/self_hosting.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/smoke.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/source_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/source_bundle_hydration_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/stdlib_tests.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/store_archive_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/store_gc_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/transactional_reconciliation_pilot.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/transcript_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/trust_policy_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tests/wasm_component_cli.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tools/generate_operator_command_contract.rs /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/tools/generate_portable_platform_profiles.rs
+warning: /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking aws-lc-sys v0.45.0
+    Checking bzip2-sys v0.1.13+1.0.8
+    Checking lzma-sys v0.1.20
+    Checking bzip2 v0.5.2
+    Checking xz2 v0.1.7
+    Checking async-compression v0.4.19
+    Checking aws-lc-rs v1.18.1
+    Checking rustls-webpki v0.103.16
+    Checking rustls v0.23.46
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking ureq v3.3.0
+    Checking hyper-rustls v0.27.7
+    Checking reqwest v0.13.2
+    Checking reqwest-middleware v0.5.1
+    Checking object_store v0.14.0
+    Checking gix-transport v0.55.1
+    Checking reqwest-tracing v0.6.0
+    Checking gix-protocol v0.59.0
+    Checking snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-tracing)
+    Checking gix v0.81.0
+    Checking snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-castore)
+    Checking casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+    Checking snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-build)
+    Checking snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/vendor/snix-store)
+    Checking crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-rustc-wrapper)
+    Checking crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-build)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-pipeline)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source/crates/crunch-nix-gateway)
+    Checking mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/source)
+    Finished `release` profile [optimized] target(s) in 3m 02s
++ date -Is
+2026-11-14T03:25:37-05:00
++ finished=1
++ printf 'pipe_validation_complete=1\n'
+pipe_validation_complete=1
++ status=0
++ '[' 0 -eq 0 ']'
++ '[' 1 -ne 1 ']'
++ printf 'pipe_validation_exit=%s\n' 0
+pipe_validation_exit=0
++ printf '%s\n' 0
++ exit 0

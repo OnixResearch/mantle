@@ -1,0 +1,603 @@
+{
+  "advisory_static_admission": "pass",
+  "boundary": "No builder/provider execution, proof receipt, compiler correctness, fixed-point convergence, or release eligibility asserted",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed",
+  "consumer_semantics": {
+    "mantle_roots": "source_built_mantle_programs.rs:143-161,768-937; exactly semantic values plus binary and --help smoke, no blanket helper roots",
+    "native_script": "Static Produced text/tree/cwd/env/history and generated invocation references checked against same-stage producer output kinds; predecessor native compiler/tool/runtime images are intentionally cross-stage; actual generated request bytes and dynamic cwd/env remain execution-time obligations.",
+    "reachability": "backwards over step inputs and ObservePhase phase, plus embedded controller specification refs; external stage refs checked against exact predecessor producers and outputs",
+    "reference_source": "source_built_recipe.rs:644-764; source_built_recipe_controller.rs:42-79"
+  },
+  "frozen_authoring_source_blake3": {
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_fixed_point_stagex_actions.rs": "8e9d7f09cd03c5880a3e4fdeb59dd599cac609e4b427e0d8153657dbd97b4784",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_mantle_programs.rs": "70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_mantle_programs_graph.rs": "6d8ec9bd415be54d08fcb71fba531920075c235c0bf56081d5992365a0c6de10",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_mantle_programs_native.rs": "825b16784805d18c65db9243227771b0e816dee14d33fa2f70cb7d4bf18eb122",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_mantle_programs_native_request.rs": "ea8e6aae0bd87fcbaf5428d07324fdc80bf0af9a9ce97eeb6962ff3681fb886c",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_native_programs.rs": "f9279a4e40d4e58ea2752211f795d1e8b6f35f5279e47e4d0f7612c3491efeae",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_program_authoring.rs": "23c52720c463872d698140fd2043fd938125692991e2b57a3fccb089d3bf7c9b",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_recipe.rs": "28ca15f8081b88c5747a851a1474d92277fba142f0b7fdfa1f74d8a48374d009",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_rust_programs.rs": "dd4c2abfec0de583680a72dec332586ec329b138ade03102d466773c77eccd7e",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca/src/source_built_stagex_programs.rs": "72d8bbcc80dd9eecf127b4d465e05f1b1aa14bca7423921fdf69c8636c5bc050"
+  },
+  "frozen_revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-22eb45ca",
+  "guard_admission_supplement": {
+    "advisory_guard_admission": "pass",
+    "issues": {},
+    "per_recipe": {
+      "full-source-native-provider": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 0,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 0,
+        "optional_failure_producers": 0,
+        "optional_failure_root_references": 0,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 0,
+        "source_file_identity": {
+          "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c",
+          "bytes": 18268649
+        }
+      },
+      "full-source-rust-provider": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 0,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 0,
+        "optional_failure_producers": 0,
+        "optional_failure_root_references": 0,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 0,
+        "source_file_identity": {
+          "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+          "bytes": 259029252
+        }
+      },
+      "mantle-stage1": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 40,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 32,
+        "optional_failure_producers": 93,
+        "optional_failure_root_references": 0,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 40,
+        "source_file_identity": {
+          "blake3": "cf357884b5684f5bc5c327133657490199da2defcb6c91621c297eadd0056c62",
+          "bytes": 172660412
+        }
+      },
+      "mantle-stage2": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 40,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 32,
+        "optional_failure_producers": 93,
+        "optional_failure_root_references": 0,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 40,
+        "source_file_identity": {
+          "blake3": "55d0b619ef57aa41f71e0c54ef42569a07005ca5e0f13cd6ed85124bb12dd04e",
+          "bytes": 172660412
+        }
+      },
+      "stagex-provider-publication": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 0,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 0,
+        "optional_failure_producers": 0,
+        "optional_failure_root_references": 0,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 0,
+        "source_file_identity": {
+          "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+          "bytes": 52226
+        }
+      },
+      "stagex-transition": {
+        "guarded_export_references": 0,
+        "guarded_input_edges": 0,
+        "guarded_prior_stage_input_edges": 0,
+        "guarded_producers": 0,
+        "guarded_root_references": 0,
+        "guarded_semantic_root_references": 0,
+        "invalid_guard_predicates": 0,
+        "invalid_guarded_input_edges": 0,
+        "invalid_observed_phases": 0,
+        "optional_failure_export_references": 0,
+        "optional_failure_input_edges": 0,
+        "optional_failure_producers": 14,
+        "optional_failure_root_references": 14,
+        "optional_failure_semantic_root_references": 0,
+        "phase_observations": 0,
+        "source_file_identity": {
+          "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+          "bytes": 31730468
+        }
+      }
+    },
+    "result": "/tmp/mantle-source22-graph-review/source22-guard-review.json",
+    "source": "runner-source-22eb45ca/src/source_built_recipe.rs:693-699,788-887,1823-1840; source_built_fixed_point_action_trust.rs:79-82"
+  },
+  "issues": {},
+  "recipes": {
+    "full-source-native-provider": {
+      "captured_path": "/tmp/mantle-source22-graph-review/native-program.json",
+      "cross_stage_by_producer": {
+        "stagex-provider-publication": 1266,
+        "stagex-transition": 3997
+      },
+      "cross_stage_references": 5263,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 105,
+      "file_identity": {
+        "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c",
+        "bytes": 18268649
+      },
+      "native_script_local_bindings": {},
+      "nested_controller_specification_references": 7914,
+      "operation_kinds": {
+        "assemble-tree": 156,
+        "controller": 49,
+        "exec": 4603,
+        "materialize-fetcher": 37,
+        "write-text": 277
+      },
+      "produced_references": 28041,
+      "reachable": 5122,
+      "root_distinct_references": 1375,
+      "roots": 1375,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+      "steps": 5122,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    },
+    "full-source-rust-provider": {
+      "captured_path": "/tmp/mantle-source22-graph-review/rust-program.json",
+      "cross_stage_by_producer": {
+        "full-source-native-provider": 191487
+      },
+      "cross_stage_references": 191487,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 13,
+      "file_identity": {
+        "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+        "bytes": 259029252
+      },
+      "native_script_local_bindings": {},
+      "nested_controller_specification_references": 173781,
+      "operation_kinds": {
+        "assemble-tree": 10928,
+        "controller": 1871,
+        "exec": 38369,
+        "extract-archive": 6,
+        "write-text": 12708
+      },
+      "produced_references": 818837,
+      "reachable": 63882,
+      "root_distinct_references": 232254,
+      "roots": 232254,
+      "semantic_root_keys": 1,
+      "semantic_root_references": 1,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/program-sources/fixed-point-rust-source-program/source-built/rust/program.json",
+      "steps": 63882,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    },
+    "mantle-stage1": {
+      "authenticator_examples": [
+        "unit-00031-script.sources.perl-0.authenticate",
+        "unit-00031-script.sources.perl-1.authenticate",
+        "unit-00031-script.sources.perl-2.authenticate",
+        "unit-00031-script.sources.perl-3.authenticate",
+        "unit-00031-script.sources.perl-4.authenticate"
+      ],
+      "authenticator_reachable": 12,
+      "authenticator_steps": 12,
+      "broad_native_alias_bindings": {
+        "local": 11029,
+        "nonlocal": 61
+      },
+      "captured_path": "/tmp/mantle-source22-graph-review/mantle-stage1.json",
+      "cross_stage_by_producer": {
+        "full-source-native-provider": 72422,
+        "full-source-rust-provider": 24063
+      },
+      "cross_stage_references": 96485,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 2,
+      "file_identity": {
+        "blake3": "cf357884b5684f5bc5c327133657490199da2defcb6c91621c297eadd0056c62",
+        "bytes": 172660412
+      },
+      "mantle_root_contract": {
+        "binary": {
+          "action_id": "mantle-stage1/unit-01020-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage1"
+        },
+        "binary_in_semantic_products": true,
+        "build_scripts": 98,
+        "exact_union": true,
+        "extra_sample": [],
+        "missing_sample": [],
+        "rust_units": 1045,
+        "semantic_ref_distinct": 1241,
+        "smoke": {
+          "action_id": "mantle-stage1/mantle-help",
+          "kind": "produced",
+          "output_id": "stdout"
+        }
+      },
+      "native_script_state": {
+        "all_actions_reachable": true,
+        "binary_executable": true,
+        "examples": [],
+        "invalid_or_nonlocal": 0,
+        "perl_asm": {
+          "authenticated_outputs_consumed": 12,
+          "authenticator_steps": 12,
+          "examples": [
+            {
+              "consumer": "mantle-stage1/unit-00031-script.sources.perl-0.generate",
+              "producer": "mantle-stage1/unit-00031-script.sources.perl-0.authenticate"
+            },
+            {
+              "consumer": "mantle-stage1/unit-00031-script.sources.perl-1.generate",
+              "producer": "mantle-stage1/unit-00031-script.sources.perl-1.authenticate"
+            },
+            {
+              "consumer": "mantle-stage1/unit-00031-script.sources.perl-2.generate",
+              "producer": "mantle-stage1/unit-00031-script.sources.perl-2.authenticate"
+            }
+          ],
+          "reachable_from_genuine_roots": 12
+        },
+        "smoke_help_uses_binary": true,
+        "state_reference_categories": {
+          "native_text_or_files_produced": 3414,
+          "prior_script_history_produced": 1740,
+          "script_cwd_produced": 448,
+          "script_invocation_cwd_env_produced": 1697,
+          "script_text_produced": 4133,
+          "script_tree_produced": 4120
+        }
+      },
+      "nested_controller_specification_references": 36575,
+      "operation_kinds": {
+        "assemble-tree": 2452,
+        "controller": 185,
+        "exec": 9357,
+        "observe-phase": 40,
+        "write-text": 12067
+      },
+      "produced_references": 382075,
+      "reachable": 24101,
+      "root_distinct_references": 1242,
+      "roots": 1242,
+      "semantic_root_keys": 1143,
+      "semantic_root_references": 1241,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+      "steps": 24101,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    },
+    "mantle-stage2": {
+      "authenticator_examples": [
+        "unit-00031-script.sources.perl-0.authenticate",
+        "unit-00031-script.sources.perl-1.authenticate",
+        "unit-00031-script.sources.perl-2.authenticate",
+        "unit-00031-script.sources.perl-3.authenticate",
+        "unit-00031-script.sources.perl-4.authenticate"
+      ],
+      "authenticator_reachable": 12,
+      "authenticator_steps": 12,
+      "broad_native_alias_bindings": {
+        "local": 11029,
+        "nonlocal": 61
+      },
+      "captured_path": "/tmp/mantle-source22-graph-review/mantle-stage2.json",
+      "cross_stage_by_producer": {
+        "full-source-native-provider": 72422,
+        "full-source-rust-provider": 24063
+      },
+      "cross_stage_references": 96485,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 2,
+      "file_identity": {
+        "blake3": "55d0b619ef57aa41f71e0c54ef42569a07005ca5e0f13cd6ed85124bb12dd04e",
+        "bytes": 172660412
+      },
+      "mantle_root_contract": {
+        "binary": {
+          "action_id": "mantle-stage2/unit-01020-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage2"
+        },
+        "binary_in_semantic_products": true,
+        "build_scripts": 98,
+        "exact_union": true,
+        "extra_sample": [],
+        "missing_sample": [],
+        "rust_units": 1045,
+        "semantic_ref_distinct": 1241,
+        "smoke": {
+          "action_id": "mantle-stage2/mantle-help",
+          "kind": "produced",
+          "output_id": "stdout"
+        }
+      },
+      "native_script_state": {
+        "all_actions_reachable": true,
+        "binary_executable": true,
+        "examples": [],
+        "invalid_or_nonlocal": 0,
+        "perl_asm": {
+          "authenticated_outputs_consumed": 12,
+          "authenticator_steps": 12,
+          "examples": [
+            {
+              "consumer": "mantle-stage2/unit-00031-script.sources.perl-0.generate",
+              "producer": "mantle-stage2/unit-00031-script.sources.perl-0.authenticate"
+            },
+            {
+              "consumer": "mantle-stage2/unit-00031-script.sources.perl-1.generate",
+              "producer": "mantle-stage2/unit-00031-script.sources.perl-1.authenticate"
+            },
+            {
+              "consumer": "mantle-stage2/unit-00031-script.sources.perl-2.generate",
+              "producer": "mantle-stage2/unit-00031-script.sources.perl-2.authenticate"
+            }
+          ],
+          "reachable_from_genuine_roots": 12
+        },
+        "smoke_help_uses_binary": true,
+        "state_reference_categories": {
+          "native_text_or_files_produced": 3414,
+          "prior_script_history_produced": 1740,
+          "script_cwd_produced": 448,
+          "script_invocation_cwd_env_produced": 1697,
+          "script_text_produced": 4133,
+          "script_tree_produced": 4120
+        }
+      },
+      "nested_controller_specification_references": 36575,
+      "operation_kinds": {
+        "assemble-tree": 2452,
+        "controller": 185,
+        "exec": 9357,
+        "observe-phase": 40,
+        "write-text": 12067
+      },
+      "produced_references": 382075,
+      "reachable": 24101,
+      "root_distinct_references": 1242,
+      "roots": 1242,
+      "semantic_root_keys": 1143,
+      "semantic_root_references": 1241,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+      "steps": 24101,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    },
+    "stagex-provider-publication": {
+      "captured_path": "/tmp/mantle-source22-graph-review/stagex-provider-publication.json",
+      "cross_stage_by_producer": {
+        "stagex-transition": 19
+      },
+      "cross_stage_references": 19,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 10,
+      "file_identity": {
+        "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+        "bytes": 52226
+      },
+      "native_script_local_bindings": {},
+      "nested_controller_specification_references": 0,
+      "operation_kinds": {
+        "assemble-tree": 2,
+        "exec": 16
+      },
+      "produced_references": 129,
+      "reachable": 18,
+      "root_distinct_references": 64,
+      "roots": 64,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+      "steps": 18,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    },
+    "stagex-transition": {
+      "captured_path": "/tmp/mantle-source22-graph-review/stagex-transition.json",
+      "cross_stage_by_producer": {},
+      "cross_stage_references": 0,
+      "cycle_nodes": 0,
+      "cycles": 0,
+      "exports": 6233,
+      "file_identity": {
+        "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+        "bytes": 31730468
+      },
+      "native_script_local_bindings": {},
+      "nested_controller_specification_references": 0,
+      "operation_kinds": {
+        "assemble-tree": 97,
+        "exec": 7982,
+        "materialize-fetcher": 44,
+        "write-text": 8
+      },
+      "produced_references": 71910,
+      "reachable": 8131,
+      "root_distinct_references": 28137,
+      "roots": 28137,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed/program-sources/source-built-stagex-programs/stagex-transition.json",
+      "steps": 8131,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": [],
+      "unresolved": 0
+    }
+  },
+  "rust_provider_canonical_export": {
+    "producer_output_kind": "tree",
+    "reference": {
+      "action_id": "full-source-rust-provider/successor-1.94.1.provider",
+      "kind": "produced",
+      "output_id": "full-source-rust-provider"
+    },
+    "semantic_root": [
+      {
+        "action_id": "full-source-rust-provider/successor-1.94.1.provider",
+        "kind": "produced",
+        "output_id": "full-source-rust-provider"
+      }
+    ],
+    "valid": true
+  },
+  "scope": "Source-only graph inspection, not source-profile verification, execution, compiler correctness, fixed point or release eligibility",
+  "total": {
+    "broad_native_alias_bindings": 22180,
+    "broad_native_alias_external_tool_examples": [
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-1.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-3",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-31.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-0",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-32.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-0",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-34.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-3",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-36.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-0",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00031-script.native-37.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-0",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00037-script.unprefixed.native-1.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-3",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      },
+      {
+        "alias": "native-request-tool",
+        "step": "mantle-stage1/unit-00037-script.unprefixed.native-3.invoke",
+        "target": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-3",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      }
+    ],
+    "cross_stage_references": 389739,
+    "cycle_nodes": 0,
+    "cycles": 0,
+    "nested_controller_specification_references": 254845,
+    "reachable": 125355,
+    "roots": 264314,
+    "steps": 125355,
+    "unreachable": 0,
+    "unresolved": 0
+  }
+}

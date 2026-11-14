@@ -1,0 +1,13 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "root": "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM",
+  "local_base": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-14-pipe-boundary",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "task": 1563,
+  "source_files": {
+    "src/source_built_mantle_programs_native.rs": "5cb0ebc1fa11afd7c28f8381a46791b4e20b57a10ab3b1ad4adfc9f734888403",
+    "flake.nix": "6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e"
+  },
+  "non_claim": "Focused source-helper unit, formatting and strict Clippy checks on an isolated validation snapshot, not a qualified final proof runner, provider or fixed point."
+}

@@ -1,0 +1,25 @@
+{
+  "1561": {
+    "task": {
+      "id": 1561,
+      "created_at": "2026-11-14T01:46:51.448247059-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/capture.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/capture.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN",
+      "envs": {},
+      "group": "default",
+      "dependencies": [],
+      "priority": 0,
+      "label": "aws-original-02561621-source-intake",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-14T01:46:51.448055859-05:00",
+          "start": "2026-11-14T01:46:51.657925925-05:00",
+          "end": "2026-11-14T01:46:58.315656945-05:00",
+          "result": "Success"
+        }
+      }
+    },
+    "output": ""
+  }
+}

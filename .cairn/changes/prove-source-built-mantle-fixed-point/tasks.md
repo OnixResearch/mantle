@@ -305,3 +305,30 @@ source-identity/PerlAsm-consumption reviews gate cold launch. Preparation and
 transfer do not complete I3–I5 or proof-dependent V2/V3. See the source-input
 correction evidence for the complete current handoff.
 
+
+## Original AWS source intake checkpoint (2026-11-14)
+
+The `23c026be…` inert cohort passed complete graph and guard inspection but is
+launch-rejected because its required original AWS-LC tree is absent. Task 1561
+successfully acquired the exact declared upstream Git commit/tree; captured
+identities and provenance are in `evidence/2026-11-14-aws-original/`. The existing
+cohort is not modified or launched. A new complete snapshot must include the
+guarded original PerlAsm pipe repair as well as the acquired source before
+qualified runner build, profile regeneration and source-completeness review.
+The source-complete `22eb45ca…` assembly is diagnostic only. I3–I5 and V2/V3
+stay open.
+
+
+## Guarded original PerlAsm checkpoint (2026-11-14)
+
+The original pipe adapter now consumes either exact supported upstream statement
+form, including the complete guarded continuation, without modifying its input
+or replacing the generator algorithm. Pueue 1568 passed the focused behavioral
+tests, package formatting and strict release Clippy. Pueue 1569 compared every
+selected Ring/AWS-LC invocation against its original pipe with byte-identical
+assembly. Exact results, prerequisite failures and bounded fixture non-claims
+are in the source-input correction evidence and `evidence/2026-11-14-pipe-boundary/`.
+This completes the pipe repair only; a corrected source-complete frozen runner,
+regenerated cohort and independent review are still required. I3–I5 and real
+V2/V3 remain open.
+

@@ -533,6 +533,24 @@ Use the `source-built-fixed-point` profile when the proof must construct its
 providers. This profile carries source authority only. It rejects a provider
 manifest in place of the StageX lineage manifest.
 
+The Mantle source record must include its declared original-source inputs, not
+only Git-tracked Rust files. The current `aws-lc-sys` 0.45.0 continuation requires
+the complete original AWS-LC tree at
+`bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/`
+inside the frozen Mantle snapshot. This is the `aws-lc-sys/aws-lc` gitlink of
+`aws-lc-rs` commit `7943223c99d909bc399bdf1b856821bb04f1f3c5`, in
+`https://github.com/aws/aws-lc.git`, with Git tree
+`969d75db5c0494de4a26bbb2dcbf6837058054c1`.
+
+Acquire that exact revision outside protected proof execution, verify its commit
+and tree identities, and export it with `git archive` into the required subtree
+before freezing the complete snapshot, building its qualified runner, or
+refreshing its source record. Retain the acquisition and BLAKE3 identities.
+A Git archive of the Mantle repository alone omits this external source input.
+The crate's vendored/generated tree omits original utility generators and is not
+a substitute. Bundle readiness checks declared records; it does not establish
+that every source path cited by an inert recipe exists.
+
 ```bash
 mantle source bundle bootstrap-profile \
   --mode source-built-fixed-point \

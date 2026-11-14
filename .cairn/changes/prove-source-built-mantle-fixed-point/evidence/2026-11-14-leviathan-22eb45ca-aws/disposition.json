@@ -1,0 +1,4 @@
+{
+  "assembly_task": 1562,
+  "disposition": "Diagnostic assembly only; original-source audit found unsupported guarded PerlAsm syntax in code22. This snapshot is not qualified or admitted for a cold proof; final source must include the actual code fix."
+}

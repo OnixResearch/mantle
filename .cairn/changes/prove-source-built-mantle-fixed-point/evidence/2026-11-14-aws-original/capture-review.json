@@ -1,0 +1,103 @@
+{
+  "scope": "Read-only source-acquisition suitability check for separately captured pinned AWS-LC Git source; no input installed in previously rejected cohort, no Perl/Go source executed, no compiler, assembler, provider, build, lint, test or fixed-point proof run.",
+  "original_source_root": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original",
+  "git_object_db": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git",
+  "capture_report": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original-source-capture.json",
+  "upstream_provenance": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-14-aws-original/upstream-provenance.json",
+  "pin": {
+    "repository": "https://github.com/aws/aws-lc.git",
+    "commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+    "parent_aws_lc_rs_gitlink_commit": "7943223c99d909bc399bdf1b856821bb04f1f3c5",
+    "parent_gitlink_path": "aws-lc-sys/aws-lc"
+  },
+  "physical_capture": {
+    "git_commit_object_type": "commit",
+    "git_commit_tree_matches_pin": true,
+    "git_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+    "normalized_physical_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+    "tracked_files": 10427,
+    "actual_git_blob_object_hash_matches": 10427,
+    "actual_file_modes_exactly_0644_or_0755_according_to_git": 10427,
+    "unexpected_or_nonregular_source_files": 0,
+    "gitlinks_and_symlinks": 0,
+    "record_hashes_match_physical": true
+  },
+  "perlasm_selection": {
+    "physical_recipe": "prepared-cohort-22eb45ca-resumed/inputs/mantle-source/bootstrap/source-built/mantle-stage{1,2}.json",
+    "frozen_producer": "runner-source-22eb45ca/src/source_built_mantle_programs_aws.rs:201-234,435-505",
+    "frozen_consumer": "runner-source-22eb45ca/src/source_built_mantle_programs_native.rs:638-661",
+    "script_binding": "Both stage recipes select identical (action ID, original logical .pl member, ELF output filename) tuples; script bytes are read from newly captured original root for acquisition suitability only. On execution the AWS helper would transform the authenticated Produced tree, including rsaz probe substitutions. No script or helper was executed here.",
+    "selected_generators_per_stage": 26,
+    "distinct_selected_source_files": 25,
+    "exact_frozen_pipe_boundary_count_one": 22,
+    "exact_frozen_pipe_boundary_count_zero": 4,
+    "original_translator": {"path":"crypto/perlasm/x86_64-xlate.pl","blake3":"95ff13079dd7701e6c6c5b00a8ba93329fc99cf2bf7a4438bf00461f0a3a914f"},
+    "selected": [
+      {"ordinal":0,"path":"crypto/chacha/asm/chacha-x86_64.pl","output":"chacha-x86_64.S","pipe":1,"blake3":"89c83891677ea6f95efa553796524a88f9d629beaba9879547389ffd60dc58be"},
+      {"ordinal":1,"path":"crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl","output":"aes128gcmsiv-x86_64.S","pipe":1,"blake3":"1fc47e7d80288b7a4effe28184954eca41de52300e42e82cb5b318a0daebaac5"},
+      {"ordinal":2,"path":"crypto/cipher_extra/asm/aesni-sha1-x86_64.pl","output":"aesni-sha1-x86_64.S","pipe":1,"blake3":"add51d8cb29e44fb9390ea73304e42948f8551c3edc87c395dc04b2029c8cf1c"},
+      {"ordinal":3,"path":"crypto/cipher_extra/asm/aesni-sha256-x86_64.pl","output":"aesni-sha256-x86_64.S","pipe":1,"blake3":"11ab8fb86f3b0c378535962f7139c16cdfc3c93944705ae53e9df6e0d2ae8ff9"},
+      {"ordinal":4,"path":"crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl","output":"chacha20_poly1305_x86_64.S","pipe":1,"blake3":"91ad2dde2284b8d64adb9399b6d0ea1b8068da647d8c5287fe918ae351fa9c76"},
+      {"ordinal":5,"path":"crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl","output":"aesni-gcm-avx512.S","pipe":0,"blake3":"87b1c7208ad1f55f518d8c32979d4e7a73ce6cfbc625e742b4bdfb7fe92c8a5d"},
+      {"ordinal":6,"path":"crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl","output":"aesni-gcm-x86_64.S","pipe":1,"blake3":"b30bdfd34ca4328d20bb971c564ea0e16e8e8e754c8b347a8f277f23d6f1fd02"},
+      {"ordinal":7,"path":"crypto/fipsmodule/aes/asm/aesni-x86_64.pl","output":"aesni-x86_64.S","pipe":1,"blake3":"7510a0d33b63d9e522a357c822105d3742b90f7dda87e6723042b52deb21f0e0"},
+      {"ordinal":8,"path":"crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl","output":"aesni-xts-avx512.S","pipe":1,"blake3":"6f12a7be63074584187c5b60b3c967280e5b894e5ae2084949f30d433d25c64c"},
+      {"ordinal":9,"path":"crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl","output":"ghash-ssse3-x86_64.S","pipe":1,"blake3":"65bd717c0fdb5c68d8f773cdd2124395d106208a690b8dfe6ad7fef15c945ee4"},
+      {"ordinal":10,"path":"crypto/fipsmodule/modes/asm/ghash-x86_64.pl","output":"ghash-x86_64.S","pipe":1,"blake3":"eaa9ea423ce573e2c0d1b75a56ae8fd12649f9a77f02b73bf737b08141f95b93"},
+      {"ordinal":11,"path":"crypto/fipsmodule/md5/asm/md5-x86_64.pl","output":"md5-x86_64.S","pipe":1,"blake3":"229e1e05673f81b6ae5d4471d34f9db92079a2ba836b4679b447376eaca8dbc1"},
+      {"ordinal":12,"path":"crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl","output":"p256-x86_64-asm.S","pipe":1,"blake3":"aa85ab25e25b02808d680e8af59bbe5e8e0ca9e99510443606f4bbc4fbbb2322"},
+      {"ordinal":13,"path":"crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl","output":"p256_beeu-x86_64-asm.S","pipe":1,"blake3":"73e62ed3a2fb9dab2e7e0b5ac1d2203d2944d7d089b435c9df7dc203a402d089"},
+      {"ordinal":14,"path":"crypto/fipsmodule/rand/asm/rdrand-x86_64.pl","output":"rdrand-x86_64.S","pipe":1,"blake3":"58b622bcb4e91f43ab67514ed5ce855f8057d75741cb5961193a632eb8c67d50"},
+      {"ordinal":15,"path":"crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl","output":"rsaz-2k-avx512.S","pipe":0,"blake3":"262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0"},
+      {"ordinal":16,"path":"crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl","output":"rsaz-3k-avx512.S","pipe":0,"blake3":"0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0"},
+      {"ordinal":17,"path":"crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl","output":"rsaz-4k-avx512.S","pipe":0,"blake3":"10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074"},
+      {"ordinal":18,"path":"crypto/fipsmodule/bn/asm/rsaz-avx2.pl","output":"rsaz-avx2.S","pipe":1,"blake3":"8884c6d710bef85d7fec1f3ee617edac45fe1114a5f1a5a579fac4b2a16e26df"},
+      {"ordinal":19,"path":"crypto/fipsmodule/sha/asm/sha1-x86_64.pl","output":"sha1-x86_64.S","pipe":1,"blake3":"810707aaa189a22282f07aedcdce8868498afac2179f058c21cd2cba070c4427"},
+      {"ordinal":20,"path":"crypto/fipsmodule/sha/asm/sha512-x86_64.pl","output":"sha256-x86_64.S","pipe":1,"blake3":"fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe"},
+      {"ordinal":21,"path":"crypto/fipsmodule/sha/asm/sha512-x86_64.pl","output":"sha512-x86_64.S","pipe":1,"blake3":"fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe"},
+      {"ordinal":22,"path":"crypto/fipsmodule/aes/asm/vpaes-x86_64.pl","output":"vpaes-x86_64.S","pipe":1,"blake3":"9bd6802d750f65b24a0247a816a9c9ccaff4c42448e0cc502958f37a9e60bebf"},
+      {"ordinal":23,"path":"crypto/fipsmodule/bn/asm/x86_64-mont.pl","output":"x86_64-mont.S","pipe":1,"blake3":"2a9fc62b13ed8b0ee32a3b6622cb8a0d385ef2a4570a73e753eb696b18fe316a"},
+      {"ordinal":24,"path":"crypto/fipsmodule/bn/asm/x86_64-mont5.pl","output":"x86_64-mont5.S","pipe":1,"blake3":"b9003d1b9873e3619141ccfea37fc6562d99d1fd72d63354ef74eb85ced09adf"},
+      {"ordinal":25,"path":"crypto/test/asm/trampoline-x86_64.pl","output":"trampoline-x86_64.S","pipe":1,"blake3":"2e066c06161f9d0dad38faebd3cdaf76eea0f29ff39bdf432c2a0eaeb6a11912"}
+    ]
+  },
+  "assembler_probe_cut": {
+    "frozen_transform": "runner-source-22eb45ca/src/source_built_mantle_programs_aws_helper.rs:234-259",
+    "expected_original_literal": "`$ENV{CC} -Wa,-v -c -o /dev/null -x assembler /dev/null 2>&1`",
+    "rsaz_sources": [
+      {"path":"crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl","literal_count":1,"blake3":"262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0"},
+      {"path":"crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl","literal_count":1,"blake3":"0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0"},
+      {"path":"crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl","literal_count":1,"blake3":"10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074"}
+    ],
+    "claim_limit": "Exact static replacement signatures only; generator was not run and assembler-probe result was not observed."
+  },
+  "original_utility_generator_inputs": {
+    "frozen_helper": "runner-source-22eb45ca/src/source_built_mantle_programs_aws_helper.rs:39-67,89-198,199-231",
+    "make_prefix_headers_go": {"path":"util/make_prefix_headers.go","blake3":"8dcd161933a013c32e28d8d916d05df979ecb79251dab7228cce548fa04f513d","template_raw_chunks":{"writeCHeader":3,"writeASMHeader":3,"writeNASMHeader":4}},
+    "read_symbols_go": {"path":"util/read_symbols.go","blake3":"c4ebb1fc307d4ea4be4ac9b48ad672857de62b33d87389cb8978725ef1bf8bd8","original_skip_symbols":9},
+    "err_data_generate_go": {"path":"crypto/err/err_data_generate.go","blake3":"ec852bd36ca7306c74d10e9251f8ee9030359d9fd35a5e2a37133a5e73934170","library_names":33,"main_raw_chunks":1},
+    "errordata_files":25,
+    "validated_errordata_rows":848,
+    "unique_library_reason_keys":848,
+    "interned_string_bytes":16970,
+    "original_native_source_files_required_by_vendor_package_template":1743,
+    "missing_original_native_copy_source_files":0
+  },
+  "blockers": [
+    {
+      "title": "Support guarded two-line original PerlAsm pipe cuts",
+      "scope": "frozen runner source and any future immutable cohort, not the previously rejected cohort",
+      "condition": "The frozen wrapper normalizes open OUT whitespace and compares only an open command ending in semicolon; four selected pinned original AWS scripts instead use open OUT,\"| ...\" without a semicolon, followed by an `or die ...;` line.",
+      "scripts": ["crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl:65-66", "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl:68-69", "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl:67-68", "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl:67-68"],
+      "frozen_wrapper": "runner-source-22eb45ca/src/source_built_mantle_programs_native.rs:646-656",
+      "impact": "On these source inputs, pipe match count is 0 and the source-built PerlAsm generator aborts with `changed original PerlAsm pipe boundary`; both Mantle stages select all four scripts and cannot complete their genuine products.",
+      "required_fix": "In a new frozen source and cohort, permit the exact two-line guarded original pipe syntax only after checking both the open command and following or-die line; replace the entire original pipe operation with an authenticated raw-file open, retaining the existing single-line cut and one-cut-only rejection. Do not merely loosen the match: leaving the original or-die continuation after an injected semicolon is invalid Perl. Regenerate and independently reverify the complete immutable cohort before cold launch."
+    }
+  ],
+  "procedures": [
+    "ssh leviathan.cymric-daggertooth.ts.net bash -s < local://source22-aws-original-capture-review-script (Git tree/blob/mode/archive checks passed; stops at first frozen wrapper mismatch)",
+    "ssh leviathan.cymric-daggertooth.ts.net bash -s < local://source22-aws-original-input-audit-script (all 26 source/pipe checks, all three probe cuts and all utility inputs measured; reports four mismatches and exits 3)"
+  ],
+  "non_claim": "Actual acquisition bytes are suitable for adding as pinned Mantle source only after a new complete source profile and program cohort are built and verified and the four frozen wrapper mismatches are fixed. The old cohort remains rejected, and neither source correctness nor provider execution nor a fixed point nor release eligibility is proven."
+}

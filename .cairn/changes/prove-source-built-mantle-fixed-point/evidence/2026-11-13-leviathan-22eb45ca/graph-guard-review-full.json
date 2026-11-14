@@ -1,0 +1,152 @@
+{
+  "advisory_guard_admission": "pass",
+  "boundary": "Optional-failure ordinary roots are counted, not prohibited, where the frozen validator permits them. Actual guarded outcomes and provider/compilation/fixed-point behavior remain execution-time obligations.",
+  "issues": {},
+  "per_recipe": {
+    "full-source-native-provider": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 0,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 0,
+      "optional_failure_producers": 0,
+      "optional_failure_root_references": 0,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 0,
+      "source_file_identity": {
+        "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c",
+        "bytes": 18268649
+      }
+    },
+    "full-source-rust-provider": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 0,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 0,
+      "optional_failure_producers": 0,
+      "optional_failure_root_references": 0,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 0,
+      "source_file_identity": {
+        "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+        "bytes": 259029252
+      }
+    },
+    "mantle-stage1": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 40,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 32,
+      "optional_failure_producers": 93,
+      "optional_failure_root_references": 0,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 40,
+      "source_file_identity": {
+        "blake3": "cf357884b5684f5bc5c327133657490199da2defcb6c91621c297eadd0056c62",
+        "bytes": 172660412
+      }
+    },
+    "mantle-stage2": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 40,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 32,
+      "optional_failure_producers": 93,
+      "optional_failure_root_references": 0,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 40,
+      "source_file_identity": {
+        "blake3": "55d0b619ef57aa41f71e0c54ef42569a07005ca5e0f13cd6ed85124bb12dd04e",
+        "bytes": 172660412
+      }
+    },
+    "stagex-provider-publication": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 0,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 0,
+      "optional_failure_producers": 0,
+      "optional_failure_root_references": 0,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 0,
+      "source_file_identity": {
+        "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+        "bytes": 52226
+      }
+    },
+    "stagex-transition": {
+      "guarded_export_references": 0,
+      "guarded_input_edges": 0,
+      "guarded_prior_stage_input_edges": 0,
+      "guarded_producers": 0,
+      "guarded_root_references": 0,
+      "guarded_semantic_root_references": 0,
+      "invalid_guard_predicates": 0,
+      "invalid_guarded_input_edges": 0,
+      "invalid_observed_phases": 0,
+      "optional_failure_export_references": 0,
+      "optional_failure_input_edges": 0,
+      "optional_failure_producers": 14,
+      "optional_failure_root_references": 14,
+      "optional_failure_semantic_root_references": 0,
+      "phase_observations": 0,
+      "source_file_identity": {
+        "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+        "bytes": 31730468
+      }
+    }
+  },
+  "scope": "Source-only guard admission; no generic graph rewalk or runtime proof",
+  "source": "runner-source-22eb45ca/src/source_built_recipe.rs:693-699,788-887,1823-1840; source_built_fixed_point_action_trust.rs:79-82",
+  "total": {
+    "guarded_export_references": 0,
+    "guarded_input_edges": 0,
+    "guarded_prior_stage_input_edges": 0,
+    "guarded_producers": 80,
+    "guarded_root_references": 0,
+    "guarded_semantic_root_references": 0,
+    "invalid_guard_predicates": 0,
+    "invalid_guarded_input_edges": 0,
+    "invalid_observed_phases": 0,
+    "optional_failure_export_references": 0,
+    "optional_failure_input_edges": 64,
+    "optional_failure_producers": 200,
+    "optional_failure_root_references": 14,
+    "optional_failure_semantic_root_references": 0,
+    "phase_observations": 80
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "mantle-aws-original-source-provenance-v1",
+  "required_mantle_source_path": "bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "source_repository": "https://github.com/aws/aws-lc.git",
+  "source_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "source_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+  "source_pin_interoperability": "Git object SHA-1 identifiers; captured archives and source snapshots use BLAKE3",
+  "parent_repository": "https://github.com/aws/aws-lc-rs.git",
+  "parent_commit": "7943223c99d909bc399bdf1b856821bb04f1f3c5",
+  "parent_gitlink_path": "aws-lc-sys/aws-lc",
+  "parent_gitlink_type": "submodule",
+  "aws_lc_sys_version": "0.45.0",
+  "primary_sources": [
+    "https://raw.githubusercontent.com/aws/aws-lc-rs/7943223c99d909bc399bdf1b856821bb04f1f3c5/.gitmodules",
+    "https://api.github.com/repos/aws/aws-lc-rs/contents/aws-lc-sys/aws-lc?ref=7943223c99d909bc399bdf1b856821bb04f1f3c5",
+    "https://api.github.com/repos/aws/aws-lc/git/commits/02561621ffa4cf17c0c4f70bc11a82df36b42ae9"
+  ],
+  "existing_consumer": "src/source_built_mantle_programs_aws.rs:44-84",
+  "non_claim": "Upstream Gitlink/commit/tree identity linkage only. Acquisition and complete source capture require their own actual results; this is not source correctness, provider execution or a fixed point."
+}

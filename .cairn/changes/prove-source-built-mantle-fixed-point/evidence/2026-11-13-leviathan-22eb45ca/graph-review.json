@@ -1,0 +1,56 @@
+{
+  "schema": "source22-read-only-graph-review-v1",
+  "advisory_static_admission": "pass",
+  "issues": {},
+  "scope": "Independent static admission of six actual inert published recipes and frozen source authoring; no source-profile re-verification or execution.",
+  "frozen_revision": "22eb45ca5321416fce3278a228a43224dd0026c5",
+  "frozen_source_tree_blake3": "e090c7f6af61a943f047257c2c48df3abcb039828d0d4b56b384116829b28edf",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-22eb45ca-resumed",
+  "captured_full_result": "/tmp/mantle-source22-graph-review/source22-graph-review.json",
+  "captured_guard_result": "/tmp/mantle-source22-graph-review/source22-guard-review.json",
+  "inspection_procedure": "local://source22-graph-review-procedure.md",
+  "inspection_scripts": ["local://source22-graph-review-script", "local://source22-graph-review-native-check", "local://source22-graph-review-guard-check"],
+  "method": "BLAKE3-match transferred source against remote physical files; follow frozen source_built_recipe.rs:644-764 and controller inputs for stage/producer/output, local order, reachability, cycles; Mantle exact unit/build-script semantic root union, binary and --help; separately check guard roots, predicates, direct edge dominance, optional-failure ordinary edges, prior-stage guarded outputs and ObservePhase via source_built_recipe.rs:693-699,788-887,1823-1840. Cross-stage counts are Produced reference occurrences, including nested controller declarations, not unique edges.",
+  "counts_by_recipe": {
+    "stagex-transition": {"bytes":31730468,"blake3":"8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34","steps":8131,"roots":28137,"reachable":8131,"unreachable":0,"cross_stage":0,"unresolved":0,"cycles":0},
+    "stagex-provider-publication": {"bytes":52226,"blake3":"95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8","steps":18,"roots":64,"reachable":18,"unreachable":0,"cross_stage":19,"unresolved":0,"cycles":0},
+    "full-source-native-provider": {"bytes":18268649,"blake3":"aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c","steps":5122,"roots":1375,"reachable":5122,"unreachable":0,"cross_stage":5263,"unresolved":0,"cycles":0},
+    "full-source-rust-provider": {"bytes":259029252,"blake3":"2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407","steps":63882,"roots":232254,"reachable":63882,"unreachable":0,"cross_stage":191487,"unresolved":0,"cycles":0},
+    "mantle-stage1": {"bytes":172660412,"blake3":"cf357884b5684f5bc5c327133657490199da2defcb6c91621c297eadd0056c62","steps":24101,"roots":1242,"reachable":24101,"unreachable":0,"cross_stage":96485,"unresolved":0,"cycles":0},
+    "mantle-stage2": {"bytes":172660412,"blake3":"55d0b619ef57aa41f71e0c54ef42569a07005ca5e0f13cd6ed85124bb12dd04e","steps":24101,"roots":1242,"reachable":24101,"unreachable":0,"cross_stage":96485,"unresolved":0,"cycles":0}
+  },
+  "total": {"steps":125355,"roots":264314,"reachable":125355,"unreachable":0,"cross_stage":389739,"unresolved":0,"cycle_nodes":0,"cycles":0,"nested_controller_specification_references":254845},
+  "guard_admission": {
+    "verdict": "pass",
+    "issues": {},
+    "same_for_all_six": {"guarded_roots":0,"guarded_exports":0,"guarded_semantic_roots":0,"invalid_guard_predicates":0,"invalid_guarded_input_edges":0,"cross_stage_guarded_input_edges":0,"invalid_observed_phases":0},
+    "per_recipe": {
+      "stagex-transition": {"guarded_producers":0,"optional_failure_producers":14,"optional_failure_ordinary_root_references":14,"optional_failure_input_edges":0,"guarded_observations":0},
+      "stagex-provider-publication": {"guarded_producers":0,"optional_failure_producers":0,"optional_failure_ordinary_root_references":0,"optional_failure_input_edges":0,"guarded_observations":0},
+      "full-source-native-provider": {"guarded_producers":0,"optional_failure_producers":0,"optional_failure_ordinary_root_references":0,"optional_failure_input_edges":0,"guarded_observations":0},
+      "full-source-rust-provider": {"guarded_producers":0,"optional_failure_producers":0,"optional_failure_ordinary_root_references":0,"optional_failure_input_edges":0,"guarded_observations":0},
+      "mantle-stage1": {"guarded_producers":40,"optional_failure_producers":93,"optional_failure_ordinary_root_references":0,"optional_failure_input_edges":32,"guarded_observations":40},
+      "mantle-stage2": {"guarded_producers":40,"optional_failure_producers":93,"optional_failure_ordinary_root_references":0,"optional_failure_input_edges":32,"guarded_observations":40}
+    },
+    "production_semantics_note": "StageX has 14 ordinary OneOf/Normal Exec outputs exposed as roots; frozen validator prohibits explicitly guarded producers as roots but permits these optional-failure roots. No invalid optional input edge was observed."
+  },
+  "rust_provider": {"canonical_export":"full-source-rust-provider/successor-1.94.1.provider#full-source-rust-provider","kind":"tree","matches_semantic_root":true},
+  "mantle_each_stage": {"semantic_keys":1143,"rust_unit_keys":1045,"build_script_keys":98,"distinct_semantic_products":1241,"binary":"unit-01020-link.native-products#<stage>","smoke":"mantle-help#stdout","root_set_exactly_semantic_products_plus_smoke":true,"authenticator_steps":12,"authenticator_reachable":12,"authenticated_outputs_consumed":12,"native_script_nonlocal_state_references":0,"native_script_local_state_reference_counts":{"script_text":4133,"script_tree":4120,"script_cwd":448,"script_invocation_cwd_env":1697,"prior_script_history":1740,"native_text_or_files":3414}},
+  "specific_positive_edge": "mantle-stage1/unit-00031-script.sources.perl-0.generate input original-script consumes mantle-stage1/unit-00031-script.sources.perl-0.authenticate#authenticated; same pattern for indices 0..11 in both stages.",
+  "intentional_external_tool_edge": "mantle-stage1/unit-00031-script.native-1.invoke input native-request-tool consumes full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.host.original.member-out-3#result; this is an expected predecessor executable, not script state.",
+  "frozen_source_blake3": {
+    "src/source_built_program_authoring.rs": "23c52720c463872d698140fd2043fd938125692991e2b57a3fccb089d3bf7c9b",
+    "src/source_built_recipe.rs": "28ca15f8081b88c5747a851a1474d92277fba142f0b7fdfa1f74d8a48374d009",
+    "src/source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+    "src/source_built_fixed_point_stagex_actions.rs": "8e9d7f09cd03c5880a3e4fdeb59dd599cac609e4b427e0d8153657dbd97b4784",
+    "src/source_built_fixed_point_action_trust.rs": "af9a141259548a73baf13bd60487412c01ee0c871ae572f1daac2ed97f681754",
+    "src/source_built_stagex_programs.rs": "72d8bbcc80dd9eecf127b4d465e05f1b1aa14bca7423921fdf69c8636c5bc050",
+    "src/source_built_native_programs.rs": "f9279a4e40d4e58ea2752211f795d1e8b6f35f5279e47e4d0f7612c3491efeae",
+    "src/source_built_rust_programs.rs": "dd4c2abfec0de583680a72dec332586ec329b138ade03102d466773c77eccd7e",
+    "src/source_built_mantle_programs.rs": "70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921",
+    "src/source_built_mantle_programs_graph.rs": "6d8ec9bd415be54d08fcb71fba531920075c235c0bf56081d5992365a0c6de10",
+    "src/source_built_mantle_programs_native.rs": "825b16784805d18c65db9243227771b0e816dee14d33fa2f70cb7d4bf18eb122",
+    "src/source_built_mantle_programs_native_request.rs": "ea8e6aae0bd87fcbaf5428d07324fdc80bf0af9a9ce97eeb6962ff3681fb886c"
+  },
+  "boundary": "No static blocker in checked graphs or guard admission. Runtime guarded outcomes and native request bytes/cwd/env, provider/compiler behavior and fixed-point convergence remain unobserved. Parent owns separate full-bundle verification and launch decision. No build, test, lint, formatter, source/profile/cohort modification or provider dispatch performed."
+}

@@ -1,0 +1,27 @@
+{
+  "1566": {
+    "task": {
+      "id": 1566,
+      "created_at": "2026-11-14T03:02:42.522024594-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/original-smoke-https.sh",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM/original-smoke-https.sh",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/pipe-boundary-validation.YinuAM",
+      "envs": {},
+      "group": "default",
+      "dependencies": [
+        1565
+      ],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-14T03:02:42.521956937-05:00",
+          "start": "2026-11-14T03:10:42.437010207-05:00",
+          "end": "2026-11-14T03:10:42.437012802-05:00",
+          "result": "DependencyFailed"
+        }
+      }
+    },
+    "output": "(Pueue error) Failed to get log file handle: I/O error at path \"/home/brittonr/.local/share/pueue/task_logs/1566.log\" while getting log file handle:\nNo such file or directory (os error 2)"
+  }
+}

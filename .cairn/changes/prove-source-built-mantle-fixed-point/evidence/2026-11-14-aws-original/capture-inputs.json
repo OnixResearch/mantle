@@ -1,0 +1,16 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "root": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN",
+  "local_base": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-14-aws-original",
+  "repository": "https://github.com/aws/aws-lc.git",
+  "revision": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "expected_git_tree": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+  "parent_repository": "https://github.com/aws/aws-lc-rs.git",
+  "parent_revision": "7943223c99d909bc399bdf1b856821bb04f1f3c5",
+  "parent_gitlink": "aws-lc-sys/aws-lc",
+  "required_mantle_source_path": "bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "driver_blake3": "ae708b4aa116f6be92c57011146c0b918631d4a23a0079d92a725f236be3e9ae",
+  "task": 1561,
+  "non_claim": "Source acquisition queued outside protected proof execution. Original Git commit/tree pins come from the existing Mantle source requirement and the upstream aws-lc-rs gitlink. No current cohort is admitted for cold launch."
+}
