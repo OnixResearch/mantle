@@ -1,0 +1,10 @@
+{
+  "format": "mantle-source-built-profile-refresh-v1",
+  "input_manifest_blake3": "de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c",
+  "output_manifest_blake3": "6fab5e96b0f26440306b8b564e5e554aff8bff7272c6b4c2dba73dcee1ebe3ed",
+  "previous_mantle_source_blake3": "51b3da0e5d3a15f690aec40a41763ff7b656eee03b2e399d97b5d705e6005194",
+  "replacement_mantle_source_blake3": "0f8070d8501aab60f63b4cced4bc6e384b7d5d2f7654a473b01d1c26204e0e48",
+  "preserved_record_count": 65,
+  "added_record_count": 0,
+  "non_claim": "profile refresh proves bounded record preservation and source identity only, not proof completion"
+}

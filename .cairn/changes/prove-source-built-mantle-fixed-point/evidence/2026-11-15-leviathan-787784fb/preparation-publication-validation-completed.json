@@ -1,0 +1,35 @@
+{
+  "task": {
+    "id": 1611,
+    "created_at": "2026-11-15T10:17:08.668747204-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validate-preparation-publication.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validate-preparation-publication.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-9300895d-preparation-evidence-cairn",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T10:17:08.668723279-05:00",
+        "start": "2026-11-15T10:17:08.925813087-05:00",
+        "end": "2026-11-15T10:17:33.661127308-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "mirror_root": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+  "changed_lifecycle_source": ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+  "changed_lifecycle_source_blake3": "7bd1c15b4efa52267f8ed46ad6d5df13eb4b6b22527fb6d3da3740742ee7bdb2",
+  "mirror_source_equal": true,
+  "log_remote": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validation-preparation-publication.log",
+  "log_local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/preparation-publication-validation.log",
+  "log_blake3": "2fa11ba1c56a06ced3652b949902ea5328464fee05f696977cbe5db69c127e9d",
+  "log_transfer_equal": true,
+  "accepted": true,
+  "excluded_live_directories": [
+    "graph-review",
+    "identity-review"
+  ],
+  "non_claim": "Lifecycle validation of completed source-only preparation/transport evidence only; independent reviews and protected/v2 execution are not inferred."
+}

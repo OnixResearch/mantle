@@ -1,0 +1,12 @@
+{
+  "source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-787784fb-helper-feature/source-profile.json",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat -- /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-787784fb-helper-feature/source-profile.json' | b3sum --no-names",
+  "remote_file_blake3": "fbc5c0e46e824c418db50d77e71f1fb605ef6705114fd9959ed3b84ec0c15959",
+  "observed_full_ssh_stream_blake3": "fbc5c0e46e824c418db50d77e71f1fb605ef6705114fd9959ed3b84ec0c15959",
+  "bytes": 15790233347,
+  "transport_equal": true,
+  "observed_exit_code": 0,
+  "observed_wall_seconds": 303.41,
+  "remote_facts": "fbc5c0e46e824c418db50d77e71f1fb605ef6705114fd9959ed3b84ec0c15959  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-787784fb-helper-feature/source-profile.json\n15790233347\n",
+  "non_claim": "Complete raw byte-stream parity only; distinct from canonical prepared manifest identity and from graph/physical/protected execution acceptance."
+}

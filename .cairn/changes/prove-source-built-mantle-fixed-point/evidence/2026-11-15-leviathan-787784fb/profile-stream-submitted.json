@@ -1,0 +1,6 @@
+{
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat -- /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-787784fb-helper-feature/source-profile.json' | b3sum --no-names",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-787784fb-helper-feature/source-profile.json",
+  "expected_raw_blake3_from_completed_log": "fbc5c0e46e824c418db50d77e71f1fb605ef6705114fd9959ed3b84ec0c15959",
+  "scope": "Entire source-profile byte stream over outer SSH transport; not manifest identity or review/proof authority."
+}

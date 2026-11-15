@@ -1,0 +1,25 @@
+{
+  "task": "1611",
+  "mirror_root": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+  "changed_lifecycle_source_blake3": "7bd1c15b4efa52267f8ed46ad6d5df13eb4b6b22527fb6d3da3740742ee7bdb2",
+  "files": [
+    "cold-proof-wrapper-prepared.json",
+    "cold-proof.sh",
+    "review-contract.md",
+    "review-subject.json",
+    "profile-stream-completed.json",
+    "fresh-preparation-completed.json",
+    "input-source-verification.json",
+    "source-refresh.json",
+    "source-program-preparation-input-plan.json",
+    "prepared-source-verification.json",
+    "source-program-preparation.json",
+    "preparation-stdout.json",
+    "profile-remote-byte-facts.txt",
+    "profile-stream-submitted.json",
+    "preparation-task-completed.json",
+    "preparation.log"
+  ],
+  "script": "#!/usr/bin/env bash\nset -euo pipefail\ncd /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N\ntest ! -e validation-preparation-publication.log\nexec > validation-preparation-publication.log 2>&1\nfinished=0\ntrap 'status=$?; if [ \"$status\" -eq 0 ] && [ \"$finished\" -ne 1 ]; then status=1; fi; printf \"validation_exit=%s\\n\" \"$status\"; exit \"$status\"' EXIT\nset -x\ndate -Is\nexport GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1\nexport GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0\n/run/current-system/sw/bin/nix develop --offline --builders \"\" --no-write-lock-file -c cairn validate --root .\ndate -Is\nfinished=1\nprintf \"validation_complete=1\\n\"\n",
+  "scope": "Completed source-only preparation and transport evidence; excludes live graph-review/identity-review directories. No review acceptance or proof launch."
+}

@@ -1,0 +1,21 @@
+{
+  "wrapper": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/cold-proof.sh",
+  "wrapper_blake3": "f0d4bc184d53446586f59e791212bacefa7d8992bfa3d4fb415a001603cfe0b9",
+  "reference": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/cold-proof-fresh-target.sh",
+  "syntax_command": "bash -n .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/cold-proof.sh",
+  "syntax_exit_code": 0,
+  "syntax_output": "",
+  "planned_output": "/home/brittonr/sbfp-20261113-berdKH/proof-787784fb-helper-feature",
+  "review_gate": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-787784fb-helper-feature.json",
+  "review_argument": "Exact BLAKE3 of actual complete parent-integrated review file; not yet supplied or accepted.",
+  "resource_bounds": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "open_file_descriptors_max": 4096,
+    "protected_exec_events_max": 524288,
+    "source_records_max": 65536
+  },
+  "requested_jobs": 16,
+  "not_submitted": true,
+  "non_claim": "Fully bound launch wrapper prepared and syntax-checked only. No current review acceptance file, proof task or protected execution is created."
+}

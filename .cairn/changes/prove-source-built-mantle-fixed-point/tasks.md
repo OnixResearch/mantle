@@ -602,3 +602,33 @@ and its referenced result. This physical verdict does not repair the old
 consumer rejections, certify replacement preparation 1608 or grant launch
 authority. Complete graph coverage remains separately required.
 
+
+## Corrected cohort regenerated and transport-bound (2026-11-15)
+
+Source-only preparation 1608 completed Success from qualified product
+`787784fb`, runner `6b7c8409…` and unchanged frozen source `dcfcf2de…`. Both
+actual source verifiers report ready with empty missing/stale/unsupported/
+untrusted sets. The new input manifest is `6fab5e96…`, input plan `2c77de53…`
+and prepared manifest `9300895d…`; actual metadata cross-links and transferred
+metadata bytes agree. All four program identities and the complete seven-role,
+six-stage source/authority/receipt/resource contracts are retained in
+`evidence/2026-11-15-leviathan-787784fb/fresh-preparation-completed.json` and its
+referenced current report/plan files.
+
+The entire 15,790,233,347-byte prepared-profile SSH stream matches independently
+measured raw-file BLAKE3 `fbc5c0e4…`. This is not the canonical manifest identity.
+`profile-stream-completed.json` records full transport parity and
+`review-subject.json` binds exact current review inputs in the same directory.
+
+Only after those actual publication/parity results were accepted did the
+parent dispatch `CorrectedGraphLuna` and `CorrectedIdentityLuna` together using
+the requested exact model. They own disjoint graph/template and physical/
+authenticated-source slices under the updated `review-contract.md`, with
+frozen data read-only and no product/helper/controller/provider execution or
+proof launch. Prior subjects, raw hashes, measured counts and verdicts are not
+adopted. Their complete current reports still require parent integration.
+
+Qualified source-only regeneration is complete, not a protected compiler/
+provider build, Mantle stage, reconciled v2 receipt, fixed point, release or
+signed native-row acceptance. I3–I5 and proof-dependent V2/V3 remain open.
+

@@ -10,10 +10,10 @@ qualification result or permission to launch a protected proof.
 2. Isolated runner qualification 1606 and independent canonical qualification
    1607 must both have succeeded. Inspect their actual logs, source-before/after
    bindings and installed runner bytes before releasing preparation.
-3. Source-only preparation 1608 was released after the parent accepted both
-   qualifications. Dispatch reviews only after preparation succeeds,
-   both source verifiers report ready, and the parent records actual new
-   report, plan, program, profile-file and installed-runner identities.
+3. Source-only preparation 1608 succeeded after both qualifications were
+   accepted. Both actual source verifiers are ready; the new report, input plan
+   and program identities are retained in `fresh-preparation-completed.json`.
+   Complete-profile SSH stream parity is accepted in `profile-stream-completed.json`.
 4. Keep proof output absent until complete current-cohort graph and physical
    reviews cover every launch criterion. Earlier ACCEPT strings, partial
    reports, source-test results and prepared-source availability are not
@@ -35,7 +35,7 @@ qualification result or permission to launch a protected proof.
   `6b7c840975dd68631c267458f3360ce46f84fe839af176aa077fb4d9bdccf7ef`.
   Successful qualification and independently measured installed/fresh-target
   bytes are retained in `fresh-runner-qualified.json`; no old runner is admissible.
-- Candidate cohort: `$RUN/prepared-cohort-787784fb-helper-feature`.
+- Prepared cohort: `$RUN/prepared-cohort-787784fb-helper-feature`.
 - Evidence: `.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/`.
 - Independent StageX lineage pin:
   `e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d`.
@@ -47,6 +47,30 @@ qualification result or permission to launch a protected proof.
 - Original normalized AWS-LC tree BLAKE3:
   `8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89`.
 - Original capture: `$RUN/aws-original-source-02561621.TGISLN/aws-lc.git`.
+
+## Actual preparation publication
+
+| Identity class | Current measured value |
+|---|---|
+| Input manifest | `6fab5e96b0f26440306b8b564e5e554aff8bff7272c6b4c2dba73dcee1ebe3ed` |
+| Input plan | `2c77de53a328ad67692abea92e257ef05fd713ff30c329cc19d2394550675e69` |
+| Prepared manifest | `9300895d8784494a3c0fe7c092e38ba4647dff5b9308e7b97cc3f8671168dbf6` |
+| Raw prepared profile file | `fbc5c0e46e824c418db50d77e71f1fb605ef6705114fd9959ed3b84ec0c15959` |
+| Preparation report file | `fdff7e600506e341ab4d0abe228260841c0118fb0f05cdc1eb55b8e546f817dc` |
+
+The actual prepared profile is 15,790,233,347 bytes. Its raw-file identity is
+not the prepared manifest identity. The complete SSH stream matches the actual
+raw file BLAKE3; `profile-stream-completed.json` retains the command and measured
+parity, and `review-subject.json` binds this handoff. Both source verifiers have empty
+missing/stale/unsupported/untrusted sets. The input profile stayed unchanged;
+complete frozen source remained `dcfcf2de…` before and after preparation.
+
+Read all four current program identities from `source-program-preparation.json`
+and the exact seven-role/six-stage source, authority, receipt and resource
+contracts from `source-program-preparation-input-plan.json`. Actual metadata
+cross-links and transferred bytes match; no baseline identities/counts are
+inherited. Both Mantle stages declare NativeSourceBundle source authority in
+this plan, but complete consumed-operand and template review remains required.
 
 The rejected `c22381a8...` cohort belongs to the earlier `71c2bd4d` source.
 Its missing owning-stage NativeSourceBundle authority and Cargo selector
