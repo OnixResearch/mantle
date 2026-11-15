@@ -713,6 +713,21 @@ preparation report states its own non-claim: inert source preparation only; no
 provider execution, fixed-point proof, compiler correctness, reproducibility,
 or release eligibility. Use the proof command above for those claims.
 
+Authored filesystem operands must remain typed source, output or runtime
+references. The internal source-package helper accepts generated-member
+exclusions as paths within its declared original-package input tree, not as
+relative literal paths or members of another tree. For the parser package,
+`src/grammar.rs` is excluded from the copied package while the authenticated
+original remains unchanged. Traversal and exclusion of the input root itself
+are rejected.
+
+StageX and Rust dependency admission borrow a per-validation recipe index;
+producer lookup requires the exact local stage and step identity and uses only
+actual command operands, guards and state dependencies. This avoids repeated
+whole-recipe scans without granting authority to unused input labels, foreign
+producers or invented observed outputs. Neither indexing nor source-program
+preparation substitutes for protected execution and action reconciliation.
+
 ## Offline Cargo project-build lane
 
 Use `mantle build .#name` for the supported near-term Rust project workflow.

@@ -530,10 +530,14 @@ fn library_overlays(mut args: impl Iterator<Item = String>) -> Result<()> {
 fn source_package(mut args: impl Iterator<Item = String>) -> Result<()> {
     let source = args.next().ok_or("missing original package")?;
     let destination = args.next().ok_or("missing package output")?;
-    let excluded = args.collect::<std::collections::BTreeSet<_>>();
-    if excluded.iter().any(|member| member.is_empty() || Path::new(member).components().any(|part| !matches!(part, std::path::Component::Normal(_)))) {
-        return Err("source package requires exact normalized generated members".into());
-    }
+    let excluded = args.map(|path| {
+        let member = Path::new(&path).strip_prefix(&source)
+            .map_err(|_| "source package exclusions must name members of the original input tree".to_owned())?;
+        if member.as_os_str().is_empty() || member.components().any(|part| !matches!(part, std::path::Component::Normal(_))) {
+            return Err("source package requires exact normalized generated members".into());
+        }
+        Ok(member.to_str().ok_or("non-UTF8 original source member")?.to_owned())
+    }).collect::<Result<std::collections::BTreeSet<_>>>()?;
     fn copy(source: &Path, target: &Path, relative: &str, excluded: &std::collections::BTreeSet<String>) -> Result<()> {
         std::fs::create_dir_all(target).map_err(|e| e.to_string())?;
         let mut entries = std::fs::read_dir(source).map_err(|e| e.to_string())?.collect::<std::io::Result<Vec<_>>>().map_err(|e| e.to_string())?;
@@ -867,3 +871,79 @@ fn compiler_invocation(mut args: impl Iterator<Item = String>) -> Result<()> {
     std::fs::write(destination, invocation).map_err(|e| e.to_string())
 }
 "##;
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    fn compiled_helper(root: &Path) -> PathBuf {
+        assert!(root.is_dir());
+        let source = root.join("metadata-helper.rs");
+        let executable = root.join("metadata-helper");
+        std::fs::write(
+            &source,
+            super::source(
+                crate::source_built_mantle_programs::native::CC_PROCESS_SOURCE,
+                Some(crate::source_built_mantle_programs::compression::NATIVE_REQUEST_HELPER_SOURCE),
+            ),
+        )
+        .unwrap();
+        let compiled = Command::new("rustc")
+            .arg("--edition=2024")
+            .arg(&source)
+            .arg("-o")
+            .arg(&executable)
+            .output()
+            .unwrap();
+        assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+        executable
+    }
+
+    #[test]
+    fn source_package_exclusions_stay_within_the_typed_input_tree() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let root = directory.path();
+        let helper = compiled_helper(root);
+        let source = root.join("package");
+        std::fs::create_dir_all(source.join("src")).unwrap();
+        std::fs::write(source.join("src/grammar.rs"), "old generated grammar").unwrap();
+        std::fs::write(source.join("src/grammar.lalrpop"), "original grammar").unwrap();
+        std::fs::write(source.join("build.rs"), "original build script").unwrap();
+        let output = root.join("filtered");
+        let copied = Command::new(&helper)
+            .arg("--source-package")
+            .arg(&source)
+            .arg(&output)
+            .arg(source.join("src/grammar.rs"))
+            .output()
+            .unwrap();
+        assert!(copied.status.success(), "{}", String::from_utf8_lossy(&copied.stderr));
+        assert!(!output.join("src/grammar.rs").exists());
+        assert_eq!(std::fs::read_to_string(output.join("src/grammar.lalrpop")).unwrap(), "original grammar");
+        assert_eq!(std::fs::read_to_string(output.join("build.rs")).unwrap(), "original build script");
+        assert_eq!(std::fs::read_to_string(source.join("src/grammar.rs")).unwrap(), "old generated grammar");
+        for (index, excluded) in [
+            PathBuf::from("src/grammar.rs"),
+            root.join("outside/src/grammar.rs"),
+            root.join("package-other/src/grammar.rs"),
+            source.clone(),
+            source.join("src/../../outside"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let output = root.join(format!("rejected-{index}"));
+            let rejected = Command::new(&helper)
+                .arg("--source-package")
+                .arg(&source)
+                .arg(&output)
+                .arg(&excluded)
+                .output()
+                .unwrap();
+            assert!(!rejected.status.success(), "accepted out-of-tree exclusion {excluded:?}");
+            assert!(!output.exists(), "invalid exclusion created a package output");
+        }
+    }
+}

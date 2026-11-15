@@ -1,0 +1,13 @@
+{
+  "id": 1577,
+  "result": {
+    "Failed": 1
+  },
+  "start": "2026-11-15T01:20:07.273346751-05:00",
+  "end": "2026-11-15T01:20:11.516975853-05:00",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/run.log",
+  "blocker": "Public key byte comparison: Nix token file has no final newline; Mantle key-show prints one. Both tokens equal; no native build was executed.",
+  "source_tree_blake3": "462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09",
+  "runner_blake3": "9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7",
+  "continuation": "Reuse existing selected key and empty qualification state; compare exact tokens with trailing line terminators removed, not raw file bytes."
+}

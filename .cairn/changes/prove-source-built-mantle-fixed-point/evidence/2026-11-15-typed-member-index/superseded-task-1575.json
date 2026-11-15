@@ -1,0 +1,8 @@
+{
+  "id": 1575,
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-typed-member-index-20261115-4x6tey.sh",
+  "status": "Killed",
+  "start": "2026-11-15T01:11:05.304130964-05:00",
+  "end": "2026-11-15T01:11:51.711380086-05:00",
+  "reason": "Operator cancelled to match the regression fixture to the actual production helper compiler edition (2024). No passing qualification claim."
+}

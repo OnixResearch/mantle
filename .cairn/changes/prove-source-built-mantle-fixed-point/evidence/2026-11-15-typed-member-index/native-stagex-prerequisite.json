@@ -1,0 +1,12 @@
+{
+  "failed_task": 1580,
+  "required_transition": "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition",
+  "required_provider": "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider",
+  "authority_sources": [
+    "bootstrap/stagex-transition-proof-input.ncl:1-6",
+    "bootstrap/stagex-provider-proof-input.ncl:1-6"
+  ],
+  "required_action": "Execute and validate the protected StageX transition and provider within the fresh source-built proof before adoption into its local state.",
+  "forbidden_workaround": "Do not import historical transition/provider bytes, cache hits, or manually populate reserved identities.",
+  "current_result": "No current native row was accepted; historical row receipts and expected source digests remain unchanged."
+}

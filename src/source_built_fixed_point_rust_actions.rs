@@ -17,10 +17,10 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
 use crate::source_built_fixed_point_action_trust::ActionExecutionEvent;
 use crate::source_built_fixed_point_action_trust::StageActionAdapter;
 use crate::source_built_fixed_point_stagex_actions::ExpandedNode;
+use crate::source_built_fixed_point_stagex_actions::RecipeDependencyIndex;
 use crate::source_built_fixed_point_stagex_actions::depends_on;
 use crate::source_built_fixed_point_stagex_actions::require_export;
 use crate::source_built_fixed_point_stagex_actions::require_node_input;
-use crate::source_built_fixed_point_stagex_actions::used_inputs;
 use crate::source_built_fixed_point_stagex_actions::validate_partition;
 use crate::source_built_recipe::ArtifactKind;
 use crate::source_built_recipe::ArtifactRef;
@@ -210,7 +210,8 @@ fn validate_expansion(
         return Err(error("source expansion omits/invents original Rust stages or archives"));
     }
     let program = prepared.source_recipe();
-    validate_partition(program, index.stages.values())?;
+    let dependencies = RecipeDependencyIndex::new(program);
+    validate_partition(&dependencies, index.stages.values())?;
     for source in &route.sources {
         let ArtifactRef::Source {
             role: SourceAuthorityRole::RustSourceArchiveSet,
@@ -231,7 +232,7 @@ fn validate_expansion(
             return Err(error(format!("original Rust stage output inventory changed: {}", stage.id)));
         }
         for source in &stage.source_ids {
-            require_node_input(program, node, &index.archives[source])?;
+            require_node_input(&dependencies, node, &index.archives[source])?;
         }
         if !stage.bootstrap_stage_id.is_empty() {
             let previous = index
@@ -239,10 +240,10 @@ fn validate_expansion(
                 .get(&stage.bootstrap_stage_id)
                 .ok_or_else(|| error("missing original bootstrap predecessor"))?;
             for reference in previous.outputs.values() {
-                require_node_input(program, node, reference)?;
+                require_node_input(&dependencies, node, reference)?;
             }
             let compiler = previous.outputs.get("rustc").ok_or_else(|| error("bootstrap predecessor lacks rustc"))?;
-            if !program.steps.iter().filter(|step| node.step_ids.contains(&step.id)).any(|step| {
+            if !node.step_ids.iter().filter_map(|id| dependencies.step(id)).any(|step| {
                 matches!(&step.operation, RecipeOperation::Exec { executable_input, .. } if step.inputs.get(executable_input) == Some(compiler))
             }) { return Err(error("Rust stage never executes its actual source-produced bootstrap compiler")); }
         }
@@ -279,7 +280,7 @@ fn validate_expansion(
             .outputs
             .get(name)
             .ok_or_else(|| error("final stage omits original provider role"))?;
-        if prepared.export(name)?.reference != *reference || !depends_on(program, product, reference) {
+        if prepared.export(name)?.reference != *reference || !depends_on(&dependencies, product, reference) {
             return Err(error(format!("published Rust provider drops or substitutes original final product {name}")));
         }
     }
@@ -287,11 +288,15 @@ fn validate_expansion(
     // occur in operands, not merely in a semantic label or attached input list.
     for role in NATIVE_TOOLS.into_iter().chain(NATIVE_TREES).chain(NATIVE_LIBRARIES) {
         let reference = &native.export(role)?.reference;
-        if !program.steps.iter().any(|step| used_inputs(step).contains(reference)) {
+        if !dependencies.uses_input(reference) {
             return Err(error(format!("Rust expansion omits source-built native role {role}")));
         }
     }
-    if !depends_on(program, &prepared.export("toolchain-closure")?.reference, &prepared.export("rustc")?.reference) {
+    if !depends_on(
+        &dependencies,
+        &prepared.export("toolchain-closure")?.reference,
+        &prepared.export("rustc")?.reference,
+    ) {
         return Err(error("toolchain closure text is not derived from the actual produced Rust compiler"));
     }
     Ok(())

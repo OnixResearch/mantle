@@ -1,0 +1,21 @@
+{
+  "submission": "New task added (id 1577).",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws",
+  "source_tree_blake3": "462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws",
+  "runner_blake3": "9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7",
+  "qualification_root": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy",
+  "roots": [
+    "bootstrap/gcc-4.7.ncl",
+    "bootstrap/gcc-10.ncl",
+    "bootstrap/musl-full.ncl",
+    "bootstrap/gcc-10-final.ncl",
+    "bootstrap/binutils-full.ncl"
+  ],
+  "trust_unsigned": false,
+  "signing_key_selected": true,
+  "substitutions_enabled": false,
+  "non_claim": "Qualification submitted only; no observed component completion or replacement row receipt"
+}

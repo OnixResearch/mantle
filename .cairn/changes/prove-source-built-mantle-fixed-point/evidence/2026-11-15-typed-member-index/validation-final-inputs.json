@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-source-overlay-validation-v1",
+  "base_source_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "base_complete_archive_blake3": "462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09",
+  "base_compressed_archive_blake3": "29e4717da23d7fc99d05d4b501f3581f58e262454a3ed5d37de0fa8fe002bd00",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/validation-source-typed-member-index-final-20261115.p3kaKv",
+  "changed_source_blake3": {
+    "src/source_built_fixed_point_stagex_actions.rs": "25c6e83381d70c25f2a03636653e364ce8a618d7ebd1a1d4cdac9dd34de28699",
+    "src/source_built_fixed_point_rust_actions.rs": "39bed8c90ca2321a1fad4ef6a3dd65cdd2ea96cf6fd85f5101952f6e7ef47970",
+    "src/source_built_mantle_programs_graph.rs": "a07836d408247111138dc22066505a55728859e06a20322af1ccd5621bbcd730",
+    "src/source_built_mantle_programs_metadata_helper.rs": "a3e2e1ae870459019462b11832f37827b489fe371856ee61d02b0a33728ce831"
+  },
+  "helper_compiler_edition": "2024",
+  "superseded_task": 1575,
+  "non_claim": "Validation overlay only; not a committed frozen cohort, provider execution or fixed-point proof"
+}

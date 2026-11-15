@@ -1099,3 +1099,85 @@ Submission alone accepts no provider, Mantle stage, fixed point, action
 reconciliation, v2 receipt, independent backend parity or release evidence.
 I3–I5 and proof-dependent V2/V3 remain open until the actual task and independent
 post-execution verification establish their required facts.
+
+## Typed package member and indexed dependency repair (2026-11-15)
+
+Cold task 1574 completed `Failed(1)` at
+`unit-00251-script-original-package`: `src/grammar.rs` was an untyped literal
+filesystem operand. The failed attempt and before/after absent success aliases
+are retained in `2026-11-14-leviathan-8fa84260-aws/attempt-status-1574.json`,
+`pueue-result-1574.json` and `cold-proof-1574.log`. No provider, Mantle stage,
+reconciled proof, v2 receipt or successful publication was accepted.
+
+`source_built_mantle_programs_graph.rs` now binds that exclusion to the typed
+`original-package` input member. The generated metadata helper strips only the
+declared input-tree prefix, requires a nonempty normalized member, and copies
+the remaining original files without changing the authenticated source tree.
+It does not accept relative literals, another tree, the root itself or a parent
+escape. The executable helper regression uses the actual composed helper
+source and production Rust edition, checks preserved/copied bytes and the
+excluded generated file, and rejects those invalid boundaries before creating
+an output.
+
+`RecipeDependencyIndex` borrows the immutable recipe, indexes exact local step
+identities and caches actual `used_inputs` once per validation pass. StageX and
+Rust callers share it for producer/reachability and original-node checks.
+Successful required-input checks no longer construct a diagnostic vector.
+Reflexivity, actual transitive operands, guard/status/seed dependencies,
+observed-phase edges and both real state alternatives remain checked; unused
+labels, foreign/near-prefix producers and invented observed outputs do not
+gain authority. No global cache or input-policy relaxation was added.
+
+Pueue 1579 completed `Success` against frozen base code `8fa84260…` plus the
+four explicit source-file overlays in `validation-formatted-inputs.json`.
+The complete normalized source-tree digest before and after qualification was
+`b46f5e5ac16c7eed21e7f501602328dad4357f850c88b4f37a8231cec116bc91`.
+Exact commands were:
+
+```text
+cargo fmt --check -p mantle -v
+cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1
+cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings
+cargo build --release --locked --offline -p mantle --bin mantle
+```
+
+Captured execution reports:
+
+```text
+test result: ok. 263 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 6.10s
+qualification_complete=1
+qualification_exit=0
+```
+
+The package-member and exact-local-producer regressions both executed and
+passed. The installed overlay runner has BLAKE3
+`76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504`.
+The command, source-file digests, unchanged-tree measurements, full transcript
+and superseded setup/formatting attempts are retained in
+`2026-11-15-typed-member-index/`. Ignored protected smokes did not execute.
+This validates the repairs only; the overlay is not a committed frozen cohort
+or an actual fixed-point proof.
+
+The native parity investigation also found real source/producer drift, not an
+acceptance-only digest discrepancy: current recipes use binutils pass4 v17 and
+GCC C++ v8, and final GCC now includes finish gates in its input-addressed
+derivation. Historical v16/v7 row receipts were not repinned to observed
+current hashes. A separate signed/no-substitution qualification preserved
+source tree `462f9c8e…` and the selected public key; task 1580 reached the first
+native build but failed on missing
+`/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition`.
+The transition/provider proof-input contracts explicitly require fresh
+protected execution and validation before local adoption, so importing older
+bytes or enabling unsigned/cache fallback is not a permitted repair. No
+native row was accepted; those receipts and proof-dependent parity remain
+open pending the genuine StageX prerequisite.
+
+Immediate outcome: typed package exclusion and bounded indexed admission are
+verified. Durable contribution: source-owned member identity and reusable
+per-pass dependency lookup with executable positive/negative regressions.
+Maintenance owner: Mantle's source-program authoring/admission modules.
+Repeatability evidence: exact overlay digests and the retained 1579 runner
+command/transcript. A new committed snapshot, source-bound runner build,
+regenerated profile, physical transfer parity and current launch review remain
+necessary before another cold attempt. I3–I5 and proof-dependent V2/V3 remain
+unaccepted.

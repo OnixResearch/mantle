@@ -1,0 +1,13 @@
+{
+  "submission": "New task added (id 1579).",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/validation-source-typed-index-formatted-20261115.bhrtxd",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-typed-index-formatted-20261115-bhrtxd.sh",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "prior_failure": {
+    "id": 1576,
+    "result": {
+      "Failed": 1
+    },
+    "scope": "Formatting differences only; tests, Clippy and build did not run."
+  }
+}

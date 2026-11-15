@@ -1,0 +1,72 @@
++ date -Is
+2026-11-14T21:38:02-05:00
++ hostname
+leviathan
++ uname -srm
+Linux 6.18.63 x86_64
++ cat /proc/sys/kernel/random/boot_id
+3fcb079b-a910-47cf-8301-25c4e0eaa757
++ df -B1 /home/brittonr/sbfp-20261113-berdKH
+Filesystem         1B-blocks          Used    Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2813504630784 923258146816  76% /
++ free -b
+               total        used        free      shared  buff/cache   available
+Mem:     269805268992 66157686784 59073884160    26431488 146494193664 203647582208
+Swap:    137438949376   468115456 136970833920
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/proof-8fa84260-aws
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/proof-8fa84260-aws
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws.exit
++ test 0 = 0
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws
++ test 9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7 = 9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json
++ test f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4 = f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-program-preparation.json
++ test fe90bf9113d0b050157e137c26a70e657027e1bb250d5aea3b25b42a7c927ce4 = fe90bf9113d0b050157e137c26a70e657027e1bb250d5aea3b25b42a7c927ce4
++ jq -e '.schema == "mantle-cohort-launch-review-v1" and .code_revision == "8fa84260ddc5ccfd01f12d09908038cf03cf472f" and .source_profile_blake3 == "1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4" and .source_profile_bytes_blake3 == "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4" and .graph.accepted == true and .identity.accepted == true and .profile_transfer_equal == true' /home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-8fa84260-aws.json
+true
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ test ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
++ mkdir /home/brittonr/sbfp-20261113-berdKH/cold-proof-8fa84260-aws-home /home/brittonr/sbfp-20261113-berdKH/cold-proof-8fa84260-aws-tmp
++ record_aliases before
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/latest ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/latest ']'
++ printf 'alias_%s %s absent\n' before latest
+alias_before latest absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/latest-source-built-fixed-point ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/latest-source-built-fixed-point ']'
++ printf 'alias_%s %s absent\n' before latest-source-built-fixed-point
+alias_before latest-source-built-fixed-point absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/.source-built-fixed-point-current ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/.source-built-fixed-point-current ']'
++ printf 'alias_%s %s absent\n' before .source-built-fixed-point-current
+alias_before .source-built-fixed-point-current absent
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/cold-proof-8fa84260-aws-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/cold-proof-8fa84260-aws-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json self-build --source-built-fixed-point --source-profile /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json --expected-source-profile-blake3 1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4 --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261113-berdKH/proof-8fa84260-aws
+{"error":"source-built fixed-point proof failed closed: error: build failed\nsource recipe: untyped filesystem path in literal command word for step unit-00251-script-original-package; preserved_attempt=/home/brittonr/sbfp-20261113-berdKH/.proof-8fa84260-aws.source-built-fixed-point-staging-4083395","code":1,"kind":"build"}
++ status=1
++ '[' 1 -eq 0 ']'
++ record_aliases after
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/latest ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/latest ']'
++ printf 'alias_%s %s absent\n' after latest
+alias_after latest absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/latest-source-built-fixed-point ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/latest-source-built-fixed-point ']'
++ printf 'alias_%s %s absent\n' after latest-source-built-fixed-point
+alias_after latest-source-built-fixed-point absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/.source-built-fixed-point-current ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/.source-built-fixed-point-current ']'
++ printf 'alias_%s %s absent\n' after .source-built-fixed-point-current
+alias_after .source-built-fixed-point-current absent
++ printf 'cold_proof_exit=%s\n' 1
+cold_proof_exit=1
++ printf '%s\n' 1
++ exit 1

@@ -284,7 +284,8 @@ fn validate_transition(
     prepared: &PreparedRecipe,
 ) -> Result<(), RunError> {
     let program = prepared.source_recipe();
-    validate_partition(program, index.tools.values())?;
+    let dependencies = RecipeDependencyIndex::new(program);
+    validate_partition(&dependencies, index.tools.values())?;
     if index.tools.keys().ne(lineage
         .transition_tools
         .iter()
@@ -347,7 +348,7 @@ fn validate_transition(
             if node.disposes(canonical) {
                 continue;
             }
-            if !node_uses_input(program, node, input) {
+            if !node_uses_input(&dependencies, node, input) {
                 omitted.push(format!("{}:{}", tool.id, canonical));
             }
         }
@@ -371,7 +372,7 @@ fn validate_transition(
         let from = node_references(&edge.from_node_id, &artifacts, &index.tools)?;
         let to = node_references(&edge.to_node_id, &artifacts, &index.tools)?;
         for input in from {
-            if !to.iter().any(|output| depends_on(program, output, input)) {
+            if !to.iter().any(|output| depends_on(&dependencies, output, input)) {
                 return Err(error(format!(
                     "expanded program drops lineage edge {} -> {}",
                     edge.from_node_id, edge.to_node_id
@@ -383,7 +384,7 @@ fn validate_transition(
         let reference = artifacts
             .get(&output.producing_artifact_id)
             .ok_or_else(|| error("provider output lacks original producer"))?;
-        if !depends_on(program, &prepared.export(TRANSITION)?.reference, reference) {
+        if !depends_on(&dependencies, &prepared.export(TRANSITION)?.reference, reference) {
             return Err(error("canonical transition tree omits an original provider product"));
         }
     }
@@ -462,6 +463,7 @@ fn validate_publication(
     prepared: &PreparedRecipe,
 ) -> Result<(), RunError> {
     require_export(prepared, "stagex-provider", ArtifactKind::Tree, Some("stagex-provider"))?;
+    let dependencies = RecipeDependencyIndex::new(prepared.source_recipe());
     let tool_exports: &[&str] = if index.binutils_admitted {
         &TOOL_EXPORTS
     } else {
@@ -543,11 +545,11 @@ fn validate_publication(
         }
     }
     let product = &prepared.export("stagex-provider")?.reference;
-    if !depends_on(prepared.source_recipe(), product, &transition.export(TRANSITION)?.reference) {
+    if !depends_on(&dependencies, product, &transition.export(TRANSITION)?.reference) {
         return Err(error("publication canonical tree drops its actual transition producer"));
     }
     for role in tool_exports {
-        if !depends_on(prepared.source_recipe(), product, &prepared.export(role)?.reference) {
+        if !depends_on(&dependencies, product, &prepared.export(role)?.reference) {
             return Err(error(format!("provider tree omits individual tool {role}")));
         }
     }
@@ -756,38 +758,81 @@ pub(crate) fn used_inputs(step: &RecipeStep) -> BTreeSet<&ArtifactRef> {
     names.into_iter().filter_map(|name| step.inputs.get(name)).collect()
 }
 
-pub(crate) fn depends_on(program: &SourceRecipe, output: &ArtifactRef, input: &ArtifactRef) -> bool {
-    if output == input {
-        return true;
+struct IndexedStep<'a> {
+    step: &'a RecipeStep,
+    used_inputs: BTreeSet<&'a ArtifactRef>,
+}
+
+/// Borrowed for one validation pass; actual operands are resolved only once.
+pub(crate) struct RecipeDependencyIndex<'a> {
+    stage_id: &'a str,
+    steps: BTreeMap<&'a str, IndexedStep<'a>>,
+}
+
+impl<'a> RecipeDependencyIndex<'a> {
+    pub(crate) fn new(program: &'a SourceRecipe) -> Self {
+        Self {
+            stage_id: &program.stage_id,
+            steps: program
+                .steps
+                .iter()
+                .map(|step| {
+                    (step.id.as_str(), IndexedStep {
+                        step,
+                        used_inputs: used_inputs(step),
+                    })
+                })
+                .collect(),
+        }
     }
-    let producer = |reference: &ArtifactRef| {
+
+    fn local_step_id<'b>(&self, action_id: &'b str) -> Option<&'b str> {
+        action_id.strip_prefix(self.stage_id)?.strip_prefix('/')
+    }
+
+    fn producer(&self, reference: &ArtifactRef) -> Option<&IndexedStep<'a>> {
         let ArtifactRef::Produced { action_id, .. } = reference else {
             return None;
         };
-        program.steps.iter().find(|step| action_id == &format!("{}/{}", program.stage_id, step.id))
-    };
-    let mut pending = producer(output).into_iter().collect::<Vec<_>>();
+        self.steps.get(self.local_step_id(action_id)?)
+    }
+
+    pub(crate) fn step(&self, id: &str) -> Option<&'a RecipeStep> {
+        self.steps.get(id).map(|entry| entry.step)
+    }
+
+    pub(crate) fn uses_input(&self, input: &ArtifactRef) -> bool {
+        self.steps.values().any(|entry| entry.used_inputs.contains(input))
+    }
+}
+
+pub(crate) fn depends_on(index: &RecipeDependencyIndex<'_>, output: &ArtifactRef, input: &ArtifactRef) -> bool {
+    if output == input {
+        return true;
+    }
+    let mut pending = index.producer(output).into_iter().collect::<Vec<_>>();
     let mut seen = BTreeSet::new();
-    while let Some(step) = pending.pop() {
+    while let Some(entry) = pending.pop() {
+        let step = entry.step;
         if !seen.insert(step.id.as_str()) {
             continue;
         }
-        for reference in used_inputs(step) {
-            if reference == input {
+        for reference in &entry.used_inputs {
+            if *reference == input {
                 return true;
             }
-            pending.extend(producer(reference));
+            pending.extend(index.producer(reference));
         }
         if let RecipeOperation::ObservePhase { phase, state, .. } = &step.operation
-            && let Some(observed) = program.steps.iter().find(|candidate| candidate.id == *phase)
+            && let Some(observed) = index.steps.get(phase.as_str())
         {
             // The typed outcome depends on the actual phase, not on an
             // invented output that would be absent when the phase is skipped.
             if let Some(state) = state
                 && let ArtifactRef::Produced { action_id, output_id } = input
-                && action_id == &format!("{}/{}", program.stage_id, phase)
+                && index.local_step_id(action_id) == Some(phase.as_str())
                 && output_id == &state.output
-                && observed.outputs.contains_key(output_id)
+                && observed.step.outputs.contains_key(output_id)
             {
                 return true;
             }
@@ -797,21 +842,19 @@ pub(crate) fn depends_on(program: &SourceRecipe, output: &ArtifactRef, input: &A
     false
 }
 
-pub(crate) fn node_uses_input(program: &SourceRecipe, node: &ExpandedNode, input: &ArtifactRef) -> bool {
-    program
-        .steps
+pub(crate) fn node_uses_input(index: &RecipeDependencyIndex<'_>, node: &ExpandedNode, input: &ArtifactRef) -> bool {
+    node.step_ids
         .iter()
-        .filter(|step| node.step_ids.contains(&step.id))
-        .any(|step| used_inputs(step).contains(input))
+        .filter_map(|id| index.steps.get(id.as_str()))
+        .any(|entry| entry.used_inputs.contains(input))
 }
 
 pub(crate) fn require_node_input(
-    program: &SourceRecipe,
+    index: &RecipeDependencyIndex<'_>,
     node: &ExpandedNode,
     input: &ArtifactRef,
 ) -> Result<(), RunError> {
-    let steps = program.steps.iter().filter(|step| node.step_ids.contains(&step.id)).collect::<Vec<_>>();
-    if !node_uses_input(program, node, input) {
+    if !node_uses_input(index, node, input) {
         let described = match input {
             ArtifactRef::Source { role, path } => format!("Source {{ role: {role:?}, path: {path:?} }}"),
             ArtifactRef::ManifestSource {
@@ -823,6 +866,7 @@ pub(crate) fn require_node_input(
                 format!("Produced {{ action: {action_id}, output: {output_id} }}")
             }
         };
+        let steps = node.step_ids.iter().filter_map(|id| index.step(id)).collect::<Vec<_>>();
         let bound = steps.iter().flat_map(|step| step.inputs.values()).collect::<BTreeSet<_>>().len();
         return Err(error(format!(
             "expanded commands omit an original source/bootstrap dependency: no step among {} uses {described}; {} distinct inputs are bound",
@@ -834,40 +878,43 @@ pub(crate) fn require_node_input(
 }
 
 pub(crate) fn validate_partition<'a>(
-    program: &SourceRecipe,
+    index: &RecipeDependencyIndex<'_>,
     nodes: impl Iterator<Item = &'a ExpandedNode>,
 ) -> Result<(), RunError> {
-    let steps = program.steps.iter().map(|step| (step.id.as_str(), step)).collect::<BTreeMap<_, _>>();
     let mut assigned = BTreeSet::new();
     for node in nodes {
         if node.step_ids.is_empty() || node.outputs.is_empty() {
             return Err(error("missing concrete original-node expansion"));
         }
         for id in &node.step_ids {
-            if !steps.contains_key(id.as_str()) || !assigned.insert(id.as_str()) {
+            if !index.steps.contains_key(id.as_str()) || !assigned.insert(id.as_str()) {
                 return Err(error("unknown or multiply assigned leaf step"));
             }
         }
-        if !node.step_ids.iter().any(|id| matches!(steps[id.as_str()].operation, RecipeOperation::Exec { .. })) {
+        if !node
+            .step_ids
+            .iter()
+            .any(|id| matches!(index.steps[id.as_str()].step.operation, RecipeOperation::Exec { .. }))
+        {
             return Err(error("original build/generator node lacks an actual command"));
         }
         for reference in node.outputs.values() {
             let ArtifactRef::Produced { action_id, output_id } = reference else {
                 return Err(error("original build output is imported source"));
             };
-            let id = action_id
-                .strip_prefix(&format!("{}/", program.stage_id))
-                .ok_or_else(|| error("original output has another stage producer"))?;
-            if !node.step_ids.contains(id) || !steps.get(id).is_some_and(|step| step.outputs.contains_key(output_id)) {
+            let id =
+                index.local_step_id(action_id).ok_or_else(|| error("original output has another stage producer"))?;
+            if !node.step_ids.contains(id) || !index.step(id).is_some_and(|step| step.outputs.contains_key(output_id)) {
                 return Err(error("original output lacks its exact owned leaf producer"));
             }
         }
     }
-    if assigned.len() != steps.len() {
+    if assigned.len() != index.steps.len() {
         return Err(error("unclassified source/generator/command leaf steps"));
     }
-    for step in &program.steps {
-        let used = used_inputs(step);
+    for entry in index.steps.values() {
+        let step = entry.step;
+        let used = &entry.used_inputs;
         if used.len() != step.inputs.values().collect::<BTreeSet<_>>().len() {
             let mut unused = step
                 .inputs
@@ -977,6 +1024,7 @@ mod tests {
             },
         };
         let graph = program(vec![phase, observer]);
+        let dependencies = RecipeDependencyIndex::new(&graph);
         let result = product("observe", "state");
         for dependency in [
             source("tool.c"),
@@ -984,10 +1032,62 @@ mod tests {
             product("prepare", "state"),
             product("phase", "state"),
         ] {
-            assert!(depends_on(&graph, &result, &dependency), "lost actual phase dependency {dependency:?}");
+            assert!(depends_on(&dependencies, &result, &dependency), "lost actual phase dependency {dependency:?}");
         }
-        assert!(!depends_on(&graph, &result, &source("unrelated.c")));
-        assert!(!depends_on(&graph, &result, &product("phase", "invented-output")));
+        assert!(!depends_on(&dependencies, &result, &source("unrelated.c")));
+        assert!(!depends_on(&dependencies, &result, &product("phase", "invented-output")));
+        for action_id in [
+            "other-stage/phase",
+            "stagex-transition-extra/phase",
+            "stagex-transition/phase-extra",
+        ] {
+            let foreign_state = ArtifactRef::Produced {
+                action_id: action_id.into(),
+                output_id: "state".into(),
+            };
+            assert!(!depends_on(&dependencies, &result, &foreign_state));
+        }
+    }
+
+    #[test]
+    fn producer_lookup_requires_exact_local_stage_and_step() {
+        let copied = RecipeStep {
+            id: "copy".into(),
+            inputs: BTreeMap::from([("state".into(), product("phase", "state"))]),
+            outputs: BTreeMap::from([("tree".into(), recipe::RecipeOutput {
+                kind: ArtifactKind::Tree,
+                bytes_max: 4096,
+            })]),
+            operation: RecipeOperation::AssembleTree {
+                entries: BTreeMap::from([("state".into(), "state".into())]),
+                output: "tree".into(),
+            },
+        };
+        let graph = program(vec![phase(), copied]);
+        let dependencies = RecipeDependencyIndex::new(&graph);
+        let result = product("copy", "tree");
+        assert!(depends_on(&dependencies, &result, &source("tool.c")));
+        assert!(depends_on(&dependencies, &result, &result));
+        for action_id in [
+            "other-stage/phase",
+            "stagex-transition-extra/phase",
+            "stagex-transition/phase-extra",
+            "stagex-transitionphase",
+            "stagex-transition//phase",
+        ] {
+            let foreign = ArtifactRef::Produced {
+                action_id: action_id.into(),
+                output_id: "state".into(),
+            };
+            assert!(!depends_on(&dependencies, &foreign, &source("tool.c")), "resolved {action_id} locally");
+            assert!(!depends_on(&dependencies, &result, &foreign), "substituted {action_id} for the actual input");
+            let node = ExpandedNode {
+                step_ids: BTreeSet::from(["phase".into(), "copy".into()]),
+                outputs: BTreeMap::from([("state".into(), foreign)]),
+                ..ExpandedNode::default()
+            };
+            assert!(validate_partition(&dependencies, std::iter::once(&node)).is_err());
+        }
     }
 
     #[test]
@@ -1041,15 +1141,16 @@ mod tests {
         let unused = source("unread.c");
         phase.inputs.insert("unused".into(), unused.clone());
         let graph = program(vec![phase]);
+        let dependencies = RecipeDependencyIndex::new(&graph);
         let node = ExpandedNode {
             step_ids: BTreeSet::from(["phase".into()]),
             outputs: BTreeMap::from([("state".into(), product("phase", "state"))]),
             ..ExpandedNode::default()
         };
-        let error = validate_partition(&graph, std::iter::once(&node)).unwrap_err();
+        let error = validate_partition(&dependencies, std::iter::once(&node)).unwrap_err();
         assert!(error.to_string().contains("unused inputs"));
-        assert!(require_node_input(&graph, &node, &unused).unwrap_err().to_string().contains("omit"));
-        assert!(!depends_on(&graph, &product("phase", "state"), &unused));
+        assert!(require_node_input(&dependencies, &node, &unused).unwrap_err().to_string().contains("omit"));
+        assert!(!depends_on(&dependencies, &product("phase", "state"), &unused));
     }
 
     #[test]

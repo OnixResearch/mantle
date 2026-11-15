@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "490eeee7bf4d7374ee17fe8c126497f2f27d84046ee3f59c903e3825942a9a39",
+  "blocker": "error: build failed\nsource recipe: untyped filesystem path in literal command word for step unit-00251-script-original-package"
+}

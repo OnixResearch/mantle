@@ -1,0 +1,7 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "cwd": "/home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws",
+  "command": "/run/current-system/sw/bin/env -C /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json bootstrap parity-report --require live-bootstrap --require guix --require stagex",
+  "exit_code": 1,
+  "scope": "Actual backend parity inventory while the separate cold proof is running; not current proof completion."
+}

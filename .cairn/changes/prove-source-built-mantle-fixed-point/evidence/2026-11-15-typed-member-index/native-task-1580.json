@@ -1,0 +1,18 @@
+{
+  "id": 1580,
+  "result": {
+    "Failed": 1
+  },
+  "start": "2026-11-15T01:31:39.805342981-05:00",
+  "end": "2026-11-15T01:32:19.172638961-05:00",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/tooling-resume.log",
+  "component_log": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/evidence/gcc-4.7.stderr",
+  "blocker": "source input not found in store: /mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition",
+  "failed_goals": [
+    "stage0-posix",
+    "make-3.82-tcc"
+  ],
+  "root": "gcc-4.7.4-musl-gcc40-v1",
+  "saved_log_path": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/state/logs/537473ly8zml047lncxcwadm0z7pn21r-gcc-4.7.4-musl-gcc40-v1.drv.log",
+  "non_claim": "No native row accepted; missing StageX source/producer authority must be recovered genuinely, not replaced by historical binaries or unsigned state."
+}

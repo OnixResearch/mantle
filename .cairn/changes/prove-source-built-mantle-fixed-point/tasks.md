@@ -359,3 +359,28 @@ Pueue 1574 is the exact cold proof command from frozen code `8fa84260…`, with
 unchanged independent pins and strict bounds and no development/remote-action
 route. I3–I5 and proof-dependent V2/V3 remain unaccepted pending real execution,
 reconciliation, receipt, parity and release evidence.
+
+## Typed member and indexed admission checkpoint (2026-11-15)
+
+Cold task 1574 failed closed while preparing `unit-00251-script-original-package`:
+its generated-member exclusion was an untyped literal filesystem path. No
+provider, stage, receipt or successful-proof alias was accepted. The author now
+uses a typed member of the original package, and the real helper rejects
+relative, foreign-tree, root and traversal exclusions without changing the
+original source tree.
+
+Dependency admission now indexes immutable recipe steps and actual operands
+once per validation pass, preserving exact producer namespaces, guard/seed
+dependencies, both observed-phase state alternatives and ownership checks.
+Pueue 1579 passed 263 source-built tests (27 ignored), formatting, strict focused
+Clippy and a release build against the byte-bound four-file overlay. The source
+tree digest was unchanged through qualification. Inputs, commands, complete
+output and failed-attempt boundaries are retained under
+`evidence/2026-11-15-typed-member-index/`.
+
+The separate native row construction reached a real missing prerequisite:
+the reserved StageX transition can only be adopted after current protected
+execution, not imported from historical outputs or cache hits. Existing native
+row receipts remain unchanged. A new committed source snapshot, qualified
+runner, regenerated cohort and current launch review are still required;
+I3–I5 and proof-dependent V2/V3 remain open.

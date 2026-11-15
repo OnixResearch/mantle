@@ -1,0 +1,8 @@
+{
+  "submission": "New task added (id 1578).",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/resume.sh",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "qualification_root": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy",
+  "source_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "non_claim": "Signed row qualification submitted; no native component completion observed."
+}
