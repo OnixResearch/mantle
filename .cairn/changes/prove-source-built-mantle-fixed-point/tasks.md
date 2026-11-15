@@ -450,3 +450,38 @@ Corrective task 1591 passed leaf rustfmt and the machine-contract checker
 in `evidence/2026-11-15-leviathan-8d2dfcd8/qualification-corrections.md`.
 A newly committed exact source must still qualify and regenerate; I3–I5 and
 proof-dependent V2/V3 remain open, with no new cohort or protected-stage claim.
+
+## Frozen runner artifact binding hold (2026-11-15)
+
+For published `71c2bd4d…`, assembly 1592, source/test/Clippy/build commands 1593
+and canonical CLI/contract/Cairn commands 1594 completed successfully. The
+source leg executed 265 passed and 27 ignored. However, the installed regular
+runner retained the rejected e9 runner's byte identity; its shared release
+artifact predates this qualification while frozen source mtimes are epoch.
+Command/source parity therefore does not establish fresh regular-runner binding.
+
+Own source-only preparation 1595 was stopped and retained, with no accepted
+cohort or protected execution. Fresh-target source and canonical jobs 1596/1597
+use separate absent-before-start directories and unset compiler wrappers inside
+the checked-in shell. Replacement preparation 1598 is stashed pending both
+actual results and parent runner-byte/source inspection. ADR 0150 records this
+operator qualification boundary; ordinary developer caches are unchanged.
+Exact observations and non-claims are in
+`evidence/2026-11-15-leviathan-71c2bd4d/runner-binding-hold.md`.
+I3–I5 and proof-dependent V2/V3 remain open.
+
+## Actual fresh runner checkpoint (2026-11-15)
+
+Fresh-target source qualification 1596 and canonical 1597 completed Success
+for frozen `71c2bd4d…`. The real regular binary was compiled and installed as
+`mantle-71c2bd4d-fresh-target`, BLAKE3 `c9803076…`, distinct from the stale e9
+image. The complete source identity stayed `b49c087a…`; source execution was
+265 passed, 27 ignored, and the isolated canonical CLI/contract/Cairn sequence
+completed. Exact full logs, byte parity and source/runner bindings are in
+`evidence/2026-11-15-leviathan-71c2bd4d/fresh-runner-qualification.md`.
+
+Only after parent inspection was source-only preparation 1598 enqueued from its
+stash into a new absent cohort namespace. No ready cohort, full current review,
+protected provider, Mantle stage, reconciliation, fixed point or release
+acceptance follows from runner compilation. I3–I5 and proof-dependent V2/V3
+remain open.

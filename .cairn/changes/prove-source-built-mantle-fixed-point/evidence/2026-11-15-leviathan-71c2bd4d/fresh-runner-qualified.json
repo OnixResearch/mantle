@@ -1,0 +1,43 @@
+{
+  "schema": "mantle-frozen-runner-qualification-v1",
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation",
+  "source_tree_before_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "source_tree_after_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-fresh-target",
+  "runner_blake3": "c980307680feebd9d8a5543d39635393dad6b39d729aad051e97e7dc75457971",
+  "old_warmed_runner_blake3": "76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504",
+  "same_as_old_warmed_image": false,
+  "source_qualification_task": 1596,
+  "canonical_task": 1597,
+  "source_qualification_status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T05:11:08.554165577-05:00",
+      "start": "2026-11-15T05:11:08.723357786-05:00",
+      "end": "2026-11-15T05:32:50.770702673-05:00",
+      "result": "Success"
+    }
+  },
+  "canonical_status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T05:11:10.449166083-05:00",
+      "start": "2026-11-15T05:11:10.717626903-05:00",
+      "end": "2026-11-15T05:22:33.072624501-05:00",
+      "result": "Success"
+    }
+  },
+  "source_qualification_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target",
+  "canonical_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-71c2bd4d-fresh-target",
+  "targets_absent_before_start": true,
+  "wrappers_unset_inside_development_shell": true,
+  "captured_test_results": [
+    "test result: ok. 265 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 6.09s"
+  ],
+  "qualification_transcript_remote_blake3": "5ceaef2087fcf775eabb9788930ae693a1e1d71c7f20c13b7fb8c52b19f1740c",
+  "qualification_transcript_local_blake3": "5ceaef2087fcf775eabb9788930ae693a1e1d71c7f20c13b7fb8c52b19f1740c",
+  "qualification_transcript_equal": true,
+  "canonical_transcript_blake3": "7ca794e19753067e13a3305e802a85c8e34be7995337641280a39f3332d2600d",
+  "source_preparation_task": 1598,
+  "source_preparation_authorized_scope": "Source-only program authoring/verification into its new absent cohort namespace only; no protected provider/stage execution or cold launch.",
+  "non_claim": "Exact frozen-source runner build/qualification observation, not compiler correctness, source correctness, provider execution, fixed point or release eligibility."
+}

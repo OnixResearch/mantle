@@ -324,6 +324,18 @@ proves executable-byte identity or version output, not which source was built.
 Rebuild an unbound mutable-checkout artifact from the frozen tree rather than
 promoting it on version or transfer parity alone.
 
+Qualify a frozen runner with a distinct Cargo target directory that is absent
+before the build; run canonical CLI/contract gates in another fresh target.
+Normalized source timestamps can coexist with old warm-target artifacts, so
+successful Cargo commands plus unchanged source checksums are not enough to
+bind the installed regular binary. Disable `RUSTC_WRAPPER` and
+`RUSTC_WORKSPACE_WRAPPER` inside the checked-in development shell, retain the
+fresh-target precondition and full compiler/build output, and install the
+qualified runner at a distinct recorded path. Keep interrupted targets/cohorts
+as evidence, not replacement inputs. Ordinary developer cache behavior is
+unchanged; these checks remain bounded build observations, not a fixed point
+([ADR 0150](../adr/0150-isolate-cargo-artifacts-when-qualifying-frozen-proof-runners.md)).
+
 Run on Leviathan only, in a fresh absent output directory, with a verified
 current Mantle executable and explicit bubblewrap/static-shell paths. Keep
 SSH, rsync, and pueue outside the protected execution boundary; do not use

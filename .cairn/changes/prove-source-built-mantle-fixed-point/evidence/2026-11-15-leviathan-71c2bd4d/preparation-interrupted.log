@@ -1,0 +1,39 @@
++ date -Is
+2026-11-15T05:00:34-05:00
++ hostname
+leviathan
++ uname -srm
+Linux 6.18.63 x86_64
++ cat /proc/sys/kernel/random/boot_id
+3fcb079b-a910-47cf-8301-25c4e0eaa757
++ df -B1 /home/brittonr/sbfp-20261113-berdKH
+Filesystem         1B-blocks          Used    Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2879302053888 857460723712  78% /
++ free -b
+               total        used        free      shared  buff/cache   available
+Mem:     269805268992 67556716544 26802024448    22437888 178312265728 202248552448
+Swap:    137438949376  3968262144 133470687232
+++ cat /home/brittonr/sbfp-20261113-berdKH/qualification-71c2bd4d-typed-invocation.exit
++ test 0 = 0
+++ cat /home/brittonr/sbfp-20261113-berdKH/canonical-qualification-71c2bd4d-typed-invocation.exit
++ test 0 = 0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --check /home/brittonr/sbfp-20261113-berdKH/runner-blake3-71c2bd4d-typed-invocation.txt
+/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-typed-invocation: OK
++ /home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-typed-invocation --version
+mantle 0.1.0
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ test ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
++ /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --unshare-all --unshare-user --ro-bind / / -- /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox true
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_BEFORE=b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778
+++ jq -er .complete_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-71c2bd4d-typed-invocation.json
++ test b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778 = b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778
++ PROOF_HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-home
++ PROOF_TMP=/home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-tmp
++ mkdir /home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-home /home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-tmp
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-typed-invocation
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-typed-invocation-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-typed-invocation --json source bundle refresh-mantle-source --from /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json --mantle-source /home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation --to /home/brittonr/sbfp-20261113-berdKH/source-profile-71c2bd4d-typed-invocation.json

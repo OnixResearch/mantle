@@ -1,0 +1,42 @@
+{
+  "assembly": {
+    "id": 1592,
+    "created_at": "2026-11-15T04:58:36.045764240-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-71c2bd4d-typed-invocation.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-71c2bd4d-typed-invocation.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-71c2bd4d-typed-invocation-source-assembly",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T04:58:36.045724605-05:00",
+        "start": "2026-11-15T04:58:36.205987371-05:00",
+        "end": "2026-11-15T04:58:54.314261187-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "qualification": {
+    "id": 1593,
+    "created_at": "2026-11-15T04:58:38.494919102-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-71c2bd4d-typed-invocation.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-71c2bd4d-typed-invocation.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [
+      1592
+    ],
+    "priority": 0,
+    "label": "mantle-71c2bd4d-typed-invocation-source-qualification",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T04:58:38.494876271-05:00",
+        "start": "2026-11-15T04:58:54.367387036-05:00",
+        "end": "2026-11-15T04:59:39.631634201-05:00",
+        "result": "Success"
+      }
+    }
+  }
+}

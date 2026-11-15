@@ -1,0 +1,29 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "assembly_task": 1592,
+  "source_qualification_task": 1593,
+  "canonical_task": 1594,
+  "source_preparation_task": 1595,
+  "qualification_after": [
+    1592
+  ],
+  "canonical_after": [
+    1592
+  ],
+  "preparation_after": [
+    1593,
+    1594
+  ],
+  "scripts": {
+    "assemble-complete-source.sh": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-71c2bd4d-typed-invocation.sh",
+    "qualify-source.sh": "/home/brittonr/sbfp-20261113-berdKH/qualify-source-71c2bd4d-typed-invocation.sh",
+    "canonical-checks-run.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-71c2bd4d-typed-invocation-run.sh",
+    "canonical-checks-inside.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-71c2bd4d-typed-invocation-inside.sh",
+    "prepare-source.sh": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-typed-invocation.sh"
+  },
+  "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "non_claim": "Exact corrected source pipeline queued; no runner qualification, new cohort, independent review or proof success observed."
+}

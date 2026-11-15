@@ -1,0 +1,19 @@
+{
+  "id": 1596,
+  "created_at": "2026-11-15T05:11:08.554192508-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-71c2bd4d-fresh-target.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-71c2bd4d-fresh-target.sh",
+  "path": "/home/brittonr",
+  "group": "default",
+  "dependencies": [],
+  "priority": 0,
+  "label": "mantle-71c2bd4d-fresh-target-source-qualification",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T05:11:08.554165577-05:00",
+      "start": "2026-11-15T05:11:08.723357786-05:00",
+      "end": "2026-11-15T05:32:50.770702673-05:00",
+      "result": "Success"
+    }
+  }
+}

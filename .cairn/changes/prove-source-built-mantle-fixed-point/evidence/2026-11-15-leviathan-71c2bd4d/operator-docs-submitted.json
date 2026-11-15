@@ -1,0 +1,17 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1599,
+  "source": "/home/brittonr/sbfp-20261113-berdKH/operator-docs-71c2bd4d-fresh-target",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/validate-operator-docs-71c2bd4d-fresh-target.sh",
+  "base_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "overlaid_documents": [
+    "adr/0150-isolate-cargo-artifacts-when-qualifying-frozen-proof-runners.md",
+    "adr/README.md",
+    "docs/operator-proof-guide.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-12-source-input-binding-corrections.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-e9a58881/parent-word-inspection/consumer-admission-rejection.md"
+  ],
+  "evidence_directory": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d",
+  "non_claim": "Current operator docs/evidence lifecycle validation only; not a changed frozen proof source, cohort, runner build or protected proof."
+}

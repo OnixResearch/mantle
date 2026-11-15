@@ -1,0 +1,51 @@
++ date -Is
+2026-11-15T04:58:36-05:00
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/source-71c2bd4de8ec66e545b42314ba95bf050396a36d.tar.gz
++ test 2892fd29b7f6d137bcbf951e773d7ace2950bc122a021fa91995aba29bc99d78 = 2892fd29b7f6d137bcbf951e773d7ace2950bc122a021fa91995aba29bc99d78
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc-original.tar
++ test 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88 = 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88
+++ /run/current-system/sw/bin/jq -r .revision /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original-source-capture.json
++ test 02561621ffa4cf17c0c4f70bc11a82df36b42ae9 = 02561621ffa4cf17c0c4f70bc11a82df36b42ae9
+++ /run/current-system/sw/bin/jq -r .git_tree_sha1 /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original-source-capture.json
++ test 969d75db5c0494de4a26bbb2dcbf6837058054c1 = 969d75db5c0494de4a26bbb2dcbf6837058054c1
+++ gzip --decompress --stdout /home/brittonr/sbfp-20261113-berdKH/incoming/source-71c2bd4de8ec66e545b42314ba95bf050396a36d.tar.gz
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ test 3c7a49f4e4e353a37eb5eff5b69057e4751164870f89f8a43ca909bd62b4fdc2 = 3c7a49f4e4e353a37eb5eff5b69057e4751164870f89f8a43ca909bd62b4fdc2
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar.gz
++ mkdir /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation
++ /run/current-system/sw/bin/tar --extract --gzip --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/source-71c2bd4de8ec66e545b42314ba95bf050396a36d.tar.gz --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation
+++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ CODE_TREE=32078fdc6b72d82594a89b30054c6ad7d66019a383b7c2890ed1ca2faea1fe1d
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
++ mkdir -p /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
++ /run/current-system/sw/bin/tar --extract --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc-original.tar --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
+++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9 .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ ORIGINAL_TREE=8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
++ test 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89 = 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar
++ RAW_BLAKE3=b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778
++ gzip --no-name --keep /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar.gz
++ COMPRESSED_BLAKE3=b3ae176fa1b4fe1797246e4544c03a0e270a42871e24df3679b1180a030758e6
++ /run/current-system/sw/bin/jq -n --arg source_code_revision 71c2bd4de8ec66e545b42314ba95bf050396a36d --arg code_archive_blake3 2892fd29b7f6d137bcbf951e773d7ace2950bc122a021fa91995aba29bc99d78 --arg code_tree_blake3 32078fdc6b72d82594a89b30054c6ad7d66019a383b7c2890ed1ca2faea1fe1d --arg original_git_commit 02561621ffa4cf17c0c4f70bc11a82df36b42ae9 --arg original_git_tree 969d75db5c0494de4a26bbb2dcbf6837058054c1 --arg original_source_archive_blake3 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88 --arg original_source_tree_blake3 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89 --arg complete_archive_blake3 b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778 --arg compressed_archive_blake3 b3ae176fa1b4fe1797246e4544c03a0e270a42871e24df3679b1180a030758e6 --arg archive /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar --arg assembly_root /home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation '{schema:"mantle-complete-source-snapshot-v1",source_code_revision:$source_code_revision,code_archive_blake3:$code_archive_blake3,code_tree_blake3:$code_tree_blake3,original_git_commit:$original_git_commit,original_git_tree_sha1:$original_git_tree,original_source_archive_blake3:$original_source_archive_blake3,original_source_normalized_tar_blake3:$original_source_tree_blake3,complete_archive_blake3:$complete_archive_blake3,compressed_archive_blake3:$compressed_archive_blake3,archive:$archive,assembly_root:$assembly_root,non_claim:"Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"}'
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar.gz /home/brittonr/sbfp-20261113-berdKH/complete-source-71c2bd4d-typed-invocation.json
+b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778  /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar
+b3ae176fa1b4fe1797246e4544c03a0e270a42871e24df3679b1180a030758e6  /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar.gz
+fb2ea5df80e9dd7d0a6dcef886ecea5c18b455394742046d86b27a4f93f141b4  /home/brittonr/sbfp-20261113-berdKH/complete-source-71c2bd4d-typed-invocation.json
++ date -Is
+2026-11-15T04:58:54-05:00
++ finished=1
++ printf 'complete_source_assembly=1\n'
+complete_source_assembly=1
++ status=0
++ '[' 0 -eq 0 ']'
++ '[' 1 -ne 1 ']'
++ printf 'assembly_exit=%s\n' 0
+assembly_exit=0
++ printf '%s\n' 0
++ exit 0

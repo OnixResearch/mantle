@@ -1,0 +1,15 @@
+{
+  "schema": "mantle-complete-source-snapshot-v1",
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "code_archive_blake3": "2892fd29b7f6d137bcbf951e773d7ace2950bc122a021fa91995aba29bc99d78",
+  "code_tree_blake3": "32078fdc6b72d82594a89b30054c6ad7d66019a383b7c2890ed1ca2faea1fe1d",
+  "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+  "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "original_source_normalized_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+  "complete_archive_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "compressed_archive_blake3": "b3ae176fa1b4fe1797246e4544c03a0e270a42871e24df3679b1180a030758e6",
+  "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar",
+  "assembly_root": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-71c2bd4d-typed-invocation",
+  "non_claim": "Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"
+}

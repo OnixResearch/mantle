@@ -1,0 +1,21 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation",
+  "source_tree_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "source_qualification_task": 1596,
+  "canonical_task": 1597,
+  "source_preparation_task": 1598,
+  "preparation_initial_state": "stashed",
+  "preparation_after": [
+    1596,
+    1597
+  ],
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-fresh-target",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target",
+  "runner_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target",
+  "canonical_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-71c2bd4d-fresh-target",
+  "hold": "Parent must inspect actual fresh-build commands, source equality and runner byte identity before enqueueing source-only preparation.",
+  "non_claim": "Fresh target compilation queued, not complete. Previous warmed-target runner binding is not accepted; interrupted preparation 1595 is not reused."
+}

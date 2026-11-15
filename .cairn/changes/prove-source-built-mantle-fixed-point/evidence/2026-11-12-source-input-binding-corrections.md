@@ -1316,3 +1316,37 @@ Exact inputs, all captured outcomes and the corrected command are retained in
 `2026-11-15-leviathan-8d2dfcd8/qualification-corrections.md`.
 The next final source snapshot must qualify, regenerate and receive complete
 current independent review; I3–I5 and proof-dependent V2/V3 remain open.
+
+## Warm target is not regular-runner source binding (2026-11-15)
+
+The `71c2bd4d…` source and canonical commands succeeded in 1593/1594, including
+265 source tests with 27 ignored, but the installed regular runner was the same
+byte image as rejected e9. Its shared target artifact predates qualification;
+normalized source members carry epoch mtimes. Source pre/post equality and a
+passing test executable do not establish that the regular binary was relinked.
+
+The parent stopped and preserved preparation 1595. Fresh-target source and
+canonical jobs 1596/1597 are separate from ordinary warmed targets; their
+replacement preparation 1598 remains stashed until actual source/build/runner
+binding is inspected. No provider/lineage pin, resource limit, typed admission,
+proof policy or initial authority changed. ADR 0150 and
+`2026-11-15-leviathan-71c2bd4d/runner-binding-hold.md` retain the exact correction,
+byte/timestamp observations, commands and bounded non-claims. Fresh compilation,
+source-only regeneration and full current review remain prerequisites to launch.
+
+## Actual isolated source compilation accepted (2026-11-15)
+
+Fresh targets 1596/1597 completed real source and canonical qualification for
+frozen `71c2bd4d…`, with complete source `b49c087a…` unchanged. The installed
+regular executable is now `c9803076…`, not the preserved warmed e9 image.
+Captured source execution is 265 passed and 27 ignored; Clippy/build and the
+fresh canonical CLI/contract/Cairn commands completed. The complete received
+transcripts match their recorded remote BLAKE3 values.
+
+Parent inspected the actual compilation, targets, source equality and runner
+bytes, then released only source-program preparation 1598 into a fresh cohort
+namespace. The exact evidence, commands and remaining non-claims are in
+`2026-11-15-leviathan-71c2bd4d/fresh-runner-qualification.md`. No partial intake
+from killed 1595 is reused. Complete current source-profile byte/physical/graph
+review and genuine protected execution/receipt remain required; I3–I5 and
+proof-dependent V2/V3 stay open.

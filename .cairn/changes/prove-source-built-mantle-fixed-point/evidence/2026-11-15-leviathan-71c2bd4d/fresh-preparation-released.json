@@ -1,0 +1,16 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "task": 1598,
+  "after": [
+    1596,
+    1597
+  ],
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-fresh-target",
+  "runner_blake3": "c980307680feebd9d8a5543d39635393dad6b39d729aad051e97e7dc75457971",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-fresh-target.sh",
+  "non_claim": "Source-only preparation enqueued after inspected real fresh-target results; no new cohort, full review, protected provider or fixed-point acceptance observed."
+}

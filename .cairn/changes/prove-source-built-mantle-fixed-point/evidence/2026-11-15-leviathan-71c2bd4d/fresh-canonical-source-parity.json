@@ -1,0 +1,13 @@
+{
+  "task": 1597,
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/canonical-source-71c2bd4d-fresh-target",
+  "source_expected_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "source_after_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "source_equal": true,
+  "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-71c2bd4d-fresh-target",
+  "remote_transcript_blake3": "7ca794e19753067e13a3305e802a85c8e34be7995337641280a39f3332d2600d",
+  "local_transcript_blake3": "7ca794e19753067e13a3305e802a85c8e34be7995337641280a39f3332d2600d",
+  "transcript_equal": true,
+  "non_claim": "Actual isolated canonical commands/source/log observations only; fresh regular-runner qualification and source-program regeneration remain separately pending."
+}

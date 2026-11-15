@@ -1,0 +1,18 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "base": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d",
+  "name": "71c2bd4d-fresh-target",
+  "source_code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation",
+  "complete_source_metadata": "/home/brittonr/sbfp-20261113-berdKH/complete-source-71c2bd4d-typed-invocation.json",
+  "complete_source_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-71c2bd4d-typed-invocation.tar.gz",
+  "source_tree_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-fresh-target",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target",
+  "runner_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target",
+  "canonical_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-71c2bd4d-fresh-target",
+  "reason": "Prior new-source Cargo commands reused the same 197683408-byte e9 runner hash; source member mtimes are epoch while the shared release binary predates the new qualification. Fresh target directories are absent-before-start and wrappers are unset inside the checked-in shell.",
+  "non_claim": "Fresh build not yet executed; no qualified new runner or source-program cohort acceptance."
+}

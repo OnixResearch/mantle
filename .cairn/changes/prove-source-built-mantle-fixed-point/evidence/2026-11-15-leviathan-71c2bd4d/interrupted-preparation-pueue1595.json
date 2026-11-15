@@ -1,0 +1,22 @@
+{
+  "id": 1595,
+  "created_at": "2026-11-15T04:58:41.046545775-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-typed-invocation.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-typed-invocation.sh",
+  "path": "/home/brittonr",
+  "group": "default",
+  "dependencies": [
+    1593,
+    1594
+  ],
+  "priority": 0,
+  "label": "mantle-71c2bd4d-typed-invocation-source-preparation",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T04:58:41.046531979-05:00",
+      "start": "2026-11-15T05:00:34.263921745-05:00",
+      "end": "2026-11-15T05:05:01.785873599-05:00",
+      "result": "Killed"
+    }
+  }
+}

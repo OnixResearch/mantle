@@ -1,0 +1,21 @@
+{
+  "id": 1594,
+  "created_at": "2026-11-15T04:58:40.492813141-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-71c2bd4d-typed-invocation-run.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-71c2bd4d-typed-invocation-run.sh",
+  "path": "/home/brittonr",
+  "group": "default",
+  "dependencies": [
+    1592
+  ],
+  "priority": 0,
+  "label": "mantle-71c2bd4d-typed-invocation-canonical-gates",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T04:58:40.492789757-05:00",
+      "start": "2026-11-15T04:58:54.421078854-05:00",
+      "end": "2026-11-15T05:00:34.197013282-05:00",
+      "result": "Success"
+    }
+  }
+}
