@@ -13,6 +13,11 @@
 //! unreachable reclaimable node is a candidate, and to always plan admissible
 //! input.
 //!
+//! A planned result retains exactly the live nodes and is the least valid plan,
+//! so planned results are unique. Adding roots or references, or protecting
+//! more nodes, never adds a candidate, and a planned result depends only on the
+//! sets of roots and references, not their order or multiplicity.
+//!
 //! Non-claims: that the caller's roots and edges are complete and current, the
 //! mapping from store paths to indices, plan identities, byte totals, and the
 //! execution of removals.
@@ -376,6 +381,8 @@ pub struct ReclaimPlan {
 
 // r[impl reclaim-plan.no-leak]
 /// Every retained node is reachable from a root.
+// r[impl reclaim-plan.exact-retention]
+// r[impl reclaim-plan.least-plan]
 pub open spec fn retained_sound_spec(edges: Seq<(usize, usize)>, roots: Seq<usize>, retained: Seq<bool>) -> bool {
     forall|v: int| #![trigger retained[v]] 0 <= v < retained.len() && retained[v] ==> live_spec(edges, roots, v)
 }
@@ -551,6 +558,195 @@ pub proof fn planned_result_reclaims_every_unreachable_node(
 {
     assert(retained[v] ==> live_spec(edges, roots, v));
     assert(candidate[v] == (reclaimable[v] && !retained[v]));
+}
+
+// ── Optimality, determinism, monotonicity, and set invariance ───────────
+
+// r[impl reclaim-plan.monotone]
+// r[impl reclaim-plan.set-invariance]
+/// Every reference in `a` is also a reference in `b`.
+pub open spec fn edges_subset_spec(a: Seq<(usize, usize)>, b: Seq<(usize, usize)>) -> bool {
+    forall|i: int| #![trigger a[i]] 0 <= i < a.len() ==> has_edge_spec(b, a[i].0 as int, a[i].1 as int)
+}
+
+// r[impl reclaim-plan.monotone]
+// r[impl reclaim-plan.set-invariance]
+/// Every root in `a` is also a root in `b`.
+pub open spec fn roots_subset_spec(a: Seq<usize>, b: Seq<usize>) -> bool {
+    forall|r: int| #![trigger a[r]] 0 <= r < a.len() ==> exists|s: int| #![trigger b[s]] 0 <= s < b.len() && b[s] == a[r]
+}
+
+// r[impl reclaim-plan.monotone]
+/// Every node `b` may reclaim, `a` may also reclaim.
+pub open spec fn reclaimable_subset_spec(b: Seq<bool>, a: Seq<bool>) -> bool {
+    b.len() == a.len() && forall|v: int| #![trigger b[v]] 0 <= v < b.len() && b[v] ==> a[v]
+}
+
+/// More references never shorten what is reachable.
+pub proof fn reachable_edges_mono(
+    edges: Seq<(usize, usize)>, edges2: Seq<(usize, usize)>, src: int, dst: int, fuel: nat,
+)
+    requires edges_subset_spec(edges, edges2), reachable_fuel(edges, src, dst, fuel),
+    ensures reachable_fuel(edges2, src, dst, fuel),
+    decreases fuel,
+{
+    if src != dst {
+        let mid = choose|mid: int| #![trigger has_edge_spec(edges, src, mid)]
+            has_edge_spec(edges, src, mid) && reachable_fuel(edges, mid, dst, (fuel - 1) as nat);
+        let i = choose|i: int| #![trigger edges[i]]
+            0 <= i < edges.len() && edges[i].0 as int == src && edges[i].1 as int == mid;
+        assert(has_edge_spec(edges2, edges[i].0 as int, edges[i].1 as int));
+        reachable_edges_mono(edges, edges2, mid, dst, (fuel - 1) as nat);
+        assert(has_edge_spec(edges2, src, mid) && reachable_fuel(edges2, mid, dst, (fuel - 1) as nat));
+    }
+}
+
+/// More roots and more references never make a live node dead.
+pub proof fn live_mono(
+    edges: Seq<(usize, usize)>, edges2: Seq<(usize, usize)>, roots: Seq<usize>, roots2: Seq<usize>, v: int,
+)
+    requires edges_subset_spec(edges, edges2), roots_subset_spec(roots, roots2), live_spec(edges, roots, v),
+    ensures live_spec(edges2, roots2, v),
+{
+    let (r, fuel) = choose|r: int, fuel: nat| #![trigger roots[r], reachable_fuel(edges, roots[r] as int, v, fuel)]
+        0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel);
+    let s = choose|s: int| #![trigger roots2[s]] 0 <= s < roots2.len() && roots2[s] == roots[r];
+    reachable_edges_mono(edges, edges2, roots[r] as int, v, fuel);
+    assert(0 <= s < roots2.len() && reachable_fuel(edges2, roots2[s] as int, v, fuel));
+}
+
+/// Any valid plan retains every live node.
+pub proof fn valid_plan_retains_live(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, v: int,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate), live_spec(edges, roots, v),
+    ensures retained[v],
+{
+    let (r, fuel) = choose|r: int, fuel: nat| #![trigger roots[r], reachable_fuel(edges, roots[r] as int, v, fuel)]
+        0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel);
+    assert(retained[roots[r] as int]);
+    closed_set_contains_reachable(n, edges, retained, roots[r] as int, v, fuel);
+}
+
+// r[verify reclaim-plan.exact-retention]
+/// A planned result retains exactly the live nodes.
+pub proof fn planned_result_retains_exactly_live(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, v: int,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate),
+        retained_sound_spec(edges, roots, retained), 0 <= v < n,
+    ensures retained[v] == live_spec(edges, roots, v),
+        candidate[v] == (reclaimable[v] && !live_spec(edges, roots, v)),
+{
+    if live_spec(edges, roots, v) {
+        valid_plan_retains_live(n, edges, roots, reclaimable, retained, candidate, v);
+    }
+    assert(retained[v] ==> live_spec(edges, roots, v));
+    assert(candidate[v] == (reclaimable[v] && !retained[v]));
+}
+
+// r[verify reclaim-plan.least-plan]
+/// A planned result is the least valid plan: it retains no more, and
+/// reclaims no less, than any other valid plan for the same input.
+pub proof fn planned_result_is_least_valid_plan(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, other_retained: Seq<bool>, other_candidate: Seq<bool>, v: int,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate),
+        retained_sound_spec(edges, roots, retained),
+        plan_valid_spec(n, edges, roots, reclaimable, other_retained, other_candidate), 0 <= v < n,
+    ensures retained[v] ==> other_retained[v], other_candidate[v] ==> candidate[v],
+{
+    if retained[v] {
+        valid_plan_retains_live(n, edges, roots, reclaimable, other_retained, other_candidate, v);
+    }
+    assert(candidate[v] == (reclaimable[v] && !retained[v]));
+    assert(other_candidate[v] == (reclaimable[v] && !other_retained[v]));
+}
+
+// r[verify reclaim-plan.least-plan]
+/// Planned results are determined by their input: any two are equal.
+pub proof fn planned_results_are_unique(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, other_retained: Seq<bool>, other_candidate: Seq<bool>,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate),
+        retained_sound_spec(edges, roots, retained),
+        plan_valid_spec(n, edges, roots, reclaimable, other_retained, other_candidate),
+        retained_sound_spec(edges, roots, other_retained),
+    ensures retained =~= other_retained, candidate =~= other_candidate,
+{
+    assert forall|v: int| 0 <= v < n implies retained[v] == other_retained[v] && candidate[v] == other_candidate[v] by {
+        planned_result_is_least_valid_plan(n, edges, roots, reclaimable, retained, candidate,
+            other_retained, other_candidate, v);
+        planned_result_is_least_valid_plan(n, edges, roots, reclaimable, other_retained, other_candidate,
+            retained, candidate, v);
+    }
+}
+
+// r[verify reclaim-plan.monotone]
+/// Adding roots or references, or protecting more nodes, never adds a
+/// candidate: every candidate of a valid plan for the larger input is a
+/// candidate of the planned result for the smaller one.
+pub proof fn stronger_input_never_adds_candidates(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>,
+    edges2: Seq<(usize, usize)>, roots2: Seq<usize>, reclaimable2: Seq<bool>,
+    retained2: Seq<bool>, candidate2: Seq<bool>, v: int,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate),
+        retained_sound_spec(edges, roots, retained),
+        plan_valid_spec(n, edges2, roots2, reclaimable2, retained2, candidate2),
+        edges_subset_spec(edges, edges2), roots_subset_spec(roots, roots2),
+        reclaimable_subset_spec(reclaimable2, reclaimable),
+        0 <= v < n, candidate2[v],
+    ensures candidate[v],
+{
+    assert(candidate2[v] == (reclaimable2[v] && !retained2[v]));
+    if retained[v] {
+        live_mono(edges, edges2, roots, roots2, v);
+        valid_plan_retains_live(n, edges2, roots2, reclaimable2, retained2, candidate2, v);
+    }
+    assert(reclaimable[v]);
+    assert(candidate[v] == (reclaimable[v] && !retained[v]));
+}
+
+// r[verify reclaim-plan.set-invariance]
+/// A planned result depends only on the sets of roots and references:
+/// reordering or deduplicating either, within the bounds, keeps it valid and
+/// sound.
+pub proof fn planned_result_depends_only_on_sets(
+    n: int, edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, edges2: Seq<(usize, usize)>, roots2: Seq<usize>,
+)
+    requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate),
+        retained_sound_spec(edges, roots, retained),
+        edges_subset_spec(edges, edges2), edges_subset_spec(edges2, edges),
+        roots_subset_spec(roots, roots2), roots_subset_spec(roots2, roots),
+        edges2.len() <= MAX_EDGES, roots2.len() <= MAX_ROOTS,
+    ensures plan_valid_spec(n, edges2, roots2, reclaimable, retained, candidate),
+        retained_sound_spec(edges2, roots2, retained),
+{
+    assert forall|s: int| #![trigger roots2[s]] 0 <= s < roots2.len()
+        implies (roots2[s] as int) < n && retained[roots2[s] as int] by {
+        let r = choose|r: int| #![trigger roots[r]] 0 <= r < roots.len() && roots[r] == roots2[s];
+        assert(retained[roots[r] as int]);
+    }
+    assert forall|j: int| #![trigger edges2[j]] 0 <= j < edges2.len() implies
+        (edges2[j].0 as int) < n && (edges2[j].1 as int) < n
+        && (!reclaimable[edges2[j].0 as int] ==> !reclaimable[edges2[j].1 as int])
+        && (retained[edges2[j].0 as int] ==> retained[edges2[j].1 as int]) by {
+        assert(has_edge_spec(edges, edges2[j].0 as int, edges2[j].1 as int));
+        let i = choose|i: int| #![trigger edges[i]]
+            0 <= i < edges.len() && edges[i].0 as int == edges2[j].0 as int && edges[i].1 as int == edges2[j].1 as int;
+        assert(edges[i].0 == edges2[j].0 && edges[i].1 == edges2[j].1);
+    }
+    assert forall|v: int| #![trigger retained[v]] 0 <= v < retained.len() && retained[v]
+        implies live_spec(edges2, roots2, v) by {
+        live_mono(edges, edges2, roots, roots2, v);
+    }
 }
 
 } // verus!

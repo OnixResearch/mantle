@@ -40,6 +40,13 @@ that `plan_gc` refuses keeps its existing error. A plan the check refuses fails
 with `gc-plan-check-failed` before any removal or Casita fence write, in both
 dry-run and execution.
 
+The kernel also proves that a planned result depends only on the sets of
+roots and references (`planned_result_depends_only_on_sets`), which covers the
+projection's sorting and deduplication, and that it is the least valid plan
+and therefore unique (`planned_results_are_unique`). Every valid plan's
+candidates are a subset of the planned result's, and adding roots, references,
+or protection never adds a candidate (`stronger_input_never_adds_candidates`).
+
 The ADR 0157 parity rail moves to `crunch-gc-check` and now exercises the
 production projection and check, so the shipped projection is the one compared
 with the kernel on the enumerated space.
@@ -65,7 +72,9 @@ with the kernel on the enumerated space.
 
 ## Non-Claims
 
-The projection is not verified. The kernel is compiled with Mantle's `vstd`
+The projection is not verified beyond the set-invariance theorem: the mapping
+from path identifiers to indices, and the treatment of unknown paths, are
+unproved. The kernel is compiled with Mantle's `vstd`
 (2026-01-25), not the Terrane cohort it was verified under (2026-10-18), and is
 not re-verified there; erasure keeps its executable code unchanged. The check
 does not establish that roots or references are complete, that the snapshot

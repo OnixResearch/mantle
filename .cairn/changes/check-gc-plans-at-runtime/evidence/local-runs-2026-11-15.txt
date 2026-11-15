@@ -46,5 +46,13 @@ $ cargo tree -i vstd -e normal --workspace
 vstd <- crunch-gc-check <- crunch-store <- crunch-build, crunch-android,
 crunch-delta, crunch-pipeline, crunch-nix-gateway, mantle, ...
 
+Re-import at Terrane c4538aa (adds optimality, uniqueness, monotonicity, and
+set-invariance proofs; Verus 0.2026.05.17, module file: 47 verified, 0 errors;
+each new theorem rejected when any one hypothesis is removed):
+$ python3 -I scripts/import-terrane-reclaim-plan.py --check
+{"status": "source-identities-match", "revision": "c4538aab95a886a8590cd4b31d7dcd5ca732d6b0", "model_blake3": "296376c9f683b2efa24c577f54b4982389224f5d1ca7f446a102245d9977fbe4", ...}
+$ cargo test --offline -p crunch-gc-check
+test result: ok. 18 passed; 0 failed
+
 Not run: first-party quality gate, Tiger Style, nix flake check, cairn validate,
 cargo deny.

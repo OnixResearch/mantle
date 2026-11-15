@@ -6,13 +6,13 @@ from pathlib import Path
 import subprocess
 import tomllib
 
-REVISION = "bbf83d95402370b6ba29e82e01f16b1059c55a83"
+REVISION = "c4538aab95a886a8590cd4b31d7dcd5ca732d6b0"
 REPOSITORY = "https://github.com/OnixResearch/terrane"
 # The producer verifies against its own Verus standard library; Mantle only
 # compiles the executable kernel for test-only parity under its own pin.
 PRODUCER_VSTD_VERSION = "=0.0.0-2026-10-18-0147"
 CONSUMER_VSTD_VERSION = "=0.0.0-2026-01-25-0057"
-MODEL_BLAKE3 = "ee279c734a91e86d6f154835a57e8e9eb5fc5bbadf349657114acabee8cd5aee"
+MODEL_BLAKE3 = "296376c9f683b2efa24c577f54b4982389224f5d1ca7f446a102245d9977fbe4"
 MODEL = "src/reclaim_plan/verified.rs"
 PATHS = (
     MODEL,
