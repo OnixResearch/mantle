@@ -1,0 +1,19 @@
+{
+  "id": 1616,
+  "created_at": "2026-11-15T11:32:00.472878471-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/captured-tmp-workspace-fixed.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/captured-tmp-workspace-fixed.sh",
+  "path": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "group": "default",
+  "dependencies": [],
+  "priority": 0,
+  "label": "mantle-captured-tmp-workspace-fixed",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T11:32:00.472862081-05:00",
+      "start": "2026-11-15T11:32:00.645759153-05:00",
+      "end": "2026-11-15T11:38:34.520084975-05:00",
+      "result": "Success"
+    }
+  }
+}

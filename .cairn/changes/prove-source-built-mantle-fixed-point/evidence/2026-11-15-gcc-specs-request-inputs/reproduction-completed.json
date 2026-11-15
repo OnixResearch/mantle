@@ -1,0 +1,32 @@
+{
+  "task": {
+    "id": 1612,
+    "created_at": "2026-11-15T11:01:01.764978858-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-repro.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-repro.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-gcc-specs-request-repro",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T11:01:01.764967096-05:00",
+        "start": "2026-11-15T11:01:01.820005164-05:00",
+        "end": "2026-11-15T11:06:10.504845638-05:00",
+        "result": {
+          "Failed": 101
+        }
+      }
+    }
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "source_file_blake3": "15fb922f6f3c9f5a512b5e52f25d423d672eea9215018fbdc12a794e60456658",
+  "log_blake3": "9b039f7fef47f07cf96af40ff6c16d6a55ff57500e9037c03b29ddaaf05eed77",
+  "log_transfer_equal": true,
+  "test_results": [
+    "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2972 filtered out; finished in 0.00s"
+  ],
+  "failure_excerpt": "+ cd /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv\n+ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target\n+ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target\n+ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true\n+ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target\n+ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache\n+ CARGO_BUILD_JOBS=8\n+ CARGO_INCREMENTAL=0\n+ CARGO_NET_OFFLINE=true\n+ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1\n+ GIT_CONFIG_NOSYSTEM=1\n+ GIT_CONFIG_GLOBAL=/dev/null\n+ GIT_CONFIG_COUNT=1\n+ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0\n+ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf\n+ GIT_CONFIG_VALUE_0=ssh://git@github.com/\n+ GIT_TERMINAL_PROMPT=0\n+ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo test --release --locked --offline -p mantle --bin mantle authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority -- --test-threads=1'\nwarning: /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv)\n    Finished `release` profile [optimized] target(s) in 4m 41s\n     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target/release/deps/mantle-61d96712292a8e06)\n\nrunning 1 test\ntest source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority ... FAILED\n\nfailures:\n\n---- source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority stdout ----\n\nthread 'source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority' (2458789) panicked at src/source_built_native_programs_phases.rs:1140:92:\ncalled `Result::unwrap()` on an `Err` value: Build(\"source recipe: unknown input unit.c\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2972 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `-p mantle --bin mantle`\n+ status=101\n+ printf 'repro_exit=%s\\n' 101\nrepro_exit=101\n+ exit 101\n",
+  "non_claim": "Pre-fix developer regression execution only; not proof-runner qualification, source preparation or protected proof."
+}

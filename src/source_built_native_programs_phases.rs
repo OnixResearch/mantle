@@ -224,6 +224,7 @@ fn validate_mapping_destination(
 fn retain_referenced_exec_inputs(
     inputs: &mut BTreeMap<String, ArtifactRef>,
     executable_input: &str,
+    authored_inputs: &BTreeSet<String>,
     arguments: &[RecipeWord],
     environment: &BTreeMap<String, RecipeWord>,
     runtime_mounts: &BTreeMap<String, String>,
@@ -261,16 +262,16 @@ fn retain_referenced_exec_inputs(
             used.insert(condition.status_input.clone());
         }
     }
-    inputs.retain(|name, _| used.contains(name) || name == executable_input);
+    inputs.retain(|name, _| used.contains(name) || authored_inputs.contains(name) || name == executable_input);
 }
 
-fn referenced_input_names(
-    words: impl IntoIterator<Item = RecipeWord>,
+pub(crate) fn referenced_input_names<'a>(
+    words: impl IntoIterator<Item = &'a RecipeWord>,
     runtime_mounts: &BTreeMap<String, String>,
-    environment: &BTreeMap<String, RecipeWord>,
+    environment: &'a BTreeMap<String, RecipeWord>,
 ) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
-    for word in words.into_iter().chain(environment.values().cloned()) {
+    for word in words.into_iter().chain(environment.values()) {
         for part in &word.parts {
             match part {
                 WordPart::Input { name, .. } | WordPart::TextInput { name } | WordPart::TextSlice { name, .. } => {
@@ -294,26 +295,33 @@ pub(crate) fn append_gcc_invocation(
     program: &mut SourceRecipe,
     invocation: GccInvocation,
 ) -> Result<GccExpansion, RunError> {
-    append_gcc_invocation_inner(program, invocation, None)
+    append_gcc_invocation_inner(program, invocation, None, BTreeSet::new())
 }
 
 /// The original source controller emits the specs request with `-###` already
 /// appended and the actual environment. Static arguments/environment must be
 /// empty; this function cannot silently alter authenticated request bytes.
+/// `request_inputs` is the source author's explicit read set for those opaque
+/// bytes; empty static words cannot describe or authorize that request's inputs.
 pub(crate) fn append_gcc_request_invocation(
     program: &mut SourceRecipe,
     invocation: GccInvocation,
     request_input: String,
+    request_inputs: BTreeSet<String>,
 ) -> Result<GccExpansion, RunError> {
-    append_gcc_invocation_inner(program, invocation, Some(request_input))
+    append_gcc_invocation_inner(program, invocation, Some(request_input), request_inputs)
 }
 
 fn append_gcc_invocation_inner(
     program: &mut SourceRecipe,
     invocation: GccInvocation,
     request_input: Option<String>,
+    request_inputs: BTreeSet<String>,
 ) -> Result<GccExpansion, RunError> {
     validate_specs_request(&invocation, request_input.as_deref())?;
+    if request_inputs.iter().any(|name| !invocation.inputs.contains_key(name)) {
+        return Err(error("authenticated specs request read set contains an unbound input"));
+    }
     require_produced(&invocation.driver)?;
     let mut steps = Vec::with_capacity(1);
     let specs_id = format!("{}.specs", invocation.id);
@@ -325,11 +333,9 @@ fn append_gcc_invocation_inner(
     insert_input(&mut query_inputs, "gcc-specs-driver".into(), invocation.driver)?;
     // The authored operands are the source of every name the phase response can
     // address; capture them before the query consumes the argument words.
-    let authored_inputs = referenced_input_names(
-        invocation.arguments.iter().cloned(),
-        &invocation.runtime_mounts,
-        &invocation.environment,
-    );
+    let mut authored_inputs =
+        referenced_input_names(invocation.arguments.iter(), &invocation.runtime_mounts, &invocation.environment);
+    authored_inputs.extend(request_inputs);
     let mut arguments = invocation.arguments;
     if request_input.is_none() {
         arguments.push(literal("-###"));
@@ -339,6 +345,7 @@ fn append_gcc_invocation_inner(
     retain_referenced_exec_inputs(
         &mut query_inputs,
         "gcc-specs-driver",
+        &authored_inputs,
         &arguments,
         &invocation.environment,
         &invocation.runtime_mounts,
@@ -628,7 +635,7 @@ fn append_response_steps_guarded(
     let mut authored_inputs = invocation.authored_inputs.clone();
     for phase in &invocation.phases {
         authored_inputs.extend(referenced_input_names(
-            phase.environment.values().cloned(),
+            phase.environment.values(),
             &phase.runtime_mounts,
             &BTreeMap::new(),
         ));
@@ -796,7 +803,7 @@ fn append_response_steps_guarded(
         // Typed phases publish this environment through the splitter overlay, so
         // the phase leaf must still bind every input those words name.
         let environment_inputs =
-            referenced_input_names(phase_environment.values().cloned(), &phase.runtime_mounts, &BTreeMap::new());
+            referenced_input_names(phase_environment.values(), &phase.runtime_mounts, &BTreeMap::new());
         let mapped_inputs = phase
             .path_mappings
             .keys()
@@ -997,6 +1004,7 @@ fn append_response_steps_guarded(
     retain_referenced_exec_inputs(
         &mut split_inputs,
         "gcc-phase-splitter",
+        &BTreeSet::new(),
         &split_arguments,
         &BTreeMap::new(),
         &split_runtime_mounts,
@@ -1039,6 +1047,9 @@ fn append_response_steps_guarded(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_built_recipe::ArtifactBinding;
+    use crate::source_built_recipe::RecipeInvocation;
+    use crate::source_built_recipe::RecipePreparation;
 
     fn reference(id: &str) -> ArtifactRef {
         ArtifactRef::Produced {
@@ -1047,60 +1058,110 @@ mod tests {
         }
     }
 
-    fn input(name: &str) -> RecipeWord {
-        RecipeWord {
-            parts: vec![WordPart::Input {
-                name: name.into(),
-                path: String::new(),
-            }],
+    fn request_program() -> SourceRecipe {
+        SourceRecipe {
+            schema: crate::source_built_recipe::SCHEMA.into(),
+            stage_id: "full-source-native-provider".into(),
+            preparation: RecipePreparation {
+                tool: "source-owned GCC request fixture".into(),
+                provenance: "canonical request input admission".into(),
+            },
+            steps: Vec::new(),
+            timeout_groups: Vec::new(),
+            roots: Vec::new(),
+            exports: BTreeMap::new(),
+            semantic_roots: BTreeMap::new(),
         }
     }
 
-    #[test]
-    fn exec_input_retention_keeps_every_addressable_operand_and_drops_labels() {
-        let mut inputs = BTreeMap::from([
-            ("tool".to_string(), reference("tool")),
-            ("data".to_string(), reference("data")),
-            ("mounted".to_string(), reference("mounted")),
-            ("cwd".to_string(), reference("cwd")),
-            ("request".to_string(), reference("request")),
-            ("status".to_string(), reference("status")),
-            ("unused".to_string(), reference("unused")),
-        ]);
-        let mounts = BTreeMap::from([("/lib".to_string(), "mounted".to_string())]);
-        let guard = RecipeGuard {
-            conditions: vec![RecipeGuardCondition {
-                status_input: "status".into(),
-                accepted_codes: vec![0],
-            }],
+    fn request_phase() -> GccPhase {
+        GccPhase {
+            executable: reference("cc1"),
+            expected_image: RecipeWord {
+                parts: vec![WordPart::Runtime {
+                    mount: "/compiler".into(),
+                    path: "bin/cc1".into(),
+                }],
+            },
+            inputs: BTreeMap::new(),
+            outputs: BTreeMap::from([("result".into(), text_output(LOG_BYTES_MAX))]),
+            path_mappings: BTreeMap::from([
+                ("/inputs/unit.c".into(), "/inputs/unit.c".into()),
+                ("/inputs/target".into(), "/outputs/result".into()),
+            ]),
+            runtime_mounts: BTreeMap::from([("/compiler".into(), "bundle".into())]),
+            environment: BTreeMap::new(),
+            output_seeds: BTreeMap::new(),
+            cwd_output: None,
+            guard: None,
+            exit_policy: RecipeExitPolicy::Exact { code: 0 },
+            merge_stderr: false,
+            invocation_input: None,
+        }
+    }
+
+    fn request_fixture() -> (GccInvocation, BTreeMap<ArtifactRef, ArtifactBinding>, RecipeInvocation) {
+        let inputs = ["bundle", "unit.c", "target", "request", "phase-only"]
+            .into_iter()
+            .map(|name| (name.to_string(), reference(name)))
+            .collect::<BTreeMap<_, _>>();
+        let bindings = inputs
+            .iter()
+            .map(|(name, reference)| {
+                (reference.clone(), ArtifactBinding {
+                    reference: reference.clone(),
+                    path: std::path::PathBuf::from(name),
+                    kind: if name == "bundle" {
+                        ArtifactKind::Tree
+                    } else {
+                        ArtifactKind::Text
+                    },
+                    bytes_max: LOG_BYTES_MAX,
+                })
+            })
+            .collect();
+        let invocation = GccInvocation {
+            id: "compile".into(),
+            driver: reference("driver"),
+            splitter: reference("splitter"),
+            inputs,
+            arguments: Vec::new(),
+            environment: BTreeMap::new(),
+            runtime_mounts: BTreeMap::from([("/compiler".into(), "bundle".into())]),
+            cwd_input: None,
+            phases: vec![request_phase()],
         };
-        let cwd = "cwd".to_string();
-        let request = "request".to_string();
-        retain_referenced_exec_inputs(
-            &mut inputs,
-            "tool",
-            &[input("data")],
-            &BTreeMap::new(),
-            &mounts,
-            Some(&cwd),
-            Some(&request),
-            Some(&guard),
-        );
-        assert_eq!(inputs.keys().cloned().collect::<Vec<_>>(), vec![
-            "cwd", "data", "mounted", "request", "status", "tool"
-        ]);
+        let request = RecipeInvocation {
+            arguments: vec![input("unit.c"), literal("-o"), input("target"), literal("-###")],
+            environment: BTreeMap::new(),
+            cwd: None,
+            argv0: None,
+            executable_path: None,
+            workspace_mounts: BTreeMap::new(),
+            readonly_input_roots: Vec::new(),
+            process_attributes: None,
+            descriptors: None,
+        };
+        (invocation, bindings, request)
     }
 
     #[test]
-    fn referenced_names_include_words_and_mount_sources_only() {
-        let mounts = BTreeMap::from([("/lib".to_string(), "libraries".to_string())]);
-        let environment = BTreeMap::from([("CPATH".to_string(), RecipeWord {
-            parts: vec![WordPart::Runtime {
-                mount: "/lib".into(),
-                path: String::new(),
-            }],
-        })]);
-        let names = referenced_input_names([input("headers")], &mounts, &environment);
-        assert_eq!(names.into_iter().collect::<Vec<_>>(), vec!["headers", "libraries"]);
+    fn authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority() {
+        let mut program = request_program();
+        let (invocation, bindings, request) = request_fixture();
+        let request_inputs =
+            referenced_input_names(request.arguments.iter(), &invocation.runtime_mounts, &request.environment);
+        append_gcc_request_invocation(&mut program, invocation, "request".into(), request_inputs).unwrap();
+        let query = &program.steps[0];
+        let bytes = serde_json::to_vec(&request).unwrap();
+        assert_eq!(crate::source_built_recipe::decode_invocation(query, &bytes, &bindings).unwrap(), request);
+        for name in ["unit.c", "target"] {
+            let mut missing = query.clone();
+            missing.inputs.remove(name);
+            assert!(crate::source_built_recipe::decode_invocation(&missing, &bytes, &bindings).is_err());
+        }
+        let mut unused = query.clone();
+        unused.inputs.insert("phase-only".into(), reference("phase-only"));
+        assert!(crate::source_built_recipe::decode_invocation(&unused, &bytes, &bindings).is_err());
     }
 }

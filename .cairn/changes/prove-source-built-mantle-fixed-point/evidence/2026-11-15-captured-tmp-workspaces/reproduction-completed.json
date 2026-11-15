@@ -1,0 +1,21 @@
+{
+  "id": 1615,
+  "created_at": "2026-11-15T11:25:26.315880276-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/captured-tmp-workspace-repro.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/captured-tmp-workspace-repro.sh",
+  "path": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "group": "default",
+  "dependencies": [],
+  "priority": 0,
+  "label": "mantle-captured-tmp-workspace-repro",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T11:25:26.315865057-05:00",
+      "start": "2026-11-15T11:25:26.407862699-05:00",
+      "end": "2026-11-15T11:30:26.314859736-05:00",
+      "result": {
+        "Failed": 101
+      }
+    }
+  }
+}

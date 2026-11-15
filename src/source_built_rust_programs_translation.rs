@@ -254,6 +254,28 @@ pub(crate) fn captured_tmp(
     });
     Ok(Some(product(&program.stage_id, &id, "tree")))
 }
+fn rebind_tmp_workspace(word: &mut RecipeWord) -> Result<(), RunError> {
+    for part in &mut word.parts {
+        let WordPart::Workspace { mount, path } = part else {
+            continue;
+        };
+        let Some(member) = mount.strip_prefix("/tmp/") else {
+            continue;
+        };
+        relative(member, false)?;
+        relative(path, true)?;
+        let mut member = std::mem::replace(mount, "/tmp".into());
+        drop(member.drain(.."/tmp/".len()));
+        if !path.is_empty() {
+            member.push('/');
+            member.push_str(path);
+        }
+        *path = member;
+        debug_assert_eq!(mount.as_str(), "/tmp");
+        debug_assert!(!path.starts_with('/'));
+    }
+    Ok(())
+}
 
 pub(crate) fn bind_tmp_step(
     program: &mut SourceRecipe,
@@ -288,6 +310,11 @@ pub(crate) fn bind_tmp_step(
         (None, None) => None,
         _ => return Err(error("captured tmp command has conflicting cwd roots")),
     };
+    // Captured descendants share the one writable /tmp Tree. Keep the original
+    // virtual pathname while making each typed operand name that exact scope.
+    for word in arguments.iter_mut().chain(environment.values_mut()) {
+        rebind_tmp_workspace(word)?;
+    }
     let invocation = RecipeInvocation {
         arguments: std::mem::take(arguments),
         environment: std::mem::take(environment),
@@ -1221,3 +1248,7 @@ mod smoke_tests;
 #[cfg(test)]
 #[path = "source_built_rust_programs_native_smoke_tests.rs"]
 mod native_smoke_tests;
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_translation_tests.rs"]
+mod tests;

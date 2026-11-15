@@ -1,0 +1,12 @@
+{
+  "task": "1613",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "files": [
+    "src/source_built_native_programs_phases.rs",
+    "src/source_built_native_programs_early_gnu_generator_base.rs",
+    "src/source_built_mantle_programs_native.rs"
+  ],
+  "reproduction_task": "1612",
+  "reproduction": "Actual real decoder regression failed before the fix with source recipe unknown input unit.c; captured log retained.",
+  "non_claim": "Developer source-built tests and strict Clippy only. No qualified runner installation or current immutable-cohort mutation; regeneration remains required."
+}

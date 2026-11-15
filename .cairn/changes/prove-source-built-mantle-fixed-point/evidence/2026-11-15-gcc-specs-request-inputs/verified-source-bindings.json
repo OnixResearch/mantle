@@ -1,0 +1,23 @@
+{
+  "task": "1614",
+  "source_files": [
+    {
+      "file": "src/source_built_native_programs_phases.rs",
+      "blake3": "a0e4a702a394a34c25b3724ce8d60cf03351293ab1765cb4f1590d658813c0c6"
+    },
+    {
+      "file": "src/source_built_native_programs_early_gnu_generator_base.rs",
+      "blake3": "c0be7f4840856c7fd947be4dd7c273f69c06bfa7bf8155548d9ba6f1577ad558"
+    },
+    {
+      "file": "src/source_built_mantle_programs_native.rs",
+      "blake3": "151bc9fff5b4d76c2a4010c925e043574c3cd063b2c02529ffe5e936796e044d"
+    }
+  ],
+  "local_remote_equal": true,
+  "test_results": [
+    "test result: ok. 266 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.69s"
+  ],
+  "strict_release_clippy": true,
+  "non_claim": "Exact formatted developer source tested; final frozen runner qualification and source-only regeneration remain required."
+}

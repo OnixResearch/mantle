@@ -24,6 +24,7 @@ use crate::source_built_native_programs::phases::GccResponseInvocation;
 use crate::source_built_native_programs::phases::append_gcc_request_invocation;
 use crate::source_built_native_programs::phases::append_gcc_response_phases;
 use crate::source_built_native_programs::phases::gcc_phase_output;
+use crate::source_built_native_programs::phases::referenced_input_names;
 use crate::source_built_recipe::ArtifactKind;
 use crate::source_built_recipe::ArtifactRef;
 use crate::source_built_recipe::RecipeExitPolicy;
@@ -558,6 +559,7 @@ pub(crate) fn lower(request: &NativeNodeRequest<'_, '_>) -> Result<NativeNodePro
         input("target", ""),
         literal("-###"),
     ];
+    let request_inputs = referenced_input_names(args.iter(), &mounts, &environment);
     let driver = gcc_driver;
     let command = b.text(
         "relocated-smoke-request",
@@ -591,6 +593,7 @@ pub(crate) fn lower(request: &NativeNodeRequest<'_, '_>) -> Result<NativeNodePro
             phases: vec![cc1, assembler, collect],
         },
         "original-invocation".into(),
+        request_inputs,
     )?;
     b.program.steps = r.steps;
     b.program.timeout_groups = r.timeout_groups;

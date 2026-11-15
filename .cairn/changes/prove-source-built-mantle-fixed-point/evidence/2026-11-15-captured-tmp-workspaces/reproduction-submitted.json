@@ -1,0 +1,24 @@
+{
+  "task": "1615",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "changed_files": [
+    "src/source_built_rust_programs_translation.rs",
+    "src/source_built_rust_programs_translation_tests.rs"
+  ],
+  "already_verified_gcc_repair": [
+    {
+      "file": "src/source_built_native_programs_phases.rs",
+      "blake3": "a0e4a702a394a34c25b3724ce8d60cf03351293ab1765cb4f1590d658813c0c6"
+    },
+    {
+      "file": "src/source_built_native_programs_early_gnu_generator_base.rs",
+      "blake3": "c0be7f4840856c7fd947be4dd7c273f69c06bfa7bf8155548d9ba6f1577ad558"
+    },
+    {
+      "file": "src/source_built_mantle_programs_native.rs",
+      "blake3": "151bc9fff5b4d76c2a4010c925e043574c3cd063b2c02529ffe5e936796e044d"
+    }
+  ],
+  "case": "Actual bind_tmp_step emitted canonical request -> production decode_invocation; descendant OUT_DIR, unknown workspace and traversal boundaries.",
+  "non_claim": "Developer reproduction only; current9300895d source data and its runner remain immutable/unlaunched."
+}

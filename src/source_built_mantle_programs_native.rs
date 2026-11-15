@@ -1057,6 +1057,8 @@ pub(crate) fn append_native_request(
                 bytes_max: BYTES_MAX,
             });
             let query_inputs = inputs.clone();
+            let request_inputs =
+                query_inputs.keys().filter(|name| name.as_str() != "native-request-invocation").cloned().collect();
             let mut phases = vec![GccPhase {
                 invocation_input: None,
                 merge_stderr: false,
@@ -1131,6 +1133,7 @@ pub(crate) fn append_native_request(
                     phases,
                 },
                 "native-request-invocation".into(),
+                request_inputs,
             )?;
             if capability {
                 let observation_id = format!("{id}.assembler-observation");

@@ -1,0 +1,35 @@
+{
+  "task": "1616",
+  "source_files": [
+    {
+      "file": "src/source_built_native_programs_phases.rs",
+      "blake3": "a0e4a702a394a34c25b3724ce8d60cf03351293ab1765cb4f1590d658813c0c6"
+    },
+    {
+      "file": "src/source_built_native_programs_early_gnu_generator_base.rs",
+      "blake3": "c0be7f4840856c7fd947be4dd7c273f69c06bfa7bf8155548d9ba6f1577ad558"
+    },
+    {
+      "file": "src/source_built_mantle_programs_native.rs",
+      "blake3": "151bc9fff5b4d76c2a4010c925e043574c3cd063b2c02529ffe5e936796e044d"
+    },
+    {
+      "file": "src/source_built_rust_programs_translation.rs",
+      "blake3": "11713cc382596b2994c11c02c758623fdafdc6e109fe6009d1088b4739d57549"
+    },
+    {
+      "file": "src/source_built_rust_programs_translation_tests.rs",
+      "blake3": "d2a881bc32fad5730ec08208a99b3f9376f49a0991b8c2db21772449f10a1fea"
+    }
+  ],
+  "local_remote_equal": true,
+  "pre_fix_task": "1615",
+  "pre_fix_result": [
+    "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 2973 filtered out; finished in 0.00s"
+  ],
+  "fixed_result": [
+    "test result: ok. 268 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.86s"
+  ],
+  "strict_release_clippy": true,
+  "non_claim": "Exact formatted developer source tested. Frozen9300895d remains rejected; a new published source must be independently frozen/qualified, regenerated and completely reviewed before protected execution."
+}

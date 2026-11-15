@@ -1,0 +1,12 @@
+{
+  "task": "1614",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "prior_task": "1613",
+  "prior_result": "Compilation E0621 before tests; environment now shares the explicitly borrowed word lifetime. Failed compilation log retained.",
+  "files": [
+    "src/source_built_native_programs_phases.rs",
+    "src/source_built_native_programs_early_gnu_generator_base.rs",
+    "src/source_built_mantle_programs_native.rs"
+  ],
+  "non_claim": "Developer verification only; no final frozen runner installation or current-cohort mutation."
+}

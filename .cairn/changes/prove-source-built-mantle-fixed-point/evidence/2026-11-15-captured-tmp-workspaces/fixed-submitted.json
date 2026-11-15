@@ -1,0 +1,14 @@
+{
+  "task": "1616",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "files": [
+    "src/source_built_native_programs_phases.rs",
+    "src/source_built_native_programs_early_gnu_generator_base.rs",
+    "src/source_built_mantle_programs_native.rs",
+    "src/source_built_rust_programs_translation.rs",
+    "src/source_built_rust_programs_translation_tests.rs"
+  ],
+  "pre_fix_task": "1615",
+  "pre_fix_failure": "workspace word must name an exact invocation workspace mount",
+  "non_claim": "Developer verification only; qualified source-only regeneration and fresh current-subject review remain required."
+}

@@ -1,0 +1,47 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo test --release --locked --offline -p mantle --bin mantle authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority -- --test-threads=1'
+warning: /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv)
+    Finished `release` profile [optimized] target(s) in 4m 41s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target/release/deps/mantle-61d96712292a8e06)
+
+running 1 test
+test source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority ... FAILED
+
+failures:
+
+---- source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority stdout ----
+
+thread 'source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority' (2458789) panicked at src/source_built_native_programs_phases.rs:1140:92:
+called `Result::unwrap()` on an `Err` value: Build("source recipe: unknown input unit.c")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2972 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
++ status=101
++ printf 'repro_exit=%s\n' 101
+repro_exit=101
++ exit 101

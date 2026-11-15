@@ -1,0 +1,33 @@
+{
+  "task": "1617",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "changed_documentation": [
+    "adr/0153-retain-authenticated-gcc-request-input-ownership.md",
+    "adr/0154-rebind-captured-workspace-descendants-to-declared-root.md",
+    "adr/README.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md"
+  ],
+  "verified_source_files": [
+    {
+      "file": "src/source_built_native_programs_phases.rs",
+      "blake3": "a0e4a702a394a34c25b3724ce8d60cf03351293ab1765cb4f1590d658813c0c6"
+    },
+    {
+      "file": "src/source_built_native_programs_early_gnu_generator_base.rs",
+      "blake3": "c0be7f4840856c7fd947be4dd7c273f69c06bfa7bf8155548d9ba6f1577ad558"
+    },
+    {
+      "file": "src/source_built_mantle_programs_native.rs",
+      "blake3": "151bc9fff5b4d76c2a4010c925e043574c3cd063b2c02529ffe5e936796e044d"
+    },
+    {
+      "file": "src/source_built_rust_programs_translation.rs",
+      "blake3": "11713cc382596b2994c11c02c758623fdafdc6e109fe6009d1088b4739d57549"
+    },
+    {
+      "file": "src/source_built_rust_programs_translation_tests.rs",
+      "blake3": "d2a881bc32fad5730ec08208a99b3f9376f49a0991b8c2db21772449f10a1fea"
+    }
+  ],
+  "non_claim": "Lifecycle checks for publication of verified author repairs; not frozen-runner or protected execution qualification."
+}

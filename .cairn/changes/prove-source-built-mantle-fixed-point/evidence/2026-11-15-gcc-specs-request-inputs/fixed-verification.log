@@ -1,0 +1,40 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; rustfmt --edition 2024 --config skip_children=true src/source_built_native_programs_phases.rs src/source_built_native_programs_early_gnu_generator_base.rs src/source_built_mantle_programs_native.rs; cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings'
+warning: /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv)
+error[E0621]: explicit lifetime required in the type of `environment`
+   --> src/source_built_native_programs_phases.rs:274:17
+    |
+274 |     for word in words.into_iter().chain(environment.values()) {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ lifetime `'a` required
+    |
+help: add explicit lifetime `'a` to the type of `environment`
+    |
+271 -     environment: &BTreeMap<String, RecipeWord>,
+271 +     environment: &'a std::collections::BTreeMap<std::string::String, source_built_recipe::RecipeWord>,
+    |
+
+For more information about this error, try `rustc --explain E0621`.
+error: could not compile `mantle` (bin "mantle" test) due to 1 previous error
++ status=101
++ printf 'fixed_exit=%s\n' 101
+fixed_exit=101
++ exit 101

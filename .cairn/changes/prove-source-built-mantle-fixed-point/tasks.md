@@ -632,3 +632,77 @@ Qualified source-only regeneration is complete, not a protected compiler/
 provider build, Mantle stage, reconciled v2 receipt, fixed point, release or
 signed native-row acceptance. I3–I5 and proof-dependent V2/V3 remain open.
 
+
+## Current GCC specs consumer rejection reproduced (2026-11-15)
+
+The completed baseline graph review and the independent current-subject review
+confirm that `generator-base.relocated-smoke.specs` consumes an authenticated
+request naming `unit.c` and `target` without declaring either on that Exec.
+The unchanged decoder rejects it even though this step is outside dependency
+reachability, because every recipe step is scheduled. The `9300895d…` cohort
+therefore remains read-only and unlaunched; availability/transport success is
+not consumer admission.
+
+Task 1612 executed the real new decoder regression against unchanged production
+code and reported `0 passed; 1 failed`, with `source recipe: unknown input unit.c`.
+Its complete output and exact source/task bindings are retained under
+`evidence/2026-11-15-gcc-specs-request-inputs/`. The local shared author now takes
+an explicit source-owned request read set, retains those typed dependencies,
+and migrates both authenticated-request callers without modifying request
+bytes or relaxing decoder checks. The regression also requires rejection after
+removing either addressed binding or adding an unused declaration; incidental
+map-copy tests are removed. ADR 0153 records the contract and owner.
+
+The first fixed verification stopped at a compiler lifetime error before tests;
+that failure is retained. The corrected source is under actual source-built
+and strict-Clippy verification in task 1614. No successful result, replacement
+runner/cohort, protected execution or v2 acceptance is inferred while it runs.
+Remaining current graph/template and physical findings still require complete
+review and parent integration. I3–I5 and proof-dependent V2/V3 remain open.
+
+
+Task 1614 subsequently completed Success: the real decoder regression and the
+source-built leg reported `266 passed; 0 failed; 27 ignored`, followed by strict
+release Clippy. The count replaces two incidental name/map-copy tests with the
+actual producer-to-decoder authority regression. Local source BLAKE3 values
+match the exact formatted files exercised; the full transcript, task and source
+bindings are retained in that repair's evidence directory. This verifies the
+GCC author repair, not a final frozen runner or replacement cohort.
+
+The same current graph review independently confirmed 57 Rust translation
+`OUT_DIR` mismatches in `9300895d…`: each operand names a descendant `/tmp/.../out`
+Workspace mount while its invocation declares only `/tmp`. The frozen consumer
+requires exact map ownership, so these are actual static decode rejections, not
+inspector-context errors. Parent owns a captured-tmp author repair that uses the
+declared `/tmp` root plus validated relative member while preserving the original
+virtual pathname. Overlap, unknown-root and traversal admission remain strict.
+ADR 0154 records the boundary; the real emitted-invocation decoder reproduction
+is running in task 1615, before the changed author is staged into its snapshot.
+No successful workspace verification or corrected cohort is inferred yet.
+
+
+Task 1615 completed with Failed(101): the actual emitted invocation reached
+`decode_invocation` and failed with `workspace word must name an exact invocation
+workspace mount`; the execution reported `1 passed; 1 failed; 0 ignored`.
+`evidence/2026-11-15-captured-tmp-workspaces/` retains the command, complete log
+and task result. Only after that snapshot finished was the root/member author
+repair staged. Fixed verification task 1616 runs the affected source-built leg,
+leaf formatting and strict release Clippy; no success is inferred while it runs.
+
+
+Task 1616 completed Success. The actual repaired decoder and source-built release
+leg reported `268 passed; 0 failed; 27 ignored`; strict release Clippy completed
+successfully. All five changed Rust files match the exact formatted remote bytes
+exercised. `evidence/2026-11-15-captured-tmp-workspaces/` retains the complete log,
+task result and source bindings. The two author repairs are locally verified;
+they do not update the rejected frozen `9300895d…` programs.
+
+The current graph reviewer returned bounded REJECT, not complete graph coverage.
+It explicitly left nested catalogs, all invocation words, guards/ObservePhase
+dominance, source-node closure, all helper authority and semantic/smoke roots
+without exhaustive total/covered counts. Parent does not accept that report as
+launch permission and requested retention of its actual commands/results. A
+replacement published/frozen/qualified source, regenerated programs, and complete
+current-subject graph and physical reviews remain required. No protected proof
+was launched from `9300895d…`; I3–I5 and proof-dependent V2/V3 remain open.
+

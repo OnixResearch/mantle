@@ -150,3 +150,5 @@ compatibility surface, crate name, or historical decision.
 | [0150](0150-isolate-cargo-artifacts-when-qualifying-frozen-proof-runners.md) | Isolate Cargo artifacts when qualifying frozen proof runners | Accepted |
 | [0151](0151-declare-authored-helper-source-authority-in-mantle-stages.md) | Declare authored helper source authority in both Mantle stages | Accepted |
 | [0152](0152-keep-dependency-activation-selectors-out-of-compiler-features.md) | Keep dependency activation selectors out of compiler features | Accepted |
+| [0153](0153-retain-authenticated-gcc-request-input-ownership.md) | Retain authenticated GCC request input ownership | Accepted |
+| [0154](0154-rebind-captured-workspace-descendants-to-declared-root.md) | Rebind captured workspace descendants to their declared root | Accepted |

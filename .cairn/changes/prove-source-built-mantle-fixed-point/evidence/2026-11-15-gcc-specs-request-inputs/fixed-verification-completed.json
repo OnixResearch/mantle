@@ -1,0 +1,29 @@
+{
+  "task": {
+    "id": 1613,
+    "created_at": "2026-11-15T11:07:55.717649809-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-fixed.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-fixed.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-gcc-specs-request-fixed",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T11:07:55.717622217-05:00",
+        "start": "2026-11-15T11:07:55.982498922-05:00",
+        "end": "2026-11-15T11:09:22.213140029-05:00",
+        "result": {
+          "Failed": 101
+        }
+      }
+    }
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "log_blake3": "6d3761229a7d370de60c5e9aa37b232ac8c768a0246eb1a00d594a9b9a1c0f36",
+  "log_transfer_equal": true,
+  "test_results": [],
+  "output_end": "+ cd /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv\n+ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target\n+ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target\n+ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true\n+ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target\n+ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache\n+ CARGO_BUILD_JOBS=8\n+ CARGO_INCREMENTAL=0\n+ CARGO_NET_OFFLINE=true\n+ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1\n+ GIT_CONFIG_NOSYSTEM=1\n+ GIT_CONFIG_GLOBAL=/dev/null\n+ GIT_CONFIG_COUNT=1\n+ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0\n+ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf\n+ GIT_CONFIG_VALUE_0=ssh://git@github.com/\n+ GIT_TERMINAL_PROMPT=0\n+ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; rustfmt --edition 2024 --config skip_children=true src/source_built_native_programs_phases.rs src/source_built_native_programs_early_gnu_generator_base.rs src/source_built_mantle_programs_native.rs; cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings'\nwarning: /home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv/src/main.rs` found to be present in multiple build targets:\n  * `bin` target `crunch`\n  * `bin` target `mantle`\n   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv)\nerror[E0621]: explicit lifetime required in the type of `environment`\n   --> src/source_built_native_programs_phases.rs:274:17\n    |\n274 |     for word in words.into_iter().chain(environment.values()) {\n    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ lifetime `'a` required\n    |\nhelp: add explicit lifetime `'a` to the type of `environment`\n    |\n271 -     environment: &BTreeMap<String, RecipeWord>,\n271 +     environment: &'a std::collections::BTreeMap<std::string::String, source_built_recipe::RecipeWord>,\n    |\n\nFor more information about this error, try `rustc --explain E0621`.\nerror: could not compile `mantle` (bin \"mantle\" test) due to 1 previous error\n+ status=101\n+ printf 'fixed_exit=%s\\n' 101\nfixed_exit=101\n+ exit 101\n",
+  "non_claim": "Actual developer regression/source-built/Clippy outcome only; no final frozen runner or regenerated cohort."
+}
