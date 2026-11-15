@@ -150,6 +150,28 @@ fn missing_vendor_is_allowed_only_until_a_dependency_is_active() {
 }
 
 #[test]
+fn dependency_activation_selects_edges_without_publishing_a_compiler_feature() {
+    let mut s = sources();
+    package(&mut s, "core/Cargo.toml", "core", "1.0.0", "");
+    package(
+        &mut s,
+        "root/Cargo.toml",
+        "root",
+        "1.0.0",
+        "core = { path = '../core', optional = true, default-features = false }\n[features]\nstd-support = ['dep:core']",
+    );
+    let selected = resolve(&s, &[("root/Cargo.toml", &["std-support"])], false).unwrap();
+    let root = &selected.packages[&selected.roots[0]];
+    assert_eq!(root.features, BTreeSet::from(["std-support".into()]));
+    assert!(root.dependencies.iter().any(|edge| edge.name == "core" && edge.key.manifest == "core/Cargo.toml"));
+    assert!(selected.packages.values().any(|package| package.name == "core"));
+    let inactive = resolve(&s, &[("root/Cargo.toml", &[])], false).unwrap();
+    assert!(inactive.packages[&inactive.roots[0]].features.is_empty());
+    assert!(inactive.packages[&inactive.roots[0]].dependencies.is_empty());
+    assert!(inactive.packages.values().all(|package| package.name != "core"));
+}
+
+#[test]
 fn work_bound_is_a_failure_not_a_partial_solution() {
     let mut s = sources();
     package(&mut s, "root/Cargo.toml", "root", "1.0.0", "a = '1'\nb = '1'");

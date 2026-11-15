@@ -1,0 +1,37 @@
+{
+  "task": {
+    "id": 1604,
+    "created_at": "2026-11-15T08:38:46.289982275-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/helper-feature-canonical.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/helper-feature-canonical.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-helper-feature-canonical-gates",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T08:38:46.289971635-05:00",
+        "start": "2026-11-15T08:38:46.395032602-05:00",
+        "end": "2026-11-15T08:44:19.173006112-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev",
+  "remote_log_blake3": "1c985d14bf2beab784ca40d7f1720b85d732190c95c7f2968656197534cd743a",
+  "local_log_blake3": "1c985d14bf2beab784ca40d7f1720b85d732190c95c7f2968656197534cd743a",
+  "log_transfer_equal": true,
+  "test_results": [
+    "test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.85s",
+    "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.77s",
+    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.29s",
+    "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 2.09s",
+    "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2915 filtered out; finished in 0.13s",
+    "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2922 filtered out; finished in 0.02s",
+    "test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2802 filtered out; finished in 0.19s",
+    "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.05s",
+    "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s"
+  ],
+  "scope": "Current corrected-code ordinary CLI/contract/receipt/release/Cairn gates; warm artifacts remain ineligible for frozen proof-runner source binding. Current c22381a8 cohort stays rejected and unlaunched."
+}

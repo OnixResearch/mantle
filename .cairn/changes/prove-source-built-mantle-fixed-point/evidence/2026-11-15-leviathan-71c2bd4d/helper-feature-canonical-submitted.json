@@ -1,0 +1,9 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1604,
+  "source": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-71c2bd4d-fresh-target",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/helper-feature-canonical.sh",
+  "inside_script": "/home/brittonr/sbfp-20261113-berdKH/helper-feature-canonical-inside.sh",
+  "scope": "Ordinary current-code CLI/contract/receipt/release/Cairn checks; active review directories excluded from stable docs snapshot. No frozen runner promotion or proof."
+}

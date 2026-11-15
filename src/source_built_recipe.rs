@@ -2384,6 +2384,121 @@ mod tests {
         )
     }
 
+    fn mantle_helper_source_fixture(
+        root: &Path,
+    ) -> (SourceBuiltFixedPointPlan, BTreeMap<SourceAuthorityRole, PathBuf>, ArtifactRef) {
+        let helpers = root.join("helpers");
+        fs::create_dir(&helpers).unwrap();
+        fs::write(helpers.join("helper.rs"), b"fn main() {}\n").unwrap();
+        let bundle = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                identity: "mantle-helpers".into(),
+                path: helpers,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let manifest = root.join("native-sources.json");
+        crate::source_bundle::write_source_bundle(&manifest, &bundle).unwrap();
+        let mut original = crate::source_built_fixed_point_action_trust::tests::fixture().0;
+        let native = original
+            .source_inputs
+            .iter_mut()
+            .find(|input| input.role == SourceAuthorityRole::NativeSourceBundle)
+            .unwrap();
+        (native.size_bytes, native.digest_blake3) = digest(&manifest).unwrap();
+        let proof = plan_source_built_fixed_point(SourceBuiltFixedPointPlanInput {
+            proof_id: original.proof_id,
+            logical_store_prefix: original.logical_store_prefix,
+            source_inputs: original.source_inputs,
+            initial_output_authority: InitialOutputAuthorityState {
+                stagex_transition_entries: 0,
+                native_provider_entries: 0,
+                rust_provider_entries: 0,
+                mantle_output_entries: 0,
+            },
+            policies: original.policies,
+            resource_bounds: original.resource_bounds,
+        })
+        .unwrap();
+        let sources = BTreeMap::from([(SourceAuthorityRole::NativeSourceBundle, manifest)]);
+        let reference = ArtifactRef::ManifestSource {
+            role: SourceAuthorityRole::NativeSourceBundle,
+            record_identity: "mantle-helpers".into(),
+            member: "helper.rs".into(),
+        };
+        (proof, sources, reference)
+    }
+
+    #[test]
+    fn mantle_helper_manifest_requires_its_declared_stage_authority_even_after_hydration() {
+        let directory = tempfile::tempdir().unwrap();
+        let (proof, sources, helper) = mantle_helper_source_fixture(directory.path());
+        let authority = StageAuthorityInput::Source {
+            role: SourceAuthorityRole::NativeSourceBundle,
+        };
+        let host_digest = "1".repeat(64);
+        for stage_id in ["mantle-stage1", "mantle-stage2"] {
+            let stage = proof.stages.iter().find(|stage| stage.stage_id == stage_id).unwrap();
+            let cache = tempfile::tempdir().unwrap();
+            let runtime = directory.path().join(&stage.stage_id);
+            let paths = RecipePaths {
+                source_roots: &sources,
+                runtime_root: &runtime,
+                sandbox_binary: Path::new(env!("SNIX_BUILD_SANDBOX_SHELL")),
+            };
+            let step = RecipeStep {
+                id: "helper-source".into(),
+                inputs: BTreeMap::from([("helper".into(), helper.clone())]),
+                outputs: BTreeMap::from([("tree".into(), RecipeOutput {
+                    kind: ArtifactKind::Tree,
+                    bytes_max: 4096,
+                })]),
+                operation: RecipeOperation::AssembleTree {
+                    output: "tree".into(),
+                    entries: BTreeMap::from([("helper.rs".into(), "helper".into())]),
+                },
+            };
+            let mut bindings = BTreeMap::new();
+            let actions = lower_step(
+                &proof,
+                &stage.stage_id,
+                &stage.inputs,
+                &[],
+                &paths,
+                cache.path(),
+                &host_digest,
+                &host_digest,
+                &[],
+                &[],
+                &step,
+                &mut bindings,
+            )
+            .unwrap();
+            assert_eq!(actions[0].inputs, vec![ActionInput::Stage { authority }]);
+            assert_eq!(fs::read(&bindings[&helper].path).unwrap(), b"fn main() {}\n");
+            let undeclared = stage.inputs.iter().copied().filter(|input| input != &authority).collect::<Vec<_>>();
+            let failure = lower_step(
+                &proof,
+                &stage.stage_id,
+                &undeclared,
+                &[],
+                &paths,
+                cache.path(),
+                &host_digest,
+                &host_digest,
+                &[],
+                &[],
+                &step,
+                &mut bindings,
+            )
+            .unwrap_err();
+            assert!(failure.to_string().contains("undeclared source role in recipe"));
+        }
+    }
+
     #[test]
     fn source_program_path_labels_reject_dot_components() {
         validate_source_recipe(&text_recipe("stagex-transition", "build.v1", "value.v1", "stagex-transition")).unwrap();

@@ -601,6 +601,7 @@ fn mantle_build_inputs(include_stage1: bool) -> Vec<StageAuthorityInput> {
     inputs.extend([
         source_authority(SourceAuthorityRole::MantleSource),
         source_authority(SourceAuthorityRole::VendorInputs),
+        source_authority(SourceAuthorityRole::NativeSourceBundle),
         policy_authority(ProofPolicyRole::Closure),
         policy_authority(ProofPolicyRole::Hermeticity),
         policy_authority(ProofPolicyRole::ProtectedExecution),

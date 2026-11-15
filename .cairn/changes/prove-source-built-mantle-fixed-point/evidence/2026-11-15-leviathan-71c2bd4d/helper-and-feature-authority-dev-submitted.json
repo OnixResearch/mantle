@@ -1,0 +1,8 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1603,
+  "source": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/helper-and-feature-authority-dev.sh",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target",
+  "scope": "Ordinary non-promoted source-built regression execution and strict release Clippy after dependency selector/feature separation and explicit two-stage authority regression. No proof or frozen regular-runner binding."
+}

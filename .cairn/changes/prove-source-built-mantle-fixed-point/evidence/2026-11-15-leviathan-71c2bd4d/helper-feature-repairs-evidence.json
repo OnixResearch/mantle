@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    1602,
+    1603
+  ],
+  "source": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev",
+  "local_code_hashes": "4f53de2c376e24e5ec63098d441f9f57304c6817f790119b12b913360863d643  src/source_built_fixed_point.rs\nace28395feedc75e43107b35a8af3a7c77bf593f757c45fedbd21151a15268a6  src/source_built_recipe.rs\n1bdc2799885f49496421d3843fccf7bfc8ed14751d43e6de7687bc50b4a09efe  src/source_built_rust_programs_minicargo_resolve.rs\n0db2032e5e6e06e8c1b7a917998192bb855329675b838ad3e4d490ce9a3b023f  src/source_built_rust_programs_minicargo_resolve_tests.rs\n",
+  "executed_remote_code_hashes": "4f53de2c376e24e5ec63098d441f9f57304c6817f790119b12b913360863d643  /home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev/src/source_built_fixed_point.rs\nace28395feedc75e43107b35a8af3a7c77bf593f757c45fedbd21151a15268a6  /home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev/src/source_built_recipe.rs\n1bdc2799885f49496421d3843fccf7bfc8ed14751d43e6de7687bc50b4a09efe  /home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev/src/source_built_rust_programs_minicargo_resolve.rs\n0db2032e5e6e06e8c1b7a917998192bb855329675b838ad3e4d490ce9a3b023f  /home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev/src/source_built_rust_programs_minicargo_resolve_tests.rs\n",
+  "code_transfer_equal": true,
+  "remote_log_hashes": "1341002df5111bd50c42408e879da858af4b357d538f32492d9b97f9ef078acb  /home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev.log\n8ca2189c69d23b2fe64b0609a78da373a23bfa2fa0193ceb11f14c55b32aeb37  /home/brittonr/sbfp-20261113-berdKH/helper-and-feature-authority-dev.log\n",
+  "local_log_hashes": "1341002df5111bd50c42408e879da858af4b357d538f32492d9b97f9ef078acb  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/helper-source-authority-dev.log\n8ca2189c69d23b2fe64b0609a78da373a23bfa2fa0193ceb11f14c55b32aeb37  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/helper-and-feature-authority-dev.log\n",
+  "log_transfer_equal": true,
+  "source_built_test_result": "test result: ok. 267 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.72s",
+  "strict_release_clippy": "completed successfully in task1603",
+  "scope": "Ordinary actual development verification of the two fixes. Frozen71c2bd4d source, c9803076 runner and rejected c22381a8 cohort remain separate and unchanged; no fresh proof runner or protected proof accepted."
+}

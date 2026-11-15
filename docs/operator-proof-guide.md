@@ -397,6 +397,12 @@ tree, preserving the existing assembler-probe cut. Authentication must remain a
 genuinely consumed dependency after unused-input pruning
 ([ADR 0149](../adr/0149-keep-semantic-and-authenticated-products-in-execution-closure.md)).
 
+Both Mantle stages explicitly declare the native source bundle containing their
+authored helper source record. Global source availability and an already
+hydrated member do not grant stage-local permission; exact manifest-record and
+member checks and undeclared-role rejection remain in force
+([ADR 0151](../adr/0151-declare-authored-helper-source-authority-in-mantle-stages.md)).
+
 The pipe cut accepts exactly one original single-line `open OUT` statement or
 the complete two-line `open OUT` / `or die` form. It rejects changed or duplicate
 boundaries before evaluating the original script; it does not leave a dangling
@@ -462,6 +468,13 @@ of the authenticated package Tree; absolute and above-root paths remain errors.
 The original manifests are unchanged. Serializing a static command into a
 Produced invocation frame does not bypass typed-word admission: the executor
 decodes and validates that frame before launching the compiler.
+
+Dependency activation markers such as `dep:core` remain internal resolver state,
+not selected compiler features. Optional-edge selection and feature forwarding
+retain their markers while published cfg and `CARGO_FEATURE_*` operands contain
+only named features. Do not rename an invalid marker into a synthetic feature
+or weaken environment-name admission
+([ADR 0152](../adr/0152-keep-dependency-activation-selectors-out-of-compiler-features.md)).
 
 Macro reservations use the existing compact controller engine rather than
 expanding a recipe per reserved invocation ([ADR 0140](../adr/0140-keep-macro-reservations-inside-compact-source-controllers.md)).

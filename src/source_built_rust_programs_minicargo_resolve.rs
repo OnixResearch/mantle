@@ -986,7 +986,12 @@ fn activate(s: &Sources, goals: &[(&str, &[&str])]) -> Result<Topology, RunError
                 break;
             }
         }
-        p.features = active.clone();
+        // Dependency selectors activate edges, not compiler cfg or Cargo environment features.
+        p.features = active
+            .iter()
+            .filter(|feature| !feature.starts_with("dep:") && !feature.contains('/'))
+            .cloned()
+            .collect();
         for (kind, alias, original) in all_deps {
             let group = kind.rsplit('.').next().unwrap_or(&kind);
             if group == "build-dependencies" && p.script.is_none() {

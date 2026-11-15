@@ -1,0 +1,8 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1602,
+  "source": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/helper-source-authority-dev.sh",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-71c2bd4d-fresh-target",
+  "scope": "Ordinary non-promoted development regression and strict Clippy. Warm Cargo artifacts are not runner-source binding or proof authority; no regular binary installation or frozen-source mutation."
+}

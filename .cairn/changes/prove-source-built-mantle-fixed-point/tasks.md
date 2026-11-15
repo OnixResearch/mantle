@@ -504,3 +504,52 @@ in progress under the current `review-contract.md`. The old e9 cohort,
 interrupted 1595, prior model verdicts and historical native rows are not
 substituted. No protected execution has been launched. I3–I5 and proof-dependent
 V2/V3 remain open.
+
+## Current cohort held on confirmed source admission defects (2026-11-15)
+
+Complete profile transfer matched raw BLAKE3 `54f27df5…` and its source-only
+evidence was pushed as `13b8d72a`. The current cohort is nevertheless not
+launchable: both Mantle stages omit the NativeSourceBundle authority used by
+three exact helper ManifestSource members per stage. The unchanged consumer
+rejects all six. The shared stage declaration is repaired without changing
+source pins or recipe validation; actual source-built execution in task 1602
+reported `266 passed; 0 failed; 27 ignored`, including real manifest-member
+lowering and rejection after removing permission even with a populated cache.
+Strict release Clippy also completed. Exact commands/results are retained in
+`evidence/2026-11-15-leviathan-71c2bd4d/helper-source-authority-dev*`.
+
+The graph review separately confirms an invalid `CARGO_FEATURE_DEP:CORE`
+environment operand in a consumed Rust invocation. Dependency activation must
+not be emitted as a Cargo feature; its authoring repair remains open. Other
+raw graph diagnostics include inspector-context errors and incomplete nested
+controller coverage, not thousands of independently established product bugs.
+The incomplete Luna identity inspector is being repaired and executed by the
+parent; its cancelled/failed attempts have no accepted physical verdict.
+
+No protected launch occurred. Preserve the current frozen source/cohort and
+review failures. Product changes require newly frozen/qualified source and
+runner, source-only regeneration and complete current review. I3–I5 and
+proof-dependent V2/V3 remain open.
+
+## Both confirmed author/declaration repairs verified (2026-11-15)
+
+Task 1603 executed the actual source-built leg with `267 passed; 0 failed;
+27 ignored` and strict release Clippy. It includes both Mantle stages' genuine
+helper manifest admission/cached-authority rejection, and resolver selection
+that preserves an activated optional dependency while excluding `dep:` tokens
+from published features and keeping disabled dependencies absent. Local changed
+code BLAKE3 values equal the formatted remote files actually exercised.
+
+The minicargo boundary now matches the existing successor convention: dependency
+selectors remain available for optional-edge activation but do not become cfg
+or Cargo feature-environment names. Exact command/result scope is retained in
+`evidence/2026-11-15-leviathan-71c2bd4d/helper-and-feature-authority-dev*`.
+These ordinary development checks do not bind a replacement frozen runner.
+
+The old `c22381a8…` cohort remains held and untouched. Parent physical v7
+completed all seven role payload comparisons before an inspector confused
+chunk entries with physical files; the corrected audit retains every byte,
+chunk, archive and source-role obligation. Static nested-controller review
+continues. Freeze/publish the verified product changes, qualify a genuinely
+fresh-target runner and regenerate/review a new cohort before any launch.
+I3–I5 and proof-dependent V2/V3 remain open.

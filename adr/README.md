@@ -148,3 +148,5 @@ compatibility surface, crate name, or historical decision.
 | [0148](0148-bind-receipt-source-to-mantle-source-root.md) | Bind the receipt source to Mantle's declared source root | Accepted |
 | [0149](0149-keep-semantic-and-authenticated-products-in-execution-closure.md) | Keep semantic and authenticated products in the execution closure | Accepted |
 | [0150](0150-isolate-cargo-artifacts-when-qualifying-frozen-proof-runners.md) | Isolate Cargo artifacts when qualifying frozen proof runners | Accepted |
+| [0151](0151-declare-authored-helper-source-authority-in-mantle-stages.md) | Declare authored helper source authority in both Mantle stages | Accepted |
+| [0152](0152-keep-dependency-activation-selectors-out-of-compiler-features.md) | Keep dependency activation selectors out of compiler features | Accepted |
