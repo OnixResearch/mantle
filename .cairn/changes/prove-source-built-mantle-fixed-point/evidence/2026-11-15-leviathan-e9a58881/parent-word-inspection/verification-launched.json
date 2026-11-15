@@ -1,0 +1,21 @@
+{
+  "execution_host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "task": 1585,
+  "after_local_task": 26,
+  "baseline_status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T04:06:26.446087066-05:00",
+      "start": "2026-11-15T04:06:26.574423817-05:00",
+      "end": "2026-11-15T04:12:10.503029743-05:00",
+      "result": {
+        "Failed": 101
+      }
+    }
+  },
+  "baseline_test_result": "FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2970 filtered out; finished in 0.00s",
+  "baseline_error": "Build(\"source recipe: untyped filesystem path in literal command word for step profile.compile\")",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/verify-template-repair.sh",
+  "non_claim": "Repaired source verification running; no successful result or final source/cohort/proof qualification yet."
+}

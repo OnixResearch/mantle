@@ -1,0 +1,98 @@
+{
+  "mantle-stage1": [
+    {
+      "arguments": [
+        {
+          "parts": [
+            {
+              "kind": "literal",
+              "text": "--source-package"
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "input",
+              "name": "original-package",
+              "path": ""
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "output",
+              "name": "package",
+              "path": ""
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "input",
+              "name": "original-package",
+              "path": "src/grammar.rs"
+            }
+          ]
+        }
+      ],
+      "id": "unit-00251-script-original-package",
+      "original_package": {
+        "kind": "source",
+        "path": "nickel-lang-parser",
+        "role": "vendor-inputs"
+      },
+      "package_output_kind": "tree"
+    }
+  ],
+  "mantle-stage2": [
+    {
+      "arguments": [
+        {
+          "parts": [
+            {
+              "kind": "literal",
+              "text": "--source-package"
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "input",
+              "name": "original-package",
+              "path": ""
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "output",
+              "name": "package",
+              "path": ""
+            }
+          ]
+        },
+        {
+          "parts": [
+            {
+              "kind": "input",
+              "name": "original-package",
+              "path": "src/grammar.rs"
+            }
+          ]
+        }
+      ],
+      "id": "unit-00251-script-original-package",
+      "original_package": {
+        "kind": "source",
+        "path": "nickel-lang-parser",
+        "role": "vendor-inputs"
+      },
+      "package_output_kind": "tree"
+    }
+  ]
+}

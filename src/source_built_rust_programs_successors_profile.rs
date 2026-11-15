@@ -5,10 +5,16 @@ use super::error;
 use super::lit;
 use super::resolve;
 use crate::errors::RunError;
+use crate::source_built_recipe::WordPart;
 pub(super) struct Profile {
     pub arguments: Vec<RecipeWord>,
     pub incremental: bool,
     pub debug: bool,
+}
+fn data(text: &str) -> RecipeWord {
+    RecipeWord {
+        parts: vec![WordPart::LiteralData { text: text.into() }],
+    }
 }
 pub(super) fn select(
     sources: &resolve::Sources,
@@ -22,7 +28,7 @@ pub(super) fn select(
                 lit("-Cdebug-assertions=off"),
                 lit("-Coverflow-checks=off"),
                 lit("-Cdebuginfo=0"),
-                lit("-Clink-args=-Wl,-rpath,$ORIGIN/../lib"),
+                data("-Clink-args=-Wl,-rpath,$ORIGIN/../lib"),
             ],
             incremental: false,
             debug: false,
@@ -92,7 +98,7 @@ pub(super) fn select(
     if boolean("rpath", true)? {
         arguments.extend([
             lit("-Clink-args=-Wl,-z,origin"),
-            lit("-Clink-args=-Wl,-rpath,$ORIGIN/../lib"),
+            data("-Clink-args=-Wl,-rpath,$ORIGIN/../lib"),
         ]);
     }
     if standard {
@@ -132,3 +138,7 @@ pub(super) fn select(
         debug: debug != "0" && debug != "none",
     })
 }
+
+#[cfg(test)]
+#[path = "source_built_rust_programs_successors_profile_tests.rs"]
+mod tests;

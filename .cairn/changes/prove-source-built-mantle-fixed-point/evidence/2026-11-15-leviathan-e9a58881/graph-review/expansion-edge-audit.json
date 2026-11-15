@@ -1,0 +1,686 @@
+{
+  "cold_route": {
+    "mantle_recipes": [
+      "bootstrap/source-built/mantle-stage1.json",
+      "bootstrap/source-built/mantle-stage2.json"
+    ],
+    "native": {
+      "index_member": "source-built/native/program.expansion.json",
+      "recipe_member": "source-built/native/program.json",
+      "record_identity": "fixed-point-native-source-program"
+    },
+    "rust_provider": {
+      "kind": "source",
+      "path": "source-built/rust/program.json",
+      "role": "rust-source-archive-set"
+    },
+    "schema": "mantle-source-built-cold-route-v1",
+    "stagex_publication": {
+      "kind": "manifest-source",
+      "member": "stagex-provider-publication.json",
+      "record_identity": "source-built-stagex-programs",
+      "role": "native-source-bundle"
+    },
+    "stagex_transition": {
+      "kind": "manifest-source",
+      "member": "stagex-transition.json",
+      "record_identity": "source-built-stagex-programs",
+      "role": "native-source-bundle"
+    }
+  },
+  "input_file_identities": {
+    "cold_route": {
+      "blake3": "6f3b0dc936212936cc49067449f56bf63180099940b8e8574be0c177bd950040",
+      "bytes": 902,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/mantle-source/bootstrap/source-built-cold-route.json",
+      "sha256": "fd4c5e7ab9b8d408cc69859786b371eccd602051642311ae588d60c910fa7ec1"
+    },
+    "lineage": {
+      "blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "bytes": 170686,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/stagex-lineage/stagex-transition-lineage.json",
+      "sha256": "6f7e2808e0f9d29d7cf9926dbf45852e2efa50b27cc0fd3e782d4bae12b95146"
+    },
+    "native_index": {
+      "blake3": "35927a6242fda8c9eb5c2457624d5592163e9556cd572b9af47e644d065c38b8",
+      "bytes": 639412,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/fixed-point-native-source-program/source-built/native/program.expansion.json",
+      "sha256": "95eb25db24ccbc316c7f92b4db6916f2ee586ae09ac5f5aa5da2534a2474dfc4"
+    },
+    "native_recipe": {
+      "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c",
+      "bytes": 18268649,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+      "sha256": "d969059f0e3cdbaf305842bb60754c5410f2f86738b32de3e6253db604039039"
+    },
+    "publication_index": {
+      "blake3": "3912c022ed921a8dd11f8284062fd8fad9c8d93332d2b3ecd84865d317af2b51",
+      "bytes": 325,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-provider-publication.json.expansion.json",
+      "sha256": "be247eef6b8549e7e70474044b8b242a49df9abdc3ce518a67ce6158b47976ef"
+    },
+    "publication_recipe": {
+      "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+      "bytes": 52226,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+      "sha256": "f75e90370cfef6171608f07dd227eff59181ba86d949759f4e8a0cf0c9f73eed"
+    },
+    "rust_index": {
+      "blake3": "82a27d0ac53f70ff44f45796a522bafdb78003e722c9a287c7d4203f1c205eee",
+      "bytes": 4827279,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/rust-source-archives/source-built/rust/program.json.expansion.json",
+      "sha256": "36e78fc17869baa3694b9e939b10777f3282539d2780cad442ff26ed0934f41d"
+    },
+    "rust_recipe": {
+      "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+      "bytes": 259029252,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/rust-source-archives/source-built/rust/program.json",
+      "sha256": "139998e7d76b23bb6bd2c757afadcf0b22d74bdfbb9754b379acbcf8169ce2fe"
+    },
+    "rust_route": {
+      "blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff",
+      "bytes": 5543,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/rust-source-archives/cairn/rust/rust-source-musl-host-plan.ncl",
+      "sha256": "fd2a27581b65034ccf49ae8ba21e866f83c99bb6bb2e81849df939e6c9162768"
+    },
+    "stagex_index": {
+      "blake3": "8c9e88c95737bc24d02c64ed36b6a2180c3980a1264681951b7ca5c81c115564",
+      "bytes": 367497,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-transition.json.expansion.json",
+      "sha256": "782a528706a2381c4b60175d4cc1aa0b1de027cd18ac326422d95d28508b2e5f"
+    },
+    "stagex_recipe": {
+      "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+      "bytes": 31730468,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-transition.json",
+      "sha256": "4b61fc5b4c84ac4dc6fd5e168967af5cd3bca6659cf8d979cf7159e05da0c961"
+    }
+  },
+  "native_expansion": {
+    "derivation_count": 88,
+    "derivation_output_reference_checks": 88,
+    "derivations_with_input_sources": 9,
+    "edge_refs_attached_to_some_declared_step_input": 341,
+    "edge_refs_used_as_actual_operation_inputs": 340,
+    "index_schema": "mantle-native-source-expansion-v1",
+    "input_derivation_output_edge_count": 341,
+    "input_source_path_count": 11,
+    "invalid_derivation_output_count": 0,
+    "invalid_derivation_output_examples": [],
+    "missing_actual_edge_count": 1,
+    "missing_actual_examples": [
+      {
+        "dependency": "/mantle/store/rksa2xdbf7r5rjfhckkvhpfpqql8is8y-make-4.4.1-full-source-gcc10-v1.drv",
+        "derivation": "/mantle/store/9bg51ihqk8kj3lsc3cvkgg9b97g507p4-linux-headers-6.6-full-source-gcc10-v3.drv",
+        "failure": "not-used",
+        "output": "out"
+      }
+    ],
+    "missing_declared_edge_count": 0,
+    "missing_declared_examples": [],
+    "partition": {
+      "assigned_step_count": 5122,
+      "duplicate_assignment_count": 0,
+      "invalid_node_output_count": 0,
+      "invalid_node_output_examples": [],
+      "node_count": 88,
+      "output_reference_count": 88,
+      "recipe_step_count": 5122,
+      "steps_with_unused_declared_inputs": 71,
+      "unclassified_step_count": 0,
+      "unclassified_step_examples": [],
+      "unused_input_examples": [
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-0",
+          "unused_reference_count": 1
+        },
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-1",
+          "unused_reference_count": 1
+        },
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-2",
+          "unused_reference_count": 1
+        },
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-3",
+          "unused_reference_count": 1
+        },
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-4",
+          "unused_reference_count": 1
+        },
+        {
+          "step_id": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-5",
+          "unused_reference_count": 1
+        }
+      ]
+    },
+    "recipe_member": "source-built/native/program.json",
+    "root_count": 7,
+    "roots": [
+      "/mantle/store/k8kzhb6mmar9h4fq7x40qz7pjj5lz0k5-full-source-seed-toolchain.drv",
+      "/mantle/store/rksa2xdbf7r5rjfhckkvhpfpqql8is8y-make-4.4.1-full-source-gcc10-v1.drv",
+      "/mantle/store/9bg51ihqk8kj3lsc3cvkgg9b97g507p4-linux-headers-6.6-full-source-gcc10-v3.drv",
+      "/mantle/store/69vh26v8glyhkh95js10nqzy19j3pg3m-busybox-1.37.0-full-source-gcc10-v1.drv",
+      "/mantle/store/hgjyl8jq2gzp2wljljl5hw5pd2dbqvdd-cmake-3.31.8-full-source-gcc10-v1.drv",
+      "/mantle/store/z11n8gyvvxw6caq90yyj2qqamn39ydns-python-3.13.5-full-source-gcc10-v1.drv",
+      "/mantle/store/kgqwawykanibq3vrjks0javhfhyasrks-perl-5.10.1-full-source-gcc10-v5.drv"
+    ],
+    "source_examples": [
+      {
+        "derivation": "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 2,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-link-seams.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/gcc-phases.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "input_source_count": 2,
+        "typed_source_ref_count": 4,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/generated.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-df4eeb7fb7927984b78141f793f57e1fc84ad27495e03af4b74243c65ab95f2e.host.setup-controller.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-df4eeb7fb7927984b78141f793f57e1fc84ad27495e03af4b74243c65ab95f2e.host.setup-projector.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/final-gnu-source-patch.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 1,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-adapter.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/9shyg439d7lmi9f3j94l1w3w02qdbp0i-gcc-4.0.4-native-gas-v45.drv",
+        "input_source_count": 2,
+        "typed_source_ref_count": 10,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/host-make-original.ncl",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/host-bzip2.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-collect2-patch.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/host-bzip2-libc.h",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 5,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-f5dbd06608f854b76db61f3740132039798cbc5c912e72fd0d4702bb9bf88724.host.setup-controller.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-collect2-patch.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-collect2-phase.inc",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-gcc4-query-patch.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/k1li54xnx3snl92l62kyin3flmjdsw2y-musl-1.1.24-gcc-pass3-v5.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 2,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-cb2c86ba1efc7397d1470e89e1f92727affbd5ad486f2c40be296c98d1f76c37.host.setup-controller.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-cb2c86ba1efc7397d1470e89e1f92727affbd5ad486f2c40be296c98d1f76c37.host.setup-projector.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/l0m8807z4i1cvr0grnr8pxy430hz8ynf-gcc-4.0.4-musl-pass3-v23.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 5,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-033cd2c826eeff729488832f6614e10d75fa192ed599b8293a30d7300782f252.host.setup-controller.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-033cd2c826eeff729488832f6614e10d75fa192ed599b8293a30d7300782f252.host.setup-projector.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-collect2-patch.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-collect2-phase.inc",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 1,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/early-gnu-adapter.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      },
+      {
+        "derivation": "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv",
+        "input_source_count": 1,
+        "typed_source_ref_count": 2,
+        "typed_source_refs": [
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-f6f6056876f3d4af7debe55a454d335bbdafd2c2de4d34235b99bedcf257c931.host.setup-controller.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          },
+          {
+            "kind": "manifest-source",
+            "member": "source-built/native/original-f6f6056876f3d4af7debe55a454d335bbdafd2c2de4d34235b99bedcf257c931.host.setup-projector.c",
+            "record_identity": "fixed-point-native-source-program",
+            "role": "native-source-bundle"
+          }
+        ]
+      }
+    ],
+    "source_nodes_with_any_typed_Source_or_ManifestSource_actual_input": 9
+  },
+  "publication_index": {
+    "all_command_steps_present": true,
+    "binutils_admitted": false,
+    "distinct_command_ids": 4,
+    "recipe_member": "stagex-provider-publication.json",
+    "recipe_step_count": 18,
+    "schema": "mantle-stagex-source-expansion-v1",
+    "validation_command_count": 4,
+    "validation_commands": {
+      "runtime-supplement": "runtime-supplement",
+      "tcc-execution": "tcc-execution",
+      "tcc-negative": "tcc-negative",
+      "tcc-positive": "tcc-positive"
+    }
+  },
+  "rust_route_and_expansion": {
+    "archive_checks": [
+      {
+        "actual_sha256": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+        "id": "mrustc-0.12.0",
+        "path": "mrustc-0.12.0.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+        "sha256_matches": true
+      },
+      {
+        "actual_sha256": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+        "id": "rust-1.90.0",
+        "path": "rust-1.90.0.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+        "sha256_matches": true
+      },
+      {
+        "actual_sha256": "38dce205d39f61571261f0444237a1ce9efecb970e760d8ec4d957af5b445723",
+        "id": "rust-1.91.1",
+        "path": "rust-1.91.1.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "38dce205d39f61571261f0444237a1ce9efecb970e760d8ec4d957af5b445723",
+        "sha256_matches": true
+      },
+      {
+        "actual_sha256": "9e0d2ca75c7e275fdc758255bf4b03afb3d65d1543602746907c933b6901c3b8",
+        "id": "rust-1.92.0",
+        "path": "rust-1.92.0.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "9e0d2ca75c7e275fdc758255bf4b03afb3d65d1543602746907c933b6901c3b8",
+        "sha256_matches": true
+      },
+      {
+        "actual_sha256": "4c230a44b3d9c9f3cef950943719f8380058d27c91fda5e36a9a947ef013e01f",
+        "id": "rust-1.93.1",
+        "path": "rust-1.93.1.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "4c230a44b3d9c9f3cef950943719f8380058d27c91fda5e36a9a947ef013e01f",
+        "sha256_matches": true
+      },
+      {
+        "actual_sha256": "4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514",
+        "id": "rust-1.94.1",
+        "path": "rust-1.94.1.tar.gz",
+        "ref_valid": true,
+        "route_sha256": "4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514",
+        "sha256_matches": true
+      }
+    ],
+    "archive_identity_failures": 0,
+    "archive_key_set_matches_route": true,
+    "bootstrap_compiler_exec_checks": 4,
+    "bootstrap_output_checks": 16,
+    "cargo_exec_count": 0,
+    "cargo_exec_examples": [],
+    "cargo_executable_reference": {
+      "action_id": "full-source-rust-provider/successor-1.94.1.tools.cargo.cargo.0.95.0.target.bin.cargo.link.native-products",
+      "kind": "produced",
+      "output_id": "artifact"
+    },
+    "final_export_matches": {
+      "cargo": true,
+      "host-rustlib": true,
+      "provider-receipt": true,
+      "rustc": true,
+      "rustdoc": true,
+      "target-rustlib": true
+    },
+    "index_archive_count": 6,
+    "index_recipe_path": "source-built/rust/program.json",
+    "index_route_path": "cairn/rust/rust-source-musl-host-plan.ncl",
+    "index_schema": "mantle-rust-source-expansion-v1",
+    "index_stage_count": 5,
+    "missing_bootstrap_compiler_execs": [],
+    "missing_bootstrap_output_count": 0,
+    "missing_bootstrap_outputs": [],
+    "missing_source_edge_count": 0,
+    "missing_source_edges": [],
+    "native_role_missing": [],
+    "native_role_usage": {
+      "host.busybox": true,
+      "host.cmake": true,
+      "host.make": true,
+      "host.perl": true,
+      "host.python": true,
+      "linux.headers": true,
+      "native.ar": true,
+      "native.as": true,
+      "native.cc1": true,
+      "native.cc1plus": true,
+      "native.ld": true,
+      "native.libc": true,
+      "native.libgcc": true,
+      "native.libgcc-eh": true,
+      "native.libstdcxx": true,
+      "native.loader": true,
+      "native.nm": true,
+      "native.objcopy": true,
+      "native.provider": true,
+      "native.ranlib": true,
+      "native.readelf": true,
+      "native.strip": true,
+      "native.sysroot": true
+    },
+    "node_output_checks": 22,
+    "node_output_failure_count": 0,
+    "node_output_failures": [],
+    "partition": {
+      "assigned_step_count": 63882,
+      "duplicate_assignment_count": 0,
+      "invalid_node_output_count": 0,
+      "invalid_node_output_examples": [],
+      "node_count": 5,
+      "output_reference_count": 22,
+      "recipe_step_count": 63882,
+      "steps_with_unused_declared_inputs": 0,
+      "unclassified_step_count": 0,
+      "unclassified_step_examples": [],
+      "unused_input_examples": []
+    },
+    "provider_export": {
+      "action_id": "full-source-rust-provider/successor-1.94.1.provider",
+      "kind": "produced",
+      "output_id": "full-source-rust-provider"
+    },
+    "route_final_outputs": [
+      "rustc",
+      "cargo",
+      "rustdoc",
+      "host-rustlib",
+      "target-rustlib",
+      "provider-receipt"
+    ],
+    "route_policy": {
+      "forbids_prebuilt_rust": true,
+      "source_built": true,
+      "uses_prebuilt_rust": false
+    },
+    "route_source_blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff",
+    "route_source_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/rust-source-archives/cairn/rust/rust-source-musl-host-plan.ncl",
+    "route_source_sha256": "fd2a27581b65034ccf49ae8ba21e866f83c99bb6bb2e81849df939e6c9162768",
+    "route_sources": [
+      "mrustc-0.12.0",
+      "rust-1.90.0",
+      "rust-1.91.1",
+      "rust-1.92.0",
+      "rust-1.93.1",
+      "rust-1.94.1"
+    ],
+    "route_stages": [
+      {
+        "bootstrap_stage_id": "",
+        "id": "mrustc-to-rust-1.90.0",
+        "kind": "mrustc-seed",
+        "outputs": [
+          "rustc",
+          "cargo",
+          "host-rustlib",
+          "target-rustlib"
+        ],
+        "rust_version": "1.90.0",
+        "source_ids": [
+          "mrustc-0.12.0",
+          "rust-1.90.0"
+        ]
+      },
+      {
+        "bootstrap_stage_id": "mrustc-to-rust-1.90.0",
+        "id": "rust-1.91.1-stage1",
+        "kind": "rustc-stage1",
+        "outputs": [
+          "rustc",
+          "cargo",
+          "host-rustlib",
+          "target-rustlib"
+        ],
+        "rust_version": "1.91.1",
+        "source_ids": [
+          "rust-1.91.1"
+        ]
+      },
+      {
+        "bootstrap_stage_id": "rust-1.91.1-stage1",
+        "id": "rust-1.92.0-stage1",
+        "kind": "rustc-stage1",
+        "outputs": [
+          "rustc",
+          "cargo",
+          "host-rustlib",
+          "target-rustlib"
+        ],
+        "rust_version": "1.92.0",
+        "source_ids": [
+          "rust-1.92.0"
+        ]
+      },
+      {
+        "bootstrap_stage_id": "rust-1.92.0-stage1",
+        "id": "rust-1.93.1-stage1",
+        "kind": "rustc-stage1",
+        "outputs": [
+          "rustc",
+          "cargo",
+          "host-rustlib",
+          "target-rustlib"
+        ],
+        "rust_version": "1.93.1",
+        "source_ids": [
+          "rust-1.93.1"
+        ]
+      },
+      {
+        "bootstrap_stage_id": "rust-1.93.1-stage1",
+        "id": "rust-1.94.1-final",
+        "kind": "rustc-final",
+        "outputs": [
+          "rustc",
+          "cargo",
+          "rustdoc",
+          "host-rustlib",
+          "target-rustlib",
+          "provider-receipt"
+        ],
+        "rust_version": "1.94.1",
+        "source_ids": [
+          "rust-1.94.1"
+        ]
+      }
+    ],
+    "route_was_evaluated": false,
+    "source_edge_checks": 6,
+    "stage_key_set_matches_route": true,
+    "toolchain_closure_export": {
+      "action_id": "full-source-rust-provider/successor-1.94.1.receipt",
+      "kind": "produced",
+      "output_id": "receipt"
+    }
+  },
+  "scope": "Read-only current source/index/route/lineage data audit; static NCL text only, no NCL evaluation and no product/helper/recipe execution.",
+  "stagex_lineage_and_index": {
+    "actual_dependency_checks": 0,
+    "authored_disposition_edge_count": 12,
+    "generated_artifact_mapped_count": 241,
+    "generated_artifact_missing": [],
+    "index_counts": {
+      "patches": 2,
+      "sources": 130,
+      "tools": 69
+    },
+    "lineage_counts": {
+      "generated_artifacts": 241,
+      "patches": 2,
+      "provider_outputs": 4,
+      "source_artifacts": 130,
+      "stage_graph": 132,
+      "transition_tools": 69
+    },
+    "lineage_edge_failure_count": 0,
+    "lineage_edge_failures": [],
+    "lineage_stage_graph_edge_count": 132,
+    "missing_actual_examples": [],
+    "missing_actual_original_input_edge_count": 0,
+    "output_inventories_match": true,
+    "partition": {
+      "assigned_step_count": 8131,
+      "duplicate_assignment_count": 0,
+      "invalid_node_output_count": 0,
+      "invalid_node_output_examples": [],
+      "node_count": 69,
+      "output_reference_count": 241,
+      "recipe_step_count": 8131,
+      "steps_with_unused_declared_inputs": 0,
+      "unclassified_step_count": 0,
+      "unclassified_step_examples": [],
+      "unused_input_examples": []
+    },
+    "provider_output_checks": 4,
+    "provider_output_failure_count": 0,
+    "provider_output_failures": [],
+    "required_original_input_edge_count": 380,
+    "set_checks": {
+      "artifact_ids_unique": true,
+      "patch_ids_match": true,
+      "source_ids_match": true,
+      "tool_ids_match": true
+    },
+    "skipped_edges_to_admitted_source_count": 132
+  }
+}

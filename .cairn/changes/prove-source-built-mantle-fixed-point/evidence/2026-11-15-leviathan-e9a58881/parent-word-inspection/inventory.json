@@ -1,0 +1,39 @@
+{
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index",
+  "manifest_blake3": "3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946",
+  "consumer_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-e9a58881-typed-index/src/source_built_recipe.rs",
+  "consumer_blake3": "28ca15f8081b88c5747a851a1474d92277fba142f0b7fdfa1f74d8a48374d009",
+  "recipe_hash_expectation_source": "Current Luna graph report, cross-binding only; not a new authority pin",
+  "recipes": [
+    {
+      "stage": "full-source-native-provider",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+      "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c"
+    },
+    {
+      "stage": "full-source-rust-provider",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/fixed-point-rust-source-program/source-built/rust/program.json",
+      "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407"
+    },
+    {
+      "stage": "mantle-stage1",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+      "blake3": "232558ac7cc4cdc4abd79159b20f8f34f34a26490d6c2cbca3c73ac91444d877"
+    },
+    {
+      "stage": "mantle-stage2",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+      "blake3": "9cc7a1bdcd5bb297d1a602763935c791000a6364e3a7692c2e9b4b4dd5c6820e"
+    },
+    {
+      "stage": "stagex-provider-publication",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+      "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8"
+    },
+    {
+      "stage": "stagex-transition",
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-transition.json",
+      "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34"
+    }
+  ]
+}

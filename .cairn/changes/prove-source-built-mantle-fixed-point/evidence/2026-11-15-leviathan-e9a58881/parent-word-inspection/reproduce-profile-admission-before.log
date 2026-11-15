@@ -1,0 +1,63 @@
+warning: unable to download 'https://nix-community.cachix.org/q7in6vj1l6qnd10dn2r9xqynlxhx8s8c.narinfo': Timeout was reached (28) Connection timed out after 5000 milliseconds; retrying in 30 ms (attempt 1/5)
+warning: unable to download 'https://nix-community.cachix.org/q7in6vj1l6qnd10dn2r9xqynlxhx8s8c.narinfo': Timeout was reached (28) Connection timed out after 5001 milliseconds; retrying in 135 ms (attempt 2/5)
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/onix-artifact.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/mantle.git', using 'master'
+warning: /home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before)
+    Finished `release` profile [optimized] target(s) in 4m 49s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target/release/deps/mantle-61d96712292a8e06)
+
+running 1 test
+test source_built_rust_programs::successors::profile::tests::original_rpath_profile_survives_strict_deferred_invocation_admission ... FAILED
+
+failures:
+
+---- source_built_rust_programs::successors::profile::tests::original_rpath_profile_survives_strict_deferred_invocation_admission stdout ----
+
+thread 'source_built_rust_programs::successors::profile::tests::original_rpath_profile_survives_strict_deferred_invocation_admission' (1453997) panicked at src/source_built_rust_programs_successors_profile_tests.rs:72:102:
+called `Result::unwrap()` on an `Err` value: Build("source recipe: untyped filesystem path in literal command word for step profile.compile")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    source_built_rust_programs::successors::profile::tests::original_rpath_profile_survives_strict_deferred_invocation_admission
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2970 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
+regression_exit=101

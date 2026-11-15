@@ -1,0 +1,24 @@
+{
+  "command": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-e9a58881-typed-index.sh",
+  "local_command_blake3": "7d12b748f761122b88f611e347050fcb7887e2a378450f92d5ed1bb58fa6d93f",
+  "installed_command_blake3": "7d12b748f761122b88f611e347050fcb7887e2a378450f92d5ed1bb58fa6d93f",
+  "command_transfer_equal": true,
+  "bindings": {
+    "code_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+    "runner_blake3": "76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504",
+    "manifest_blake3": "3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946",
+    "raw_profile_blake3": "32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf",
+    "report_blake3": "3c848d614b58613cafb88f2eaf1affad95fa18c642f49eb7b95df4932adc5b96",
+    "stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f"
+  },
+  "budgets": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "exec_events_max": 524288,
+    "source_records_max": 65536,
+    "jobs": 16
+  },
+  "review_gate": "Current graph.accepted, identity.accepted and full profile_transfer_equal must all be true in the exact source/manifest/byte-bound launch record.",
+  "non_claim": "Command-input/byte binding only; command remains unlaunched pending current independent review verdicts."
+}

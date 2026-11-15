@@ -1,0 +1,10 @@
+{
+  "queue_host": "local workstation",
+  "pueue_task": 26,
+  "execution_host": "leviathan.cymric-daggertooth.ts.net",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before.sh",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/reproduce-profile-admission-e9a58881-before.log",
+  "subject": "Frozen e9 product sources plus new profile admission regression only; no authoring fix in this isolated tree",
+  "non_claim": "Execution result pending; not a proof or a regenerated cohort."
+}

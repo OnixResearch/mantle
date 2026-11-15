@@ -510,3 +510,22 @@ fn one_manifest_cannot_merge_local_and_registry_lock_authorities() {
     );
     assert!(resolve(&sources, &[("app/Cargo.toml", &[])]).is_err());
 }
+
+#[test]
+fn manifest_source_members_resolve_siblings_without_escaping_the_archive() {
+    for (original, expected) in [
+        (
+            "rustc-1.90.0-src/compiler/rustc_proc_macro/../../library/proc_macro/src/lib.rs",
+            "rustc-1.90.0-src/library/proc_macro/src/lib.rs",
+        ),
+        (
+            "source/rustc-1.94.1-src/vendor/im-rc-15.1.0/./src/lib.rs",
+            "source/rustc-1.94.1-src/vendor/im-rc-15.1.0/src/lib.rs",
+        ),
+    ] {
+        assert_eq!(normalize("", original).unwrap(), expected);
+    }
+    for escaped in ["../outside.rs", "rustc-1.90.0-src/../../outside.rs", "/outside.rs"] {
+        assert!(normalize("", escaped).is_err(), "admitted out-of-archive source {escaped:?}");
+    }
+}

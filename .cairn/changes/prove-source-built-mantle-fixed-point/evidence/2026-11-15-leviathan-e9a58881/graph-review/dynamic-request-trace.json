@@ -1,0 +1,511 @@
+{
+  "candidate_issue_counts": {
+    "literal_filesystem_path": 2931,
+    "noncanonical_member": 12
+  },
+  "candidate_producer_count": 2933,
+  "candidate_word_count": 2943,
+  "consumer_operation_kinds": {
+    "exec": 2933
+  },
+  "consumer_source_blake3": "28ca15f8081b88c5747a851a1474d92277fba142f0b7fdfa1f74d8a48374d009",
+  "guarded_consumer_count": 0,
+  "immediate_consumer_count": 2933,
+  "parent_trace_recipe": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/fixed-point-rust-source-program/source-built/rust/program.json",
+  "parent_trace_recipe_blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+  "producer_operation_kinds": {
+    "write-text": 2933
+  },
+  "producer_output_kinds": {
+    "text": 2933
+  },
+  "recipe_bytes": 259029252,
+  "routed_recipe": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/inputs/rust-source-archives/source-built/rust/program.json",
+  "routed_recipe_blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+  "samples": [
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.cargo.242.im-rc.library.translate"
+        }
+      ],
+      "issue": "noncanonical_member",
+      "producer": "full-source-rust-provider/minicargo.cargo.242.im-rc.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "input",
+            "name": "package",
+            "path": "rustc-1.90.0-src/vendor/im-rc-15.1.0/./src/lib.rs"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.cargo.269.regex.library.translate"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/minicargo.cargo.269.regex.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "feature=\"regex-syntax/default\""
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.cargo.74.tracing-core.library.translate"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/minicargo.cargo.74.tracing-core.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "feature=\"valuable?/std\""
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.rustc.194.rustc_proc_macro.library.translate"
+        }
+      ],
+      "issue": "noncanonical_member",
+      "producer": "full-source-rust-provider/minicargo.rustc.194.rustc_proc_macro.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "input",
+            "name": "package",
+            "path": "rustc-1.90.0-src/compiler/rustc_proc_macro/../../library/proc_macro/src/lib.rs"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.rustc.35.regex.library.translate"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/minicargo.rustc.35.regex.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "feature=\"regex-syntax/default\""
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "workspace-invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "minicargo.rustc.85.tracing-core.library.translate"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/minicargo.rustc.85.tracing-core.library.translate.workspace-invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "feature=\"valuable/std\""
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.adler2.2.0.1.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.adler2.2.0.1.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.aho-corasick.1.1.3.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.aho-corasick.1.1.3.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.allocator-api2.0.2.21.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.allocator-api2.0.2.21.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.annotate-snippets.0.11.5.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.annotate-snippets.0.11.5.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.anstyle.1.0.11.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.anstyle.1.0.11.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.ar_5farchive_5fwriter.0.4.2.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.ar_5farchive_5fwriter.0.4.2.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.arrayref.0.3.9.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.arrayref.0.3.9.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.arrayvec.0.7.6.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.arrayvec.0.7.6.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.bitflags.2.9.1.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.bitflags.2.9.1.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.blake3.1.8.2.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.blake3.1.8.2.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.block-buffer.0.10.4.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.block-buffer.0.10.4.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.bstr.1.12.0.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.bstr.1.12.0.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.cc.1.2.16.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.cc.1.2.16.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.cfg-if.1.0.1.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.cfg-if.1.0.1.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.constant_5ftime_5feq.0.3.1.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.constant_5ftime_5feq.0.3.1.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.cpufeatures.0.2.17.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.cpufeatures.0.2.17.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.crc32fast.1.5.0.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.crc32fast.1.5.0.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    },
+    {
+      "consumers": [
+        {
+          "alias": "invocation",
+          "guarded": false,
+          "kind": "exec",
+          "step_id": "successor-1.90.0.compiler.compiler.crossbeam-deque.0.8.6.target.lib.rlib"
+        }
+      ],
+      "issue": "literal_filesystem_path",
+      "producer": "full-source-rust-provider/successor-1.90.0.compiler.compiler.crossbeam-deque.0.8.6.target.lib.rlib.invocation",
+      "word": {
+        "parts": [
+          {
+            "kind": "literal",
+            "text": "-Clink-args=-Wl,-rpath,$ORIGIN/../lib"
+          }
+        ]
+      }
+    }
+  ],
+  "scope": "Read-only static trace from current Rust WriteText outputs through exact Produced request input to frozen Exec invocation parser; no product execution.",
+  "step_count": 63882
+}

@@ -1,0 +1,11 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "interpreter": "/nix/store/bya4ansy58az5133kryqp2cvrxbnz8qy-python3-3.14.10/bin/python3",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/parent-word-e9a58881.BzOgRZ/scan.py",
+  "inventory": "/home/brittonr/sbfp-20261113-berdKH/parent-word-e9a58881.BzOgRZ/inventory.json",
+  "result": "/home/brittonr/sbfp-20261113-berdKH/parent-word-e9a58881.BzOgRZ/result.json",
+  "exit_code": 0,
+  "local_result_blake3": "b15af04c596b0943e6a54fc9cf4af41721c441f2565cc86876e169ac5ee11f05",
+  "scope": "all direct RecipeWord dictionaries: lexical/shape checks only; encoded JSON data candidates reported separately",
+  "non_claim": "Context-free lexical/shape inspection only; not complete alias/kind/lineage/operation validation or a launch/proof verdict."
+}

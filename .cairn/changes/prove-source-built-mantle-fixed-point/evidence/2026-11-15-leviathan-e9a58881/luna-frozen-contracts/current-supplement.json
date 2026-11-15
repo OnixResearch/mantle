@@ -1,0 +1,322 @@
+{
+  "boundary": "Static publication/export/guard/native owner checks, not a re-execution of product recipes, source expansion lineage, generated invocation requests or actual provider validation.",
+  "issues": {},
+  "native_provider": {
+    "canonical_roles": [
+      "native.provider",
+      "native.sysroot",
+      "native.runtime"
+    ],
+    "canonical_tree": {
+      "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.canonical-provider",
+      "kind": "produced",
+      "output_id": "full-source-native-provider"
+    },
+    "producer_kind": "tree",
+    "valid": true
+  },
+  "per_recipe": {
+    "mantle-stage1": {
+      "counts": {
+        "cwd_input_bindings": 602,
+        "guarded_commands": 40,
+        "invocation_input_bindings": 1697,
+        "native_script_text_bindings": 1095,
+        "phase_observations": 40
+      },
+      "samples": {
+        "guard_conditions": [
+          {
+            "action": "mantle-stage1/unit-00005-script-probe-2",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage1/unit-00005-script-probe-3",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage1/unit-00011-script-probe-0",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage1/unit-00032-script-probe-0",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          }
+        ],
+        "observations": [
+          {
+            "action": "mantle-stage1/unit-00005-script-probe-2-observed",
+            "phase": "mantle-stage1/unit-00005-script-probe-2",
+            "state": null
+          },
+          {
+            "action": "mantle-stage1/unit-00005-script-probe-3-observed",
+            "phase": "mantle-stage1/unit-00005-script-probe-3",
+            "state": null
+          },
+          {
+            "action": "mantle-stage1/unit-00011-script-probe-0-observed",
+            "phase": "mantle-stage1/unit-00011-script-probe-0",
+            "state": null
+          },
+          {
+            "action": "mantle-stage1/unit-00032-script-probe-0-observed",
+            "phase": "mantle-stage1/unit-00032-script-probe-0",
+            "state": null
+          }
+        ],
+        "optional_direct_inputs": [],
+        "perlasm_authenticated": [
+          {
+            "action": "mantle-stage1/unit-00031-script.sources.perl-0.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage1/unit-00031-script.sources.perl-0.generate",
+                "reference": {
+                  "action_id": "mantle-stage1/unit-00031-script.sources.perl-0.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage1/unit-00031-script.sources.perl-1.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage1/unit-00031-script.sources.perl-1.generate",
+                "reference": {
+                  "action_id": "mantle-stage1/unit-00031-script.sources.perl-1.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage1/unit-00031-script.sources.perl-2.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage1/unit-00031-script.sources.perl-2.generate",
+                "reference": {
+                  "action_id": "mantle-stage1/unit-00031-script.sources.perl-2.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "mantle-stage2": {
+      "counts": {
+        "cwd_input_bindings": 602,
+        "guarded_commands": 40,
+        "invocation_input_bindings": 1697,
+        "native_script_text_bindings": 1095,
+        "phase_observations": 40
+      },
+      "samples": {
+        "guard_conditions": [
+          {
+            "action": "mantle-stage2/unit-00005-script-probe-2",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage2/unit-00005-script-probe-3",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage2/unit-00011-script-probe-0",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage2/unit-00032-script-probe-0",
+            "conditions": [
+              {
+                "accepted_codes": [
+                  75
+                ],
+                "status_input": "continuation-status"
+              }
+            ]
+          }
+        ],
+        "observations": [
+          {
+            "action": "mantle-stage2/unit-00005-script-probe-2-observed",
+            "phase": "mantle-stage2/unit-00005-script-probe-2",
+            "state": null
+          },
+          {
+            "action": "mantle-stage2/unit-00005-script-probe-3-observed",
+            "phase": "mantle-stage2/unit-00005-script-probe-3",
+            "state": null
+          },
+          {
+            "action": "mantle-stage2/unit-00011-script-probe-0-observed",
+            "phase": "mantle-stage2/unit-00011-script-probe-0",
+            "state": null
+          },
+          {
+            "action": "mantle-stage2/unit-00032-script-probe-0-observed",
+            "phase": "mantle-stage2/unit-00032-script-probe-0",
+            "state": null
+          }
+        ],
+        "optional_direct_inputs": [],
+        "perlasm_authenticated": [
+          {
+            "action": "mantle-stage2/unit-00031-script.sources.perl-0.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage2/unit-00031-script.sources.perl-0.generate",
+                "reference": {
+                  "action_id": "mantle-stage2/unit-00031-script.sources.perl-0.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage2/unit-00031-script.sources.perl-1.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage2/unit-00031-script.sources.perl-1.generate",
+                "reference": {
+                  "action_id": "mantle-stage2/unit-00031-script.sources.perl-1.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          },
+          {
+            "action": "mantle-stage2/unit-00031-script.sources.perl-2.authenticate",
+            "consumers": [
+              {
+                "action": "mantle-stage2/unit-00031-script.sources.perl-2.generate",
+                "reference": {
+                  "action_id": "mantle-stage2/unit-00031-script.sources.perl-2.authenticate",
+                  "kind": "produced",
+                  "output_id": "authenticated"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "stagex-transition": {
+      "optional_failure_ordinary_root_samples": [
+        {
+          "action_id": "stagex-transition/gnu-patch-reject-malformed",
+          "kind": "produced",
+          "output_id": "work"
+        },
+        {
+          "action_id": "stagex-transition/gzip-reject-malformed",
+          "kind": "produced",
+          "output_id": "work"
+        },
+        {
+          "action_id": "stagex-transition/tar-reject-malformed",
+          "kind": "produced",
+          "output_id": "work"
+        },
+        {
+          "action_id": "stagex-transition/sed-reject-malformed",
+          "kind": "produced",
+          "output_id": "work"
+        },
+        {
+          "action_id": "stagex-transition/bzip2-reject-malformed",
+          "kind": "produced",
+          "output_id": "work"
+        },
+        {
+          "action_id": "stagex-transition/coreutils-reject-missing",
+          "kind": "produced",
+          "output_id": "work"
+        }
+      ],
+      "optional_failure_ordinary_roots_allowed": 14
+    }
+  },
+  "scope": "Supplement to six-recipe inert static graph review",
+  "stagex_publication": {
+    "binutils_admitted": false,
+    "canonical_depends_on_tool_exports": {
+      "tcc": true,
+      "tcc-0.9.26": true,
+      "tcc-selfhost": true
+    },
+    "canonical_depends_on_transition": true,
+    "expansion_index_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/program-sources/source-built-stagex-programs/stagex-provider-publication.json.expansion.json",
+    "tool_export_kinds": {
+      "musl.headers": "tree",
+      "musl.libraries": "tree",
+      "tcc": "executable",
+      "tcc-0.9.26": "executable",
+      "tcc-selfhost": "executable"
+    },
+    "validation_commands": {
+      "runtime-supplement": "runtime-supplement",
+      "tcc-execution": "tcc-execution",
+      "tcc-negative": "tcc-negative",
+      "tcc-positive": "tcc-positive"
+    }
+  },
+  "supplement_gate": "accept"
+}

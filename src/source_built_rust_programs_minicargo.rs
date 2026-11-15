@@ -49,7 +49,7 @@ fn lit(s: impl Into<String>) -> RecipeWord {
         parts: vec![WordPart::Literal { text: s.into() }],
     }
 }
-fn input(n: &str, p: &str) -> RecipeWord {
+fn input(n: &str, p: impl Into<String>) -> RecipeWord {
     RecipeWord {
         parts: vec![WordPart::Input {
             name: n.into(),
@@ -718,7 +718,7 @@ impl Context<'_, '_> {
             TranslationKind::Dylib => "dylib",
         };
         let mut arguments = vec![
-            input("package", path),
+            input("package", super::resolve::normalize("", path)?),
             lit("--crate-name"),
             lit(name),
             lit("--crate-type"),
@@ -736,7 +736,11 @@ impl Context<'_, '_> {
             }
         }
         for feature in features {
-            arguments.extend([lit("--cfg"), lit(format!("feature=\"{feature}\""))]);
+            arguments.extend([lit("--cfg"), RecipeWord {
+                parts: vec![WordPart::LiteralData {
+                    text: format!("feature=\"{feature}\""),
+                }],
+            }]);
         }
         let mut used = BTreeSet::new();
         let mut proc_macros = BTreeMap::new();
@@ -1044,7 +1048,7 @@ fn graph(
                 env.insert("MRUSTC_CAIRN_SCRIPT_ENV".into(), input("package", "metadata/script-environment"));
                 env.insert(
                     "MRUSTC_CAIRN_MANIFEST_DIR".into(),
-                    input("package", &format!("rustc-1.90.0-src/{}", p.directory)),
+                    input("package", format!("rustc-1.90.0-src/{}", p.directory)),
                 );
                 for (key, path) in [
                     ("CC", "target-wrappers/cc"),
@@ -1391,7 +1395,7 @@ pub(crate) fn author(
     let overlay_id = "minicargo.cc-overlay";
     let mut args = vec![lit("--cc-overlay"), input("source", ""), output("tree")];
     for path in cc_sources {
-        args.push(input("source", &path));
+        args.push(input("source", path));
     }
     c.exec(
         overlay_id,
@@ -1405,7 +1409,7 @@ pub(crate) fn author(
     let scripts_id = "minicargo.script-entry-overlay";
     let mut args = vec![lit("scripts"), input("source", ""), output("tree")];
     for path in script_sources {
-        args.push(input("source", &path));
+        args.push(input("source", path));
     }
     c.exec(
         scripts_id,

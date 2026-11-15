@@ -411,3 +411,28 @@ parity and the requested complete current Luna inspections gate the unlaunched
 cold command. This completes regeneration only, not protected provider/stage
 execution, a proof receipt, real native parity or release acceptance. I3–I5 and
 proof-dependent V2/V3 stay open.
+
+## Deferred invocation authoring checkpoint (2026-11-15)
+
+The e9a58881/30960523 cohort remains unlaunched and is held on a real deferred
+request mismatch. The complete inert word scan found 2,943 flags inside
+consumed Rust invocation JSON, despite all direct recipe words passing its
+lexical/shape checks. Compiler-data strings were emitted as filesystem Literals,
+and source target paths retained manifest dot/parent components. Actual request
+admission validates those words unchanged before the executable can run.
+
+Local Pueue 26 executed the new real-profile/decoder regression against isolated
+pre-fix sources and failed with the exact untyped filesystem-literal error.
+Leviathan 1585 executed and passed that repaired profile regression and the
+existing path/name/control authority rejection test (one test per leg). Its
+mistyped resolver filter selected zero tests and is not resolver evidence;
+correct module/boundary verification in 1586 then executed 23 tests and passed,
+including sibling/dot source members and rejected archive escapes/absolute paths.
+
+The author-only repair keeps cfg/rpath bytes as LiteralData and resolves source
+members with the existing archive-relative resolver. The consumer and strict
+validator are unchanged. Evidence and exact commands are in
+`evidence/2026-11-15-leviathan-e9a58881/parent-word-inspection/`.
+Final committed-source qualification, regeneration, complete current byte and
+Luna reviews, protected stages, reconciliation and v2 receipt remain required;
+I3–I5 and proof-dependent V2/V3 stay open.

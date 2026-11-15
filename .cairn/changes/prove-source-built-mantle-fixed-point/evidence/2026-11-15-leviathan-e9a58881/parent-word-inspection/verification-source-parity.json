@@ -1,0 +1,25 @@
+{
+  "schema": "mantle-template-repair-smoke-source-parity-v1",
+  "checkpoint": "Tasks 1585/1586, before the owned-String constructor caller migration. The explicit hashes identify that smoke-tested subject; final committed-source qualification covers the final caller cutover.",
+  "execution_host": "leviathan.cymric-daggertooth.ts.net",
+  "tested_source": "/home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source",
+  "local_and_tested_source_equal": true,
+  "files_blake3": {
+    "src/source_built_rust_programs_minicargo.rs": "c8a408df7befee8e3b5cfe536212377cabd62067ad00795521d8030c317c4419",
+    "src/source_built_rust_programs_successors.rs": "2a5b773712dcae713568a04f3744847ccfe6347c5c98450fd4a3786401cd1f0a",
+    "src/source_built_rust_programs_successors_profile.rs": "8770968eb1c3fc3eee3396e3c4ec2b3e3e6fddd5d7572f93c6e1e026ebba76df",
+    "src/source_built_rust_programs_successors_profile_tests.rs": "adb2bd1c5a3284488e7796997ec0995cc069b1cf2f37196d4207d2c7ddbb5a63",
+    "src/source_built_rust_resolve_tests.rs": "3817df100b532f7eb00614a9c8bb47b2ab529c95ece96cfefc975ce53cd7b7f8"
+  },
+  "verification": {
+    "baseline_queue_host": "local workstation; SSH execution on Leviathan",
+    "baseline_task": 26,
+    "baseline_exit": 101,
+    "repaired_profile_and_existing_authority_task": 1585,
+    "executed_tests_per_leg": [1, 1],
+    "mistyped_resolver_leg_tests_not_counted": 0,
+    "actual_resolver_task": 1586,
+    "actual_resolver_tests_passed": 23
+  },
+  "non_claim": "Five changed Rust-file byte identities and isolated executed smoke checks only. Full final committed source qualification, regenerated cohort, independent current review and genuine proof execution remain required."
+}

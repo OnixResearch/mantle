@@ -441,6 +441,16 @@ Generated recipe labels encode source identity components losslessly
 SemVer build metadata and combined crate-type punctuation remain unchanged in
 Cargo data and compiler arguments; only the producer-label representation changes.
 
+Compiler-data operands such as source-selected feature cfg values and
+`-Clink-args=-Wl,-rpath,$ORIGIN/../lib` use `LiteralData`, not filesystem
+`Literal` words. Their bytes are preserved without granting path authority.
+Minicargo and successor compiler source filenames use the existing
+archive-relative manifest resolver before becoming normalized `Input` members
+of the authenticated package Tree; absolute and above-root paths remain errors.
+The original manifests are unchanged. Serializing a static command into a
+Produced invocation frame does not bypass typed-word admission: the executor
+decodes and validates that frame before launching the compiler.
+
 Macro reservations use the existing compact controller engine rather than
 expanding a recipe per reserved invocation ([ADR 0140](../adr/0140-keep-macro-reservations-inside-compact-source-controllers.md)).
 The source-owned slot reservation is unchanged; compiler and plugin invocations

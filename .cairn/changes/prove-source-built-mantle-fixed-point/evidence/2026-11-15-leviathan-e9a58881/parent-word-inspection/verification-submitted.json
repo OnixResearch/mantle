@@ -1,0 +1,10 @@
+{
+  "queue_host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "pueue_task": "1585",
+  "initial_state": "stashed",
+  "requires": "Local pueue task 26 pre-fix regression completion before enqueue; both use the same warm target directory",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/verify-template-repair.sh",
+  "non_claim": "Not started; isolated smoke subject, not final committed source qualification or proof."
+}

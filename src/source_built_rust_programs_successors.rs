@@ -80,7 +80,7 @@ pub(super) fn lit(text: impl Into<String>) -> RecipeWord {
         parts: vec![WordPart::Literal { text: text.into() }],
     }
 }
-pub(super) fn input(name: &str, path: &str) -> RecipeWord {
+pub(super) fn input(name: &str, path: impl Into<String>) -> RecipeWord {
     RecipeWord {
         parts: vec![WordPart::Input {
             name: name.into(),
@@ -299,7 +299,7 @@ impl Context<'_, '_> {
         extra_inputs.insert("package".into(), tree);
         extra_inputs.insert("native-sysroot".into(), self.native("native.sysroot")?);
         let mut args = vec![
-            input("package", source_path),
+            input("package", resolve::normalize("", source_path)?),
             lit("--crate-name"),
             lit(crate_name),
             lit("--crate-type"),

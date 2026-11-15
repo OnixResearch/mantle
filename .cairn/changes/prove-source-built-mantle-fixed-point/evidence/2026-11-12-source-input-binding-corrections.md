@@ -1271,3 +1271,31 @@ scope are retained in
 replace the independently verified manifest identity `30960523…` or accept
 source execution. Complete current Luna review verdicts still gate the retained
 unlaunched cold command; I3–I5 and proof-dependent V2/V3 remain open.
+
+## Consumed deferred invocation rejection (2026-11-15)
+
+The e9a58881/30960523 cold command remains unlaunched. Complete lexical scanning
+of direct words did not establish admission of consumed JSON invocation frames.
+The parent traced every flagged embedded word to its Produced consumer and
+confirmed that minicargo/successor authors serialize original arguments directly
+into the frame that the executor decodes before compiler launch. Linker/cfg data
+and manifest-relative source members violated that unchanged typed contract.
+
+The actual new profile/decoder regression failed against isolated pre-fix code
+in local Pueue 26 with `untyped filesystem path in literal command word`.
+Leviathan 1585 passed the repaired profile/decoder regression and existing
+authority rejection, each with one executed test; its zero-test resolver filter
+is not counted. Correct resolver module/boundary execution in task 1586 passed
+23 tests, including sibling/dot members and escape/absolute rejection. Exact
+scripts, source/data identities, complete word
+counts, all 16 candidate patterns, producer/consumer links, captured logs and
+bounded rejection are in
+`2026-11-15-leviathan-e9a58881/parent-word-inspection/consumer-admission-rejection.md`.
+
+The repair changes authors only: original cfg/rpath bytes become LiteralData,
+and target members use the existing archive-relative resolver before Input
+construction. No source/consumer policy, expected provider pin, literal/path
+admission, initial authority, action-trust or proof acceptance is relaxed.
+Source-bound qualification and a freshly regenerated, fully reviewed cohort are
+still required. This is not provider, Mantle-stage, native parity, fixed-point
+or release evidence; I3–I5 and proof-dependent V2/V3 remain open.

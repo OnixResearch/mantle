@@ -1,0 +1,35 @@
+warning: /home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/repair-rust-template-admission-source)
+    Finished `release` profile [optimized] target(s) in 4m 14s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target/release/deps/mantle-61d96712292a8e06)
+
+running 23 tests
+test source_built_rust_programs::resolve::tests::atomic_predicates_follow_the_original_fixed_target ... ok
+test source_built_rust_programs::resolve::tests::atomic_target_dependencies_select_only_supported_edges ... ok
+test source_built_rust_programs::resolve::tests::cargo_feature_does_not_enable_global_tracing_mode ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... ok
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... ok
+test source_built_rust_programs::resolve::tests::duplicate_exact_qualified_lock_identity_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::enabled_cargo_feature_does_not_populate_global_target_cfg ... ok
+test source_built_rust_programs::resolve::tests::local_path_owner_is_not_replaced_by_same_version_registry_record ... ok
+test source_built_rust_programs::resolve::tests::malformed_or_trailing_source_qualifiers_do_not_select_unique_names ... ok
+test source_built_rust_programs::resolve::tests::manifest_source_members_resolve_siblings_without_escaping_the_archive ... ok
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... ok
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::one_manifest_cannot_merge_local_and_registry_lock_authorities ... ok
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... ok
+test source_built_rust_programs::resolve::tests::qualified_lock_source_must_match_without_source_fallback ... ok
+test source_built_rust_programs::resolve::tests::sealed_native_profile_selects_rustix_linux_raw_backend ... ok
+test source_built_rust_programs::resolve::tests::selected_dependency_kinds_still_reject_unclassified_predicates ... ok
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... ok
+test source_built_rust_programs::resolve::tests::source_omission_admits_version_before_unique_local_precedence ... ok
+test source_built_rust_programs::resolve::tests::source_qualified_edge_retains_exact_transitive_lock_owner ... ok
+test source_built_rust_programs::resolve::tests::target_optional_features_classify_predicates_only_when_selected ... ok
+test source_built_rust_programs::resolve::tests::unselected_dependency_kinds_do_not_require_target_classification ... ok
+test source_built_rust_programs::resolve::tests::unset_getrandom_override_selects_linux_default_dependencies ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 2949 filtered out; finished in 0.00s
+
+verification_exit=0

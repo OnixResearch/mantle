@@ -255,8 +255,7 @@ impl Context<'_, '_> {
                 parts: vec![WordPart::TextInput { name: alias }],
             });
         }
-        environment
-            .insert("CARGO_MANIFEST_DIR".into(), input("package", &format!("{}/{}", self.top, package.directory)));
+        environment.insert("CARGO_MANIFEST_DIR".into(), input("package", format!("{}/{}", self.top, package.directory)));
         environment.insert("RUSTC".into(), input("package", "target-wrappers/rustc"));
         environment.insert("CC".into(), input("package", "target-wrappers/cc"));
         environment.insert("CXX".into(), input("package", "target-wrappers/c++"));
@@ -421,7 +420,7 @@ impl Context<'_, '_> {
             vec![
                 lit("--process-library"),
                 input("package", ""),
-                input("package", &format!("{}/{}", self.top, package.directory)),
+                input("package", format!("{}/{}", self.top, package.directory)),
                 lit(&package.name),
                 output("source-overlay"),
             ]
@@ -839,7 +838,7 @@ pub(crate) fn author_version(
     let overlay = format!("{prefix}.native-source-overlay");
     let mut args = vec![lit("--cc-overlay"), input("source", ""), output("tree")];
     for package in cc {
-        args.push(input("source", &format!("{original_top}/{package}")));
+        args.push(input("source", format!("{original_top}/{package}")));
     }
     context.exec(
         &overlay,
@@ -1037,7 +1036,7 @@ pub(crate) fn author_version(
         vec![
             lit("--provider-receipt"),
             input("version", ""),
-            input("source", &format!("{}/src/version", context.top)),
+            input("source", format!("{}/src/version", context.top)),
             lit(version),
             output("receipt"),
         ],
