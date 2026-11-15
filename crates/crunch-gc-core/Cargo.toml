@@ -6,6 +6,3 @@ license.workspace = true
 
 [dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
-
-[dev-dependencies]
-vstd = "=0.0.0-2026-01-25-0057"

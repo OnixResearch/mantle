@@ -546,10 +546,6 @@ fn hash_string(hasher: &mut blake3::Hasher, value: &str) -> Result<(), GcPlanErr
 extern crate std;
 
 #[cfg(test)]
-#[path = "terrane_reclaim_parity_tests.rs"]
-mod terrane_reclaim_parity_tests;
-
-#[cfg(test)]
 mod tests {
     use alloc::string::ToString;
     use alloc::vec;

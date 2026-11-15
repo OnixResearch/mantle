@@ -1,6 +1,7 @@
 //! Executable parity between Mantle's `plan_gc` and the imported, unmodified
-//! Terrane reclaim-plan kernel, plus the kernel's verified checker applied to
-//! Mantle's own output. Parity is agreement on enumerated cases, not a theorem
+//! Terrane reclaim-plan kernel, through the production projection in
+//! [`GcCheck`], plus the kernel's verified checker applied to Mantle's own
+//! output. Parity is agreement on enumerated cases, not a theorem
 //! about Mantle source; the checker's safety theorems apply to each checked
 //! output individually.
 //!
@@ -8,23 +9,11 @@
 //! the store shell's replan-before-delete and removal execution, and inputs
 //! beyond the enumerated space.
 
-extern crate std;
+use crunch_gc_core::*;
 
-use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::vec;
-use alloc::vec::Vec;
-
-use super::*;
-
-// Exact upstream bytes are refreshed only by the repository-owned importer.
-// The producer's lint policy allows `&Vec` parameters; the bytes stay unchanged.
-#[rustfmt::skip]
-#[allow(clippy::ptr_arg)]
-#[path = "../../../vendor/terrane-reclaim-plan/verified.rs"]
-mod terrane;
+use super::GcCheck;
+use super::GcCheckError;
+use super::kernel as terrane;
 
 /// Kernel inputs: node count, references, roots, and reclaimable flags.
 type KernelInput = (usize, Vec<(usize, usize)>, Vec<usize>, Vec<bool>);
@@ -47,31 +36,10 @@ struct Case {
     reclaimable: Vec<bool>,
 }
 
-/// Projects a request built from `NODE_IDS[..n]` into kernel indices. A path
-/// that names no entry maps to index `n`, which the kernel rejects as out of
-/// range, matching Mantle's missing-root and missing-reference classes.
+/// Projects a request through the production projection.
 fn project(request: &GcPlanRequest) -> KernelInput {
-    let mut entries: Vec<&GcEntry> = request.entries.iter().collect();
-    entries.sort_by(|left, right| left.path_id.cmp(&right.path_id));
-    let n = entries.len();
-    let index: BTreeMap<&str, usize> =
-        entries.iter().enumerate().map(|(position, entry)| (entry.path_id.as_str(), position)).collect();
-    let lookup = |path_id: &str| index.get(path_id).copied().unwrap_or(n);
-    let mut edges = Vec::new();
-    for entry in &entries {
-        let owner = lookup(&entry.path_id);
-        let mut references = entry.references.clone();
-        references.sort();
-        references.dedup();
-        for reference in &references {
-            edges.push((owner, lookup(reference)));
-        }
-    }
-    let mut roots: Vec<usize> = request.roots.iter().map(|root| lookup(root)).collect();
-    roots.sort_unstable();
-    roots.dedup();
-    let reclaimable = entries.iter().map(|entry| entry.ownership == GcOwnership::Overlay).collect();
-    (n, edges, roots, reclaimable)
+    let check = GcCheck::prepare(request).expect("enumerated requests have distinct entries");
+    (check.n, check.edges, check.roots, check.reclaimable)
 }
 
 fn build_case(n: usize, edges: &[(usize, usize)], roots: &[usize], overlay_mask: u32, variant: Variant) -> Case {
@@ -184,6 +152,8 @@ fn compare(case: &Case, context: &str) -> bool {
                 terrane::check_plan(case.n, &case.edges, &case.roots, &case.reclaimable, &retained, &candidate),
                 "checker rejected Mantle's plan: {context}"
             );
+            let check = GcCheck::prepare(&case.request).expect("distinct entries");
+            assert_eq!(check.check(&plan), Ok(()), "runtime check: {context}");
             true
         }
         Err(error) => {
@@ -280,4 +250,91 @@ fn duplicate_references_and_unsorted_input_project_identically() {
         reclaimable,
     };
     assert!(compare(&case, "unsorted duplicates"));
+}
+
+fn chain_request() -> GcPlanRequest {
+    // a -> b, root a; c is an unreachable overlay entry.
+    build_case(3, &[(0, 1)], &[0], 0b111, Variant::Plain).request
+}
+
+fn checked_plan() -> (GcCheck, GcPlan) {
+    let request = chain_request();
+    let check = GcCheck::prepare(&request).expect("distinct entries");
+    let plan = plan_gc(request).expect("valid request");
+    assert_eq!(check.check(&plan), Ok(()));
+    (check, plan)
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn runtime_check_refuses_a_live_candidate() {
+    let (check, mut plan) = checked_plan();
+    plan.retained_path_ids.retain(|path_id| path_id != NODE_IDS[1]);
+    plan.candidate_path_ids.insert(0, NODE_IDS[1].to_string());
+    plan.mutation_intents.insert(0, GcMutationIntent {
+        path_id: NODE_IDS[1].to_string(),
+        ..plan.mutation_intents[0].clone()
+    });
+    assert_eq!(check.check(&plan), Err(GcCheckError::KernelRejected));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn runtime_check_refuses_a_retained_path_that_is_also_a_candidate() {
+    let (check, mut plan) = checked_plan();
+    plan.candidate_path_ids.insert(0, NODE_IDS[0].to_string());
+    plan.mutation_intents.insert(0, GcMutationIntent {
+        path_id: NODE_IDS[0].to_string(),
+        ..plan.mutation_intents[0].clone()
+    });
+    assert_eq!(check.check(&plan), Err(GcCheckError::KernelRejected));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn runtime_check_refuses_a_missing_candidate() {
+    let (check, mut plan) = checked_plan();
+    plan.candidate_path_ids.clear();
+    plan.mutation_intents.clear();
+    assert_eq!(check.check(&plan), Err(GcCheckError::KernelRejected));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn runtime_check_refuses_unknown_and_duplicate_paths() {
+    let (check, plan) = checked_plan();
+    let mut unknown = plan.clone();
+    unknown.retained_path_ids.push(MISSING_ID.to_string());
+    assert_eq!(
+        check.check(&unknown),
+        Err(GcCheckError::UnknownPlannedPath {
+            path_id: MISSING_ID.to_string()
+        })
+    );
+    let mut duplicate = plan;
+    let first = duplicate.retained_path_ids[0].clone();
+    duplicate.retained_path_ids.push(first.clone());
+    assert_eq!(check.check(&duplicate), Err(GcCheckError::DuplicatePlannedPath { path_id: first }));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn runtime_check_refuses_intents_that_differ_from_candidates() {
+    let (check, mut plan) = checked_plan();
+    plan.mutation_intents.clear();
+    assert_eq!(check.check(&plan), Err(GcCheckError::IntentsDifferFromCandidates));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn prepare_refuses_duplicate_entries() {
+    let mut request = chain_request();
+    let first = request.entries[0].clone();
+    request.entries.push(first);
+    assert_eq!(
+        GcCheck::prepare(&request).map(|_| ()),
+        Err(GcCheckError::DuplicateEntry {
+            path_id: NODE_IDS[0].to_string()
+        })
+    );
 }

@@ -17,6 +17,7 @@ casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f223
 crunch-action-result-core = { path = "../crunch-action-result-core" }
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-composition-core = { path = "../crunch-composition-core" }
+crunch-gc-check = { path = "../crunch-gc-check" }
 crunch-gc-core = { path = "../crunch-gc-core" }
 crunch-nar = { path = "../crunch-nar" }
 crunch-overlay-core = { path = "../crunch-overlay-core" }

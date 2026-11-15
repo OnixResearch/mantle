@@ -1932,11 +1932,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-gc-check"
+version = "0.1.0"
+dependencies = [
+ "crunch-gc-core",
+ "vstd",
+]
+
+[[package]]
 name = "crunch-gc-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "vstd",
 ]
 
 [[package]]
@@ -2349,6 +2356,7 @@ dependencies = [
  "crunch-attestation",
  "crunch-composition-core",
  "crunch-delta",
+ "crunch-gc-check",
  "crunch-gc-core",
  "crunch-nar",
  "crunch-overlay-core",

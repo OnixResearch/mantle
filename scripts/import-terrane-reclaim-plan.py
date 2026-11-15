@@ -49,8 +49,8 @@ def destination(member):
 
 
 def consumer_vstd_version():
-    manifest = Path(__file__).resolve().parent.parent / "crates" / "crunch-gc-core" / "Cargo.toml"
-    return tomllib.loads(manifest.read_text())["dev-dependencies"]["vstd"]
+    manifest = Path(__file__).resolve().parent.parent / "crates" / "crunch-gc-check" / "Cargo.toml"
+    return tomllib.loads(manifest.read_text())["dependencies"]["vstd"]
 
 
 def check(root):

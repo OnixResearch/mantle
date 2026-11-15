@@ -1,0 +1,50 @@
+Local developer runs, not gate evidence. Host lacked mold and the dev shell;
+linking used lld via RUSTFLAGS. Toolchain nightly-2026-04-08.
+
+$ PATH=<b3sum>:$PATH python3 -I scripts/import-terrane-reclaim-plan.py --check
+{"status": "source-identities-match", "revision": "bbf83d95402370b6ba29e82e01f16b1059c55a83", ...}
+
+$ cargo test --offline -p crunch-gc-check -p crunch-gc-core
+crunch-gc-check: test result: ok. 15 passed; 0 failed
+crunch-gc-core:  test result: ok. 27 passed; 0 failed
+
+$ cargo test --offline -p crunch-store --lib gc   (debuginfo off)
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 412 filtered out; finished in 78.76s
+
+$ cargo test --offline -p crunch-store --lib   (after review fixes)
+test result: FAILED. 462 passed; 1 failed
+The failure is query::tests::store_verify_read_failure_does_not_persist_pathinfo,
+which makes a file unreadable with chmod and expects the read to fail; this host
+runs as root, so the read succeeds. It does not reach GC.
+
+$ cargo clippy --offline -p crunch-gc-check -p crunch-gc-core -p crunch-store --lib --tests --no-deps -- -D warnings
+(no warnings)
+
+Mutated-planner run: crates/crunch-gc-core/src/lib.rs line 417 changed to
+`entry.references.iter().skip(1)` (root reachability walk), then
+`cargo test -p crunch-store --lib gc`:
+test result: FAILED. 49 passed; 2 failed
+gc::tests::retained_root_keeps_transitive_closure_and_sidecars and
+handle::tests::overlay_gc_retains_base_reachability_without_base_mutation both
+panicked on `Gc("gc-plan-check-failed: KernelRejected")` from garbage_collect,
+i.e. during planning, before the removal code is reached (no assertion on
+surviving files ran). plan_gc was restored afterwards.
+
+Timing (release, one local run, temporary test not committed; synthetic store
+with every tenth entry a base entry without references, up to four forward
+references per overlay entry, 1,000 roots):
+n=100000  refs=179996  prepare=76ms   plan_gc=220ms  check=18ms
+n=1000000 refs=1799996 prepare=931ms  plan_gc=2.09s  check=267ms
+
+$ cargo tree -p crunch-gc-check -e normal
+crunch-gc-core (blake3 ...) and vstd 0.0.0-2026-01-25-0057 with verus_builtin
+and verus_builtin_macros (proc-macro: proc-macro2, quote, syn, synstructure).
+vstd, verus_builtin and verus_builtin_macros declare license MIT, which deny.toml
+allows; its ban lists are empty. cargo-deny is not installed here.
+
+$ cargo tree -i vstd -e normal --workspace
+vstd <- crunch-gc-check <- crunch-store <- crunch-build, crunch-android,
+crunch-delta, crunch-pipeline, crunch-nix-gateway, mantle, ...
+
+Not run: first-party quality gate, Tiger Style, nix flake check, cairn validate,
+cargo deny.

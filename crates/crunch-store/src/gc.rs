@@ -22,6 +22,7 @@ use std::sync::Arc;
 use casita::experimental::MetadataStore;
 use casita::experimental::ObjectKey;
 use casita::experimental::RootName;
+use crunch_gc_check::GcCheck;
 use crunch_gc_core::GcEntry;
 use crunch_gc_core::GcExecutionMode;
 use crunch_gc_core::GcMutationDisposition;
@@ -29,7 +30,6 @@ use crunch_gc_core::GcOwnership;
 use crunch_gc_core::GcPlanError;
 use crunch_gc_core::GcPlanRequest;
 use crunch_gc_core::GcReportDecision;
-use crunch_gc_core::plan_gc;
 use crunch_gc_core::report_decision;
 use crunch_gc_core::retention::RetentionDecision;
 use crunch_gc_core::retention::RetentionDisposition;
@@ -447,17 +447,24 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         .await?;
         (snapshot, BTreeMap::new(), composed)
     };
-    let core_plan =
-        plan_gc(core_plan_request(&retained_roots, &composed_snapshot, ctx.store_dir, !is_execution_requested)?)
-            .map_err(|error| {
-                if ctx.casita_store.is_some()
-                    && matches!(error, GcPlanError::MissingRoot { .. } | GcPlanError::MissingReference { .. })
-                {
-                    Error::Gc(format!("casita-root-missing: {error:?}"))
-                } else {
-                    shell_gc_plan_error(error, ctx.store_dir)
-                }
-            })?;
+    let core_plan = checked_plan_gc(core_plan_request(
+        &retained_roots,
+        &composed_snapshot,
+        ctx.store_dir,
+        !is_execution_requested,
+    )?)
+    .map_err(|failure| match failure {
+        CheckedPlanFailure::Plan(error) => {
+            if ctx.casita_store.is_some()
+                && matches!(error, GcPlanError::MissingRoot { .. } | GcPlanError::MissingReference { .. })
+            {
+                Error::Gc(format!("casita-root-missing: {error:?}"))
+            } else {
+                shell_gc_plan_error(error, ctx.store_dir)
+            }
+        }
+        CheckedPlanFailure::Check(error) => gc_plan_check_error(&error),
+    })?;
     let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
     let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
     let mut usage = build_usage_report(
@@ -576,6 +583,31 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     })
 }
 
+/// Why a checked core plan was not produced.
+#[derive(Debug)]
+enum CheckedPlanFailure {
+    /// `plan_gc` refused the request; its existing error is preserved.
+    Plan(GcPlanError),
+    /// `plan_gc` planned, but the verified Terrane checker refused the plan.
+    Check(crunch_gc_check::GcCheckError),
+}
+
+// r[impl mantle.gc_plan.runtime_check]
+/// Plans with `plan_gc` and returns the plan only if the verified Terrane
+/// reclaim kernel accepts it (ADR 0158). Every core plan that feeds deletion
+/// passes through here, so a plan that retains too little or deletes a live or
+/// base path is refused before any removal or fence write.
+fn checked_plan_gc(request: GcPlanRequest) -> Result<crunch_gc_core::GcPlan, CheckedPlanFailure> {
+    let check = GcCheck::prepare(&request);
+    let plan = crunch_gc_core::plan_gc(request).map_err(CheckedPlanFailure::Plan)?;
+    check.and_then(|check| check.check(&plan)).map_err(CheckedPlanFailure::Check)?;
+    Ok(plan)
+}
+
+fn gc_plan_check_error(error: &crunch_gc_check::GcCheckError) -> Error {
+    Error::Gc(format!("gc-plan-check-failed: {error:?}"))
+}
+
 async fn plan_casita_castore_roots(
     store: &CasitaStore,
     retained_nodes: &[Node],
@@ -615,7 +647,7 @@ fn plan_casita_castore_facts(
             return Err(Error::Gc(format!("casita-envelope-invalid: duplicate castore root {id}")));
         }
     }
-    let core_plan = plan_gc(GcPlanRequest {
+    let core_plan = checked_plan_gc(GcPlanRequest {
         roots,
         entries,
         execution_mode: if execute {
@@ -624,9 +656,12 @@ fn plan_casita_castore_facts(
             GcExecutionMode::DryRun
         },
     })
-    .map_err(|error| match error {
-        GcPlanError::MissingRoot { .. } => Error::Gc(format!("casita-root-missing: {error:?}")),
-        _ => Error::Gc(format!("planning Casita castore reachability: {error:?}")),
+    .map_err(|failure| match failure {
+        CheckedPlanFailure::Plan(error @ GcPlanError::MissingRoot { .. }) => {
+            Error::Gc(format!("casita-root-missing: {error:?}"))
+        }
+        CheckedPlanFailure::Plan(error) => Error::Gc(format!("planning Casita castore reachability: {error:?}")),
+        CheckedPlanFailure::Check(error) => gc_plan_check_error(&error),
     })?;
     Ok(CasitaCastorePlan {
         core_plan_id: core_plan.plan_id.into_bytes(),
@@ -2759,13 +2794,47 @@ mod tests {
         assert!(output_dir.path().join(dir_path.to_string()).join("hello.txt").exists());
     }
 
+    // r[verify mantle.gc_plan.runtime_check]
+    #[test]
+    fn checked_plan_gc_checks_planned_results_and_preserves_planner_errors() {
+        let root = "/mantle/store/root".to_string();
+        let dead = "/mantle/store/dead".to_string();
+        let entry = |path_id: &str, references: Vec<String>| GcEntry {
+            path_id: path_id.to_string(),
+            references,
+            declared_nar_bytes: 1,
+            ownership: GcOwnership::Overlay,
+        };
+        let plan = checked_plan_gc(GcPlanRequest {
+            roots: vec![root.clone()],
+            entries: vec![entry(&root, Vec::new()), entry(&dead, Vec::new())],
+            execution_mode: GcExecutionMode::Execute,
+        })
+        .unwrap();
+        assert_eq!(plan.candidate_path_ids, vec![dead.clone()]);
+        let missing = checked_plan_gc(GcPlanRequest {
+            roots: vec!["/mantle/store/missing".to_string()],
+            entries: vec![entry(&root, Vec::new())],
+            execution_mode: GcExecutionMode::Execute,
+        })
+        .unwrap_err();
+        assert!(matches!(missing, CheckedPlanFailure::Plan(GcPlanError::MissingRoot { .. })));
+        let duplicate = checked_plan_gc(GcPlanRequest {
+            roots: vec![root.clone()],
+            entries: vec![entry(&root, Vec::new()), entry(&root, Vec::new())],
+            execution_mode: GcExecutionMode::Execute,
+        })
+        .unwrap_err();
+        assert!(matches!(duplicate, CheckedPlanFailure::Plan(GcPlanError::DuplicateEntry { .. })));
+    }
+
     #[test]
     fn path_explanation_rejects_retaining_root_links_above_policy_limit() {
         const ROOT_LINK_LIMIT: usize = 1;
         let root_a = "/mantle/store/root-a".to_string();
         let root_b = "/mantle/store/root-b".to_string();
         let shared = "/mantle/store/shared".to_string();
-        let plan = plan_gc(GcPlanRequest {
+        let plan = crunch_gc_core::plan_gc(GcPlanRequest {
             roots: vec![root_a.clone(), root_b.clone()],
             entries: vec![
                 GcEntry {

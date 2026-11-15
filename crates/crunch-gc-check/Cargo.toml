@@ -1,0 +1,11 @@
+[package]
+name = "crunch-gc-check"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crunch-gc-core = { path = "../crunch-gc-core" }
+# Supplies the `verus!` macro, which erases ghost code under plain rustc so
+# the imported kernel's executable code compiles unchanged (ADR 0158).
+vstd = "=0.0.0-2026-01-25-0057"

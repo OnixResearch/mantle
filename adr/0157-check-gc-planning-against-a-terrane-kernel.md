@@ -2,6 +2,9 @@
 
 Status: Proposed
 
+Amended by ADR 0158: the kernel, the projection, and the parity rail now live
+in `crunch-gc-check`, which runs the kernel at runtime.
+
 ## Context
 
 `crunch_gc_core::plan_gc` decides which store paths are retained and which
