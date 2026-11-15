@@ -1,0 +1,13 @@
+{
+  "task": 1574,
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/cold-proof-8fa84260-aws.sh",
+  "cwd": "/home/brittonr/sbfp-20261113-berdKH",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws",
+  "runner_blake3": "9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7",
+  "code_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "source_profile_manifest_blake3": "1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4",
+  "source_profile_bytes_blake3": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4",
+  "output": "/home/brittonr/sbfp-20261113-berdKH/proof-8fa84260-aws",
+  "non_claim": "Submission of a reviewed fresh cold proof only; no provider, stage, receipt, parity or release acceptance."
+}

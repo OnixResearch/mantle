@@ -1,0 +1,8 @@
+{"stage_id":"mantle-stage1","steps":24101,"roots":1242,"semantic_roots":1143,"ring_generators":12,"aws_generators":26,"ring_fail":[],"aws_fail":[],"unused_declared_inputs":[],"pipe_fail":[],"aws_source":{"kind":"source","role":"mantle-source","path":"bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9"},"aws_original_edges":true,"downstream_edges":true}
+RECIPE_RAW stage=1 blake3=f0cd61f74c0346dffdbccd75dd4e5a5c14ce2aa494692d9c299ebc898b558c4d bytes=172677322
+PIPE_WRAPPER stage=1 frozen_b3=66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df distinct=1
+REACHABILITY stage=mantle-stage1 reached=24101 total=24101 selected_missing=0
+{"stage_id":"mantle-stage2","steps":24101,"roots":1242,"semantic_roots":1143,"ring_generators":12,"aws_generators":26,"ring_fail":[],"aws_fail":[],"unused_declared_inputs":[],"pipe_fail":[],"aws_source":{"kind":"source","role":"mantle-source","path":"bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9"},"aws_original_edges":true,"downstream_edges":true}
+RECIPE_RAW stage=2 blake3=a35d5167194df66c913adf5e7300b5763b52f60526479d225619c193e4d85442 bytes=172677322
+PIPE_WRAPPER stage=2 frozen_b3=66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df distinct=1
+REACHABILITY stage=mantle-stage2 reached=24101 total=24101 selected_missing=0

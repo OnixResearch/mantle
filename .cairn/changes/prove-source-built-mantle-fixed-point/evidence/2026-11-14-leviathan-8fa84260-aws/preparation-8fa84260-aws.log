@@ -1,0 +1,75 @@
++ date -Is
+2026-11-14T03:56:04-05:00
++ hostname
+leviathan
++ uname -srm
+Linux 6.18.63 x86_64
++ cat /proc/sys/kernel/random/boot_id
+3fcb079b-a910-47cf-8301-25c4e0eaa757
++ df -B1 /home/brittonr/sbfp-20261113-berdKH
+Filesystem         1B-blocks          Used     Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2705071312896 1031691464704  73% /
++ free -b
+               total        used        free      shared  buff/cache   available
+Mem:     269805268992 65582350336 38538534912    37982208 167615942656 204222918656
+Swap:    137438949376      749568 137438199808
+++ cat /home/brittonr/sbfp-20261113-berdKH/qualification-8fa84260-aws.exit
++ test 0 = 0
+++ cat /home/brittonr/sbfp-20261113-berdKH/canonical-qualification-8fa84260-aws.exit
++ test 0 = 0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --check /home/brittonr/sbfp-20261113-berdKH/runner-blake3-8fa84260-aws.txt
+/home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws: OK
++ /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --version
+mantle 0.1.0
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ test ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
++ /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --unshare-all --unshare-user --ro-bind / / -- /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox true
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_BEFORE=462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09
+++ jq -er .complete_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-8fa84260-aws.json
++ test 462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09 = 462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09
++ PROOF_HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home
++ PROOF_TMP=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp
++ mkdir /home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home /home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json source bundle refresh-mantle-source --from /home/brittonr/sbfp-20261113-berdKH/incoming/source-profile-baseline.json --mantle-source /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws --to /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json
++ jq -e '.input_manifest_blake3 == "de163b8deb0b14afd58469f0c66f8dc62714117b4706323d5e419cf37cd03c6c" and .previous_mantle_source_blake3 == "51b3da0e5d3a15f690aec40a41763ff7b656eee03b2e399d97b5d705e6005194" and .preserved_record_count == 65 and .added_record_count == 0' /home/brittonr/sbfp-20261113-berdKH/source-refresh-8fa84260-aws.json
+true
+++ jq -er .output_manifest_blake3 /home/brittonr/sbfp-20261113-berdKH/source-refresh-8fa84260-aws.json
++ PROFILE_ID=55e7300eb4fb0930a62fccf44a4d72ee3c7b82dcb4739b44b3d851250d3fd186
++ [[ 55e7300eb4fb0930a62fccf44a4d72ee3c7b82dcb4739b44b3d851250d3fd186 =~ ^[a-f0-9]{64}$ ]]
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json
++ PROFILE_BYTES_BEFORE=51e223c053211bf3b1e03d6f95f6634394c2051dd0da74e9919dc93a3d14ad3f
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json
++ jq -e '.ready_class == "ready" and ([.missing_records, .stale_records, .unsupported_records, .untrusted_records] | all(length == 0))' /home/brittonr/sbfp-20261113-berdKH/source-profile-verification-8fa84260-aws.json
+true
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json self-build --source-built-fixed-point --prepare-source-programs --source-profile /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json --expected-source-profile-blake3 55e7300eb4fb0930a62fccf44a4d72ee3c7b82dcb4739b44b3d851250d3fd186 --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-8fa84260-aws-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json
++ jq -e '.ready_class == "ready" and ([.missing_records, .stale_records, .unsupported_records, .untrusted_records] | all(length == 0))' /home/brittonr/sbfp-20261113-berdKH/prepared-source-profile-verification-8fa84260-aws.json
+true
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json
++ test 51e223c053211bf3b1e03d6f95f6634394c2051dd0da74e9919dc93a3d14ad3f = 51e223c053211bf3b1e03d6f95f6634394c2051dd0da74e9919dc93a3d14ad3f
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_AFTER=462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09
++ test 462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09 = 462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-program-preparation.json
+51e223c053211bf3b1e03d6f95f6634394c2051dd0da74e9919dc93a3d14ad3f  /home/brittonr/sbfp-20261113-berdKH/source-profile-8fa84260-aws.json
+f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json
+fe90bf9113d0b050157e137c26a70e657027e1bb250d5aea3b25b42a7c927ce4  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-program-preparation.json
++ date -Is
+2026-11-14T04:36:26-05:00
++ finished=1
++ printf 'preparation_complete=1\n'
+preparation_complete=1
++ status=0
++ '[' 0 -eq 0 ']'
++ '[' 1 -ne 1 ']'
++ printf 'preparation_exit=%s\n' 0
+preparation_exit=0
++ printf '%s\n' 0
++ exit 0

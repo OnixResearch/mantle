@@ -1,0 +1,75 @@
+{
+  "schema": "mantle-cohort-launch-review-v1",
+  "code_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "source_snapshot_blake3": "462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09",
+  "runner_blake3": "9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7",
+  "source_profile_blake3": "1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4",
+  "source_profile_bytes_blake3": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4",
+  "profile_transfer_equal": true,
+  "graph": {
+    "accepted": true,
+    "authority": "Parent integration decision over completed independently measured inert graph/guard inspection and recovered Luna tool observations; model output is not completion authority",
+    "steps": 125355,
+    "all_steps_reachable": true,
+    "recipe_count": 6,
+    "missing_references": 0,
+    "cycles": 0,
+    "guard_issues": 0,
+    "evidence": [
+      {
+        "path": "graph-review/graph-current-result.json",
+        "blake3": "26b71590fcbfb59694862c3e03f4ccea303860feb45fbf8edc11e85d021e9acc"
+      },
+      {
+        "path": "graph-review/graph-current-supplement.json",
+        "blake3": "d079ee6da47c268870e14bdf545e4ea622f6e3f2901d8daaa09d8196326c62f0"
+      },
+      {
+        "path": "launch-inspection/luna-completed-policy-observations.json",
+        "blake3": "933fcad1c488292d14b0cfe8e319edaf8dade54448d1ee4a1ae0f483a8d36eaf"
+      }
+    ]
+  },
+  "identity": {
+    "accepted": true,
+    "authority": "Parent integration decision over completed physical Git/mode/source/program/archive/chunk checks, Luna role inspection, and corrected static selected-source inspection",
+    "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+    "original_files_per_copy": 10427,
+    "aws_invocations": 26,
+    "ring_invocations": 12,
+    "source_selection_equal_across_stages": true,
+    "initial_output_authority_absent": true,
+    "evidence": [
+      {
+        "path": "identity-review/original.log",
+        "blake3": "0afa6f1a8d929381e21673e1b353487cc4f44e87968b5f64ab1fce97f9e7d8ee"
+      },
+      {
+        "path": "identity-review/records.log",
+        "blake3": "65c6c7cced1c319cc9cc92b43d127bfe1f56871e0d1ecc13371e600c66ba86e3"
+      },
+      {
+        "path": "luna-identity-review/roles.log",
+        "blake3": "4bf16353dd4a5af9dddf2a5d7347da1c7cce424b046149ef68676eeafe190616"
+      },
+      {
+        "path": "launch-inspection/selected-source-inspection-qualified.log",
+        "blake3": "ba6b2accff321bb6f26828c05315f84885bcf3019229209bff239d6f8e81eafc"
+      }
+    ]
+  },
+  "luna": {
+    "requested_model": "underclass/gpt-6-luna",
+    "resolved_graph_model": "underclass/gpt-6-luna",
+    "final_model_verdict_received": false,
+    "graph_agent_outcome": "quota_exhausted (429) while finalizing; completed tool facts recovered without retry or model substitution",
+    "identity_agent_outcome": "role inspection completed; selected-source template retained; parent completed remaining inert inspection after quota interruption"
+  },
+  "limitations": [
+    "Source-only launch gate, not source/compiler correctness.",
+    "No provider execution, protected action reconciliation, stage equality, v2 receipt or release claim yet.",
+    "Directory-role preauthor digests are labeled as such; no claim that unchanged preauthor digests identify the augmented prepared directories.",
+    "No independent decode/compare of every embedded hex byte; canonical record, physical hash, chunk/archive checks and actual bundle verifiers supply the stated identity evidence."
+  ]
+}

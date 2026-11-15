@@ -332,3 +332,30 @@ This completes the pipe repair only; a corrected source-complete frozen runner,
 regenerated cohort and independent review are still required. I3–I5 and real
 V2/V3 remain open.
 
+
+## Original-source-complete preparation checkpoint (2026-11-14)
+
+Frozen code `8fa84260…` plus the exact original AWS-LC tree passed source-bound
+runner qualification/build in task 1571 and the canonical CLI/contract/lifecycle
+gates in 1572. Task 1573 successfully prepared a fresh immutable `1ce22ef7…`
+cohort; both actual source verifiers reported ready and complete profile-byte
+transfer parity passed. Exact source/program/runner identities and transcripts
+are in `evidence/2026-11-14-leviathan-8fa84260-aws/` and the source-input
+correction evidence. Independent full graph/guard and physical source/program
+reviews gate its first cold launch. No provider execution, stage comparison,
+reconciliation, receipt or real parity/release acceptance follows from this
+preparation. I3–I5 and proof-dependent V2/V3 remain open.
+
+## Reviewed original-source-complete cold attempt (2026-11-14)
+
+Current independent graph/guard and physical source/program checks now support
+launch of the `1ce22ef7…` prepared cohort. Both original trees match the pinned
+Git files/modes, selected authenticated source routing and stage-local selection
+parity passed, and complete source/profile transfer parity is retained. Luna's
+quota failure is preserved without inventing a final model verdict; actual
+completed inspections and the integration owner's remaining static checks are
+bound in `evidence/2026-11-14-leviathan-8fa84260-aws/launch-review-acceptance.json`.
+Pueue 1574 is the exact cold proof command from frozen code `8fa84260…`, with
+unchanged independent pins and strict bounds and no development/remote-action
+route. I3–I5 and proof-dependent V2/V3 remain unaccepted pending real execution,
+reconciliation, receipt, parity and release evidence.

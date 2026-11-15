@@ -1,0 +1,387 @@
+{
+  "advisory_static_launch_gate": "accept",
+  "boundary": "A static admission of current physical recipe graph/guard/root/owner references only; does not authenticate a proof run, actual exit codes, dynamic controller turns/requests/cwd/env, source-package/lineage correctness, provider behavior, compiler correctness, reconciliation, fixed-point equality or release eligibility.",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws",
+  "consumer_source_blake3": {
+    "source_built_fixed_point_stagex_actions.rs": "8e9d7f09cd03c5880a3e4fdeb59dd599cac609e4b427e0d8153657dbd97b4784",
+    "source_built_mantle_programs.rs": "70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921",
+    "source_built_mantle_programs_graph.rs": "6d8ec9bd415be54d08fcb71fba531920075c235c0bf56081d5992365a0c6de10",
+    "source_built_recipe.rs": "28ca15f8081b88c5747a851a1474d92277fba142f0b7fdfa1f74d8a48374d009",
+    "source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755"
+  },
+  "frozen_code_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws",
+  "issues": {},
+  "per_recipe": {
+    "full-source-native-provider": {
+      "authenticated_perlasm_consumed": 0,
+      "authenticated_perlasm_steps": 0,
+      "controller_executable_variants": {
+        "inventory": 49,
+        "request-output": 49
+      },
+      "cross_stage_by_owner": {
+        "stagex-provider-publication": 1266,
+        "stagex-transition": 3997
+      },
+      "cross_stage_reference_occurrences": 5263,
+      "distinct_roots": 1375,
+      "embedded_controller_reference_occurrences": 7914,
+      "exports": 105,
+      "guarded_commands": 0,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "native_state_categories": {},
+      "operation_variants": {
+        "assemble-tree": 156,
+        "controller": 49,
+        "exec": 4603,
+        "materialize-fetcher": 37,
+        "write-text": 277
+      },
+      "optional_failure_commands": 0,
+      "optional_failure_direct_inputs": 0,
+      "optional_failure_roots_exports_semantic": 0,
+      "outcome": "accept",
+      "phase_observations": 0,
+      "physical_identity": {
+        "blake3": "aaf5403428b921f312b8c74336a8dba56b230fd657b88b4b5fa9d28b0fdd413c",
+        "bytes": 18268649
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+      "produced_reference_occurrences": 28041,
+      "reachable": 5122,
+      "roots": 1375,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "steps": 5122,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    },
+    "full-source-rust-provider": {
+      "authenticated_perlasm_consumed": 0,
+      "authenticated_perlasm_steps": 0,
+      "canonical_rust_provider": {
+        "reference": {
+          "action_id": "full-source-rust-provider/successor-1.94.1.provider",
+          "kind": "produced",
+          "output_id": "full-source-rust-provider"
+        },
+        "valid": true
+      },
+      "controller_executable_variants": {
+        "fixed": 181,
+        "inventory": 1871,
+        "request-output": 1690
+      },
+      "cross_stage_by_owner": {
+        "full-source-native-provider": 191487
+      },
+      "cross_stage_reference_occurrences": 191487,
+      "distinct_roots": 232254,
+      "embedded_controller_reference_occurrences": 173781,
+      "exports": 13,
+      "guarded_commands": 0,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "native_state_categories": {},
+      "operation_variants": {
+        "assemble-tree": 10928,
+        "controller": 1871,
+        "exec": 38369,
+        "extract-archive": 6,
+        "write-text": 12708
+      },
+      "optional_failure_commands": 0,
+      "optional_failure_direct_inputs": 0,
+      "optional_failure_roots_exports_semantic": 0,
+      "outcome": "accept",
+      "phase_observations": 0,
+      "physical_identity": {
+        "blake3": "2401c71c1efe2053251f9e65021b4a9ec16fcc98359f5b4536359ca75c01a407",
+        "bytes": 259029252
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/program-sources/fixed-point-rust-source-program/source-built/rust/program.json",
+      "produced_reference_occurrences": 818837,
+      "reachable": 63882,
+      "roots": 232254,
+      "semantic_root_keys": 1,
+      "semantic_root_references": 1,
+      "steps": 63882,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    },
+    "mantle-stage1": {
+      "authenticated_perlasm_consumed": 12,
+      "authenticated_perlasm_reachable": 12,
+      "authenticated_perlasm_samples": [
+        "mantle-stage1/unit-00031-script.sources.perl-0.authenticate",
+        "mantle-stage1/unit-00031-script.sources.perl-1.authenticate",
+        "mantle-stage1/unit-00031-script.sources.perl-10.authenticate"
+      ],
+      "authenticated_perlasm_steps": 12,
+      "controller_executable_variants": {
+        "inventory": 185,
+        "request-output": 185
+      },
+      "cross_stage_by_owner": {
+        "full-source-native-provider": 72422,
+        "full-source-rust-provider": 24063
+      },
+      "cross_stage_reference_occurrences": 96485,
+      "distinct_roots": 1242,
+      "embedded_controller_reference_occurrences": 36575,
+      "exports": 2,
+      "guarded_commands": 40,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "mantle_semantic_contract": {
+        "binary": {
+          "action_id": "mantle-stage1/unit-01006-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage1"
+        },
+        "binary_executable": true,
+        "build_script_keys": 98,
+        "distinct_semantic_products": 1241,
+        "exact_roots": true,
+        "extra_roots": [],
+        "invalid_semantic_key_examples": [],
+        "missing_roots": [],
+        "rust_unit_keys": 1045,
+        "smoke": {
+          "action_id": "mantle-stage1/mantle-help",
+          "kind": "produced",
+          "output_id": "stdout"
+        },
+        "smoke_executes_binary_help_exact_zero": true
+      },
+      "native_state_categories": {
+        "native_state": 3414,
+        "script_cwd": 448,
+        "script_invocation": 1697,
+        "script_text": 4133,
+        "script_tree": 4120
+      },
+      "operation_variants": {
+        "assemble-tree": 2452,
+        "controller": 185,
+        "exec": 9357,
+        "observe-phase": 40,
+        "write-text": 12067
+      },
+      "optional_failure_commands": 93,
+      "optional_failure_direct_inputs": 32,
+      "optional_failure_roots_exports_semantic": 0,
+      "outcome": "accept",
+      "phase_observations": 40,
+      "physical_identity": {
+        "blake3": "f0cd61f74c0346dffdbccd75dd4e5a5c14ce2aa494692d9c299ebc898b558c4d",
+        "bytes": 172677322
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+      "produced_reference_occurrences": 382075,
+      "reachable": 24101,
+      "roots": 1242,
+      "semantic_root_keys": 1143,
+      "semantic_root_references": 1241,
+      "steps": 24101,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    },
+    "mantle-stage2": {
+      "authenticated_perlasm_consumed": 12,
+      "authenticated_perlasm_reachable": 12,
+      "authenticated_perlasm_samples": [
+        "mantle-stage2/unit-00031-script.sources.perl-0.authenticate",
+        "mantle-stage2/unit-00031-script.sources.perl-1.authenticate",
+        "mantle-stage2/unit-00031-script.sources.perl-10.authenticate"
+      ],
+      "authenticated_perlasm_steps": 12,
+      "controller_executable_variants": {
+        "inventory": 185,
+        "request-output": 185
+      },
+      "cross_stage_by_owner": {
+        "full-source-native-provider": 72422,
+        "full-source-rust-provider": 24063
+      },
+      "cross_stage_reference_occurrences": 96485,
+      "distinct_roots": 1242,
+      "embedded_controller_reference_occurrences": 36575,
+      "exports": 2,
+      "guarded_commands": 40,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "mantle_semantic_contract": {
+        "binary": {
+          "action_id": "mantle-stage2/unit-01006-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage2"
+        },
+        "binary_executable": true,
+        "build_script_keys": 98,
+        "distinct_semantic_products": 1241,
+        "exact_roots": true,
+        "extra_roots": [],
+        "invalid_semantic_key_examples": [],
+        "missing_roots": [],
+        "rust_unit_keys": 1045,
+        "smoke": {
+          "action_id": "mantle-stage2/mantle-help",
+          "kind": "produced",
+          "output_id": "stdout"
+        },
+        "smoke_executes_binary_help_exact_zero": true
+      },
+      "native_state_categories": {
+        "native_state": 3414,
+        "script_cwd": 448,
+        "script_invocation": 1697,
+        "script_text": 4133,
+        "script_tree": 4120
+      },
+      "operation_variants": {
+        "assemble-tree": 2452,
+        "controller": 185,
+        "exec": 9357,
+        "observe-phase": 40,
+        "write-text": 12067
+      },
+      "optional_failure_commands": 93,
+      "optional_failure_direct_inputs": 32,
+      "optional_failure_roots_exports_semantic": 0,
+      "outcome": "accept",
+      "phase_observations": 40,
+      "physical_identity": {
+        "blake3": "a35d5167194df66c913adf5e7300b5763b52f60526479d225619c193e4d85442",
+        "bytes": 172677322
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+      "produced_reference_occurrences": 382075,
+      "reachable": 24101,
+      "roots": 1242,
+      "semantic_root_keys": 1143,
+      "semantic_root_references": 1241,
+      "steps": 24101,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    },
+    "stagex-provider-publication": {
+      "authenticated_perlasm_consumed": 0,
+      "authenticated_perlasm_steps": 0,
+      "canonical_stagex_tree": {
+        "reference": {
+          "action_id": "stagex-provider-publication/canonical-provider",
+          "kind": "produced",
+          "output_id": "stagex-provider"
+        },
+        "valid": true
+      },
+      "controller_executable_variants": {},
+      "cross_stage_by_owner": {
+        "stagex-transition": 19
+      },
+      "cross_stage_reference_occurrences": 19,
+      "distinct_roots": 64,
+      "embedded_controller_reference_occurrences": 0,
+      "exports": 10,
+      "guarded_commands": 0,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "native_state_categories": {},
+      "operation_variants": {
+        "assemble-tree": 2,
+        "exec": 16
+      },
+      "optional_failure_commands": 0,
+      "optional_failure_direct_inputs": 0,
+      "optional_failure_roots_exports_semantic": 0,
+      "outcome": "accept",
+      "phase_observations": 0,
+      "physical_identity": {
+        "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+        "bytes": 52226
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+      "produced_reference_occurrences": 129,
+      "reachable": 18,
+      "roots": 64,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "steps": 18,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    },
+    "stagex-transition": {
+      "authenticated_perlasm_consumed": 0,
+      "authenticated_perlasm_steps": 0,
+      "canonical_stagex_tree": {
+        "reference": {
+          "action_id": "stagex-transition/canonical-transition",
+          "kind": "produced",
+          "output_id": "stagex-transition"
+        },
+        "valid": true
+      },
+      "controller_executable_variants": {},
+      "cross_stage_by_owner": {},
+      "cross_stage_reference_occurrences": 0,
+      "distinct_roots": 28137,
+      "embedded_controller_reference_occurrences": 0,
+      "exports": 6233,
+      "guarded_commands": 0,
+      "guarded_direct_inputs": 0,
+      "guarded_root_export_semantic": 0,
+      "native_state_categories": {},
+      "operation_variants": {
+        "assemble-tree": 97,
+        "exec": 7982,
+        "materialize-fetcher": 44,
+        "write-text": 8
+      },
+      "optional_failure_commands": 14,
+      "optional_failure_direct_inputs": 0,
+      "optional_failure_roots_exports_semantic": 14,
+      "outcome": "accept",
+      "phase_observations": 0,
+      "physical_identity": {
+        "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+        "bytes": 31730468
+      },
+      "physical_source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/program-sources/source-built-stagex-programs/stagex-transition.json",
+      "produced_reference_occurrences": 71910,
+      "reachable": 8131,
+      "roots": 28137,
+      "semantic_root_keys": 0,
+      "semantic_root_references": 0,
+      "steps": 8131,
+      "timeout_groups": 0,
+      "unreachable": 0,
+      "unreachable_samples": []
+    }
+  },
+  "scope": "read-only static six physical recipe launch gate",
+  "total": {
+    "cross_stage_reference_occurrences": 389739,
+    "cycle_candidates": 0,
+    "embedded_controller_reference_occurrences": 254845,
+    "guarded_commands": 80,
+    "guarded_direct_inputs": 0,
+    "guarded_root_export_semantic": 0,
+    "issues": {},
+    "optional_failure_commands": 200,
+    "optional_failure_direct_inputs": 64,
+    "phase_observations": 80,
+    "produced_reference_occurrences": 1683067,
+    "reachable": 125355,
+    "roots": 264314,
+    "steps": 125355,
+    "unreachable": 0
+  }
+}

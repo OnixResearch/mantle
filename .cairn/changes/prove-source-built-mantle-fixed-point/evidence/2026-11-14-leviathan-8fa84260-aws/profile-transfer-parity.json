@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-prepared-profile-transfer-parity-v1",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "remote_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json",
+  "remote_observed_blake3": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4",
+  "local_received_stream_blake3": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4",
+  "equal": true,
+  "manifest_blake3": "1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4",
+  "preparation_task": 1573,
+  "method": "Actual SSH cat byte stream received by workstation b3sum; no full profile stored locally",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net '/run/current-system/sw/bin/cat /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/source-profile.json' | /run/current-system/sw/bin/b3sum",
+  "observed_output": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4  -\n",
+  "non_claim": "Exact profile transfer identity only; does not accept physical source/recipe review, provider execution, fixed point or release eligibility."
+}

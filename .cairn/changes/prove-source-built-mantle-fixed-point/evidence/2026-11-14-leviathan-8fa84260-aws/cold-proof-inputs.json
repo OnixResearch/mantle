@@ -1,0 +1,12 @@
+{
+  "code_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-8fa84260-aws",
+  "runner_blake3": "9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws",
+  "profile_manifest_blake3": "1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4",
+  "profile_bytes_blake3": "f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4",
+  "preparation_report_bytes_blake3": "fe90bf9113d0b050157e137c26a70e657027e1bb250d5aea3b25b42a7c927ce4",
+  "proof": "/home/brittonr/sbfp-20261113-berdKH/proof-8fa84260-aws",
+  "review_gate": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-8fa84260-aws.json",
+  "non_claim": "Concrete gated command only. No proof task is submitted before both independent reviews and actual profile byte-transfer parity are accepted."
+}

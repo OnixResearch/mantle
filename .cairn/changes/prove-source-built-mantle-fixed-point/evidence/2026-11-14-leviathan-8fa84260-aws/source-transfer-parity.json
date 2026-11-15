@@ -1,0 +1,16 @@
+{
+  "schema": "mantle-complete-source-transfer-parity-v1",
+  "source_code_revision": "8fa84260ddc5ccfd01f12d09908038cf03cf472f",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-8fa84260-aws.tar.gz",
+  "remote_observed_blake3": "29e4717da23d7fc99d05d4b501f3581f58e262454a3ed5d37de0fa8fe002bd00",
+  "local_received_archive": "/dev/shm/mantle-guarded-source.7FLxkH/complete-source-8fa84260-aws.tar.gz",
+  "local_observed_blake3": "29e4717da23d7fc99d05d4b501f3581f58e262454a3ed5d37de0fa8fe002bd00",
+  "equal": true,
+  "method": "rsync --checksum --protect-args, followed by local b3sum; remote archive digest is retained in the successful assembly log and receipt",
+  "assembly_task": 1570,
+  "code_upload_blake3": "37ed9056139a5dd529f10fe2f0724c9192831d5f998072a8823ad01bc436a49c",
+  "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "original_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "non_claim": "Exact complete-source transfer parity only; no runner qualification, source correctness, provider execution or fixed point."
+}

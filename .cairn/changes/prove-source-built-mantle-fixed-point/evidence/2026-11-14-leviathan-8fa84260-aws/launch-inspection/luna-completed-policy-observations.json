@@ -1,0 +1,47 @@
+{
+  "model_selector": "underclass/gpt-6-luna",
+  "agent_outcome": "quota_exhausted before final verdict; not a launch acceptance",
+  "observations": [
+    {
+      "name": "ValidateRustPolicies",
+      "text": "ValidateRustPolicies: ready pid=3637588 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"policy_variants\": {\"exact\": 40421, \"normal\": 3380, \"one-of\": 181}, \"policy_count\": 43982, \"invalid_samples\": []}\n",
+      "is_error": false
+    },
+    {
+      "name": "ValidateNativePolicies",
+      "text": "ValidateNativePolicies: ready pid=3642112 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"policy_variants\": {\"exact\": 3674, \"one-of\": 978, \"normal\": 98}, \"policy_count\": 4750, \"invalid_samples\": []}\n",
+      "is_error": false
+    },
+    {
+      "name": "ValidateStageOnePolicies",
+      "text": "ValidateStageOnePolicies: ready pid=3644584 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"policy_variants\": {\"exact\": 9449, \"one-of\": 93, \"normal\": 370}, \"policy_count\": 9912, \"invalid_samples\": []}\n",
+      "is_error": false
+    },
+    {
+      "name": "ValidateStageTwoPolicies",
+      "text": "ValidateStageTwoPolicies: ready pid=3650688 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"policy_variants\": {\"exact\": 9449, \"one-of\": 93, \"normal\": 370}, \"policy_count\": 9912, \"invalid_samples\": []}\n",
+      "is_error": false
+    },
+    {
+      "name": "CheckTransitionRoles",
+      "text": "CheckTransitionRoles: ready pid=3662474 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"exit_policy_variants\": {\"exact\": 7968, \"one-of\": 14}, \"invalid_exit_policies\": [], \"materializer_roles\": {\"stagex-source-bundle\": 44}}\n",
+      "is_error": false
+    },
+    {
+      "name": "CheckNativeRoles",
+      "text": "CheckNativeRoles: ready pid=3665247 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"materializer_roles\": {\"native-source-bundle\": 37}, \"materializer_variants\": {\"materialize-fetcher\": 37}}\n",
+      "is_error": false
+    },
+    {
+      "name": "ValidatePublicationPolicies",
+      "text": "ValidatePublicationPolicies: exited ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"exit_policy_variants\": {\"exact\": 16}, \"invalid_samples\": []}\n",
+      "is_error": false
+    },
+    {
+      "name": "CheckControllerBindings1",
+      "text": "CheckControllerBindings1: ready pid=3892216 ready\nIgnored timeout: service-only; readiness follows ready.timeout.\n{\"stage\": \"mantle-stage1\", \"controllers\": 185, \"catalog_binding_mismatches\": 0, \"samples\": []}\n",
+      "is_error": false
+    }
+  ],
+  "non_claim": "Recovered actual tool output only; no fabricated final model verdict, provider execution, fixed point or release claim."
+}

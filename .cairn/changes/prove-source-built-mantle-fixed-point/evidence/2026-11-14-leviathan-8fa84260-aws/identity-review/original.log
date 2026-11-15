@@ -1,0 +1,8 @@
+PIN commit=02561621ffa4cf17c0c4f70bc11a82df36b42ae9 tree=969d75db5c0494de4a26bbb2dcbf6837058054c1 git_db=/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git
+TREE_FILES /home/brittonr/sbfp-20261113-berdKH/runner-source-8fa84260-aws/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9 total=10427 regular_0644=10207 executable_0755=220 extra=0 symlinks=0
+GIT_BLOBS FROZEN match=true
+NORMALIZED_GNU_TAR FROZEN blake3=8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
+TREE_FILES /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-8fa84260-aws/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9 total=10427 regular_0644=10207 executable_0755=220 extra=0 symlinks=0
+GIT_BLOBS COHORT match=true
+NORMALIZED_GNU_TAR COHORT blake3=8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
+ORIGINAL_CONCLUSION frozen_and_cohort_match_pinned_git=true

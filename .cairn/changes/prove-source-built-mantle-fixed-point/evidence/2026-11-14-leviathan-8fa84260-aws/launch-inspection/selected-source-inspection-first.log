@@ -1,0 +1,5 @@
+CURRENT_STAGE stage=1 raw_b3=f0cd61f74c0346dffdbccd75dd4e5a5c14ce2aa494692d9c299ebc898b558c4d bytes=172677322 aws_generators=26 ring_authentications=12
+CURRENT_STAGE stage=2 raw_b3=a35d5167194df66c913adf5e7300b5763b52f60526479d225619c193e4d85442 bytes=172677322 aws_generators=26 ring_authentications=12
+STAGE_SELECTION_PARITY aws=26 ring=12 validated stage-local tuples identical across stage1/stage2
+BLOCKER AWS original is not selected source-tree output: unit-00037-script.perlasm-source
+inspection_exit=3

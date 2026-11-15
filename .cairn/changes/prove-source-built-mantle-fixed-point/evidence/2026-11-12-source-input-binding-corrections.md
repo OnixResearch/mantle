@@ -955,3 +955,147 @@ mechanism observations, not a source-built provider, protected action
 reconciliation, prepared-cohort acceptance, fixed point or release claim. The
 corrected complete source still requires a source-bound runner, fresh program
 preparation and independent physical-cohort review before cold launch.
+
+## Corrected complete-source frozen runner (2026-11-14)
+
+Commit `8fa84260ddc5ccfd01f12d09908038cf03cf472f` contains the guarded
+original-statement repair and retained fixture evidence; it is published on
+`origin/main`. Task 1570 successfully assembled that exact code with the pinned
+original AWS-LC source. The complete normalized source-tree BLAKE3 is
+`462f9c8e68382c0876eede90b1b858386391878718fe7b9b9a3e2f01d3bcce09`;
+its compressed archive BLAKE3 is
+`29e4717da23d7fc99d05d4b501f3581f58e262454a3ed5d37de0fa8fe002bd00`.
+The received complete archive was independently hashed on the workstation and
+matched Leviathan. Exact code/original input identities, assembly output and
+two-endpoint transfer facts are in `2026-11-14-leviathan-8fa84260-aws/`.
+
+Source-bound runner qualification/build task 1571 completed successfully. Its
+source-tree digest is unchanged before and after the actual checked-in-shell
+build, and its exact executed source-built test result is:
+
+```text
+test result: ok. 261 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.27s
+```
+
+Package formatting, strict root binary/test release Clippy and the locked offline
+release build also passed. Installed runner BLAKE3 is
+`9f8443f0e1cde27bbab085db844e70078695dbf927af2dc01f83adcecf99ebb7`.
+Its retained compressed qualification-log BLAKE3 matches the remote original:
+`8b8a0c707b66e1e60b4bec5545042a766810ea78135b18026bf6e22571242086`;
+the remote uncompressed log digest is
+`e1634324901ab59607cc26bbf0f669cc2ac059927e3e395a5c776912c4e1f6a9`.
+Ignored protected smokes were not executed by this command.
+
+Independent task 1572 ran the canonical CLI/contract/lifecycle checks on another
+extraction of that same complete source archive and completed successfully:
+
+| Executed test leg | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| `release_cli` | 154 | 0 | 0 |
+| `bootstrap_parity_cli` | 21 | 0 | 0 |
+| `machine_schema_contracts` | 4 | 0 | 0 |
+| Library v2 receipt tests | 18 | 0 | 0 |
+| Cargo-free self-build mechanisms | 59 | 0 | 0 |
+| Source-toolchain closure mechanisms | 52 | 0 | 0 |
+| Self-build mechanisms | 172 | 0 | 0 |
+| Release-core determinism | 22 | 0 | 0 |
+| Release-core genuine rebuild | 6 | 0 | 0 |
+
+The machine checker reported `PASS (24 contracted, 65 classified)`. Nickel
+reported 1.17.0; Cairn validation and proposal/design/tasks gates returned success
+with `valid: true`. The retained canonical compressed-log digest matches the
+remote copy: `ee79bf112ab2029b657d2bf434b5ef2e7995c42e915c2b9241e5834f8e25dd55`;
+the remote uncompressed digest is
+`46c669c4662e4d778b7714a38320ad9647f37e91211bbcba083b63633eac695c`.
+
+Task 1573 depends on both successful qualifications and regenerates a new
+source-complete cohort. Submission is not acceptance of preparation, physical
+source/program review, a provider, Mantle stage equality, reconciliation, a v2
+receipt or a release. I3–I5 and proof-dependent V2/V3 remain open.
+
+## Verified original-source-complete inert cohort (2026-11-14)
+
+Task 1573 completed `Success`. Its current source profile and prepared profile
+both reported `ready` with no missing, stale, unsupported or untrusted records.
+The input manifest identity is
+`55e7300eb4fb0930a62fccf44a4d72ee3c7b82dcb4739b44b3d851250d3fd186`;
+the authored output manifest identity is
+`1ce22ef7bf87d93e94d6473a14979ce2b4390f8f4312478344c1dc08a1ac78c4`.
+The actual source-program report binds these program records:
+
+| Program record | Content BLAKE3 |
+| --- | --- |
+| `fixed-point-native-source-program` | `04eff17a42aded3d6bdc62b4f782050c4180594acdb67d9f977b65f6537e238e` |
+| `fixed-point-rust-source-program` | `3a0575915396758fe9e9d4f95267ed123d9d7b4736f5a2cf2219d8fecd54f8f6` |
+| `source-built-mantle-programs` | `093e62b24464783de487e40fd4aace098e3bdd0d75aacd8bd0f30626c129ed58` |
+| `source-built-stagex-programs` | `c4c9e4c7d1e829e6a29890c2d5297754c2475f8d76bde38414d00aab96259410` |
+
+The source-input profile bytes and frozen source tree are unchanged through
+preparation. The actual prepared-profile byte stream was transferred over SSH
+and hashed on the workstation, matching the remote captured raw digest
+`f8a91b58db64b68cb5a4e69c47d85d9dd1d5df9ecf3ea4bc6f33ca82f153e7f4`.
+This raw-file digest is not the manifest identity passed to the cold-proof CLI.
+The exact report bytes have digest
+`fe90bf9113d0b050157e137c26a70e657027e1bb250d5aea3b25b42a7c927ce4`.
+Reports, terminal task result, exact preparation log and transfer parity are
+retained in `2026-11-14-leviathan-8fa84260-aws/`.
+
+Separate complete graph/guard and physical identity/authenticated-source
+reviews gate launch of the concrete cold command retained beside those inputs.
+No proof is accepted from preparation, transfer parity, a planned command or a
+review in progress. I3–I5 and proof-dependent V2/V3 remain open.
+
+## Current physical launch gate and cold attempt (2026-11-14)
+
+The complete current graph inspection accepted all six physical recipes: every
+one of the 125,355 steps is root-reachable, with no missing/late/foreign producer,
+unknown output, graph cycle or guarded-output admission finding. Exact recipe
+bytes/hashes, complete graph/guard procedures and current consumer-file hashes
+are retained in `2026-11-14-leviathan-8fa84260-aws/graph-review/`.
+
+Physical identity inspection verified both installed original AWS-LC trees
+against the pinned Git blobs, modes and normalized tree digest. All four appended
+program records passed report/content bindings, archive-member/content,
+physical-file/chunk and recursive-NAR checks; original native record bodies were
+preserved. Actual role inspection confirmed the selected source files, helper
+copies, Rust-authority copies, cold selector and absent initial output roots.
+Directory-role preauthor digests are explicitly labeled as preauthor facts, not
+invented hashes of the augmented prepared directories. The full frozen source
+tree still matches `462f9c8e…`. Evidence is in `identity-review/` and
+`luna-identity-review/roles.log` beside that current graph inspection.
+
+The user-requested explicit Luna reviewers ran retained read-only checks, but
+Luna exhausted its subscription pool with HTTP 429 while the graph agent was
+finalizing. No final Luna model verdict is claimed and no substitute-model
+retry is used. Actual completed Luna commands/results were recovered into
+`launch-inspection/luna-graph-tool-{calls,results}.jsonl`; completed policy
+observations are retained separately. The earlier configured reviewer route was
+Sol and is labeled diagnostic/advisory, not misreported as Luna.
+
+The integration owner completed the remaining inert selected-source inspection.
+Its first inspection failure was a matcher quotation bug; a later comparison
+also exposed normalization of producer prefixes in a temporary inspection tuple.
+Only inspection code was corrected, preserving qualified references for actual
+source checks and normalizing validated local stage prefixes only for parity.
+The final command exited 0: both stage recipes have identical stage-local
+selections, every selected AWS-LC/Ring original has the exact supported complete
+boundary, Ring package checksums match, both translators exist and match their
+source identities, and each original rsaz assembler-probe literal occurs once.
+No original source, helper, provider or recipe was executed by that inspection.
+Exact successful output and preceding failed inspection are retained in
+`launch-inspection/selected-source-inspection-*`.
+
+`launch-review-acceptance.json` records the parent integration decision over
+these completed independent measurements, explicit limitations and actual
+profile-transfer parity. It is a source-only launch gate, not proof completion
+authority. Pueue task 1574 runs the exact retained cold command on Leviathan in
+the fresh absent `proof-8fa84260-aws` root. The native-provider expectation,
+lineage, strict source-only policy, event/source bounds, elapsed/disk budget and
+local-only execution are unchanged; no development cache, provider adoption or
+remote action route is enabled. `cold-proof-submitted.json` binds its command,
+source, runner, manifest and raw profile identities.
+
+Submission alone accepts no provider, Mantle stage, fixed point, action
+reconciliation, v2 receipt, independent backend parity or release evidence.
+I3–I5 and proof-dependent V2/V3 remain open until the actual task and independent
+post-execution verification establish their required facts.
