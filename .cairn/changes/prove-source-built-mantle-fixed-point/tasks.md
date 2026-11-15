@@ -384,3 +384,30 @@ execution, not imported from historical outputs or cache hits. Existing native
 row receipts remain unchanged. A new committed source snapshot, qualified
 runner, regenerated cohort and current launch review are still required;
 I3–I5 and proof-dependent V2/V3 remain open.
+
+## Committed typed-member source checkpoint (2026-11-15)
+
+Commit `e9a58881…` is pushed. Complete-source assembly 1581, source-bound
+qualification/build 1582 and canonical CLI/contract/lifecycle gates 1583 all
+completed successfully. The frozen complete source identity is `e62509cd…`;
+263 source-built tests passed with 27 ignored, and the runner remains byte-bound
+through unchanged pre/post source checks. Exact byte-verified logs and source
+metadata are in `evidence/2026-11-15-leviathan-e9a58881/`.
+
+Preparation 1584 is gated on both successful qualifications and must author a
+new cohort. No prepared profile, protected provider, Mantle stage, receipt or
+fixed point is accepted from these checks; physical parity, current independent
+launch review and actual execution remain required. I3–I5 and proof-dependent
+V2/V3 stay open.
+
+
+## Regenerated committed cohort checkpoint (2026-11-15)
+
+Task 1584 completed source-only preparation for frozen `e9a58881…`. Both actual
+bundle verifiers report ready, and the new prepared manifest is `30960523…`.
+Current program/report identities and full preparation output are retained in
+`evidence/2026-11-15-leviathan-e9a58881/`. Full-profile byte-stream transfer
+parity and the requested complete current Luna inspections gate the unlaunched
+cold command. This completes regeneration only, not protected provider/stage
+execution, a proof receipt, real native parity or release acceptance. I3–I5 and
+proof-dependent V2/V3 stay open.

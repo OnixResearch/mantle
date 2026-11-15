@@ -1,0 +1,9 @@
+{
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "local_archive": "/dev/shm/mantle-e9a58881-freeze.tkGqBV/source-e9a58881b9ff491f47864632367c9b8ea4af76e3.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-e9a58881b9ff491f47864632367c9b8ea4af76e3.tar.gz",
+  "local_archive_blake3": "494a677f912de7f25d9efadde55ba6bcc3052bf9193a80022332a1da810ee4a5",
+  "remote_archive_blake3": "494a677f912de7f25d9efadde55ba6bcc3052bf9193a80022332a1da810ee4a5",
+  "equal": true,
+  "non_claim": "Committed source archive byte-transfer equality only; no runner qualification or fixed-point proof"
+}

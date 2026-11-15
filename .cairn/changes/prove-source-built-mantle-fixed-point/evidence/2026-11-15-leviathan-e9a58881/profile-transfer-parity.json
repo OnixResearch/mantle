@@ -1,0 +1,13 @@
+{
+  "schema": "mantle-source-profile-byte-transfer-parity-v1",
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/source-profile.json",
+  "manifest_blake3": "3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946",
+  "remote_file_bytes": 15790943073,
+  "remote_file_blake3": "32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf",
+  "local_complete_stream_blake3": "32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf",
+  "equal": true,
+  "command": "ssh -C -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/source-profile.json' | b3sum --no-names",
+  "storage": "Complete byte stream transferred and hashed; no local profile file retained.",
+  "non_claim": "Raw profile-byte transfer identity only; manifest identity is separately verified. No current model verdict, provider execution or fixed-point proof."
+}

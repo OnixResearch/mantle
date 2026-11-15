@@ -1,0 +1,14 @@
+{
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "source_tree_blake3": "e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-e9a58881-typed-index",
+  "runner_blake3": "76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504",
+  "prepared_cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index",
+  "manifest_blake3": "3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946",
+  "profile_bytes_blake3": "32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf",
+  "profile_bytes": 15790943073,
+  "preparation_report_bytes_blake3": "3c848d614b58613cafb88f2eaf1affad95fa18c642f49eb7b95df4932adc5b96",
+  "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "non_claim": "Current declared input binding; full profile transfer and complete current independent reviews still gate launch."
+}

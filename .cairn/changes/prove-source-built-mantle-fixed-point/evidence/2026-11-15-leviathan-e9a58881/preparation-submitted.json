@@ -1,0 +1,13 @@
+{
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1584,
+  "after": [
+    1582,
+    1583
+  ],
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-e9a58881-typed-index.sh",
+  "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "non_claim": "Source-only preparation queued behind actual runner qualification and canonical gates; no prepared cohort or provider/proof completion observed."
+}

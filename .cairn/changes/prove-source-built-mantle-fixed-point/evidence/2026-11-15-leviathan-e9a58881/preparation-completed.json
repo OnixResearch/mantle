@@ -1,0 +1,45 @@
+{
+  "id": 1584,
+  "result": "Success",
+  "start": "2026-11-15T01:59:17.839958466-05:00",
+  "end": "2026-11-15T02:40:04.205593067-05:00",
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "source_tree_blake3": "e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+  "report": {
+    "schema": "mantle-source-built-source-programs-v1",
+    "input_profile_blake3": "5974bc464d7bb0f357a89a60dd18f147413500a8533ccd7d0007644ee987c147",
+    "input_plan_blake3": "87a66a10c559307b92d3aeac145f22251019cd4ad32d901bb9ca031da1432525",
+    "output_profile_blake3": "3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946",
+    "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-e9a58881-typed-index/source-profile.json",
+    "program_records": {
+      "fixed-point-native-source-program": "990c2bf6333cdcddea75adbf620504dab1cf7ee6abfd6aa9c688f1ab817cfcb9",
+      "fixed-point-rust-source-program": "90bc338312e4710668dd2590a10e2b5de349d4393f1e4e66c9074a25ee68bba4",
+      "source-built-mantle-programs": "2a1e19e4b61256507876acc3d1e3dae293368c390bb336912627ec0dfa251e6f",
+      "source-built-stagex-programs": "42ab05777c1299b7234c0b306da03b53f1975f202635520410dcb5203a26b7b7"
+    },
+    "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+  },
+  "artifacts": [
+    {
+      "file": "preparation.log",
+      "blake3": "59e9e9d6c50dd1225c2363e6f0c205203f2931938b762ae5fb6844b6dbeb80e0"
+    },
+    {
+      "file": "preparation-report.json",
+      "blake3": "3c848d614b58613cafb88f2eaf1affad95fa18c642f49eb7b95df4932adc5b96"
+    },
+    {
+      "file": "source-refresh.json",
+      "blake3": "6e47b4557277970965dc4d08676d19b5f472de15123e39b6ac4ff30ee742c4a6"
+    },
+    {
+      "file": "source-profile-verification.json",
+      "blake3": "2ec85842b6b7dfd042043d2349e345eef804b677fbe7eac4b2fedb3378e0155a"
+    },
+    {
+      "file": "prepared-source-profile-verification.json",
+      "blake3": "e3cca2f01dc2e93658c3bcbc6f47a8de78ffcf5cc02334686a6e6e77cc180e48"
+    }
+  ],
+  "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+}

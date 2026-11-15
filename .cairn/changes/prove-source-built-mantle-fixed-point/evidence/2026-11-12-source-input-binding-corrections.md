@@ -1181,3 +1181,93 @@ command/transcript. A new committed snapshot, source-bound runner build,
 regenerated profile, physical transfer parity and current launch review remain
 necessary before another cold attempt. I3–I5 and proof-dependent V2/V3 remain
 unaccepted.
+
+## Committed typed-member frozen qualification (2026-11-15)
+
+The verified fixes and their evidence are committed and pushed as
+`e9a58881b9ff491f47864632367c9b8ea4af76e3`. The new complete-source snapshot
+combines that exact Git archive with the unchanged pinned original AWS-LC
+commit/tree; it does not reuse a previously prepared cohort. Code-archive byte
+transfer parity passed. The complete normalized source-tree identity is
+`e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7`, and its
+compressed complete archive is
+`02cb82a404b09b3b85aec971aacf3437271f203157e9e7acd296aaeee1624819`.
+
+Task 1581 completed source assembly. Task 1582 completed frozen-source
+formatting, source-built tests, focused strict Clippy and the release runner
+build. Its source tree remained exactly `e62509cd…` before and after the build;
+the installed runner BLAKE3 is
+`76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504`.
+Captured source-built execution reports:
+
+```text
+test result: ok. 263 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 7.62s
+```
+
+Task 1583 independently completed the canonical release CLI, bootstrap parity
+CLI, machine-schema, v2 receipt, Cargo-free, source-closure, self-build and
+release-core contract legs, the machine-contract checker, Cairn validation and
+the proposal/design/tasks gates. The exact canonical transcript contains nine
+successful test-result lines, `valid: true` and three `PASS` gate verdicts.
+These fixture/contract and lifecycle results do not establish current native
+backend parity, release acceptance or the fixed point.
+
+Full logs were retrieved as exact byte artifacts and independently BLAKE3
+compared with the remote files. `2026-11-15-leviathan-e9a58881/` retains the
+commands, dependency graph, source/archive/runner identities, complete logs and
+`completed-qualification.json`. Task 1584 is scheduled only after both 1582 and
+1583 succeed and must produce a fresh source-only cohort before physical
+transfer parity and current independent launch review. Submission is not
+prepared-profile, provider, stage or proof acceptance. I3–I5 and proof-dependent
+V2/V3 remain open.
+
+
+## Regenerated committed-source inert cohort (2026-11-15)
+
+Task 1584 completed `Success` after both source-bound gates. The refreshed
+input manifest is
+`5974bc464d7bb0f357a89a60dd18f147413500a8533ccd7d0007644ee987c147`, its input
+plan is `87a66a10c559307b92d3aeac145f22251019cd4ad32d901bb9ca031da1432525`,
+and the new prepared manifest is
+`3096052305ed9bc2cf0b23b3291dc98153f5b090d7f9abe726368638f883a946`.
+Both actual bundle verifiers report `ready` with empty missing, stale,
+unsupported and untrusted record arrays. The unchanged-tree and unchanged
+input-profile checks in the retained preparation command passed.
+
+The actual report binds these fresh program records:
+
+| Program record | Content BLAKE3 |
+| --- | --- |
+| `fixed-point-native-source-program` | `990c2bf6333cdcddea75adbf620504dab1cf7ee6abfd6aa9c688f1ab817cfcb9` |
+| `fixed-point-rust-source-program` | `90bc338312e4710668dd2590a10e2b5de349d4393f1e4e66c9074a25ee68bba4` |
+| `source-built-mantle-programs` | `2a1e19e4b61256507876acc3d1e3dae293368c390bb336912627ec0dfa251e6f` |
+| `source-built-stagex-programs` | `42ab05777c1299b7234c0b306da03b53f1975f202635520410dcb5203a26b7b7` |
+
+Reports, commands and successful task facts are retained under
+`2026-11-15-leviathan-e9a58881/`. The remote prepared profile has raw BLAKE3
+`32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf` and
+15,790,943,073 bytes. Its full byte stream is being transferred and hashed
+without making a local profile copy; the raw-file hash is not the manifest
+identity used by the proof CLI. The two explicitly requested Luna reviewers
+have the published current cohort for complete graph/guard/typed-word and
+physical source/record checks. No current final review verdict or transfer
+parity result is claimed here.
+
+The retained cold command is unlaunched and requires current review acceptance,
+exact runner/profile/report identities and fresh output namespaces. No provider,
+Mantle stage, reconciliation, receipt, native parity or release evidence follows
+from this inert preparation. I3–I5 and proof-dependent V2/V3 remain open.
+
+
+## Complete current profile transfer parity (2026-11-15)
+
+The actual complete prepared-profile byte stream was transferred over SSH and
+hashed on the workstation without storing a local profile copy. The received
+stream BLAKE3 equals the remote raw-file value
+`32b865ac836fa247a6a20b63fd5dd38530c6a455a39dfe84344694be329806cf`; the
+remote file size is 15,790,943,073 bytes. The exact command and identity-only
+scope are retained in
+`2026-11-15-leviathan-e9a58881/profile-transfer-parity.json`. This does not
+replace the independently verified manifest identity `30960523…` or accept
+source execution. Complete current Luna review verdicts still gate the retained
+unlaunched cold command; I3–I5 and proof-dependent V2/V3 remain open.

@@ -1,0 +1,70 @@
+{
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "assembly_task": {
+    "id": 1581,
+    "result": "Success"
+  },
+  "qualification_task": {
+    "id": 1582,
+    "result": "Success"
+  },
+  "canonical_task": {
+    "id": 1583,
+    "result": "Success"
+  },
+  "logs": [
+    {
+      "file": "assemble-complete-source.log",
+      "blake3": "744143bf76eb8548a3b5937a6a625133db54083ddee4175effa6772a6e171207",
+      "bytes": 7365,
+      "facts": [
+        "+ printf 'assembly_exit=%s\\n' 0",
+        "assembly_exit=0"
+      ]
+    },
+    {
+      "file": "qualification.log",
+      "blake3": "6f345a90b5f049535e26456e671631a7e67947f1c911dcd8d11f21891feac754",
+      "bytes": 63533,
+      "facts": [
+        "+ printf 'frozen_source_revision=%s\\nsource_tree_before_blake3=%s\\n' e9a58881b9ff491f47864632367c9b8ea4af76e3 e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+        "source_tree_before_blake3=e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+        "test result: ok. 263 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 7.62s",
+        "+ printf 'source_tree_after_blake3=%s\\n' e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+        "source_tree_after_blake3=e62509cd40ab6e4b202dce425a40483d74101210c6322c64f70b196ff7e177f7",
+        "+ printf 'qualification_complete=1\\n'",
+        "qualification_complete=1"
+      ]
+    },
+    {
+      "file": "canonical-qualification.log",
+      "blake3": "da7d57b90cc649a8b48946dfe3b44202ae2da305c79edac51f72056550a42237",
+      "bytes": 158355,
+      "facts": [
+        "test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.46s",
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.45s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.76s",
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 4.03s",
+        "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2909 filtered out; finished in 0.14s",
+        "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2916 filtered out; finished in 0.02s",
+        "test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2796 filtered out; finished in 0.21s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.07s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s",
+        "    \"valid\": true",
+        "  \"valid\": true,",
+        "  \"valid\": true,",
+        "  \"verdict\": \"PASS\"",
+        "  \"valid\": true,",
+        "  \"verdict\": \"PASS\"",
+        "    \"valid\": true",
+        "  \"valid\": true,",
+        "  \"verdict\": \"PASS\"",
+        "+ printf 'canonical_qualification_complete=1\\n'",
+        "canonical_qualification_complete=1"
+      ]
+    }
+  ],
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-e9a58881-typed-index",
+  "runner_blake3": "76654f00f2c2418e585a1f718da8c8d36ab0d110fbeddc4e69b6dd2dc8116504",
+  "non_claim": "Actual assembly and source-bound runner/contract/lifecycle qualification only; no source-preparation, provider execution or fixed-point proof completion claim."
+}

@@ -1,0 +1,14 @@
+{
+  "source_revision": "e9a58881b9ff491f47864632367c9b8ea4af76e3",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "assembly_task": 1581,
+  "qualification_task": 1582,
+  "canonical_task": 1583,
+  "dependencies": {
+    "qualification_after": 1581,
+    "canonical_after": 1581
+  },
+  "runner_cache": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target",
+  "canonical_cache": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-8fa84260-aws",
+  "non_claim": "Tasks submitted; no source assembly, qualification, provider or proof completion is claimed."
+}
