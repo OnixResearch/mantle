@@ -1,0 +1,41 @@
+{
+  "qualified_runner": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+  "qualified_source": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "qualification_task": "1619",
+  "canonical_task": "1620",
+  "task_before": {
+    "id": 1621,
+    "created_at": "2026-11-15T11:52:15.107616231-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-869a461d-request-workspace.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-869a461d-request-workspace.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-source-preparation-869a461d-request-workspace",
+    "status": {
+      "Stashed": {
+        "enqueue_at": null
+      }
+    }
+  },
+  "enqueue_output": "Stashed tasks have been enqueued: 1621\n",
+  "task_after": {
+    "id": 1621,
+    "created_at": "2026-11-15T11:52:15.107616231-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-869a461d-request-workspace.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-869a461d-request-workspace.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-source-preparation-869a461d-request-workspace",
+    "status": {
+      "Running": {
+        "enqueued_at": "2026-11-15T12:14:42.910573931-05:00",
+        "start": "2026-11-15T12:14:43.030092617-05:00"
+      }
+    }
+  },
+  "non_claim": "Only existing source-only preparation released after actual source/runner/gate acceptance. No prepared-program acceptance or protected proof launch."
+}

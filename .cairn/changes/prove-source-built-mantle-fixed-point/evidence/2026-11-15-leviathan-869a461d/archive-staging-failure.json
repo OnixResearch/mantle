@@ -1,0 +1,8 @@
+{
+  "source_code_revision": "869a461d6170404e752865a2029092391240b741",
+  "failed_directory": "/dev/shm/mantle-869a461d-freeze.QdbHz7",
+  "failed_command": "git archive --format=tar --output=/dev/shm/mantle-869a461d-freeze.QdbHz7/source-869a461d6170404e752865a2029092391240b741.tar 869a461d6170404e752865a2029092391240b741",
+  "observed_error": "fatal: write error: No space left on device",
+  "exit_code": 128,
+  "non_claim": "No complete archive, hash, transfer or qualification was produced by this staging attempt. No frozen source or cohort was changed."
+}

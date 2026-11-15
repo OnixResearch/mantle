@@ -1,0 +1,8 @@
+{
+  "retired_local_cache": "/tmp/mantle-869a461d-freeze.lIlk1A/source-869a461d6170404e752865a2029092391240b741.tar.gz",
+  "retained_remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-869a461d6170404e752865a2029092391240b741.tar.gz",
+  "compressed_archive_blake3": "6ce9eb923e01a36f967a4d07cf1d15caf751f2f906048aaeb3faf8a910217449",
+  "raw_archive_blake3": "e494b76750c740bc2d4540c3612d11693ee90a809deb2770786401db121a36af",
+  "source_code_revision": "869a461d6170404e752865a2029092391240b741",
+  "reason": "Host pool ENOSPC; removed only parent-created redundant local archive cache after actual remote BLAKE3 match and successful complete-source assembly. Immutable Git revision and remote exact archive remain. No user data, source checkout, frozen source, cohort or proof evidence was deleted."
+}

@@ -1,0 +1,41 @@
+{
+  "task": "1620",
+  "result": {
+    "id": 1620,
+    "created_at": "2026-11-15T11:52:14.539606718-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-869a461d-request-workspace-run.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-869a461d-request-workspace-run.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "group": "default",
+    "dependencies": [
+      1618
+    ],
+    "priority": 0,
+    "label": "mantle-canonical-qualification-869a461d-request-workspace",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T11:52:14.539600897-05:00",
+        "start": "2026-11-15T11:52:30.224151710-05:00",
+        "end": "2026-11-15T12:02:31.378064917-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "source_bindings": [
+    "source_tree_before_blake3=f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+    "source_tree_after_blake3=f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911"
+  ],
+  "test_results": [
+    "test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.73s",
+    "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.23s",
+    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 36.70s",
+    "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 2.11s",
+    "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2916 filtered out; finished in 0.14s",
+    "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2923 filtered out; finished in 0.02s",
+    "test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2803 filtered out; finished in 0.20s",
+    "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.05s",
+    "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s"
+  ],
+  "log_blake3": "f2c73e67b7a46af689a35793bc6b3000760c26210415f180c517f4b5340d074d",
+  "non_claim": "Actual isolated canonical gates only; no runner installation or protected-source execution acceptance is inferred."
+}

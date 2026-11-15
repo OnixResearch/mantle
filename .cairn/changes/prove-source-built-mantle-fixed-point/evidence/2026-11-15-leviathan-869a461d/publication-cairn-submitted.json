@@ -1,0 +1,11 @@
+{
+  "task": "1622",
+  "root": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+  "documentation": [
+    "adr/0155-bind-complete-inert-reviews-to-measured-frozen-subject.md",
+    "adr/README.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md"
+  ],
+  "excluded_in_progress_directory": "graph-review/",
+  "non_claim": "Qualification/source-only release documentation only; not inspector, prepared-data or protected-execution acceptance."
+}

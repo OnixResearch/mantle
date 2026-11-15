@@ -706,3 +706,30 @@ replacement published/frozen/qualified source, regenerated programs, and complet
 current-subject graph and physical reviews remain required. No protected proof
 was launched from `9300895d…`; I3–I5 and proof-dependent V2/V3 remain open.
 
+
+## Published request/workspace repair qualification (2026-11-15)
+
+Verified author repairs and their actual failed/successful executions were
+published as `869a461d6170404e752865a2029092391240b741`. New archive transfer
+matches at compressed BLAKE3 `6ce9eb923e01a36f967a4d07cf1d15caf751f2f906048aaeb3faf8a910217449`.
+The first tmpfs staging attempt failed with no space; its partial owned archive
+was removed and compressed-only disk-backed staging completed. The failure is
+retained, not claimed as a completed archive.
+
+Complete source assembly 1618 succeeded. New normalized source identity is
+`f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911`.
+Canonical qualification 1620 succeeded in its own initially absent target, with
+that exact source identity unchanged before/after all recorded CLI/receipt/
+closure/release/machine-contract and Cairn gates. Full commands, task results
+and each actual test result are retained under `evidence/2026-11-15-leviathan-869a461d/`.
+Isolated runner qualification 1619 still requires its actual result; preparation
+1621 is stashed until parent accepts both qualifications and runner/source bytes.
+
+Parent is preparing complete explicit-subject graph/template/physical inspectors
+rather than accepting partial model text or old hardcoded counts/verdicts.
+ADR 0155 records complete per-criterion coverage, actual scopes/kind provenance,
+and separate symbolic runtime versus observed execution boundaries. New-data
+execution/acceptance is not inferred from implementing these inspectors.
+No protected attempt is selected from either rejected old data or this pending
+replacement; I3–I5 and proof-dependent V2/V3 remain open.
+

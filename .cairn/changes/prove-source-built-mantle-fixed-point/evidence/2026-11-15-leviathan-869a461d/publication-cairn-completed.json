@@ -1,0 +1,23 @@
+{
+  "task": "1622",
+  "result": {
+    "id": 1622,
+    "created_at": "2026-11-15T12:19:47.985472722-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/frozen-869a461d-publication-cairn.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/frozen-869a461d-publication-cairn.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/gcc-specs-request-dev.glWdGv",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-qualified-source-publication-869a461d-request-workspace",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T12:19:47.985417638-05:00",
+        "start": "2026-11-15T12:19:48.145341181-05:00",
+        "end": "2026-11-15T12:20:14.154184363-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "non_claim": "Observed lifecycle publication validation only; source qualification is separately bound and current prepared/protected acceptance remains pending."
+}
