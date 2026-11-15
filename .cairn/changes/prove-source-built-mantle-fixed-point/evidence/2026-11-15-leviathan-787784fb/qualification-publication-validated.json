@@ -1,0 +1,36 @@
+{
+  "task": {
+    "id": 1610,
+    "created_at": "2026-11-15T09:51:50.480888632-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validate-qualified-environment.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validate-qualified-environment.sh",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-787784fb-evidence-cairn-qualified-env",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T09:51:50.480858195-05:00",
+        "start": "2026-11-15T09:51:50.615118881-05:00",
+        "end": "2026-11-15T09:52:16.871153950-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "mirror_root": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+  "changed_lifecycle_source": ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+  "changed_lifecycle_source_blake3": "9f2b0eef66e244e9e190fc869c621a6f6c0fa418039d04dc2a6578f782e8888d",
+  "mirror_source_equal": true,
+  "log_remote": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N/validation-qualified-environment.log",
+  "log_local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/qualification-publication-qualified-environment.log",
+  "log_blake3": "61a02973fc893a9ae5b9f7208514ff1165af78b47bbc8bf787a8933883555703",
+  "log_transfer_equal": true,
+  "accepted": true,
+  "prior_failed_attempts": [
+    "qualification-publication-cairn.log",
+    "qualification-publication-validation-attempt1.json"
+  ],
+  "environment": "Same Git rewrite and noninteractive config as completed runner/canonical qualifications, inside the pinned Nix development shell.",
+  "non_claim": "Lifecycle/document evidence validation only; preparation1608, new cohort reviews and protected proof remain separate requirements."
+}

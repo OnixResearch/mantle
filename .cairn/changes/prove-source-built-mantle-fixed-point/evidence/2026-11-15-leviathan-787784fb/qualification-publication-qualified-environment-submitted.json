@@ -1,0 +1,9 @@
+{
+  "task": "1610",
+  "mirror_root": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+  "changed_lifecycle_source_blake3": "9f2b0eef66e244e9e190fc869c621a6f6c0fa418039d04dc2a6578f782e8888d",
+  "script": "#!/usr/bin/env bash\nset -euo pipefail\ncd /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N\ntest ! -e validation-qualified-environment.log\nexec > validation-qualified-environment.log 2>&1\nfinished=0\ntrap 'status=$?; if [ \"$status\" -eq 0 ] && [ \"$finished\" -ne 1 ]; then status=1; fi; printf \"validation_exit=%s\\n\" \"$status\"; exit \"$status\"' EXIT\nset -x\ndate -Is\nexport GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1\nexport GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0\n/run/current-system/sw/bin/nix develop --offline --builders \"\" --no-write-lock-file -c cairn validate --root .\ndate -Is\nfinished=1\nprintf \"validation_complete=1\\n\"\n",
+  "prior_attempt": "qualification-publication-validation-attempt1.json",
+  "correction": "Same Git URL rewrite and noninteractive configuration as the already successful runner/canonical qualifications; no source, lock, pin, trust or consumer change.",
+  "non_claim": "Submitted lifecycle/document validation only; no result or proof authority inferred."
+}

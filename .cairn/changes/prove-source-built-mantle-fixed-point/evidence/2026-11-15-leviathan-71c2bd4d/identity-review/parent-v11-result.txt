@@ -1,0 +1,24 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+profile_role_bound=bootstrap-source
+profile_role_bound=stagex-seed
+profile_role_bound=mantle-source
+profile_role_bound=vendored-cargo-inputs
+profile_role_bound=proof-input
+profile_role_bound=stagex-source-bundle
+profile_role_bound=stagex-lineage
+phase=profile-role-and-program-bytes-bound
+BLOCKER AuditError: prepared Mantle source omits frozen member .autoresearch
+execution_exit_code=1
+
+No complete physical audit verdict was produced. Frozen src/self_build.rs:96-112
+selects staged build-input roots; .autoresearch is not selected. Frozen
+src/source_bundle.rs:3437-3454 excludes the separate vendor-deps role and
+collects only selected roots. Its :3596-3634 traversal records leaves rather
+than empty directories, and :3783-3804 skips .git at every level. The v11
+inspector erroneously required every checkout member, including excluded
+operator data. Correct the inspector to compare every admitted frozen leaf,
+required parent directories and executable flag, retaining excluded-root and
+addition coverage. No product or consumer admission change is justified by
+this inspector failure. A corrected inspection still needs actual execution.

@@ -1,0 +1,16 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "mirror_root": "/home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N",
+  "task": "1609",
+  "base_frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-787784fb-helper-feature",
+  "overlays": [
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review"
+  ],
+  "changed_lifecycle_source_blake3": "9f2b0eef66e244e9e190fc869c621a6f6c0fa418039d04dc2a6578f782e8888d",
+  "lifecycle_source_transfer_equal": true,
+  "script": "#!/usr/bin/env bash\nset -euo pipefail\ncd /home/brittonr/sbfp-20261113-berdKH/qualification-publication-787784fb.CmcH2N\ntest ! -e validation.log\nexec > validation.log 2>&1\nfinished=0\ntrap 'status=$?; if [ \"$status\" -eq 0 ] && [ \"$finished\" -ne 1 ]; then status=1; fi; printf \"validation_exit=%s\\n\" \"$status\"; exit \"$status\"' EXIT\nset -x\ndate -Is\n/run/current-system/sw/bin/nix develop --offline --builders \"\" --no-write-lock-file -c cairn validate --root .\ndate -Is\nfinished=1\nprintf \"validation_complete=1\\n\"\n",
+  "local_preflight": "Local nix develop was interrupted during auto-GC before Cairn started; exact failed output retained. No root service, pin, trust or product admission was changed.",
+  "non_claim": "Isolated candidate-document validation only; original frozen proof source and running source-only preparation are unchanged."
+}

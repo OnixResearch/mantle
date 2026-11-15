@@ -553,3 +553,52 @@ chunk, archive and source-role obligation. Static nested-controller review
 continues. Freeze/publish the verified product changes, qualify a genuinely
 fresh-target runner and regenerate/review a new cohort before any launch.
 I3–I5 and proof-dependent V2/V3 remain open.
+
+## Corrected frozen runner accepted; regeneration released (2026-11-15)
+
+Both product repairs are published as `787784fb`. Complete frozen source
+`dcfcf2de…` qualified in two separately extracted trees and previously absent
+Cargo targets: runner task 1606 completed Success with `267 passed; 0 failed;
+27 ignored`, formatting, strict Clippy and release build; canonical task 1607
+completed the selected CLI, receipt, closure, machine-contract, release-core
+and Cairn gates. Both wrappers recorded unchanged source identities. Independent
+installed/fresh-target binary measurements equal `6b7c8409…`. Full source,
+task, log-transfer and byte bindings are retained in
+`evidence/2026-11-15-leviathan-787784fb/fresh-runner-qualified.json` and
+`fresh-runner-qualification.md` beside it.
+
+Only after accepting those actual results did the parent release the existing
+stashed source-only preparation 1608. Its new report, source verifiers, plan,
+manifest, raw-profile transport parity and complete new-subject reviews still
+must be observed; no prior hashes/counts/verdicts are copied forward. The exact
+release is retained in that evidence directory's `preparation-released.json`,
+and `review-contract.md` defines current graph/physical review obligations.
+
+Old-cohort parent physical v11 reached all seven role byte comparisons, then
+erroneously required the excluded `.autoresearch` checkout entry. The frozen
+consumer stages an explicit build-input allowlist, excludes the separate
+vendor role and `.git`, and records leaves rather than empty directories.
+Corrected physical v12 compares every admitted frozen leaf and required parent,
+records policy hashes/excluded roots/additions, and retains all existing
+archive, chunk, source and program identity checks. The failed inspector output
+is preserved; no product admission change follows from that failure. Complete
+old graph review remains distinct from reviews of the replacement subject.
+
+The rejected `c22381a8…` cohort remains unlaunched. Runner qualification and
+source preparation are not source-built compiler/provider execution, a fixed
+point, release eligibility or signed native-row acceptance. I3–I5 and
+proof-dependent V2/V3 remain open.
+
+
+Parent physical v12 subsequently completed with bounded inert ACCEPT for the
+old `c22381a8…` subject. The transferred result verifies all seven role payloads,
+59 original native record bodies, four new program records, 26 selected AWS-LC
+and 12 Ring scripts, and preservation of all 12,762 admitted frozen source
+leaves. The 11,626 policy-excluded leaves and four additional members are
+separate coverage, not a whole-checkout or preauthor/postauthor identity claim.
+Exact result, commands, policy hashes and transfer equality are in
+`evidence/2026-11-15-leviathan-71c2bd4d/identity-review/parent-v12-completed.json`
+and its referenced result. This physical verdict does not repair the old
+consumer rejections, certify replacement preparation 1608 or grant launch
+authority. Complete graph coverage remains separately required.
+

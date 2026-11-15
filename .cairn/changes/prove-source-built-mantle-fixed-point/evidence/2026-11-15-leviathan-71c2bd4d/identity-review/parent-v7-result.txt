@@ -1,0 +1,16 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+profile_role_bound=bootstrap-source
+profile_role_bound=stagex-seed
+profile_role_bound=mantle-source
+profile_role_bound=vendored-cargo-inputs
+profile_role_bound=proof-input
+profile_role_bound=stagex-source-bundle
+profile_role_bound=stagex-lineage
+phase=profile-role-and-program-bytes-bound
+BLOCKER AuditError: current native-source-bundle role is not a single closure file
+Exit code: 1
+Wall time: 1401.28 seconds
+
+All seven role payload/physical comparisons completed. The remaining assertion counted chunk entries instead of unique physical files: the native closure is one file transported in canonical 64-MiB chunks. Parent v8 uses the already measured physical-file count, retaining exact chunk/hash/payload checks. It also batches whole-file BLAKE3 invocations after exact payload byte comparison, using only the same admitted b3sum binary; chunk payload hashing remains direct. No physical ACCEPT was emitted by v7 and no product/frozen source input was changed.

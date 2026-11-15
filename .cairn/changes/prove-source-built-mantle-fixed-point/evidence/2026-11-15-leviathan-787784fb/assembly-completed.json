@@ -1,0 +1,40 @@
+{
+  "task": {
+    "id": 1605,
+    "created_at": "2026-11-15T08:53:50.542278550-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-787784fb-helper-feature.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-787784fb-helper-feature.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-787784fb-complete-source",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T08:53:50.542264123-05:00",
+        "start": "2026-11-15T08:53:50.733264028-05:00",
+        "end": "2026-11-15T08:54:09.770517111-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "complete_source": {
+    "schema": "mantle-complete-source-snapshot-v1",
+    "source_code_revision": "787784fbb6bf2141fce5aa2be9f1741ac9f2f013",
+    "code_archive_blake3": "8ed485dbd6fa2824902ee6ad74a62af06efd484202ed8edd94542aa0583258a8",
+    "code_tree_blake3": "8cb3a7fff5997b892ad125b043988b86389ac3897d54273c4d9ec22366481029",
+    "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+    "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+    "original_source_normalized_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+    "complete_archive_blake3": "dcfcf2de5825e24aec564fee9f3bc064a50965046c86013eac7a3ff4edd4ec0c",
+    "compressed_archive_blake3": "4aab9196b5ea08b1019548a3f87ae58c8ad6e01b637d98696720e603d75e4577",
+    "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-787784fb-helper-feature.tar",
+    "assembly_root": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-787784fb-helper-feature",
+    "non_claim": "Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"
+  },
+  "remote_metadata_hashes": "65655c6bd37cc249b0c1e514bb5cb8d02ce63c028887631a4d7a96a404771dbe  /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-787784fb-helper-feature.log\nff3bc88e665d9fbc7746123893b3642024e19aa831cae93c6d898d392ed95ab9  /home/brittonr/sbfp-20261113-berdKH/complete-source-787784fb-helper-feature.json\n",
+  "local_metadata_hashes": "65655c6bd37cc249b0c1e514bb5cb8d02ce63c028887631a4d7a96a404771dbe  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/assembly.log\nff3bc88e665d9fbc7746123893b3642024e19aa831cae93c6d898d392ed95ab9  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/complete-source.json\n",
+  "metadata_transfer_equal": true,
+  "non_claim": "Composite frozen source assembled and bound; two isolated qualifications still require their actual results. No replacement cohort or protected proof accepted."
+}

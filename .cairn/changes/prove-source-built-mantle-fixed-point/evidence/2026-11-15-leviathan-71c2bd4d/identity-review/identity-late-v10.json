@@ -1,0 +1,1161 @@
+{
+  "scope": "Late inert helper/source/script bindings only; not a complete identity verdict or protected execution.",
+  "selected_sources": {
+    "aws_probe_boundaries": [
+      {
+        "blake3": "262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0",
+        "bytes": 21458,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl"
+      },
+      {
+        "blake3": "0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0",
+        "bytes": 26648,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl"
+      },
+      {
+        "blake3": "10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074",
+        "bytes": 28681,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl"
+      }
+    ],
+    "aws_scripts": [
+      {
+        "blake3": "89c83891677ea6f95efa553796524a88f9d629beaba9879547389ffd60dc58be",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 66813,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/chacha/asm/chacha-x86_64.pl"
+      },
+      {
+        "blake3": "1fc47e7d80288b7a4effe28184954eca41de52300e42e82cb5b318a0daebaac5",
+        "boundary_kind": "standalone",
+        "boundary_line": 26,
+        "bytes": 58547,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl"
+      },
+      {
+        "blake3": "eaa9ea423ce573e2c0d1b75a56ae8fd12649f9a77f02b73bf737b08141f95b93",
+        "boundary_kind": "standalone",
+        "boundary_line": 113,
+        "bytes": 30738,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/ghash-x86_64.pl"
+      },
+      {
+        "blake3": "229e1e05673f81b6ae5d4471d34f9db92079a2ba836b4679b447376eaca8dbc1",
+        "boundary_kind": "standalone",
+        "boundary_line": 126,
+        "bytes": 12789,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/md5/asm/md5-x86_64.pl"
+      },
+      {
+        "blake3": "aa85ab25e25b02808d680e8af59bbe5e8e0ca9e99510443606f4bbc4fbbb2322",
+        "boundary_kind": "standalone",
+        "boundary_line": 54,
+        "bytes": 93043,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl"
+      },
+      {
+        "blake3": "73e62ed3a2fb9dab2e7e0b5ac1d2203d2944d7d089b435c9df7dc203a402d089",
+        "boundary_kind": "standalone",
+        "boundary_line": 27,
+        "bytes": 8962,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl"
+      },
+      {
+        "blake3": "58b622bcb4e91f43ab67514ed5ce855f8057d75741cb5961193a632eb8c67d50",
+        "boundary_kind": "standalone",
+        "boundary_line": 24,
+        "bytes": 1570,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/rand/asm/rdrand-x86_64.pl"
+      },
+      {
+        "blake3": "262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0",
+        "boundary_kind": "guarded",
+        "boundary_line": 68,
+        "bytes": 21458,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl"
+      },
+      {
+        "blake3": "0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0",
+        "boundary_kind": "guarded",
+        "boundary_line": 67,
+        "bytes": 26648,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl"
+      },
+      {
+        "blake3": "10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074",
+        "boundary_kind": "guarded",
+        "boundary_line": 67,
+        "bytes": 28681,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl"
+      },
+      {
+        "blake3": "8884c6d710bef85d7fec1f3ee617edac45fe1114a5f1a5a579fac4b2a16e26df",
+        "boundary_kind": "standalone",
+        "boundary_line": 56,
+        "bytes": 51322,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-avx2.pl"
+      },
+      {
+        "blake3": "810707aaa189a22282f07aedcdce8868498afac2179f058c21cd2cba070c4427",
+        "boundary_kind": "standalone",
+        "boundary_line": 111,
+        "bytes": 50927,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha1-x86_64.pl"
+      },
+      {
+        "blake3": "add51d8cb29e44fb9390ea73304e42948f8551c3edc87c395dc04b2029c8cf1c",
+        "boundary_kind": "standalone",
+        "boundary_line": 104,
+        "bytes": 40904,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aesni-sha1-x86_64.pl"
+      },
+      {
+        "blake3": "fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe",
+        "boundary_kind": "standalone",
+        "boundary_line": 135,
+        "bytes": 52908,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe",
+        "boundary_kind": "standalone",
+        "boundary_line": 135,
+        "bytes": 52908,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "9bd6802d750f65b24a0247a816a9c9ccaff4c42448e0cc502958f37a9e60bebf",
+        "boundary_kind": "standalone",
+        "boundary_line": 67,
+        "bytes": 40142,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl"
+      },
+      {
+        "blake3": "2a9fc62b13ed8b0ee32a3b6622cb8a0d385ef2a4570a73e753eb696b18fe316a",
+        "boundary_kind": "standalone",
+        "boundary_line": 57,
+        "bytes": 32716,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/x86_64-mont.pl"
+      },
+      {
+        "blake3": "b9003d1b9873e3619141ccfea37fc6562d99d1fd72d63354ef74eb85ced09adf",
+        "boundary_kind": "standalone",
+        "boundary_line": 42,
+        "bytes": 85309,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/x86_64-mont5.pl"
+      },
+      {
+        "blake3": "2e066c06161f9d0dad38faebd3cdaf76eea0f29ff39bdf432c2a0eaeb6a11912",
+        "boundary_kind": "standalone",
+        "boundary_line": 35,
+        "bytes": 12296,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/test/asm/trampoline-x86_64.pl"
+      },
+      {
+        "blake3": "11ab8fb86f3b0c378535962f7139c16cdfc3c93944705ae53e9df6e0d2ae8ff9",
+        "boundary_kind": "standalone",
+        "boundary_line": 60,
+        "bytes": 43564,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aesni-sha256-x86_64.pl"
+      },
+      {
+        "blake3": "91ad2dde2284b8d64adb9399b6d0ea1b8068da647d8c5287fe918ae351fa9c76",
+        "boundary_kind": "standalone",
+        "boundary_line": 26,
+        "bytes": 78528,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl"
+      },
+      {
+        "blake3": "87b1c7208ad1f55f518d8c32979d4e7a73ce6cfbc625e742b4bdfb7fe92c8a5d",
+        "boundary_kind": "guarded",
+        "boundary_line": 65,
+        "bytes": 198503,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl"
+      },
+      {
+        "blake3": "b30bdfd34ca4328d20bb971c564ea0e16e8e8e754c8b347a8f277f23d6f1fd02",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 31756,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl"
+      },
+      {
+        "blake3": "7510a0d33b63d9e522a357c822105d3742b90f7dda87e6723042b52deb21f0e0",
+        "boundary_kind": "standalone",
+        "boundary_line": 203,
+        "bytes": 103292,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/aesni-x86_64.pl"
+      },
+      {
+        "blake3": "6f12a7be63074584187c5b60b3c967280e5b894e5ae2084949f30d433d25c64c",
+        "boundary_kind": "standalone",
+        "boundary_line": 40,
+        "bytes": 90497,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl"
+      },
+      {
+        "blake3": "65bd717c0fdb5c68d8f773cdd2124395d106208a690b8dfe6ad7fef15c945ee4",
+        "boundary_kind": "standalone",
+        "boundary_line": 80,
+        "bytes": 10029,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl"
+      }
+    ],
+    "aws_selected_count": 26,
+    "aws_translator": {
+      "blake3": "95ff13079dd7701e6c6c5b00a8ba93329fc99cf2bf7a4438bf00461f0a3a914f",
+      "bytes": 57882,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/perlasm/x86_64-xlate.pl"
+    },
+    "frozen_pipe_source_blake3": "66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df",
+    "frozen_pipe_source_bytes": 1260,
+    "ring_scripts": [
+      {
+        "blake3": "8ec24e99ba7dd8aac31652b2e5b3c2ee9fcf2fc7b28b0c27cf7349e713b07439",
+        "boundary_kind": "standalone",
+        "boundary_line": 75,
+        "bytes": 46692,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/chacha/asm/chacha-x86_64.pl"
+      },
+      {
+        "blake3": "67176f5ad24afbc55024bd74af3be84ce8db9e30ee95d7d0a68f5c8bfdbcd9b5",
+        "boundary_kind": "standalone",
+        "boundary_line": 60,
+        "bytes": 42267,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl"
+      },
+      {
+        "blake3": "f4089870141639aead541de1add20ecc5251aa68298e853320722ce7251e9f98",
+        "boundary_kind": "standalone",
+        "boundary_line": 34,
+        "bytes": 79830,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/cipher/asm/chacha20_poly1305_x86_64.pl"
+      },
+      {
+        "blake3": "160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c",
+        "boundary_kind": "standalone",
+        "boundary_line": 167,
+        "bytes": 43633,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "607878718866b3672f44aac485d3a544c9d252212d8ef42209befeec896863e8",
+        "boundary_kind": "standalone",
+        "boundary_line": 72,
+        "bytes": 32033,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl"
+      },
+      {
+        "blake3": "97da62d6fc1533db255ffffc89d7f0c1b032768846121dc187ad6c186a2a9911",
+        "boundary_kind": "standalone",
+        "boundary_line": 206,
+        "bytes": 44616,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aesni-x86_64.pl"
+      },
+      {
+        "blake3": "fca6dea9bccbf1a56c983fe50153af38fa6555b2f5de4ef458697badececf28b",
+        "boundary_kind": "standalone",
+        "boundary_line": 120,
+        "bytes": 29711,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/ghash-x86_64.pl"
+      },
+      {
+        "blake3": "56058492b2682b2a4a9ac074bea023ecc827210d7e972eae7337d85ddd5d8a1c",
+        "boundary_kind": "standalone",
+        "boundary_line": 75,
+        "bytes": 27318,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl"
+      },
+      {
+        "blake3": "fed94b06c9bd5c6eedd723db7ee6b1a70fa0ca3ad56549015e650de1cf0fb36c",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 32733,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/bn/asm/x86_64-mont.pl"
+      },
+      {
+        "blake3": "482e03daf2011ae4ad80c379da3b399b72ec870cc24fb5b98368135a0d65c912",
+        "boundary_kind": "standalone",
+        "boundary_line": 50,
+        "bytes": 76649,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/bn/asm/x86_64-mont5.pl"
+      },
+      {
+        "blake3": "96f377c7ef8a94c7f7d44e8baa1e7cec0db2f61d7cf48ec171e51507bf66d95b",
+        "boundary_kind": "standalone",
+        "boundary_line": 61,
+        "bytes": 92109,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl"
+      },
+      {
+        "blake3": "160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c",
+        "boundary_kind": "standalone",
+        "boundary_line": 167,
+        "bytes": 43633,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      }
+    ],
+    "ring_selected_count": 12,
+    "ring_translator": {
+      "blake3": "f42e8bb3a5d4149a976e588f89ceadd370b3ab74d46ef317aad4b4e9a2c289fd",
+      "bytes": 59159,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/vendor-deps/ring/crypto/perlasm/x86_64-xlate.pl"
+    },
+    "stage_selection_equal": true
+  },
+  "source_copies": {
+    "frozen_helper_translator_copies": [
+      {
+        "blake3": "79b30f32724f2d7528b787ace20da86be7760db319987e3c8e4e5792c1c9e1ff",
+        "bytes": 12042,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_mantle_programs_aws_helper.rs",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/source-built-mantle-programs/aws-source-helper.rs"
+      },
+      {
+        "blake3": "44f4bf3ddebf711cf51390879245bccaf63ed71e13f2a89f8fb3ca8f0a4cb550",
+        "bytes": 7176,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_mantle_programs_native_helper.rs",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/source-built-mantle-programs/source_built_mantle_native_helper.rs"
+      },
+      {
+        "blake3": "fa60e97692a06b25117df8e541dce467a8d5d006d83f066c9d52a7b0970e3aac",
+        "bytes": 14808,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_translation.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/cairn/rust/mrustc-native-translation.c"
+      },
+      {
+        "blake3": "81d8bce63c143995a4d5ed6307d0bd111a3c9d90c4636616ea4ea7c69f7f01f7",
+        "bytes": 8725,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_phase.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-source-phase.c"
+      },
+      {
+        "blake3": "06e840a94f57af8b1b32b0b2dbb950d7959f0122ea2e8af72ab99d1a31b93ddc",
+        "bytes": 3931,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_link.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-native-link.rs"
+      },
+      {
+        "blake3": "56bccbafd578c286f5075c6f2e2f7a20bfc944c646cf80b14b67b289f4baf2dd",
+        "bytes": 2643,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_env.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-environment.rs"
+      },
+      {
+        "blake3": "d27164d3f6fc8a7c3757808c2c952d7ac7c6b2823c84ac8213306a3d3ef136f1",
+        "bytes": 3832,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_overlay.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-source-overlay.rs"
+      },
+      {
+        "blake3": "66e45fe3f07505c208b88aef6e98f196944d1881b09962d807eb550c0b769ade",
+        "bytes": 22113,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_patches.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-patches.c"
+      },
+      {
+        "blake3": "9070df77dfe11bf10746cc059b3e9c6d528e6173210555c96b36e77f3f65538c",
+        "bytes": 4762,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_mrustc_metadata.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/mantle-source-authoring/mrustc-metadata.hpp"
+      },
+      {
+        "blake3": "36688b576b66d59db339d34b97d7805365c3ab055f1c527d35305c2c0270b8ca",
+        "bytes": 8683,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_mrustc_proc_macro.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/mantle-source-authoring/mrustc-proc-macro.hpp"
+      },
+      {
+        "blake3": "8e886d0dc01938ac5730d2b7a00c9de4be504f557869ec444a2b69bbb824d1a4",
+        "bytes": 16594,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_minicargo_helper.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-minicargo.c"
+      },
+      {
+        "blake3": "853feb15acd3baed2b4560c059d8f41b86b17ff3f3484757873333db62512f32",
+        "bytes": 3686,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_llvm_source.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-llvm-products.c"
+      },
+      {
+        "blake3": "60dff5cd003a811f83f8e2b5b0a7a38f39ceaa4091f5dbc2d6f2f151e375b2f5",
+        "bytes": 9772,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_llvm_cmake_patch.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-native-source-program/source-built/native/llvm-cmake-patch.c"
+      },
+      {
+        "blake3": "1589ed7c19f5f66d700f5f412b5907618d3debbcd193e3d61c0531e5c0ddb46d",
+        "bytes": 19173,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation/src/source_built_rust_programs_llvm_cmake_phase.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/program-sources/fixed-point-native-source-program/source-built/native/llvm-cmake-phase.h"
+      }
+    ],
+    "original_route_copy": {
+      "blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff",
+      "bytes": 5543,
+      "three_way_exact_byte_match": true
+    },
+    "rust_authority_copies": [
+      {
+        "blake3": "ad7888f17e6158dacd8a9f9278bdbbbd260da1733ca0f1bd2804eed3c59747d1",
+        "bytes": 259051407,
+        "exact_byte_match": true,
+        "member": "source-built/rust/program.json"
+      },
+      {
+        "blake3": "56bccbafd578c286f5075c6f2e2f7a20bfc944c646cf80b14b67b289f4baf2dd",
+        "bytes": 2643,
+        "exact_byte_match": true,
+        "member": "cairn/rust/compiler-environment.rs"
+      }
+    ]
+  },
+  "stages": [
+    {
+      "aws": [
+        {
+          "assembly_output": "chacha-x86_64.S",
+          "id": "unit-00037-script.perlasm-0.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-0.pipe-source",
+          "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aes128gcmsiv-x86_64.S",
+          "id": "unit-00037-script.perlasm-1.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-1.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "ghash-x86_64.S",
+          "id": "unit-00037-script.perlasm-10.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-10.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/ghash-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "md5-x86_64.S",
+          "id": "unit-00037-script.perlasm-11.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-11.pipe-source",
+          "script_path": "crypto/fipsmodule/md5/asm/md5-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "p256-x86_64-asm.S",
+          "id": "unit-00037-script.perlasm-12.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-12.pipe-source",
+          "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "p256_beeu-x86_64-asm.S",
+          "id": "unit-00037-script.perlasm-13.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-13.pipe-source",
+          "script_path": "crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rdrand-x86_64.S",
+          "id": "unit-00037-script.perlasm-14.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-14.pipe-source",
+          "script_path": "crypto/fipsmodule/rand/asm/rdrand-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-2k-avx512.S",
+          "id": "unit-00037-script.perlasm-15.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-15.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-3k-avx512.S",
+          "id": "unit-00037-script.perlasm-16.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-16.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-4k-avx512.S",
+          "id": "unit-00037-script.perlasm-17.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-17.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-avx2.S",
+          "id": "unit-00037-script.perlasm-18.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-18.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-avx2.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha1-x86_64.S",
+          "id": "unit-00037-script.perlasm-19.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-19.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha1-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-sha1-x86_64.S",
+          "id": "unit-00037-script.perlasm-2.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-2.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aesni-sha1-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha256-x86_64.S",
+          "id": "unit-00037-script.perlasm-20.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-20.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha512-x86_64.S",
+          "id": "unit-00037-script.perlasm-21.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-21.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "vpaes-x86_64.S",
+          "id": "unit-00037-script.perlasm-22.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-22.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "x86_64-mont.S",
+          "id": "unit-00037-script.perlasm-23.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-23.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "x86_64-mont5.S",
+          "id": "unit-00037-script.perlasm-24.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-24.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "trampoline-x86_64.S",
+          "id": "unit-00037-script.perlasm-25.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-25.pipe-source",
+          "script_path": "crypto/test/asm/trampoline-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-sha256-x86_64.S",
+          "id": "unit-00037-script.perlasm-3.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-3.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aesni-sha256-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "chacha20_poly1305_x86_64.S",
+          "id": "unit-00037-script.perlasm-4.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-4.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-gcm-avx512.S",
+          "id": "unit-00037-script.perlasm-5.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-5.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-gcm-x86_64.S",
+          "id": "unit-00037-script.perlasm-6.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-6.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-x86_64.S",
+          "id": "unit-00037-script.perlasm-7.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-7.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-xts-avx512.S",
+          "id": "unit-00037-script.perlasm-8.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-8.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "ghash-ssse3-x86_64.S",
+          "id": "unit-00037-script.perlasm-9.generate",
+          "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-9.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl",
+          "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+        }
+      ],
+      "aws_count": 26,
+      "pipe_source_count": 38,
+      "recipe_bytes": 172677364,
+      "recipe_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+      "recipe_raw_blake3": "5feb9973572ee678748954a0dc66de4afec64f1cb85051fe1eb75135b7747d5a",
+      "ring": [
+        {
+          "assembly_output": "chacha-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-0.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-0.generate",
+          "id": "unit-00031-script.sources.perl-0.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-0.result",
+          "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-0.translate"
+        },
+        {
+          "assembly_output": "aes-gcm-avx2-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-1.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-1.generate",
+          "id": "unit-00031-script.sources.perl-1.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-1.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-1.translate"
+        },
+        {
+          "assembly_output": "chacha20_poly1305_x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-10.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-10.generate",
+          "id": "unit-00031-script.sources.perl-10.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-10.result",
+          "script_path": "crypto/cipher/asm/chacha20_poly1305_x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-10.translate"
+        },
+        {
+          "assembly_output": "sha256-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-11.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-11.generate",
+          "id": "unit-00031-script.sources.perl-11.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-11.result",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-11.translate"
+        },
+        {
+          "assembly_output": "aesni-gcm-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-2.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-2.generate",
+          "id": "unit-00031-script.sources.perl-2.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-2.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-2.translate"
+        },
+        {
+          "assembly_output": "aesni-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-3.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-3.generate",
+          "id": "unit-00031-script.sources.perl-3.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-3.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-3.translate"
+        },
+        {
+          "assembly_output": "ghash-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-4.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-4.generate",
+          "id": "unit-00031-script.sources.perl-4.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-4.result",
+          "script_path": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-4.translate"
+        },
+        {
+          "assembly_output": "vpaes-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-5.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-5.generate",
+          "id": "unit-00031-script.sources.perl-5.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-5.result",
+          "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-5.translate"
+        },
+        {
+          "assembly_output": "x86_64-mont-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-6.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-6.generate",
+          "id": "unit-00031-script.sources.perl-6.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-6.result",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+          "translator": "unit-00031-script.sources.perl-6.translate"
+        },
+        {
+          "assembly_output": "x86_64-mont5-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-7.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-7.generate",
+          "id": "unit-00031-script.sources.perl-7.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-7.result",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+          "translator": "unit-00031-script.sources.perl-7.translate"
+        },
+        {
+          "assembly_output": "p256-x86_64-asm-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-8.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-8.generate",
+          "id": "unit-00031-script.sources.perl-8.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-8.result",
+          "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+          "translator": "unit-00031-script.sources.perl-8.translate"
+        },
+        {
+          "assembly_output": "sha512-x86_64-elf.S",
+          "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-9.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-9.generate",
+          "id": "unit-00031-script.sources.perl-9.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-9.result",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-9.translate"
+        }
+      ],
+      "ring_count": 12,
+      "stage": "mantle-stage1",
+      "steps": 24101
+    },
+    {
+      "aws": [
+        {
+          "assembly_output": "chacha-x86_64.S",
+          "id": "unit-00037-script.perlasm-0.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-0.pipe-source",
+          "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aes128gcmsiv-x86_64.S",
+          "id": "unit-00037-script.perlasm-1.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-1.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "ghash-x86_64.S",
+          "id": "unit-00037-script.perlasm-10.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-10.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/ghash-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "md5-x86_64.S",
+          "id": "unit-00037-script.perlasm-11.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-11.pipe-source",
+          "script_path": "crypto/fipsmodule/md5/asm/md5-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "p256-x86_64-asm.S",
+          "id": "unit-00037-script.perlasm-12.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-12.pipe-source",
+          "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "p256_beeu-x86_64-asm.S",
+          "id": "unit-00037-script.perlasm-13.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-13.pipe-source",
+          "script_path": "crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rdrand-x86_64.S",
+          "id": "unit-00037-script.perlasm-14.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-14.pipe-source",
+          "script_path": "crypto/fipsmodule/rand/asm/rdrand-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-2k-avx512.S",
+          "id": "unit-00037-script.perlasm-15.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-15.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-3k-avx512.S",
+          "id": "unit-00037-script.perlasm-16.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-16.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-4k-avx512.S",
+          "id": "unit-00037-script.perlasm-17.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-17.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "rsaz-avx2.S",
+          "id": "unit-00037-script.perlasm-18.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-18.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/rsaz-avx2.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha1-x86_64.S",
+          "id": "unit-00037-script.perlasm-19.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-19.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha1-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-sha1-x86_64.S",
+          "id": "unit-00037-script.perlasm-2.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-2.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aesni-sha1-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha256-x86_64.S",
+          "id": "unit-00037-script.perlasm-20.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-20.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "sha512-x86_64.S",
+          "id": "unit-00037-script.perlasm-21.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-21.pipe-source",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "vpaes-x86_64.S",
+          "id": "unit-00037-script.perlasm-22.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-22.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "x86_64-mont.S",
+          "id": "unit-00037-script.perlasm-23.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-23.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "x86_64-mont5.S",
+          "id": "unit-00037-script.perlasm-24.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-24.pipe-source",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "trampoline-x86_64.S",
+          "id": "unit-00037-script.perlasm-25.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-25.pipe-source",
+          "script_path": "crypto/test/asm/trampoline-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-sha256-x86_64.S",
+          "id": "unit-00037-script.perlasm-3.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-3.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/aesni-sha256-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "chacha20_poly1305_x86_64.S",
+          "id": "unit-00037-script.perlasm-4.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-4.pipe-source",
+          "script_path": "crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-gcm-avx512.S",
+          "id": "unit-00037-script.perlasm-5.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-5.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-gcm-x86_64.S",
+          "id": "unit-00037-script.perlasm-6.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-6.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-x86_64.S",
+          "id": "unit-00037-script.perlasm-7.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-7.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "aesni-xts-avx512.S",
+          "id": "unit-00037-script.perlasm-8.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-8.pipe-source",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        },
+        {
+          "assembly_output": "ghash-ssse3-x86_64.S",
+          "id": "unit-00037-script.perlasm-9.generate",
+          "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-9.pipe-source",
+          "script_path": "crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl",
+          "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+        }
+      ],
+      "aws_count": 26,
+      "pipe_source_count": 38,
+      "recipe_bytes": 172677364,
+      "recipe_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+      "recipe_raw_blake3": "a2bc80bb274afa8d8c5017470f365559fdc92e8d785350bb6e8f4d652fe40a3a",
+      "ring": [
+        {
+          "assembly_output": "chacha-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-0.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-0.generate",
+          "id": "unit-00031-script.sources.perl-0.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-0.result",
+          "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-0.translate"
+        },
+        {
+          "assembly_output": "aes-gcm-avx2-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-1.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-1.generate",
+          "id": "unit-00031-script.sources.perl-1.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-1.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-1.translate"
+        },
+        {
+          "assembly_output": "chacha20_poly1305_x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-10.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-10.generate",
+          "id": "unit-00031-script.sources.perl-10.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-10.result",
+          "script_path": "crypto/cipher/asm/chacha20_poly1305_x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-10.translate"
+        },
+        {
+          "assembly_output": "sha256-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-11.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-11.generate",
+          "id": "unit-00031-script.sources.perl-11.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-11.result",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-11.translate"
+        },
+        {
+          "assembly_output": "aesni-gcm-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-2.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-2.generate",
+          "id": "unit-00031-script.sources.perl-2.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-2.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-2.translate"
+        },
+        {
+          "assembly_output": "aesni-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-3.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-3.generate",
+          "id": "unit-00031-script.sources.perl-3.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-3.result",
+          "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-3.translate"
+        },
+        {
+          "assembly_output": "ghash-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-4.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-4.generate",
+          "id": "unit-00031-script.sources.perl-4.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-4.result",
+          "script_path": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-4.translate"
+        },
+        {
+          "assembly_output": "vpaes-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-5.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-5.generate",
+          "id": "unit-00031-script.sources.perl-5.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-5.result",
+          "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-5.translate"
+        },
+        {
+          "assembly_output": "x86_64-mont-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-6.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-6.generate",
+          "id": "unit-00031-script.sources.perl-6.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-6.result",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+          "translator": "unit-00031-script.sources.perl-6.translate"
+        },
+        {
+          "assembly_output": "x86_64-mont5-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-7.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-7.generate",
+          "id": "unit-00031-script.sources.perl-7.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-7.result",
+          "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+          "translator": "unit-00031-script.sources.perl-7.translate"
+        },
+        {
+          "assembly_output": "p256-x86_64-asm-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-8.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-8.generate",
+          "id": "unit-00031-script.sources.perl-8.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-8.result",
+          "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+          "translator": "unit-00031-script.sources.perl-8.translate"
+        },
+        {
+          "assembly_output": "sha512-x86_64-elf.S",
+          "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-9.authenticate:authenticated",
+          "generator": "unit-00031-script.sources.perl-9.generate",
+          "id": "unit-00031-script.sources.perl-9.authenticate",
+          "package_source_ref": {
+            "kind": "source",
+            "path": "ring",
+            "role": "vendor-inputs"
+          },
+          "result": "unit-00031-script.sources.perl-9.result",
+          "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+          "translator": "unit-00031-script.sources.perl-9.translate"
+        }
+      ],
+      "ring_count": 12,
+      "stage": "mantle-stage2",
+      "steps": 24101
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v5.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v5.json'",
+  "script_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v5.py",
+  "script_blake3": "16fabec3c07be4f68be198c4c8ef0adde07411773d68fbb8b190ea65b7303730",
+  "script_transfer_equal": true,
+  "result_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v5.json",
+  "previous_result": "parent-v4-result.txt",
+  "scope": "Inert inspection only; native subset count measured, not repinned; complete original-body preservation and exact four-program additions remain required."
+}

@@ -1,0 +1,10 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v4.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v4.json'",
+  "script_local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-audit.py",
+  "script_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v4.py",
+  "script_blake3": "063a890a8ba240192dfe00a5c9a3aa3c6dceb603abe34a065d857633ce10e173",
+  "script_transfer_equal": true,
+  "result_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v4.json",
+  "scope": "Trusted bounded inert identity inspection only; frozen source/cohort read-only; no physical verdict or product execution is inferred before completion."
+}

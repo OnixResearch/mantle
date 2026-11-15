@@ -1,0 +1,35 @@
++ date -Is
+2026-11-15T09:49:29-05:00
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c cairn validate --root .
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+error:
+       … while calling the 'derivationStrict' builtin
+         at «nix-internal»/derivation-internal.nix:37:12:
+           36|
+           37|   strict = derivationStrict drvAttrs;
+             |            ^
+           38|
+
+       … while evaluating derivation 'nix-shell'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating attribute 'nativeBuildInputs' of derivation 'nix-shell'
+         at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:590:11:
+          589|           depsBuildBuild = elemAt (elemAt dependencies 0) 0;
+          590|           nativeBuildInputs = elemAt (elemAt dependencies 0) 1;
+             |           ^
+          591|           depsBuildTarget = elemAt (elemAt dependencies 0) 2;
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Failed to fetch git repository 'ssh://git@github.com/brittonr/tigerstyle-rs.git'
++ status=1
++ '[' 1 -eq 0 ']'
++ printf 'validation_exit=%s\n' 1
+validation_exit=1
++ exit 1

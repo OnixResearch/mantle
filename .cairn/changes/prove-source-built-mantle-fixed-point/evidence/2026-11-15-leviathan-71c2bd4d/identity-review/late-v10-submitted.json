@@ -1,0 +1,7 @@
+{
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/late-source-preflight.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v10.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-late-v10.json'",
+  "script_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v10.py",
+  "script_blake3": "edcb31a8b06191244b1ef7f4db82fb2b2f20f2f7c27ba40e105e809f9f77d5e3",
+  "result_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-late-v10.json",
+  "scope": "Narrow inert late helper/source/original-script binding inspection; no complete physical verdict or protected execution."
+}

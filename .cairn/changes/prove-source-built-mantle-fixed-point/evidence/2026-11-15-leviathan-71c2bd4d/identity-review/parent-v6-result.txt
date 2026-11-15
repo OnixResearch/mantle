@@ -1,0 +1,8 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+BLOCKER AuditError: source profile canonical manifest identity mismatch None
+Exit code: 1
+Wall time: 156.08 seconds
+
+A bounded read of the actual file proved that its root manifest_blake3 follows the records array and source-role metadata uses bootstrap_profile_class (the authoritative source_bundle.rs constant), not the reviewer's invented profile-class key. Parent v7 reads the bounded actual footer and uses the existing vocabulary. Complete record payload comparison remains required; no product input or source pin changed and no physical acceptance was emitted by v6.

@@ -1,0 +1,7 @@
+phase=plan-bound
+phase=original-git-copies-bound
+BLOCKER AuditError: preauthor native source record count changed: 59
+Exit code: 1
+Wall time: 33.02 seconds
+
+Parent v4 reached and verified both complete AWS-LC Git copies after repairing pipe draining. It then rejected the inspector's unsupported 65-native-record assertion. The observed native closure has 59 records; 65 is the refreshed whole source-profile record count, not this native subset. No product input was changed and no physical verdict was accepted. The next inspector removes that incidental count, retaining the independent preauthor raw digest/size pin, full record-body comparison, exact four-record addition set, and original-plus-four cardinality check; it does not repin to the observed 59.

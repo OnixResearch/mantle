@@ -1,0 +1,8 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+BLOCKER AuditError: current source role profile classes incomplete: all seven role classes
+Exit code: 1
+Wall time: 138.27 seconds
+
+Parent v5 completed pinned plan/runner/source checks, both original AWS-LC Git copies, all original native record-body comparisons and all four program record/archive/NAR/payload checks before the profile scanner rejected. Its 64-KiB prefix classifier found no source roles. No physical verdict was accepted. The next revision replaces that unsupported field-order assumption with the existing bounded complete-record JSON decoder; all role and program verification remains mandatory.

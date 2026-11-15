@@ -1,0 +1,10 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v6.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v6.json'",
+  "script_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v6.py",
+  "script_blake3": "87465882948c3c2b1d9295a07419c8a30a751444c5f7e4ae8ff1d405ee7b7fe3",
+  "script_transfer_equal": true,
+  "result_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v6.json",
+  "previous_result": "parent-v5-result.txt",
+  "scope": "Inert byte/identity inspection of unchanged c22381a8 cohort; one complete record at a time under existing explicit record/memory bounds; no prefix-based selection or field-order assumption."
+}

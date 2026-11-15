@@ -1,0 +1,38 @@
+# Reproducible inert identity review
+
+Host: `leviathan.cymric-daggertooth.ts.net`
+Unique remote scratch: `/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115`
+Assigned local evidence directory: `.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/`
+
+## Final reviewer execution
+
+1. Create only the unique review scratch:
+```sh
+ssh -o BatchMode=yes -o ConnectTimeout=10 leviathan.cymric-daggertooth.ts.net 'mkdir /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115'
+```
+2. Transfer the persisted Python inspection script:
+```sh
+scp -q .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-audit.py leviathan.cymric-daggertooth.ts.net:/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit.py
+```
+3. Run only the bounded inert inspection (result is written inside the review scratch; stdout/stderr are retained locally):
+```sh
+set -o pipefail; ssh -o BatchMode=yes -o ConnectTimeout=10 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review.json' 2>&1 | tee .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-audit-final.log
+```
+4. Retrieve only this reviewer-owned JSON result:
+```sh
+scp -q leviathan.cymric-daggertooth.ts.net:/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review.json .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-review.json
+```
+
+## Exact tools
+
+- Python interpreter: `/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14` (Python 3.14.8)
+- BLAKE3: `/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum` (b3sum 1.8.7)
+- Git: `/run/current-system/sw/bin/git` (2.56.0)
+- GNU tar: `/run/current-system/sw/bin/tar` (1.35)
+- Nix: `/run/current-system/sw/bin/nix` (2.35.6)
+- jq: `/run/current-system/sw/bin/jq` (1.8.2; checked available, not invoked by the script)
+- Captured remote version output: `tools-versions.txt`.
+
+The script also uses the exact commands recorded in its `commands_and_tools` JSON field for normalized source tar, recursive NAR path hashes, Git blob IDs, and BLAKE3 content/record digests. All inputs are frozen source or inert prepared evidence. No product/helper/generator/provider/controller/recipe execution, builds, tests, lint, formatter, or proof launch occurred.
+
+Independent parent stream evidence: `../profile-transfer-parity.json` records equal remote raw-file and complete received-SSH-stream BLAKE3 `54f27df59c3ff958be04f42f4c52261c1be5cc0b0bd3489bd69770e629c0b0cc` for the 15,791,130,195-byte source profile. The identity script independently hashes the local received file against that identity.

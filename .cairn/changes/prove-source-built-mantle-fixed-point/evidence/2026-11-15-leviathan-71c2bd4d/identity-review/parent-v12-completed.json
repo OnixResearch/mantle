@@ -1,0 +1,11 @@
+{
+  "script": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v12.py",
+  "script_blake3": "0b86c78641f773e29d23b7042472eea567ece0e9659ac5fbd843dd7f2e770d6f",
+  "remote_result": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v12.json",
+  "local_result": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-review-parent-v12.json",
+  "remote_hashes": "9797d7ad0c8a157ab6525d834e97920b1a27e0891533d02a8defe5de4c24f812  /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v12.json\nbb4343fcb08b450b39efe55b4ff1317b7b73eb455006c142f8ee0c77298556f6  /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/source-preservation-v12.json\n",
+  "local_hashes": "9797d7ad0c8a157ab6525d834e97920b1a27e0891533d02a8defe5de4c24f812  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/identity-review-parent-v12.json\nbb4343fcb08b450b39efe55b4ff1317b7b73eb455006c142f8ee0c77298556f6  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/identity-review/source-preservation-v12.json\n",
+  "transferred_bytes_equal": true,
+  "observed_completion": "All emitted phases completed; status ACCEPT, roles7, original records59, new program records4, AWS scripts26, Ring scripts12. Source preservation12762 admitted leaves;11626 policy-excluded leaves;4 additions.",
+  "non_claim": "Bounded inert physical acceptance for rejected old c22381a8 cohort only. Does not remedy its consumer rejections, certify replacement787784fb cohort, or authorize protected execution."
+}

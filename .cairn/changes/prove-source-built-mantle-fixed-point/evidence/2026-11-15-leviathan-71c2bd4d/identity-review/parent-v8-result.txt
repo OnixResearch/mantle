@@ -1,0 +1,16 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+profile_role_bound=bootstrap-source
+profile_role_bound=stagex-seed
+profile_role_bound=mantle-source
+profile_role_bound=vendored-cargo-inputs
+profile_role_bound=proof-input
+profile_role_bound=stagex-source-bundle
+profile_role_bound=stagex-lineage
+phase=profile-role-and-program-bytes-bound
+BLOCKER AuditError: frozen helper/translator copy missing: src/source_built_mantle_programs_aws_helper.rs -> program-sources/source-built-mantle-programs/source-built-mantle-programs/aws-source-helper.rs
+Exit code: 1
+Wall time: 309.68 seconds
+
+The parent audit completed all source-role payload checks and physical-role identity assembly, then encountered the reviewer's duplicated program-prefix mapping for a helper. No final physical verdict was emitted. The authoritative recipe ManifestSource member and actual program archive inventory, not a guessed path prefix, determine the corrected binding. Frozen/product/cohort inputs remain unchanged.

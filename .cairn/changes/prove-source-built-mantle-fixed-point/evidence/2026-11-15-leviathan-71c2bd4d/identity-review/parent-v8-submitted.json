@@ -1,0 +1,10 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v8.py /dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v8.json'",
+  "script_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-audit-parent-v8.py",
+  "script_blake3": "2b7ecc9b2fb1a9e6f3257634a5e996557538a3487535e0dfad9a4f75a53275fc",
+  "script_transfer_equal": true,
+  "result_remote": "/dev/shm/mantle-identity-review-71c2bd4d-gpt6luna-20261115/identity-review-parent-v8.json",
+  "previous_result": "parent-v7-result.txt",
+  "scope": "Trusted bounded inert byte/identity inspection only; unchanged c22381a8 cohort. Actual bootstrap_profile_class vocabulary and root manifest footer; no product execution or verdict inferred."
+}
