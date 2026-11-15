@@ -436,3 +436,17 @@ validator are unchanged. Evidence and exact commands are in
 Final committed-source qualification, regeneration, complete current byte and
 Luna reviews, protected stages, reconciliation and v2 receipt remain required;
 I3–I5 and proof-dependent V2/V3 stay open.
+
+## Invocation source qualification checkpoint (2026-11-15)
+
+Author repair `8d2dfcd8…` is pushed. Assembly 1587 succeeded, but source
+qualification 1588 stopped on one rustfmt wrap. Canonical 1589 executed its
+named test legs successfully, then rejected the new profile regression module's
+missing private JSON-family decision; the following Cairn gates did not run.
+Preparation 1590 was dependency-failed and never ran. The exact wrap is applied,
+and the new fixture is registered in the existing internal bootstrap family.
+Corrective task 1591 passed leaf rustfmt and the machine-contract checker
+(`24 contracted, 65 classified`). Commands, full logs and bounded outcomes are
+in `evidence/2026-11-15-leviathan-8d2dfcd8/qualification-corrections.md`.
+A newly committed exact source must still qualify and regenerate; I3–I5 and
+proof-dependent V2/V3 remain open, with no new cohort or protected-stage claim.

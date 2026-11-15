@@ -1,0 +1,168 @@
++ date -Is
+2026-11-15T04:46:27-05:00
+++ cat /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-8d2dfcd8-typed-invocation.exit
++ test 0 = 0
++ META=/home/brittonr/sbfp-20261113-berdKH/complete-source-8d2dfcd8-typed-invocation.json
++ jq -e '.schema == "mantle-complete-source-snapshot-v1" and .source_code_revision == "8d2dfcd88e7b36a20637b2376f312ce29747d1bc" and .code_archive_blake3 == "6cf7a625552ae8e128a5b893806d70b2d8dd6bb199dec205e3f70800196c8e07" and .original_git_commit == "02561621ffa4cf17c0c4f70bc11a82df36b42ae9" and .original_git_tree_sha1 == "969d75db5c0494de4a26bbb2dcbf6837058054c1" and .original_source_archive_blake3 == "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88" and .original_source_normalized_tar_blake3 == "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89"' /home/brittonr/sbfp-20261113-berdKH/complete-source-8d2dfcd8-typed-invocation.json
+true
++ ARCHIVE=/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-8d2dfcd8-typed-invocation.tar.gz
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-8d2dfcd8-typed-invocation.tar.gz
+++ jq -er .compressed_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-8d2dfcd8-typed-invocation.json
++ test 547af34c76710e0324a7bb56328e23af4bf867a907e7c81ad9bf9e45115664da = 547af34c76710e0324a7bb56328e23af4bf867a907e7c81ad9bf9e45115664da
++ SOURCE=/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation
++ mkdir /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation /home/brittonr/sbfp-20261113-berdKH/runner-tmp-8d2dfcd8-typed-invocation
++ tar --extract --gzip --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-8d2dfcd8-typed-invocation.tar.gz --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation
+++ source_digest
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_BEFORE=fa2e5015588d0dfcf88a91bd5d8af19625449a98b8a303935adb8a67ce1dbc70
+++ jq -er .complete_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-8d2dfcd8-typed-invocation.json
++ test fa2e5015588d0dfcf88a91bd5d8af19625449a98b8a303935adb8a67ce1dbc70 = fa2e5015588d0dfcf88a91bd5d8af19625449a98b8a303935adb8a67ce1dbc70
++ printf 'frozen_source_revision=%s\nsource_tree_before_blake3=%s\n' 8d2dfcd88e7b36a20637b2376f312ce29747d1bc fa2e5015588d0dfcf88a91bd5d8af19625449a98b8a303935adb8a67ce1dbc70
+frozen_source_revision=8d2dfcd88e7b36a20637b2376f312ce29747d1bc
+source_tree_before_blake3=fa2e5015588d0dfcf88a91bd5d8af19625449a98b8a303935adb8a67ce1dbc70
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-8d2dfcd8-typed-invocation XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-8d2dfcd8-typed-invocation
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; rustc -Vv; cargo -V; perl --version; cargo fmt --check -p mantle -v; cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings; cargo build --release --locked --offline -p mantle --bin mantle'
+error (ignored): SQLite database '/home/brittonr/sbfp-20261113-berdKH/tooling-cache/nix/eval-cache-v6/321bc5b08f7572e6e273858e32a52b5f9901fa40a902817c681366ca3ffb2706.sqlite' is busy
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+
+This is perl 5, version 42, subversion 0 (v5.42.0) built for x86_64-linux-thread-multi
+
+Copyright 1987-2025, Larry Wall
+
+Perl may be copied only under the terms of either the Artistic License or the
+GNU General Public License, which may be found in the Perl 5 source kit.
+
+Complete documentation for Perl, including FAQ lists, should be found on
+this system using "man perl" or "perldoc perl".  If you have access to the
+Internet, point your browser at https://www.perl.org/, the Perl Home Page.
+
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/shared-action-result-roundtrip/publish.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/resource_evidence_check.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/resource_policy_replay.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/bin/mantle-protected-build-runner.rs"
+[lib (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/lib.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/main.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_apk.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_sources.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_sources_offline.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_build_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/causal_build_trace.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/demand_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/elf_dynamic_reference_scanner.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/elf_dynamic_relocation.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/finish_gates.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/gateway_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/integration.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/profile_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/release_gauntlet_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_hexagon_v2_parity.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/resource_gateway_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/retention_interest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_eval_backends.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_eval_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_lazy_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_scheduler_priority.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/benchmark_suite.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/distributed_eval_assess.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/hardware_simulation_plan.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/picolibc_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/delta-substitution/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/release-witness-handoff/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/resource_evidence_check.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/examples/resource_policy_replay.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/bin/mantle-protected-build-runner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/lib.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/main.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_apk.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_sources.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/android_sources_offline.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/attest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/audit_support.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/benchmark_harness.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_parity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/bootstrap_validate_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_build_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_free_self_build_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/cargo_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/causal_build_trace.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/composition_root_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/demand_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/elf_dynamic_reference_scanner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/elf_dynamic_relocation.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/evaluator_budget_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/example_projects.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_inventory.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/examples_workflow_gallery.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/finish_gates.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/foreign_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/freshness_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/gateway_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/identity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/integration.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/integration_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernel_bundle_oci_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/kernelscript_experiment.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/lock_importer_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/machine_schema_contracts.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/nix_free_demo_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/offline_build_runbook_docs.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/offline_cargo_project.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/operator_diagnostics.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/pin_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/profile_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_build_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/project_refresh_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/release_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/release_gauntlet_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_credentials_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_hexagon_v2_parity.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_rail_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_stdio_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/remote_transfer_production.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/removed_system_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/resource_gateway_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/retention_interest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/retention_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/rust_compatibility_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/rust_plan_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/scheduling_policy.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/self_hosting.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/source_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/source_bundle_hydration_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/stdlib_tests.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/store_archive_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/store_gc_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/transactional_reconciliation_pilot.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/transcript_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/trust_policy_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tests/wasm_component_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tools/generate_operator_command_contract.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/tools/generate_portable_platform_profiles.rs
+Diff in /home/brittonr/sbfp-20261113-berdKH/runner-source-8d2dfcd8-typed-invocation/src/source_built_rust_programs_successors_graph.rs:255:
+                 parts: vec![WordPart::TextInput { name: alias }],
+             });
+         }
+-        environment.insert("CARGO_MANIFEST_DIR".into(), input("package", format!("{}/{}", self.top, package.directory)));
++        environment
++            .insert("CARGO_MANIFEST_DIR".into(), input("package", format!("{}/{}", self.top, package.directory)));
+         environment.insert("RUSTC".into(), input("package", "target-wrappers/rustc"));
+         environment.insert("CC".into(), input("package", "target-wrappers/cc"));
+         environment.insert("CXX".into(), input("package", "target-wrappers/c++"));
++ status=1
++ '[' 1 -eq 0 ']'
++ printf 'qualification_exit=%s\n' 1
+qualification_exit=1
++ printf '%s\n' 1
++ exit 1

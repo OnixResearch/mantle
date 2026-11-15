@@ -255,7 +255,8 @@ impl Context<'_, '_> {
                 parts: vec![WordPart::TextInput { name: alias }],
             });
         }
-        environment.insert("CARGO_MANIFEST_DIR".into(), input("package", format!("{}/{}", self.top, package.directory)));
+        environment
+            .insert("CARGO_MANIFEST_DIR".into(), input("package", format!("{}/{}", self.top, package.directory)));
         environment.insert("RUSTC".into(), input("package", "target-wrappers/rustc"));
         environment.insert("CC".into(), input("package", "target-wrappers/cc"));
         environment.insert("CXX".into(), input("package", "target-wrappers/c++"));

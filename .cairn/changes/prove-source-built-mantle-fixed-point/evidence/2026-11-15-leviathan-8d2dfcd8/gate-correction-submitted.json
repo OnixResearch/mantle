@@ -1,0 +1,12 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "task": 1591,
+  "source": "/home/brittonr/sbfp-20261113-berdKH/repair-invocation-gates-8d2dfcd8",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/verify-invocation-gate-corrections.sh",
+  "original_qualification_failure": "1588: rustfmt requires the existing method-chain line wrap",
+  "original_canonical_failure": "1589: new successors_profile_tests.rs is missing its private bootstrap.validation-reports source-family decision",
+  "preparation_status": "1590 DependencyFailed; no new cohort or protected execution",
+  "change": "Exact format correction and one internal-family source path only; no public schema, literal/path rule or proof authority changed",
+  "non_claim": "Corrected checks pending; final committed-source qualification and source-only regeneration still required."
+}

@@ -1,0 +1,2 @@
+machine schema contract check: PASS (24 contracted, 65 classified)
+verification_exit=0

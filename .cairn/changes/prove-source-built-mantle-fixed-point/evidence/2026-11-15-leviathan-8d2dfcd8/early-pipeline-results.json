@@ -1,0 +1,66 @@
+{
+  "assembly": {
+    "id": 1587,
+    "created_at": "2026-11-15T04:46:09.870831388-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-8d2dfcd8-typed-invocation.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-8d2dfcd8-typed-invocation.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "mantle-8d2dfcd8-typed-invocation-source-assembly",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T04:46:09.870818463-05:00",
+        "start": "2026-11-15T04:46:10.033123298-05:00",
+        "end": "2026-11-15T04:46:27.837951966-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "qualification": {
+    "id": 1588,
+    "created_at": "2026-11-15T04:46:10.445240309-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-8d2dfcd8-typed-invocation.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/qualify-source-8d2dfcd8-typed-invocation.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [
+      1587
+    ],
+    "priority": 0,
+    "label": "mantle-8d2dfcd8-typed-invocation-source-qualification",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T04:46:10.445196967-05:00",
+        "start": "2026-11-15T04:46:27.888216194-05:00",
+        "end": "2026-11-15T04:47:04.415804563-05:00",
+        "result": {
+          "Failed": 1
+        }
+      }
+    }
+  },
+  "preparation": {
+    "id": 1590,
+    "created_at": "2026-11-15T04:46:11.582581709-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-8d2dfcd8-typed-invocation.sh",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-8d2dfcd8-typed-invocation.sh",
+    "path": "/home/brittonr",
+    "group": "default",
+    "dependencies": [
+      1588,
+      1589
+    ],
+    "priority": 0,
+    "label": "mantle-8d2dfcd8-typed-invocation-source-preparation",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-15T04:46:11.582568605-05:00",
+        "start": "2026-11-15T04:47:04.446541696-05:00",
+        "end": "2026-11-15T04:47:04.446542458-05:00",
+        "result": "DependencyFailed"
+      }
+    }
+  }
+}

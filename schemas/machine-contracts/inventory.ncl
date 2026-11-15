@@ -2176,6 +2176,7 @@ let Registry = {
           "src/source_built_rust_programs_macros.rs",
           "src/source_built_rust_programs_native_smoke_tests.rs",
           "src/source_built_rust_programs_successors.rs",
+          "src/source_built_rust_programs_successors_profile_tests.rs",
           "src/source_built_rust_programs_translation.rs",
           "src/source_built_stagex_programs.rs",
           "src/source_built_stagex_programs_binutils_dispatch.rs",

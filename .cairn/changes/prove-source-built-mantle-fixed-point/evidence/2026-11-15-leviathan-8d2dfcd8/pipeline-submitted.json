@@ -1,0 +1,29 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "pueue": "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+  "revision": "8d2dfcd88e7b36a20637b2376f312ce29747d1bc",
+  "assembly_task": 1587,
+  "source_qualification_task": 1588,
+  "canonical_task": 1589,
+  "source_preparation_task": 1590,
+  "qualification_after": [
+    1587
+  ],
+  "canonical_after": [
+    1587
+  ],
+  "preparation_after": [
+    1588,
+    1589
+  ],
+  "scripts": {
+    "assemble-complete-source.sh": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-8d2dfcd8-typed-invocation.sh",
+    "qualify-source.sh": "/home/brittonr/sbfp-20261113-berdKH/qualify-source-8d2dfcd8-typed-invocation.sh",
+    "canonical-checks-run.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-8d2dfcd8-typed-invocation-run.sh",
+    "canonical-checks-inside.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-8d2dfcd8-typed-invocation-inside.sh",
+    "prepare-source.sh": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-8d2dfcd8-typed-invocation.sh"
+  },
+  "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "non_claim": "Queued exact-source assembly, qualification and inert source-program preparation only. No new cohort, runner qualification, review, protected stage, fixed point or release success is claimed."
+}

@@ -1299,3 +1299,20 @@ admission, initial authority, action-trust or proof acceptance is relaxed.
 Source-bound qualification and a freshly regenerated, fully reviewed cohort are
 still required. This is not provider, Mantle-stage, native parity, fixed-point
 or release evidence; I3–I5 and proof-dependent V2/V3 remain open.
+
+## Invocation qualification closure corrections (2026-11-15)
+
+Pushed author repair `8d2dfcd8…` assembled successfully in 1587. Source-bound
+1588 stopped on the reported method-chain rustfmt wrap; canonical 1589 passed
+its named test legs before rejecting the new test-only serialization source's
+missing inventory family. It did not reach Cairn. Preparation 1590 was
+dependency-failed, not source-prepared or protected-executed.
+
+The exact format change and one source-path registration in the existing
+internal `bootstrap.validation-reports` family passed corrective task 1591:
+`machine schema contract check: PASS (24 contracted, 65 classified)`, with the
+leaf rustfmt check successful. No public schema or authority rule changed.
+Exact inputs, all captured outcomes and the corrected command are retained in
+`2026-11-15-leviathan-8d2dfcd8/qualification-corrections.md`.
+The next final source snapshot must qualify, regenerate and receive complete
+current independent review; I3–I5 and proof-dependent V2/V3 remain open.

@@ -1,0 +1,23 @@
+{
+  "id": 1589,
+  "created_at": "2026-11-15T04:46:11.010227954-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-8d2dfcd8-typed-invocation-run.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/canonical-checks-8d2dfcd8-typed-invocation-run.sh",
+  "path": "/home/brittonr",
+  "group": "default",
+  "dependencies": [
+    1587
+  ],
+  "priority": 0,
+  "label": "mantle-8d2dfcd8-typed-invocation-canonical-gates",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T04:46:11.010215560-05:00",
+      "start": "2026-11-15T04:46:27.940181430-05:00",
+      "end": "2026-11-15T04:48:13.425998847-05:00",
+      "result": {
+        "Failed": 1
+      }
+    }
+  }
+}
