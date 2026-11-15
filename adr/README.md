@@ -153,3 +153,4 @@ compatibility surface, crate name, or historical decision.
 | [0153](0153-retain-authenticated-gcc-request-input-ownership.md) | Retain authenticated GCC request input ownership | Accepted |
 | [0154](0154-rebind-captured-workspace-descendants-to-declared-root.md) | Rebind captured workspace descendants to their declared root | Accepted |
 | [0155](0155-bind-complete-inert-reviews-to-measured-frozen-subject.md) | Bind complete inert reviews to a measured frozen subject | Accepted |
+| [0157](0157-check-gc-planning-against-a-terrane-kernel.md) | Check GC planning against a Terrane kernel | Proposed |

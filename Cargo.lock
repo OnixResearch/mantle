@@ -1936,6 +1936,7 @@ name = "crunch-gc-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "vstd",
 ]
 
 [[package]]

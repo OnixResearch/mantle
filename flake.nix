@@ -499,6 +499,7 @@
               )
             )
             || pkgs.lib.hasPrefix "${toString ./vendor/trellis-fenced-attempt}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./vendor/terrane-reclaim-plan}/" pathString
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString

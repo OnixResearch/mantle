@@ -1,0 +1,29 @@
+Local developer runs, not gate evidence. Host lacked mold and the dev shell;
+linking used lld via RUSTFLAGS. Toolchain nightly-2026-04-08.
+
+$ PATH=<b3sum>:$PATH python3 -I scripts/import-terrane-reclaim-plan.py --check
+{"status": "source-identities-match", "revision": "bbf83d95402370b6ba29e82e01f16b1059c55a83", "model_blake3": "ee279c734a91e86d6f154835a57e8e9eb5fc5bbadf349657114acabee8cd5aee", "non_claim": "source identity only: not fresh Verus verification, not proof acceptance, not runtime authority, and not equivalence of Mantle source with the kernel"}
+
+$ cargo test --offline -p crunch-gc-core
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.61s
+
+$ cargo clippy --offline -p crunch-gc-core --lib --tests --no-deps -- -D warnings
+(no warnings)
+
+Mutation check (each mutant applied alone to crates/crunch-gc-core/src/lib.rs,
+`cargo test -p crunch-gc-core terrane_reclaim`, then restored):
+reach-skip-ref         KILLED  retained: unsorted duplicates
+retaining-skip-ref     KILLED  retaining roots: unsorted duplicates
+no-base-to-overlay     KILLED  Mantle planned, kernel rejected: n=2 edges=[(0, 1)] roots=[] overlay=0b10 Plain
+no-missing-reference   KILLED  Mantle planned, kernel rejected: n=1 edges=[] roots=[] overlay=0b0 DanglingReference
+no-missing-root-check  SURVIVED  equivalent: compute_reachable still returns MissingRoot;
+                               only the order of coexisting errors changes
+base-can-be-candidate  KILLED  candidates: n=1 edges=[] roots=[] overlay=0b0 Plain
+live-can-be-candidate  KILLED  by plan_gc's own debug assertion
+                               `classified_count <= entries.len()` before the rail compared
+
+Producer side (Terrane bbf83d9, Verus 0.2026.05.17.e479cce, module file only):
+verification results:: 39 verified, 0 errors
+
+Not run: first-party quality gate, Tiger Style, nix flake check, cairn validate,
+Terrane's full-library Verus gate.
