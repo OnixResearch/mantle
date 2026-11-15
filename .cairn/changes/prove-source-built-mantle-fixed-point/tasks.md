@@ -485,3 +485,22 @@ stash into a new absent cohort namespace. No ready cohort, full current review,
 protected provider, Mantle stage, reconciliation, fixed point or release
 acceptance follows from runner compilation. I3–I5 and proof-dependent V2/V3
 remain open.
+
+## Fresh-runner cohort prepared (2026-11-15)
+
+Source-only preparation 1598 completed Success using the genuinely compiled
+`c9803076…` runner. Both actual source verifiers report ready with empty
+missing/stale/unsupported/untrusted sets. The new input profile is `6e3a630f…`,
+input plan `1e74d77c…`, and prepared manifest `c22381a8…`. The complete frozen
+source remained `b49c087a…`; the original input profile also remained unchanged.
+Exact task, commands, report, four new program identities, source verifier
+outputs and received-metadata parity are retained in
+`evidence/2026-11-15-leviathan-71c2bd4d/fresh-preparation-completed.json`.
+
+The complete prepared profile is 15,791,130,195 bytes. Its raw BLAKE3 is not its
+manifest identity. Complete-profile transfer parity and fresh independent Luna
+graph/guard/typed-template and physical/authenticated-source reviews are now
+in progress under the current `review-contract.md`. The old e9 cohort,
+interrupted 1595, prior model verdicts and historical native rows are not
+substituted. No protected execution has been launched. I3–I5 and proof-dependent
+V2/V3 remain open.

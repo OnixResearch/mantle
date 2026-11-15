@@ -1,0 +1,62 @@
+{
+  "task": 1598,
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T05:35:20.951839186-05:00",
+      "start": "2026-11-15T05:35:21.231518890-05:00",
+      "end": "2026-11-15T06:20:45.197867780-05:00",
+      "result": "Success"
+    }
+  },
+  "code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-71c2bd4d-typed-invocation",
+  "source_tree_blake3": "b49c087adf2e6f7c15fd6e4fb80bc2c614546a4efba8a59df279c61d79059778",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-71c2bd4d-fresh-target",
+  "runner_blake3": "c980307680feebd9d8a5543d39635393dad6b39d729aad051e97e7dc75457971",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target",
+  "report": {
+    "schema": "mantle-source-built-source-programs-v1",
+    "input_profile_blake3": "6e3a630fbc19fe7038ed46b6871a102ca8a9d86aa2ca16196b0eb5866d86f723",
+    "input_plan_blake3": "1e74d77c263bcd6d6d781683e99c9664b1551486fc5fd3da5c1eaaa815456d3a",
+    "output_profile_blake3": "c22381a887c2d1ebb9105e7c4e9c5a2a010779c64355d882a3d80da932071c9c",
+    "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-profile.json",
+    "program_records": {
+      "fixed-point-native-source-program": "4666eecb4640e8cee8746051788c17bfd98a0fb8b5289ab672a1bd4cd09e66ee",
+      "fixed-point-rust-source-program": "151a953a0914801d77f974f64ebbe2e9dcb303570e981cee121df9676b6d8de2",
+      "source-built-mantle-programs": "53b89e14f86a830bcc36ba8728a9596cf09d75014cb6357ac0b087706783d363",
+      "source-built-stagex-programs": "1457bcfa249038ce3a4a76ae8c7c95317e0f2dda6e02f1449bde58d4b1b1ce77"
+    },
+    "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+  },
+  "profile_bytes": 15791130195,
+  "profile_raw_blake3_from_preparation_log": "54f27df59c3ff958be04f42f4c52261c1be5cc0b0bd3489bd69770e629c0b0cc",
+  "preparation_report_raw_blake3": "55588f77ead28264195490a2aec50a57f6dad9863d69194389f11ced47df296b",
+  "metadata_files": [
+    [
+      "source-refresh-71c2bd4d-fresh-target.json",
+      "source-refresh-fresh-target.json"
+    ],
+    [
+      "source-profile-verification-71c2bd4d-fresh-target.json",
+      "source-profile-verification-fresh-target.json"
+    ],
+    [
+      "preparation-report-71c2bd4d-fresh-target.json",
+      "preparation-report-fresh-target.json"
+    ],
+    [
+      "prepared-source-profile-verification-71c2bd4d-fresh-target.json",
+      "prepared-source-profile-verification-fresh-target.json"
+    ],
+    [
+      "prepared-cohort-71c2bd4d-fresh-target/source-program-preparation.json",
+      "source-program-preparation-fresh-target.json"
+    ]
+  ],
+  "metadata_remote_hashes": "4e15642114d62c5653928ddfefeebc7dc8415cfcce50c72a84ee0ae634fd37a9  /home/brittonr/sbfp-20261113-berdKH/source-refresh-71c2bd4d-fresh-target.json\nf7c90b49507836abea9352f92ba4000eb81a57a89e1d8353f65c8b314900e403  /home/brittonr/sbfp-20261113-berdKH/source-profile-verification-71c2bd4d-fresh-target.json\n55588f77ead28264195490a2aec50a57f6dad9863d69194389f11ced47df296b  /home/brittonr/sbfp-20261113-berdKH/preparation-report-71c2bd4d-fresh-target.json\n1f4ce327704d02d33143e20c6c83f0a4699d33bff19bb70d5f265e2dc0273f5d  /home/brittonr/sbfp-20261113-berdKH/prepared-source-profile-verification-71c2bd4d-fresh-target.json\n55588f77ead28264195490a2aec50a57f6dad9863d69194389f11ced47df296b  /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-program-preparation.json\n1969b667de66c6e722bd6d6dca8292cd83a3ab7179552fe995d7f34e8efd398d  /home/brittonr/sbfp-20261113-berdKH/preparation-71c2bd4d-fresh-target.log\n",
+  "metadata_local_hashes": "4e15642114d62c5653928ddfefeebc7dc8415cfcce50c72a84ee0ae634fd37a9  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/source-refresh-fresh-target.json\nf7c90b49507836abea9352f92ba4000eb81a57a89e1d8353f65c8b314900e403  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/source-profile-verification-fresh-target.json\n55588f77ead28264195490a2aec50a57f6dad9863d69194389f11ced47df296b  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/preparation-report-fresh-target.json\n1f4ce327704d02d33143e20c6c83f0a4699d33bff19bb70d5f265e2dc0273f5d  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/prepared-source-profile-verification-fresh-target.json\n55588f77ead28264195490a2aec50a57f6dad9863d69194389f11ced47df296b  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/source-program-preparation-fresh-target.json\n1969b667de66c6e722bd6d6dca8292cd83a3ab7179552fe995d7f34e8efd398d  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-71c2bd4d/preparation-fresh-target.log\n",
+  "metadata_transfer_equal": true,
+  "input_ready_class": "ready",
+  "prepared_ready_class": "ready",
+  "non_claim": "Newly authored source-only cohort and source availability; independent complete physical/graph review, full-profile transfer and protected execution remain required."
+}

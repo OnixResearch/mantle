@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-source-built-source-programs-v1",
+  "input_profile_blake3": "6e3a630fbc19fe7038ed46b6871a102ca8a9d86aa2ca16196b0eb5866d86f723",
+  "input_plan_blake3": "1e74d77c263bcd6d6d781683e99c9664b1551486fc5fd3da5c1eaaa815456d3a",
+  "output_profile_blake3": "c22381a887c2d1ebb9105e7c4e9c5a2a010779c64355d882a3d80da932071c9c",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-profile.json",
+  "program_records": {
+    "fixed-point-native-source-program": "4666eecb4640e8cee8746051788c17bfd98a0fb8b5289ab672a1bd4cd09e66ee",
+    "fixed-point-rust-source-program": "151a953a0914801d77f974f64ebbe2e9dcb303570e981cee121df9676b6d8de2",
+    "source-built-mantle-programs": "53b89e14f86a830bcc36ba8728a9596cf09d75014cb6357ac0b087706783d363",
+    "source-built-stagex-programs": "1457bcfa249038ce3a4a76ae8c7c95317e0f2dda6e02f1449bde58d4b1b1ce77"
+  },
+  "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+}

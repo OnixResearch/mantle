@@ -1350,3 +1350,20 @@ namespace. The exact evidence, commands and remaining non-claims are in
 from killed 1595 is reused. Complete current source-profile byte/physical/graph
 review and genuine protected execution/receipt remain required; I3–I5 and
 proof-dependent V2/V3 stay open.
+
+## Genuinely fresh-runner cohort authored (2026-11-15)
+
+Preparation 1598 completed Success from runner `c9803076…` and unchanged frozen
+source `b49c087a…`. Its input profile is `6e3a630f…`, input plan `1e74d77c…`,
+and new prepared manifest `c22381a8…`. Both actual source verifiers report ready
+and no missing, stale, unsupported or untrusted records. The complete prepared
+profile is 15,791,130,195 bytes; its raw bytes and manifest identity remain
+separate claim boundaries.
+
+Actual report, four program identities, task, received complete metadata/log
+parity and source-verification outputs are retained in
+`2026-11-15-leviathan-71c2bd4d/fresh-preparation-completed.json`. The complete
+profile stream and both fresh Luna review slices are now in flight under that
+directory's current `review-contract.md`. No protected proof was launched and
+no prior cohort, warmed runner, interrupted intake or historical native row is
+adopted. I3–I5 and proof-dependent V2/V3 remain open.

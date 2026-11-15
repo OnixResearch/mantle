@@ -1,0 +1,16 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "code_revision": "71c2bd4de8ec66e545b42314ba95bf050396a36d",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-profile.json",
+  "source_profile_manifest_blake3": "c22381a887c2d1ebb9105e7c4e9c5a2a010779c64355d882a3d80da932071c9c",
+  "source_profile_file_bytes": 15791130195,
+  "remote_raw_file_blake3": "54f27df59c3ff958be04f42f4c52261c1be5cc0b0bd3489bd69770e629c0b0cc",
+  "local_complete_received_stream_blake3": "54f27df59c3ff958be04f42f4c52261c1be5cc0b0bd3489bd69770e629c0b0cc",
+  "profile_transfer_equal": true,
+  "remote_hash_source": "Successful preparation1598 complete log final b3sum measurement",
+  "local_hash_source": "Completed owned bg_268 stdout; 301.43-second full SSH compressed stream",
+  "command": "ssh -C -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-profile.json' | b3sum --no-names",
+  "local_profile_copy_retained": false,
+  "non_claim": "Complete raw profile byte-transfer identity only, not canonical program/physical source review, provider execution, fixed point or release eligibility."
+}

@@ -1,0 +1,22 @@
+{
+  "id": 1598,
+  "created_at": "2026-11-15T05:11:12.795348130-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-fresh-target.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/prepare-source-71c2bd4d-fresh-target.sh",
+  "path": "/home/brittonr",
+  "group": "default",
+  "dependencies": [
+    1596,
+    1597
+  ],
+  "priority": 0,
+  "label": "mantle-71c2bd4d-fresh-target-source-preparation",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T05:35:20.951839186-05:00",
+      "start": "2026-11-15T05:35:21.231518890-05:00",
+      "end": "2026-11-15T06:20:45.197867780-05:00",
+      "result": "Success"
+    }
+  }
+}

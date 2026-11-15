@@ -1,0 +1,1 @@
+ssh -C -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-71c2bd4d-fresh-target/source-profile.json' | b3sum --no-names
