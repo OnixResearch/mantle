@@ -54,5 +54,22 @@ $ python3 -I scripts/import-terrane-reclaim-plan.py --check
 $ cargo test --offline -p crunch-gc-check
 test result: ok. 18 passed; 0 failed
 
+Verified projection (Terrane 5aec06f: project_keys and key_mask validate
+the path-to-index lookup; Verus 0.2026.05.17, module file: 75 verified,
+0 errors; each of 19 hypothesis and runtime-check mutants rejected exactly
+at the mutated item):
+$ python3 -I scripts/import-terrane-reclaim-plan.py --check
+{"status": "source-identities-match", "revision": "5aec06fdfc841b3d472e239310f47e724b91e12f", "model_blake3": "2e65ea0900823f70ea071e324b56a46f50acafbd026102af42556fa4277d952b", ...}
+$ cargo test --offline -p crunch-gc-check
+test result: ok. 21 passed; 0 failed
+(the rail now also requires the production projection to be refused exactly
+for unknown roots or references and otherwise to match an independent test
+projection, over all 99,098 enumerated cases)
+$ cargo test --offline -p crunch-store --lib gc
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 412 filtered out; finished in 70.02s
+$ cargo clippy --offline -p crunch-gc-check -p crunch-store --lib --tests --no-deps -- -D warnings
+(no warnings)
+Timing was not re-measured after the projection change.
+
 Not run: first-party quality gate, Tiger Style, nix flake check, cairn validate,
 cargo deny.

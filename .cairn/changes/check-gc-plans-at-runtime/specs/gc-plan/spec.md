@@ -7,7 +7,9 @@
 r[mantle.gc_plan.runtime_check] Every core GC plan that drives deletion MUST be
 accepted by the imported Terrane kernel's `check_plan`, through a projection
 that refuses duplicate entries and unknown or repeated planned paths and
-requires the deletion intents to name exactly the candidates. A refused plan
+requires the deletion intents to name exactly the candidates. The projection
+from path identifiers to indices MUST itself be validated by the kernel's
+verified `project_keys` and `key_mask`, not trusted. A refused plan
 MUST fail before any removal or fence write.
 
 #### Scenario: Planner drops a reference
@@ -17,6 +19,13 @@ MUST fail before any removal or fence write.
 - WHEN the store plans GC
 - THEN planning MUST fail with `gc-plan-check-failed`
 - AND no path MUST be removed.
+
+#### Scenario: Projection names the wrong entry
+
+- GIVEN a computed reference or root index that names an entry whose path
+  differs from the referenced path, or a path that names no entry
+- WHEN the store plans GC
+- THEN the verified projection MUST be refused and no path removed.
 
 #### Scenario: Planner refuses the request
 

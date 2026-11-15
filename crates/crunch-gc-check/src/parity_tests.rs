@@ -9,6 +9,9 @@
 //! the store shell's replan-before-delete and removal execution, and inputs
 //! beyond the enumerated space.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use crunch_gc_core::*;
 
 use super::GcCheck;
@@ -36,10 +39,31 @@ struct Case {
     reclaimable: Vec<bool>,
 }
 
-/// Projects a request through the production projection.
+/// Independent test projection of a request built from `NODE_IDS[..n]` into kernel indices. A path
+/// that names no entry maps to index `n`, which the kernel rejects as out of
+/// range, matching Mantle's missing-root and missing-reference classes.
 fn project(request: &GcPlanRequest) -> KernelInput {
-    let check = GcCheck::prepare(request).expect("enumerated requests have distinct entries");
-    (check.n, check.edges, check.roots, check.reclaimable)
+    let mut entries: Vec<&GcEntry> = request.entries.iter().collect();
+    entries.sort_by(|left, right| left.path_id.cmp(&right.path_id));
+    let n = entries.len();
+    let index: BTreeMap<&str, usize> =
+        entries.iter().enumerate().map(|(position, entry)| (entry.path_id.as_str(), position)).collect();
+    let lookup = |path_id: &str| index.get(path_id).copied().unwrap_or(n);
+    let mut edges = Vec::new();
+    for entry in &entries {
+        let owner = lookup(&entry.path_id);
+        let mut references = entry.references.clone();
+        references.sort();
+        references.dedup();
+        for reference in &references {
+            edges.push((owner, lookup(reference)));
+        }
+    }
+    let mut roots: Vec<usize> = request.roots.iter().map(|root| lookup(root)).collect();
+    roots.sort_unstable();
+    roots.dedup();
+    let reclaimable = entries.iter().map(|entry| entry.ownership == GcOwnership::Overlay).collect();
+    (n, edges, roots, reclaimable)
 }
 
 fn build_case(n: usize, edges: &[(usize, usize)], roots: &[usize], overlay_mask: u32, variant: Variant) -> Case {
@@ -132,6 +156,27 @@ fn compare(case: &Case, context: &str) -> bool {
     let mantle = plan_gc(case.request.clone());
     let kernel = terrane::plan(case.n, &case.edges, &case.roots, &case.reclaimable);
     let (root_out, edge_out, protected) = kernel_violations(case);
+    // The production projection is refused exactly when a root or reference
+    // names no entry, and otherwise yields the same graph as the independent
+    // projection above, up to the order and multiplicity the kernel proves
+    // irrelevant (`planned_result_depends_only_on_sets`).
+    match GcCheck::prepare(&case.request) {
+        Ok(production) => {
+            assert!(!root_out && !edge_out, "production projection accepted an unknown path: {context}");
+            let as_set = |edges: &[(usize, usize)]| edges.iter().copied().collect::<BTreeSet<_>>();
+            assert_eq!(as_set(&production.edges), as_set(&case.edges), "projected references: {context}");
+            assert_eq!(
+                production.roots.iter().copied().collect::<BTreeSet<_>>(),
+                case.roots.iter().copied().collect(),
+                "projected roots: {context}"
+            );
+            assert_eq!(production.reclaimable, case.reclaimable, "projected ownership: {context}");
+        }
+        Err(error) => {
+            assert_eq!(error, GcCheckError::ProjectionRejected, "{context}");
+            assert!(root_out || edge_out, "production projection refused a closed request: {context}");
+        }
+    }
     match mantle {
         Ok(plan) => {
             assert_eq!(kernel.status, terrane::PLANNED, "Mantle planned, kernel rejected: {context}");
@@ -305,16 +350,22 @@ fn runtime_check_refuses_unknown_and_duplicate_paths() {
     let (check, plan) = checked_plan();
     let mut unknown = plan.clone();
     unknown.retained_path_ids.push(MISSING_ID.to_string());
-    assert_eq!(
-        check.check(&unknown),
-        Err(GcCheckError::UnknownPlannedPath {
-            path_id: MISSING_ID.to_string()
-        })
-    );
+    assert_eq!(check.check(&unknown), Err(GcCheckError::PlannedPathsRejected));
     let mut duplicate = plan;
     let first = duplicate.retained_path_ids[0].clone();
-    duplicate.retained_path_ids.push(first.clone());
-    assert_eq!(check.check(&duplicate), Err(GcCheckError::DuplicatePlannedPath { path_id: first }));
+    duplicate.retained_path_ids.push(first);
+    assert_eq!(check.check(&duplicate), Err(GcCheckError::PlannedPathsRejected));
+}
+
+// r[verify mantle.gc_plan.runtime_check]
+#[test]
+fn prepare_refuses_unknown_roots_and_references() {
+    let mut missing_root = chain_request();
+    missing_root.roots.push(MISSING_ID.to_string());
+    assert_eq!(GcCheck::prepare(&missing_root).map(|_| ()), Err(GcCheckError::ProjectionRejected));
+    let mut dangling = chain_request();
+    dangling.entries[0].references.push(MISSING_ID.to_string());
+    assert_eq!(GcCheck::prepare(&dangling).map(|_| ()), Err(GcCheckError::ProjectionRejected));
 }
 
 // r[verify mantle.gc_plan.runtime_check]

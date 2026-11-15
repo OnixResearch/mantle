@@ -9,6 +9,7 @@ acceptance.
 - [x] [serial] T1.1 Add `crunch-gc-check` with the kernel include, `GcCheck::prepare`, and `GcCheck::check`. r[mantle.gc_plan.runtime_check]
 - [x] [serial] T1.2 Move the parity rail into `crunch-gc-check` on the production projection; remove the test include and `vstd` dev-dependency from `crunch-gc-core`; point the importer at the new manifest. r[mantle.gc_plan.planning_parity]
 - [x] [parallel] T1.3 Add corrupted-plan and duplicate-entry tests. r[mantle.gc_plan.runtime_check]
+- [x] [serial] T1.4 Replace the trusted path-to-index projection with the kernel's verified `project_keys` and `key_mask` (Terrane 5aec06f), and compare the production projection with an independent test projection on every enumerated case. r[mantle.gc_plan.runtime_check]
 
 ## Phase 2: Store
 

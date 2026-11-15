@@ -18,9 +18,14 @@
 //! more nodes, never adds a candidate, and a planned result depends only on the
 //! sets of roots and references, not their order or multiplicity.
 //!
-//! Non-claims: that the caller's roots and edges are complete and current, the
-//! mapping from store paths to indices, plan identities, byte totals, and the
-//! execution of removals.
+//! `project_keys` validates a consumer's mapping from byte-string keys to
+//! indices instead of trusting it, and `key_mask` validates its plan path
+//! lists, so the safety theorems also hold over keys: no listed candidate path
+//! is reachable from a root path, and every reachable path is listed retained.
+//!
+//! Non-claims: that the caller's roots and references are complete and
+//! current, that the caller passes each entry's key, references, and flag
+//! together, plan identities, byte totals, and the execution of removals.
 
 use vstd::prelude::*;
 // Explicit so the kernel also compiles inside `no_std` consumers' test builds.
@@ -178,8 +183,9 @@ pub proof fn no_live_candidate(
     ensures !live_spec(edges, roots, v),
 {
     if live_spec(edges, roots, v) {
-        let (r, fuel) = choose|r: int, fuel: nat| #![trigger roots[r], reachable_fuel(edges, roots[r] as int, v, fuel)]
-            0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel);
+        let r = choose|r: int| #![trigger roots[r]] 0 <= r < roots.len()
+            && exists|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
+        let fuel = choose|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
         assert(retained[roots[r] as int]);
         closed_set_contains_reachable(n, edges, retained, roots[r] as int, v, fuel);
         assert(candidate[v] == (reclaimable[v] && !retained[v]));
@@ -336,22 +342,44 @@ pub fn check_plan(
 // ── Counting ────────────────────────────────────────────────────────────
 
 /// Number of retained nodes.
-pub open spec fn count_true(s: Seq<bool>) -> nat
-    decreases s.len(),
+/// The number of `true` entries among the first `k` of `s`.
+pub open spec fn count_true_upto(s: Seq<bool>, k: int) -> nat
+    decreases k,
 {
-    if s.len() == 0 {
+    if k <= 0 {
         0
     } else {
-        (if s[s.len() - 1] { 1nat } else { 0nat }) + count_true(s.subrange(0, s.len() - 1))
+        (if s[k - 1] { 1nat } else { 0nat }) + count_true_upto(s, k - 1)
+    }
+}
+
+pub open spec fn count_true(s: Seq<bool>) -> nat {
+    count_true_upto(s, s.len() as int)
+}
+
+proof fn count_true_upto_bounded(s: Seq<bool>, k: int)
+    requires 0 <= k <= s.len(),
+    ensures count_true_upto(s, k) <= k,
+    decreases k,
+{
+    if k > 0 {
+        count_true_upto_bounded(s, k - 1);
     }
 }
 
 pub proof fn count_true_bounded(s: Seq<bool>)
     ensures count_true(s) <= s.len(),
-    decreases s.len(),
 {
-    if s.len() > 0 {
-        count_true_bounded(s.subrange(0, s.len() - 1));
+    count_true_upto_bounded(s, s.len() as int);
+}
+
+proof fn count_true_upto_set(s: Seq<bool>, i: int, k: int)
+    requires 0 <= i < s.len(), !s[i], 0 <= k <= s.len(),
+    ensures count_true_upto(s.update(i, true), k) == count_true_upto(s, k) + (if i < k { 1nat } else { 0nat }),
+    decreases k,
+{
+    if k > 0 {
+        count_true_upto_set(s, i, k - 1);
     }
 }
 
@@ -359,16 +387,8 @@ pub proof fn count_true_bounded(s: Seq<bool>)
 pub proof fn count_true_set(s: Seq<bool>, i: int)
     requires 0 <= i < s.len(), !s[i],
     ensures count_true(s.update(i, true)) == count_true(s) + 1,
-    decreases s.len(),
 {
-    let t = s.update(i, true);
-    let last = s.len() - 1;
-    if i == last {
-        assert(t.subrange(0, last) =~= s.subrange(0, last));
-    } else {
-        assert(t.subrange(0, last) =~= s.subrange(0, last).update(i, true));
-        count_true_set(s.subrange(0, last), i);
-    }
+    count_true_upto_set(s, i, s.len() as int);
 }
 
 // ── Planner ─────────────────────────────────────────────────────────────
@@ -502,8 +522,9 @@ pub fn plan(n: usize, edges: &Vec<(usize, usize)>, roots: &Vec<usize>, reclaimab
                     assert(e[i as int] == (u, v));
                     assert(has_edge_spec(e, u as int, v as int));
                     assert(live_spec(e, rs, u as int));
-                    let (ro, fuel) = choose|ro: int, fuel: nat| #![trigger rs[ro], reachable_fuel(e, rs[ro] as int, u as int, fuel)]
-                        0 <= ro < rs.len() && reachable_fuel(e, rs[ro] as int, u as int, fuel);
+                    let ro = choose|ro: int| #![trigger rs[ro]] 0 <= ro < rs.len()
+                        && exists|fuel: nat| #![trigger reachable_fuel(e, rs[ro] as int, u as int, fuel)] reachable_fuel(e, rs[ro] as int, u as int, fuel);
+                    let fuel = choose|fuel: nat| #![trigger reachable_fuel(e, rs[ro] as int, u as int, fuel)] reachable_fuel(e, rs[ro] as int, u as int, fuel);
                     reachable_extend(e, rs[ro] as int, u as int, v as int, fuel);
                     assert(reachable_fuel(e, rs[ro] as int, v as int, fuel + 1));
                     assert(live_spec(e, rs, v as int));
@@ -608,8 +629,9 @@ pub proof fn live_mono(
     requires edges_subset_spec(edges, edges2), roots_subset_spec(roots, roots2), live_spec(edges, roots, v),
     ensures live_spec(edges2, roots2, v),
 {
-    let (r, fuel) = choose|r: int, fuel: nat| #![trigger roots[r], reachable_fuel(edges, roots[r] as int, v, fuel)]
-        0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel);
+    let r = choose|r: int| #![trigger roots[r]] 0 <= r < roots.len()
+        && exists|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
+    let fuel = choose|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
     let s = choose|s: int| #![trigger roots2[s]] 0 <= s < roots2.len() && roots2[s] == roots[r];
     reachable_edges_mono(edges, edges2, roots[r] as int, v, fuel);
     assert(0 <= s < roots2.len() && reachable_fuel(edges2, roots2[s] as int, v, fuel));
@@ -623,8 +645,9 @@ pub proof fn valid_plan_retains_live(
     requires plan_valid_spec(n, edges, roots, reclaimable, retained, candidate), live_spec(edges, roots, v),
     ensures retained[v],
 {
-    let (r, fuel) = choose|r: int, fuel: nat| #![trigger roots[r], reachable_fuel(edges, roots[r] as int, v, fuel)]
-        0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel);
+    let r = choose|r: int| #![trigger roots[r]] 0 <= r < roots.len()
+        && exists|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
+    let fuel = choose|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
     assert(retained[roots[r] as int]);
     closed_set_contains_reachable(n, edges, retained, roots[r] as int, v, fuel);
 }
@@ -747,6 +770,589 @@ pub proof fn planned_result_depends_only_on_sets(
         implies live_spec(edges2, roots2, v) by {
         live_mono(edges, edges2, roots, roots2, v);
     }
+}
+
+
+// ── Key projection: path identifiers to indices ─────────────────────────
+//
+// A consumer names nodes by byte-string keys and maps them to indices with
+// its own (unverified) lookup. `project_keys` validates that mapping instead
+// of trusting it: keys must be strictly sorted, so distinct, and every
+// reference and root index must name an entry whose key equals the
+// referenced bytes. `key_live_matches_index_live` then shows reachability
+// over indices is exactly reachability over keys.
+
+/// Keys `a` and `b` agree on their first `p` bytes.
+pub open spec fn prefix_eq_spec(a: Seq<u8>, b: Seq<u8>, p: int) -> bool {
+    forall|k: int| #![trigger a[k], b[k]] 0 <= k < p ==> a[k] == b[k]
+}
+
+/// `p` is where `a` first falls below `b`: either `a` ends there and `b`
+/// does not, or both continue and `a`'s byte is smaller.
+pub open spec fn key_lt_at_spec(a: Seq<u8>, b: Seq<u8>, p: int) -> bool {
+    0 <= p <= a.len() && p <= b.len() && prefix_eq_spec(a, b, p)
+        && ((p == a.len() && p < b.len()) || (p < a.len() && p < b.len() && a[p] < b[p]))
+}
+
+// r[impl reclaim-plan.key-projection]
+/// Lexicographic order on byte strings.
+pub open spec fn key_lt_spec(a: Seq<u8>, b: Seq<u8>) -> bool {
+    exists|p: int| #![trigger key_lt_at_spec(a, b, p)] key_lt_at_spec(a, b, p)
+}
+
+pub proof fn key_lt_irreflexive(a: Seq<u8>)
+    ensures !key_lt_spec(a, a),
+{
+}
+
+pub proof fn key_lt_transitive(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+    requires key_lt_spec(a, b), key_lt_spec(b, c),
+    ensures key_lt_spec(a, c),
+{
+    let p = choose|p: int| #![trigger key_lt_at_spec(a, b, p)] key_lt_at_spec(a, b, p);
+    let q = choose|q: int| #![trigger key_lt_at_spec(b, c, q)] key_lt_at_spec(b, c, q);
+    if p < q {
+        assert(forall|k: int| #![trigger a[k], c[k]] 0 <= k < p ==> a[k] == b[k] && b[k] == c[k]);
+        if p < a.len() {
+            assert(b[p] == c[p]);
+        }
+        assert(key_lt_at_spec(a, c, p));
+    } else if q < p {
+        assert(forall|k: int| #![trigger a[k], c[k]] 0 <= k < q ==> a[k] == b[k] && b[k] == c[k]);
+        assert(a[q] == b[q]);
+        assert(key_lt_at_spec(a, c, q));
+    } else {
+        assert(forall|k: int| #![trigger a[k], c[k]] 0 <= k < p ==> a[k] == b[k] && b[k] == c[k]);
+        assert(key_lt_at_spec(a, c, p));
+    }
+}
+
+pub proof fn key_lt_implies_ne(a: Seq<u8>, b: Seq<u8>)
+    requires key_lt_spec(a, b),
+    ensures a != b,
+{
+    if a == b {
+        key_lt_irreflexive(a);
+    }
+}
+
+/// Every pair of keys is in strictly increasing order, so keys are distinct.
+pub open spec fn keys_sorted_spec(keys: Seq<Vec<u8>>) -> bool {
+    forall|i: int, j: int| #![trigger keys[i], keys[j]] 0 <= i < j < keys.len() ==> key_lt_spec(keys[i]@, keys[j]@)
+}
+
+pub proof fn sorted_keys_distinct(keys: Seq<Vec<u8>>, i: int, j: int)
+    requires keys_sorted_spec(keys), 0 <= i < keys.len(), 0 <= j < keys.len(), keys[i]@ == keys[j]@,
+    ensures i == j,
+{
+    if i < j {
+        key_lt_implies_ne(keys[i]@, keys[j]@);
+    } else if j < i {
+        key_lt_implies_ne(keys[j]@, keys[i]@);
+    }
+}
+
+/// `b` is reachable from `a` over keys in at most `fuel` reference steps.
+pub open spec fn key_reach_fuel(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, a: Seq<u8>, b: Seq<u8>, fuel: nat) -> bool
+    decreases fuel,
+{
+    if a == b {
+        true
+    } else if fuel == 0 {
+        false
+    } else {
+        exists|i: int, j: int| #![trigger keys[i], refs[i][j]]
+            0 <= i < keys.len() && i < refs.len() && keys[i]@ == a && 0 <= j < refs[i].len()
+            && key_reach_fuel(keys, refs, refs[i][j]@, b, (fuel - 1) as nat)
+    }
+}
+
+// r[impl reclaim-plan.key-projection]
+/// `b` is reachable from some root key.
+pub open spec fn key_live_spec(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>, b: Seq<u8>) -> bool {
+    exists|r: int, fuel: nat| #![trigger root_keys[r], key_reach_fuel(keys, refs, root_keys[r]@, b, fuel)]
+        0 <= r < root_keys.len() && key_reach_fuel(keys, refs, root_keys[r]@, b, fuel)
+}
+
+// r[impl reclaim-plan.key-projection]
+/// The index edges are exactly the key references: each edge names a
+/// reference of its owner, and each reference is an edge to the entry whose
+/// key it names.
+pub open spec fn edges_match_refs_spec(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, edges: Seq<(usize, usize)>) -> bool {
+    &&& refs.len() == keys.len()
+    &&& (forall|k: int| #![trigger edges[k]] 0 <= k < edges.len() ==> edge_names_ref_spec(keys, refs, edges[k]))
+    &&& (forall|i: int, j: int| #![trigger ref_resolved_spec(keys, refs, edges, i, j)]
+        0 <= i < refs.len() && 0 <= j < refs[i].len() ==> ref_resolved_spec(keys, refs, edges, i, j))
+}
+
+// r[impl reclaim-plan.key-projection]
+/// The index roots are exactly the root keys.
+pub open spec fn roots_match_keys_spec(keys: Seq<Vec<u8>>, root_keys: Seq<Vec<u8>>, roots: Seq<usize>) -> bool {
+    &&& roots.len() == root_keys.len()
+    &&& forall|r: int| #![trigger roots[r]] 0 <= r < roots.len() ==>
+        (roots[r] as int) < keys.len() && keys[roots[r] as int]@ == root_keys[r]@
+}
+
+pub open spec fn projection_valid_spec(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>,
+    edges: Seq<(usize, usize)>, roots: Seq<usize>,
+) -> bool {
+    keys_sorted_spec(keys) && edges_match_refs_spec(keys, refs, edges) && roots_match_keys_spec(keys, root_keys, roots)
+}
+
+/// Index reachability implies key reachability.
+pub proof fn index_reach_implies_key_reach(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, edges: Seq<(usize, usize)>, s: int, t: int, fuel: nat,
+)
+    requires edges_match_refs_spec(keys, refs, edges), 0 <= s < keys.len(), 0 <= t < keys.len(),
+        reachable_fuel(edges, s, t, fuel),
+    ensures key_reach_fuel(keys, refs, keys[s]@, keys[t]@, fuel),
+    decreases fuel,
+{
+    if s != t && keys[s]@ != keys[t]@ {
+        let mid = choose|mid: int| #![trigger has_edge_spec(edges, s, mid)]
+            has_edge_spec(edges, s, mid) && reachable_fuel(edges, mid, t, (fuel - 1) as nat);
+        let k = choose|k: int| #![trigger edges[k]] 0 <= k < edges.len() && edges[k].0 as int == s && edges[k].1 as int == mid;
+        assert(edge_names_ref_spec(keys, refs, edges[k]));
+        let j = choose|j: int| #![trigger refs[edges[k].0 as int][j]]
+            0 <= j < refs[edges[k].0 as int].len() && refs[edges[k].0 as int][j]@ == keys[edges[k].1 as int]@;
+        index_reach_implies_key_reach(keys, refs, edges, mid, t, (fuel - 1) as nat);
+        assert(refs[s][j]@ == keys[mid]@ && key_reach_fuel(keys, refs, refs[s][j]@, keys[t]@, (fuel - 1) as nat)) by {
+            assert(keys[s] == keys[edges[k].0 as int] && refs[s][j] == refs[edges[k].0 as int][j]);
+        }
+    }
+}
+
+/// Key reachability from an entry's key reaches an entry by index.
+pub proof fn key_reach_implies_index_reach(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, edges: Seq<(usize, usize)>, s: int, b: Seq<u8>, fuel: nat,
+) -> (t: int)
+    requires keys_sorted_spec(keys), edges_match_refs_spec(keys, refs, edges), 0 <= s < keys.len(),
+        key_reach_fuel(keys, refs, keys[s]@, b, fuel),
+    ensures 0 <= t < keys.len(), keys[t]@ == b, reachable_fuel(edges, s, t, fuel),
+    decreases fuel,
+{
+    if keys[s]@ == b {
+        assert(reachable_fuel(edges, s, s, fuel));
+        s
+    } else {
+        let i = choose|i: int| #![trigger keys[i]] 0 <= i < keys.len() && i < refs.len() && keys[i]@ == keys[s]@
+            && exists|j: int| #![trigger refs[i][j]] 0 <= j < refs[i].len() && key_reach_fuel(keys, refs, refs[i][j]@, b, (fuel - 1) as nat);
+        let j = choose|j: int| #![trigger refs[i][j]] 0 <= j < refs[i].len() && key_reach_fuel(keys, refs, refs[i][j]@, b, (fuel - 1) as nat);
+        sorted_keys_distinct(keys, i, s);
+        assert(ref_resolved_spec(keys, refs, edges, i, j));
+        let m = choose|t: int| #![trigger keys[t]] 0 <= t < keys.len() && keys[t]@ == refs[i][j]@ && has_edge_spec(edges, i, t);
+        let t = key_reach_implies_index_reach(keys, refs, edges, m, b, (fuel - 1) as nat);
+        assert(has_edge_spec(edges, s, m) && reachable_fuel(edges, m, t, (fuel - 1) as nat));
+        t
+    }
+}
+
+// r[verify reclaim-plan.key-projection]
+/// Under a valid projection, a node is live over indices exactly when its key
+/// is live over keys.
+pub proof fn key_live_matches_index_live(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>,
+    edges: Seq<(usize, usize)>, roots: Seq<usize>, v: int,
+)
+    requires projection_valid_spec(keys, refs, root_keys, edges, roots), 0 <= v < keys.len(),
+    ensures live_spec(edges, roots, v) == key_live_spec(keys, refs, root_keys, keys[v]@),
+{
+    if live_spec(edges, roots, v) {
+        let r = choose|r: int| #![trigger roots[r]] 0 <= r < roots.len()
+            && exists|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
+        let fuel = choose|fuel: nat| #![trigger reachable_fuel(edges, roots[r] as int, v, fuel)] reachable_fuel(edges, roots[r] as int, v, fuel);
+        index_reach_implies_key_reach(keys, refs, edges, roots[r] as int, v, fuel);
+        assert(key_reach_fuel(keys, refs, root_keys[r]@, keys[v]@, fuel));
+    }
+    if key_live_spec(keys, refs, root_keys, keys[v]@) {
+        let r = choose|r: int| #![trigger root_keys[r]] 0 <= r < root_keys.len()
+            && exists|fuel: nat| #![trigger key_reach_fuel(keys, refs, root_keys[r]@, keys[v]@, fuel)] key_reach_fuel(keys, refs, root_keys[r]@, keys[v]@, fuel);
+        let fuel = choose|fuel: nat| #![trigger key_reach_fuel(keys, refs, root_keys[r]@, keys[v]@, fuel)] key_reach_fuel(keys, refs, root_keys[r]@, keys[v]@, fuel);
+        assert(keys[roots[r] as int]@ == root_keys[r]@);
+        let t = key_reach_implies_index_reach(keys, refs, edges, roots[r] as int, keys[v]@, fuel);
+        sorted_keys_distinct(keys, t, v);
+        assert(0 <= r < roots.len() && reachable_fuel(edges, roots[r] as int, v, fuel));
+    }
+}
+
+// r[verify reclaim-plan.key-projection]
+/// End to end: under a valid projection, no candidate of a valid plan has a
+/// key reachable from a root key.
+pub proof fn no_live_key_is_candidate(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>,
+    edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, v: int,
+)
+    requires projection_valid_spec(keys, refs, root_keys, edges, roots),
+        plan_valid_spec(keys.len() as int, edges, roots, reclaimable, retained, candidate),
+        0 <= v < keys.len(), candidate[v],
+    ensures !key_live_spec(keys, refs, root_keys, keys[v]@),
+{
+    no_live_candidate(keys.len() as int, edges, roots, reclaimable, retained, candidate, v);
+    key_live_matches_index_live(keys, refs, root_keys, edges, roots, v);
+}
+
+fn key_lt(a: &Vec<u8>, b: &Vec<u8>) -> (lt: bool)
+    ensures lt == key_lt_spec(a@, b@),
+{
+    let mut i: usize = 0;
+    let mut same = true;
+    while same && i < a.len() && i < b.len()
+        invariant 0 <= i <= a.len(), i <= b.len(), prefix_eq_spec(a@, b@, i as int),
+            !same ==> i < a.len() && i < b.len() && a@[i as int] != b@[i as int],
+        decreases a.len() - i + (if same { 1int } else { 0int }),
+    {
+        if a[i] == b[i] {
+            i = i + 1;
+        } else {
+            same = false;
+        }
+    }
+    let lt = (i == a.len() && i < b.len()) || (i < a.len() && i < b.len() && a[i] < b[i]);
+    proof {
+        if lt {
+            assert(key_lt_at_spec(a@, b@, i as int));
+        }
+        if key_lt_spec(a@, b@) {
+            let p = choose|p: int| #![trigger key_lt_at_spec(a@, b@, p)] key_lt_at_spec(a@, b@, p);
+            if p < i as int {
+                assert(a@[p] == b@[p]);
+            } else if p > i as int {
+                assert(a@[i as int] == b@[i as int]);
+            }
+        }
+    }
+    lt
+}
+
+fn key_eq(a: &Vec<u8>, b: &Vec<u8>) -> (eq: bool)
+    ensures eq == (a@ == b@),
+{
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i: usize = 0;
+    while i < a.len()
+        invariant 0 <= i <= a.len(), a.len() == b.len(), prefix_eq_spec(a@, b@, i as int),
+        decreases a.len() - i,
+    {
+        if a[i] != b[i] {
+            assert(a@[i as int] != b@[i as int]);
+            return false;
+        }
+        i = i + 1;
+    }
+    assert(a@ =~= b@);
+    true
+}
+
+fn keys_sorted(keys: &Vec<Vec<u8>>) -> (ok: bool)
+    ensures ok == keys_sorted_spec(keys@),
+{
+    if keys.len() < 2 {
+        return true;
+    }
+    let mut i: usize = 1;
+    while i < keys.len()
+        invariant 1 <= i <= keys.len(),
+            forall|a: int, b: int| #![trigger keys@[a], keys@[b]] 0 <= a < b < i ==> key_lt_spec(keys@[a]@, keys@[b]@),
+        decreases keys.len() - i,
+    {
+        if !key_lt(&keys[i - 1], &keys[i]) {
+            assert(!key_lt_spec(keys@[i - 1]@, keys@[i as int]@));
+            return false;
+        }
+        proof {
+            assert forall|a: int, b: int| #![trigger keys@[a], keys@[b]] 0 <= a < b < i + 1
+                implies key_lt_spec(keys@[a]@, keys@[b]@) by {
+                if b == i && a < i - 1 {
+                    key_lt_transitive(keys@[a]@, keys@[i - 1]@, keys@[i as int]@);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    true
+}
+
+/// Edge `e` names a reference of its owner by the target's key.
+pub open spec fn edge_names_ref_spec(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, e: (usize, usize)) -> bool {
+    (e.0 as int) < keys.len() && (e.1 as int) < keys.len() && (e.0 as int) < refs.len()
+        && exists|q: int| #![trigger refs[e.0 as int][q]] 0 <= q < refs[e.0 as int].len() && refs[e.0 as int][q]@ == keys[e.1 as int]@
+}
+
+/// Reference `j` of entry `i` resolves to an edge to the entry with its key.
+pub open spec fn ref_resolved_spec(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, edges: Seq<(usize, usize)>, i: int, j: int) -> bool {
+    exists|t: int| #![trigger keys[t]] 0 <= t < keys.len() && keys[t]@ == refs[i][j]@ && has_edge_spec(edges, i, t)
+}
+
+pub open spec fn prefix_of_spec(a: Seq<(usize, usize)>, b: Seq<(usize, usize)>) -> bool {
+    a.len() <= b.len() && forall|k: int| #![trigger a[k]] 0 <= k < a.len() ==> b[k] == a[k]
+}
+
+proof fn ref_resolved_extend(keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, a: Seq<(usize, usize)>, b: Seq<(usize, usize)>, i: int, j: int)
+    requires ref_resolved_spec(keys, refs, a, i, j), prefix_of_spec(a, b),
+    ensures ref_resolved_spec(keys, refs, b, i, j),
+{
+    let t = choose|t: int| #![trigger keys[t]] 0 <= t < keys.len() && keys[t]@ == refs[i][j]@ && has_edge_spec(a, i, t);
+    let k = choose|k: int| #![trigger a[k]] 0 <= k < a.len() && a[k].0 as int == i && a[k].1 as int == t;
+    assert(b[k] == a[k]);
+    assert(has_edge_spec(b, i, t));
+}
+
+/// Edges after projecting one entry's references, and whether every
+/// reference resolved.
+pub struct RowProjection {
+    pub ok: bool,
+    pub edges: Vec<(usize, usize)>,
+}
+
+/// Appends one edge per reference of entry `i` to `edges`, refusing any
+/// reference whose index does not name an entry with the referenced key.
+fn project_row(keys: &Vec<Vec<u8>>, references: &Vec<Vec<Vec<u8>>>, i: usize, index_row: &Vec<usize>, input: Vec<(usize, usize)>) -> (result: RowProjection)
+    requires i < keys.len(), references.len() == keys.len(), index_row.len() == references@[i as int].len(),
+        forall|k: int| #![trigger input@[k]] 0 <= k < input@.len() ==> edge_names_ref_spec(keys@, references@, input@[k]),
+    ensures
+        prefix_of_spec(input@, result.edges@),
+        forall|k: int| #![trigger result.edges@[k]] 0 <= k < result.edges@.len() ==> edge_names_ref_spec(keys@, references@, result.edges@[k]),
+        result.ok ==> forall|q: int| #![trigger ref_resolved_spec(keys@, references@, result.edges@, i as int, q)]
+            0 <= q < references@[i as int].len() ==> ref_resolved_spec(keys@, references@, result.edges@, i as int, q),
+{
+    let mut edges = input;
+    let row = &references[i];
+    let mut j: usize = 0;
+    while j < row.len()
+        invariant 0 <= j <= row.len(), i < keys.len(), references.len() == keys.len(),
+            row == references@[i as int], index_row.len() == row.len(),
+            prefix_of_spec(input@, edges@),
+            forall|k: int| #![trigger edges@[k]] 0 <= k < edges@.len() ==> edge_names_ref_spec(keys@, references@, edges@[k]),
+            forall|q: int| #![trigger ref_resolved_spec(keys@, references@, edges@, i as int, q)] 0 <= q < j ==> ref_resolved_spec(keys@, references@, edges@, i as int, q),
+        decreases row.len() - j,
+    {
+        let t = index_row[j];
+        if t >= keys.len() || !key_eq(&keys[t], &row[j]) {
+            return RowProjection { ok: false, edges };
+        }
+        let ghost prev = edges@;
+        edges.push((i, t));
+        proof {
+            assert(prefix_of_spec(prev, edges@));
+            let e = edges@[prev.len() as int];
+            assert(e == (i, t));
+            assert(references@[e.0 as int][j as int]@ == keys@[e.1 as int]@);
+            assert(0 <= j < references@[e.0 as int].len());
+            assert(edge_names_ref_spec(keys@, references@, e));
+            assert forall|k: int| #![trigger edges@[k]] 0 <= k < edges@.len() implies edge_names_ref_spec(keys@, references@, edges@[k]) by {
+                if k < prev.len() {
+                    assert(edges@[k] == prev[k]);
+                }
+            }
+            assert forall|q: int| #![trigger ref_resolved_spec(keys@, references@, edges@, i as int, q)] 0 <= q < j + 1 implies
+                ref_resolved_spec(keys@, references@, edges@, i as int, q) by {
+                if q < j {
+                    assert(ref_resolved_spec(keys@, references@, prev, i as int, q));
+                    ref_resolved_extend(keys@, references@, prev, edges@, i as int, q);
+                } else {
+                    assert(edges@[prev.len() as int] == (i, t));
+                    assert(has_edge_spec(edges@, i as int, t as int));
+                }
+            }
+            assert forall|k: int| #![trigger input@[k]] 0 <= k < input@.len() implies edges@[k] == input@[k] by {
+                assert(prev[k] == input@[k]);
+            }
+        }
+        j = j + 1;
+    }
+    RowProjection { ok: true, edges }
+}
+
+/// A validated projection, or the reason it was refused.
+pub struct KeyProjection {
+    pub ok: bool,
+    pub edges: Vec<(usize, usize)>,
+}
+
+// r[impl reclaim-plan.key-projection]
+/// Validates a consumer's key-to-index mapping and builds the index edges.
+/// `reference_index[i][j]` must name the entry whose key equals
+/// `references[i][j]`, and `roots[r]` the entry whose key equals
+/// `root_keys[r]`. Any unresolved or mismatched reference or root, unsorted
+/// or duplicate keys, or a shape mismatch refuses the projection.
+pub fn project_keys(
+    keys: &Vec<Vec<u8>>, references: &Vec<Vec<Vec<u8>>>, reference_index: &Vec<Vec<usize>>,
+    root_keys: &Vec<Vec<u8>>, roots: &Vec<usize>,
+) -> (result: KeyProjection)
+    ensures result.ok ==> projection_valid_spec(keys@, references@, root_keys@, result.edges@, roots@),
+{
+    let n = keys.len();
+    if references.len() != n || reference_index.len() != n || roots.len() != root_keys.len() {
+        return KeyProjection { ok: false, edges: Vec::new() };
+    }
+    if !keys_sorted(keys) {
+        return KeyProjection { ok: false, edges: Vec::new() };
+    }
+    let mut r: usize = 0;
+    while r < roots.len()
+        invariant 0 <= r <= roots.len(), roots.len() == root_keys.len(), n == keys.len(),
+            forall|q: int| #![trigger roots@[q]] 0 <= q < r ==>
+                (roots@[q] as int) < keys.len() && keys@[roots@[q] as int]@ == root_keys@[q]@,
+        decreases roots.len() - r,
+    {
+        if roots[r] >= n || !key_eq(&keys[roots[r]], &root_keys[r]) {
+            return KeyProjection { ok: false, edges: Vec::new() };
+        }
+        r = r + 1;
+    }
+    let mut edges: Vec<(usize, usize)> = Vec::new();
+    let mut i: usize = 0;
+    while i < n
+        invariant 0 <= i <= n, n == keys.len(), references.len() == n, reference_index.len() == n,
+            keys_sorted_spec(keys@), roots_match_keys_spec(keys@, root_keys@, roots@),
+            forall|k: int| #![trigger edges@[k]] 0 <= k < edges@.len() ==> edge_names_ref_spec(keys@, references@, edges@[k]),
+            forall|a: int, q: int| #![trigger ref_resolved_spec(keys@, references@, edges@, a, q)]
+                0 <= a < i && 0 <= q < references@[a].len() ==> ref_resolved_spec(keys@, references@, edges@, a, q),
+        decreases n - i,
+    {
+        if reference_index[i].len() != references[i].len() {
+            return KeyProjection { ok: false, edges: Vec::new() };
+        }
+        let ghost prev = edges@;
+        let row = project_row(keys, references, i, &reference_index[i], edges);
+        if !row.ok {
+            return KeyProjection { ok: false, edges: Vec::new() };
+        }
+        edges = row.edges;
+        proof {
+            assert forall|a: int, q: int| #![trigger ref_resolved_spec(keys@, references@, edges@, a, q)]
+                0 <= a < i + 1 && 0 <= q < references@[a].len() implies ref_resolved_spec(keys@, references@, edges@, a, q) by {
+                if a < i {
+                    assert(ref_resolved_spec(keys@, references@, prev, a, q));
+                    ref_resolved_extend(keys@, references@, prev, edges@, a, q);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    proof {
+        assert forall|a: int, q: int| #![trigger ref_resolved_spec(keys@, references@, edges@, a, q)]
+            0 <= a < references@.len() && 0 <= q < references@[a].len() implies ref_resolved_spec(keys@, references@, edges@, a, q) by {
+        }
+    }
+    KeyProjection { ok: true, edges }
+}
+
+/// `mask` marks exactly the keys that `paths` lists.
+pub open spec fn mask_matches_paths_spec(keys: Seq<Vec<u8>>, paths: Seq<Vec<u8>>, mask: Seq<bool>) -> bool {
+    &&& mask.len() == keys.len()
+    &&& (forall|t: int| #![trigger mask[t]] 0 <= t < keys.len() && mask[t] ==>
+        exists|s: int| #![trigger paths[s]] 0 <= s < paths.len() && paths[s]@ == keys[t]@)
+    &&& (forall|s: int| #![trigger paths[s]] 0 <= s < paths.len() ==> key_marked_spec(keys, mask, paths[s]@))
+}
+
+/// Some key equal to `p` is marked in `mask`.
+pub open spec fn key_marked_spec(keys: Seq<Vec<u8>>, mask: Seq<bool>, p: Seq<u8>) -> bool {
+    exists|t: int| #![trigger keys[t]] 0 <= t < keys.len() && t < mask.len() && mask[t] && keys[t]@ == p
+}
+
+/// A plan's path list as a mask over keys, or `None` when a path is not a
+/// key, is listed twice, or its index does not name it.
+pub fn key_mask(keys: &Vec<Vec<u8>>, paths: &Vec<Vec<u8>>, index: &Vec<usize>) -> (mask: Option<Vec<bool>>)
+    ensures
+        mask.is_some() ==> mask_matches_paths_spec(keys@, paths@, mask.unwrap()@),
+{
+    let n = keys.len();
+    if index.len() != paths.len() {
+        return None;
+    }
+    let mut m: Vec<bool> = Vec::new();
+    let mut k: usize = 0;
+    while k < n
+        invariant 0 <= k <= n, n == keys.len(), m@.len() == k, forall|t: int| #![trigger m@[t]] 0 <= t < k ==> !m@[t],
+        decreases n - k,
+    {
+        m.push(false);
+        k = k + 1;
+    }
+    let mut s: usize = 0;
+    while s < paths.len()
+        invariant 0 <= s <= paths.len(), index.len() == paths.len(), n == keys.len(), m@.len() == n,
+            forall|t: int| #![trigger m@[t]] 0 <= t < n && m@[t] ==>
+                exists|q: int| #![trigger paths@[q]] 0 <= q < s && paths@[q]@ == keys@[t]@,
+            forall|q: int| #![trigger paths@[q]] 0 <= q < s ==>
+                exists|t: int| #![trigger keys@[t]] 0 <= t < n && m@[t] && keys@[t]@ == paths@[q]@,
+        decreases paths.len() - s,
+    {
+        let t = index[s];
+        if t >= n || m[t] || !key_eq(&keys[t], &paths[s]) {
+            return None;
+        }
+        let ghost prev = m@;
+        m.set(t, true);
+        proof {
+            assert forall|u: int| #![trigger m@[u]] 0 <= u < n && m@[u] implies
+                exists|q: int| #![trigger paths@[q]] 0 <= q < s + 1 && paths@[q]@ == keys@[u]@ by {
+                if u == t as int {
+                    assert(paths@[s as int]@ == keys@[u]@);
+                } else {
+                    assert(m@[u] == prev[u]);
+                }
+            }
+            assert forall|q: int| #![trigger paths@[q]] 0 <= q < s + 1 implies
+                exists|u: int| #![trigger keys@[u]] 0 <= u < n && m@[u] && keys@[u]@ == paths@[q]@ by {
+                if q == s as int {
+                    assert(m@[t as int] && keys@[t as int]@ == paths@[q]@);
+                } else {
+                    let u = choose|u: int| #![trigger keys@[u]] 0 <= u < n && prev[u] && keys@[u]@ == paths@[q]@;
+                    assert(m@[u]);
+                }
+            }
+        }
+        s = s + 1;
+    }
+    assert forall|q: int| #![trigger paths@[q]] 0 <= q < paths@.len() implies key_marked_spec(keys@, m@, paths@[q]@) by {
+        let t = choose|t: int| #![trigger keys@[t]] 0 <= t < n && m@[t] && keys@[t]@ == paths@[q]@;
+        assert(0 <= t < keys@.len() && t < m@.len() && m@[t] && keys@[t]@ == paths@[q]@);
+    }
+    Some(m)
+}
+
+// r[verify reclaim-plan.key-projection]
+/// End to end over paths: under a valid projection, a valid plan, and masks
+/// that match the consumer's path lists, no listed candidate path is
+/// reachable from a root path.
+pub proof fn no_listed_candidate_path_is_live(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>,
+    edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, candidate_paths: Seq<Vec<u8>>, s: int,
+)
+    requires projection_valid_spec(keys, refs, root_keys, edges, roots),
+        plan_valid_spec(keys.len() as int, edges, roots, reclaimable, retained, candidate),
+        mask_matches_paths_spec(keys, candidate_paths, candidate), 0 <= s < candidate_paths.len(),
+    ensures !key_live_spec(keys, refs, root_keys, candidate_paths[s]@),
+{
+    assert(key_marked_spec(keys, candidate, candidate_paths[s]@));
+    let t = choose|t: int| #![trigger keys[t]]
+        0 <= t < keys.len() && t < candidate.len() && candidate[t] && keys[t]@ == candidate_paths[s]@;
+    no_live_key_is_candidate(keys, refs, root_keys, edges, roots, reclaimable, retained, candidate, t);
+}
+
+// r[verify reclaim-plan.key-projection]
+/// End to end over paths: every entry whose path is reachable from a root
+/// path appears in the consumer's retained path list.
+pub proof fn every_live_path_is_listed_retained(
+    keys: Seq<Vec<u8>>, refs: Seq<Vec<Vec<u8>>>, root_keys: Seq<Vec<u8>>,
+    edges: Seq<(usize, usize)>, roots: Seq<usize>, reclaimable: Seq<bool>,
+    retained: Seq<bool>, candidate: Seq<bool>, retained_paths: Seq<Vec<u8>>, v: int,
+)
+    requires projection_valid_spec(keys, refs, root_keys, edges, roots),
+        plan_valid_spec(keys.len() as int, edges, roots, reclaimable, retained, candidate),
+        mask_matches_paths_spec(keys, retained_paths, retained), 0 <= v < keys.len(),
+        key_live_spec(keys, refs, root_keys, keys[v]@),
+    ensures exists|s: int| #![trigger retained_paths[s]] 0 <= s < retained_paths.len() && retained_paths[s]@ == keys[v]@,
+{
+    key_live_matches_index_live(keys, refs, root_keys, edges, roots, v);
+    valid_plan_retains_live(keys.len() as int, edges, roots, reclaimable, retained, candidate, v);
 }
 
 } // verus!

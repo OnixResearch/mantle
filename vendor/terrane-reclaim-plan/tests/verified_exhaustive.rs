@@ -195,3 +195,78 @@ fn reordering_and_duplicating_roots_and_references_keep_the_plan() {
         }
     }
 }
+
+// Keys chosen so byte order differs from length order and one is a prefix of another.
+const KEYS: [&[u8]; 3] = [b"/a", b"/a-b", b"/b"];
+
+fn keyed(nodes: &[usize]) -> Vec<Vec<u8>> {
+    nodes.iter().map(|&node| KEYS[node].to_vec()).collect()
+}
+
+// r[verify reclaim-plan.key-projection]
+// r[verify reclaim-plan.evidence]
+#[test]
+fn projected_keys_plan_exactly_the_unreachable_reclaimable_keys() {
+    let mut planned_count = 0u32;
+    for n in 0..=3usize {
+        let all_edges: Vec<(usize, usize)> = (0..n).flat_map(|u| (0..n).map(move |v| (u, v))).collect();
+        let nodes: Vec<usize> = (0..n).collect();
+        let keys = keyed(&nodes);
+        for edges in subsets(&all_edges) {
+            let references: Vec<Vec<Vec<u8>>> =
+                (0..n).map(|u| edges.iter().filter(|e| e.0 == u).map(|e| KEYS[e.1].to_vec()).collect()).collect();
+            let reference_index: Vec<Vec<usize>> =
+                (0..n).map(|u| edges.iter().filter(|e| e.0 == u).map(|e| e.1).collect()).collect();
+            for roots in subsets(&nodes) {
+                let root_keys = keyed(&roots);
+                let projection = project_keys(&keys, &references, &reference_index, &root_keys, &roots);
+                assert!(projection.ok);
+                for mask in 0..1u32 << n {
+                    let reclaimable: Vec<bool> = (0..n).map(|v| mask & (1 << v) != 0).collect();
+                    if !protected_closed(&projection.edges, &reclaimable) {
+                        continue;
+                    }
+                    let result = plan(n, &projection.edges, &roots, &reclaimable);
+                    assert_eq!(result.status, PLANNED);
+                    assert_eq!(result.retained, oracle_live(n, &edges, &roots));
+                    let retained_paths: Vec<Vec<u8>> = (0..n).filter(|&v| result.retained[v]).map(|v| KEYS[v].to_vec()).collect();
+                    let retained_index: Vec<usize> = (0..n).filter(|&v| result.retained[v]).collect();
+                    assert_eq!(key_mask(&keys, &retained_paths, &retained_index), Some(result.retained.clone()));
+                    planned_count += 1;
+                }
+            }
+        }
+    }
+    assert!(planned_count > 0);
+}
+
+// r[verify reclaim-plan.key-projection]
+#[test]
+fn projection_refuses_bad_mappings() {
+    let keys = keyed(&[0, 1, 2]);
+    let references = vec![vec![KEYS[1].to_vec()], vec![], vec![KEYS[0].to_vec()]];
+    let good_index = vec![vec![1], vec![], vec![0]];
+    let root_keys = keyed(&[0]);
+    assert!(project_keys(&keys, &references, &good_index, &root_keys, &vec![0]).ok);
+    // A reference index naming the wrong entry.
+    assert!(!project_keys(&keys, &references, &vec![vec![2], vec![], vec![0]], &root_keys, &vec![0]).ok);
+    // A reference index out of range, as for an unknown path.
+    assert!(!project_keys(&keys, &references, &vec![vec![3], vec![], vec![0]], &root_keys, &vec![0]).ok);
+    // A root index naming the wrong entry, or out of range.
+    assert!(!project_keys(&keys, &references, &good_index, &root_keys, &vec![1]).ok);
+    assert!(!project_keys(&keys, &references, &good_index, &root_keys, &vec![3]).ok);
+    // Unsorted and duplicate keys.
+    assert!(!project_keys(&keyed(&[1, 0, 2]), &references, &good_index, &root_keys, &vec![1]).ok);
+    assert!(!project_keys(&keyed(&[0, 0, 2]), &references, &good_index, &root_keys, &vec![0]).ok);
+    // Shape mismatches.
+    assert!(!project_keys(&keys, &references, &vec![vec![1], vec![]], &root_keys, &vec![0]).ok);
+    assert!(!project_keys(&keys, &references, &vec![vec![1, 0], vec![], vec![0]], &root_keys, &vec![0]).ok);
+    assert!(!project_keys(&keys, &references, &good_index, &root_keys, &vec![]).ok);
+    // Masks: wrong index, out of range, duplicate, and a path that is no key.
+    assert_eq!(key_mask(&keys, &keyed(&[1]), &vec![1]), Some(vec![false, true, false]));
+    assert_eq!(key_mask(&keys, &keyed(&[1]), &vec![2]), None);
+    assert_eq!(key_mask(&keys, &keyed(&[1]), &vec![3]), None);
+    assert_eq!(key_mask(&keys, &keyed(&[1, 1]), &vec![1, 1]), None);
+    assert_eq!(key_mask(&keys, &vec![b"/c".to_vec()], &vec![2]), None);
+    assert_eq!(key_mask(&keys, &keyed(&[1]), &vec![]), None);
+}

@@ -7,8 +7,8 @@
       "path": "LICENSE"
     },
     "src/reclaim_plan/tests/verified_exhaustive.rs": {
-      "blake3": "21ede2a331b317361186e5daaffe4748fe5cb74ac5908df13aa4c78c771c7054",
-      "bytes": 9213,
+      "blake3": "a796fcf0168cdbee4c5690919dce6a5be5d8964945df0a79bf8c198f187f64ea",
+      "bytes": 13397,
       "path": "tests/verified_exhaustive.rs"
     },
     "src/reclaim_plan/tests/verified_negative.rs": {
@@ -22,12 +22,12 @@
       "path": "tests/verified_positive.rs"
     },
     "src/reclaim_plan/verified.rs": {
-      "blake3": "296376c9f683b2efa24c577f54b4982389224f5d1ca7f446a102245d9977fbe4",
-      "bytes": 33345,
+      "blake3": "2e65ea0900823f70ea071e324b56a46f50acafbd026102af42556fa4277d952b",
+      "bytes": 61970,
       "path": "verified.rs"
     }
   },
   "producer_vstd_version": "=0.0.0-2026-10-18-0147",
   "repository": "https://github.com/OnixResearch/terrane",
-  "revision": "c4538aab95a886a8590cd4b31d7dcd5ca732d6b0"
+  "revision": "5aec06fdfc841b3d472e239310f47e724b91e12f"
 }

@@ -10,13 +10,18 @@
 //! and makes exactly the unretained reclaimable entries candidates, so no
 //! entry reachable from a root, and no base entry, is a candidate.
 //!
-//! Non-claims: this projection is not verified; the kernel is compiled with
-//! Mantle's `vstd`, which erases its ghost code, and is not re-verified under
-//! that cohort; root and reference completeness, and anything the store
-//! deletes without consulting the checked plan, are outside the check.
+//! The mapping from path identifiers to indices is computed here but
+//! validated by the kernel's `project_keys` and `key_mask`, so the kernel's
+//! key-level theorems apply: no listed candidate path is reachable from a
+//! root path, and every reachable path is listed as retained.
+//!
+//! Non-claims: the kernel is compiled with Mantle's `vstd`, which erases its
+//! ghost code, and is not re-verified under that cohort; that each entry's
+//! path, references, and ownership are passed together (one loop below);
+//! root and reference completeness; and anything the store deletes without
+//! consulting the checked plan.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use crunch_gc_core::GcOwnership;
 use crunch_gc_core::GcPlan;
@@ -24,10 +29,11 @@ use crunch_gc_core::GcPlanRequest;
 
 // r[impl mantle.gc_plan.kernel_import]
 // Exact upstream bytes are refreshed only by the repository-owned importer.
-// The producer's lint policy allows `&Vec` parameters, and the planner and
-// admission helpers are unused here; the bytes stay unchanged.
+// The producer's lint policy allows `&Vec` parameters and `x = x + 1`, and
+// the planner and admission helpers are unused here; the bytes stay
+// unchanged.
 #[rustfmt::skip]
-#[allow(clippy::ptr_arg, dead_code, unused_imports)]
+#[allow(clippy::ptr_arg, clippy::assign_op_pattern, dead_code, unused_imports)]
 #[path = "../../../vendor/terrane-reclaim-plan/verified.rs"]
 mod kernel;
 
@@ -40,20 +46,24 @@ mod parity_tests;
 pub enum GcCheckError {
     /// The request names the same entry twice, so indices are ambiguous.
     DuplicateEntry { path_id: String },
-    /// The plan retains or deletes a path the request does not contain.
-    UnknownPlannedPath { path_id: String },
-    /// The plan lists the same path twice in one set.
-    DuplicatePlannedPath { path_id: String },
+    /// The verified projection refused the request: a root or reference
+    /// names no entry, or a computed index names the wrong entry.
+    ProjectionRejected,
+    /// The verified mask check refused a planned path list: a path is not
+    /// an entry, is listed twice, or its computed index names another entry.
+    PlannedPathsRejected,
     /// The deletion intents do not name exactly the candidates.
     IntentsDifferFromCandidates,
     /// The verified checker rejected the plan.
     KernelRejected,
 }
 
-/// A request projected into kernel indices, ready to check a plan.
+/// A request projected into kernel indices by the verified projection, ready
+/// to check a plan.
 #[derive(Clone, Debug)]
 pub struct GcCheck {
     index: BTreeMap<String, usize>,
+    keys: Vec<Vec<u8>>,
     n: usize,
     edges: Vec<(usize, usize)>,
     roots: Vec<usize>,
@@ -61,46 +71,53 @@ pub struct GcCheck {
 }
 
 impl GcCheck {
-    /// Projects `request`: entries sorted by path identifier, references and
-    /// roots deduplicated, overlay entries reclaimable, and any path that
-    /// names no entry mapped to `n`, which the kernel rejects as out of range.
+    /// Projects `request`. Entries are sorted by path identifier and indexed
+    /// by an unverified lookup; the kernel's `project_keys` then validates
+    /// that every index names the entry whose path bytes it claims and builds
+    /// the edges itself, so the lookup is checked, not trusted.
     pub fn prepare(request: &GcPlanRequest) -> Result<Self, GcCheckError> {
+        let mut entries: Vec<&crunch_gc_core::GcEntry> = request.entries.iter().collect();
+        entries.sort_by(|left, right| left.path_id.cmp(&right.path_id));
         let mut index = BTreeMap::new();
-        for entry in &request.entries {
-            if index.insert(entry.path_id.clone(), 0).is_some() {
+        for (position, entry) in entries.iter().enumerate() {
+            if index.insert(entry.path_id.clone(), position).is_some() {
                 return Err(GcCheckError::DuplicateEntry {
                     path_id: entry.path_id.clone(),
                 });
             }
         }
-        for (position, slot) in index.values_mut().enumerate() {
-            *slot = position;
-        }
-        let n = index.len();
-        debug_assert_eq!(n, request.entries.len());
+        let n = entries.len();
         let lookup = |path_id: &str| index.get(path_id).copied().unwrap_or(n);
-        let mut reclaimable = vec![false; n];
-        let mut edges = Vec::new();
-        for entry in &request.entries {
-            let owner = lookup(&entry.path_id);
-            reclaimable[owner] = entry.ownership == GcOwnership::Overlay;
-            let targets: BTreeSet<usize> = entry.references.iter().map(|reference| lookup(reference)).collect();
-            edges.extend(targets.into_iter().map(|target| (owner, target)));
+        let keys: Vec<Vec<u8>> = entries.iter().map(|entry| entry.path_id.as_bytes().to_vec()).collect();
+        let references: Vec<Vec<Vec<u8>>> = entries
+            .iter()
+            .map(|entry| entry.references.iter().map(|reference| reference.as_bytes().to_vec()).collect())
+            .collect();
+        let reference_index: Vec<Vec<usize>> = entries
+            .iter()
+            .map(|entry| entry.references.iter().map(|reference| lookup(reference)).collect())
+            .collect();
+        let root_keys: Vec<Vec<u8>> = request.roots.iter().map(|root| root.as_bytes().to_vec()).collect();
+        let roots: Vec<usize> = request.roots.iter().map(|root| lookup(root)).collect();
+        let reclaimable = entries.iter().map(|entry| entry.ownership == GcOwnership::Overlay).collect();
+        let projection = kernel::project_keys(&keys, &references, &reference_index, &root_keys, &roots);
+        if !projection.ok {
+            return Err(GcCheckError::ProjectionRejected);
         }
-        edges.sort_unstable();
-        let roots: BTreeSet<usize> = request.roots.iter().map(|root| lookup(root)).collect();
         Ok(Self {
             index,
+            keys,
             n,
-            edges,
-            roots: roots.into_iter().collect(),
+            edges: projection.edges,
+            roots,
             reclaimable,
         })
     }
 
     // r[impl mantle.gc_plan.runtime_check]
-    /// Accepts `plan` only if the verified kernel accepts its retained and
-    /// candidate sets and its deletion intents name exactly its candidates.
+    /// Accepts `plan` only if the verified mask check accepts its retained
+    /// and candidate path lists, its deletion intents name exactly its
+    /// candidates, and the verified checker accepts the plan.
     pub fn check(&self, plan: &GcPlan) -> Result<(), GcCheckError> {
         let retained = self.mask(&plan.retained_path_ids)?;
         let candidate = self.mask(&plan.candidate_path_ids)?;
@@ -117,20 +134,9 @@ impl GcCheck {
     }
 
     fn mask(&self, path_ids: &[String]) -> Result<Vec<bool>, GcCheckError> {
-        let mut mask = vec![false; self.n];
-        for path_id in path_ids {
-            let Some(&position) = self.index.get(path_id) else {
-                return Err(GcCheckError::UnknownPlannedPath {
-                    path_id: path_id.clone(),
-                });
-            };
-            if mask[position] {
-                return Err(GcCheckError::DuplicatePlannedPath {
-                    path_id: path_id.clone(),
-                });
-            }
-            mask[position] = true;
-        }
-        Ok(mask)
+        let paths: Vec<Vec<u8>> = path_ids.iter().map(|path_id| path_id.as_bytes().to_vec()).collect();
+        let positions: Vec<usize> =
+            path_ids.iter().map(|path_id| self.index.get(path_id).copied().unwrap_or(self.n)).collect();
+        kernel::key_mask(&self.keys, &paths, &positions).ok_or(GcCheckError::PlannedPathsRejected)
     }
 }
