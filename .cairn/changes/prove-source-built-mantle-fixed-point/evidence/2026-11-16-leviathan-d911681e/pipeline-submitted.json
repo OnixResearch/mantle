@@ -1,0 +1,47 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "subject": "d911681e-signed-stagex-adoption",
+  "source_archive_compressed_blake3": "60388a225ba84a11433af838ed9342e740704a90861be935bb4441305e1d0d65",
+  "source_archive_raw_blake3": "28cfba4b35a481e4ddc0d295ed4bd0408a35f685737785485491bf45b4a9484d",
+  "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "original_source_tree_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+  "scripts": {
+    "assemble-complete-source.sh": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-d911681e-signed-stagex-adoption.sh",
+    "qualify-source.sh": "/home/brittonr/sbfp-20261113-berdKH/qualify-source-d911681e-signed-stagex-adoption.sh",
+    "canonical-checks-run.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-d911681e-signed-stagex-adoption-run.sh",
+    "canonical-checks-inside.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-d911681e-signed-stagex-adoption-inside.sh",
+    "prepare-source.sh": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-d911681e-signed-stagex-adoption.sh"
+  },
+  "tasks": {
+    "assembly": {
+      "id": 1646,
+      "dependencies": []
+    },
+    "runner": {
+      "id": 1648,
+      "dependencies": [
+        1646
+      ],
+      "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-d911681e-signed-stagex-adoption"
+    },
+    "canonical": {
+      "id": 1647,
+      "dependencies": [
+        1646
+      ],
+      "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-d911681e-signed-stagex-adoption"
+    },
+    "preparation": {
+      "id": 1649,
+      "dependencies": [
+        1648,
+        1647
+      ]
+    }
+  },
+  "all_driver_syntax_checked": true,
+  "source_code_archive_transport_equal": true,
+  "rejected_source_48_not_reused": true,
+  "non_claim": "Submitted complete source assembly, separate absent-target runner and canonical checks, and dependent inert source preparation. No qualification, prepared/current review, protected execution, fixed point or native-row acceptance is asserted."
+}

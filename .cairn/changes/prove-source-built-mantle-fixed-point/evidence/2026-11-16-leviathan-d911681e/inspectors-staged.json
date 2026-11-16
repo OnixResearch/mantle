@@ -1,0 +1,23 @@
+{
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "inspector_directory": "/home/brittonr/sbfp-20261113-berdKH/inert-inspectors-d911681e-signed-stagex-adoption",
+  "scratch": {
+    "graph": "/home/brittonr/sbfp-20261113-berdKH/inert-graph-d911681e-signed-stagex-adoption.XhsSob",
+    "identity": "/home/brittonr/sbfp-20261113-berdKH/inert-identity-d911681e-signed-stagex-adoption.3qCtsQ",
+    "preauthor": "/home/brittonr/sbfp-20261113-berdKH/inert-preauthor-d911681e-signed-stagex-adoption.5O1tqf"
+  },
+  "archive_blake3": "9eff49c52bdc39be0eede32056c55702e26dbbcc00b84af18c58cecf2a12767a",
+  "transport_equal": true,
+  "files": [
+    "graph-review/graph-audit.py",
+    "graph-review/controller-template-audit.py",
+    "graph-review/run-semantic-root-inspection.sh",
+    "identity-review/identity-audit.py",
+    "identity-review/preauthor-role-physical-audit.py",
+    "identity-review/run-full-identity.sh",
+    "identity-review/run-preauthor-roles.sh",
+    "review-contract.md"
+  ],
+  "execution": "not started; actual prepared subject and full profile transport must be bound first",
+  "scope": "Inert code transport and owned empty scratch creation outside frozen source/cohort only."
+}

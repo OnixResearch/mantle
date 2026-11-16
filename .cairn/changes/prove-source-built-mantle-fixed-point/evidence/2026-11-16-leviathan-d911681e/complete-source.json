@@ -1,0 +1,15 @@
+{
+  "schema": "mantle-complete-source-snapshot-v1",
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "code_archive_blake3": "60388a225ba84a11433af838ed9342e740704a90861be935bb4441305e1d0d65",
+  "code_tree_blake3": "1cfabcfe1a905e07810d4138c70ddcaa34df74923bb997e0239dc030bcfd5fba",
+  "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+  "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "original_source_normalized_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+  "complete_archive_blake3": "d2ee92dc190f251d7d9f8503e2253b8ad1ddbf6b5f81a126c7c46c9abcb8e9f6",
+  "compressed_archive_blake3": "de9ffd2a0d0e3050e35a2ab6772ea9a5252505d256b28047343dc251e63710ab",
+  "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-d911681e-signed-stagex-adoption.tar",
+  "assembly_root": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-d911681e-signed-stagex-adoption",
+  "non_claim": "Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"
+}

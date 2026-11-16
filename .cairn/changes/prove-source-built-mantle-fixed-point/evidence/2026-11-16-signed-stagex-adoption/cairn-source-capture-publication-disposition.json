@@ -1,0 +1,8 @@
+{
+  "task": 26,
+  "result": "Failed(1)",
+  "phase": "Nix development-shell profile setup",
+  "blocker": "Creating /tmp/.0_mantle-signed-adoption-cairn-profile symlink failed: Disk quota exceeded",
+  "cairn_reports_executed": false,
+  "scope": "Execution-environment failure before any current Cairn validation or gate; no product failure or lifecycle acceptance is inferred."
+}

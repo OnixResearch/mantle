@@ -1,0 +1,7 @@
+{
+  "task": 1652,
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "working_directory": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+  "driver": "/home/brittonr/sbfp-20261113-berdKH/tools-source-planning-smoke-20261116/verify-native-target-admission.sh",
+  "scope": "Exact admit_native_targets core with real target-file facts from an owned captured-source fixture. No full graph or proof claim."
+}

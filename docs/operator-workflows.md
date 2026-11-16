@@ -733,13 +733,14 @@ preparation substitutes for protected execution and action reconciliation.
 The five native parity rows consume two reserved StorePaths. A completed cold
 proof retains canonical StageX exports but does not publish signed PathInfo for
 those paths. Use the separate operator boundary in
-`scripts/adopt-source-built-stagex.rs`; do not import historical development
+`tools/adopt_source_built_stagex.rs`; do not import historical development
 state, replay a legacy transition, or add these outputs to a cold proof's empty
 initial authority. See [ADR 0156](../adr/0156-adopt-only-verified-cold-stagex-outputs-for-native-rows.md).
 
 Build the `adopt-source-built-stagex` and `check-native-row-receipts` workspace
-binary targets from the reviewed frozen checkout. Their source files are under
-`scripts/`, but they use the workspace lockfile and patches, not independent
+binary targets from the reviewed frozen checkout. Their Rust sources live in
+`tools/`, which belongs to the declared staged-source set; `scripts/` is not
+captured. They use the workspace lockfile and patches, not independent
 `cargo -Zscript` manifests:
 
 ```bash

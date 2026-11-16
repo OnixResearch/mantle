@@ -1,0 +1,35 @@
+{
+  "task": 1652,
+  "result": "Success",
+  "consumer": "mantle_rust_plan_core::admit_native_targets",
+  "observations": "Actual current manifest targets and filesystem is_file facts in owned retained-capture copy; scripts remains absent",
+  "admitted_target_count": 8,
+  "moved_targets": [
+    "adopt-source-built-stagex",
+    "check-native-row-receipts"
+  ],
+  "transfer_blake3": {
+    "target-admission.log": "c3f0b295cf6dbd649b549c898002e07ce386234dea02a795ab513591f6a28b41",
+    "target-candidates.json": "8686063f2b8f696e4507486698d3e61987e169f6ae4b528e41f7a4c89df4d303",
+    "admitted-targets.json": "50a3ea4597f08802597175286291f087dd7710e0b52794bc0d5653b1df4de4b6"
+  },
+  "reproduction_sources": {
+    "native-target-admission-20261116.rs": "#!/usr/bin/env -S cargo -Zscript\n---\n[package]\nedition = \"2024\"\n\n[dependencies]\nmantle-rust-plan-core = { path = \"../signed-stagex-adoption-dev-20261116/crates/mantle-rust-plan-core\" }\nserde_json = \"=1.0.149\"\n---\nuse std::io::Read;\nuse mantle_rust_plan_core::{NativeTargetCandidate, admit_native_targets};\nfn main() {\n    const MAX_BYTES: u64 = 1_048_576;\n    let mut bytes = Vec::new();\n    std::io::stdin().take(MAX_BYTES + 1).read_to_end(&mut bytes).unwrap();\n    assert!(bytes.len() as u64 <= MAX_BYTES);\n    let candidates: Vec<NativeTargetCandidate> = serde_json::from_slice(&bytes).unwrap();\n    let admitted = admit_native_targets(\"path+captured-tools-fixture#mantle@0.1.0\", candidates).unwrap();\n    for name in [\"adopt-source-built-stagex\", \"check-native-row-receipts\"] {\n        let target = admitted.iter().find(|target| target.name == name).unwrap();\n        assert_eq!(target.kind, \"bin\");\n        assert!(target.source_path.contains(\"/tools/\"));\n    }\n    println!(\"{}\", serde_json::to_string(&admitted).unwrap());\n}\n",
+    "native-target-observations-20261116.py": "import json\nimport sys\nimport tomllib\nfrom pathlib import Path\nroot = Path(sys.argv[1]).resolve(strict=True)\nmanifest = tomllib.loads((root / 'Cargo.toml').read_text())\nedition = str(manifest['workspace']['package']['edition'])\ncandidates = []\nfor target in manifest['bin']:\n    path = root / target['path']\n    readable = path.is_file()\n    candidates.append({'name': target['name'], 'kind': 'bin', 'source_path': str(path) if readable else '', 'edition': edition, 'source_failure_display': None if readable else str(path)})\nlib = root / 'src/lib.rs'\nreadable = lib.is_file()\ncandidates.append({'name': manifest['package']['name'], 'kind': 'lib', 'source_path': str(lib) if readable else '', 'edition': edition, 'source_failure_display': None if readable else str(lib)})\nassert not (root / 'scripts').exists(), 'captured source must continue excluding scripts'\nassert all(item['source_failure_display'] is None for item in candidates), candidates\njson.dump(candidates, sys.stdout)\nsys.stdout.write('\\n')\n",
+    "verify-native-target-admission-20261116.sh": "#!/usr/bin/env bash\nset -euo pipefail\nROOT=/home/brittonr/sbfp-20261113-berdKH\nSMOKE=\"$ROOT/tools-source-planning-smoke-20261116\"\nDEV=\"$ROOT/signed-stagex-adoption-dev-20261116\"\nPYTHON=/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14\ntest ! -e \"$SMOKE/target-admission.log\"\nexec > \"$SMOKE/target-admission.log\" 2>&1\ntrap 'status=$?; printf \"target_admission_exit=%s\\n\" \"$status\"; printf \"%s\\n\" \"$status\" > \"$SMOKE/target-admission.exit\"; exit \"$status\"' EXIT\nset -x\n\"$PYTHON\" \"$SMOKE/observe-targets.py\" \"$SMOKE/source\" > \"$SMOKE/target-candidates.json\"\nexport SMOKE CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=\"$SMOKE/target-admission-cargo\" TMPDIR=\"$SMOKE/tmp\" XDG_CACHE_HOME=\"$ROOT/tooling-cache\"\ncd \"$DEV\"\n/run/current-system/sw/bin/nix develop --profile \"$ROOT/tooling-profile-signed-stagex-adoption\" --builders '' --no-write-lock-file -c bash -c '\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\ncargo -Zscript \"$SMOKE/native-target-admission.rs\" < \"$SMOKE/target-candidates.json\" > \"$SMOKE/admitted-targets.json\"\njq -e \"[.[] | select(.name == \\\"adopt-source-built-stagex\\\" or .name == \\\"check-native-row-receipts\\\")] | length == 2\" \"$SMOKE/admitted-targets.json\"\n'\nprintf 'target_admission_complete=1\\n'\n"
+  },
+  "prior_smoke": {
+    "task": 1651,
+    "result": "Failed(124)",
+    "completed": [
+      "package formatting",
+      "strict selected-binary release Clippy",
+      "selected release builds",
+      "actual adoption help",
+      "actual five-row checker contract"
+    ],
+    "inconclusive": "Whole-workspace native planning exceeded the check-specific 300-second deadline without a receipt"
+  },
+  "inventory_gate": "machine schema contract check: PASS (24 contracted, 67 classified)",
+  "non_claim": "Exact target readability/admission and developer binary mechanisms only. Full source preparation, frozen qualification, graph review, protected stages, fixed point and native rows remain unaccepted."
+}

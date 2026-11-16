@@ -1,0 +1,7 @@
+{
+  "task": 26,
+  "host": "local",
+  "driver": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-current.sh",
+  "attempt": "source-capture-publication",
+  "scope": "Current source-capture cutover lifecycle validation and proposal/design/tasks gates"
+}

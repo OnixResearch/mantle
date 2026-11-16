@@ -7,7 +7,7 @@ test ! -e "$LOG"
 exec > "$LOG" 2>&1
 trap 'status=$?; printf "current_cairn_exit=%s\n" "$status"; printf "%s\n" "$status" > "$BASE/cairn-$ATTEMPT.exit"; exit "$status"' EXIT
 set -x
-nix develop --profile /tmp/mantle-signed-adoption-cairn-profile --no-write-lock-file -c bash -c '
+nix develop --profile "${TMPDIR:-/tmp}/mantle-signed-adoption-cairn-profile" --no-write-lock-file -c bash -c '
 set -euo pipefail
 BASE="$1"
 ATTEMPT="$2"

@@ -976,3 +976,29 @@ canonical targets, successful regeneration and the full fresh independent
 review before protected execution. No 48afe432 qualification or unexecuted
 inspector port can be promoted to the final replacement subject.
 
+## Declared operator source-capture repair observed (2026-11-16)
+
+The d911681e runner and canonical qualifications passed, but preparation task
+1649 rejected the operator target under uncaptured `scripts/`. Its partial
+staging and dependent fact/transport rejections are retained. Both operator
+sources now live under the already admitted `tools/` tree; manifest, documentation
+and producer-family callers migrate together. Capture and target admission are
+unchanged.
+
+Task 1651 passed package formatting, strict selected-binary release Clippy,
+release builds and the actual operator CLI surfaces. Its full-workspace native
+plan exceeded the check-specific 300-second deadline, so that part is not a
+successful planning receipt. Task 1652 separately exercised the exact native
+target-admission core with real manifest/filesystem observations from an owned
+copy of the retained capture: both moved targets are admitted and `scripts/`
+remains absent. The current machine gate passed with 24 contracted and 67
+classified families. Complete commands, reproduction source data, outputs and
+transfer identities are in `evidence/2026-11-16-signed-stagex-adoption/`.
+
+Maintenance owner: Mantle's source-capture and operator adapters. The durable
+repair makes the declared binary sources available to the existing capture
+contract rather than adding a second capture policy. A new published freeze,
+isolated qualification, successful source-only preparation and full fresh
+independent review still precede protected execution. N1-N2, I3-I5 and
+proof-dependent V2/V3 remain open.
+

@@ -1,0 +1,24 @@
+{
+  "task": 27,
+  "result": "Success",
+  "reports": {
+    "validation": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-validation.json",
+      "valid": true
+    },
+    "proposal": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-proposal.json",
+      "valid": true
+    },
+    "design": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-design.json",
+      "valid": true
+    },
+    "tasks": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-tasks.json",
+      "valid": true
+    }
+  },
+  "blake3_output": "c9764be43124fc24799dae8101d55f3b34235f2acfb18edf64bb456e7401873f  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2.log\na03f71ef46bd9269dcc26de21e5fded83d063a7894da1095dea76ed3f53455a0  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-validation.json\n527f6d5f6f17942d5fd5eb8e4f7d7623f9fb68ad242dacb51812f76fec956079  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-proposal.json\nd4fdf1692777d098467b51bba834cda542574f4032e3d2a6713f9901dc13b13f  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-design.json\n9c908badacdb4691fe12f62392c6e10fa568520446bf0bf3d0f099e7fe90e6ee  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-publication-v2-tasks.json\n",
+  "scope": "Pinned current lifecycle validation and all three gates only; no archive, protected proof or native-row acceptance."
+}

@@ -1,0 +1,6 @@
+{
+  "task": 1650,
+  "depends_on": 1649,
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/capture-review-subject-facts-d911681e-signed-stagex-adoption.sh",
+  "scope": "Bounded read-only capture of exact current prepared profile/plan/report and three executable bytes for later parent comparison; not review/proof acceptance."
+}

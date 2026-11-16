@@ -1,0 +1,7 @@
+{
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "compressed_code_archive_blake3": "60388a225ba84a11433af838ed9342e740704a90861be935bb4441305e1d0d65",
+  "authorization": "../2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json",
+  "authorized_review_model": "underclass/gpt-6-sol",
+  "scope": "The user-authorized qualified replacement for signed-adoption/seed repairs, including the required producer inventory correction. Candidate48 failed canonical qualification before preparation or independent review; no earlier acceptance is reused."
+}

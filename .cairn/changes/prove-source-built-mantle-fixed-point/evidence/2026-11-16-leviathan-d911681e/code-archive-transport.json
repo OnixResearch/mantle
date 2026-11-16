@@ -1,0 +1,8 @@
+{
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "local_archive": "/tmp/mantle-d911681e-freeze.awdLq0/source-d911681e3a16c7248290261fab7ce6c8605a409d.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-d911681e3a16c7248290261fab7ce6c8605a409d.tar.gz",
+  "compressed_archive_blake3": "60388a225ba84a11433af838ed9342e740704a90861be935bb4441305e1d0d65",
+  "raw_archive_blake3": "28cfba4b35a481e4ddc0d295ed4bd0408a35f685737785485491bf45b4a9484d",
+  "transfer_equal": true
+}

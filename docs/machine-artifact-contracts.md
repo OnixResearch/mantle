@@ -101,6 +101,12 @@ the curated generated-schema cohort. Classification alone does not reverify a
 cold proof, authorize a signer, establish current NAR bytes or grant new
 provider, fixed-point, native-row or release claims.
 
+The `bootstrap.native-row-receipt-checker` compatibility family covers the
+separate checker in `tools/check_native_row_receipts.rs`. Its contract export
+describes the original row validators, and its verification mode invokes those
+same validators over supplied evidence. It adds no aggregate receipt version
+and does not turn exported conventions into observed native execution or trust.
+
 ## Authority flow
 
 Authority is one-way:

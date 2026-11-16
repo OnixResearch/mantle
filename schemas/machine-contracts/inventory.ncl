@@ -2266,7 +2266,8 @@ let Registry = {
         "command_or_api"= "adopt-source-built-stagex --json and create-new adoption report",
         "marker"= "bootstrap.cold-stagex-adoption-report",
         "source_paths"= [
-          "src/source_built_fixed_point_stagex_adoption.rs"
+          "src/source_built_fixed_point_stagex_adoption.rs",
+          "tools/adopt_source_built_stagex.rs"
         ]
       },
       "consumers"= [
@@ -2307,6 +2308,55 @@ let Registry = {
         "adoption does not establish new provider construction, a fixed point, native-row acceptance, or release authority"
       ],
       "rationale"= "The separate operator handoff composes existing cold-proof, canonical-artifact and signed-store facts outside the curated schema-contracted cohort; its explicit v1 compatibility boundary is not an internal-only DTO or a new proof receipt."
+    },
+    {
+      "id"= "bootstrap.native-row-receipt-checker",
+      "class"= "compatibility",
+      "rust_owner"= "tools/check_native_row_receipts.rs::run",
+      "producer"= {
+        "command_or_api"= "check-native-row-receipts --contract/--artifact/--view-root",
+        "marker"= "bootstrap.native-row-receipt-checker",
+        "source_paths"= [
+          "tools/check_native_row_receipts.rs"
+        ]
+      },
+      "consumers"= [
+        "scripts/qualify-native-rows.py"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "unversioned checker projection",
+        "supported"= [],
+        "unknown_version_behavior"= "original row validators and artifact serde owners reject unsupported versions; checker adds no aggregate version",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p mantle --bin mantle early_native_row_receipt"
+      ],
+      "fixture_coverage"= [
+        "classification"
+      ],
+      "freshness_strategy"= "Original Rust row validators and attestation owners remain authoritative; the native operator independently pins checker bytes",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "exported contracts describe existing validators, not observed native-row execution",
+        "classification and supplied receipt validation do not grant signing trust, compiler correctness, a cold fixed point, or release authority"
+      ],
+      "rationale"= "The separate operator checker reuses original row and artifact conventions without inventing another aggregate schema or replacing source-selected native execution."
     },
     {
       "id"= "bootstrap.parity-reports",

@@ -1,0 +1,15 @@
++ nix develop --profile /tmp/mantle-signed-adoption-cairn-profile --no-write-lock-file -c bash -c $'\nset -euo pipefail\nBASE="$1"\nATTEMPT="$2"\nexpected_cairn=$(nix eval --raw github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872#packages.x86_64-linux.default.outPath)\nactual_cairn=$(readlink -f "$(command -v cairn)")\ntest "$actual_cairn" = "$expected_cairn/bin/cairn"\nprintf "pinned_cairn=%s\\n" "$actual_cairn"\nb3sum "$actual_cairn"\ncheck_report() {\n    local label="$1"\n    shift\n    local report="$BASE/cairn-$ATTEMPT-$label.json"\n    test ! -e "$report"\n    "$@" > "$report"\n    cat "$report"\n    jq -e ".valid == true" "$report"\n}\ncheck_report validation cairn validate --root .\ncheck_report proposal cairn gate proposal prove-source-built-mantle-fixed-point --root .\ncheck_report design cairn gate design prove-source-built-mantle-fixed-point --root .\ncheck_report tasks cairn gate tasks prove-source-built-mantle-fixed-point --root .\n' bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption source-capture-publication
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 8 ms: Could not connect to server; retrying in 60 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 101 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 42 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 790 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+error: creating symlink "/tmp/.0_mantle-signed-adoption-cairn-profile" -> "mantle-signed-adoption-cairn-profile-1-link": Disk quota exceeded
++ status=1
++ printf 'current_cairn_exit=%s\n' 1
+current_cairn_exit=1
++ printf '%s\n' 1
++ exit 1

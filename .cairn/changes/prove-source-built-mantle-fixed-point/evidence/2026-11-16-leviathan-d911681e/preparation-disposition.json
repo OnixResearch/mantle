@@ -1,0 +1,13 @@
+{
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "qualified_checks": {"assembly": 1646, "canonical": 1647, "isolated_runner": 1648},
+  "failed_preparation": {"task": 1649, "result": "Failed(3)", "input_manifest_blake3": "f09f27643f9464a0289ec5a2d9f2164d688d1d1588e7d2b3bddc6b028056c546", "input_profile_raw_blake3": "eb5be64a9dd6d9ee05e85daff9ddc42080f487b2deae1d27a3226cded8c9e731"},
+  "blocker": "Cargo-free native target planning failed: target adopt-source-built-stagex source inputs/mantle-source/scripts/adopt-source-built-stagex.rs is not readable",
+  "retained_staging": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-d911681e-signed-stagex-adoption.source-built-fixed-point-staging-3900186",
+  "observed_retained_root_entries": ["inputs", "program-sources", "native-source-closure.json", "source-program-preparation-input-plan.json"],
+  "capture_policy": "src/self_build.rs STAGED_SOURCE_TOP_LEVEL_ENTRIES explicitly includes tools and deliberately omits scripts; it requires every declared Cargo target source to be captured.",
+  "repair_boundary": "Move the two new workspace binary sources into tools and migrate their manifest/docs/producer-family callers. Do not widen source capture, suppress missing-target errors, or narrow declared target admission.",
+  "dependent_fact_capture": "1650 DependencyFailed; no current review-subject facts were emitted",
+  "full_profile_transport": "Rejected with exit1 at the preparation-success guard; displayed stdout digest was not a profile identity",
+  "non_claim": "Qualified code/build mechanisms are retained, but preparation did not succeed. No current prepared subject, full inert scan, independent acceptance, protected cold stage, v2 receipt or native-row acceptance is established."
+}

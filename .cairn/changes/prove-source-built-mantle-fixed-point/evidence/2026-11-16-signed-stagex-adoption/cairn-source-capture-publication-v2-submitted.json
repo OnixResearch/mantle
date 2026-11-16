@@ -1,0 +1,9 @@
+{
+  "task": 27,
+  "host": "local",
+  "driver": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-current.sh",
+  "attempt": "source-capture-publication-v2",
+  "scratch": "/home/brittonr/git/.mantle-source-capture-validation-20261116.7LG3Dm",
+  "repair": "Evidence driver respects TMPDIR for its Nix profile; dedicated scratch on the measured 88GB-available git dataset avoids the observed /tmp quota failure",
+  "scope": "Actual pinned current Cairn validation plus proposal/design/tasks gates; no product admission or resource limit change"
+}

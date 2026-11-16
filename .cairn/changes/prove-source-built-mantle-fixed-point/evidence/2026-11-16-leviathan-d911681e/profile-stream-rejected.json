@@ -1,0 +1,8 @@
+{
+  "result": "rejected",
+  "producer_task": 1649,
+  "producer_result": "Failed(3)",
+  "pipeline_exit": 1,
+  "observed_stdout_digest": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+  "scope": "The preparation exit guard failed before cat could stream the profile. The displayed digest is not profile identity or transport equality. No current prepared subject or inspection is admitted."
+}

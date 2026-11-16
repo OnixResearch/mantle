@@ -198,13 +198,13 @@ path = "tools/generate_portable_platform_profiles.rs"
 
 [[bin]]
 name = "adopt-source-built-stagex"
-path = "scripts/adopt-source-built-stagex.rs"
+path = "tools/adopt_source_built_stagex.rs"
 test = false
 bench = false
 
 [[bin]]
 name = "check-native-row-receipts"
-path = "scripts/check-native-row-receipts.rs"
+path = "tools/check_native_row_receipts.rs"
 test = false
 bench = false
 

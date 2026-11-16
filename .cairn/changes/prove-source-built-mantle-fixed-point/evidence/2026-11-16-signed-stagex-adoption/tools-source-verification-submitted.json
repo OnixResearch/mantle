@@ -1,0 +1,7 @@
+{
+  "task": 1651,
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/verify-tools-source-20261116.sh",
+  "development_source": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+  "captured_fixture_source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-d911681e-signed-stagex-adoption.source-built-fixed-point-staging-3900186/inputs/mantle-source",
+  "scope": "Developer verification of moved workspace targets and actual Cargo-free planning from an owned copy of the retained capture plus declared vendor input. Frozen source/staging remain unchanged; no new frozen qualification or proof claim."
+}

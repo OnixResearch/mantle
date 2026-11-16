@@ -39,6 +39,12 @@ raw receipt identities, exact producer-bound StageX exports, explicit existing
 signing authority, and fresh nonoverlapping local store/state destinations.
 Development or partial attempts cannot pass this boundary.
 
+Place both Rust entrypoints in the existing `tools/` tree. Every declared
+Cargo target must be present in the staged source set; `scripts/` is deliberately
+excluded. Move the sources rather than broadening source capture or narrowing
+target admission. The checker has a separate compatibility-family decision
+for its original-validator projections, not a new aggregate receipt schema.
+
 The versioned adoption report is an explicit compatibility surface in the
 machine-artifact inventory, not an internal-only DTO. Its Rust owner and
 receipt-bound consumer checks govern the handoff; classification does not

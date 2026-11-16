@@ -1,0 +1,39 @@
+{
+  "task": 1647,
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-d911681e-signed-stagex-adoption",
+  "source_tree_before_blake3": "d2ee92dc190f251d7d9f8503e2253b8ad1ddbf6b5f81a126c7c46c9abcb8e9f6",
+  "source_tree_after_blake3": "d2ee92dc190f251d7d9f8503e2253b8ad1ddbf6b5f81a126c7c46c9abcb8e9f6",
+  "test_results": [
+    "test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.52s",
+    "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.76s",
+    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.36s",
+    "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 1.97s",
+    "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 251 filtered out; finished in 1.17s",
+    "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2918 filtered out; finished in 0.13s",
+    "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2925 filtered out; finished in 0.02s",
+    "test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2805 filtered out; finished in 0.19s",
+    "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.05s",
+    "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s"
+  ],
+  "machine_schema_contract": "machine schema contract check: PASS (24 contracted, 66 classified)",
+  "cairn": {
+    "validation": {
+      "valid": true,
+      "verdict": null
+    },
+    "proposal": {
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "design": {
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "tasks": {
+      "valid": true,
+      "verdict": "PASS"
+    }
+  },
+  "scope": "Separate initially absent canonical Cargo target and unchanged complete frozen source; bounded CLI/contract and lifecycle mechanisms, not protected execution or proof/native-row acceptance."
+}

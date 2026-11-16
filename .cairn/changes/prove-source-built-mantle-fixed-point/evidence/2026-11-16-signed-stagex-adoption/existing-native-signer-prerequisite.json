@@ -1,0 +1,11 @@
+{
+  "existing_dedicated_signing_key": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/config/signing-key",
+  "private_file_metadata_only": {"mode": "600", "size_bytes": 129, "kind": "regular file", "not_symlink": true},
+  "public_key_file": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/config/public-key",
+  "public_key_file_bytes_blake3": "dcf2bff85b0e3533474353d4419464c7cc33150b304177e50e454ba966dd2c0b",
+  "old_key_show_output": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/key-show-public.txt",
+  "old_key_show_bytes_blake3": "1c5e05d8c98e1252f0d171ac22dbe40407e296f4078870e393d95acef4fde63c",
+  "selection_context": "The recorded native qualification wrapper generated this dedicated cache key and selected it explicitly before its build loop. The wrappers are stale and must not be rerun.",
+  "observations": "The public text views show the same named Ed25519 key; their exact raw files differ. No private bytes were read, copied or disclosed during this lookup, and no key/state policy was created or changed.",
+  "non_claim": "Prerequisite discovery only. Current adoption must still load the explicitly selected existing key and verify its actual signer/current content; no signing, adoption, native build, trust extension or proof acceptance occurred."
+}

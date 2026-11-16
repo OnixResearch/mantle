@@ -1,0 +1,29 @@
+{
+  "syntax": "Four Python modules compiled without executing cohort globals; three Bash launchers passed bash -n.",
+  "python_runtime": "3.14.8 (main, Sep 30 2026, 17:55:09) [GCC 16.2.0]",
+  "seed_behavior_cases": 13,
+  "seed_behavior_result": "all_expectations_passed",
+  "fingerprints": [
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/graph-review/graph-audit.py",
+      "blake3": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd"
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/graph-review/controller-template-audit.py",
+      "blake3": "20c85b4e3c3990c582354bf59c56730c7ca8464f372b9e0f58700ccce81fade5"
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/identity-review/identity-audit.py",
+      "blake3": "8e1de0c158f745d4bd94e49c585e44f3d2357aa6ea8ad141ccfefa5217137e98"
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/identity-review/preauthor-role-physical-audit.py",
+      "blake3": "c16c2235bb4f8aefeee89bf64beab032b7c42f4c9dddfd9fd1fa2839b8f80f5f"
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/graph-review/seed-contract-function-check.json",
+      "blake3": "77d73f01fb8b8a8521d701e2d71f1ad7c030abc25348dfa152dadba79914fe3c"
+    }
+  ],
+  "scope": "Local port syntax and pure seed-admission mechanism only; no full current-data inspection, independent acceptance or protected execution."
+}

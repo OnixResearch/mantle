@@ -1,0 +1,21 @@
+{
+  "reason": "The required whitespace check rejected preserved CR-bearing SSH stderr and one byte-bound inert inspector source. Evidence bytes are archived losslessly rather than normalized or removed.",
+  "raw_log": {
+    "observed_name": "target-admission.log",
+    "storage": "target-admission.log.gz",
+    "decoded_blake3": "c3f0b295cf6dbd649b549c898002e07ce386234dea02a795ab513591f6a28b41",
+    "roundtrip_equal": true
+  },
+  "inspector_sources": {
+    "observed_root": "../2026-11-16-leviathan-d911681e/",
+    "storage": "../2026-11-16-leviathan-d911681e/inspector-port-sources.tar.gz",
+    "members": [
+      "graph-review/",
+      "identity-review/"
+    ],
+    "archive_compare_equal": true,
+    "fingerprint_manifest": "../2026-11-16-leviathan-d911681e/inspector-port-mechanism-verified.json"
+  },
+  "archive_blake3_output": "25c61013a3f8a40306ffa788ebfcf1a2fd5527685ef2e3515fec3dd73f2ac8ed  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/target-admission.log.gz\n7b72fee47a84f147ae7d3418c90c53389f98f2cf8e882d43bd2537659313b8fe  .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-d911681e/inspector-port-sources.tar.gz\n",
+  "scope": "Encoding/retention only; no changed inspector behavior, current-data acceptance or product verification."
+}

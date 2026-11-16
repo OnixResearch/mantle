@@ -1,0 +1,10 @@
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 41 ms: Could not connect to server; retrying in 59 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 10 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 303 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 398 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 3 ms: Could not connect to server
+waiting for another Nix process to finish fetching input 'git+https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9&submodules=1'...
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+machine schema contract check: PASS (24 contracted, 67 classified)

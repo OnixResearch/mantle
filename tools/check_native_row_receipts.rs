@@ -1,6 +1,7 @@
 //! Compile in the reviewed checkout, then invoke the compiled executable directly.
 //! The included core/shell validators are the authoritative receipt convention.
 // r[impl bootstrap_inventory.cold_stagex_native_row_adoption]
+// machine-artifact-public: bootstrap.native-row-receipt-checker
 
 #[path = "../src/early_native_row_receipt.rs"]
 mod early_native_row_receipt;

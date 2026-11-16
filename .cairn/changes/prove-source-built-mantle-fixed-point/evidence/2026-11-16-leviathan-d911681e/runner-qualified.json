@@ -1,0 +1,27 @@
+{
+  "task": 1648,
+  "source_code_revision": "d911681e3a16c7248290261fab7ce6c8605a409d",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-d911681e-signed-stagex-adoption",
+  "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-d911681e-signed-stagex-adoption",
+  "source_tree_before_blake3": "d2ee92dc190f251d7d9f8503e2253b8ad1ddbf6b5f81a126c7c46c9abcb8e9f6",
+  "source_tree_after_blake3": "d2ee92dc190f251d7d9f8503e2253b8ad1ddbf6b5f81a126c7c46c9abcb8e9f6",
+  "test_results": [
+    "test result: ok. 270 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.27s"
+  ],
+  "binaries": [
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-d911681e-signed-stagex-adoption",
+      "blake3": "2747154bd1e3b5b54c0d6387ba79eb7ca184751d2b244a0da89c445e3e539fad"
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-d911681e-signed-stagex-adoption",
+      "blake3": "bdcf9ace3e4004fb9e58b4ab7e713b686d1b2a5f56d8739fabf0e89b186985f7"
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-d911681e-signed-stagex-adoption",
+      "blake3": "d57684d167b12f399f52864be8449dbbffe899007bd82c1c73a81060efa8e257"
+    }
+  ],
+  "compiler_and_build_output": "runner-qualification.log",
+  "scope": "Complete frozen-source, initially absent-target compiler/test/Clippy/release build and installed binary observations only. Not source-program preparation, runtime provider execution, a cold fixed point or native-row acceptance."
+}
