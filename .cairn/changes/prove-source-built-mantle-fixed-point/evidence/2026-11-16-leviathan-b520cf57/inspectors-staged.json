@@ -1,0 +1,45 @@
+{
+  "subject": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "remote_tools": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources",
+  "files": [
+    {
+      "file": "graph-review/graph-audit.py",
+      "blake3": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd",
+      "received_blake3": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd"
+    },
+    {
+      "file": "graph-review/controller-template-audit.py",
+      "blake3": "20c85b4e3c3990c582354bf59c56730c7ca8464f372b9e0f58700ccce81fade5",
+      "received_blake3": "20c85b4e3c3990c582354bf59c56730c7ca8464f372b9e0f58700ccce81fade5"
+    },
+    {
+      "file": "graph-review/run-semantic-root-inspection.sh",
+      "blake3": "b81e4f8ad446ce7454c93db6583f9e256536d453c421408f6156a0bb08eb3951",
+      "received_blake3": "b81e4f8ad446ce7454c93db6583f9e256536d453c421408f6156a0bb08eb3951"
+    },
+    {
+      "file": "identity-review/identity-audit.py",
+      "blake3": "2d29d4378ca1b1a79f2e4059ae7728e74c9cdc606908b26c9dbd71465fdff6a5",
+      "received_blake3": "2d29d4378ca1b1a79f2e4059ae7728e74c9cdc606908b26c9dbd71465fdff6a5"
+    },
+    {
+      "file": "identity-review/preauthor-role-physical-audit.py",
+      "blake3": "af41f559fb5886f4cc1b9689f58a85d439a7e8c99df30b6c0a367991bf24ba5a",
+      "received_blake3": "af41f559fb5886f4cc1b9689f58a85d439a7e8c99df30b6c0a367991bf24ba5a"
+    },
+    {
+      "file": "identity-review/run-full-identity.sh",
+      "blake3": "2e037e97a5e9c16f1c193df38233362975414f8d37aa5d8a7137d07f5ec20cd8",
+      "received_blake3": "2e037e97a5e9c16f1c193df38233362975414f8d37aa5d8a7137d07f5ec20cd8"
+    },
+    {
+      "file": "identity-review/run-preauthor-roles.sh",
+      "blake3": "9d633378bb3137e518be14c9ab7b673f0e6fa01cc25821670d63f05592264a16",
+      "received_blake3": "9d633378bb3137e518be14c9ab7b673f0e6fa01cc25821670d63f05592264a16"
+    }
+  ],
+  "transfer_equal": true,
+  "archive": "inspector-tools.tar.gz",
+  "archive_compare_equal": true,
+  "scope": "Exact-source inert inspector/tool staging only; no subject facts or current-data inspection/review is accepted."
+}

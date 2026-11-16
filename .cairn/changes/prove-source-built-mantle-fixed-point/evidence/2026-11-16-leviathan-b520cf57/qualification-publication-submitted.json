@@ -1,0 +1,8 @@
+{
+  "task": 26,
+  "host": "local",
+  "driver": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-current.sh",
+  "attempt": "source-capture-qualification-publication",
+  "scratch": "/home/brittonr/git/.mantle-source-capture-validation-20261116.7LG3Dm",
+  "scope": "Current qualification handoff lifecycle validation and all three gates, not proof completion or archive."
+}

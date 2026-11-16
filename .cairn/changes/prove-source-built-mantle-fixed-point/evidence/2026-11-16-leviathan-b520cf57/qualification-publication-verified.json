@@ -1,0 +1,26 @@
+{
+  "task": 26,
+  "result": "Success",
+  "reports": {
+    "validation": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-qualification-publication-validation.json",
+      "valid": true
+    },
+    "proposal": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-qualification-publication-proposal.json",
+      "valid": true
+    },
+    "design": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-qualification-publication-design.json",
+      "valid": true
+    },
+    "tasks": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-qualification-publication-tasks.json",
+      "valid": true
+    }
+  },
+  "log_storage": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-source-capture-qualification-publication.log.gz",
+  "raw_log_blake3": "f5f661e1085190185715cf8f713c6345be692aa84dbee8ff1e8915365c671ac0",
+  "archive_roundtrip_equal": true,
+  "scope": "Current qualification handoff lifecycle validation and all three gates. No completion, archive, source-program or proof acceptance."
+}

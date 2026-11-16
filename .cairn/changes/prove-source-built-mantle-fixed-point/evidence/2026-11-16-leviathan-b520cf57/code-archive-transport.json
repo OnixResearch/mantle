@@ -1,0 +1,9 @@
+{
+  "revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "local_archive": "/home/brittonr/git/.mantle-source-capture-validation-20261116.7LG3Dm/mantle-b520cf57-freeze.QiPzWd/source-b520cf5791fb7638ab78ed59f42d890ccd75dc30.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-b520cf5791fb7638ab78ed59f42d890ccd75dc30.tar.gz",
+  "compressed_blake3": "ab5fd2bb82d3c0641497d6088b22ec093232825ae1bb10682264517eb36b4b4a",
+  "raw_tar_blake3": "db4d27d22efa87316da3aead6af08d0d7d4072189988ff15ee3afd6c26b601cd",
+  "received_compressed_blake3": "ab5fd2bb82d3c0641497d6088b22ec093232825ae1bb10682264517eb36b4b4a",
+  "transfer_equal": true
+}

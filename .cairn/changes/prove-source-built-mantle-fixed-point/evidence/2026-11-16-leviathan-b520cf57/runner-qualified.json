@@ -1,0 +1,24 @@
+{
+  "task": 1655,
+  "result": "Success",
+  "source_code_revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-b520cf57-captured-operator-sources",
+  "source_tree_before_blake3": "7d3a672bd38452322d43ff9465ddc8acd4d43c9776f152c3c6471a479bba4329",
+  "source_tree_after_blake3": "7d3a672bd38452322d43ff9465ddc8acd4d43c9776f152c3c6471a479bba4329",
+  "test_result_lines": [
+    "test result: ok. 270 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.50s"
+  ],
+  "installed_binaries": {
+    "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-b520cf57-captured-operator-sources": "e9e34f6005cce3a5bd6ea9357122af78c0753d18ef3a3cfa4b2a5d8bb9318387",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-b520cf57-captured-operator-sources": "97abdd42598d0e1827ac9f35d73d71575bf9513ea784b0e7ec7716e42565ba18",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-b520cf57-captured-operator-sources": "59db130642fffb0d375f13d1f2b1a9e3a3312de932f5d3dcc97cac9b12dca461"
+  },
+  "selected_release_clippy": "passed",
+  "formatting": "passed",
+  "actual_cli": [
+    "adopt-source-built-stagex --help",
+    "check-native-row-receipts --contract",
+    "mantle --version"
+  ],
+  "scope": "Absent-target current-source runner/operator build and mechanism qualification only; no source preparation, current static review, protected stages or native-row acceptance."
+}

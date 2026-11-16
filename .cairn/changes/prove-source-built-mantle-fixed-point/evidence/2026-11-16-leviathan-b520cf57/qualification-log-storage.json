@@ -1,0 +1,26 @@
+{
+  "logs": [
+    {
+      "observed_name": "assembly.log",
+      "storage": "assembly.log.gz",
+      "raw_blake3": "5c2ffc6962ec8fbc7608778d08db2245bd09ec8908681d0590b39cf70c5a2c8c",
+      "archive_blake3": "b733dc1118b3a1b8b7c0e129b17ba032198c53f43b9507f765fabe986a1e57ed",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "canonical-qualification.log",
+      "storage": "canonical-qualification.log.gz",
+      "raw_blake3": "aa50cc5d611aa4d0e3d50504cad3911b436c7df321cb053a0c6874a847de28aa",
+      "archive_blake3": "6893c8944f22066364d2dd656eb2a3e0ca3df11a0d714f2e100fbbfc15d714c4",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "runner-qualification.log",
+      "storage": "runner-qualification.log.gz",
+      "raw_blake3": "9616ef136bc2bc7515797e5b4716f17ecc5bb2c22b031581a8d929c5e43ccb3f",
+      "archive_blake3": "3b526dc21141f9fd4ae390d7c98677bfa2e02e65f18eca39995ffb311132f663",
+      "roundtrip_equal": true
+    }
+  ],
+  "scope": "Lossless storage of exact observed qualification bytes, not whitespace normalization or additional execution."
+}

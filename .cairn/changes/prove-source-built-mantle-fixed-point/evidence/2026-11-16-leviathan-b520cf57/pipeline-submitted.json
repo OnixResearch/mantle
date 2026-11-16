@@ -1,0 +1,53 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source_code_revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "subject": "b520cf57-captured-operator-sources",
+  "source_archive_compressed_blake3": "ab5fd2bb82d3c0641497d6088b22ec093232825ae1bb10682264517eb36b4b4a",
+  "source_archive_raw_blake3": "db4d27d22efa87316da3aead6af08d0d7d4072189988ff15ee3afd6c26b601cd",
+  "scripts": {
+    "assemble-complete-source.sh": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-b520cf57-captured-operator-sources.sh",
+    "qualify-source.sh": "/home/brittonr/sbfp-20261113-berdKH/qualify-source-b520cf57-captured-operator-sources.sh",
+    "canonical-checks-run.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-b520cf57-captured-operator-sources-run.sh",
+    "canonical-checks-inside.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-b520cf57-captured-operator-sources-inside.sh",
+    "prepare-source.sh": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-b520cf57-captured-operator-sources.sh",
+    "capture-review-subject-facts.sh": "/home/brittonr/sbfp-20261113-berdKH/capture-review-subject-facts-b520cf57-captured-operator-sources.sh"
+  },
+  "tasks": {
+    "assembly": {
+      "id": 1653,
+      "dependencies": []
+    },
+    "canonical": {
+      "id": 1654,
+      "dependencies": [
+        1653
+      ]
+    },
+    "runner": {
+      "id": 1655,
+      "dependencies": [
+        1653
+      ]
+    },
+    "preparation": {
+      "id": 1656,
+      "dependencies": [
+        1654,
+        1655
+      ]
+    },
+    "subject_facts": {
+      "id": 1657,
+      "dependencies": [
+        1656
+      ]
+    }
+  },
+  "all_driver_syntax_checked": true,
+  "source_code_archive_transport_equal": true,
+  "independent_runner_and_canonical_targets": [
+    "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-b520cf57-captured-operator-sources",
+    "/home/brittonr/sbfp-20261113-berdKH/canonical-target-b520cf57-captured-operator-sources"
+  ],
+  "non_claim": "Submitted exact-source assembly, independent absent-target qualifications, dependent inert preparation and bounded current-data fact capture. No result, current review, protected proof or native-row acceptance is asserted."
+}

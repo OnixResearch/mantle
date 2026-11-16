@@ -1002,3 +1002,25 @@ isolated qualification, successful source-only preparation and full fresh
 independent review still precede protected execution. N1-N2, I3-I5 and
 proof-dependent V2/V3 remain open.
 
+## Frozen captured-operator replacement qualified (2026-11-16)
+
+Published product source `b520cf5791fb7638ab78ed59f42d890ccd75dc30` has exact
+Git-archive transfer parity. Complete-source assembly task 1653 retained the
+unchanged original AWS pins and produced normalized complete-source identity
+`7d3a672bd38452322d43ff9465ddc8acd4d43c9776f152c3c6471a479bba4329`.
+
+Distinct absent-target canonical task 1654 passed all ten selected test legs,
+the current machine gate (24 contracted, 67 classified) and four valid Cairn
+reports. Absent-target runner task 1655 passed formatting, strict selected
+release Clippy, release builds, actual operator CLI surfaces and the captured
+result `270 passed; 0 failed; 27 ignored`. Both qualifications retained the same
+complete-source identity before and after execution. All three installed
+regular binaries and their exact BLAKE3 identities are recorded in
+`evidence/2026-11-16-leviathan-b520cf57/`.
+
+These observations qualify the frozen code and outer runner mechanisms only.
+Source-program preparation, current-data inspection, two fresh authorized-model
+reviews, protected stages, v2 receipt and all five native rows remain separate
+acceptance obligations. No predecessor acceptance or failed staging is reused;
+N1-N2, I3-I5 and proof-dependent V2/V3 remain open.
+
