@@ -1,0 +1,24 @@
+{
+  "code_revision": "869a461d6170404e752865a2029092391240b741",
+  "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace",
+  "inspection_scratch": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs",
+  "scripts": [
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/graph-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/graph-audit.py",
+      "blake3": "428a04821611349069a33f5581c26ae5fb3f375b5a3ca7bd8d113c4b20932ea8",
+      "transfer_equal": true
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/controller-template-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.py",
+      "blake3": "e86db2d8b97d5ada81b68416ab2aacf64cd809cac4399403cba6c9c0e0db7705",
+      "transfer_equal": true
+    }
+  ],
+  "module_bootstrap_verified": true,
+  "bootstrap_evidence": "inspector-bootstrap.json",
+  "executed": false,
+  "non_claim": "Corrected inspector code staged and module interface exercised only. Actual graph/template mains require complete new prepared data and measured subject bindings. No graph acceptance, product execution or protected proof."
+}

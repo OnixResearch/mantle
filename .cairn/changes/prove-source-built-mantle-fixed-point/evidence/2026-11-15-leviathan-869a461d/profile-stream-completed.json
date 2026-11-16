@@ -1,0 +1,11 @@
+{
+  "source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json",
+  "command": "set -o pipefail; ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat -- /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json' | b3sum --no-names",
+  "remote_file_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "observed_full_ssh_stream_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "bytes": 15795883182,
+  "transport_equal": true,
+  "observed_exit_code": 0,
+  "observed_wall_seconds": 305.51,
+  "non_claim": "Actual complete raw-file/SSH-stream parity only; distinct from canonical manifest, complete physical/graph acceptance, protected execution and independent model review."
+}

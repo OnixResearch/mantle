@@ -733,3 +733,113 @@ execution/acceptance is not inferred from implementing these inspectors.
 No protected attempt is selected from either rejected old data or this pending
 replacement; I3–I5 and proof-dependent V2/V3 remain open.
 
+
+## Replacement source-program publication observed (2026-11-16)
+
+Source-only preparation task 1621 completed Success from the qualified
+`869a461d…` source and `ef890d46…` runner. Both source verifiers reported ready,
+with empty missing/stale/unsupported/untrusted sets. Frozen source remained
+`f1c0468c…`; the input profile stayed byte-identical before/after generation.
+The actual input manifest is `2ac7c54bb85544ea738c04c2bc073e576984b2d661dfb0aaf58da24f1e440cf2`,
+input plan `670b518868884548d6570cdf9ed050086f6184c4bc4c7a95b17fdc8a9e78d0cd`,
+and prepared manifest `79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce`.
+
+The complete 15,795,883,182-byte profile stream over SSH matches the actual raw
+file BLAKE3 `9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442`.
+These raw bytes are not the canonical manifest identity. Actual metadata,
+source-verifier results and stream output are retained under
+`evidence/2026-11-15-leviathan-869a461d/`; no old counts or program identities
+are carried forward. Publication/freeze/qualification/regeneration is complete.
+
+Both newly requested `underclass/gpt-6-luna` physical-inspector workers failed
+with `429 ... quota_exhausted`. No other model was substituted. Parent is
+completing the reachable checker integration and actual current-data exercise;
+those parent checks are not independent exact-model acceptance. The partial
+failed-worker edit was repaired in inspection code only; frozen source and
+generated programs were not modified.
+
+Current full graph/template inspection task 1623 settled, but its actual result
+has not yet been retrieved. Current full physical inspection 1624 and streaming
+preauthor role reconstruction 1625 were submitted against the measured new
+subject. Retrieving the settled static result then encountered SSH connection
+timeout; no success is inferred from the wait command. Exact current verdicts,
+complete per-criterion coverage and independent-review authority remain required.
+No protected proof has been launched from this replacement.
+
+## Complete current physical checks observed (2026-11-16)
+
+Parent-owned task 1624 completed Success and emitted
+`STATIC_IDENTITY_CHECKS_CLEAR`: all seven source roles, all four authored
+program records, all 59 original native record bodies, 476 archive members,
+20,854 original Git leaves and 27 initially absent authority paths were covered.
+Task 1625 independently exercised the preauthor reconstruction mechanism and
+completed Success with `STATIC_PREAUTHOR_IDENTITIES_CLEAR`. All seven role
+criteria and every expected leaf record were covered. The Mantle, Rust archive
+and vendor directory identities reconstructed from actual embedded input bytes
+match the preauthor plan; bootstrap-source input bytes, the assembled native
+plan closure and the augmented native closure remain distinct identities.
+
+Complete received reports match the remote BLAKE3 values recorded in
+`evidence/2026-11-15-leviathan-869a461d/identity-review/physical-result-transport.json`.
+These bounded physical results close the earlier missing preauthor-directory
+measurement; they are not independent exact-model acceptance or execution.
+
+Static task 1623 failed in inspector aggregation; its failed output and original
+source remain retained. Corrected task 1626 produced an actual graph `HOLD`,
+not acceptance. Its template subprocess had a missing `__main__` entry point:
+process Success without a result was rejected. Task 1627 invokes that entry
+point and requires the result file. Task 1628 separately exercises exact
+source/member kinds derived from the frozen hydration/lowering rules and a
+non-copying template binding overlay. New inspection code does not change the
+frozen source, generated inputs, expected pins or strict consumer admission.
+Actual corrected results and complete category accounting remain required.
+
+Both exact `underclass/gpt-6-luna` workers remain unavailable with the retained
+quota errors; no model was substituted. No protected attempt has been launched.
+
+## Complete current static contracts observed (2026-11-16)
+
+Parent-owned task 1629 completed Success with
+`STATIC_TEMPLATE_REVIEW_CLEAR` and an empty combined static blocker list.
+Actual coverage is 125,355 selected recipe steps, 2,290 ControllerSpecs,
+25,009 generated templates and 2,533,604 scoped static words. Every exact
+producer/reference, constructor, word and source-role diagnostic category is
+empty. All 816 distinct source references have consumer-derived kinds; all
+11,153 source-reference occurrences are covered. The 6,167 runtime-generated
+invocations have individually checked Produced Text requests and Produced
+Executable consumers, but no actual runtime payload bytes were observed.
+
+All 132 StageX lineage edges into pre-existing sources/patches were checked as
+authenticated admission edges under the frozen consumer, not fictitious seed
+production. All 341 native derivation-output edges are declared and consumed;
+the Linux-header Make edge is traced through the selected output Tree's exact
+catalog-authenticated `bin/make` Produced Executable to both selected header
+Exec consumers. All 37 non-Exec native nodes are authenticated fetcher
+materializations with the consumer-required output kinds. Raw mis-scoped word
+flags and all 71 static operand-unused step diagnostics remain retained, not
+silently deleted. Operand use is distinct from declared ordering/context input
+validation; this result does not claim minimal authority.
+
+`evidence/2026-11-15-leviathan-869a461d/current-inspection-summary.json` retains
+the complete compact per-criterion counts, measured verdicts, command/result
+links, source/runner/subject identities and current blocker. Complete earlier
+blocked and final reports are retained as exact-byte `.json.gz` artifacts;
+`graph-review/compressed-report-manifest.json` binds raw and compressed hashes
+and verified decompression roundtrips. Failed inspector runs and their exact
+source versions remain separate from successful measurements.
+
+The immediate outcome is complete parent-owned bounded physical/static
+qualification of the current inert cohort, not cold-proof completion. The
+durable capability is explicit-subject, consumer-scoped reusable inspection;
+the maintenance owner remains Mantle's source-built proof/operator workflow
+(ADR 0155). Repeatability evidence is the retained four-argument commands,
+exact inspector/tool/consumer hashes and actual tasks 1624, 1625 and 1629.
+
+The required independent exact `underclass/gpt-6-luna` review remains blocked
+by the retained `429 quota_exhausted` errors. No model was substituted and
+parent results are not independent acceptance. Protected provider/stage1/stage2
+execution, runtime decode/results, action-trust reconciliation, the verified
+v2 receipt and native signed-row qualification remain unproven. I3–I5 and
+proof-dependent V2/V3 remain open; no protected launch or lifecycle archive
+is authorized by these static results.
+

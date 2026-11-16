@@ -1,0 +1,8 @@
+{
+  "task": "1630",
+  "remote_log": "/home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ/inspection-publication-cairn.log",
+  "local_log": "inspection-publication-cairn.log",
+  "blake3": "c01b76970dccb91d6b2b9500165a119152b7b55c3a8aa2ea6e880aca7361a2d7",
+  "transfer_equal": true,
+  "non_claim": "Captured lifecycle command execution only; no protected proof or independent model acceptance."
+}

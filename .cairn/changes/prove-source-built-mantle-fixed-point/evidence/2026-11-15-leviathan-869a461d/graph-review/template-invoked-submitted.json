@@ -1,0 +1,8 @@
+{
+  "task": "1627",
+  "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.py /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/review-subject.json",
+  "template_file_blake3": "3b8230581be33dd40a48e88d6bdcc43175d7aa505f5f3ed10d2c4669a28f40c2",
+  "required_artifact": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.json",
+  "observed_predecessor_defect": "Missing __main__ entry point: importing succeeded but actual template inspection never ran and emitted no result. Task1626 Success is graph execution only, not template acceptance.",
+  "non_claim": "Only corrected inert inspector submitted; unchanged subject, no product/protected execution."
+}

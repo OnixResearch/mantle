@@ -1,0 +1,8 @@
+{
+  "stage": "template module import",
+  "observed_error": "ValueError: cannot statically resolve Rust resource bound SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX",
+  "frozen_source_literal": "524_288",
+  "cause": "Inspector decimal regex did not admit Rust numeric separators.",
+  "repair": "Accept underscores in decimal Rust constants and strip separators before int conversion; source/consumer bound unchanged.",
+  "non_claim": "Inspector bootstrap failed before either graph/template main; no profile, recipe, provider or protected execution was performed."
+}

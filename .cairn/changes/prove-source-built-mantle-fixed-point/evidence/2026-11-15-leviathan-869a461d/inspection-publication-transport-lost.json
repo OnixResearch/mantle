@@ -1,0 +1,12 @@
+{
+  "task": "1631",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "wait_transport_exit_code": 255,
+  "observed_errors": [
+    "SSH wait connection: Timeout, server 100.90.108.13 not responding.",
+    "One tailnet diagnostic: ping 100.90.108.13 timed out; no reply.",
+    "One bounded existing-task result retrieval: connect to host 100.90.108.13 port22 timed out."
+  ],
+  "remote_task_result": "unobserved; not claimed failed, passed or rerun",
+  "parent_action": "Retain the detached job and its unknown result. Run the required current-root gate locally in the checked-in shell with the same invocation-scoped Git resolution and builders disabled, correcting the observed local build-hook failure without system configuration changes."
+}

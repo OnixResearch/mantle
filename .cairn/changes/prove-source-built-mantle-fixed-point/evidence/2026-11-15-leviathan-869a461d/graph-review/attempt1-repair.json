@@ -1,0 +1,7 @@
+{
+  "task": "1623",
+  "observed_result": "Failed(1)",
+  "observed_error": "KeyError: missing_source_edge_count",
+  "repair": "Use the actual returned missing_source_edges list, never a fabricated zero. Recompute canonical input plan identity rather than comparing its digest with a raw JSON checksum. Carry actual graph subject bindings to the template result.",
+  "non_claim": "Inspector integration corrections only; immutable source and generated data unchanged. The failed inspection remains failed, not acceptance."
+}

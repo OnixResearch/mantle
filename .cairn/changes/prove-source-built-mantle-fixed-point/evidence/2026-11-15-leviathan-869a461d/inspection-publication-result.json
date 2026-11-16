@@ -1,0 +1,53 @@
+{
+  "task": "26",
+  "host": "local",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "task_result": "Success",
+  "captured_exit_code": 0,
+  "commands": [
+    "cairn validate --root .",
+    "cairn gate proposal prove-source-built-mantle-fixed-point --root .",
+    "cairn gate design prove-source-built-mantle-fixed-point --root .",
+    "cairn gate tasks prove-source-built-mantle-fixed-point --root ."
+  ],
+  "actual_checked_in_shell_tool_paths": [
+    "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn"
+  ],
+  "pinned_cairn_revision": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+  "evaluated_pinned_output_matches_actual_tool": true,
+  "report_results": [
+    {
+      "command_index": 1,
+      "stage": null,
+      "valid": true,
+      "verdict": null
+    },
+    {
+      "command_index": 2,
+      "stage": "proposal",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 3,
+      "stage": "design",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 4,
+      "stage": "tasks",
+      "valid": true,
+      "verdict": "PASS"
+    }
+  ],
+  "transcript": "inspection-publication-local-cairn.log",
+  "transcript_blake3": "fef7310fb264ea96ec1cf9235f08e8641dfc7a8d2ced995473f174bacefbafa0",
+  "preserved_failures": [
+    "inspection-publication-nix-develop-failed.json",
+    "inspection-publication-cairn-completed.json",
+    "inspection-publication-transport-lost.json"
+  ],
+  "remote1631_result": "unobserved; host transport remains unavailable in the last observation; no rerun or success claim",
+  "non_claim": "Current lifecycle validation/gates only. No independent exact-model acceptance, cold proof launch, runtime payload observation, v2 receipt, native-row acceptance or lifecycle archive."
+}

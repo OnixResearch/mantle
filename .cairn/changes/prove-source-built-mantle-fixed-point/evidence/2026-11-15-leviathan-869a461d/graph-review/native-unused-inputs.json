@@ -1,0 +1,913 @@
+{
+  "step_count": 5122,
+  "unused_input_names": {
+    "assertion-0": 3,
+    "assertion-1": 3,
+    "assertion-10": 1,
+    "assertion-11": 1,
+    "assertion-2": 2,
+    "assertion-3": 2,
+    "assertion-4": 1,
+    "assertion-5": 1,
+    "assertion-6": 1,
+    "assertion-7": 1,
+    "assertion-8": 1,
+    "assertion-9": 1,
+    "dependency-0-out": 2,
+    "dependency-1-out": 2,
+    "dependency-2-out": 1,
+    "libraries": 66,
+    "objects": 1,
+    "target": 1,
+    "unit.c": 1
+  },
+  "unused_step_count": 71,
+  "unused_steps": [
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-0",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-1",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-2",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-3",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-4",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-5",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-6",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-7",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-8",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-9",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-10",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-11",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-12",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-13",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-14",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-15",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-16",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-17",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-18",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-19",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-20",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-21",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-22",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-23",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-24",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-25",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-26",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-27",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-28",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.unit-29",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.stub-object",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-make.control-object",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-7bf3f00dd1ede1c7d0e00252034498ada315fc8cfefae8878710bed84a31b22a.host.bootstrap-bzip2.compile",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.select-gcc",
+      "unused": {
+        "assertion-0": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-gcc",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-1": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-cc1",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-10": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-diff",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-11": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-config-sub",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-2": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-libc",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-3": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-make",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-4": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-as",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-5": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-ld",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-6": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-ar",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-7": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-ranlib",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-8": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-readelf",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-9": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.require-sed",
+          "kind": "produced",
+          "output_id": "exit-status"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke.linker-seam",
+      "unused": {
+        "assertion-0": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.installed-gcc",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-1": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.installed-libc",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-2": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.installed-ld",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-3": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.installed-make",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "objects": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke.phase-1",
+          "kind": "produced",
+          "output_id": "temps"
+        },
+        "target": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke-target",
+          "kind": "produced",
+          "output_id": "text"
+        },
+        "unit.c": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke-source",
+          "kind": "produced",
+          "output_id": "text"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.config-sub-directory",
+      "unused": {
+        "assertion-0": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke-run",
+          "kind": "produced",
+          "output_id": "exit-status"
+        },
+        "assertion-1": {
+          "action_id": "full-source-native-provider/original-58571c301266e601cf8ffc3c8fc78e6361bc054543ff8f0dc62c80ddee38308e.generator-base.relocated-smoke.linker-seam",
+          "kind": "produced",
+          "output_id": "stdout"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-0",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-1",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-2",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-3",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-4",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-5",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-6",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-7",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-8",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-9",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-10",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-11",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-12",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-13",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-14",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-15",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-16",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-17",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-18",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-19",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-20",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-21",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-22",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-23",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-24",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-25",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-26",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-27",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-28",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.unit-29",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.stub-object",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-make.control-object",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "exec",
+      "step": "original-0f824554c888cca6cba9cff6a38e07d4212a4839485b24cd6701aa846841476a.host.bootstrap-bzip2.compile",
+      "unused": {
+        "libraries": {
+          "action_id": "stagex-provider-publication/publish-musl-libraries",
+          "kind": "produced",
+          "output_id": "tree"
+        }
+      }
+    },
+    {
+      "operation": "write-text",
+      "step": "original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.transform-helper.compile-target",
+      "unused": {
+        "dependency-0-out": {
+          "action_id": "full-source-native-provider/original-0cf6e7354a5c3a19f0ebafb597030a1674e0fb1468ec40729a1f0e76030793c3",
+          "kind": "produced",
+          "output_id": "out"
+        },
+        "dependency-1-out": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.canonical-provider",
+          "kind": "produced",
+          "output_id": "full-source-native-provider"
+        }
+      }
+    },
+    {
+      "operation": "write-text",
+      "step": "original-8152dd219899700806b53f5d2be12beb4d3c78e5deb1c471ab28b383042f96aa.host.transform-helper.compile-target",
+      "unused": {
+        "dependency-0-out": {
+          "action_id": "full-source-native-provider/original-d3c81f3c08c2297944f4cc1a062869faf094a478191fffba366dacafa8692505",
+          "kind": "produced",
+          "output_id": "out"
+        },
+        "dependency-1-out": {
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.canonical-provider",
+          "kind": "produced",
+          "output_id": "full-source-native-provider"
+        },
+        "dependency-2-out": {
+          "action_id": "full-source-native-provider/original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.install-out",
+          "kind": "produced",
+          "output_id": "result"
+        }
+      }
+    }
+  ]
+}

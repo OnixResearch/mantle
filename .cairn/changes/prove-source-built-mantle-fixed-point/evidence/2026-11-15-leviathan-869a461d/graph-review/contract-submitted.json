@@ -1,0 +1,26 @@
+{
+  "task": "1629",
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/inert-contract-869a461d-request-workspace.15mnSN",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "scripts": [
+    {
+      "file": "graph-audit.py",
+      "blake3": "a49650bcd8857f171554434c96e53cd6fdb674b85b9b6ed2cd1ecebc35232cec",
+      "transfer_equal": true
+    },
+    {
+      "file": "controller-template-audit.py",
+      "blake3": "e7394213a34b8e9a06afe852a9113c952aec327e1a93adeb765f106274b58b10",
+      "transfer_equal": true
+    }
+  ],
+  "changes": [
+    "Authenticate every actual source/patch identity and classify StageX source-admission edges as prescribed by frozen validate_expansion; never claim source bytes were produced by the seed.",
+    "Check every non-Exec native source node against exact admitted MaterializeFetcher identity/output-kind rules.",
+    "Trace selected make output Tree through its exact catalog-authenticated bin/make Produced Executable to both actual Linux-header commands.",
+    "Keep all static operand-unused diagnostics; do not confuse success-ordering metadata or unused operands with a consumer validation rule or claim minimal authority.",
+    "Individually verify each runtime-only invocation has an exact Produced Text request and Produced Executable consumer. Actual runtime bytes/decode/output remain unobserved, not unknown source kinds.",
+    "Combine corrected full template scope findings with graph guard/source/native/Rust/Mantle checks; retain raw graph mis-scoping diagnostics and every prior result."
+  ],
+  "non_claim": "Only inert inspection code changes. Frozen product/cohort, expected pins and strict consumer admission unchanged. No independent exact-model acceptance, product/protected execution or launch authority."
+}

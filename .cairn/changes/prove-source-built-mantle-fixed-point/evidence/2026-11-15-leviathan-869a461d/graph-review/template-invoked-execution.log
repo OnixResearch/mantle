@@ -1,0 +1,11 @@
++ export PYTHONDONTWRITEBYTECODE=1
++ PYTHONDONTWRITEBYTECODE=1
++ /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.py /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/review-subject.json
+{"bounded_verdict": "STATIC_TEMPLATE_REVIEW_BLOCKED", "output": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.json", "per_stage": {"full-source-native-provider": {"constructor_issues": 0, "controllers": 49, "payloads": 98, "slots": 98, "source_role_issues": 0, "template_words": 35411, "templates": 539, "word_issues": 0}, "full-source-rust-provider": {"constructor_issues": 0, "controllers": 1871, "payloads": 3742, "slots": 3742, "source_role_issues": 0, "template_words": 796238, "templates": 20400, "word_issues": 0}, "mantle-stage1": {"constructor_issues": 0, "controllers": 185, "payloads": 370, "slots": 370, "source_role_issues": 0, "template_words": 122993, "templates": 2035, "word_issues": 0}, "mantle-stage2": {"constructor_issues": 0, "controllers": 185, "payloads": 370, "slots": 370, "source_role_issues": 0, "template_words": 122993, "templates": 2035, "word_issues": 0}, "stagex-provider-publication": {"constructor_issues": 0, "controllers": 0, "payloads": 0, "slots": 0, "source_role_issues": 0, "template_words": 0, "templates": 0, "word_issues": 0}, "stagex-transition": {"constructor_issues": 0, "controllers": 0, "payloads": 0, "slots": 0, "source_role_issues": 0, "template_words": 0, "templates": 0, "word_issues": 0}}}
++ test -s /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.json
++ printf 'template_inspector_complete=1\n'
+template_inspector_complete=1
++ status=0
++ printf 'template_inspector_exit=%s\n' 0
+template_inspector_exit=0
++ exit 0

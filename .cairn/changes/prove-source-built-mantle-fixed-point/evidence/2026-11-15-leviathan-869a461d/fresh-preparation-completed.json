@@ -1,0 +1,44 @@
+{
+  "task": "1621",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-15T12:14:42.910573931-05:00",
+      "start": "2026-11-15T12:14:43.030092617-05:00",
+      "end": "2026-11-15T12:55:54.357814789-05:00",
+      "result": "Success"
+    }
+  },
+  "source_before_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "source_after_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "input_profile_blake3": "2ac7c54bb85544ea738c04c2bc073e576984b2d661dfb0aaf58da24f1e440cf2",
+  "input_plan_blake3": "670b518868884548d6570cdf9ed050086f6184c4bc4c7a95b17fdc8a9e78d0cd",
+  "output_profile_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "profile_file_raw_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "profile_file_bytes": 15795883182,
+  "preparation_report_raw_blake3": "0fbebd51eb6bf87d5b5b0187385bf3a78f10b409d9b34c4bc1e3f47f60211f46",
+  "program_records": {
+    "fixed-point-native-source-program": "d28d77dcf39883284827ee53aa78fcd1ccfac609eb65f2917c3e1442ea6d5800",
+    "fixed-point-rust-source-program": "0b0e81d6dbb9a610ce7c60f3db444abebbf901df644124fb2b88d8118c9f5a46",
+    "source-built-mantle-programs": "b82ffc678450196c0b549a5def0d903c6bf730bd3214ed2ba4edc0e47fad91a0",
+    "source-built-stagex-programs": "f60f01b6e467f3c233af912caba409c28cff93f56ff3a46780d6bcc4efe4ce26"
+  },
+  "input_verifier": {
+    "manifest_blake3": "2ac7c54bb85544ea738c04c2bc073e576984b2d661dfb0aaf58da24f1e440cf2",
+    "ready_class": "ready",
+    "missing_records": [],
+    "stale_records": [],
+    "unsupported_records": [],
+    "untrusted_records": [],
+    "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+  },
+  "prepared_verifier": {
+    "manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+    "ready_class": "ready",
+    "missing_records": [],
+    "stale_records": [],
+    "unsupported_records": [],
+    "untrusted_records": [],
+    "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+  },
+  "non_claim": "Completed inert source-only preparation with ready source verifiers and unchanged frozen source. Full profile stream parity and complete current-data static/physical/independent acceptance remain required; no provider or protected proof execution."
+}

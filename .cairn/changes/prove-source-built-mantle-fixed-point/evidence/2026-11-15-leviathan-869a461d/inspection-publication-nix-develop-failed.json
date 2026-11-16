@@ -1,0 +1,8 @@
+{
+  "command": "nix develop --no-update-lock-file -c cairn validate --root .",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "exit_code": 1,
+  "observed_blocker": "Nix could not open the configured grpc build-farm current-load lock: File name too long; build hook then ended with unexpected EOF. Binary-cache connectivity warnings preceded this failure.",
+  "cairn_validation_success_claimed": false,
+  "parent_action": "Resolve the existing installed Cairn output against the exact repository-pinned flake input; use the same pinned executable directly if identity matches. Do not change system builders, caches or trust settings, or rerun the failed shell to confirm it."
+}

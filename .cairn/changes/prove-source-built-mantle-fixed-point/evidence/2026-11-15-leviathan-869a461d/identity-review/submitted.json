@@ -1,0 +1,135 @@
+{
+  "subject": {
+    "host": "leviathan.cymric-daggertooth.ts.net",
+    "run": "/home/brittonr/sbfp-20261113-berdKH",
+    "frozen_product_revision": "869a461d6170404e752865a2029092391240b741",
+    "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+    "frozen_complete_source_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+    "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-869a461d-request-workspace",
+    "runner_blake3": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+    "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace",
+    "evidence_root": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d",
+    "input_manifest_blake3": "2ac7c54bb85544ea738c04c2bc073e576984b2d661dfb0aaf58da24f1e440cf2",
+    "input_plan_blake3": "670b518868884548d6570cdf9ed050086f6184c4bc4c7a95b17fdc8a9e78d0cd",
+    "prepared_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+    "profile_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json",
+    "profile_file_bytes": 15795883182,
+    "profile_file_raw_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+    "full_profile_ssh_stream_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+    "profile_transport_equal": true,
+    "preparation_report": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-program-preparation.json",
+    "preparation_report_raw_blake3": "0fbebd51eb6bf87d5b5b0187385bf3a78f10b409d9b34c4bc1e3f47f60211f46",
+    "input_plan": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-program-preparation-input-plan.json",
+    "program_records": {
+      "fixed-point-native-source-program": "d28d77dcf39883284827ee53aa78fcd1ccfac609eb65f2917c3e1442ea6d5800",
+      "fixed-point-rust-source-program": "0b0e81d6dbb9a610ce7c60f3db444abebbf901df644124fb2b88d8118c9f5a46",
+      "source-built-mantle-programs": "b82ffc678450196c0b549a5def0d903c6bf730bd3214ed2ba4edc0e47fad91a0",
+      "source-built-stagex-programs": "f60f01b6e467f3c233af912caba409c28cff93f56ff3a46780d6bcc4efe4ce26"
+    },
+    "source_inputs": [
+      {
+        "id": "mantle-source",
+        "role": "mantle-source",
+        "kind": "directory",
+        "digest_blake3": "94ec73df8b3c3424fbf2addbd15458eeb009be9c24e727f7528165b76e5302b8",
+        "size_bytes": 359028108
+      },
+      {
+        "id": "native-source-bundle",
+        "role": "native-source-bundle",
+        "kind": "regular-file",
+        "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+        "size_bytes": 968316247
+      },
+      {
+        "id": "rust-source-archive-set",
+        "role": "rust-source-archive-set",
+        "kind": "directory",
+        "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+        "size_bytes": 3164874699
+      },
+      {
+        "id": "stagex-lineage",
+        "role": "stagex-lineage",
+        "kind": "regular-file",
+        "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "size_bytes": 170686
+      },
+      {
+        "id": "stagex-seed",
+        "role": "stagex-seed",
+        "kind": "regular-file",
+        "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "size_bytes": 229
+      },
+      {
+        "id": "stagex-source-bundle",
+        "role": "stagex-source-bundle",
+        "kind": "regular-file",
+        "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "size_bytes": 87616094
+      },
+      {
+        "id": "vendor-inputs",
+        "role": "vendor-inputs",
+        "kind": "directory",
+        "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "size_bytes": 1213371949
+      }
+    ],
+    "resource_bounds": {
+      "elapsed_seconds_max": 86400,
+      "disk_bytes_max": 200000000000,
+      "open_file_descriptors_max": 4096,
+      "protected_exec_events_max": 524288,
+      "source_records_max": 65536
+    },
+    "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+    "original_aws": {
+      "capture": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git",
+      "commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+      "git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+      "normalized_tree_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89"
+    },
+    "inert_tools": {
+      "python": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+      "b3sum": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+    },
+    "prior_reference_inspector": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/identity-review/identity-audit.py",
+    "prior_reference_identity_result": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-787784fb/identity-review/identity-review.json",
+    "authority": "Measured869a461d/79f9c650 subject for complete inert static/physical inspection only. No product/helper/provider/controller/recipe execution or protected launch. Independent exact-model reviewers are unavailable due quota; parent inspection does not grant their acceptance."
+  },
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w",
+  "inspectors": [
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/identity-review/identity-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/identity-audit.py",
+      "blake3": "76793c40b6713bec876a4bdbc70f7cde133ec3fddd8f99d63b1dc1adba4f098f",
+      "transfer_equal": true
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/identity-review/preauthor-role-physical-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/preauthor-role-physical-audit.py",
+      "blake3": "b2e073d072d628ecdc239a9ef2d323512a6c3ba82f303d6015fa342016302ca1",
+      "transfer_equal": true
+    }
+  ],
+  "tasks": [
+    {
+      "task": "1624",
+      "file": "identity-audit.py",
+      "label": "full-identity",
+      "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/identity-audit.py /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/review-subject.json"
+    },
+    {
+      "task": "1625",
+      "file": "preauthor-role-physical-audit.py",
+      "label": "preauthor-roles",
+      "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -u /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/preauthor-role-physical-audit.py /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w /home/brittonr/sbfp-20261113-berdKH/physical-review-869a461d-request-workspace.7oAA4w/review-subject.json"
+    }
+  ],
+  "parent_integration": true,
+  "independent_model_review": false,
+  "non_claim": "Inert actual current data inspection submitted. Prior old-cohort counts/acceptance are not adopted; no product/helper/recipe/protected execution or independent exact-model review is implied."
+}

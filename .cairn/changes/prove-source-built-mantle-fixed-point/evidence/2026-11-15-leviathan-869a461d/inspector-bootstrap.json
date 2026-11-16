@@ -1,0 +1,23 @@
+{
+  "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -c 'import json, pathlib, runpy, sys\nscratch=pathlib.Path(sys.argv[1]); cohort,source=sys.argv[2:4]; fixture=scratch/'\\''import-schema-fixture.json'\\''\nsys.argv=[str(scratch/'\\''graph-audit.py'\\''),cohort,source,str(scratch),str(fixture)]\ng=runpy.run_path(str(scratch/'\\''graph-audit.py'\\''),run_name='\\''graph_import_check'\\'')\nt=runpy.run_path(str(scratch/'\\''controller-template-audit.py'\\''),run_name='\\''template_import_check'\\'')\nassert g['\\''SUBJECT_PATH'\\'']==fixture and g['\\''SUBJECT'\\'']['\\''cohort'\\''].endswith('\\''787784fb-helper-feature'\\'')\nassert g['\\''COHORT'\\'']==pathlib.Path(cohort) and t['\\''COHORT'\\'']==pathlib.Path(cohort)\nassert g['\\''SCRATCH'\\'']==scratch and t['\\''G'\\'']['\\''SCRATCH'\\'']==scratch\nassert callable(g['\\''recipe_words'\\'']) and callable(t['\\''audit_controller_templates'\\''])\nprint(json.dumps({'\\''graph_and_template_imported'\\'':True,'\\''explicit_roots_bound'\\'':True,'\\''subject_fixture_loaded'\\'':True,'\\''graph_main_called'\\'':False,'\\''template_main_called'\\'':False,'\\''profile_or_recipe_files_read'\\'':False,'\\''scope'\\'':'\\''CLI/module bootstrap only, preserved subject used as schema fixture, not current review acceptance'\\''},sort_keys=True))' '/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs' '/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace' '/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace'",
+  "output": "{\"explicit_roots_bound\": true, \"graph_and_template_imported\": true, \"graph_main_called\": false, \"profile_or_recipe_files_read\": false, \"scope\": \"CLI/module bootstrap only, preserved subject used as schema fixture, not current review acceptance\", \"subject_fixture_loaded\": true, \"template_main_called\": false}\n",
+  "scripts": [
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/graph-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/graph-audit.py",
+      "blake3": "428a04821611349069a33f5581c26ae5fb3f375b5a3ca7bd8d113c4b20932ea8",
+      "transfer_equal": true
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/controller-template-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.py",
+      "blake3": "e86db2d8b97d5ada81b68416ab2aacf64cd809cac4399403cba6c9c0e0db7705",
+      "transfer_equal": true
+    }
+  ],
+  "parent_repairs": [
+    "Load explicit SUBJECT before schema checks.",
+    "Parse valid underscored Rust decimal resource literals without changing bounds."
+  ],
+  "non_claim": "Module/CLI interface verification only; source constants and a preserved subject-schema fixture were read. No product/profile/recipe or graph/template main was executed. Complete current-data exercise remains required."
+}

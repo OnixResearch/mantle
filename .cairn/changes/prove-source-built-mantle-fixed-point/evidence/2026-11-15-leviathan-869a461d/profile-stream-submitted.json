@@ -1,0 +1,7 @@
+{
+  "command": "set -o pipefail; ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 leviathan.cymric-daggertooth.ts.net 'cat -- /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json' | b3sum --no-names",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json",
+  "expected_remote_raw_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "bytes": 15795883182,
+  "non_claim": "Complete raw source-profile stream identity, not canonical manifest identity, graph/physical acceptance or protected execution."
+}

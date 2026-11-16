@@ -1,0 +1,21 @@
+{
+  "id": 1623,
+  "created_at": "2026-11-16T01:35:01.595672311-05:00",
+  "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/run-current.sh",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/run-current.sh",
+  "path": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs",
+  "group": "default",
+  "dependencies": [],
+  "priority": 0,
+  "label": "mantle-inert-static-869a461d-request-workspace",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-16T01:35:01.592168923-05:00",
+      "start": "2026-11-16T01:35:01.855163225-05:00",
+      "end": "2026-11-16T01:36:10.631660391-05:00",
+      "result": {
+        "Failed": 1
+      }
+    }
+  }
+}

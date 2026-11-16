@@ -1,0 +1,39 @@
+{
+  "format": "Exact complete JSON reports in deterministic gzip; existing repository evidence convention, not a new report identity class.",
+  "artifacts": [
+    {
+      "raw_name": "template-invoked-controller-template-audit.json",
+      "remote_raw": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.json",
+      "raw_blake3": "97ba7af3c28bf75aa95788c37cb3c1d3d723cd127211aabff6cdbb5f0ef5b8de",
+      "raw_bytes": 53419884,
+      "local_artifact": "template-invoked-controller-template-audit.json.gz",
+      "gzip_blake3": "004bfd1f5023cfd2c817f41d4772e9f8879224062256ecaacfa9888bd20f6635",
+      "gzip_bytes": 1009837,
+      "roundtrip_blake3": "97ba7af3c28bf75aa95788c37cb3c1d3d723cd127211aabff6cdbb5f0ef5b8de",
+      "exact_raw_bytes_preserved": true
+    },
+    {
+      "raw_name": "resolved-controller-template-audit.json",
+      "remote_raw": "/home/brittonr/sbfp-20261113-berdKH/inert-resolved-869a461d-request-workspace.tON71S/controller-template-audit.json",
+      "raw_blake3": "6a02eaf89d2c60198a3705ce43a9c4135b6c700ed23f7ceda36509dfe8c138d3",
+      "raw_bytes": 53420200,
+      "local_artifact": "resolved-controller-template-audit.json.gz",
+      "gzip_blake3": "74362bffa874f885a14709e6cef5e144e88faa4f8464d5eaa9d435fc2f720bd2",
+      "gzip_bytes": 1009833,
+      "roundtrip_blake3": "6a02eaf89d2c60198a3705ce43a9c4135b6c700ed23f7ceda36509dfe8c138d3",
+      "exact_raw_bytes_preserved": true
+    },
+    {
+      "raw_name": "contract-controller-template-audit.json",
+      "remote_raw": "/home/brittonr/sbfp-20261113-berdKH/inert-contract-869a461d-request-workspace.15mnSN/controller-template-audit.json",
+      "raw_blake3": "c3ab0bd60fd66e29027c0f462f9d1e5726db983a191b83e7f7365019ac51d87a",
+      "raw_bytes": 59684611,
+      "local_artifact": "contract-controller-template-audit.json.gz",
+      "gzip_blake3": "544b491f64ea69f886d0f1a1ff3490e08976612bcbc5580029086c3a35549e4d",
+      "gzip_bytes": 1086496,
+      "roundtrip_blake3": "c3ab0bd60fd66e29027c0f462f9d1e5726db983a191b83e7f7365019ac51d87a",
+      "exact_raw_bytes_preserved": true
+    }
+  ],
+  "non_claim": "Compression roundtrip preserves complete measured output including prior blocked verdicts. No report was sampled or reserialized; raw BLAKE3 and compressed transport BLAKE3 remain distinct. Remote complete raw reports and all source versions remain retained."
+}

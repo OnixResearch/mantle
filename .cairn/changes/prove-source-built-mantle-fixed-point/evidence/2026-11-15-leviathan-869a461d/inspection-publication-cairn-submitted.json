@@ -1,0 +1,16 @@
+{
+  "task": "1630",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "validation_root": "/home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ",
+  "source_copy_of": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+  "changed_inputs": [
+    ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-12-source-input-binding-corrections.md",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d"
+  ],
+  "command": "/home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ/inspection-publication-cairn.sh",
+  "pinned_cairn_revision": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+  "local_pinned_output": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0",
+  "local_installed_output_not_substituted": "/nix/store/x37qabfj71nzk5661f3x735nni4m96qk-cairn-0.1.0",
+  "non_claim": "Existing checked-in-shell route in a separate owned validation copy. No frozen source/cohort mutation, system builder/cache/trust reconfiguration, product/protected execution, independent model acceptance or lifecycle archive."
+}

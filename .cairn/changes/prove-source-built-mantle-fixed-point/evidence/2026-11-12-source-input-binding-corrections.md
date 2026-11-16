@@ -1367,3 +1367,57 @@ profile stream and both fresh Luna review slices are now in flight under that
 directory's current `review-contract.md`. No protected proof was launched and
 no prior cohort, warmed runner, interrupted intake or historical native row is
 adopted. I3–I5 and proof-dependent V2/V3 remain open.
+
+## Current request/workspace cohort physical identity (2026-11-16)
+
+The qualified `869a461d…` source and `ef890d46…` runner authored the new
+`79f9c650…` prepared manifest in source-only task 1621. The complete
+15,795,883,182-byte profile stream matches raw BLAKE3 `9d26367b…`; the raw file
+identity is not the canonical manifest identity. Both actual source verifiers
+reported ready with empty rejection sets.
+
+Parent-owned physical tasks 1624/1625 completed Success with respectively
+`STATIC_IDENTITY_CHECKS_CLEAR` and `STATIC_PREAUTHOR_IDENTITIES_CLEAR`. The
+first covers seven source roles, four authored programs, 59 unchanged original
+native record bodies, 476 archive members, 20,854 original Git leaves and 27
+absent initial-authority paths. The supplement reconstructs every expected
+leaf and required parent of all three preauthor directory roles from actual
+embedded input-profile bytes under the frozen identity framing. All seven
+role criteria are covered. Complete reports and exact transport hashes are
+retained in `2026-11-15-leviathan-869a461d/identity-review/`.
+
+These checks do not accept static graph/templates, execute any product or
+provide a fixed point. Static checker integration defects are retained and
+being corrected without modifying the subject. Both newly requested exact
+`underclass/gpt-6-luna` workers returned the recorded quota error; no substitute
+or independent acceptance is inferred. I3–I5 and proof-dependent V2/V3 remain
+open; no protected proof has launched from this cohort.
+
+## Complete current static contract exercise (2026-11-16)
+
+Actual task 1629 returned `STATIC_TEMPLATE_REVIEW_CLEAR` with no combined
+static blockers: 125,355 recipe steps, 2,290 ControllerSpecs, 25,009 generated
+templates and 2,533,604 scoped words. All 816 distinct source references and
+11,153 occurrences have exact source/member kinds under the frozen
+hydration/lowering rules. The individually checked bindings of 6,167 dynamic
+invocations are known Text/Executable pairs; their payload bytes, strict
+decoding and command outcomes still require protected execution.
+
+Consumer-faithful classification closes the earlier false graph gaps: all 132
+StageX source/patch admission edges retain authenticated identity, 37 native
+fetcher nodes are checked as materializations rather than missing Execs, and
+all 341 native selected-output edges have real consumed Tree/member paths.
+The two Linux-header consumers select the original Make output's authenticated
+`bin/make` executable. Raw diagnostics, 71 operand-unused step observations and
+every earlier blocked report remain available; no least-authority or runtime
+claim is inferred. Complete gzip artifacts preserve exact raw report bytes
+with measured roundtrip identities.
+
+All evidence is under `2026-11-15-leviathan-869a461d/`, with compact complete
+counts in `current-inspection-summary.json`. Parent-owned task success is not
+the required independent exact-model acceptance: both Luna workers remain
+quota-blocked, without substitution. No protected attempt, v2 receipt,
+native-row acceptance, compiler correctness or release claim follows. The
+remaining cold-launch prerequisite is independent current-subject review;
+the proof-dependent lifecycle items remain open.
+

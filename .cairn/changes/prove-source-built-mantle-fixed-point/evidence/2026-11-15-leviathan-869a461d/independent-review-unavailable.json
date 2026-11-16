@@ -1,0 +1,11 @@
+{
+  "requested_model": "underclass/gpt-6-luna",
+  "failed_workers": [
+    "BindFullIdentityInspector",
+    "BindPreauthorInspector"
+  ],
+  "observed_error": "429 all subscriptions for this model are out of quota; retry when the pool resets (type=quota_exhausted)",
+  "substitute_used": false,
+  "parent_action": "Finish reachable inspector integration and actual current-data checks inline; do not label parent results as independent exact-model acceptance.",
+  "non_claim": "No independent acceptance or protected proof launch follows from model unavailability. Old9300895d remains rejected; new79f9c650 still requires complete current data acceptance."
+}

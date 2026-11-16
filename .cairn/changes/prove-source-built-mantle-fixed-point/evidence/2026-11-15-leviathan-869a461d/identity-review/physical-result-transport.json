@@ -1,0 +1,16 @@
+{
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "reports": [
+    {
+      "file": "identity-review.json",
+      "blake3": "ed739002f918a8b7b7241c2ee9a7cd179a701dfa24176dddfcc99eabbf6417aa",
+      "transfer_equal": true
+    },
+    {
+      "file": "preauthor-role-physical-review.json",
+      "blake3": "e5c209546d762de6992a9480afa71f7604324b2d9a9158e6464671ea264989c7",
+      "transfer_equal": true
+    }
+  ],
+  "non_claim": "Complete bounded physical identity checks only; no independent exact-model acceptance, graph verdict or protected execution."
+}

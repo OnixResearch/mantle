@@ -1,0 +1,25 @@
+{
+  "task": "1629",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "reports": [
+    {
+      "file": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/contract-graph-audit.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-contract-869a461d-request-workspace.15mnSN/graph-audit.json",
+      "blake3": "cac6355bff14e0cb7408c2fcce619ce9b9b43193ef53e7a4147ab4dc138d6c78",
+      "transfer_equal": true
+    },
+    {
+      "file": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/contract-source-binding-kind-inventory.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-contract-869a461d-request-workspace.15mnSN/source-binding-kind-inventory.json",
+      "blake3": "07bf73013c79c1d09b87923108ad74215d67a09ca6d00059620443ff55acbc45",
+      "transfer_equal": true
+    },
+    {
+      "file": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/contract-controller-template-audit.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-contract-869a461d-request-workspace.15mnSN/controller-template-audit.json",
+      "blake3": "c3ab0bd60fd66e29027c0f462f9d1e5726db983a191b83e7f7365019ac51d87a",
+      "transfer_equal": true
+    }
+  ],
+  "non_claim": "Actual bounded inert execution only; no independent exact-model acceptance or protected execution."
+}

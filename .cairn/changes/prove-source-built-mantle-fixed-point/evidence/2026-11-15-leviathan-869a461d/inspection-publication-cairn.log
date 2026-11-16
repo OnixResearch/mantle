@@ -1,0 +1,374 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-71c2bd4d-fresh-target
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; command -v cairn; readlink -f "$(command -v cairn)"; cairn validate --root .; cairn gate proposal prove-source-built-mantle-fixed-point --root .; cairn gate design prove-source-built-mantle-fixed-point --root .; cairn gate tasks prove-source-built-mantle-fixed-point --root .'
+unpacking 'github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D' into the Git cache...
+unpacking 'github:NixOS/nixpkgs/9cf7092bdd603554bd8b63c216e8943cf9b12512?narHash=sha256-9tpvMGFteZnd3gRQZFlRCohVpqooygFuy9yjuyRL2C0%3D' into the Git cache...
+unpacking 'github:oxalica/rust-overlay/e598b37857b895b81020a65a802ef55f5bbed72f?narHash=sha256-KlepQu/O5m11lAjcJ4ER5bc6bIzyX2UMPDARzMzQfIw%3D' into the Git cache...
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/valence.git', using 'master'
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/basalt.git', using 'master'
+unpacking 'github:nixos/nixpkgs/2fbfb1d73d239d2402a8fe03963e37aab15abe8b?narHash=sha256-9VvC20PJPsleGMewwcWYKGzDIyjckEz8uWmT0vCDYK0%3D' into the Git cache...
+building '/nix/store/y84saga4qsmk7xrprd0qv8rgdqjk67g1-bash-5.3.tar.gz.drv'...
+building '/nix/store/avf6vbj4jmpnn5cdsjyj2693samnvqsa-bash53-001.drv'...
+building '/nix/store/ii3jsqp9rrwv0g21lwbvb94ddg8c5m7n-bash53-002.drv'...
+building '/nix/store/5m6vm7vkilsgas517yf8f321k5r3g1m3-bash53-003.drv'...
+building '/nix/store/0442lf73plz43gym6ahgydmp752dxczk-acl-2.3.2.tar.gz.drv'...
+building '/nix/store/7byvrfyi1f00i8jxsc1q8z997j9r10y5-attr-2.5.2.tar.gz.drv'...
+building '/nix/store/44sw3grr08hzn0jjg6vcdlxwpakf9jbq-binutils-with-gold-2.44.tar.bz2.drv'...
+building '/nix/store/vgjfnqbxgxa8a5575bhq07nm35b2l31m-bison-3.8.2.tar.gz.drv'...
+building '/nix/store/xjkydxc0n24mwxp8kh4wn5jq0fppga9k-bootstrap-tools.tar.xz.drv'...
+building '/nix/store/0m4y3j4pnivlhhpr5yqdvlly86p93fwc-busybox.drv'...
+building '/nix/store/mhrxc5w6drwi4m5ykbdrayz7869i9mx9-bzip2-1.0.8.tar.gz.drv'...
+building '/nix/store/bamwxswxacs3cjdcydv0z7bj22d7g2kc-config.guess-948ae97.drv'...
+building '/nix/store/nbsdqpfzh1jlpmh95s69b3iivfcvv3lh-config.sub-948ae97.drv'...
+building '/nix/store/lq5pzlxzdbndqqbzdwm2n9cgyp7zqb71-coreutils-9.8.tar.xz.drv'...
+building '/nix/store/mag3pq29n9f6jw0rb17crny8ilm4kfjy-diffutils-3.12.tar.xz.drv'...
+building '/nix/store/mh9lmg3jifh54ph8j35kd8wmxdyhyyni-ed-1.22.2.tar.lz.drv'...
+building '/nix/store/ixwy12didmgk7j4z7ghlirpw46ahmhbd-mpfr-4.2.2.tar.xz.drv'...
+building '/nix/store/156yvnw4g1h0gv1s8p7bray6hyn43f8q-mpc-1.3.1.tar.gz.drv'...
+building '/nix/store/mbfqb9y6ryn2axyvg797s3lw1w49liz5-gzip-1.14.tar.xz.drv'...
+building '/nix/store/qxz8v1gxrrw9j138k2ajl36vcajra8mb-isl-0.20.tar.xz.drv'...
+building '/nix/store/cxh8cwlp0z4a7xl6bk7zsqr7ci1hzdq6-make-4.4.1.tar.gz.drv'...
+building '/nix/store/vsbymyzgxr2pbsbdk5zfn74nb73njni5-grep-3.12.tar.xz.drv'...
+building '/nix/store/z4x4wa4ahsc6xn40j847dsrnagxd41w0-gmp-6.3.0.tar.bz2.drv'...
+building '/nix/store/5fia0s7sl13hsqbhcmgmjpq84i0rqczs-glibc-2.40.tar.xz.drv'...
+warning: unable to download 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=948ae97ca5703224bd3eada06b7a69f40dd15a02': HTTP error 502
+
+response body:
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+<title>Bad Gateway</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+
+<body>
+
+  <h1>502 Bad Gateway</h1>
+  <p>
+    The service is unavailable.  This is due to the high rate of AI
+    scraping proxies which are overwhelming the system.  When this
+    happens the backend processes are unable to keep up and timeout
+    resulting in a failed backend gateway operation which is
+    reported as a Bad Gateway failure.
+  </p>
+  <p>
+    Your address is not blocked if you are seeing this message.  If
+    you were blocked then you would only see a timeout from the
+    server.  Since you are getting this response then you know you are
+    connecting and therefore your address is not blocked.
+  </p>
+  <p>
+    You may contact us to discuss this on IRC #fsfsys on the
+    Libera.Chat IRC network.
+  </p>
+  <p>
+    You may contact us to discuss on email to
+    <br/>
+    &lt;savannah-hackers-public@gnu.org&gt;.
+  </p>
+
+</body>
+</html>; retrying in 54 ms (attempt 1/5)
+building '/nix/store/xnqgvd0v3sq1x2w8ydyp10vmxb0412l1-gcc-14.3.0.tar.xz.drv'...
+building '/nix/store/79g78vzphsrhzs95ph6g4wcm31d6b1q1-gawk-5.3.2.tar.xz.drv'...
+building '/nix/store/130xp3xbhxwms383bbf7wpcvc6ksjjnk-findutils-4.10.0.tar.xz.drv'...
+building '/nix/store/klfl82nqgac8fyl7z83q1i7rngka20d3-file-5.45.tar.gz.drv'...
+building '/nix/store/h7ijrlrjxvy87frncwpqivqxn9zaqx5x-patch-2.8.tar.xz.drv'...
+building '/nix/store/gyks6vvl7x0gq214ldjhi3w4rg37nh8i-zlib-1.3.1.tar.gz.drv'...
+building '/nix/store/qsxr00amrjgxry1hirafhlrzhl9ban5b-xz-5.8.1.tar.xz.drv'...
+building '/nix/store/72cmq1ms8qih2svpnw3v1rs9a035h2gy-tar-1.35.tar.xz.drv'...
+building '/nix/store/ql7jhf1wzhazxw4cw627zyls49xm5g3n-sed-4.9.tar.xz.drv'...
+building '/nix/store/3siddy2kzlx0pj7h8s15jgqdicg3j3lr-pcre2-10.46.tar.bz2.drv'...
+building '/nix/store/0i89ydplmfyhw5rykihdpcr1ndki1bp3-patchelf-0.15.2.tar.bz2.drv'...
+building '/nix/store/k57m9w78wvwisy52r6599w1fr6pwb29d-Python-3.13.9.tar.xz.drv'...
+building '/nix/store/0pbb02jyyjrf6fgin878c47pfwg2wxis-bits-only-build-when-cpu_set_t-is-available.patch.drv'...
+building '/nix/store/m89sxvlc3w9dzy6f6vb9ghivacr8fass-curl-8.17.0.tar.xz.drv'...
+building '/nix/store/vmhss394mpk9262p6jijry11g72pwpgg-gettext-0.25.1.tar.gz.drv'...
+warning: unable to download 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=948ae97ca5703224bd3eada06b7a69f40dd15a02': HTTP error 502
+
+response body:
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+<title>Bad Gateway</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+
+<body>
+
+  <h1>502 Bad Gateway</h1>
+  <p>
+    The service is unavailable.  This is due to the high rate of AI
+    scraping proxies which are overwhelming the system.  When this
+    happens the backend processes are unable to keep up and timeout
+    resulting in a failed backend gateway operation which is
+    reported as a Bad Gateway failure.
+  </p>
+  <p>
+    Your address is not blocked if you are seeing this message.  If
+    you were blocked then you would only see a timeout from the
+    server.  Since you are getting this response then you know you are
+    connecting and therefore your address is not blocked.
+  </p>
+  <p>
+    You may contact us to discuss this on IRC #fsfsys on the
+    Libera.Chat IRC network.
+  </p>
+  <p>
+    You may contact us to discuss on email to
+    <br/>
+    &lt;savannah-hackers-public@gnu.org&gt;.
+  </p>
+
+</body>
+</html>; retrying in 140 ms (attempt 2/5)
+building '/nix/store/55d91flpk4776srkw66wdx69wll7b5zr-libxcrypt-4.5.2.tar.xz.drv'...
+building '/nix/store/bsf32582y9rl8wy0dmi6h1lfd0f3qklh-lzip-1.25.tar.gz.drv'...
+building '/nix/store/j54kvd8mlj8cl9ycvlkh5987fqvzl4p5-m4-1.4.20.tar.bz2.drv'...
+building '/nix/store/z2rvjzfm2crd6hs6qfdwwq4bhk27zw9r-perl-5.40.0.tar.gz.drv'...
+building '/nix/store/896vsnl7w7rhd17b65j8sp3g4kc0zh35-texinfo-7.2.tar.xz.drv'...
+building '/nix/store/x2mzaq4qw65bqj7c0r71hk078gacvqq3-util-linux-2.41.2.tar.xz.drv'...
+building '/nix/store/g39zbiv8d8qbgzkqk2s03zdfc39b1j4a-which-2.23.tar.gz.drv'...
+building '/nix/store/i2pfgljh1az3v0xga8s4kvn7l1kb1nj4-autoconf-2.72.tar.xz.drv'...
+building '/nix/store/2rmk35vbqb6q9r4aqmsz7iicmi44jx6d-automake-1.18.1.tar.xz.drv'...
+building '/nix/store/zgklqdh9majhk3nyivpl33ciflvsq5lc-krb5-1.22.1.tar.gz.drv'...
+building '/nix/store/l4q7jsk9n0ys3qb31zafgzwakpwq0360-libssh2-1.11.1.tar.gz.drv'...
+warning: unable to download 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=948ae97ca5703224bd3eada06b7a69f40dd15a02': HTTP error 502
+
+response body:
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+<title>Bad Gateway</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+
+<body>
+
+  <h1>502 Bad Gateway</h1>
+  <p>
+    The service is unavailable.  This is due to the high rate of AI
+    scraping proxies which are overwhelming the system.  When this
+    happens the backend processes are unable to keep up and timeout
+    resulting in a failed backend gateway operation which is
+    reported as a Bad Gateway failure.
+  </p>
+  <p>
+    Your address is not blocked if you are seeing this message.  If
+    you were blocked then you would only see a timeout from the
+    server.  Since you are getting this response then you know you are
+    connecting and therefore your address is not blocked.
+  </p>
+  <p>
+    You may contact us to discuss this on IRC #fsfsys on the
+    Libera.Chat IRC network.
+  </p>
+  <p>
+    You may contact us to discuss on email to
+    <br/>
+    &lt;savannah-hackers-public@gnu.org&gt;.
+  </p>
+
+</body>
+</html>; retrying in 395 ms (attempt 3/5)
+building '/nix/store/izbfj3rckm6lyip0y99dw9hyyap52kg6-libtool-2.5.4.tar.gz.drv'...
+building '/nix/store/chi1p3hax6h0a8s3bffy1ishq8k9ka3b-nghttp2-1.67.1.tar.bz2.drv'...
+building '/nix/store/sdxzyk51x3ik4ihrnli0krl642km6pql-openssl-3.6.0.tar.gz.drv'...
+building '/nix/store/6b29gjz7rj4mw0ch0vy2m6qrqipz2bbb-pkg-config-0.29.2.tar.gz.drv'...
+building '/nix/store/b6yxpjizcj55gzmm8vpjzdxgl15246qv-byacc-20241231.tgz.drv'...
+building '/nix/store/lkkzb8ybhp5jjgvb04b13n68i51lxwd9-keyutils-1.6.3.tar.gz.drv'...
+warning: unable to download 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=948ae97ca5703224bd3eada06b7a69f40dd15a02': HTTP error 502
+
+response body:
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+<title>Bad Gateway</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+
+<body>
+
+  <h1>502 Bad Gateway</h1>
+  <p>
+    The service is unavailable.  This is due to the high rate of AI
+    scraping proxies which are overwhelming the system.  When this
+    happens the backend processes are unable to keep up and timeout
+    resulting in a failed backend gateway operation which is
+    reported as a Bad Gateway failure.
+  </p>
+  <p>
+    Your address is not blocked if you are seeing this message.  If
+    you were blocked then you would only see a timeout from the
+    server.  Since you are getting this response then you know you are
+    connecting and therefore your address is not blocked.
+  </p>
+  <p>
+    You may contact us to discuss this on IRC #fsfsys on the
+    Libera.Chat IRC network.
+  </p>
+  <p>
+    You may contact us to discuss on email to
+    <br/>
+    &lt;savannah-hackers-public@gnu.org&gt;.
+  </p>
+
+</body>
+</html>; retrying in 617 ms (attempt 4/5)
+building '/nix/store/3xs5n9hmbbmc5qis9zzs764ilbjk0v72-libidn2-2.3.8.tar.gz.drv'...
+building '/nix/store/dhjhlihqj08f3fs1cvsja0fims0dqnlw-raw.drv'...
+building '/nix/store/05q48dcd4lgk4vh7wyk330gr2fr082i2-bootstrap-tools.drv'...
+building '/nix/store/9b6fqyahkq36md44m6fwnzvh2xm8666n-libunistring-1.4.1.tar.gz.drv'...
+building '/nix/store/ydld0fh638kgppqrfx30fr205wiab9ja-bootstrap-stage0-stdenv-linux.drv'...
+building '/nix/store/swcark68dhh8qx8jnq6xjs2siakw5ggz-bootstrap-stage0-glibc-bootstrapFiles.drv'...
+building '/nix/store/9khsa6l6wxk1rqlhmgmlhmm002nsx8fn-bootstrap-stage0-binutils-wrapper-.drv'...
+building '/nix/store/0mbanw6inqr1ybpqr70ass09c445amf2-bootstrap-stage1-gcc-wrapper-.drv'...
+error: Cannot build '/nix/store/bamwxswxacs3cjdcydv0z7bj22d7g2kc-config.guess-948ae97.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/vq0j27nvpks679djbiykl8ikdyj6z5a9-config.guess-948ae97
+       Last 4 log lines:
+       > error:
+       >        … writing file "/nix/store/vq0j27nvpks679djbiykl8ikdyj6z5a9-config.guess-948ae97"
+       >
+       >        error: unable to download 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=948ae97ca5703224bd3eada06b7a69f40dd15a02': Timeout was reached (28) Connection timed out after 5001 milliseconds
+       For full logs, run:
+         nix log /nix/store/bamwxswxacs3cjdcydv0z7bj22d7g2kc-config.guess-948ae97.drv
+error: Cannot build '/nix/store/bhbpzhiqjrnmb3jxzya8cx5wci0f6fkp-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/nkp2jjfx646f1brf8mbyn6ypagxks2vi-gnu-config-2024-01-01
+error: Cannot build '/nix/store/c14yc5znpdnwlab1a2pnmnhbwdp35vp6-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/0iz8c9d6dyq3fy9f9shk3fj7y085f7i1-gnu-config-2024-01-01
+error: Cannot build '/nix/store/jyr5b8qxxdfykv4cp6g9gsx8f9j8qh3c-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wha3g18iplpm2izn2x1a6fmmvdw2iy9q-gnu-config-2024-01-01
+error: Cannot build '/nix/store/kks0pc1n4y77xa8q80k7wwr1bymrzw8r-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/pfdiyprxgmx4pghrqym1r7cmqpib031m-gnu-config-2024-01-01
+error: Cannot build '/nix/store/w85rskf0f40fw3ygbpcs3iq87ynncrkg-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/2b96blvjcclrswkdy5fqzq2kz0nzzac7-gnu-config-2024-01-01
+error: Cannot build '/nix/store/zh8559bdz57bq03m7rgpvb22632qrrvh-gnu-config-2024-01-01.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1kzclixw4c13wxin0b6cij1zykvwp0wb-gnu-config-2024-01-01
+error: Cannot build '/nix/store/dwp3wll5zvrx1qmjhg6fvrw89l9j55r9-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/br3nr5ymp1p8k9gn9zljmbnsksikj98l-stdenv-linux
+error: Cannot build '/nix/store/pnjvpwgka59d6fwpp9fnz42ll2ai4ffm-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/s3w5m3spa1g71hx0yb82lvk6394j3w5j-stdenv-linux
+error: Cannot build '/nix/store/a4g3k5cr8qxq8k860xr1wcdcrafn9bsz-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/2yvqgbgavz96qpm12pf8jackg6z2rm67-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/lk1ngqgzsgxgncpc2b26gnkh2fgga5gq-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/13z86wk9fl7padcbqpkabs7vn5m2xsza-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/qkv79kfbw806vwlzf42mwsasgn3i70yf-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/l2xk4ac1wx9c95kpp8vymv9r9yn57fvh-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/qvd48yga2kyydg00lwb87mfqn31mrzh9-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/b6vpv6747yf3nz1rdsxlbibpfvlpw6c7-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/vcq0nzi3rzndlyryvb2pz35xpp580ghy-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9lid25cvryxhm6xzp80lp29nai9245sc-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/zgb9kik3lxh6yz3nhl2pjhzpqxhaf301-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ivs0ximaj8m0dgakfd87cd9s466s2r2i-update-autotools-gnu-config-scripts-hook
+error:
+       … while calling the 'derivationStrict' builtin
+         at «nix-internal»/derivation-internal.nix:37:12:
+           36|
+           37|   strict = derivationStrict drvAttrs;
+             |            ^
+           38|
+
+       … while evaluating derivation 'nix-shell'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating attribute 'nativeBuildInputs' of derivation 'nix-shell'
+         at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:590:11:
+          589|           depsBuildBuild = elemAt (elemAt dependencies 0) 0;
+          590|           nativeBuildInputs = elemAt (elemAt dependencies 0) 1;
+             |           ^
+          591|           depsBuildTarget = elemAt (elemAt dependencies 0) 2;
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Cannot build '/nix/store/f6m3my85q7zyjg78ir4zl4g9a9l4xll6-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9gc06hr24r73841v6njlsqcgvdf90p8h-source
++ status=1
++ printf 'inspection_publication_cairn_exit=%s\n' 1
+inspection_publication_cairn_exit=1
++ exit 1

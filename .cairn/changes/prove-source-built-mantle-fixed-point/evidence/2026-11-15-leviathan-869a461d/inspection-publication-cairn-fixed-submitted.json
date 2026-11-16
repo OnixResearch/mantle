@@ -1,0 +1,9 @@
+{
+  "task": "1631",
+  "failed_predecessor": "1630",
+  "validation_root": "/home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ",
+  "script": "inspection-publication-cairn-fixed.sh",
+  "predecessor_failure": "The first remote wrapper omitted the exact GIT_CONFIG HTTPS rewrite used by qualified1619/1620. Captured SSH identity failures made dependency metadata fall back; environment realization then failed fetching config.guess before Cairn ran.",
+  "correction": "Use the same invocation-scoped Git configuration and non-offline nix develop --builders empty --no-write-lock-file route as the successful frozen-source qualification. No system configuration, trust, pins or product source changes.",
+  "non_claim": "Failed1630 remains failed; no validation success inferred until the corrected command actually executes."
+}

@@ -1,0 +1,508 @@
+{
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "product_revision": "869a461d6170404e752865a2029092391240b741",
+  "frozen_complete_source_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "runner_blake3": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+  "actual_tasks": {
+    "physical": "1624",
+    "preauthor": "1625",
+    "static": "1629"
+  },
+  "verdicts": {
+    "physical": "STATIC_IDENTITY_CHECKS_CLEAR",
+    "preauthor": "STATIC_PREAUTHOR_IDENTITIES_CLEAR",
+    "static": "STATIC_TEMPLATE_REVIEW_CLEAR"
+  },
+  "complete_static_coverage": {
+    "launch_blockers": [],
+    "per_stage": {
+      "full-source-native-provider": {
+        "ObservePhase": {
+          "covered": 98,
+          "total": 98
+        },
+        "controller_specs": {
+          "covered": 49,
+          "total": 49
+        },
+        "generated_templates": {
+          "covered": 539,
+          "total": 539
+        },
+        "guard_conditions": {
+          "covered": 294,
+          "total": 294
+        },
+        "recipe_steps": {
+          "covered": 5122,
+          "total": 5122
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3,
+          "total": 3
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 98,
+          "total": 98
+        },
+        "slots": {
+          "covered": 98,
+          "total": 98
+        },
+        "static_words": {
+          "covered": 63675,
+          "total": 63675
+        }
+      },
+      "full-source-rust-provider": {
+        "ObservePhase": {
+          "covered": 3742,
+          "total": 3742
+        },
+        "controller_specs": {
+          "covered": 1871,
+          "total": 1871
+        },
+        "generated_templates": {
+          "covered": 20400,
+          "total": 20400
+        },
+        "guard_conditions": {
+          "covered": 10864,
+          "total": 10864
+        },
+        "recipe_steps": {
+          "covered": 63882,
+          "total": 63882
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3742,
+          "total": 3742
+        },
+        "slots": {
+          "covered": 3742,
+          "total": 3742
+        },
+        "static_words": {
+          "covered": 1619549,
+          "total": 1619549
+        }
+      },
+      "mantle-stage1": {
+        "ObservePhase": {
+          "covered": 370,
+          "total": 370
+        },
+        "controller_specs": {
+          "covered": 185,
+          "total": 185
+        },
+        "generated_templates": {
+          "covered": 2035,
+          "total": 2035
+        },
+        "guard_conditions": {
+          "covered": 1110,
+          "total": 1110
+        },
+        "recipe_steps": {
+          "covered": 24101,
+          "total": 24101
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3082,
+          "total": 3082
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 370,
+          "total": 370
+        },
+        "slots": {
+          "covered": 370,
+          "total": 370
+        },
+        "static_words": {
+          "covered": 391537,
+          "total": 391537
+        }
+      },
+      "mantle-stage2": {
+        "ObservePhase": {
+          "covered": 370,
+          "total": 370
+        },
+        "controller_specs": {
+          "covered": 185,
+          "total": 185
+        },
+        "generated_templates": {
+          "covered": 2035,
+          "total": 2035
+        },
+        "guard_conditions": {
+          "covered": 1110,
+          "total": 1110
+        },
+        "recipe_steps": {
+          "covered": 24101,
+          "total": 24101
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3082,
+          "total": 3082
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 370,
+          "total": 370
+        },
+        "slots": {
+          "covered": 370,
+          "total": 370
+        },
+        "static_words": {
+          "covered": 391537,
+          "total": 391537
+        }
+      },
+      "stagex-provider-publication": {
+        "ObservePhase": {
+          "covered": 0,
+          "total": 0
+        },
+        "controller_specs": {
+          "covered": 0,
+          "total": 0
+        },
+        "generated_templates": {
+          "covered": 0,
+          "total": 0
+        },
+        "guard_conditions": {
+          "covered": 0,
+          "total": 0
+        },
+        "recipe_steps": {
+          "covered": 18,
+          "total": 18
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "slots": {
+          "covered": 0,
+          "total": 0
+        },
+        "static_words": {
+          "covered": 79,
+          "total": 79
+        }
+      },
+      "stagex-transition": {
+        "ObservePhase": {
+          "covered": 0,
+          "total": 0
+        },
+        "controller_specs": {
+          "covered": 0,
+          "total": 0
+        },
+        "generated_templates": {
+          "covered": 0,
+          "total": 0
+        },
+        "guard_conditions": {
+          "covered": 0,
+          "total": 0
+        },
+        "recipe_steps": {
+          "covered": 8131,
+          "total": 8131
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "slots": {
+          "covered": 0,
+          "total": 0
+        },
+        "static_words": {
+          "covered": 67227,
+          "total": 67227
+        }
+      }
+    },
+    "uncovered_static_binding_kind_count": 0
+  },
+  "combined_static_contract_check": {
+    "actual_runtime_invocation_bytes_observed": 0,
+    "guard_failures": 0,
+    "non_claim": "Complete measured static contracts only. Raw mis-scoped ControllerSpec diagnostics remain in the graph report. Runtime payloads are not unknown artifact kinds and remain explicit unobserved protected-execution obligations. No independent model acceptance or launch authority.",
+    "non_word_graph_findings": {
+      "mantle_root_and_consumer_failures": 0,
+      "native_failures": 0,
+      "rust_failures": 0,
+      "stagex_failures": 0,
+      "subject_claim_mismatches": 0
+    },
+    "raw_graph_word_flags_superseded_by_complete_template_scopes": 14013,
+    "runtime_invocation_static_bindings": 6167,
+    "static_source_binding_kind_failures": 0
+  },
+  "full_static_diagnostic_categories": {
+    "constructor_issue_categories": {},
+    "corrected_static_word_issue_categories": {},
+    "invalid_environment_name_counts": {},
+    "invalid_environment_name_occurrence_count": 0,
+    "reference_issue_categories": {},
+    "unknown_binding_kind_reasons": {}
+  },
+  "graph_coverage": {
+    "stagex_lineage_edges": {
+      "authenticated_source_admission": 132,
+      "covered": 132,
+      "execution_dependency_checks": 0,
+      "failed": 0,
+      "total": 132,
+      "uncovered_source_or_patch_edges": 0
+    },
+    "native_derivation_edges": {
+      "declared": 341,
+      "missing_actual": 0,
+      "missing_declared": 0,
+      "total": 341,
+      "used": 341
+    },
+    "rust_source_edges": {
+      "covered": 6,
+      "missing": 0,
+      "total": 6
+    },
+    "rust_bootstrap_outputs": {
+      "covered": 16,
+      "missing": 0,
+      "total": 16
+    },
+    "mantle_semantic_roots": {
+      "mantle-stage1": {
+        "binary_root_exact": false,
+        "covered": 1241,
+        "help_consumers": 1,
+        "smoke_export_present": true,
+        "total": 1241
+      },
+      "mantle-stage2": {
+        "binary_root_exact": false,
+        "covered": 1241,
+        "help_consumers": 1,
+        "smoke_export_present": true,
+        "total": 1241
+      }
+    }
+  },
+  "source_kind_inventory": {
+    "distinct_references": 816,
+    "unresolved": 0,
+    "manifest_files": {
+      "native-source-bundle": {
+        "blake3": "adea93606319999aad987c8fc9182e6a2000134a13fc869fc798fd377a3a58c1",
+        "consumer": "hydrate_reference -> materialize_source_record_payload -> lower_step",
+        "manifest_blake3": "20cfd39d418367f3fc9a49d4d4cd80a11086fabf6f3acab63d12ab44e5a75331",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/inputs/native-source-authority/native-source-closure.json",
+        "record_count": 63,
+        "size_bytes": 1632752863
+      },
+      "stagex-source-bundle": {
+        "blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "consumer": "hydrate_reference -> materialize_source_record_payload -> lower_step",
+        "manifest_blake3": "541eae99be64df5f13ed8ff52403e83d034c8ce4747984a2d8d11cffc10b01ab",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/inputs/stagex-source-bundle/stagex-source-closure.json",
+        "record_count": 29,
+        "size_bytes": 87616094
+      }
+    }
+  },
+  "native_builtin_fetchers": 37,
+  "exact_linux_headers_make_consumers": [
+    {
+      "contract": "mantle_native_installed requires an original isolated ELF in the catalog, then copies exactly that tree member; runtime identity remains unobserved",
+      "derivation": "/mantle/store/9bg51ihqk8kj3lsc3cvkgg9b97g507p4-linux-headers-6.6-full-source-gcc10-v3.drv",
+      "member": "bin/make",
+      "produced": {
+        "action_id": "full-source-native-provider/original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.member-out-0",
+        "kind": "produced",
+        "output_id": "result"
+      },
+      "projection_step": "original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.member-out-0",
+      "scope": "exact Produced Executable refinement",
+      "step_id": "original-8152dd219899700806b53f5d2be12beb4d3c78e5deb1c471ab28b383042f96aa.host.make-version-request",
+      "tree": {
+        "action_id": "full-source-native-provider/original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.install-out",
+        "kind": "produced",
+        "output_id": "result"
+      }
+    },
+    {
+      "contract": "mantle_native_installed requires an original isolated ELF in the catalog, then copies exactly that tree member; runtime identity remains unobserved",
+      "derivation": "/mantle/store/9bg51ihqk8kj3lsc3cvkgg9b97g507p4-linux-headers-6.6-full-source-gcc10-v3.drv",
+      "member": "bin/make",
+      "produced": {
+        "action_id": "full-source-native-provider/original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.member-out-0",
+        "kind": "produced",
+        "output_id": "result"
+      },
+      "projection_step": "original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.member-out-0",
+      "scope": "exact Produced Executable refinement",
+      "step_id": "original-8152dd219899700806b53f5d2be12beb4d3c78e5deb1c471ab28b383042f96aa.host.original-make-version",
+      "tree": {
+        "action_id": "full-source-native-provider/original-e154c47ae0d31d09fb82e8a836f35accc5224ea347572c16d8b4850a7743d111.host.original.install-out",
+        "kind": "produced",
+        "output_id": "result"
+      }
+    }
+  ],
+  "static_operand_unused_diagnostics": {
+    "step_count": 71,
+    "classification": "Static operand-use diagnostic, not a source-recipe admission rule. Exact dependency declarations, success-ordering artifacts, generated-invocation context and command-path usage remain separate evidence; no minimal-authority claim.",
+    "complete_inventory": "graph-review/native-unused-inputs.json"
+  },
+  "physical_coverage": {
+    "archive_members": {
+      "covered": 476,
+      "total": 476
+    },
+    "initial_authority_paths": {
+      "covered": 27,
+      "total": 27
+    },
+    "original_git_leaves": {
+      "covered": 20854,
+      "total": 20854
+    },
+    "original_native_records": {
+      "covered": 59,
+      "total": 59
+    },
+    "program_records": {
+      "covered": 4,
+      "total": 4
+    },
+    "selected_authenticated_stages": {
+      "covered": 2,
+      "total": 2
+    },
+    "source_roles": {
+      "covered": 7,
+      "total": 7
+    }
+  },
+  "preauthor_role_checks": [
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 1,
+      "leaf_records_expected": 1,
+      "profile_class": "stagex-seed",
+      "role": "stagex-seed"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 1,
+      "leaf_records_expected": 1,
+      "profile_class": "stagex-lineage",
+      "role": "stagex-lineage"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 2,
+      "leaf_records_expected": 2,
+      "profile_class": "stagex-source-bundle",
+      "role": "stagex-source-bundle"
+    },
+    {
+      "covered": 1,
+      "criterion": "input-role canonical body/payload (native plan closure checked separately)",
+      "expected": 1,
+      "leaf_records_covered": 1,
+      "leaf_records_expected": 1,
+      "profile_class": "bootstrap-source",
+      "role": "native-source-bundle"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 50,
+      "leaf_records_expected": 50,
+      "profile_class": "proof-input",
+      "role": "rust-source-archive-set"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 12763,
+      "leaf_records_expected": 12763,
+      "profile_class": "mantle-source",
+      "role": "mantle-source"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 57965,
+      "leaf_records_expected": 57965,
+      "profile_class": "vendored-cargo-inputs",
+      "role": "vendor-inputs"
+    }
+  ],
+  "independent_review": {
+    "required_model": "underclass/gpt-6-luna",
+    "available": false,
+    "error": "429 quota_exhausted",
+    "substitute_used": false,
+    "parent_checks_are_not_independent_acceptance": true
+  },
+  "authority": {
+    "protected_attempt_launched": false,
+    "actual_runtime_payload_bytes_observed": 0,
+    "v2_receipt_proven": false,
+    "native_rows_accepted": false,
+    "lifecycle_archived": false
+  },
+  "non_claims": [
+    "Static source/graph/template and physical identity observations only.",
+    "Runtime invocation payload bytes, strict decode/admission, command results, protected execution, stage2 equality and complete action-trust reconciliation remain unobserved.",
+    "No compiler correctness, arbitrary reproducibility, native signed-row acceptance, deployment safety or release eligibility."
+  ]
+}

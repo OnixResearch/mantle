@@ -1,0 +1,22 @@
+{
+  "task": "1628",
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/inert-resolved-869a461d-request-workspace.tON71S",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "scripts": [
+    {
+      "file": "graph-audit.py",
+      "blake3": "46a9b11e3d4cc4ed6154bcae7f96ac4fff21fb6672f09aaac7968cea4f344115",
+      "transfer_equal": true
+    },
+    {
+      "file": "controller-template-audit.py",
+      "blake3": "03fbe10196b503f0554098d9c06c935c8e7868c31ae06674e74fd7ee2efb45c5",
+      "transfer_equal": true
+    }
+  ],
+  "changes": [
+    "Source/ManifestSource exact member kinds derived from actual physical roots and actual record inventories under frozen hydrate_reference/materialize_source_record_payload/lower_step Tree/Text rules.",
+    "Controller templates use a ChainMap overlay instead of copying all producer bindings per generated word; strict predicates unchanged."
+  ],
+  "non_claim": "Inert inspector implementation changes only. Actual source/cohort and expected pins unchanged; previous HOLD report and invoked sources retained. No protected execution or independent acceptance."
+}

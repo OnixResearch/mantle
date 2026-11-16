@@ -1,0 +1,9 @@
+{
+  "task": "26",
+  "host": "local",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "script": "inspection-publication-local-cairn.sh",
+  "command": "nix develop --builders empty --no-update-lock-file, same qualified invocation-scoped Git configuration; Cairn validate and proposal/design/tasks gates",
+  "correction": "Disable only this invocation’s broken configured remote-builder hook; do not change system settings or substitute the installed mismatched Cairn. Detached remote1631 remains retained with unknown result.",
+  "non_claim": "Actual gate result still required; no protected proof or independent review implied."
+}

@@ -1,0 +1,38 @@
+{
+  "task": "1631",
+  "validation_root": "/home/brittonr/sbfp-20261113-berdKH/inspection-publication-869a461d-request-workspace.qycVlZ",
+  "inputs": [
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+      "blake3": "810cec37851cccf3104db784b199aeff76a0d650c3f4764ebd20a186eac45a86",
+      "validation_copy_equal": true
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-12-source-input-binding-corrections.md",
+      "blake3": "46135a6e6d6a72f8f6f27d328ba7cd8ba9539241b9fcffa6a61aa5c0bb1befc1",
+      "validation_copy_equal": true
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/review-contract.md",
+      "blake3": "ae8c79784de5065107a36800fefd7180a35aa453507fd3aa8bf16dd6935f3d13",
+      "validation_copy_equal": true
+    },
+    {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/current-inspection-summary.json",
+      "blake3": "2d6a82203f39a862a65cf8c609e5e31c72f4911ebb9796990a4c1cf59cd4bec8",
+      "validation_copy_equal": true
+    },
+    {
+      "path": "flake.nix",
+      "blake3": "6997b85fddbdff4ffd543364db73a9b07c34bf3adb4dafdd1db5ee9597c64e7e",
+      "validation_copy_equal": true
+    },
+    {
+      "path": "flake.lock",
+      "blake3": "1095e18485b3746e4aff36fc52deab1a01cffac9dd07f04bd14ea3165ff68521",
+      "validation_copy_equal": true
+    }
+  ],
+  "scope": "Exact current lifecycle prose, review contract, compact measured summary and checked-in shell/lock inputs. Validation runs in an independent owned copy; the qualified proof source/cohort are unchanged.",
+  "non_claim": "Input parity is not a gate result, independent review or proof execution."
+}

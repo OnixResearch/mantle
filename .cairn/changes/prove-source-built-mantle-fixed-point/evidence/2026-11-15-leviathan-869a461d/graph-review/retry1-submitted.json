@@ -1,0 +1,21 @@
+{
+  "task": "1626",
+  "failed_predecessor": "1623",
+  "subject_json": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/review-subject.json",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "scripts": [
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/graph-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/graph-audit.py",
+      "blake3": "25d9917fd7078386836a27e259b315b22de315f8e883aa4adc622c3800513684",
+      "transfer_equal": true
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/controller-template-audit.py",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-review-869a461d-request-workspace.j2KYjs/controller-template-audit.py",
+      "blake3": "c5d7cd5585635c212bbe246f32044dc5877c1d4addbe27a5b8e9c4469a06b83f",
+      "transfer_equal": true
+    }
+  ],
+  "non_claim": "Corrected inert inspector run; no current-data acceptance or protected execution inferred until actual output/coverage is inspected."
+}
