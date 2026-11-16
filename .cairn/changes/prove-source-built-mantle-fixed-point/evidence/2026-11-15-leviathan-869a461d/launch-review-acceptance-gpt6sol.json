@@ -1,0 +1,78 @@
+{
+  "schema": "mantle-cohort-launch-review-v1",
+  "code_revision": "869a461d6170404e752865a2029092391240b741",
+  "source_tree_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "runner_blake3": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace",
+  "source_profile_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "source_profile_bytes_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "source_preparation_report_bytes_blake3": "0fbebd51eb6bf87d5b5b0187385bf3a78f10b409d9b34c4bc1e3f47f60211f46",
+  "independent_review_model": "underclass/gpt-6-sol",
+  "graph": {
+    "accepted": true,
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-869a461d-request-workspace-gpt6sol.json",
+    "review_bytes_blake3": "fd6c14b08e15eeea549515ecb105766a5e52eb2c6a231a509f976c7c87eb5d0a",
+    "criteria": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "parent_integration": "independent-gpt6sol-graph/parent-integration.json"
+  },
+  "identity": {
+    "accepted": true,
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-869a461d-request-workspace-gpt6sol.json",
+    "review_bytes_blake3": "ef80c20e978b9ee53276b8fd4aa70cd900cd8806afc52c8fccd71d7045725635",
+    "criteria": [
+      7,
+      8
+    ],
+    "parent_integration": "independent-gpt6sol-physical/parent-integration.json"
+  },
+  "model_authorization": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-869a461d-request-workspace-gpt6sol.json",
+    "bytes_blake3": "27023e6df44ff65d0b4c53f52f4963706d4a1e51e79908457161a338383f0dba"
+  },
+  "profile_transfer_equal": true,
+  "parent_acceptance": true,
+  "uncovered_criteria": [],
+  "fresh_launch_preconditions_required": true,
+  "non_claim": "Parent integration permits only the reviewed fresh protected attempt after recorded current Cairn gates and the held driver exact-byte/fresh-source/output preconditions. It is not a protected execution result, runtime payload observation, stage2 equality, action-trust reconciliation, v2, signed native-row or release acceptance.",
+  "current_cairn": {
+    "host": "local",
+    "task": "26",
+    "result": "graph-review/semantic-root-cairn-result.json",
+    "transcript_bytes_blake3": "960f45f8878856b2840576cfbe09688c9676904c10c5d69208694b6c0695354f",
+    "checks": [
+      {
+        "check": "validation",
+        "valid": true,
+        "verdict": null
+      },
+      {
+        "check": "proposal",
+        "valid": true,
+        "verdict": "PASS"
+      },
+      {
+        "check": "design",
+        "valid": true,
+        "verdict": "PASS"
+      },
+      {
+        "check": "tasks",
+        "valid": true,
+        "verdict": "PASS"
+      }
+    ]
+  },
+  "static_inspector": {
+    "blake3": "c56272eaf27cee88370c0b5762ad2901c6aa2ad5a5c16f87626fc47d9fef37ef",
+    "inspection_task": "1632",
+    "report_transport": "graph-review/semantic-root-result-transport.json",
+    "original_rejection_retained": true
+  }
+}

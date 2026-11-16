@@ -133,8 +133,59 @@ combined check uses the complete actual generated scopes and all graph guard,
 source, native, Rust and Mantle criteria. All 71 static operand-unused step
 diagnostics remain explicit; no minimal-authority claim is made.
 
-These are parent-owned results only. The earlier Luna workers were unavailable
-with retained quota errors. The authorized independent GPT-6-sol reviews have
-not yet supplied acceptance. The original cold-launch and protected/v2/native-row
-claim boundaries remain unchanged.
+These historical checks are parent-owned results only. The earlier Luna
+workers were unavailable with retained quota errors. The authorized GPT-6-sol
+physical slice has separate bounded acceptance; the graph inspector was
+rejected as recorded below. Original protected/v2/native-row boundaries remain.
+
+## Independent graph-inspector rejection and correction (2026-11-16)
+
+`independent-gpt6sol-graph/review.json` rejects criterion 3's final inspector:
+the shorthand `rust-unit:mantle` key is absent, and both false binary/semantic
+matches were omitted from its failure tally. The reviewer independently found
+both binaries under their fully qualified Mantle Rust-unit keys; this is an
+inspector defect, not an observed product mismatch. Task 1629's historical
+clear result cannot satisfy this launch prerequisite.
+
+`graph-review/graph-audit-semantic-rejected.py` preserves the rejected inspector
+byte-for-byte (`a49650bcd8857f171554434c96e53cd6fdb674b85b9b6ed2cd1ecebc35232cec`).
+The corrected inspector derives a unique qualified Mantle unit, compares its
+exact Produced binary, and counts the combined semantic/consumer decision.
+Detached inert task 1632 checks the actual selected recipes and in-memory
+missing, nonunique, wrong-product and shorthand-only cases before repeating
+complete graph/template inspection. Its result and independent re-review are
+still required; neither submission nor process completion supplies acceptance.
+
+Physical/source criteria 7-8 alone have bounded independent acceptance, with
+parent evidence/consumer-hash integration in
+`independent-gpt6sol-physical/parent-integration.json`. Combined launch approval
+remains false. Product source, cohort, expected pins and protected rules are
+unchanged by this inspector-only correction.
+
+## Corrected complete measurement and renewed review (2026-11-16)
+
+Detached task 1632 completed Success. Both actual selected recipes passed the
+unique qualified-unit/Produced-binary check. Eight in-memory negatives
+(missing, nonunique, wrong product and shorthand only, for each stage) were
+rejected while their independent root/help/smoke checks stayed valid. Complete
+graph/template reinspection returned `STATIC_TEMPLATE_REVIEW_CLEAR`, with
+empty combined static blockers and both binary matches now true. All 14
+selected-input and 30 graph-consumer byte bindings matched their previous
+actual observations; all eight subject checks passed.
+
+`graph-review/semantic-root-result-transport.json` binds the full captured
+reports and exact compressed/decompressed template bytes. Reader excerpts
+were rejected before adoption; complete file transport passed actual remote
+hash equality. `semantic-root-subject-parity.json` and the regression report
+retain the measured bindings and each exercised case.
+
+The renewed exact-model graph review is `ACCEPT_BOUNDED` for complete criteria
+1-6, with no remaining static finding. Parent checked its 35 complete counter
+rows, subject and selected recipes, eight artifact and ten frozen-consumer
+bindings, full-template roundtrip and actual review transport. Its original
+rejection remains unchanged. Combined with the separate bounded criteria 7-8
+review, all eight review criteria are parent-integrated. The current Cairn
+gates, sealed review-byte record and fresh launch preconditions still precede
+any protected attempt. No runtime payload, stage2 equality, v2 or native-row
+acceptance follows from this static/physical review.
 

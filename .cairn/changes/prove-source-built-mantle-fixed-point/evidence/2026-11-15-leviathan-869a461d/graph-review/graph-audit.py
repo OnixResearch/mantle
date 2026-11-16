@@ -959,6 +959,42 @@ def native_edge_check(recipe,index):
     report['linux_headers_export_owner_derivations']=[drv for drv,_ in linux_nodes]
     return report
 
+def mantle_root_report(stage,recipe,prior):
+    exports=recipe.get('exports',{}); sem=recipe.get('semantic_roots',{})
+    steps={step['id']:step for step in recipe['steps']}
+    binary=exports.get(stage); smoke=exports.get('mantle-smoke')
+    unit_keys=sorted(name for name in sem if name.startswith('rust-unit:') and name.endswith(':path+native#mantle@0.1.0:mantle:bin:build'))
+    unit=sem[unit_keys[0]] if len(unit_keys)==1 else []
+    help_steps=[]
+    for step in recipe['steps']:
+        op=step['operation']
+        if op['kind']=='exec' and step.get('inputs',{}).get(op.get('executable_input'))==binary and any(p.get('kind')=='literal' and p.get('text')=='--help' for word in op.get('arguments',[]) for p in word.get('parts',[])):
+            help_steps.append(step['id'])
+    expected_roots={key(ref) for refs in sem.values() for ref in refs}
+    if binary: expected_roots.add(key(binary))
+    if smoke: expected_roots.add(key(smoke))
+    actual_roots={key(ref) for ref in recipe.get('roots',[])}
+    smoke_action=smoke.get('action_id','') if isinstance(smoke,dict) else ''
+    smoke_local=smoke_action[len(stage)+1:] if isinstance(smoke_action,str) and smoke_action.startswith(stage+'/') else None
+    smoke_step=steps.get(smoke_local) if smoke_local else None
+    report={
+        'export_names':sorted(exports),'binary_export':binary,'smoke_export':smoke,
+        'mantle_unit_key_candidates':unit_keys,'mantle_unit_key_unique':len(unit_keys)==1,'mantle_unit_root':unit,
+        'build_script_roots':{name:refs for name,refs in sem.items() if name.startswith('build-script:')},
+        'semantic_key_count':len(sem),'semantic_product_count':sum(map(len,sem.values())),
+        'semantic_key_prefix_counts':dict(collections.Counter(name.split(':',1)[0] for name in sem)),
+        'semantic_root_empty_count':sum(not refs for refs in sem.values()),
+        'semantic_refs_nonproduced_count':sum(ref.get('kind')!='produced' for refs in sem.values() for ref in refs),
+        'binary_is_exact_mantle_semantic_product':bool(binary and binary.get('kind')=='produced' and len(unit_keys)==1 and binary in unit),
+        'binary_output_kind':kind_for(binary,prior[stage],prior,STAGES.index(stage)) if binary else None,
+        'help_consumer_step_ids':help_steps,'help_consumer_count':len(help_steps),
+        'smoke_export_is_produced':bool(smoke and smoke.get('kind')=='produced'),
+        'smoke_export_actual_producer_valid':bool(smoke_step and smoke_step['id'] in help_steps and smoke.get('output_id')=='stdout' and out_kind(smoke_step,'stdout')=='text'),
+        'recipe_roots_exact_semantic_binary_smoke_union':actual_roots==expected_roots and len(recipe.get('roots',[]))==len(actual_roots),
+    }
+    report['root_and_consumer_failure_count']=int(not report['binary_is_exact_mantle_semantic_product'] or report['binary_output_kind']!='executable' or report['help_consumer_count']!=1 or not report['smoke_export_actual_producer_valid'] or not report['recipe_roots_exact_semantic_binary_smoke_union'])
+    return report
+
 def main():
     SCRATCH.mkdir(parents=True,exist_ok=True)
     planfile=COHORT/'source-program-preparation-input-plan.json'; plan=load(planfile)
@@ -1018,26 +1054,8 @@ def main():
     sx=stagex_check(route,files,prior)
     native_idx=load(ni); native_report=native_edge_check(stage_data['full-source-native-provider'],native_idx)
     rust_report=rust_check(stage_data['full-source-rust-provider'],rustix,rust_route_path,stage_data['full-source-native-provider'])
-    # Mantle roots, output names, exported canonical binary/smoke context.
-    mantle_sem={}
-    for stage in ('mantle-stage1','mantle-stage2'):
-        r=stage_data[stage]; exports=r.get('exports',{}); sem=r.get('semantic_roots',{}); steps={s['id']:s for s in r['steps']}
-        binary=exports.get(stage); smoke=exports.get('mantle-smoke'); unit=sem.get('rust-unit:mantle',[])
-        build_scripts={k:v for k,v in sem.items() if k.startswith('build-script:')}
-        help_steps=[]
-        for step in r['steps']:
-            op=step['operation']
-            if op['kind']=='exec' and step.get('inputs',{}).get(op.get('executable_input'))==binary and any(p.get('kind')=='literal' and p.get('text')=='--help' for w in op.get('arguments',[]) for p in w.get('parts',[])):
-                help_steps.append(step['id'])
-        expected_roots={key(ref) for refs in sem.values() for ref in refs}
-        if binary: expected_roots.add(key(binary))
-        if smoke: expected_roots.add(key(smoke))
-        actual_roots={key(ref) for ref in r.get('roots',[])}
-        smoke_action=smoke.get('action_id','') if isinstance(smoke,dict) else ''
-        smoke_local=smoke_action[len(stage)+1:] if isinstance(smoke_action,str) and smoke_action.startswith(stage+'/') else None
-        smoke_step=steps.get(smoke_local) if smoke_local else None
-        smoke_producer_valid=bool(smoke_step and smoke_step['id'] in help_steps and smoke.get('output_id')=='stdout' and out_kind(smoke_step,'stdout')=='text')
-        mantle_sem[stage]={'export_names':sorted(exports),'binary_export':binary,'smoke_export':smoke,'mantle_unit_root':unit,'build_script_roots':build_scripts,'semantic_key_count':len(sem),'semantic_product_count':sum(map(len,sem.values())),'semantic_key_prefix_counts':dict(collections.Counter(k.split(':',1)[0] for k in sem)),'semantic_root_empty_count':sum(not v for v in sem.values()),'semantic_refs_nonproduced_count':sum(ref.get('kind')!='produced' for vals in sem.values() for ref in vals),'binary_is_exact_mantle_semantic_product':bool(binary and binary in unit),'binary_output_kind':kind_for(binary,prior[stage],prior,STAGES.index(stage)) if binary else None,'help_consumer_step_ids':help_steps,'help_consumer_count':len(help_steps),'smoke_export_is_produced':bool(smoke and smoke.get('kind')=='produced'),'smoke_export_actual_producer_valid':smoke_producer_valid,'recipe_roots_exact_semantic_binary_smoke_union':actual_roots==expected_roots and len(r.get('roots',[]))==len(actual_roots)}
+    # Validate the uniquely qualified Rust-unit product and its actual binary/smoke consumers together.
+    mantle_sem={stage:mantle_root_report(stage,stage_data[stage],prior) for stage in ('mantle-stage1','mantle-stage2')}
     # Full current consumer/hash bindings, graph/typed observations and bounded exclusions.
     stage_coverage={stage:summary['coverage'] for stage,summary in recipe_summaries.items()}
     unresolved=sum(x['unknown_binding_kind_count'] for x in recipe_summaries.values())
@@ -1048,7 +1066,7 @@ def main():
         'stagex_failures':sum(not ok for ok in sx['id_sets'].values())+int(not sx['artifact_identity_unique'])+sx['generated_output_missing_count']+len(sx['missing_actual_source_or_bootstrap_edges'])+sx['stage_graph_dependency_failure_count']+sx['source_identity_failure_count']+len(sx['provider_output_failures'])+len(sx['publication']['command_issues'])+partition_defects(sx['partition'])+sx['edges_to_source_or_patch_not_product_checked'],
         'native_failures':partition_defects(native_report['partition'])+native_report['invalid_output_owner_count']+native_report['missing_declared_edge_count']+native_report['missing_actual_edge_count']+int(not native_report['linux_header_consumed_bin_make_member_complete']),
         'rust_failures':partition_defects(rust_report['partition'])+rust_report['invalid_output_ref_count']+len(rust_report['missing_source_edges'])+rust_report['missing_bootstrap_output_edge_count']+len(rust_report['missing_bootstrap_compiler_execs'])+sum(not x['sha256_matches'] for x in rust_report['archive_checks'])+len(rust_report['native_role_missing'])+sum(not x for x in rust_report['final_export_matches'].values())+int(not rust_report['archive_keyset_matches'])+int(not rust_report['stage_keyset_matches'])+rust_report['cargo_exec_count'],
-        'mantle_root_and_consumer_failures':sum(x['binary_output_kind']!='executable' or x['help_consumer_count']!=1 or not x['smoke_export_actual_producer_valid'] or not x['recipe_roots_exact_semantic_binary_smoke_union'] for x in mantle_sem.values()),
+        'mantle_root_and_consumer_failures':sum(report['root_and_consumer_failure_count'] for report in mantle_sem.values()),
         'subject_claim_mismatches':sum(not ok for ok in subject_checks.values()),
     }
     failures=sum(finding_counts.values())

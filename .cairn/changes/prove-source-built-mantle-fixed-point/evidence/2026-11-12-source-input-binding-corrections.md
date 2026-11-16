@@ -1436,3 +1436,37 @@ now in progress. The sealed current-cohort cold driver remains held, with an
 exercised invalid-review-digest rejection and no proof output namespace created.
 No protected execution, v2 receipt or native-row acceptance follows yet.
 
+## Independent graph-inspector rejection (2026-11-16)
+
+The authorized independent graph review found an ineffective canonical binary
+check: `rust-unit:mantle` is not either actual fully qualified semantic key,
+and the final inspector did not tally its two false equality results. The
+reviewer independently measured both true canonical binary matches; the
+finding is in the inspector, not an observed product mismatch.
+
+The rejected inspector and original reports remain retained. A corrected
+unique-qualified-key/Produced-binary check now feeds the actual failure tally.
+Detached inert task 1632 checks positive and negative in-memory cases and
+repeats complete graph/template inspection without changing the frozen
+source, cohort, pins or protected consumer. Actual results and renewed
+independent acceptance remain necessary. Physical/source criteria 7-8 have
+separate bounded acceptance; combined launch approval stays false.
+
+## Corrected inspector and renewed independent acceptance (2026-11-16)
+
+Task 1632 succeeded with two actual selected-recipe positives and eight
+missing/nonunique/wrong-product/shorthand-only negative rejections. Full
+graph/template reinspection returned `STATIC_TEMPLATE_REVIEW_CLEAR`;
+canonical binary checks now contribute to its real failure tally. All
+selected-input and frozen graph-consumer hashes matched prior observations.
+Full transported reports and exact template compression roundtrip are bound
+in `graph-review/semantic-root-result-transport.json` under the current cohort.
+
+The independent graph re-review returned bounded complete criteria 1-6
+acceptance, retaining its original rejection. Parent verified all counter,
+subject, recipe, report/consumer and transport bindings before integrating it
+with separately accepted physical/source criteria 7-8. All eight review
+criteria are integrated, not promoted into runtime success. Current Cairn
+gates and sealed review-byte/fresh-launch checks still precede protected
+execution. No v2, native-row or release claim follows yet.
+

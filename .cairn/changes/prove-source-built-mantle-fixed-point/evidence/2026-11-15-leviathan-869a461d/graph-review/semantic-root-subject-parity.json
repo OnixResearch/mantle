@@ -1,0 +1,335 @@
+{
+  "task": "1632",
+  "subject_claim_checks": {
+    "cohort_path_matches_observed": true,
+    "expected_stagex_lineage_blake3_matches_observed": true,
+    "frozen_source_path_matches_observed": true,
+    "input_plan_blake3_matches_observed": true,
+    "input_plan_path_matches_observed": true,
+    "preparation_report_raw_blake3_matches_observed": true,
+    "runner_blake3_matches_observed": true,
+    "source_inputs_match_observed_plan": true
+  },
+  "inspector_blake3": "c56272eaf27cee88370c0b5762ad2901c6aa2ad5a5c16f87626fc47d9fef37ef",
+  "rejected_inspector_blake3": "a49650bcd8857f171554434c96e53cd6fdb674b85b9b6ed2cd1ecebc35232cec",
+  "unchanged_actual_bindings": [
+    {
+      "kind": "selected_input_blake3",
+      "path": "cold_route",
+      "blake3": "6f3b0dc936212936cc49067449f56bf63180099940b8e8574be0c177bd950040"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "lineage",
+      "blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "mantle_stage1",
+      "blake3": "538e87a1c232237c855a4c487168bde3a6258127817c03c6b3aa87ec1299958e"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "mantle_stage2",
+      "blake3": "009288a67bd7f5f62d602a330f7e3685675eb009e8415b84a676b03eb80eb78c"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "native_index",
+      "blake3": "35927a6242fda8c9eb5c2457624d5592163e9556cd572b9af47e644d065c38b8"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "native_recipe",
+      "blake3": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "plan",
+      "blake3": "399f520e3ba115abe5d7d407b35976cfdd2b2986be392d6b7175f5d34dbb8fcc"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "publication_index",
+      "blake3": "3912c022ed921a8dd11f8284062fd8fad9c8d93332d2b3ecd84865d317af2b51"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "publication_recipe",
+      "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "rust_index",
+      "blake3": "82a27d0ac53f70ff44f45796a522bafdb78003e722c9a287c7d4203f1c205eee"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "rust_recipe",
+      "blake3": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "rust_route",
+      "blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "stagex_transition_index",
+      "blake3": "8c9e88c95737bc24d02c64ed36b6a2180c3980a1264681951b7ca5c81c115564"
+    },
+    {
+      "kind": "selected_input_blake3",
+      "path": "stagex_transition_recipe",
+      "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_action_controller.rs",
+      "blake3": "aafd4668ae21b831b33f726121fb9894b5da517e4f29353fee79e02eb8a12768"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_action_trust.rs",
+      "blake3": "af9a141259548a73baf13bd60487412c01ee0c871ae572f1daac2ed97f681754"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_authoring.rs",
+      "blake3": "2755d9ab07792600ce5491c4d134b33339c3119f67b71148558262157d6817c8"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_cold.rs",
+      "blake3": "17064df3c6c2b5b5b79a8dcc3f6eb17c9fe6ed21b63d4c74352c16f5494a10bb"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_mantle_actions.rs",
+      "blake3": "d55b45a11b922b6dceb428879b8723fa8c27503f3311b29418841d0bfcfcf1b2"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_native_actions.rs",
+      "blake3": "027be7f263cb328aaea5340cdc3be639bf8d9499ba3382897180b9212cb8caef"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_rust_actions.rs",
+      "blake3": "03347c19dea92ab80d08b0f65df54ec9cb020443b5dda5f62bb6a9dcbc9bf55f"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_fixed_point_stagex_actions.rs",
+      "blake3": "32937f01d8199b5a83c0a2af692c1755324de87e65d176a801fe1286346d29fd"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_mantle_programs.rs",
+      "blake3": "70973ba46431cbbda391a55c9a0724215e3005f25d2f1a1a9d4227d4b5f07921"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_mantle_programs_graph.rs",
+      "blake3": "a07836d408247111138dc22066505a55728859e06a20322af1ccd5621bbcd730"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_mantle_programs_metadata_helper.rs",
+      "blake3": "a3e2e1ae870459019462b11832f37827b489fe371856ee61d02b0a33728ce831"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_native_programs_host_controller.rs",
+      "blake3": "33ee5374c41b6b185f527eb325da7f22eddb47891a66d61dd9a88074071f55e2"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_native_programs_host_nested.c",
+      "blake3": "38d305a6454a0453135ab7655efb5bf0e9a28dc871a8413b3346468beadb8a90"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_native_programs_host_root.rs",
+      "blake3": "16bdecc85eaf1edf7a12aedd25335871a7493dfd22efc50800e2f88d81898174"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_recipe.rs",
+      "blake3": "ace28395feedc75e43107b35a8af3a7c77bf593f757c45fedbd21151a15268a6"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_recipe_controller.rs",
+      "blake3": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_recipe_exec.rs",
+      "blake3": "ec7d233b69c57375dd3ca7df4d33cf964f6a82e3ffa9b7acccc4b9740d41fc29"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs.rs",
+      "blake3": "dd4c2abfec0de583680a72dec332586ec329b138ade03102d466773c77eccd7e"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_minicargo.rs",
+      "blake3": "1b32d78a7d3f3465a75beb2a84a4da069f80d88712a15e1cc24436082969f515"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_minicargo_resolve.rs",
+      "blake3": "1bdc2799885f49496421d3843fccf7bfc8ed14751d43e6de7687bc50b4a09efe"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_successors.rs",
+      "blake3": "2a5b773712dcae713568a04f3744847ccfe6347c5c98450fd4a3786401cd1f0a"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_successors_graph.rs",
+      "blake3": "111bc095d017920735be537c1ca61ad62e5320f1a7a6c4ee3c09749831cefb4d"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_successors_invocation.rs",
+      "blake3": "80eef322f01952048856fc708b6966f42d318a3d5c598b73fc4151b9048462c6"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_successors_profile.rs",
+      "blake3": "8770968eb1c3fc3eee3396e3c4ec2b3e3e6fddd5d7572f93c6e1e026ebba76df"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_rust_programs_translation.rs",
+      "blake3": "11713cc382596b2994c11c02c758623fdafdc6e109fe6009d1088b4739d57549"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_stagex_programs_controller.rs",
+      "blake3": "65fdd81998efff77e665ccd4bde4f5389ffc19736b5b50419bb392839fa05b94"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_stagex_programs_controller_paths.c",
+      "blake3": "e84760566f10f1d2a7fb71c32f7731b892f317ada6725bf889c43b9544410c95"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_stagex_programs_controller_protocol.c",
+      "blake3": "90cedfe17d94566a541f37b46ab5e15ed6e44950c4182cabc3ef9309e9058352"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_built_stagex_programs_transform.c",
+      "blake3": "27815ae950dbccafc17e07323333e8f57eacfdd2e53e12bb4384f0a2bb168a0f"
+    },
+    {
+      "kind": "consumer_blake3",
+      "path": "src/source_bundle.rs",
+      "blake3": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282"
+    }
+  ],
+  "regression_actual_recipes": 2,
+  "regression_cases": [
+    {
+      "canonical_match": true,
+      "case": "actual_selected_recipe",
+      "failure_count": 0,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "missing_qualified_unit",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": false,
+      "case": "nonunique_qualified_units",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:0000000000000000000000000000000000000000000000000000000000000000:path+native#mantle@0.1.0:mantle:bin:build",
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "wrong_produced_binary",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "shorthand_unit_not_qualified",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": true,
+      "case": "actual_selected_recipe",
+      "failure_count": 0,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "missing_qualified_unit",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": false,
+      "case": "nonunique_qualified_units",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:0000000000000000000000000000000000000000000000000000000000000000:path+native#mantle@0.1.0:mantle:bin:build",
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "wrong_produced_binary",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "shorthand_unit_not_qualified",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": []
+    }
+  ],
+  "non_claim": "Actual inert observations and unchanged selected input/consumer hashes only; no new frozen runner build, independent acceptance or protected execution."
+}

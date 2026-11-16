@@ -1,0 +1,19 @@
+{
+  "id": 26,
+  "created_at": "2026-11-16T11:49:49.265973090-05:00",
+  "original_command": "/run/current-system/sw/bin/bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/semantic-root-cairn.sh",
+  "command": "/run/current-system/sw/bin/bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/semantic-root-cairn.sh",
+  "path": "/home/brittonr/git/OnixResearch/mantle",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-11-16T11:49:49.265801919-05:00",
+      "start": "2026-11-16T11:49:49.561539831-05:00",
+      "end": "2026-11-16T11:50:17.262856373-05:00",
+      "result": "Success"
+    }
+  },
+  "group": "default",
+  "dependencies": [],
+  "priority": 0,
+  "label": null
+}

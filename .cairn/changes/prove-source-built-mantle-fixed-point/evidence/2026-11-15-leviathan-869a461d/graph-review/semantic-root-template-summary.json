@@ -1,0 +1,457 @@
+{
+  "bounded_verdict": "STATIC_TEMPLATE_REVIEW_CLEAR",
+  "combined_static_contract_check": {
+    "actual_runtime_invocation_bytes_observed": 0,
+    "guard_failures": 0,
+    "non_claim": "Complete measured static contracts only. Raw mis-scoped ControllerSpec diagnostics remain in the graph report. Runtime payloads are not unknown artifact kinds and remain explicit unobserved protected-execution obligations. No independent model acceptance or launch authority.",
+    "non_word_graph_findings": {
+      "mantle_root_and_consumer_failures": 0,
+      "native_failures": 0,
+      "rust_failures": 0,
+      "stagex_failures": 0,
+      "subject_claim_mismatches": 0
+    },
+    "raw_graph_word_flags_superseded_by_complete_template_scopes": 14013,
+    "runtime_invocation_static_bindings": 6167,
+    "static_source_binding_kind_failures": 0
+  },
+  "coverage": {
+    "launch_blockers": [],
+    "per_stage": {
+      "full-source-native-provider": {
+        "ObservePhase": {
+          "covered": 98,
+          "total": 98
+        },
+        "controller_specs": {
+          "covered": 49,
+          "total": 49
+        },
+        "generated_templates": {
+          "covered": 539,
+          "total": 539
+        },
+        "guard_conditions": {
+          "covered": 294,
+          "total": 294
+        },
+        "recipe_steps": {
+          "covered": 5122,
+          "total": 5122
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3,
+          "total": 3
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 98,
+          "total": 98
+        },
+        "slots": {
+          "covered": 98,
+          "total": 98
+        },
+        "static_words": {
+          "covered": 63675,
+          "total": 63675
+        }
+      },
+      "full-source-rust-provider": {
+        "ObservePhase": {
+          "covered": 3742,
+          "total": 3742
+        },
+        "controller_specs": {
+          "covered": 1871,
+          "total": 1871
+        },
+        "generated_templates": {
+          "covered": 20400,
+          "total": 20400
+        },
+        "guard_conditions": {
+          "covered": 10864,
+          "total": 10864
+        },
+        "recipe_steps": {
+          "covered": 63882,
+          "total": 63882
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3742,
+          "total": 3742
+        },
+        "slots": {
+          "covered": 3742,
+          "total": 3742
+        },
+        "static_words": {
+          "covered": 1619549,
+          "total": 1619549
+        }
+      },
+      "mantle-stage1": {
+        "ObservePhase": {
+          "covered": 370,
+          "total": 370
+        },
+        "controller_specs": {
+          "covered": 185,
+          "total": 185
+        },
+        "generated_templates": {
+          "covered": 2035,
+          "total": 2035
+        },
+        "guard_conditions": {
+          "covered": 1110,
+          "total": 1110
+        },
+        "recipe_steps": {
+          "covered": 24101,
+          "total": 24101
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3082,
+          "total": 3082
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 370,
+          "total": 370
+        },
+        "slots": {
+          "covered": 370,
+          "total": 370
+        },
+        "static_words": {
+          "covered": 391537,
+          "total": 391537
+        }
+      },
+      "mantle-stage2": {
+        "ObservePhase": {
+          "covered": 370,
+          "total": 370
+        },
+        "controller_specs": {
+          "covered": 185,
+          "total": 185
+        },
+        "generated_templates": {
+          "covered": 2035,
+          "total": 2035
+        },
+        "guard_conditions": {
+          "covered": 1110,
+          "total": 1110
+        },
+        "recipe_steps": {
+          "covered": 24101,
+          "total": 24101
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 3082,
+          "total": 3082
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 370,
+          "total": 370
+        },
+        "slots": {
+          "covered": 370,
+          "total": 370
+        },
+        "static_words": {
+          "covered": 391537,
+          "total": 391537
+        }
+      },
+      "stagex-provider-publication": {
+        "ObservePhase": {
+          "covered": 0,
+          "total": 0
+        },
+        "controller_specs": {
+          "covered": 0,
+          "total": 0
+        },
+        "generated_templates": {
+          "covered": 0,
+          "total": 0
+        },
+        "guard_conditions": {
+          "covered": 0,
+          "total": 0
+        },
+        "recipe_steps": {
+          "covered": 18,
+          "total": 18
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "slots": {
+          "covered": 0,
+          "total": 0
+        },
+        "static_words": {
+          "covered": 79,
+          "total": 79
+        }
+      },
+      "stagex-transition": {
+        "ObservePhase": {
+          "covered": 0,
+          "total": 0
+        },
+        "controller_specs": {
+          "covered": 0,
+          "total": 0
+        },
+        "generated_templates": {
+          "covered": 0,
+          "total": 0
+        },
+        "guard_conditions": {
+          "covered": 0,
+          "total": 0
+        },
+        "recipe_steps": {
+          "covered": 8131,
+          "total": 8131
+        },
+        "runtime_invocation_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "runtime_symbolic_payloads": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 0,
+          "total": 0
+        },
+        "slots": {
+          "covered": 0,
+          "total": 0
+        },
+        "static_words": {
+          "covered": 67227,
+          "total": 67227
+        }
+      }
+    },
+    "uncovered_static_binding_kind_count": 0
+  },
+  "full_category_tally": {
+    "constructor_issue_categories": {},
+    "corrected_static_word_issue_categories": {},
+    "invalid_environment_name_counts": {},
+    "invalid_environment_name_occurrence_count": 0,
+    "reference_issue_categories": {},
+    "unknown_binding_kind_reasons": {}
+  },
+  "mantle_export_and_help_root_audit": {
+    "mantle-stage1": {
+      "binary_export_is_execution_root": true,
+      "canonical_binary_export": {
+        "action_id": "mantle-stage1/unit-01012-link.native-products",
+        "kind": "produced",
+        "output_id": "mantle-stage1"
+      },
+      "canonical_binary_owner": {
+        "full_action_id": "mantle-stage1/unit-01012-link.native-products",
+        "local_after_validation": "unit-01012-link.native-products",
+        "output_id": "mantle-stage1",
+        "output_kind": "executable",
+        "producer_operation": "exec",
+        "producer_step_id": "unit-01012-link.native-products",
+        "valid": true
+      },
+      "export_names": [
+        "mantle-smoke",
+        "mantle-stage1"
+      ],
+      "help_command": {
+        "arguments": [
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--help"
+              }
+            ]
+          }
+        ],
+        "executable_ref": {
+          "action_id": "mantle-stage1/unit-01012-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage1"
+        },
+        "executable_ref_actually_used": true,
+        "operation_kind": "exec",
+        "stdout_output": {
+          "bytes_max": 200000000000,
+          "kind": "text"
+        },
+        "step_id": "mantle-help",
+        "valid": true
+      },
+      "mantle_smoke_export": {
+        "action_id": "mantle-stage1/mantle-help",
+        "kind": "produced",
+        "output_id": "stdout"
+      },
+      "mantle_smoke_owner": {
+        "full_action_id": "mantle-stage1/mantle-help",
+        "local_after_validation": "mantle-help",
+        "output_id": "stdout",
+        "output_kind": "text",
+        "producer_operation": "exec",
+        "producer_step_id": "mantle-help",
+        "valid": true
+      },
+      "root_count": 1242,
+      "smoke_export_is_execution_root": true
+    },
+    "mantle-stage2": {
+      "binary_export_is_execution_root": true,
+      "canonical_binary_export": {
+        "action_id": "mantle-stage2/unit-01012-link.native-products",
+        "kind": "produced",
+        "output_id": "mantle-stage2"
+      },
+      "canonical_binary_owner": {
+        "full_action_id": "mantle-stage2/unit-01012-link.native-products",
+        "local_after_validation": "unit-01012-link.native-products",
+        "output_id": "mantle-stage2",
+        "output_kind": "executable",
+        "producer_operation": "exec",
+        "producer_step_id": "unit-01012-link.native-products",
+        "valid": true
+      },
+      "export_names": [
+        "mantle-smoke",
+        "mantle-stage2"
+      ],
+      "help_command": {
+        "arguments": [
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--help"
+              }
+            ]
+          }
+        ],
+        "executable_ref": {
+          "action_id": "mantle-stage2/unit-01012-link.native-products",
+          "kind": "produced",
+          "output_id": "mantle-stage2"
+        },
+        "executable_ref_actually_used": true,
+        "operation_kind": "exec",
+        "stdout_output": {
+          "bytes_max": 200000000000,
+          "kind": "text"
+        },
+        "step_id": "mantle-help",
+        "valid": true
+      },
+      "mantle_smoke_export": {
+        "action_id": "mantle-stage2/mantle-help",
+        "kind": "produced",
+        "output_id": "stdout"
+      },
+      "mantle_smoke_owner": {
+        "full_action_id": "mantle-stage2/mantle-help",
+        "local_after_validation": "mantle-help",
+        "output_id": "stdout",
+        "output_kind": "text",
+        "producer_operation": "exec",
+        "producer_step_id": "mantle-help",
+        "valid": true
+      },
+      "root_count": 1242,
+      "smoke_export_is_execution_root": true
+    }
+  },
+  "observed_inputs": {
+    "graph_report": {
+      "blake3": "f4e589cab7c570f73d955021dad5972d759d6fa8150bf90ab474efaa953e4ba4",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/graph-audit.json",
+      "size_bytes": 495216
+    },
+    "plan": {
+      "blake3": "399f520e3ba115abe5d7d407b35976cfdd2b2986be392d6b7175f5d34dbb8fcc",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-program-preparation-input-plan.json",
+      "size_bytes": 10329
+    },
+    "recipes": {
+      "full-source-native-provider": {
+        "blake3": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+        "size_bytes": 18269163
+      },
+      "full-source-rust-provider": {
+        "blake3": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/inputs/rust-source-archives/source-built/rust/program.json",
+        "size_bytes": 258937678
+      },
+      "mantle-stage1": {
+        "blake3": "538e87a1c232237c855a4c487168bde3a6258127817c03c6b3aa87ec1299958e",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+        "size_bytes": 174085014
+      },
+      "mantle-stage2": {
+        "blake3": "009288a67bd7f5f62d602a330f7e3685675eb009e8415b84a676b03eb80eb78c",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+        "size_bytes": 174085014
+      },
+      "stagex-provider-publication": {
+        "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+        "size_bytes": 52226
+      },
+      "stagex-transition": {
+        "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/program-sources/source-built-stagex-programs/stagex-transition.json",
+        "size_bytes": 31730468
+      }
+    },
+    "subject_json": {
+      "blake3": "5bbafadf863f6e07dc59595affd4851234690b538ee242aea8ace6bd79c8971c",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/review-subject.json",
+      "size_bytes": 5477
+    }
+  },
+  "review_script_blake3": {
+    "controller-template-audit.py": {
+      "blake3": "e7394213a34b8e9a06afe852a9113c952aec327e1a93adeb765f106274b58b10",
+      "size_bytes": 51276
+    },
+    "graph-audit.py": {
+      "blake3": "c56272eaf27cee88370c0b5762ad2901c6aa2ad5a5c16f87626fc47d9fef37ef",
+      "size_bytes": 98784
+    }
+  }
+}

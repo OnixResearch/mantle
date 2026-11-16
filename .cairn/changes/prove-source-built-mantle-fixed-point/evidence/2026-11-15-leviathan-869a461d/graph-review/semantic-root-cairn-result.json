@@ -1,0 +1,31 @@
+{
+  "task": "26",
+  "host": "local",
+  "actual_command": "/run/current-system/sw/bin/bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/semantic-root-cairn.sh",
+  "transcript": "../semantic-root-cairn.log",
+  "transcript_blake3": "960f45f8878856b2840576cfbe09688c9676904c10c5d69208694b6c0695354f",
+  "reports": [
+    {
+      "check": "validation",
+      "valid": true,
+      "verdict": null
+    },
+    {
+      "check": "proposal",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "check": "design",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "check": "tasks",
+      "valid": true,
+      "verdict": "PASS"
+    }
+  ],
+  "parser_note": "Whole emitted JSON objects decoded independent of object-key order. The initial valid-first extraction produced no reports and was rejected; no check was rerun.",
+  "non_claim": "Current-root structural/lifecycle validation and proposal/design/tasks gate passes only; not proof-dependent execution/v2, signed native-row, archive or release completion."
+}

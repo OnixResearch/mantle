@@ -1,0 +1,182 @@
+{
+  "schema": "mantle-independent-current-cohort-review-v1",
+  "review_model": "underclass/gpt-6-sol",
+  "assigned_scope": "review-contract.md criteria 1-6; graph, typed templates, symbolic runtime, semantic handoffs and static provenance only",
+  "verdict": "REJECT",
+  "reason": "The final graph inspector reports false for both canonical Mantle binary/semantic-product matches, but does not count either mismatch as a failure. Both selected binaries independently match exactly one correctly qualified semantic-product key, so this is an inspector enforcement defect, not an observed product mismatch. Repair and rerun the final inspector before using its CLEAR result as a complete static launch prerequisite.",
+  "subject": {
+    "host": "leviathan.cymric-daggertooth.ts.net",
+    "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace",
+    "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+    "frozen_product_revision": "869a461d6170404e752865a2029092391240b741",
+    "subject_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+    "frozen_complete_source_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+    "qualified_runner_blake3": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+    "subject_json_blake3_observed_in_source_kind_inventory": "5bbafadf863f6e07dc59595affd4851234690b538ee242aea8ace6bd79c8971c",
+    "plan_blake3": "670b518868884548d6570cdf9ed050086f6184c4bc4c7a95b17fdc8a9e78d0cd"
+  },
+  "observed_hashes": {
+    "final_graph_inspector": "a49650bcd8857f171554434c96e53cd6fdb674b85b9b6ed2cd1ecebc35232cec",
+    "final_template_inspector": "e7394213a34b8e9a06afe852a9113c952aec327e1a93adeb765f106274b58b10",
+    "final_graph_report": "cac6355bff14e0cb7408c2fcce619ce9b9b43193ef53e7a4147ab4dc138d6c78",
+    "source_kind_inventory": "07bf73013c79c1d09b87923108ad74215d67a09ca6d00059620443ff55acbc45",
+    "final_template_report_raw_verified_gzip_roundtrip": "c3ab0bd60fd66e29027c0f462f9d1e5726db983a191b83e7f7365019ac51d87a",
+    "final_template_report_gzip": "544b491f64ea69f886d0f1a1ff3490e08976612bcbc5580029086c3a35549e4d",
+    "frozen_consumer": {
+      "src/source_built_recipe.rs": "ace28395feedc75e43107b35a8af3a7c77bf593f757c45fedbd21151a15268a6",
+      "src/source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+      "src/source_built_recipe_exec.rs": "ec7d233b69c57375dd3ca7df4d33cf964f6a82e3ffa9b7acccc4b9740d41fc29",
+      "src/source_built_mantle_programs_graph.rs": "a07836d408247111138dc22066505a55728859e06a20322af1ccd5621bbcd730",
+      "src/source_built_stagex_programs_controller_protocol.c": "90cedfe17d94566a541f37b46ab5e15ed6e44950c4182cabc3ef9309e9058352",
+      "src/source_built_native_programs_host_nested.c": "38d305a6454a0453135ab7655efb5bf0e9a28dc871a8413b3346468beadb8a90",
+      "src/source_built_rust_programs_successors.rs": "2a5b773712dcae713568a04f3744847cc5c98450fd4a3786401cd1f0a",
+      "src/rust_plan.rs": "0890464dcf1da3d64dd9544018412d8908bc9b53da41db4aadb30d326d8ab90c"
+    }
+  },
+  "criteria": [
+    {
+      "id": 1,
+      "name": "Six exact recipes, original partitions, producer/order/cycle and genuine roots",
+      "status": "COVERED",
+      "counts": {
+        "selected_recipes": {"total": 6, "covered": 6},
+        "recipe_steps": {"total": 125355, "covered": 125355},
+        "artifact_reference_occurrences": {"total": 1707266, "covered": 1707266},
+        "actual_dependency_edges": {"total": 853200, "covered": 853200},
+        "source_selected_original_nodes": {"total": 162, "covered": 162},
+        "partitioned_original_node_steps": {"total": 77135, "covered": 77135},
+        "validator_unreachable_steps": 0,
+        "dependency_unreachable_but_source_order_executed_native_steps": 35,
+        "cycle_or_late_producer_defects": 0
+      },
+      "method": "Assessed frozen source-order/reference validator, selected plan/route/index selectors, partition/used_refs algorithm and complete captured six-recipe counters. The 132 StageX source/patch edges are source admissions, not claimed seed-produced bytes. The 35 native nodes lacking actual dependency reachability are nevertheless source-order-executed steps and are retained, not silently omitted.",
+      "citations": ["graph-review/contract-graph-audit.json#six_recipe_reports,coverage.stages,stagex_lineage_expansion_publication.partition,native_expansion_edges_and_make_uses.partition,rust_route_expansion_and_canonical_handoffs.partition", "graph-review/graph-audit.py:61-130,612-723,1004-1067", "frozen:src/source_built_recipe.rs:886-1096,2096-2104", "frozen:src/source_built_recipe_exec.rs:1190-1222"],
+      "uncovered_static_obligations": []
+    },
+    {
+      "id": 2,
+      "name": "Guard status, optional status, ObservePhase and executed/skipped state",
+      "status": "COVERED",
+      "counts": {
+        "generated_template_guard_conditions": {"total": 13378, "covered": 13378},
+        "raw_recipe_guard_status_edges": {"total": 80, "covered": 80},
+        "generated_template_observe_phases": {"total": 4580, "covered": 4580},
+        "raw_recipe_observe_phases": {"total": 80, "covered": 80},
+        "raw_optional_failure_ordinary_outputs": {"total": 232, "covered": 232},
+        "state_or_guard_findings": 0
+      },
+      "method": "Compared guard-to-prior-status bindings, lower_guard, ObservePhase source-order/state edges and symbolic skipped/executed alternatives with frozen producer/consumer; no skipped command output was fabricated.",
+      "citations": ["graph-review/contract-graph-audit.json#six_recipe_reports.*.graph_guards", "graph-review/contract-controller-template-audit.json.gz#coverage.per_stage", "graph-review/controller-template-audit.py:215-354", "frozen:src/source_built_recipe.rs:886-1096", "frozen:src/source_built_recipe_exec.rs:1185-1210", "frozen:src/source_built_stagex_programs_controller_protocol.c:336-361"],
+      "uncovered_static_obligations": []
+    },
+    {
+      "id": 3,
+      "name": "Semantic products, StageX/Rust handoffs, native installed member and binary/smoke",
+      "status": "BLOCKED_BY_INSPECTOR_DEFECT",
+      "counts": {
+        "stagex_lineage_source_or_patch_admissions": {"total": 132, "covered": 132, "actual_executable_dependency_checks": 0},
+        "native_derivation_edges": {"total": 341, "covered": 341},
+        "exact_linux_headers_bin_make_executable_consumers": {"total": 2, "covered": 2},
+        "rust_source_edges": {"total": 6, "covered": 6},
+        "rust_bootstrap_output_edges": {"total": 16, "covered": 16},
+        "mantle_semantic_product_refs": {"total": 2482, "covered": 2482},
+        "binary_export_to_correct_fully_qualified_mantle_semantic_product": {"total": 2, "independently_verified": 2, "correctly_checked_by_final_graph_inspector": 0},
+        "actual_help_smoke_consumers": {"total": 2, "covered": 2}
+      },
+      "method": "Compared actual StageX admission/alternate authored-input dispositions, 88 native derivations and installed make Tree-to-member projection with frozen isolated-installed-image consumer; checked canonical six Rust exports and selected semantic products. Fresh inert Python inspection of both selected Mantle recipes found each binary export exactly once under rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build. Final inspector instead looks up the nonexistent shorthand rust-unit:mantle and never treats false as a failure.",
+      "citations": ["graph-review/contract-graph-audit.json#stagex_lineage_expansion_publication,native_expansion_edges_and_make_uses,rust_route_expansion_and_canonical_handoffs,mantle_stage_semantic_root_and_smoke_inventory", "graph-review/graph-audit.py:1004-1067", "graph-review/contract-controller-template-audit.json.gz#mantle_export_and_help_root_audit", "frozen:src/source_built_native_programs_host_nested.c:232-250", "frozen:src/source_built_mantle_programs_graph.rs:585-698", "prepared-cohort/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json#semantic_roots,exports", "prepared-cohort/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json#semantic_roots,exports"],
+      "uncovered_static_obligations": ["Correct final graph-inspector binary/semantic-product key lookup and add mismatch to failure tally, then rerun on unchanged frozen subject."]
+    },
+    {
+      "id": 4,
+      "name": "Static/nested invocation and every typed word/env/cwd/argv0/image/descriptor/mount scope",
+      "status": "COVERED_STATIC",
+      "counts": {
+        "correctly_scoped_static_words": {"total": 2533604, "covered": 2533604},
+        "static_invocation_json_requests": {"total": 4279, "covered": 4279},
+        "runtime_only_request_static_bindings": {"total": 6167, "covered": 6167, "actual_runtime_bytes_observed": 0},
+        "retained_static_operand_unused_step_diagnostics": {"total": 71, "retained_and_classified": 71, "exec": 69, "write_text": 2},
+        "corrected_typed_word_or_environment_name_findings": 0
+      },
+      "method": "Compared frozen validate_word_scoped/decode_invocation/read-only Tree and mount/workspace/descriptor/argv0 rules with full locally scoped generated templates and captured static/nested request inventory. Frozen Rust static invocation emitter uses serde_json::to_string; runtime bytes are conditional and not guessed. All 71 unused-operand diagnostics are retained; 66 names are libraries, including separately authored ordering-only operands; these are not static recipe admission errors and no minimal-authority claim is made.",
+      "citations": ["graph-review/contract-controller-template-audit.json.gz#coverage,full_category_tally,per_stage", "graph-review/native-unused-inputs.json#unused_steps,unused_input_names", "graph-review/graph-audit.py:61-95,283-429", "graph-review/controller-template-audit.py:67-215,215-395", "frozen:src/source_built_recipe.rs:1098-1170,1316-1558", "frozen:src/source_built_recipe_exec.rs:282-304,1202-1380", "frozen:src/source_built_rust_programs_successors.rs:619-649"],
+      "uncovered_static_obligations": [],
+      "runtime_only_protected_obligations_not_static_unknown_kinds": ["Actual generated request bytes, strict decode/admission, launch/outcome and descriptor observations. Literal runtime payloads have not been observed."]
+    },
+    {
+      "id": 5,
+      "name": "Every ControllerSpec/variant/slot/template and symbolic emitter/decoder/router",
+      "status": "COVERED_SYMBOLIC",
+      "counts": {
+        "controller_specs": {"total": 2290, "covered": 2290},
+        "slots": {"total": 4580, "covered": 4580},
+        "generated_template_steps": {"total": 25009, "covered": 25009},
+        "symbolic_same_turn_same_slot_payload_links": {"total": 4580, "covered": 4580, "runtime_payload_bytes_observed": 0},
+        "selected_executable_variants": {"inventory": 2290, "request_output": 2109, "fixed": 181, "adapted": 0},
+        "constructor_issues": 0
+      },
+      "method": "Checked full generated start/prepare/command/executable/observation/resume/finish ID formulas, explicit fixed/inventory/request-output/unused adapted dispatch, runtime mounts and ControllerRuntime binding collisions in frozen constructor, same-slot Produced Text request to command, C request writer/identity router/strict observation branch, Rust strict canonical decoder and guarded execution dispatch. Raw graph inspector's 14013 ControllerSpec lexical flags are mis-scoped and replaced by complete template checks, not silently discarded. No request bytes or outcomes inferred.",
+      "citations": ["graph-review/contract-controller-template-audit.json.gz#per_stage,runtime_payload_producer_consumer_contract", "graph-review/controller-template-audit.py:215-395", "frozen:src/source_built_stagex_programs_controller.rs:20-210", "frozen:src/source_built_recipe_controller.rs:19-210", "frozen:src/source_built_stagex_programs_controller_protocol.c:225-337,336-440", "frozen:src/source_built_recipe.rs:1354-1565", "frozen:src/source_built_recipe_exec.rs:282-304,1190-1210"],
+      "uncovered_static_obligations": [],
+      "runtime_only_protected_obligations_not_static_unknown_kinds": ["Observe actual emitter frames, strict decoder output, active/skipped command results and all generated target products under protected execution."]
+    },
+    {
+      "id": 6,
+      "name": "Actual admitted source kinds, consumed helpers, package exclusions and features",
+      "status": "COVERED_STATIC",
+      "counts": {
+        "distinct_static_source_member_references": {"total": 816, "covered": 816, "unknown": 0},
+        "source_reference_occurrences_in_six_recipes": {"total": 11153, "covered": 11153},
+        "admitted_record_inventories": {"total": 92, "covered": 92, "native": 63, "stagex": 29},
+        "mantle_stage_consumed_helper_source_members": {"total": 6, "covered": 6},
+        "original_package_exclusion_operands": {"total": 2, "covered": 2},
+        "custom_build_script_feature_selectors": {"total": 196, "covered": 196},
+        "selected_compiler_cfg_feature_env_variables": {"total": 440, "matched": 440, "stage1": 220, "stage2": 220}
+      },
+      "method": "Compared actual 816 resolved Text/Tree classes to two admitted record inventories and frozen hydrate_reference/materialize_source_record_payload/lower_step, not digest-shaped names. Independently inspected both stage recipe JSONs: each original package copy binds original-package and original src/grammar.rs exclusion, and three exact helper source members are consumed per stage. Fresh inert Python scan located all 98 build-script units in each stage (including seven with .complete IDs), then compared each compile-step feature= cfg to the script environment CARGO_FEATURE_ names: 220 matched, zero missing/extra per stage. Source-byte physical reconstruction belongs to separate criteria 7-8, not asserted here.",
+      "citations": ["graph-review/contract-source-binding-kind-inventory.json#manifests,resolved_references", "graph-review/contract-graph-audit.json#six_recipe_reports.*.source_binding_references", "graph-review/graph-audit.py:128-206,660-695", "frozen:src/source_built_recipe.rs:2096-2130", "frozen:src/source_bundle.rs#materialize_source_record_payload", "frozen:src/source_built_mantle_programs_graph.rs:585-698", "frozen:src/rust_plan.rs:15849-15881", "prepared-cohort/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json#original_packages,semantic_roots", "prepared-cohort/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json#original_packages,semantic_roots"],
+      "uncovered_static_obligations": []
+    }
+  ],
+  "findings": [
+    {
+      "type": "inspector_defect",
+      "priority": 1,
+      "title": "Validate the canonical Mantle binary against its qualified semantic product",
+      "producer": "Both selected mantle-stage{1,2} recipe semantic_roots, key rust-unit:native:89a7b293d76f5212728bcf77d15b08740b1f5d2ec901f30756c8a38351432ad0:path+native#mantle@0.1.0:mantle:bin:build",
+      "consumer": "graph-review/graph-audit.py:1024-1040,1044-1060",
+      "observed": "sem.get('rust-unit:mantle',[]) is empty in each selected recipe; binary_is_exact_mantle_semantic_product=false twice, but mantle_root_and_consumer_failures ignores that flag. Independent exact-key inspection proves both current binaries do match, so the selected product is not claimed broken.",
+      "consequence": "A future/altered selected binary that remains an Executable root and the --help executable can pass the final CLEAR tally without being the declared Mantle semantic Rust unit; current report cannot certify this required handoff.",
+      "action": "Derive the unique actual rust-unit key for path+native#mantle@0.1.0:mantle:bin:build, compare its exact Produced output with the binary export, and count a mismatch or nonunique/missing key as a static failure; retain previous reports and rerun on the unchanged subject."
+    }
+  ],
+  "observations_not_blockers": [
+    "Final graph report's 14013 raw ControllerSpec word flags use outer controller-input-N scope; full template report checks actual generated lexical scopes and reports zero corrected issues.",
+    "StageX 132 source/patch lineage edges are authenticated source admission, not execution-produced dependency edges.",
+    "Two Linux-header commands consume the exact projected bin/make Executable from the Make installation Tree; this does not claim observed runtime image bytes.",
+    "Retained 71 native unused-input step diagnostics do not establish a missing required recipe input, and do not establish minimal input authority.",
+    "The graph inventory's 35 native dependency-unreachable steps remain executed in declared recipe order."
+  ],
+  "execution": {
+    "product_or_provider_executed": false,
+    "protected_launch_executed": false,
+    "build_test_lint_format_executed": false,
+    "methods_and_commands": [
+      "functions.read of review-contract.md, review-subject.json, current-inspection-summary.json, final graph/template/source-kind reports, frozen consumer source ranges and selected remote recipe excerpts; functions.grep of known frozen/local symbols and functions.find for unmapped invocation producer (find failed with 402; grep was used instead).",
+      "b3sum src/rust_plan.rs and final graph-review inspector/report files; ssh leviathan.cymric-daggertooth.ts.net /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum <five exact frozen consumer file paths>; observed hashes listed above.",
+      "gzip -cd graph-review/contract-controller-template-audit.json.gz | b3sum --no-names; gzip -cd ... | python3 -c 'import sys,json; r=json.load(sys.stdin); print(json.dumps({...per_stage variant/counters...}))' (read-only compact JSON projection).",
+      "ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -c 'import json; d=json.load(open(<cohort>/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json)); b=d[\"exports\"][\"mantle-stage1\"]; print([k for k,v in d[\"semantic_roots\"].items() if b in v])' (actual executed version also printed binary, all mantle keys and root membership).",
+      "ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -c 'import json; d=json.load(open(<cohort>/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json)); b=d[\"exports\"][\"mantle-stage2\"]; print([k for k,v in d[\"semantic_roots\"].items() if b in v])' (actual executed version also printed binary, root membership and nonexistent shorthand key).",
+      "ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -c '<bounded json/re comparison of all unit-NNNNN-script(?:-|[.]|$) indices, unit-NNNNN-compile feature cfgs and CARGO_FEATURE_ script environments>' for each of mantle-stage1.json and mantle-stage2.json; both returned 98/98 units and 220/220 names, zero missing/extra.",
+      "git diff -- .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/graph-review/ src/source_built_recipe.rs src/source_built_mantle_programs_graph.rs src/rust_plan.rs (no output)."
+    ],
+    "limits": "Only read-only, inert source/report/selected-recipe parsing and hashing; no product/helper/controller/compiler/provider/NCL/proof launches or mutations. Failed 402 find and one mistyped remote Python pathname were superseded by successful grep/correct-path read-only scans and are not counted as passing measurements."
+  },
+  "non_claims": [
+    "This review is advisory; it is not parent authorization to launch or proof completion.",
+    "No actual runtime invocation payload bytes, strict decoding of generated bytes, command results, descriptor outcomes or protected execution observed.",
+    "No actual stage2-to-stage1 equality, complete action-trust reconciliation, v2 receipt or fixed-point proof observed.",
+    "No compiler correctness, universal reproducibility, native signed-row acceptance, release or deployment eligibility established.",
+    "Physical/source byte qualification, source-profile and complete archive/NAR reconstruction are assigned separately to criteria 7-8 and not accepted by this review."
+  ]
+}

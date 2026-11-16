@@ -1,0 +1,40 @@
+{
+  "task": "1632",
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0",
+  "artifacts": [
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/graph-audit.json",
+      "file": "semantic-root-graph-audit.json",
+      "blake3": "f4e589cab7c570f73d955021dad5972d759d6fa8150bf90ab474efaa953e4ba4",
+      "transport_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/source-binding-kind-inventory.json",
+      "file": "semantic-root-source-binding-kind-inventory.json",
+      "blake3": "07bf73013c79c1d09b87923108ad74215d67a09ca6d00059620443ff55acbc45",
+      "transport_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/semantic-root-regression.json",
+      "file": "semantic-root-regression.json",
+      "blake3": "b615386d6b6de42059b175e2364d5b6f7fe71f25bbe8595670a410e2c2c0754b",
+      "transport_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/execution.log",
+      "file": "semantic-root-execution.log",
+      "blake3": "d98ab6c0546bd4b3edfbd90e5dfa0c87b915329ac7ece1688635d750bf2d8210",
+      "transport_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0/controller-template-audit.json.gz",
+      "file": "semantic-root-controller-template-audit.json.gz",
+      "blake3": "895569618a649a202e4090272f5e3140e468a0c350b68371b0073069d69edd96",
+      "raw_blake3": "fd7e69b09455d71c3e94ec2ed822aaf1abf7f1daabb3c43053a0a359c0993545",
+      "transport_equal": true,
+      "decompression_roundtrip_equal": true
+    }
+  ],
+  "reader_excerpt_rejected": "Formatted/raw SSH reader output was incomplete and not adopted; whole-file transfer was checked against actual remote BLAKE3.",
+  "non_claim": "Captured inert reinspection and fixture results only, not independent acceptance, protected execution or a v2 proof."
+}

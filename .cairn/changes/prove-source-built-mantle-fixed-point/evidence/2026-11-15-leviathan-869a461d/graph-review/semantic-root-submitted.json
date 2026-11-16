@@ -1,0 +1,26 @@
+{
+  "task": "1632",
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/inert-semantic-root-869a461d-request-workspace.frpsG0",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "rejected_inspector": "graph-audit-semantic-rejected.py",
+  "rejected_inspector_blake3": "a49650bcd8857f171554434c96e53cd6fdb674b85b9b6ed2cd1ecebc35232cec",
+  "scripts": [
+    {
+      "file": "graph-audit.py",
+      "blake3": "c56272eaf27cee88370c0b5762ad2901c6aa2ad5a5c16f87626fc47d9fef37ef",
+      "transfer_equal": true
+    },
+    {
+      "file": "controller-template-audit.py",
+      "blake3": "e7394213a34b8e9a06afe852a9113c952aec327e1a93adeb765f106274b58b10",
+      "transfer_equal": true
+    },
+    {
+      "file": "review-subject.json",
+      "blake3": "5bbafadf863f6e07dc59595affd4851234690b538ee242aea8ace6bd79c8971c",
+      "transfer_equal": true
+    }
+  ],
+  "driver": "run-semantic-root-inspection.sh",
+  "scope": "Correct qualified canonical Mantle unit selection, require one key and exact Produced binary membership, and include every canonical/consumer failure in the static tally. Validate both actual selected recipes plus missing/nonunique/wrong-product/shorthand-only in-memory cases, then rerun complete graph/template inspection against unchanged cohort. No source/cohort/pin mutation or protected execution."
+}

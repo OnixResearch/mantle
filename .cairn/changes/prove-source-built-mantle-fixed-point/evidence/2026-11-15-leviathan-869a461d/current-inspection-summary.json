@@ -6,7 +6,7 @@
   "actual_tasks": {
     "physical": "1624",
     "preauthor": "1625",
-    "static": "1629"
+    "static": "1632"
   },
   "verdicts": {
     "physical": "STATIC_IDENTITY_CHECKS_CLEAR",
@@ -310,14 +310,14 @@
     },
     "mantle_semantic_roots": {
       "mantle-stage1": {
-        "binary_root_exact": false,
+        "binary_root_exact": true,
         "covered": 1241,
         "help_consumers": 1,
         "smoke_export_present": true,
         "total": 1241
       },
       "mantle-stage2": {
-        "binary_root_exact": false,
+        "binary_root_exact": true,
         "covered": 1241,
         "help_consumers": 1,
         "smoke_export_present": true,
@@ -486,15 +486,48 @@
       "role": "vendor-inputs"
     }
   ],
+  "static_inspector_correction": {
+    "superseded_task": "1629",
+    "rejected_review": "independent-gpt6sol-graph/review.json",
+    "retained_rejected_inspector": "graph-review/graph-audit-semantic-rejected.py",
+    "corrected_inspector_blake3": "c56272eaf27cee88370c0b5762ad2901c6aa2ad5a5c16f87626fc47d9fef37ef",
+    "actual_executed_driver_blake3": "7b1c3af00780b95105fa099106e15ec3850a777c74a6e16a533920038d0a7a42",
+    "graph_report": "graph-review/semantic-root-graph-audit.json",
+    "template_report": "graph-review/semantic-root-controller-template-audit.json.gz",
+    "complete_template_summary": "graph-review/semantic-root-template-summary.json",
+    "regression_report": "graph-review/semantic-root-regression.json",
+    "actual_recipe_positive_cases": 2,
+    "negative_rejections": 8,
+    "transport": "graph-review/semantic-root-result-transport.json",
+    "unchanged_selected_input_and_consumer_bindings": "graph-review/semantic-root-subject-parity.json"
+  },
+  "current_cairn_gate": {
+    "host": "local",
+    "task": "26",
+    "result": "graph-review/semantic-root-cairn-result.json",
+    "validation_and_proposal_design_tasks_passed": true
+  },
+  "sealed_parent_launch_review": {
+    "file": "launch-review-acceptance-gpt6sol.json",
+    "blake3": "f1e3cdcb29a9eb68be24643f0f6087569d9c83fd42d115866824c663b0ddf01f",
+    "remote_bytes_equal": true,
+    "fresh_driver_preconditions_still_required": true
+  },
   "independent_review": {
     "required_model": "underclass/gpt-6-sol",
-    "status": "user-authorized; independent review pending",
+    "status": "both bounded slices parent-integrated; current Cairn gates passed and exact launch review sealed; protected attempt not yet launched",
     "previous_required_model": "underclass/gpt-6-luna",
     "previous_model_error": "429 quota_exhausted",
     "model_change": "explicit user-authorized replacement, not an automatic fallback",
     "authorization_record": "independent-review-model-authorization.json",
-    "independent_acceptance_obtained": false,
-    "parent_checks_are_not_independent_acceptance": true
+    "independent_acceptance_obtained": true,
+    "parent_checks_are_not_independent_acceptance": true,
+    "graph_review_report": "independent-gpt6sol-graph/review-semantic-fixed.json",
+    "graph_review_verdict": "ACCEPT_BOUNDED for criteria 1-6 only",
+    "graph_parent_integration": "independent-gpt6sol-graph/parent-integration.json",
+    "physical_review_report": "independent-gpt6sol-physical/review.json",
+    "physical_review_verdict": "ACCEPT_BOUNDED for criteria 7-8 only",
+    "physical_parent_integration": "independent-gpt6sol-physical/parent-integration.json"
   },
   "authority": {
     "protected_attempt_launched": false,

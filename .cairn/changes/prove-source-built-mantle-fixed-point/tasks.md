@@ -870,3 +870,34 @@ Shell syntax and transfer parity passed. An actual invalid review-hash argument
 was rejected with exit 1 before the proof parent existed. This is a negative
 launch-gate observation only; the proof is not queued or launched.
 
+## Independent inspector finding (2026-11-16)
+
+The physical/source slice is bounded accepted for criteria 7-8 and published
+with parent-checked report, inspector and frozen-consumer bindings. The graph
+slice rejected the final inspector's missing qualified Mantle-unit lookup and
+omitted failure tally. Both actual binary matches were independently observed;
+no product mismatch is asserted. The historical static-clear label is not a
+launch prerequisite while this finding remains open.
+
+The rejected inspector/review are retained. Inspector-only correction and
+positive/negative in-memory checks are queued as detached inert task 1632,
+followed by full unchanged-cohort graph/template reinspection and independent
+re-review. No source/cohort/pin change or proof launch follows from this work.
+
+## Corrected inspector and complete independent review observed (2026-11-16)
+
+Task 1632 completed Success: two actual canonical-binary positives, eight
+isolated negative rejections, and complete graph/template static-clear
+measurement. Both binary/semantic matches are now enforced and true. All
+14 selected-input and 30 frozen graph-consumer byte bindings were unchanged.
+Full report transport and compressed-template roundtrip parity passed;
+incomplete reader excerpts were rejected, not used as evidence.
+
+Renewed exact-model graph acceptance covers complete criteria 1-6, with no
+remaining static finding. Parent checked all 35 counter rows and 18 actual
+artifact/consumer bindings plus subject, recipe, raw-template and transport
+identities. Together with the separately accepted physical/source criteria
+7-8, all required review criteria are integrated. The original graph rejection
+is retained. Current Cairn gates and sealed review/fresh launch preconditions
+remain before protected execution; I3-I5 and proof-dependent V2/V3 stay open.
+
