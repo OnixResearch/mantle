@@ -949,3 +949,30 @@ N1's real completed-proof adoption and all five native rows, N2's published
 fresh qualification/regeneration/review, I3-I5 and proof-dependent V2/V3 remain
 open. A warm-target developer check cannot qualify the changed frozen source.
 
+## Replacement-source inventory gate observed (2026-11-16)
+
+Published source `48afe43229ebccdb8d24ae382e8dabb59281dd71` and its exact Git
+archive passed transfer parity; task 1642 assembled the complete source with
+the unchanged independently pinned original AWS tree. Canonical task 1643
+passed its selected release, bootstrap-parity, schema-mechanism, receipt,
+adoption, Cargo-free, closure, self-build and release-core test legs, then the
+actual machine-schema checker rejected the new adoption module's missing
+producer-family inventory decision. Task 1645 was DependencyFailed and did
+not execute preparation. This source remains an immutable unqualified
+predecessor, not a current prepared or accepted proof cohort.
+
+The operator's versioned report now has its own
+`bootstrap.cold-stagex-adoption-report` compatibility classification and public
+producer marker. It is not mislabeled as an internal-only encoding, nor added
+to the curated generated-schema cohort. The existing Rust owner, receipt-bound
+consumer, exact-version rejection and proof/store non-claims remain authoritative.
+Nickel typechecking passed and the narrow current-root gate reported
+`machine schema contract check: PASS (24 contracted, 66 classified)`; the exact
+command/output is retained in
+`evidence/2026-11-16-signed-stagex-adoption/producer-inventory-check.log`.
+
+The changed source still requires a newly published freeze, absent runner and
+canonical targets, successful regeneration and the full fresh independent
+review before protected execution. No 48afe432 qualification or unexecuted
+inspector port can be promoted to the final replacement subject.
+

@@ -84,6 +84,7 @@ pub struct StagexAdoptedOutput {
     pub signature_count: u32,
 }
 
+// machine-artifact-public: bootstrap.cold-stagex-adoption-report
 #[derive(Debug, Clone, Serialize)]
 pub struct StagexAdoptionReport {
     pub schema: String,

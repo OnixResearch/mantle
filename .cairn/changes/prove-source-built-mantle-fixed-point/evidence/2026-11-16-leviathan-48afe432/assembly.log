@@ -1,0 +1,51 @@
++ date -Is
+2026-11-16T15:33:42-05:00
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/source-48afe43229ebccdb8d24ae382e8dabb59281dd71.tar.gz
++ test 1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb = 1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc-original.tar
++ test 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88 = 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88
+++ /run/current-system/sw/bin/jq -r .revision /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original-source-capture.json
++ test 02561621ffa4cf17c0c4f70bc11a82df36b42ae9 = 02561621ffa4cf17c0c4f70bc11a82df36b42ae9
+++ /run/current-system/sw/bin/jq -r .git_tree_sha1 /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/original-source-capture.json
++ test 969d75db5c0494de4a26bbb2dcbf6837058054c1 = 969d75db5c0494de4a26bbb2dcbf6837058054c1
+++ gzip --decompress --stdout /home/brittonr/sbfp-20261113-berdKH/incoming/source-48afe43229ebccdb8d24ae382e8dabb59281dd71.tar.gz
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ test 28267665187d40c1689f246cafd7d7bf15103bda70480e677602ff4ca2dff2c3 = 28267665187d40c1689f246cafd7d7bf15103bda70480e677602ff4ca2dff2c3
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz
++ mkdir /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption
++ /run/current-system/sw/bin/tar --extract --gzip --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/source-48afe43229ebccdb8d24ae382e8dabb59281dd71.tar.gz --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption
+++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ CODE_TREE=d17932a1136a0810da829dadad91034430a4af79aafe805da43f34fecf612c90
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
++ mkdir -p /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
++ /run/current-system/sw/bin/tar --extract --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc-original.tar --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9
+++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9 .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ ORIGINAL_TREE=8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
++ test 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89 = 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89
++ /run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar --directory /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar
++ RAW_BLAKE3=b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
++ gzip --no-name --keep /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz
++ COMPRESSED_BLAKE3=de758000b1dd7450a6afaa9346e9f226c827361bb7af65b73a1ea66502397178
++ /run/current-system/sw/bin/jq -n --arg source_code_revision 48afe43229ebccdb8d24ae382e8dabb59281dd71 --arg code_archive_blake3 1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb --arg code_tree_blake3 d17932a1136a0810da829dadad91034430a4af79aafe805da43f34fecf612c90 --arg original_git_commit 02561621ffa4cf17c0c4f70bc11a82df36b42ae9 --arg original_git_tree 969d75db5c0494de4a26bbb2dcbf6837058054c1 --arg original_source_archive_blake3 282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88 --arg original_source_tree_blake3 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89 --arg complete_archive_blake3 b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5 --arg compressed_archive_blake3 de758000b1dd7450a6afaa9346e9f226c827361bb7af65b73a1ea66502397178 --arg archive /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar --arg assembly_root /home/brittonr/sbfp-20261113-berdKH/source-assembly-48afe432-signed-stagex-adoption '{schema:"mantle-complete-source-snapshot-v1",source_code_revision:$source_code_revision,code_archive_blake3:$code_archive_blake3,code_tree_blake3:$code_tree_blake3,original_git_commit:$original_git_commit,original_git_tree_sha1:$original_git_tree,original_source_archive_blake3:$original_source_archive_blake3,original_source_normalized_tar_blake3:$original_source_tree_blake3,complete_archive_blake3:$complete_archive_blake3,compressed_archive_blake3:$compressed_archive_blake3,archive:$archive,assembly_root:$assembly_root,non_claim:"Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"}'
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz /home/brittonr/sbfp-20261113-berdKH/complete-source-48afe432-signed-stagex-adoption.json
+b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5  /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar
+de758000b1dd7450a6afaa9346e9f226c827361bb7af65b73a1ea66502397178  /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz
+ef822886bd7c63201eb4ecdac2b92c2b9daaef55d8c504c006267b797ecb2e0b  /home/brittonr/sbfp-20261113-berdKH/complete-source-48afe432-signed-stagex-adoption.json
++ date -Is
+2026-11-16T15:34:01-05:00
++ finished=1
++ printf 'complete_source_assembly=1\n'
+complete_source_assembly=1
++ status=0
++ '[' 0 -eq 0 ']'
++ '[' 1 -ne 1 ']'
++ printf 'assembly_exit=%s\n' 0
+assembly_exit=0
++ printf '%s\n' 0
++ exit 0

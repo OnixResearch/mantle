@@ -1,0 +1,3 @@
+367b19b0a3c608e85484b5fa35715a52683bc6995f385fa6c85d88bbfa3ed389  /home/brittonr/sbfp-20261113-berdKH/bin/mantle-48afe432-signed-stagex-adoption
+6368f98f3d891461cc5b3dd0b2e4d78335f40cdec9c0d397413520ca74b32ee4  /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-48afe432-signed-stagex-adoption
+4d2c321b1de89b19eb37d3ce1523466e5c5ba80ff753f3964ea7a1bebf5f55ed  /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-48afe432-signed-stagex-adoption

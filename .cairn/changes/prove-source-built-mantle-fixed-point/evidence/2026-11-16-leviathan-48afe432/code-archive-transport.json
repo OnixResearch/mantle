@@ -1,0 +1,9 @@
+{
+  "source_code_revision": "48afe43229ebccdb8d24ae382e8dabb59281dd71",
+  "local_archive": "/tmp/mantle-48afe432-freeze.p6xElv/source-48afe43229ebccdb8d24ae382e8dabb59281dd71.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-48afe43229ebccdb8d24ae382e8dabb59281dd71.tar.gz",
+  "compressed_archive_blake3": "1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb",
+  "transfer_equal": true,
+  "raw_archive_blake3": "28267665187d40c1689f246cafd7d7bf15103bda70480e677602ff4ca2dff2c3",
+  "source": "Git archive of the published immutable commit; unchanged independently pinned original source is assembled separately."
+}

@@ -39,6 +39,11 @@ raw receipt identities, exact producer-bound StageX exports, explicit existing
 signing authority, and fresh nonoverlapping local store/state destinations.
 Development or partial attempts cannot pass this boundary.
 
+The versioned adoption report is an explicit compatibility surface in the
+machine-artifact inventory, not an internal-only DTO. Its Rust owner and
+receipt-bound consumer checks govern the handoff; classification does not
+add it to the curated generated-schema cohort or confer proof/store authority.
+
 The canonical transition export contains original and intermediate artifacts in
 addition to runtime tools. Copy each complete canonical export into an owned
 bounded snapshot and compare its exact receipt-bound artifact identity before

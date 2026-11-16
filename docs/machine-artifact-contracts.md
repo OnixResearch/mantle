@@ -91,6 +91,16 @@ paths. `fixed_point: true` means only that the recorded stage1/stage2 binary
 digests match under this bounded proof; it does not promote compiler, seed,
 release, independent-rebuild, deployment, or full-Cargo claims.
 
+Cold StageX adoption uses the `bootstrap.cold-stagex-adoption-report`
+compatibility family for `mantle-cold-stagex-store-adoption-v1`. Its Rust owner
+is `StagexAdoptionReport`; the native-row operator rejects unsupported versions,
+incomplete publication and report-identity drift before native builds, then
+rechecks the selected signer and current signed outputs. This is an explicit
+operator-consumer boundary, not an internal-only encoding or an addition to
+the curated generated-schema cohort. Classification alone does not reverify a
+cold proof, authorize a signer, establish current NAR bytes or grant new
+provider, fixed-point, native-row or release claims.
+
 ## Authority flow
 
 Authority is one-way:

@@ -2259,6 +2259,56 @@ let Registry = {
       "rationale"= "Bootstrap, StageX, authored programs and private proof artifacts, including their protocol/regression fixtures, remain governed by proof manifests and canonical digests rather than a public schema."
     },
     {
+      "id"= "bootstrap.cold-stagex-adoption-report",
+      "class"= "compatibility",
+      "rust_owner"= "src/source_built_fixed_point_stagex_adoption.rs::StagexAdoptionReport",
+      "producer"= {
+        "command_or_api"= "adopt-source-built-stagex --json and create-new adoption report",
+        "marker"= "bootstrap.cold-stagex-adoption-report",
+        "source_paths"= [
+          "src/source_built_fixed_point_stagex_adoption.rs"
+        ]
+      },
+      "consumers"= [
+        "scripts/qualify-native-rows.py",
+        "native-row operator evidence"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle-cold-stagex-store-adoption-v1",
+        "supported"= [],
+        "unknown_version_behavior"= "reject non-v1, incomplete, or mismatched reports before native builds",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p mantle --lib source_built_fixed_point_stagex_adoption::tests::"
+      ],
+      "fixture_coverage"= [
+        "classification"
+      ],
+      "freshness_strategy"= "Rust owner and receipt-bound signed-adoption tests; consumers independently pin exact report bytes and verify current signed outputs",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "classification does not reverify a proof, authorize a signer, or verify current store content",
+        "adoption does not establish new provider construction, a fixed point, native-row acceptance, or release authority"
+      ],
+      "rationale"= "The separate operator handoff composes existing cold-proof, canonical-artifact and signed-store facts outside the curated schema-contracted cohort; its explicit v1 compatibility boundary is not an internal-only DTO or a new proof receipt."
+    },
+    {
       "id"= "bootstrap.parity-reports",
       "class"= "debug",
       "rust_owner"= "src/bootstrap_parity.rs::public_json_family",

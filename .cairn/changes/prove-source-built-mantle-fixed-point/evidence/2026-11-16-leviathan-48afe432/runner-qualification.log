@@ -1,0 +1,1935 @@
++ date -Is
+2026-11-16T15:34:01-05:00
+++ cat /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-48afe432-signed-stagex-adoption.exit
++ test 0 = 0
++ jq -e '.schema == "mantle-complete-source-snapshot-v1" and .source_code_revision == "48afe43229ebccdb8d24ae382e8dabb59281dd71" and .code_archive_blake3 == "1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb" and .original_source_normalized_tar_blake3 == "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89"' /home/brittonr/sbfp-20261113-berdKH/complete-source-48afe432-signed-stagex-adoption.json
+true
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz
+++ jq -er .compressed_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-48afe432-signed-stagex-adoption.json
++ test de758000b1dd7450a6afaa9346e9f226c827361bb7af65b73a1ea66502397178 = de758000b1dd7450a6afaa9346e9f226c827361bb7af65b73a1ea66502397178
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption
++ mkdir /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption
++ tar --extract --gzip --no-same-owner --file /home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-48afe432-signed-stagex-adoption.tar.gz --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption
+++ source_digest
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_BEFORE=b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
+++ jq -er .complete_archive_blake3 /home/brittonr/sbfp-20261113-berdKH/complete-source-48afe432-signed-stagex-adoption.json
++ test b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5 = b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-48afe432-signed-stagex-adoption XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/runner-tmp-48afe432-signed-stagex-adoption
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ mkdir /home/brittonr/sbfp-20261113-berdKH/runner-tmp-48afe432-signed-stagex-adoption
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ cd /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption
++ /run/current-system/sw/bin/nix develop --profile /home/brittonr/sbfp-20261113-berdKH/tooling-profile-runner-48afe432-signed-stagex-adoption --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; rustc -Vv; cargo -V; printf "fresh_target=%s\n" "$CARGO_TARGET_DIR"; cargo fmt --check -p mantle -v; cargo test --release --locked --offline -p mantle --bin mantle source_built_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --bin adopt-source-built-stagex --bin check-native-row-receipts --tests --no-deps -- -D warnings; cargo build --release --locked --offline -p mantle --bin mantle --bin adopt-source-built-stagex --bin check-native-row-receipts'
+error (ignored): SQLite database '/home/brittonr/sbfp-20261113-berdKH/tooling-cache/nix/eval-cache-v6/bb494231a100688f6b5486cca0f1b4040d3f9471b7a1794630c7ef3a3ea78637.sqlite' is busy
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+fresh_target=/home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/shared-action-result-roundtrip/publish.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/resource_evidence_check.rs"
+[example (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/resource_policy_replay.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/scripts/adopt-source-built-stagex.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/scripts/check-native-row-receipts.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/bin/mantle-protected-build-runner.rs"
+[lib (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/lib.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/main.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_apk.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_sources.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_sources_offline.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_build_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/causal_build_trace.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/demand_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/elf_dynamic_reference_scanner.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/elf_dynamic_relocation.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/finish_gates.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/gateway_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/integration.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/profile_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/release_gauntlet_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_hexagon_v2_parity.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/resource_gateway_runtime.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/retention_interest_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/smoke.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_eval_backends.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_eval_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_lazy_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_scheduler_priority.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/benchmark_suite.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/distributed_eval_assess.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/hardware_simulation_plan.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/picolibc_compare.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/delta-substitution/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/release-witness-handoff/demo.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/resource_evidence_check.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/examples/resource_policy_replay.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/scripts/adopt-source-built-stagex.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/scripts/check-native-row-receipts.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/bin/mantle-protected-build-runner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/lib.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/main.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_apk.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_sources.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/android_sources_offline.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/attest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/audit_support.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/benchmark_harness.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_parity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/bootstrap_validate_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_build_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_free_self_build_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/cargo_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/causal_build_trace.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/composition_root_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/demand_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/elf_dynamic_reference_scanner.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/elf_dynamic_relocation.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/evaluator_budget_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/example_projects.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_eval.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_inventory.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/examples_workflow_gallery.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/finish_gates.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/foreign_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/freshness_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/gateway_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/identity_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/integration.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/integration_build.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernel_bundle_oci_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/kernelscript_experiment.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/lock_importer_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/machine_schema_contracts.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/nix_free_demo_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/offline_build_runbook_docs.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/offline_cargo_project.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/operator_diagnostics.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/pin_import_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/profile_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_build_smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/project_refresh_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/release_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/release_gauntlet_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_credentials_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_hexagon_v2_parity.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_rail_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_stdio_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/remote_transfer_production.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/removed_system_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/resource_gateway_runtime.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/retention_interest_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/retention_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/rust_compatibility_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/rust_plan_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/scheduling_policy.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/self_hosting.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/smoke.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/source_bundle_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/source_bundle_hydration_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/stdlib_tests.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/store_archive_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/store_gc_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/transactional_reconciliation_pilot.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/transcript_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/trust_policy_offline_rail.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tests/wasm_component_cli.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tools/generate_operator_command_contract.rs /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/tools/generate_portable_platform_profiles.rs
+warning: /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling version_check v0.9.5
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling crossbeam-utils v0.8.21
+   Compiling itoa v1.0.18
+   Compiling smallvec v1.15.1
+   Compiling subtle v2.6.1
+   Compiling typenum v1.20.1
+   Compiling parking_lot_core v0.9.12
+   Compiling syn v2.0.117
+   Compiling generic-array v0.14.7
+   Compiling aho-corasick v1.1.4
+   Compiling jobserver v0.1.34
+   Compiling regex-syntax v0.8.10
+   Compiling cc v1.2.59
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling getrandom v0.2.17
+   Compiling scopeguard v1.2.0
+   Compiling rand_core v0.6.4
+   Compiling lock_api v0.4.14
+   Compiling const-oid v0.9.6
+   Compiling parking_lot v0.12.5
+   Compiling thiserror v2.0.18
+   Compiling equivalent v1.0.2
+   Compiling allocator-api2 v0.2.21
+   Compiling cpufeatures v0.2.17
+   Compiling arrayvec v0.7.6
+   Compiling crossbeam-epoch v0.9.20
+   Compiling stable_deref_trait v1.2.1
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling foldhash v0.2.0
+   Compiling fastrand v2.4.1
+   Compiling cpufeatures v0.3.0
+   Compiling rayon-core v1.13.0
+   Compiling regex-automata v0.4.14
+   Compiling rustix v1.1.4
+   Compiling crossbeam-deque v0.8.6
+   Compiling hashbrown v0.16.1
+   Compiling blake3 v1.8.5
+   Compiling errno v0.3.14
+   Compiling log v0.4.29
+   Compiling linux-raw-sys v0.12.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling pin-project-lite v0.2.17
+   Compiling crc32fast v1.5.0
+   Compiling serde_derive v1.0.228
+   Compiling zeroize_derive v1.5.0
+   Compiling thiserror-impl v2.0.18
+   Compiling zeroize v1.9.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling autocfg v1.5.0
+   Compiling futures-core v0.3.32
+   Compiling same-file v1.0.6
+   Compiling crossbeam-channel v0.5.15
+   Compiling synstructure v0.13.2
+   Compiling walkdir v2.5.0
+   Compiling tinyvec_macros v0.1.1
+   Compiling byteorder v1.5.0
+   Compiling tinyvec v1.11.0
+   Compiling gix-trace v0.1.18
+   Compiling pkg-config v0.3.32
+   Compiling mio v1.2.0
+   Compiling libm v0.2.16
+   Compiling unicode-normalization v0.1.25
+   Compiling getrandom v0.4.2
+   Compiling rand_core v0.10.0
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling tokio-macros v2.7.0
+   Compiling socket2 v0.6.3
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-path v0.11.2
+   Compiling rustversion v1.0.22
+   Compiling zerofrom v0.1.7
+   Compiling tokio v1.51.0
+   Compiling yoke-derive v0.8.2
+   Compiling futures-io v0.3.32
+   Compiling human_format v1.2.1
+   Compiling bytesize v2.3.1
+   Compiling gix-error v0.2.1
+   Compiling prodash v31.0.0
+   Compiling winnow v0.7.15
+   Compiling yoke v0.8.2
+   Compiling zlib-rs v0.6.3
+   Compiling sha1 v0.10.6
+   Compiling zerovec-derive v0.11.3
+   Compiling futures-sink v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling futures-macro v0.3.32
+   Compiling zerovec v0.11.6
+   Compiling displaydoc v0.2.5
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.32
+   Compiling tracing-core v0.1.36
+   Compiling futures-util v0.3.32
+   Compiling writeable v0.6.3
+   Compiling sha1-checked v0.10.0
+   Compiling gix-features v0.46.2
+   Compiling heapless v0.8.0
+   Compiling base64ct v1.8.3
+   Compiling semver v1.0.28
+   Compiling pem-rfc7468 v0.7.0
+   Compiling rustc_version v0.4.1
+   Compiling tinystr v0.8.3
+   Compiling tempfile v3.27.0
+   Compiling hash32 v0.3.1
+   Compiling tracing-attributes v0.1.31
+   Compiling litemap v0.8.2
+   Compiling icu_locale_core v2.2.0
+   Compiling der v0.7.10
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling syn v3.0.3
+   Compiling unicode-width v0.2.2
+   Compiling tracing v0.1.44
+   Compiling utf8_iter v1.0.4
+   Compiling jiff v0.2.23
+   Compiling icu_collections v2.2.0
+   Compiling spki v0.7.3
+   Compiling icu_provider v2.2.0
+   Compiling faster-hex v0.10.0
+   Compiling num-traits v0.2.19
+   Compiling sha2 v0.10.9
+   Compiling indexmap v2.13.1
+   Compiling icu_normalizer_data v2.2.0
+   Compiling icu_properties_data v2.2.0
+   Compiling base64 v0.22.1
+   Compiling pkcs8 v0.10.2
+   Compiling http v1.4.0
+   Compiling cmake v0.1.58
+   Compiling write16 v1.0.0
+   Compiling percent-encoding v2.3.2
+   Compiling fs_extra v1.3.0
+   Compiling dunce v1.0.5
+   Compiling gix-date v0.15.1
+   Compiling utf16_iter v1.0.5
+   Compiling aws-lc-sys v0.45.0
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling gix-hash v0.23.0
+   Compiling fnv v1.0.7
+   Compiling bytemuck_derive v1.12.1
+   Compiling tokio-util v0.7.18
+   Compiling either v1.15.0
+   Compiling cfg_aliases v0.2.1
+   Compiling gix-actor v0.40.0
+   Compiling signature v2.2.0
+   Compiling bytemuck v1.25.0
+   Compiling ring v0.17.14
+   Compiling ryu v1.0.23
+   Compiling spin v0.9.9
+   Compiling aws-lc-rs v1.18.1
+   Compiling lazy_static v1.5.0
+   Compiling gix-hashtable v0.13.0
+   Compiling rustls-pki-types v1.14.0
+   Compiling zerocopy v0.8.48
+   Compiling unicode-xid v0.2.6
+   Compiling gix-object v0.58.0
+   Compiling memmap2 v0.9.10
+   Compiling encoding_rs v0.8.35
+   Compiling ipnet v2.12.0
+   Compiling untrusted v0.9.0
+   Compiling heck v0.5.0
+   Compiling simd-adler32 v0.3.9
+   Compiling httparse v1.10.1
+   Compiling foldhash v0.1.5
+   Compiling anyhow v1.0.102
+   Compiling adler2 v2.0.1
+   Compiling miniz_oxide v0.8.9
+   Compiling hashbrown v0.15.5
+   Compiling regex v1.12.3
+   Compiling getrandom v0.3.4
+   Compiling ident_case v1.0.1
+   Compiling rustls v0.23.46
+   Compiling strsim v0.11.1
+   Compiling http-body v1.0.1
+   Compiling thread_local v1.1.9
+   Compiling idna_adapter v1.2.1
+   Compiling form_urlencoded v1.2.2
+   Compiling gix-fs v0.19.2
+   Compiling gix-chunk v0.7.0
+   Compiling try-lock v0.2.5
+   Compiling tower-service v0.3.3
+   Compiling signal-hook v0.4.4
+   Compiling atomic-waker v1.1.2
+   Compiling want v0.3.1
+   Compiling idna v1.1.0
+   Compiling h2 v0.4.16
+   Compiling itertools v0.14.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling gix-quote v0.7.0
+   Compiling hashbrown v0.14.5
+   Compiling static_assertions v1.1.0
+   Compiling nonempty v0.12.0
+   Compiling url v2.5.8
+   Compiling dashmap v6.1.0
+   Compiling rand_core v0.9.5
+   Compiling num-integer v0.1.46
+   Compiling ppv-lite86 v0.2.21
+   Compiling sync_wrapper v1.0.2
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling object v0.37.3
+   Compiling openssl-probe v0.2.1
+   Compiling tower-layer v0.3.3
+   Compiling data-encoding v2.10.0
+   Compiling tower v0.5.3
+   Compiling rustls-native-certs v0.8.3
+   Compiling hyper v1.9.0
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-commitgraph v0.35.0
+   Compiling hyper-util v0.1.20
+   Compiling sharded-slab v0.1.7
+   Compiling ed25519 v2.2.3
+   Compiling gix-glob v0.24.0
+   Compiling tracing-log v0.2.0
+   Compiling matchers v0.2.0
+   Compiling gimli v0.32.3
+   Compiling nu-ansi-term v0.50.3
+   Compiling colorchoice v1.0.5
+   Compiling iri-string v0.7.12
+   Compiling tracing-subscriber v0.3.23
+   Compiling ed25519-dalek v2.2.0
+   Compiling gix-revwalk v0.29.0
+   Compiling http-body-util v0.1.3
+   Compiling arc-swap v1.9.1
+   Compiling unicode-segmentation v1.13.2
+   Compiling owo-colors v4.3.0
+   Compiling rustc-demangle v0.1.28
+   Compiling iana-time-zone v0.1.65
+   Compiling tower-http v0.6.8
+   Compiling addr2line v0.25.1
+   Compiling mime v0.3.17
+   Compiling anstyle v1.0.14
+   Compiling syn v1.0.109
+   Compiling chrono v0.4.44
+   Compiling convert_case v0.10.0
+   Compiling rand_chacha v0.9.0
+   Compiling glob v0.3.3
+   Compiling utf8parse v0.2.2
+   Compiling unicode-linebreak v0.1.5
+   Compiling is_ci v1.2.0
+   Compiling unicode-bom v2.0.3
+   Compiling backtrace v0.3.76
+   Compiling textwrap v0.16.2
+   Compiling supports-color v3.0.2
+   Compiling anstyle-parse v1.0.0
+   Compiling clang-sys v1.9.1
+   Compiling backtrace-ext v0.2.1
+   Compiling rand v0.9.3
+   Compiling derive_more-impl v2.1.1
+   Compiling gix-lock v21.0.2
+   Compiling darling_core v0.23.0
+   Compiling strum_macros v0.26.4
+   Compiling terminal_size v0.4.4
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling inout v0.1.4
+   Compiling miette-derive v7.6.0
+   Compiling filetime v0.2.27
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling prettyplease v0.2.37
+   Compiling bumpalo v3.20.2
+   Compiling rustix v0.38.44
+   Compiling rustc-hash v2.1.2
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling icu_locale_data v2.2.0
+   Compiling supports-hyperlinks v3.2.0
+   Compiling unicode-width v0.1.14
+   Compiling portable-atomic v1.13.1
+   Compiling anstyle-query v1.1.5
+   Compiling supports-unicode v3.0.0
+   Compiling sha1_smol v1.0.1
+   Compiling miette v7.6.0
+   Compiling uuid v1.23.0
+   Compiling anstream v1.0.0
+   Compiling strum v0.26.3
+   Compiling darling_macro v0.23.0
+   Compiling syn-mid v0.5.4
+   Compiling derive_more v2.1.1
+   Compiling cipher v0.4.4
+   Compiling kstring v2.0.2
+   Compiling memoffset v0.9.1
+   Compiling universal-hash v0.5.1
+   Compiling pin-project-internal v1.1.11
+   Compiling proc-macro-error v0.4.12
+   Compiling io-lifetimes v3.0.1
+   Compiling icu_collator_data v2.2.0
+   Compiling io-lifetimes v2.0.4
+   Compiling linux-raw-sys v0.4.15
+   Compiling opaque-debug v0.3.1
+   Compiling minimal-lexical v0.2.1
+   Compiling shell-words v1.1.1
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling winnow v1.0.1
+   Compiling parking v2.2.1
+   Compiling clap_lex v1.1.0
+   Compiling pin-project v1.1.11
+   Compiling futures-lite v2.6.1
+   Compiling clap_builder v4.6.0
+   Compiling nom v7.1.3
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling gix-command v0.8.0
+   Compiling polyval v0.6.2
+   Compiling gix-attributes v0.31.0
+   Compiling darling v0.23.0
+   Compiling clap_derive v4.6.0
+   Compiling libloading v0.8.9
+   Compiling futures-executor v0.3.32
+   Compiling branches v0.4.6
+   Compiling crc32c v0.6.8
+   Compiling gix-config-value v0.17.1
+   Compiling bigdecimal v0.4.11
+   Compiling async-trait v0.1.89
+   Compiling turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling aegis v0.9.8
+   Compiling libmimalloc-sys v0.1.44
+   Compiling simsimd v6.5.16
+   Compiling uncased v0.9.10
+   Compiling home v0.5.12
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling zstd-safe v7.2.4
+   Compiling bindgen v0.69.5
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling io-extras v0.19.0
+   Compiling io-uring v0.7.15
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling which v4.4.2
+   Compiling clap v4.6.0
+   Compiling futures v0.3.32
+   Compiling icu_locale v2.2.0
+   Compiling serde_with_macros v3.18.0
+   Compiling cexpr v0.6.0
+   Compiling ghash v0.5.1
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling twox-hash v2.1.2
+   Compiling num-bigint v0.4.8
+   Compiling darling_core v0.20.11
+   Compiling itertools v0.12.1
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nix v0.31.3
+   Compiling tokio-stream v0.1.18
+   Compiling xattr v1.6.1
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling memoffset v0.6.5
+   Compiling aead v0.5.2
+   Compiling aristo-macros v0.4.1
+   Compiling async-stream-impl v0.3.6
+   Compiling vte v0.15.0
+   Compiling rustc-hash v1.1.0
+   Compiling powerfmt v0.2.0
+   Compiling lazycell v1.3.0
+   Compiling cap-primitives v4.0.2
+   Compiling softaes v0.1.7
+   Compiling siphasher v1.0.2
+   Compiling typeid v1.0.3
+   Compiling fastbloom v0.14.1
+   Compiling async-stream v0.3.6
+   Compiling aristo v0.4.1
+   Compiling deranged v0.5.8
+   Compiling vt100 v0.16.2
+   Compiling aes-gcm v0.10.3
+   Compiling darling_macro v0.20.11
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling fs-set-times v0.20.3
+   Compiling icu_collator v2.2.1
+   Compiling intrusive-collections v0.9.7
+   Compiling serde_with v3.18.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling gix-traverse v0.55.0
+   Compiling roaring v0.11.4
+   Compiling pack1 v1.1.0
+   Compiling n0-future v0.3.2
+   Compiling gix-packetline v0.21.2
+   Compiling console v0.16.3
+   Compiling polling v3.11.0
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling rapidhash v4.5.1
+   Compiling chacha20 v0.10.0
+   Compiling hmac v0.12.1
+   Compiling bitflags v1.3.2
+   Compiling unit-prefix v0.5.2
+   Compiling maybe-owned v0.3.4
+   Compiling cordyceps v0.3.4
+   Compiling ambient-authority v0.0.2
+   Compiling allocator-api2 v0.4.0
+   Compiling num-conv v0.2.1
+   Compiling cap-std v4.0.2
+   Compiling erased-serde v0.4.10
+   Compiling pastey v0.2.3
+   Compiling cfg_block v0.1.1
+   Compiling hex v0.4.3
+   Compiling time-core v0.1.8
+   Compiling spin v0.10.0
+   Compiling thiserror v1.0.69
+   Compiling diatomic-waker v0.2.3
+   Compiling fallible-iterator v0.3.0
+   Compiling genawaiter-macro v0.99.1
+   Compiling simdutf8 v0.1.5
+   Compiling genawaiter v0.99.1
+   Compiling futures-buffered v0.2.13
+   Compiling time v0.3.47
+   Compiling indicatif v0.18.4
+   Compiling rand v0.10.1
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling num_enum_derive v0.7.6
+   Compiling prost-derive v0.14.3
+   Compiling mimalloc v0.1.48
+   Compiling darling v0.20.11
+   Compiling serde_urlencoded v0.7.1
+   Compiling flate2 v1.1.9
+   Compiling itertools v0.15.0
+   Compiling quick-xml v0.40.1
+   Compiling md-5 v0.10.6
+   Compiling n0-error-macros v0.1.3
+   Compiling spez v0.1.2
+   Compiling thiserror-impl v1.0.69
+   Compiling env_filter v2.0.0
+   Compiling gix-sec v0.13.2
+   Compiling hybrid-array v0.4.13
+   Compiling nibble_vec v0.1.0
+   Compiling endian-type v0.1.2
+   Compiling redb v3.1.3
+   Compiling ref-cast v1.0.25
+   Compiling matchit v0.8.4
+   Compiling humantime v2.3.0
+   Compiling cap-fs-ext v4.0.2
+   Compiling nix-compat v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/nix-compat)
+   Compiling symlink v0.1.0
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/fuse-backend-rs)
+   Compiling tracing-appender v0.2.5
+   Compiling phf_shared v0.11.3
+   Compiling radix_trie v0.2.1
+   Compiling n0-error v0.1.3
+   Compiling env_logger v0.11.11
+   Compiling xz2 v0.1.7
+   Compiling prost v0.14.3
+   Compiling nix v0.24.3
+   Compiling derive_builder_core v0.20.2
+   Compiling num_enum v0.7.6
+   Compiling bzip2 v0.5.2
+   Compiling tracing-indicatif v0.3.14
+   Compiling vmm-sys-util v0.11.2
+   Compiling astral-tokio-tar v0.6.4
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-attestation-core)
+   Compiling gix-bitmap v0.3.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling cobs v0.3.0
+   Compiling irpc-derive v0.10.0
+   Compiling auto_impl v1.3.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/nix-compat-derive)
+   Compiling ref-cast-impl v1.0.25
+   Compiling turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling mio v0.8.11
+   Compiling vm-memory v0.10.0
+   Compiling num_cpus v1.17.0
+   Compiling caps v0.5.6
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling fixedbitset v0.5.7
+   Compiling fixedbitset v0.4.2
+   Compiling bit-vec v0.8.0
+   Compiling precomputed-hash v0.1.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-castore)
+   Compiling heck v0.4.1
+   Compiling term v1.2.1
+   Compiling keccak v0.1.6
+   Compiling ascii-canvas v4.0.0
+   Compiling sha3 v0.10.8
+   Compiling bit-set v0.8.0
+   Compiling string_cache v0.8.9
+   Compiling petgraph v0.6.5
+   Compiling petgraph v0.7.1
+   Compiling proc-macro-error2 v2.0.1
+   Compiling threadpool v1.8.1
+   Compiling irpc v0.13.0
+   Compiling postcard v1.1.3
+   Compiling gix-index v0.49.0
+   Compiling derive_builder_macro v0.20.2
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling gix-filter v0.28.0
+   Compiling fastcdc v3.2.1
+   Compiling gix-ref v0.61.0
+   Compiling gix-ignore v0.19.1
+   Compiling ena v0.14.4
+   Compiling lalrpop-util v0.22.2
+   Compiling safe_arch v1.2.0
+   Compiling safe_arch v0.7.4
+   Compiling nix v0.29.0
+   Compiling serde_bytes v0.11.19
+   Compiling ff v0.13.1
+   Compiling inplace-vec-builder v0.1.1
+   Compiling binary-merge v0.1.2
+   Compiling base16ct v0.2.0
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling const-oid v0.10.2
+   Compiling malachite-nz v0.9.2
+   Compiling pico-args v0.5.0
+   Compiling lalrpop v0.22.2
+   Compiling malachite-base v0.9.2
+   Compiling digest v0.11.3
+   Compiling sec1 v0.7.3
+   Compiling range-collections v0.4.6
+   Compiling group v0.13.0
+   Compiling wide v1.7.0
+   Compiling wide v0.7.33
+   Compiling gix-worktree v0.50.0
+   Compiling derive_builder v0.20.2
+   Compiling getset v0.1.6
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-attestation)
+   Compiling hkdf v0.12.4
+   Compiling gix-pathspec v0.16.1
+   Compiling iroh-io v0.6.2
+   Compiling rand_chacha v0.3.1
+   Compiling rand_xoshiro v0.7.0
+   Compiling crypto-bigint v0.5.5
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling typed-builder-macro v0.22.0
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling positioned-io v0.3.5
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling self_cell v1.3.0
+   Compiling archery v1.2.3
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-store)
+   Compiling imbl-sized-chunks v0.2.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling typed-builder v0.22.0
+   Compiling bao-tree v0.16.1
+   Compiling elliptic-curve v0.13.8
+   Compiling imbl v7.0.2
+   Compiling rand v0.8.6
+   Compiling oci-spec v0.7.1
+   Compiling md-5 v0.11.0
+   Compiling fastcdc v5.0.0
+   Compiling tar v0.4.45
+   Compiling gix-url v0.35.2
+   Compiling nix-archive v0.6.0
+   Compiling nix-archive v0.1.0
+   Compiling zstd v0.13.3
+   Compiling async-compression v0.4.19
+   Compiling fs4 v1.1.0
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-plan-core)
+   Compiling lru v0.16.4
+   Compiling count-write v0.1.0
+   Compiling yansi v1.0.1
+   Compiling crunch-nar v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nar)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-action-result-core)
+   Compiling rfc6979 v0.4.0
+   Compiling gix-prompt v0.14.1
+   Compiling gix-revision v0.43.0
+   Compiling logos-codegen v0.16.1
+   Compiling imara-diff v0.1.8
+   Compiling imara-diff v0.2.0
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-composition-core)
+   Compiling indexmap v1.9.3
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-gc-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-overlay-core)
+   Compiling malachite-q v0.9.2
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-repair-core)
+   Compiling serde_spanned v1.1.1
+   Compiling fs2 v0.4.3
+   Compiling verus_syn v0.0.0-2026-01-25-0057
+   Compiling verus_prettyplease v0.0.0-2026-01-25-0057
+   Compiling bitmaps v3.2.1
+   Compiling signal-hook v0.3.18
+   Compiling termcolor v1.4.1
+   Compiling codespan-reporting v0.13.1
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling malachite-float v0.9.2
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling gix-diff v0.61.0
+   Compiling logos-derive v0.16.1
+   Compiling gix-refspec v0.39.0
+   Compiling gix-credentials v0.37.1
+   Compiling ecdsa v0.16.9
+   Compiling ouroboros_macro v0.18.5
+   Compiling nickel-lang-parser v0.3.0
+   Compiling gix-discover v0.49.0
+   Compiling hashlink v0.10.0
+   Compiling clru v0.6.3
+   Compiling uluru v3.1.0
+   Compiling arrayvec v0.5.2
+   Compiling aliasable v0.1.3
+   Compiling arraydeque v0.5.1
+   Compiling paste v1.0.15
+   Compiling num-bigint-dig v0.8.6
+   Compiling hashbrown v0.12.3
+   Compiling typed-arena v2.0.2
+   Compiling pretty v0.12.5
+   Compiling ouroboros v0.18.5
+   Compiling saphyr-parser v0.0.6
+   Compiling gix-pack v0.68.0
+   Compiling gix-dir v0.23.0
+   Compiling logos v0.16.1
+   Compiling malachite v0.9.2
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling gix-shallow v0.10.0
+   Compiling gix-negotiate v0.29.0
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rust-cache-core)
+   Compiling num-iter v0.1.46
+   Compiling maybe-async v0.2.10
+   Compiling io-close v0.3.7
+   Compiling vte v0.14.1
+   Compiling simple-counter v0.1.0
+   Compiling vstd v0.0.0-2026-01-25-0057
+   Compiling crc-catalog v2.4.0
+   Compiling unsafe-libyaml v0.2.11
+   Compiling litrs v1.0.0
+   Compiling redb v2.6.4
+   Compiling linkme-impl v0.3.37
+   Compiling document-features v0.2.12
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling crc v3.4.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling gix-worktree-state v0.28.0
+   Compiling gix-submodule v0.28.0
+   Compiling gix-archive v0.30.0
+   Compiling gix-odb v0.78.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+   Compiling gix-status v0.28.0
+   Compiling verus_state_machines_macros v0.0.0-2026-01-25-0057
+   Compiling gix-blame v0.11.0
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-differential-core)
+   Compiling primeorder v0.13.6
+   Compiling ureq-proto v0.6.0
+   Compiling webpki-roots v1.0.10
+   Compiling gix-mailmap v0.32.0
+   Compiling pkcs1 v0.7.5
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-remote-core)
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling linkme v0.3.37
+   Compiling utf8-zero v0.8.1
+   Compiling indoc v2.0.7
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-build)
+   Compiling verus_builtin v0.0.0-2026-01-25-0057
+   Compiling rsa v0.9.10
+   Compiling crossterm v0.29.0
+   Compiling lzma-rs v0.3.0
+   Compiling gethostname v0.5.0
+   Compiling snafu-derive v0.8.9
+   Compiling ruzstd v0.9.1
+   Compiling fuzzy-matcher v0.3.7
+   Compiling toml_datetime v0.6.11
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-causal-trace-core)
+   Compiling serde_spanned v0.6.9
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-spacewasm-core)
+   Compiling bzip2-rs v0.1.2
+   Compiling hashbrown v0.17.1
+   Compiling bs58 v0.5.1
+   Compiling dyn-clone v1.0.20
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling toml_write v0.1.2
+   Compiling toml_edit v0.22.27
+   Compiling iddqd v0.4.6
+   Compiling rustls-webpki v0.103.16
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test-core)
+   Compiling inquire v0.9.4
+   Compiling snafu v0.8.9
+   Compiling p384 v0.13.1
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling ureq v3.3.0
+   Compiling p256 v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling object_store v0.14.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-tracing)
+   Compiling gix-transport v0.55.1
+   Compiling gix-protocol v0.59.0
+   Compiling gix v0.81.0
+   Compiling verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling k256 v0.13.4
+   Compiling crunch-glue v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-glue)
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling secrecy v0.10.3
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-wasm-component-core)
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling etcetera v0.11.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling predicates-core v1.0.10
+   Compiling colored v3.1.1
+   Compiling dotenvy v0.15.7
+   Compiling secretspec v0.17.0
+   Compiling ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling jsonwebtoken v11.0.0
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test-app)
+   Compiling toml v0.8.23
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-project-core)
+   Compiling float-cmp v0.10.0
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-shell-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-source-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-evaluation-stream-core)
+   Compiling termtree v0.5.1
+   Compiling assert_cmd v2.2.0
+   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nix-gateway-core)
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-delta-core)
+   Compiling normalize-line-endings v0.3.0
+   Compiling difflib v0.4.0
+   Compiling crunch-watch-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-watch-core)
+   Compiling predicates v3.1.4
+   Compiling predicates-tree v1.0.13
+   Compiling crunch-project v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-project)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-release-core)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-shell)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-wasm-component)
+   Compiling crunch-test v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test)
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-remote-app)
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-plan-app)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-application-contract)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-cargo-build-bundle-core)
+   Compiling chapter-tgz v0.1.0
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-eval-budget-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-hardware-simulation-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-bootstrap-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantlepkgs-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-portable-client-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-build-contract)
+   Compiling wait-timeout v0.2.1
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-service-readiness-core)
+   Compiling diff v0.1.13
+   Compiling mantle-lock-vendor-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-lock-vendor-core)
+   Compiling pretty_assertions v1.4.1
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-hardware-simulation)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-android-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-eval)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rustc-wrapper)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nix-gateway)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption)
+    Finished `release` profile [optimized] target(s) in 10m 13s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/deps/mantle-61d96712292a8e06)
+
+running 297 tests
+test native_toolchain_closure::tests::native_host_metadata_accepts_matching_source_built_capability ... ok
+test native_toolchain_closure::tests::native_metadata_rejects_non_source_built_root ... ok
+test rust_plan::tests::source_built_c_compiler_route_json_rejects_non_compiler_route ... ok
+test rust_plan::tests::source_built_c_compiler_route_json_validates_receipt_bound_identity ... ok
+test source_built_fixed_point::tests::enforces_every_resource_bound_at_zero_minimum_maximum_and_above_maximum ... ok
+test source_built_fixed_point::tests::plan_is_stable_across_source_input_order ... ok
+test source_built_fixed_point::tests::plans_complete_source_built_fixed_point_authority ... ok
+test source_built_fixed_point::tests::publication_requires_its_authenticated_source_program_authority ... ok
+test source_built_fixed_point::tests::receipt_source_cannot_be_replaced_by_the_authority_set_digest ... ok
+test source_built_fixed_point::tests::rejects_each_missing_required_source_role ... ok
+test source_built_fixed_point::tests::rejects_host_orchestration_for_stage2 ... ok
+test source_built_fixed_point::tests::rejects_imported_provider_as_source_authority ... ok
+test source_built_fixed_point::tests::rejects_invalid_expected_native_provider_digest ... ok
+test source_built_fixed_point::tests::rejects_practical_or_fallback_policy ... ok
+test source_built_fixed_point::tests::rejects_stale_plan_digest ... ok
+test source_built_fixed_point::tests::requires_empty_initial_output_authority_for_every_output_class ... ok
+test source_built_fixed_point_action_trust::controller::tests::actual_event_budget_exhaustion_latches_and_matches_portable_replay ... ok
+test source_built_fixed_point_action_trust::controller::tests::actual_turns_have_unique_ids_and_bind_previous_producer_even_for_identical_bytes ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_catalog_rejects_static_shadowing_overflow_and_unknown_slot ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_binds_previous_checkpoint_done_outcome_and_real_image_hashes ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_covers_actual_turn_and_honest_skip_without_potential_completion ... ok
+test source_built_fixed_point_action_trust::controller::tests::compact_journal_rejects_repetition_gaps_premature_finish_and_unfinished_roots ... ok
+test source_built_fixed_point_action_trust::controller::tests::controller_potential_events_charge_each_turn_phase_once_per_admitted_turn ... ok
+test source_built_fixed_point_action_trust::controller::tests::controller_requires_exactly_one_selected_original_command_per_active_turn ... ok
+test source_built_fixed_point_action_trust::controller::tests::large_conditional_catalog_accepts_actual_done_early_without_reserving_unexecuted_turns ... ok
+test source_built_fixed_point_action_trust::controller::tests::outer_controller_guard_skips_without_finish_authority_and_active_runs_real_finish ... ok
+test source_built_fixed_point_action_trust::controller::tests::selected_command_preserves_explicit_normal255_opt_in_and_actual_phase_status ... ok
+test source_built_fixed_point_action_trust::tests::accepted_failed_probe_grants_only_actual_outputs_and_rejects_status_drift ... ok
+test source_built_fixed_point_action_trust::tests::complete_producer_inventory_admits_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::guarded_actual_status_controls_execution_and_authenticated_phase_outcome ... ok
+test source_built_fixed_point_action_trust::tests::guarded_decision_rejects_forged_false_missing_duplicate_and_execution_claims ... ok
+test source_built_fixed_point_action_trust::tests::guarded_phase_outcome_cannot_be_forged_or_observed_before_decision ... ok
+test source_built_fixed_point_action_trust::tests::mandatory_stage_product_cannot_escape_coverage_through_a_guard ... ok
+test source_built_fixed_point_action_trust::tests::partial_producer_inventory_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::pending_producer_event_coverage_denies_dependent_executable_and_input ... ok
+test source_built_fixed_point_action_trust::tests::publication_without_a_child_requires_its_real_build_event_not_a_fictional_launch ... ok
+test source_built_fixed_point_action_trust::tests::reconciles_synthetic_six_action_graph_without_proof_claim ... ok
+test source_built_fixed_point_action_trust::tests::rejects_extra_globally_bound_input_and_latches_live_admission ... ok
+test source_built_fixed_point_action_trust::tests::rejects_foreign_root_even_with_recomputed_action_plan_digest ... ok
+test source_built_fixed_point_action_trust::tests::rejects_incomplete_adapter_and_path_only_generated_authority ... ok
+test source_built_fixed_point_action_trust::tests::rejects_input_consumption_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_measured_source_and_generated_input_digest_drift ... ok
+test source_built_fixed_point_action_trust::tests::rejects_missing_producer_edges_nonlocal_actions_and_tampered_plan ... ok
+test source_built_fixed_point_action_trust::tests::rejects_repeated_outputs_before_and_after_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_live_event_identity_and_latches_failure ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_missing_drift_remote_cache_and_effect_events ... ok
+test source_built_fixed_point_action_trust::tests::rejects_unknown_output_before_producer_completion ... ok
+test source_built_fixed_point_action_trust::tests::requires_protected_and_build_events_for_supervised_action ... ok
+test source_built_fixed_point_dev_cache::tests::fast_fail_reports_exact_matched_prior_digest_or_proceeds ... ok
+test source_built_fixed_point_dev_cache::tests::ordered_policy_digests_are_distinct_and_stable ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_key_is_stable_and_digest_sensitive ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_lookup_accepts_only_exact_receipt_validated_entry ... ok
+test source_built_fixed_point_dev_cache::tests::provider_cache_rejects_stale_or_mismatched_digests_as_hard_miss ... ok
+test source_built_fixed_point_dev_cache::tests::stage_marker_trusts_only_exact_plan_stage_and_digest_match ... ok
+test source_built_fixed_point_mantle_actions::tests::protected_orchestrator_preserves_identity_before_rejecting_drift ... ok
+test source_built_fixed_point_mantle_actions::tests::protected_orchestrator_records_actual_exec_before_program_output ... ok
+test source_built_fixed_point_mantle_actions::tests::replay_continuation_rejects_parent_refusal_and_missing_acknowledgement ... ok
+test source_built_fixed_point_resume::tests::a_fresh_directory_restores_every_validated_stage ... ok
+test source_built_fixed_point_resume::tests::duplicate_and_producer_mismatched_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::mutated_partial_and_malformed_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::policy_cohort_drift_is_rejected ... ok
+test source_built_fixed_point_resume::tests::promoted_paths_and_unknown_stages_are_rejected ... ok
+test source_built_fixed_point_resume::tests::stale_plan_source_and_policy_bundles_are_rejected ... ok
+test source_built_fixed_point_resume::tests::the_first_invalid_stage_and_every_later_stage_execute ... ok
+test source_built_fixed_point_resume_bundle::tests::bundle_recorded_under_another_plan_is_executed_instead_of_restored ... ok
+test source_built_fixed_point_resume_bundle::tests::missing_payload_is_reported_and_never_restored ... ok
+test source_built_fixed_point_resume_bundle::tests::promoted_alias_is_observed_and_reported ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_is_idempotent_for_identical_payloads ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_read_and_restore_round_trip_into_a_fresh_directory ... ok
+test source_built_fixed_point_resume_bundle::tests::publish_rejects_a_missing_payload_directory ... ok
+test source_built_fixed_point_resume_bundle::tests::published_bundle_plans_as_a_restored_stage ... ok
+test source_built_fixed_point_resume_bundle::tests::restore_refuses_an_existing_destination ... ok
+test source_built_fixed_point_resume_bundle::tests::tampered_payload_changes_the_recomputed_digest ... ok
+test source_built_fixed_point_shell::authoring::tests::authored_members_use_canonical_chunk_sequences ... ok
+test source_built_fixed_point_shell::authoring::tests::packaged_source_round_trip_rejects_payload_tampering ... ok
+test source_built_fixed_point_shell::authoring::tests::source_writes_reject_escape_binary_payloads_and_symlinked_parents ... ok
+test source_built_fixed_point_shell::tests::adopt_cached_provider_subtrees_copies_and_returns_observation ... ok
+test source_built_fixed_point_shell::tests::alias_publication_failure_preserves_candidate_artifacts_and_prior_success ... ok
+test source_built_fixed_point_shell::tests::dev_cache_adoption_requires_validated_entry_and_present_subtrees ... ok
+test source_built_fixed_point_shell::tests::dev_handoff_reuses_only_an_identical_persistent_tree ... ok
+test source_built_fixed_point_shell::tests::dev_resume_restores_into_a_different_fresh_attempt ... ok
+test source_built_fixed_point_shell::tests::disagreeing_success_aliases_cannot_authorize_a_new_publication ... ok
+test source_built_fixed_point_shell::tests::disk_capacity_accepts_sufficient_space_and_rejects_shortfall ... ok
+test source_built_fixed_point_shell::tests::every_development_mode_is_disqualified_before_cache_or_resume_execution ... ok
+test source_built_fixed_point_shell::tests::expired_runtime_bound_rejects_an_otherwise_admitted_attempt ... ok
+test source_built_fixed_point_shell::tests::failed_status_update_preserves_last_complete_status ... ok
+test source_built_fixed_point_shell::tests::fixed_point_sandbox_shell_rejects_dynamic_linker_markers ... ok
+test source_built_fixed_point_shell::tests::ignored_unknown_observation_error_cannot_publish_filtered_success ... ok
+test source_built_fixed_point_shell::tests::interrupted_alias_migration_never_selects_part_of_the_new_generation ... ok
+test source_built_fixed_point_shell::tests::isolated_exec_worker_returns_values_and_reports_invalid_completion ... ok
+test source_built_fixed_point_shell::tests::last_published_source_digest_reads_latest_receipt_binding ... ok
+test source_built_fixed_point_shell::tests::materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches ... ok
+test source_built_fixed_point_shell::tests::missing_stagex_transition_handoff_input_leaves_destination_absent ... ok
+test source_built_fixed_point_shell::tests::native_build_child_is_strict_offline_and_rejects_backend_mismatch ... ok
+test source_built_fixed_point_shell::tests::native_build_failure_summary_preserves_offline_blockers_and_rejects_malformed_output ... ok
+test source_built_fixed_point_shell::tests::non_utf8_compiler_cache_variable_name_remains_disqualifying ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_child ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_is_enforced_in_a_subprocess ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_planning_is_bounded_and_fail_closed ... ok
+test source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests ... ok
+test source_built_fixed_point_shell::tests::partially_present_prior_aliases_are_rejected_without_creating_a_selection ... ok
+test source_built_fixed_point_shell::tests::policy_digests_are_domain_separated_and_stable ... ok
+test source_built_fixed_point_shell::tests::post_commit_sync_failure_restores_both_aliases_and_preserves_failed_candidate ... ok
+test source_built_fixed_point_shell::tests::preparation_failure_status_preserves_blocker_without_inventing_plan_identity ... ok
+test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ignored, requires retained completed StageX transition
+test source_built_fixed_point_shell::tests::promoted_cold_environment_rejects_cache_and_scheduling_keys_without_reading_values ... ok
+test source_built_fixed_point_shell::tests::published_selection_readback_rejects_a_repointed_generation ... ok
+test source_built_fixed_point_shell::tests::stage_marker_write_read_and_reject_mutation ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_cache_reuses_only_the_same_normalized_payload ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_handoff_accepts_only_expected_normalized_identity ... ok
+test source_built_fixed_point_shell::tests::stagex_transition_handoff_projects_only_declared_runtime_outputs ... ok
+test source_built_fixed_point_shell::tests::store_seed_is_disabled_without_cache_flag ... ok
+test source_built_fixed_point_shell::tests::store_service_registration_adopts_real_provider_and_is_observable ... ok
+test source_built_fixed_point_shell::tests::success_aliases_cannot_publish_a_cycle_or_escape_the_root ... ok
+test source_built_fixed_point_stagex_actions::tests::fetcher_hydration_consumes_only_exact_manifest_and_selected_record_roots ... ok
+test source_built_fixed_point_stagex_actions::tests::phase_observation_retains_guard_seed_and_both_real_state_dependencies ... ok
+test source_built_fixed_point_stagex_actions::tests::producer_lookup_requires_exact_local_stage_and_step ... ok
+test source_built_fixed_point_stagex_actions::tests::referenced_names_cover_shared_environment_words_only ... ok
+test source_built_fixed_point_stagex_actions::tests::response_file_leaves_keep_every_declared_input ... ok
+test source_built_fixed_point_stagex_actions::tests::superseding_a_lineage_input_requires_an_authored_reason ... ok
+test source_built_fixed_point_stagex_actions::tests::unused_labels_cannot_satisfy_original_node_dependencies ... ok
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_another_declared_source_as_mantle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes ... ok
+test source_built_fixed_point_trust_report::tests::coverage_counts_each_event_kind_without_hiding_unknown_actions ... ok
+test source_built_fixed_point_trust_report::tests::evidence_reads_reject_absolute_parent_and_symlink_authority ... ok
+test source_built_fixed_point_trust_report::tests::journal_rejects_omitted_unknown_reordered_changed_or_truncated_records ... ok
+test source_built_fixed_point_trust_report::tests::missing_proof_is_blocked_not_zero_action_success ... ok
+test source_built_mantle_programs::metadata::helper::tests::source_package_exclusions_stay_within_the_typed_input_tree ... ok
+test source_built_mantle_programs::native::tests::original_script_trees_survive_all_native_seeded_phases ... ok
+test source_built_mantle_programs::native::tests::perlasm_authentication_survives_input_pruning_and_rejects_substitution ... ok
+test source_built_mantle_programs::native::tests::perlasm_pipe_cut_executes_standalone_and_guarded_sources ... ok
+test source_built_mantle_programs::native::tests::perlasm_pipe_cut_rejects_changed_or_duplicate_boundaries_before_eval ... ok
+test source_built_mantle_programs::native::tests::rejected_native_probes_retain_admitted_state_not_optional_outputs ... ok
+test source_built_mantle_programs::rust_probes::tests::generated_script_tree_fits_heapless_probe_without_narrowing_its_authority ... ok
+test source_built_mantle_programs::tests::plan_derived_source_operands_normalize_lexically ... ok
+test source_built_mantle_programs::tests::selected_semantic_products_remain_execution_obligations ... ok
+test source_built_mantle_programs::tests::unselected_helpers_do_not_become_dummy_execution_roots ... ok
+test source_built_native_programs::phases::tests::authenticated_specs_request_retains_operands_and_rejects_missing_or_unused_authority ... ok
+test source_built_program_authoring::tests::exact_override_precedes_source_hint_without_spending_above_budget ... ok
+test source_built_program_authoring::tests::reservations_reject_overflow_zero_and_invalid_phase_instead_of_clamping ... ok
+test source_built_recipe::tests::canonical_invocation_preserves_typed_operands_and_rejects_alternative_encodings ... ok
+test source_built_recipe::tests::directory_separator_requires_typed_tree_directory_boundary_and_keeps_negative_members_lexical ... ok
+test source_built_recipe::tests::generated_workspace_and_actual_status_have_bounded_declared_outputs ... ok
+test source_built_recipe::tests::guarded_compile_assemble_link_and_exact_binary_require_dominating_predicates ... ok
+test source_built_recipe::tests::inherited_descriptor_tables_reject_missing_slots_alias_divergence_and_readonly_root_writes ... ok
+test source_built_recipe::tests::installed_image_path_is_only_a_readonly_produced_tree_member_not_an_image_selector ... ok
+test source_built_recipe::tests::invocation_admission_rejects_static_override_or_imported_request_and_executable ... ok
+test source_built_recipe::tests::invocation_cannot_invent_paths_names_control_reads_or_unused_dependencies ... ok
+test source_built_recipe::tests::invocation_cwd_field_is_canonical_and_empty_extension_is_omitted ... ok
+test source_built_recipe::tests::invocation_cwd_requires_one_typed_tree_path_and_rejects_static_conflicts ... ok
+test source_built_recipe::tests::mantle_helper_manifest_requires_its_declared_stage_authority_even_after_hydration ... ok
+test source_built_recipe::tests::output_seed_admission_preserves_produced_kind_and_declared_bound ... ok
+test source_built_recipe::tests::phase_state_projection_source_accepts_only_normalized_relative_members ... ok
+test source_built_recipe::tests::preparation_rejects_source_timeout_above_global_proof_cap ... ok
+test source_built_recipe::tests::prior_stage_output_requires_its_canonical_producer ... ok
+test source_built_recipe::tests::probe_exit_policy_requires_a_bounded_sorted_normal_exit_set ... ok
+test source_built_recipe::tests::readonly_input_catalog_accounts_only_declared_produced_trees ... ok
+test source_built_recipe::tests::readonly_input_catalog_keeps_uncatalogued_inputs_rejected_and_names_sorted ... ok
+test source_built_recipe::tests::relative_source_operands_require_cwd_authority_without_changing_original_spelling ... ok
+test source_built_recipe::tests::runtime_destinations_reject_duplicate_ancestor_and_reserved_namespaces ... ok
+test source_built_recipe::tests::runtime_tree_prepare_requires_the_authenticated_configured_store_prefix ... ok
+test source_built_recipe::tests::rust_provider_handoff_rejects_a_noncanonical_bound_output ... ok
+test source_built_recipe::tests::source_creation_masks_reject_bits_outside_permissions ... ok
+test source_built_recipe::tests::source_program_import_cannot_hide_unadmitted_bytes_behind_a_symlink ... ok
+test source_built_recipe::tests::source_program_imports_must_stay_in_the_authenticated_tree ... ok
+test source_built_recipe::tests::source_program_path_labels_reject_dot_components ... ok
+test source_built_recipe::tests::source_timeout_spans_accept_nested_arenas_and_reject_crossing_unknown_or_reversed_endpoints ... ok
+test source_built_recipe::tests::typed_text_slices_and_runtime_words_preserve_declared_authority ... ok
+test source_built_recipe::tests::workspace_mounts_preserve_only_declared_output_tree_namespaces ... ok
+test source_built_recipe_exec::command_state::tests::descriptor_observation_uses_actual_shared_offsets_and_append_flags ... ok
+test source_built_recipe_exec::command_state::tests::descriptor_snapshot_keeps_workspace_inode_and_actual_original_offset ... ok
+test source_built_recipe_exec::command_state::tests::null_descriptor_preserves_device_semantics_and_rejects_regular_substitution ... ok
+test source_built_recipe_exec::command_state::tests::workspace_times_reject_changed_inventory_noncanonical_and_out_of_range_records ... ok
+test source_built_recipe_exec::command_state::tests::workspace_times_restore_exact_postorder_without_following_symlinks ... ok
+test source_built_recipe_exec::tests::archive_extraction_preserves_original_root_and_enforces_member_output_bounds ... ok
+test source_built_recipe_exec::tests::clone3_never_grants_authority_from_mutable_flags ... ok
+test source_built_recipe_exec::tests::installed_image_member_requires_same_real_regular_executable_without_symlink_projection ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_decodes_original_archive_and_verifies_recursive_pin ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_preserves_flat_bytes_and_rejects_wrong_pin_and_bound ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_manifest_drift_after_preparation ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_nonfetchers_wrong_kinds_unknown_records_and_undeclared_roles ... ok
+test source_built_recipe_exec::tests::nested_source_timeout_uses_tightest_original_deadline_not_a_per_leaf_cap ... ok
+test source_built_recipe_exec::tests::phase_state_projection_forwards_exact_prior_envelope_checkpoint_and_rejects_invalid_members ... ok
+test source_built_recipe_exec::tests::protected_filter_preserves_legacy_threads_without_clone3 ... ok
+test source_built_recipe_exec::tests::protected_initial_exec_decision_has_a_deadline ... ok
+test source_built_recipe_exec::tests::protected_listener_teardown_cancels_already_blocked_receive ... ok
+test source_built_recipe_exec::tests::protected_parallel_launch_timeout_does_not_cancel_another_listener ... ok
+test source_built_recipe_exec::tests::protected_recipe_smoke_actual_argv0_does_not_change_exact_image_authority ... ignored, requires parent-built libc-free ELF verify mode, reviewed bwrap --argv0 and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_cancellation ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_invocation_uses_exact_produced_executable ... ignored, requires parent-built libc-free ELF request/self-copy and probe0 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_workspace ... ignored, requires parent-built libc-free ELF with workspace mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_guarded_phase_and_immutable_output_seeds ... ignored, requires parent-built libc-free ELF with probe0/probe1/workspace modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_process_clone ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_second_exec ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_path_preserves_real_image_cwd_and_data_context ... ignored, requires parent-built libc-free ELF request/self-copy and image-context modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_rejects_wrong_member_and_forged_whole_tree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_merge_preserves_actual_descriptor_write_order ... ignored, requires parent-built libc-free ELF merged mode writing alternating descriptors, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_normal_probe_records_actual_non_whitelisted_exit ... ignored, requires parent-built libc-free ELF normal-probe mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_observes_actual_workspace_mtimes_and_seeked_stream_offsets ... ignored, requires parent-built libc-free ELF observation mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_original_creation_masks_do_not_mutate_parent ... ignored, requires parent-built libc-free ELF umask mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_preserves_sparse_64_fd_aliases_null_and_actual_status_flags ... ignored, requires parent-built libc-free ELF backing mode, reviewed bwrap/ADDFD and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_preserves_actual_zero_and_one ... ignored, requires parent-built libc-free ELF with probe0/probe1 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_rejects_unlisted_exit ... ignored, requires parent-built libc-free ELF with probe2 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_invocation_before_launch ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_status_before_conditional_launch ... ignored, requires parent-built libc-free ELF with probe1 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_success ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_reaches_nested_input_and_output_tree_consumers ... ignored, requires parent-built libc-free ELF request/self-copy and local modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_rejects_forged_noncanonical_unknown_conflicting_and_escape_requests ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_text_slices_and_runtime_tree_reach_actual_leaf ... ignored, requires parent-built libc-free ELF request/self-copy and data modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_captures_actual_original_tmp_write ... ignored, requires parent-built libc-free ELF request/self-copy and temporary modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_does_not_recreate_missing_subtree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::rooted_directory_selection_does_not_follow_symlinks_create_missing_members_or_accept_files ... ok
+test source_built_recipe_exec::tests::shared_timeout_arena_never_restarts_for_resumed_leaves_or_observation ... ok
+test source_built_recipe_exec::tests::text_operands_authenticate_whole_source_and_share_utf8_safe_snapshot ... ok
+test source_built_recipe_exec::tests::text_slice_rejects_forged_whole_frame_even_when_selected_bytes_match ... ok
+test source_built_rust_programs::minicargo::resolve::tests::backjumping_agrees_with_exhaustive_version_assignments ... ok
+test source_built_rust_programs::minicargo::resolve::tests::conflict_can_change_requiring_package_through_path_dependencies ... ok
+test source_built_rust_programs::minicargo::resolve::tests::contradictory_pins_fail_instead_of_dropping_a_required_edge ... ok
+test source_built_rust_programs::minicargo::resolve::tests::dependency_activation_selects_edges_without_publishing_a_compiler_feature ... ok
+test source_built_rust_programs::minicargo::resolve::tests::filtered_alternatives_reappear_after_their_blocker_changes ... ok
+test source_built_rust_programs::minicargo::resolve::tests::incompatible_families_coexist_and_satisfying_versions_are_reused ... ok
+test source_built_rust_programs::minicargo::resolve::tests::late_exact_pin_skips_unrelated_version_choices ... ok
+test source_built_rust_programs::minicargo::resolve::tests::missing_vendor_is_allowed_only_until_a_dependency_is_active ... ok
+test source_built_rust_programs::minicargo::resolve::tests::work_bound_is_a_failure_not_a_partial_solution ... ok
+test source_built_rust_programs::resolve::tests::atomic_predicates_follow_the_original_fixed_target ... ok
+test source_built_rust_programs::resolve::tests::atomic_target_dependencies_select_only_supported_edges ... ok
+test source_built_rust_programs::resolve::tests::cargo_feature_does_not_enable_global_tracing_mode ... ok
+test source_built_rust_programs::resolve::tests::consuming_lock_overrides_dependency_local_lock ... ok
+test source_built_rust_programs::resolve::tests::consuming_patch_applies_to_transitive_vendor_dependencies ... ok
+test source_built_rust_programs::resolve::tests::duplicate_exact_qualified_lock_identity_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::enabled_cargo_feature_does_not_populate_global_target_cfg ... ok
+test source_built_rust_programs::resolve::tests::local_path_owner_is_not_replaced_by_same_version_registry_record ... ok
+test source_built_rust_programs::resolve::tests::malformed_or_trailing_source_qualifiers_do_not_select_unique_names ... ok
+test source_built_rust_programs::resolve::tests::manifest_source_members_resolve_siblings_without_escaping_the_archive ... ok
+test source_built_rust_programs::resolve::tests::missing_consuming_lock_never_falls_back_to_dependency_lock ... ok
+test source_built_rust_programs::resolve::tests::nonlocal_consuming_patch_is_rejected ... ok
+test source_built_rust_programs::resolve::tests::one_manifest_cannot_merge_local_and_registry_lock_authorities ... ok
+test source_built_rust_programs::resolve::tests::one_topology_cannot_mix_consuming_workspaces ... ok
+test source_built_rust_programs::resolve::tests::qualified_lock_source_must_match_without_source_fallback ... ok
+test source_built_rust_programs::resolve::tests::sealed_native_profile_selects_rustix_linux_raw_backend ... ok
+test source_built_rust_programs::resolve::tests::selected_dependency_kinds_still_reject_unclassified_predicates ... ok
+test source_built_rust_programs::resolve::tests::separate_workspace_uses_its_own_lock_without_parent_fallback ... ok
+test source_built_rust_programs::resolve::tests::source_omission_admits_version_before_unique_local_precedence ... ok
+test source_built_rust_programs::resolve::tests::source_qualified_edge_retains_exact_transitive_lock_owner ... ok
+test source_built_rust_programs::resolve::tests::target_optional_features_classify_predicates_only_when_selected ... ok
+test source_built_rust_programs::resolve::tests::unselected_dependency_kinds_do_not_require_target_classification ... ok
+test source_built_rust_programs::resolve::tests::unset_getrandom_override_selects_linux_default_dependencies ... ok
+test source_built_rust_programs::successors::graph::tests::build_metadata_and_prerelease_versions_keep_distinct_admitted_producers ... ok
+test source_built_rust_programs::successors::graph::tests::combined_crate_types_and_literal_escape_tokens_do_not_alias ... ok
+test source_built_rust_programs::successors::native::tests::source_reservations_use_runtime_ceiling_not_expanded_declarations ... ok
+test source_built_rust_programs::successors::profile::tests::original_rpath_profile_survives_strict_deferred_invocation_admission ... ok
+test source_built_rust_programs::translation::macros::tests::macro_5612_slots_use_constant_declarations_and_exact_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_config_preserves_typed_operands_environment_cwd_and_metadata ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_output_cwd_and_referenced_executable_alias_remain_typed ... ok
+test source_built_rust_programs::translation::macros::tests::macro_compiler_rejects_conflicting_continuation_state ... ok
+test source_built_rust_programs::translation::macros::tests::macro_graphs_admit_actual_stage_roots_and_reject_cross_stage_roots ... ok
+test source_built_rust_programs::translation::macros::tests::macro_inventory_rejects_non_basenames_and_non_produced_images ... ok
+test source_built_rust_programs::translation::macros::tests::macro_reservations_obey_command_ceiling_not_expansion_size ... ok
+test source_built_rust_programs::translation::native_smoke_tests::compact_native_protected_smoke ... ignored, requires explicit static C compiler, reviewed bwrap and fresh evidence root
+test source_built_rust_programs::translation::native_smoke_tests::native_script_graphs_admit_owning_stage_products_and_reject_cross_stage_inputs ... ok
+test source_built_rust_programs::translation::smoke_tests::compact_macro_protected_smoke ... ignored, requires explicit pinned musl compiler/linker, reviewed bwrap and fresh evidence root
+test source_built_rust_programs::translation::tests::captured_tmp_request_preserves_descendant_out_dir_and_rejects_unbound_workspace ... ok
+test source_built_rust_programs::translation::tests::captured_tmp_request_rejects_traversal_in_workspace_root_or_member ... ok
+test source_bundle::tests::source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor ... ok
+test source_bundle::tests::source_built_fixed_point_profile_carries_sources_without_provider_outputs ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_manifest_authority ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_source_closure ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_provider_manifest_substitution ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_preserves_every_other_record ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
+test source_bundle::tests::source_built_vendor_inputs_refresh_replaces_only_the_vendor_record ... ok
+test source_toolchain_closure::tests::enforced_complete_closure_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::json_fixture_parses_seed_exception_and_counts_source_built_members ... ok
+test source_toolchain_closure::tests::provided_rust_provider_status_promotes_source_built_claim ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_member_without_receipt ... ok
+test source_toolchain_closure::tests::validator_rejects_source_built_rustc_with_prebuilt_source_marker ... ok
+test tests::self_build_cli_accepts_source_built_fixed_point_authority ... ok
+test tests::self_build_cli_rejects_source_built_and_legacy_cargo_free_modes_together ... ok
+test tests::source_program_preparation_requires_source_built_authority ... ok
+
+test result: ok. 270 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.75s
+
+warning: /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.0
+    Checking libc v0.2.186
+    Checking serde_core v1.0.228
+    Checking itoa v1.0.18
+    Checking zeroize v1.9.0
+    Checking crossbeam-utils v0.8.21
+    Checking smallvec v1.15.1
+    Checking typenum v1.20.1
+    Checking subtle v2.6.1
+    Checking regex-syntax v0.8.10
+    Checking bitflags v2.11.0
+    Checking once_cell v1.21.4
+    Checking aho-corasick v1.1.4
+    Checking scopeguard v1.2.0
+    Checking const-oid v0.9.6
+    Checking thiserror v2.0.18
+    Checking lock_api v0.4.14
+    Checking equivalent v1.0.2
+    Checking allocator-api2 v0.2.21
+    Checking cpufeatures v0.2.17
+    Checking arrayvec v0.7.6
+    Checking crossbeam-epoch v0.9.20
+    Checking stable_deref_trait v1.2.1
+    Checking zmij v1.0.21
+    Checking foldhash v0.2.0
+    Checking generic-array v0.14.7
+    Checking fastrand v2.4.1
+    Checking cpufeatures v0.3.0
+    Checking hashbrown v0.16.1
+    Checking crossbeam-deque v0.8.6
+    Checking linux-raw-sys v0.12.1
+    Checking log v0.4.29
+    Checking getrandom v0.2.17
+    Checking parking_lot_core v0.9.12
+    Checking errno v0.3.14
+    Checking rand_core v0.6.4
+    Checking block-buffer v0.10.4
+    Checking parking_lot v0.12.5
+    Checking signal-hook-registry v1.4.8
+    Checking rayon-core v1.13.0
+    Checking crypto-common v0.1.7
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.4.2
+    Checking digest v0.10.7
+    Checking pin-project-lite v0.2.17
+    Checking crc32fast v1.5.0
+    Checking futures-core v0.3.32
+    Checking same-file v1.0.6
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking crossbeam-channel v0.5.15
+    Checking walkdir v2.5.0
+    Checking byteorder v1.5.0
+    Checking regex-automata v0.4.14
+    Checking blake3 v1.8.5
+    Checking tinyvec_macros v0.1.1
+    Checking gix-trace v0.1.18
+    Checking tinyvec v1.11.0
+    Checking mio v1.2.0
+    Checking rand_core v0.10.0
+    Checking bytes v1.11.1
+    Checking getrandom v0.4.2
+    Checking unicode-normalization v0.1.25
+    Checking libm v0.2.16
+    Checking rustix v1.1.4
+    Checking socket2 v0.6.3
+    Checking zerofrom v0.1.7
+    Checking bytesize v2.3.1
+    Checking futures-io v0.3.32
+    Checking human_format v1.2.1
+    Checking yoke v0.8.2
+    Checking winnow v0.7.15
+    Checking zlib-rs v0.6.3
+    Checking tokio v1.51.0
+    Checking prodash v31.0.0
+    Checking sha1 v0.10.6
+    Checking futures-sink v0.3.32
+    Checking futures-channel v0.3.32
+    Checking zerovec v0.11.6
+    Checking slab v0.4.12
+    Checking futures-task v0.3.32
+    Checking tracing-core v0.1.36
+    Checking futures-util v0.3.32
+    Checking writeable v0.6.3
+    Checking sha1-checked v0.10.0
+    Checking base64ct v1.8.3
+    Checking hash32 v0.3.1
+    Checking tinystr v0.8.3
+    Checking litemap v0.8.2
+    Checking heapless v0.8.0
+    Checking pem-rfc7468 v0.7.0
+    Checking tracing v0.1.44
+    Checking icu_locale_core v2.2.0
+    Checking der v0.7.10
+    Checking bstr v1.12.1
+    Checking potential_utf v0.1.5
+    Checking zerotrie v0.2.4
+    Checking unicode-width v0.2.2
+    Checking jiff v0.2.23
+    Checking gix-validate v0.11.0
+    Checking gix-utils v0.3.1
+    Checking gix-path v0.11.2
+    Checking gix-error v0.2.1
+    Checking gix-features v0.46.2
+    Checking utf8_iter v1.0.4
+    Checking icu_provider v2.2.0
+    Checking spki v0.7.3
+    Checking icu_collections v2.2.0
+    Checking faster-hex v0.10.0
+    Checking sha2 v0.10.9
+    Checking indexmap v2.13.1
+    Checking base64 v0.22.1
+    Checking pkcs8 v0.10.2
+    Checking num-traits v0.2.19
+    Checking icu_properties_data v2.2.0
+    Checking icu_normalizer_data v2.2.0
+    Checking http v1.4.0
+    Checking utf16_iter v1.0.5
+    Checking percent-encoding v2.3.2
+    Checking write16 v1.0.0
+    Checking icu_normalizer v2.2.0
+    Checking icu_properties v2.2.0
+    Checking gix-hash v0.23.0
+    Checking fnv v1.0.7
+    Checking either v1.15.0
+    Checking bytemuck v1.25.0
+    Checking signature v2.2.0
+    Checking spin v0.9.9
+    Checking ryu v1.0.23
+    Checking gix-hashtable v0.13.0
+    Checking rustls-pki-types v1.14.0
+    Checking lazy_static v1.5.0
+    Checking aws-lc-sys v0.45.0
+    Checking memmap2 v0.9.10
+    Checking encoding_rs v0.8.35
+    Checking tokio-util v0.7.18
+    Checking simd-adler32 v0.3.9
+    Checking ipnet v2.12.0
+    Checking foldhash v0.1.5
+    Checking adler2 v2.0.1
+    Checking untrusted v0.9.0
+    Checking hashbrown v0.15.5
+    Checking aws-lc-rs v1.18.1
+    Checking miniz_oxide v0.8.9
+    Checking ring v0.17.14
+    Checking tempfile v3.27.0
+    Checking zerocopy v0.8.48
+    Checking regex v1.12.3
+    Checking httparse v1.10.1
+    Checking http-body v1.0.1
+    Checking thread_local v1.1.9
+    Checking gix-date v0.15.1
+    Checking getrandom v0.3.4
+    Checking idna_adapter v1.2.1
+    Checking form_urlencoded v1.2.2
+    Checking gix-fs v0.19.2
+    Checking gix-chunk v0.7.0
+    Checking atomic-waker v1.1.2
+    Checking try-lock v0.2.5
+    Checking gix-actor v0.40.0
+    Checking tower-service v0.3.3
+    Checking h2 v0.4.16
+    Checking want v0.3.1
+    Checking idna v1.1.0
+    Checking gix-quote v0.7.0
+    Checking nonempty v0.12.0
+    Checking gix-object v0.58.0
+    Checking hashbrown v0.14.5
+    Checking static_assertions v1.1.0
+    Checking signal-hook v0.4.4
+    Checking rand_core v0.9.5
+    Checking url v2.5.8
+    Checking num-integer v0.1.46
+    Checking sync_wrapper v1.0.2
+    Checking rustls-webpki v0.103.16
+    Checking tower-layer v0.3.3
+    Checking openssl-probe v0.2.1
+    Checking dashmap v6.1.0
+    Checking data-encoding v2.10.0
+    Checking rustls-native-certs v0.8.3
+    Checking tower v0.5.3
+    Checking curve25519-dalek v4.1.3
+    Checking gix-tempfile v21.0.2
+    Checking rustls v0.23.46
+    Checking gix-commitgraph v0.35.0
+    Checking sharded-slab v0.1.7
+    Checking ed25519 v2.2.3
+    Checking gix-glob v0.24.0
+    Checking matchers v0.2.0
+    Checking tracing-log v0.2.0
+    Checking iri-string v0.7.12
+    Checking colorchoice v1.0.5
+    Checking gimli v0.32.3
+    Checking nu-ansi-term v0.50.3
+    Checking gix-revwalk v0.29.0
+    Checking object v0.37.3
+    Checking tracing-subscriber v0.3.23
+    Checking ed25519-dalek v2.2.0
+    Checking http-body-util v0.1.3
+    Checking hyper v1.9.0
+    Checking arc-swap v1.9.1
+    Checking anstyle v1.0.14
+    Checking tower-http v0.6.8
+    Checking ppv-lite86 v0.2.21
+    Checking strsim v0.11.1
+    Checking iana-time-zone v0.1.65
+    Checking mime v0.3.17
+    Checking rustc-demangle v0.1.28
+    Checking chrono v0.4.44
+    Checking rand_chacha v0.9.0
+    Checking unicode-bom v2.0.3
+    Checking hyper-util v0.1.20
+    Checking is_ci v1.2.0
+    Checking utf8parse v0.2.2
+    Checking unicode-linebreak v0.1.5
+    Checking supports-color v3.0.2
+    Checking anstyle-parse v1.0.0
+    Checking addr2line v0.25.1
+    Checking rand v0.9.3
+    Checking owo-colors v4.3.0
+    Checking textwrap v0.16.2
+    Checking gix-lock v21.0.2
+    Checking terminal_size v0.4.4
+    Checking inout v0.1.4
+    Checking filetime v0.2.27
+    Checking anstyle-query v1.1.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking supports-hyperlinks v3.2.0
+    Checking bumpalo v3.20.2
+    Checking unicode-width v0.1.14
+    Checking rustc-hash v2.1.2
+    Checking sha1_smol v1.0.1
+    Checking supports-unicode v3.0.0
+    Checking anstream v1.0.0
+    Checking cipher v0.4.4
+    Checking uuid v1.23.0
+    Checking anyhow v1.0.102
+    Checking strum v0.26.3
+    Checking derive_more v2.1.1
+    Checking kstring v2.0.2
+    Checking universal-hash v0.5.1
+    Checking shell-words v1.1.1
+    Checking parking v2.2.1
+    Checking opaque-debug v0.3.1
+    Checking clap_lex v1.1.0
+    Checking gix-command v0.8.0
+    Checking polyval v0.6.2
+    Checking gix-attributes v0.31.0
+    Checking futures-lite v2.6.1
+    Checking backtrace v0.3.76
+    Checking pin-project v1.1.11
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking clap_builder v4.6.0
+    Checking icu_locale_data v2.2.0
+    Checking portable-atomic v1.13.1
+    Checking futures-executor v0.3.32
+    Checking gix-config-value v0.17.1
+    Checking hyper-rustls v0.27.7
+    Checking icu_locale v2.2.0
+    Checking futures v0.3.32
+    Checking backtrace-ext v0.2.1
+    Checking memoffset v0.9.1
+    Checking reqwest v0.13.2
+    Checking miette v7.6.0
+    Checking ghash v0.5.1
+    Checking icu_collator_data v2.2.0
+    Checking io-lifetimes v2.0.4
+    Checking io-lifetimes v3.0.1
+    Checking aes v0.8.4
+    Checking ctr v0.9.2
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking twox-hash v2.1.2
+    Checking num-bigint v0.4.8
+    Checking tokio-stream v0.1.18
+    Checking xattr v1.6.1
+    Checking aead v0.5.2
+    Checking vte v0.15.0
+    Checking softaes v0.1.7
+    Checking siphasher v1.0.2
+    Checking powerfmt v0.2.0
+    Checking turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking vt100 v0.16.2
+    Checking fastbloom v0.14.1
+    Checking aegis v0.9.8
+    Checking deranged v0.5.8
+    Checking aes-gcm v0.10.3
+    Checking async-stream v0.3.6
+    Checking clap v4.6.0
+    Checking aristo v0.4.1
+    Checking icu_collator v2.2.1
+    Checking zstd-safe v7.2.4
+    Checking io-extras v0.19.0
+    Checking fs-set-times v0.20.3
+    Checking intrusive-collections v0.9.7
+    Checking serde_with v3.18.0
+    Checking crc32c v0.6.8
+    Checking branches v0.4.6
+    Checking bigdecimal v0.4.11
+    Checking simsimd v6.5.16
+    Checking libmimalloc-sys v0.1.44
+    Checking uncased v0.9.10
+    Checking turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking io-uring v0.7.15
+    Checking gix-traverse v0.55.0
+    Checking rustix-linux-procfs v0.1.1
+    Checking polling v3.11.0
+    Checking pack1 v1.1.0
+    Checking roaring v0.11.4
+    Checking gix-packetline v0.21.2
+    Checking console v0.16.3
+    Checking rapidhash v4.5.1
+    Checking chacha20 v0.10.0
+    Checking hmac v0.12.1
+    Checking libloading v0.8.9
+    Checking allocator-api2 v0.4.0
+    Checking cordyceps v0.3.4
+    Checking bitflags v1.3.2
+    Checking num-conv v0.2.1
+    Checking ambient-authority v0.0.2
+    Checking genawaiter-macro v0.99.1
+    Checking spin v0.10.0
+    Checking hex v0.4.3
+    Checking fallible-iterator v0.3.0
+    Checking simdutf8 v0.1.5
+    Checking cfg_block v0.1.1
+    Checking time-core v0.1.8
+    Checking unit-prefix v0.5.2
+    Checking maybe-owned v0.3.4
+    Checking diatomic-waker v0.2.3
+    Checking genawaiter v0.99.1
+    Checking time v0.3.47
+    Checking indicatif v0.18.4
+    Checking rand v0.10.1
+    Checking futures-buffered v0.2.13
+    Checking cap-primitives v4.0.2
+    Checking mimalloc v0.1.48
+    Checking zstd v0.13.3
+    Checking nix v0.31.3
+    Checking turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking lzma-sys v0.1.20
+    Checking bzip2-sys v0.1.13+1.0.8
+    Checking memoffset v0.6.5
+    Checking typeid v1.0.3
+    Checking reqwest-middleware v0.5.1
+    Checking serde_urlencoded v0.7.1
+    Checking flate2 v1.1.9
+    Checking itertools v0.15.0
+    Checking quick-xml v0.40.1
+    Checking md-5 v0.10.6
+    Checking env_filter v2.0.0
+    Checking gix-sec v0.13.2
+    Checking hybrid-array v0.4.13
+    Checking nibble_vec v0.1.0
+    Checking matchit v0.8.4
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/fuse-backend-rs)
+    Checking symlink v0.1.0
+    Checking endian-type v0.1.2
+   Compiling nix-compat v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/nix-compat)
+    Checking humantime v2.3.0
+    Checking radix_trie v0.2.1
+    Checking tracing-appender v0.2.5
+    Checking reqwest-tracing v0.6.0
+    Checking n0-error v0.1.3
+    Checking thiserror v1.0.69
+    Checking env_logger v0.11.11
+    Checking cap-std v4.0.2
+    Checking tracing-indicatif v0.3.14
+    Checking erased-serde v0.4.10
+    Checking nix v0.24.3
+    Checking xz2 v0.1.7
+    Checking bzip2 v0.5.2
+    Checking n0-future v0.3.2
+    Checking prost v0.14.3
+    Checking object_store v0.14.0
+    Checking num_enum v0.7.6
+    Checking vmm-sys-util v0.11.2
+    Checking clap-verbosity-flag v3.0.4
+    Checking astral-tokio-tar v0.6.4
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-attestation-core)
+    Checking gix-bitmap v0.3.0
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking mio v0.8.11
+    Checking caps v0.5.6
+    Checking vm-memory v0.10.0
+    Checking num_cpus v1.17.0
+    Checking cobs v0.3.0
+    Checking nom v8.0.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-castore)
+    Checking fixedbitset v0.4.2
+    Checking petgraph v0.6.5
+    Checking irpc v0.13.0
+    Checking ref-cast v1.0.25
+    Checking postcard v1.1.3
+    Checking threadpool v1.8.1
+    Checking gix-index v0.49.0
+    Checking snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-tracing)
+    Checking serde_tagged v0.3.0
+    Checking async-compression v0.4.19
+    Checking cap-fs-ext v4.0.2
+    Checking serde_qs v0.12.0
+    Checking redb v3.1.3
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking gix-filter v0.28.0
+    Checking fastcdc v3.2.1
+    Checking gix-ref v0.61.0
+    Checking gix-ignore v0.19.1
+    Checking safe_arch v1.2.0
+    Checking safe_arch v0.7.4
+    Checking itertools v0.14.0
+    Checking serde_bytes v0.11.19
+    Checking ff v0.13.1
+    Checking inplace-vec-builder v0.1.1
+    Checking base16ct v0.2.0
+    Checking winnow v1.0.1
+    Checking const-oid v0.10.2
+    Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+    Checking binary-merge v0.1.2
+    Checking digest v0.11.3
+    Checking range-collections v0.4.6
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking sec1 v0.7.3
+    Checking group v0.13.0
+    Checking wide v1.7.0
+    Checking wide v0.7.33
+    Checking malachite-base v0.9.2
+    Checking gix-worktree v0.50.0
+    Checking derive_builder v0.20.2
+    Checking crunch-attestation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-attestation)
+    Checking hkdf v0.12.4
+    Checking iroh-io v0.6.2
+    Checking gix-pathspec v0.16.1
+    Checking rand_chacha v0.3.1
+    Checking rand_xoshiro v0.7.0
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking crypto-bigint v0.5.5
+    Checking positioned-io v0.3.5
+    Checking imbl-sized-chunks v0.2.0
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-store)
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking self_cell v1.3.0
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/vendor/snix-build)
+    Checking archery v1.2.3
+    Checking bao-tree v0.16.1
+    Checking imbl v7.0.2
+    Checking elliptic-curve v0.13.8
+    Checking typed-builder v0.22.0
+    Checking rand v0.8.6
+    Checking oci-spec v0.7.1
+    Checking nix v0.29.0
+    Checking md-5 v0.11.0
+    Checking fastcdc v5.0.0
+    Checking tar v0.4.45
+    Checking nix-archive v0.6.0
+    Checking nix-archive v0.1.0
+    Checking fs4 v1.1.0
+    Checking itertools v0.12.1
+    Checking gix-url v0.35.2
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-plan-core)
+    Checking lru v0.16.4
+    Checking count-write v0.1.0
+    Checking crunch-nar v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nar)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-action-result-core)
+    Checking rfc6979 v0.4.0
+    Checking gix-prompt v0.14.1
+    Checking gix-revision v0.43.0
+    Checking imara-diff v0.1.8
+    Checking imara-diff v0.2.0
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-overlay-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-gc-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-composition-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-repair-core)
+    Checking serde_spanned v1.1.1
+    Checking fs2 v0.4.3
+    Checking unicode-segmentation v1.13.2
+    Checking bitmaps v3.2.1
+    Checking termcolor v1.4.1
+    Checking codespan-reporting v0.13.1
+    Checking toml v0.9.12+spec-1.1.0
+    Checking gix-refspec v0.39.0
+    Checking malachite-nz v0.9.2
+    Checking imbl-sized-chunks v0.1.3
+    Checking gix-diff v0.61.0
+    Checking gix-credentials v0.37.1
+    Checking ecdsa v0.16.9
+    Checking gix-discover v0.49.0
+    Checking hashlink v0.10.0
+    Checking clru v0.6.3
+    Checking uluru v3.1.0
+    Checking typed-arena v2.0.2
+    Checking arraydeque v0.5.1
+    Checking aliasable v0.1.3
+    Checking arrayvec v0.5.2
+    Checking gix-pack v0.68.0
+    Checking gix-dir v0.23.0
+    Checking ouroboros v0.18.5
+    Checking saphyr-parser v0.0.6
+    Checking gix-transport v0.55.1
+    Checking pretty v0.12.5
+    Checking codespan v0.13.1
+    Checking logos v0.16.1
+    Checking nickel-lang-vector v0.2.0
+    Checking signal-hook v0.3.18
+    Checking toml_edit v0.24.1+spec-1.1.0
+    Checking gix-config v0.54.0
+    Checking gix-worktree-stream v0.30.0
+    Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking gix-shallow v0.10.0
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rust-cache-core)
+    Checking gix-negotiate v0.29.0
+    Checking num-iter v0.1.46
+    Checking lalrpop-util v0.22.2
+    Checking io-close v0.3.7
+    Checking vte v0.14.1
+    Checking simple-counter v0.1.0
+    Checking unsafe-libyaml v0.2.11
+    Checking crc-catalog v2.4.0
+    Checking linux-raw-sys v0.4.15
+    Checking strip-ansi-escapes v0.2.1
+    Checking crc v3.4.0
+    Checking gix-protocol v0.59.0
+    Checking gix-worktree-state v0.28.0
+    Checking rustix v0.38.44
+    Checking gix-submodule v0.28.0
+    Checking gix-odb v0.78.0
+    Checking serde_yaml v0.9.34+deprecated
+    Checking num-bigint-dig v0.8.6
+    Checking gix-archive v0.30.0
+    Checking signal-hook-mio v0.2.5
+    Checking gix-status v0.28.0
+    Checking gix-blame v0.11.0
+    Checking mantle-rust-differential-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-differential-core)
+    Checking primeorder v0.13.6
+    Checking gix-mailmap v0.32.0
+    Checking ureq-proto v0.6.0
+    Checking webpki-roots v1.0.10
+    Checking pkcs1 v0.7.5
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-remote-core)
+    Checking sha-1 v0.10.1
+    Checking json_scanner v0.1.0
+    Checking utf8-zero v0.8.1
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-build)
+    Checking verus_builtin v0.0.0-2026-01-25-0057
+    Checking ureq v3.3.0
+    Checking rsa v0.9.10
+    Checking vstd v0.0.0-2026-01-25-0057
+    Checking gix v0.81.0
+    Checking crossterm v0.29.0
+    Checking gethostname v0.5.0
+    Checking lzma-rs v0.3.0
+    Checking redb v2.6.4
+    Checking ruzstd v0.9.1
+    Checking fuzzy-matcher v0.3.7
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-spacewasm-core)
+    Checking mantle-causal-trace-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-causal-trace-core)
+    Checking replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking bzip2-rs v0.1.2
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking hashbrown v0.17.1
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking bs58 v0.5.1
+    Checking dyn-clone v1.0.20
+    Checking toml_write v0.1.2
+    Checking inquire v0.9.4
+    Checking iddqd v0.4.6
+    Checking toml_edit v0.22.27
+    Checking crunch-test-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test-core)
+    Checking verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking snafu v0.8.9
+    Checking linkme v0.3.37
+    Checking p384 v0.13.1
+    Checking p256 v0.13.2
+    Checking k256 v0.13.4
+    Checking crunch-glue v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-glue)
+    Checking ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-wasm-component-core)
+    Checking revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking secrecy v0.10.3
+    Checking etcetera v0.11.0
+    Checking detect-coding-agent v0.1.0
+    Checking colored v3.1.1
+    Checking dotenvy v0.15.7
+    Checking toml v0.8.23
+    Checking jsonwebtoken v11.0.0
+    Checking ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking secretspec v0.17.0
+    Checking crunch-test-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test-app)
+    Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-project-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-shell-core)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-source-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-evaluation-stream-core)
+    Checking crunch-watch-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-watch-core)
+    Checking malachite-q v0.9.2
+    Checking crunch-nix-gateway-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nix-gateway-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-release-core)
+    Checking crunch-shell v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-shell)
+    Checking crunch-test v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-test)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-wasm-component)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+    Checking malachite-float v0.9.2
+    Checking crunch-remote-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-remote-app)
+    Checking mantle-application-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-application-contract)
+    Checking mantle-rust-plan-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-rust-plan-app)
+    Checking mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-cargo-build-bundle-core)
+    Checking crunch-project v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-project)
+    Checking malachite v0.9.2
+    Checking chapter-tgz v0.1.0
+    Checking nickel-lang-parser v0.3.0
+    Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+    Checking nix-derivation v0.1.0
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-bootstrap-core)
+    Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantlepkgs-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-build-contract)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-eval-budget-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-portable-client-core)
+    Checking crunch-service-readiness-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-service-readiness-core)
+    Checking mantle-lock-vendor-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-lock-vendor-core)
+    Checking predicates-core v1.0.10
+    Checking float-cmp v0.10.0
+    Checking difflib v0.4.0
+    Checking termtree v0.5.1
+    Checking normalize-line-endings v0.3.0
+    Checking predicates-tree v1.0.13
+    Checking predicates v3.1.4
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-hardware-simulation-core)
+    Checking wait-timeout v0.2.1
+    Checking yansi v1.0.1
+    Checking diff v0.1.13
+    Checking pretty_assertions v1.4.1
+    Checking assert_cmd v2.2.0
+    Checking turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-hardware-simulation)
+    Checking mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/mantle-wasm-consumer-verifier)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-kernelscript-core)
+    Checking crunch-android-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-android-core)
+    Checking transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+    Checking ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+    Checking nickel-lang-core v0.18.0
+    Checking nickel-lang v2.2.0
+    Checking crunch-eval v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-eval)
+    Checking crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rustc-wrapper)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nix-gateway)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-pipeline)
+    Checking mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption)
+    Finished `release` profile [optimized] target(s) in 3m 14s
+warning: /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-rustc-wrapper)
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-build)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-nix-gateway)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption)
+    Finished `release` profile [optimized] target(s) in 4m 34s
++ /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/adopt-source-built-stagex --help
+Usage: adopt-source-built-stagex --proof-root DIR --expected-plan-blake3 HEX --expected-receipt-bytes-blake3 HEX --store DIR --state-dir DIR --signing-key FILE --report FILE [--backend snix|casita] [--json]
++ /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/check-native-row-receipts --contract
+[{"acceptance_evidence_path":"bootstrap/evidence/early-native-binutils-acceptance-v1.json","acceptance_evidence_schema":"mantle-early-native-row-acceptance-v1","artifact_evidence_path":"bootstrap/evidence/early-native-binutils-artifact.json","artifact_evidence_schema":"mantle-early-native-artifact-evidence-v1","derivation":"bootstrap/binutils-tcc.ncl","generated":["bfd-two-pass-headers","binutils-parser-scanner-set","gas-parser-set","ld-parser-scanner-set"],"non_claims":["general compiler or binutils correctness","provider or seed admission","whole-bootstrap correctness"],"positive":["archive-roundtrip","assemble-object","link-execute","nm-symbols","objcopy-copy","object-format-readelf","ranlib-index","relocation-link"],"predecessors":[{"path":"bootstrap/evidence/early-native-predecessors/bison-2.3.json","role":"bison-2.3"},{"path":"bootstrap/evidence/early-native-predecessors/flex-2.6.4.json","role":"flex-2.6.4"},{"path":"bootstrap/evidence/early-native-predecessors/gawk-3.0.4.json","role":"gawk-3.0.4"},{"path":"bootstrap/evidence/early-native-predecessors/m4-1.4.7.json","role":"m4-1.4.7"},{"path":"bootstrap/evidence/early-native-predecessors/native-musl.json","role":"native-musl"},{"path":"bootstrap/evidence/early-native-predecessors/tcc-v2.json","role":"tcc-v2"}],"receipt_path":"bootstrap/evidence/early-native-binutils-row-v2.json","rejection":["malformed-archive-rejected","malformed-assembly-rejected","malformed-link-input-rejected","malformed-object-rejected","missing-archive-member-rejected"],"row_id":"binutils.tcc","schema":"mantle-early-native-row-receipt-v2","source_policies":[{"forbidden":["command -v ","/usr/bin/","exec \"$TCC/bin/tcc\"","NON_ADMISSION"],"path":"bootstrap/binutils-tcc.ncl","required":["source-built TCC-era binutils matrix passed","CONFIGURE_PROBE_INVOCATION_COUNT_MAX=4096","CONFIGURE_PROBE_SOURCE_BYTES_MAX=65536","delegates to predecessor TinyCC"]}],"sources":["bootstrap/binutils-tcc.ncl","bootstrap/bison-2.3-musl.ncl","bootstrap/diffutils-2.7-musl.ncl","bootstrap/flex-2.6.4-musl.ncl","bootstrap/gawk-3.0.4-musl.ncl","bootstrap/m4-1.4.7-musl.ncl","bootstrap/musl-1.1.24-native.ncl","bootstrap/tcc-musl-native.ncl","bootstrap/tcc-musl-v2.ncl"],"success_marker":"source-built TCC-era binutils matrix passed"},{"acceptance_evidence_path":"bootstrap/evidence/early-native-gcc40-acceptance-v1.json","acceptance_evidence_schema":"mantle-early-native-row-acceptance-v1","artifact_evidence_path":"bootstrap/evidence/early-native-gcc40-artifact.json","artifact_evidence_schema":"mantle-early-native-artifact-evidence-v1","derivation":"bootstrap/gcc-4.0.ncl","generated":["c-parser-bison-3.4.1","gcc-configure-autoconf-2.59","gengtype-parser-bison-3.4.1","gengtype-scanner-flex-2.6.4","top-level-configure-autoconf-2.13"],"non_claims":["general compiler or binutils correctness","provider or seed admission","whole-bootstrap correctness"],"positive":["c-driver-static-runtime","cc1-and-cc1plus-present","cxx-exception-rtti-allocation-runtime","demangler-runtime","generator-artifact-set","libgcc-exception-runtime-present","relocated-c-driver-runtime"],"predecessors":[{"path":"bootstrap/evidence/early-native-predecessors/early-binutils.json","role":"early-binutils"},{"path":"bootstrap/evidence/early-native-predecessors/gcc-built-binutils.json","role":"gcc-built-binutils"},{"path":"bootstrap/evidence/early-native-predecessors/gcc-pass6.json","role":"gcc-pass6"},{"path":"bootstrap/evidence/early-native-predecessors/musl-pass5.json","role":"musl-pass5"},{"path":"bootstrap/evidence/early-native-predecessors/native-musl.json","role":"native-musl"},{"path":"bootstrap/evidence/early-native-predecessors/native-tcc.json","role":"native-tcc"}],"receipt_path":"bootstrap/evidence/early-native-gcc40-row-v2.json","rejection":["configure-bridge-compiler-use-scan-clean","fabricated-object-scan-clean","malformed-c-rejected","malformed-cxx-rejected","release-generated-substitution-scan-clean","wrapper-delegation-scan-clean"],"row_id":"gcc.4.0","schema":"mantle-early-native-row-receipt-v2","source_policies":[{"forbidden":["$STAGE0/bin:$PATH","exec \"$TCC/bin/tcc\"","NON_ADMISSION"],"path":"bootstrap/gcc-4.0-musl-cxx.ncl","required":["early-native-gcc40-row.txt","accepted malformed C","accepted malformed C++","for generator in genattrtab genoutput genemit genrecog genextract gengtype"]}],"sources":["bootstrap/gcc-4.0.ncl","bootstrap/gcc-4.0-musl-cxx.ncl","bootstrap/gcc-4.0-musl-pass3.ncl","bootstrap/gcc-4.0-musl-pass4.ncl","bootstrap/gcc-4.0-musl-pass5.ncl","bootstrap/gcc-4.0-musl-pass6.ncl","bootstrap/gcc-4.0-native.ncl","bootstrap/musl-1.1.24-gcc.ncl","bootstrap/musl-1.1.24-gcc-pass4.ncl","bootstrap/musl-1.1.24-gcc-pass5.ncl","bootstrap/binutils-2.30-gcc.ncl","bootstrap/binutils-tcc.ncl","bootstrap/bison-3.4.1-gcc.ncl","bootstrap/flex-2.6.4-gcc.ncl","bootstrap/m4-1.4.7-gcc.ncl","bootstrap/autoconf-2.13-gcc.ncl","bootstrap/autoconf-2.59-gcc.ncl","bootstrap/perl-5.6.2-configured-gcc.ncl"],"success_marker":"GCC 4.0.4 regenerated C/C++ early-native row behavior matrix passed"},{"acceptance_evidence_path":"bootstrap/evidence/final-native-gcc47-acceptance-v1.json","acceptance_evidence_schema":"mantle-final-native-row-acceptance-v1","artifact_evidence_path":"bootstrap/evidence/final-native-gcc47-artifact.json","artifact_evidence_schema":"mantle-final-native-artifact-evidence-v1","derivation":"bootstrap/gcc-4.7.ncl","generated":["configure-set-autoconf-2.64","config-header-set-autoheader-2.64","intl-plural-bison-3.4.1","gengtype-scanner-flex-2.6.4","config-sub-automake-1.15.1"],"non_claims":["general compiler, libc, or binutils correctness","provider or seed admission","whole-bootstrap correctness"],"positive":["c-static-runtime","cc1-and-cc1plus-present","cxx11-exception-rtti-allocation-runtime","libgcc-libstdcxx-libsupcxx-present","relocated-c-runtime"],"predecessors":[{"path":"bootstrap/evidence/final-native-predecessors/gcc40.json","role":"gcc40"},{"path":"bootstrap/evidence/final-native-predecessors/early-binutils.json","role":"binutils"},{"path":"bootstrap/evidence/final-native-predecessors/musl-pass5.json","role":"musl"},{"path":"bootstrap/evidence/final-native-predecessors/gmp.json","role":"gmp"},{"path":"bootstrap/evidence/final-native-predecessors/mpfr.json","role":"mpfr"},{"path":"bootstrap/evidence/final-native-predecessors/mpc.json","role":"mpc"},{"path":"bootstrap/evidence/final-native-predecessors/autoconf.json","role":"autoconf"},{"path":"bootstrap/evidence/final-native-predecessors/bison.json","role":"bison"},{"path":"bootstrap/evidence/final-native-predecessors/flex.json","role":"flex"}],"receipt_path":"bootstrap/evidence/final-native-gcc47-row-v1.json","rejection":["malformed-c-rejected","malformed-cxx-rejected","ambient-path-scan-clean","host-compiler-scan-clean","release-generated-substitution-scan-clean","wrong-predecessor-scan-clean"],"row_id":"gcc.4.7","schema":"mantle-final-native-row-receipt-v1","source_policies":[{"forbidden":["$STAGE0/bin:$PATH","command -v ","/usr/bin/","/home/",".pi/cairn-drain/","NON_ADMISSION"],"path":"bootstrap/gcc-4.7.ncl","required":["final-native-gcc47-row.txt","accepted malformed C","accepted malformed C++","gcc47-regenerated-files.txt"]}],"sources":["bootstrap/gcc-4.7.ncl","bootstrap/autoconf-2.64-gcc.ncl","bootstrap/bison-3.4.1-gcc.ncl","bootstrap/flex-2.6.4-gcc.ncl","bootstrap/gmp-6.2.1.ncl","bootstrap/mpfr-4.1.0.ncl","bootstrap/mpc-1.2.1.ncl"],"success_marker":"GCC 4.7.4 final-native row C/C++11 runtime, relocation, and rejection matrix passed"},{"acceptance_evidence_path":"bootstrap/evidence/final-native-gcc10-acceptance-v1.json","acceptance_evidence_schema":"mantle-final-native-row-acceptance-v1","artifact_evidence_path":"bootstrap/evidence/final-native-gcc10-artifact.json","artifact_evidence_schema":"mantle-final-native-artifact-evidence-v1","derivation":"bootstrap/gcc-10.ncl","generated":["configure-and-header-set-autoconf-2.69","intl-plural-bison-3.4.1","gengtype-scanner-flex-2.6.4"],"non_claims":["general compiler, libc, or binutils correctness","provider or seed admission","whole-bootstrap correctness"],"positive":["c-static-runtime","cc1-and-cc1plus-present","cxx17-exception-rtti-allocation-runtime","libgcc-libstdcxx-libsupcxx-present","regenerated-source-manifest-present","relocated-cxx-runtime"],"predecessors":[{"path":"bootstrap/evidence/final-native-predecessors/gcc47.json","role":"gcc47"},{"path":"bootstrap/evidence/final-native-predecessors/early-binutils.json","role":"binutils"},{"path":"bootstrap/evidence/final-native-predecessors/musl-pass5.json","role":"musl"},{"path":"bootstrap/evidence/final-native-predecessors/gcc10-regenerated-source.json","role":"regenerated-source"},{"path":"bootstrap/evidence/final-native-predecessors/gmp.json","role":"gmp"},{"path":"bootstrap/evidence/final-native-predecessors/mpfr.json","role":"mpfr"},{"path":"bootstrap/evidence/final-native-predecessors/mpc.json","role":"mpc"}],"receipt_path":"bootstrap/evidence/final-native-gcc10-row-v1.json","rejection":["malformed-c-rejected","malformed-cxx-rejected","ambient-path-scan-clean","host-compiler-scan-clean","release-generated-substitution-scan-clean","wrong-predecessor-scan-clean"],"row_id":"gcc.10","schema":"mantle-final-native-row-receipt-v1","source_policies":[{"forbidden":["$STAGE0/bin:$PATH","command -v ","/usr/bin/","/home/",".pi/cairn-drain/","NON_ADMISSION"],"path":"bootstrap/gcc-10.ncl","required":["final-native-gcc10-row.txt","accepted malformed C","accepted malformed C++","gcc-10.5.0-files.txt"]}],"sources":["bootstrap/gcc-10.ncl","bootstrap/gcc-10.5.0-regenerated-source.ncl"],"success_marker":"GCC 10.5.0 final-native row C/C++17 runtime, ELF, relocation, and rejection matrix passed"},{"acceptance_evidence_path":"bootstrap/evidence/final-native-musl-binutils-acceptance-v1.json","acceptance_evidence_schema":"mantle-final-native-row-acceptance-v1","artifact_evidence_path":"bootstrap/evidence/final-native-binutils-artifact.json","artifact_evidence_schema":"mantle-final-native-artifact-evidence-v1","derivation":"bootstrap/binutils-full.ncl","generated":["gcc10-final-regenerated-source-set","binutils-configure-set-autoconf-2.69","binutils-parser-scanner-set-bison-flex"],"non_claims":["general compiler, libc, or binutils correctness","provider or seed admission","whole-bootstrap correctness"],"positive":["gcc10-static-cxx17-runtime","gcc10-dynamic-cxx17-runtime","gcc10-shared-runtime-members","gcc10-relocated-runtime","musl-header-crt-static-shared-interpreter-set","musl-static-runtime","musl-dynamic-runtime","musl-copied-tree-runtime","binutils-tool-set","binutils-runtime-and-relocation","binutils-copied-tree-runtime"],"predecessors":[{"path":"bootstrap/evidence/final-native-predecessors/gcc10.json","role":"gcc10"},{"path":"bootstrap/evidence/final-native-predecessors/gcc10-final.json","role":"gcc10-final-cycle"},{"path":"bootstrap/evidence/final-native-predecessors/musl-final.json","role":"musl-final"}],"receipt_path":"bootstrap/evidence/final-native-musl-binutils-row-v1.json","rejection":["malformed-cxx-rejected","absolute-shared-runtime-dependency-rejected","malformed-c-rejected","malformed-assembly-rejected","malformed-object-rejected","malformed-archive-rejected","undefined-symbol-link-rejected","ambient-path-scan-clean","state-pinned-input-scan-clean","missing-runtime-member-scan-clean"],"row_id":"full-musl-binutils","schema":"mantle-final-native-row-receipt-v1","source_policies":[{"forbidden":["$STAGE0/bin:$PATH","command -v ","/usr/bin/","/home/",".pi/cairn-drain/","NON_ADMISSION"],"path":"bootstrap/gcc-10-final.ncl","required":["final-native-gcc10-cycle.txt","accepted malformed C++","absolute libc dependency"]},{"forbidden":["$STAGE0/bin:$PATH","command -v ","/usr/bin/","/home/",".pi/cairn-drain/","NON_ADMISSION"],"path":"bootstrap/musl-full.ncl","required":["final-native-musl-row.txt","accepted malformed C","ld-musl-x86_64.so.1","RELOCATED_MUSL=\"$WORK/relocated-musl\""]},{"forbidden":["$STAGE0/bin:$PATH","command -v ","/usr/bin/","/home/",".pi/cairn-drain/","NON_ADMISSION"],"path":"bootstrap/binutils-full.ncl","required":["final-native-binutils-row.txt","expect_bounded_rejection \"malformed assembly\"","expect_bounded_rejection \"malformed object inspection\"","expect_bounded_rejection \"malformed archive\"","expect_bounded_rejection \"undefined-symbol link\"","binutils-2.41-removed-generated-files.txt"]}],"sources":["bootstrap/gcc-10-final.ncl","bootstrap/gcc-10.5.0-regenerated-source.ncl","bootstrap/musl-full.ncl","bootstrap/binutils-full.ncl","bootstrap/binutils-2.41-regeneration-ready-source.ncl"],"success_marker":"binutils 2.41 final-native assembler/linker/archive/object runtime, relocation, and rejection matrix passed"}]
+++ source_digest
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-48afe432-signed-stagex-adoption .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ SOURCE_AFTER=b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
++ printf 'source_tree_before_blake3=%s\nsource_tree_after_blake3=%s\n' b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5 b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
+source_tree_before_blake3=b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
+source_tree_after_blake3=b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
++ test b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5 = b85910b803f0c3a47d97282bdaa1a0e5ad64959e7aeca6005955d0528d02fcc5
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/bin/mantle-48afe432-signed-stagex-adoption
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-48afe432-signed-stagex-adoption
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-48afe432-signed-stagex-adoption
++ install -m 755 /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/mantle /home/brittonr/sbfp-20261113-berdKH/bin/mantle-48afe432-signed-stagex-adoption
++ install -m 755 /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/adopt-source-built-stagex /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-48afe432-signed-stagex-adoption
++ install -m 755 /home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption/release/check-native-row-receipts /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-48afe432-signed-stagex-adoption
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/bin/mantle-48afe432-signed-stagex-adoption /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-48afe432-signed-stagex-adoption /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-48afe432-signed-stagex-adoption
++ /home/brittonr/sbfp-20261113-berdKH/bin/mantle-48afe432-signed-stagex-adoption --version
+mantle 0.1.0
++ date -Is
+2026-11-16T15:52:48-05:00
++ finished=1
++ printf 'qualification_complete=1\n'
+qualification_complete=1
++ status=0
++ '[' 0 -eq 0 ']'
++ '[' 1 -ne 1 ']'
++ printf 'qualification_exit=%s\n' 0
+qualification_exit=0
++ printf '%s\n' 0
++ exit 0

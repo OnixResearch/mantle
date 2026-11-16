@@ -1,0 +1,46 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "source_code_revision": "48afe43229ebccdb8d24ae382e8dabb59281dd71",
+  "source_archive_compressed_blake3": "1a61695bd59c6b7374dd74ba3b9d976fbb46c71fdb9f61b1c6d8a481748b1ecb",
+  "source_archive_raw_blake3": "28267665187d40c1689f246cafd7d7bf15103bda70480e677602ff4ca2dff2c3",
+  "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "original_source_tree_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+  "subject": "48afe432-signed-stagex-adoption",
+  "scripts": {
+    "assemble-complete-source.sh": "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-48afe432-signed-stagex-adoption.sh",
+    "qualify-source.sh": "/home/brittonr/sbfp-20261113-berdKH/qualify-source-48afe432-signed-stagex-adoption.sh",
+    "canonical-checks-run.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-48afe432-signed-stagex-adoption-run.sh",
+    "canonical-checks-inside.sh": "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-48afe432-signed-stagex-adoption-inside.sh",
+    "prepare-source.sh": "/home/brittonr/sbfp-20261113-berdKH/prepare-source-48afe432-signed-stagex-adoption.sh"
+  },
+  "tasks": {
+    "assembly": {
+      "id": 1642,
+      "dependencies": []
+    },
+    "runner": {
+      "id": 1644,
+      "dependencies": [
+        1642
+      ],
+      "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-48afe432-signed-stagex-adoption"
+    },
+    "canonical": {
+      "id": 1643,
+      "dependencies": [
+        1642
+      ],
+      "fresh_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-48afe432-signed-stagex-adoption"
+    },
+    "preparation": {
+      "id": 1645,
+      "dependencies": [
+        1644,
+        1643
+      ]
+    }
+  },
+  "all_driver_syntax_checked": true,
+  "source_code_archive_transport_equal": true,
+  "non_claim": "Queued source assembly, two isolated builds and inert source-program preparation. No qualification result, review acceptance, protected execution or fixed-point/native-row claim."
+}

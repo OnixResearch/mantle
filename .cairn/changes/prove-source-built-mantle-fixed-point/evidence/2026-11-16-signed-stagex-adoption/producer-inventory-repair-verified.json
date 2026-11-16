@@ -1,0 +1,16 @@
+{
+  "rejected_source_revision": "48afe43229ebccdb8d24ae382e8dabb59281dd71",
+  "canonical_task": 1643,
+  "canonical_result": "Failed(1)",
+  "blocker": "root JSON serialization source has no inventory family decision: src/source_built_fixed_point_stagex_adoption.rs",
+  "preparation_task": 1645,
+  "preparation_result": "DependencyFailed; no preparation command ran",
+  "repair": "Declare the versioned operator-to-native-row report as bootstrap.cold-stagex-adoption-report under the existing compatibility policy, with its own public producer marker, owner, consumers, exact version rejection policy and non-claims. Do not misclassify it as internal or add it to the curated schema-contracted cohort.",
+  "executed_post_repair": [
+    "nix develop --no-write-lock-file -c nickel typecheck schemas/machine-contracts/inventory.ncl",
+    "nix develop --no-write-lock-file -c cargo -Zscript scripts/check-machine-schema-contracts.rs"
+  ],
+  "actual_checker_result": "machine schema contract check: PASS (24 contracted, 66 classified)",
+  "log": "producer-inventory-check.log",
+  "non_claim": "Narrow current-root policy verification only. The immutable 48afe432 source remains canonically unqualified; no prepared current subject, independent acceptance, protected stage or proof follows."
+}
