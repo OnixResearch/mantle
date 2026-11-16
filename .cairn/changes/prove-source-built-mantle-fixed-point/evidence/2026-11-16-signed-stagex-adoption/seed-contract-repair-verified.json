@@ -1,0 +1,16 @@
+{
+  "task": 1640,
+  "log": "focused-1640.log",
+  "cold_failure_task": 1633,
+  "diagnosis": "Each Mantle stage had 1013 local tree seeds with a 2147483648-byte Produced source bound and an incorrectly narrowed 536870912-byte destination bound: 1012 native phase seeds and one generated Rust probe seed. The retained grouped inventory reports Tree on both sides, not an observed kind mismatch.",
+  "repair": "Keep original build-script OUT_DIR authority intact by sharing its existing declared bound with seeded native/probe output contracts. Leave exact Produced-kind and source/destination bound admission unchanged.",
+  "executed": [
+    {"command": "cargo fmt --check -p mantle", "result": "passed"},
+    {"filter": "source_built_mantle_programs::native::tests::", "result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2972 filtered out; finished in 0.04s"},
+    {"filter": "generated_script_tree_fits_heapless_probe_without_narrowing_its_authority", "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.00s"},
+    {"filter": "output_seed_admission_preserves_produced_kind_and_declared_bound", "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.01s"},
+    {"command": "cargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings", "result": "Finished release profile in 1m 32s"}
+  ],
+  "subsequent_failure": "Standalone adoption script compilation could not resolve vendored casita: cargo -Zscript has no workspace lockfile. Not a failure of the completed seed-contract tests or Clippy.",
+  "non_claim": "Warm-target development checks only. No new frozen-source qualification, regenerated cohort, protected stage or v2 receipt. The failed sealed 869a461d attempt is retained unchanged."
+}

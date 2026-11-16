@@ -1,0 +1,21 @@
+{
+  "pueue_task": 1641,
+  "log": "focused-1641.log",
+  "workspace_locked_offline": true,
+  "formatting": "passed",
+  "strict_selected_binary_clippy": "passed",
+  "selected_release_binary_builds": "passed",
+  "actual_cli": [
+    "adopt-source-built-stagex --help",
+    "check-native-row-receipts --contract",
+    "python3 scripts/qualify-native-rows.py --help"
+  ],
+  "checker_rows": [
+    "binutils.tcc",
+    "gcc.4.0",
+    "gcc.4.7",
+    "gcc.10",
+    "full-musl-binutils"
+  ],
+  "scope": "Developer mechanism and entrypoint verification only; not a qualified frozen runner or genuine proof/native build."
+}

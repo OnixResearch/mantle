@@ -66,6 +66,26 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 **Rationale:** Long-running failures are evidence, not disposable logs.
 
+### Decision: adopt completed cold exports only at a separate operator boundary
+
+**Choice:** Native-row qualification consumes a completed reverified cold v2 proof
+through a separate operator-consumer API. It binds the independently selected
+plan and receipt bytes, snapshots and measures each complete canonical StageX
+export, projects only the existing transition runtime members, and admits both
+reserved paths into fresh strict signed local state. It does not introduce
+store publication, imported output authority, legacy transition reports or a
+development fallback into the cold proof itself. ADR 0156 owns this boundary.
+
+The native operator executes all five source-selected parity rows and records
+their actual source, predecessor, regeneration, artifact/NAR, runtime, rejection,
+relocation, fallback and trust observations under the existing validators.
+Historical JSON and old qualification loops cannot substitute for this run.
+
+**Rationale:** Source construction, verified output publication, and native-row
+behavior are different claims. The current frozen attempt remains immutable;
+changed Rust/operator source requires a new published and qualified source
+cohort before final changed-source proof or native-row promotion.
+
 ## Risks / Trade-offs
 
 - A clean proof can run for many hours and require substantial disk; preflight must bound both before construction.

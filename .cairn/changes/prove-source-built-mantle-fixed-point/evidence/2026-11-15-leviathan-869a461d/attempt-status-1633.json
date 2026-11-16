@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "9134b0c189ebac1abbb401f5934e29f28b98ebc71f26d43cdfae77d2448da71a",
+  "blocker": "error: build failed\nsource recipe: output seed must preserve its exact Produced kind and fit the output bound"
+}

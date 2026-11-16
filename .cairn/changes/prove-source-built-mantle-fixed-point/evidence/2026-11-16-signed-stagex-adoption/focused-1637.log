@@ -1,0 +1,759 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c /run/current-system/sw/bin/bash -c $'\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\nrustc -Vv\ncargo -V\ncargo fmt --check -p mantle\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_stagex_adoption::tests:: -- --test-threads=1\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_trust_report::receipt_tests:: -- --test-threads=1\ncargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings\ncargo -Zscript build --release --offline --manifest-path scripts/adopt-source-built-stagex.rs\ncargo -Zscript build --release --offline --manifest-path scripts/check-native-row-receipts.rs\n"$CARGO_TARGET_DIR/release/adopt-source-built-stagex" --help\n"$CARGO_TARGET_DIR/release/check-native-row-receipts" --contract\n'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+    Finished `release` profile [optimized] target(s) in 36.59s
+     Running unittests src/lib.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-b4cc276fb4acdef1)
+
+running 9 tests
+test source_built_fixed_point_stagex_adoption::tests::captured_v2_stage_binding_rejects_metadata_substitution ... ok
+test source_built_fixed_point_stagex_adoption::tests::complete_v2_fixture_wrong_plan_or_receipt_pin_has_no_effects ... ok
+test source_built_fixed_point_stagex_adoption::tests::fresh_casita_state_requires_only_operator_owned_policy ... ok
+test source_built_fixed_point_stagex_adoption::tests::fresh_locations_reject_overlap_aliases_and_existing_state ... ok
+test source_built_fixed_point_stagex_adoption::tests::missing_verified_receipt_never_creates_state_or_success_report ... ok
+test source_built_fixed_point_stagex_adoption::tests::owned_snapshot_detects_drift_and_rejects_escaping_links ... ok
+test source_built_fixed_point_stagex_adoption::tests::provider_projection_refuses_wrong_verified_identity ... ok
+test source_built_fixed_point_stagex_adoption::tests::signed_publication_reopens_and_rejects_other_signers_and_tree_drift ... ok
+test source_built_fixed_point_stagex_adoption::tests::transition_projection_omits_unselected_artifacts_and_detects_copy_drift ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 251 filtered out; finished in 0.46s
+
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `release` profile [optimized] target(s) in 0.54s
+     Running unittests src/lib.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-b4cc276fb4acdef1)
+
+running 18 tests
+test source_built_fixed_point_trust_report::receipt_tests::actual_command_stderr_is_hashed_in_order_and_tampering_is_rejected ... ok
+test source_built_fixed_point_trust_report::receipt_tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_trust_report::receipt_tests::dangling_development_marker_is_not_absent_authority ... ok
+test source_built_fixed_point_trust_report::receipt_tests::empty_audit_files_are_bound_in_bundle_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_actual_closure_content_drift_despite_resealed_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_another_declared_source_as_mantle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_closure_policy_drift_after_rebinding_manifest_and_bundle ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_consistently_relabeled_wrong_provider_kind ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_observed_host_stage2_orchestration_with_equal_binary_digests ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_core_schema_and_extension_schema ... ok
+test source_built_fixed_point_trust_report::receipt_tests::full_receipt_path_rejects_v1_workflow_even_with_canonical_core_digest ... ok
+test source_built_fixed_point_trust_report::receipt_tests::machine_local_cache_receipt_cannot_occupy_stage_command_evidence_slot ... ok
+test source_built_fixed_point_trust_report::receipt_tests::promoted_receipts_reject_every_development_authority_marker ... ok
+test source_built_fixed_point_trust_report::receipt_tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_trust_report::receipt_tests::receipt_extension_digest_binds_full_action_records_and_reconciliation ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_artifact_paths_cannot_escape_or_hide_noncanonical_components ... ok
+test source_built_fixed_point_trust_report::receipt_tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+test source_built_fixed_point_trust_report::receipt_tests::synthetic_supplied_receipt_accepts_measured_bound_evidence_without_launching_processes ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 0.27s
+
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.0
+    Checking libc v0.2.186
+    Checking serde_core v1.0.228
+    Checking itoa v1.0.18
+    Checking zeroize v1.9.0
+    Checking crossbeam-utils v0.8.21
+    Checking smallvec v1.15.1
+    Checking subtle v2.6.1
+    Checking typenum v1.20.1
+    Checking regex-syntax v0.8.10
+    Checking once_cell v1.21.4
+    Checking bitflags v2.11.0
+    Checking scopeguard v1.2.0
+    Checking const-oid v0.9.6
+    Checking aho-corasick v1.1.4
+    Checking thiserror v2.0.18
+    Checking lock_api v0.4.14
+    Checking equivalent v1.0.2
+    Checking allocator-api2 v0.2.21
+    Checking cpufeatures v0.2.17
+    Checking arrayvec v0.7.6
+    Checking crossbeam-epoch v0.9.20
+    Checking stable_deref_trait v1.2.1
+    Checking zmij v1.0.21
+    Checking foldhash v0.2.0
+    Checking fastrand v2.4.1
+    Checking generic-array v0.14.7
+    Checking cpufeatures v0.3.0
+    Checking hashbrown v0.16.1
+    Checking crossbeam-deque v0.8.6
+    Checking log v0.4.29
+    Checking getrandom v0.2.17
+    Checking parking_lot_core v0.9.12
+    Checking errno v0.3.14
+    Checking linux-raw-sys v0.12.1
+    Checking signal-hook-registry v1.4.8
+    Checking rand_core v0.6.4
+    Checking block-buffer v0.10.4
+    Checking parking_lot v0.12.5
+    Checking rayon-core v1.13.0
+    Checking crypto-common v0.1.7
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.4.2
+    Checking pin-project-lite v0.2.17
+    Checking crc32fast v1.5.0
+    Checking digest v0.10.7
+    Checking futures-core v0.3.32
+    Checking same-file v1.0.6
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking crossbeam-channel v0.5.15
+    Checking walkdir v2.5.0
+    Checking regex-automata v0.4.14
+    Checking byteorder v1.5.0
+    Checking blake3 v1.8.5
+    Checking tinyvec_macros v0.1.1
+    Checking tinyvec v1.11.0
+    Checking gix-trace v0.1.18
+    Checking mio v1.2.0
+    Checking rand_core v0.10.0
+    Checking bytes v1.11.1
+    Checking libm v0.2.16
+    Checking unicode-normalization v0.1.25
+    Checking getrandom v0.4.2
+    Checking socket2 v0.6.3
+    Checking zerofrom v0.1.7
+    Checking rustix v1.1.4
+    Checking futures-io v0.3.32
+    Checking bytesize v2.3.1
+    Checking human_format v1.2.1
+    Checking yoke v0.8.2
+    Checking winnow v0.7.15
+    Checking zlib-rs v0.6.3
+    Checking tokio v1.51.0
+    Checking prodash v31.0.0
+    Checking sha1 v0.10.6
+    Checking futures-sink v0.3.32
+    Checking futures-channel v0.3.32
+    Checking zerovec v0.11.6
+    Checking futures-task v0.3.32
+    Checking slab v0.4.12
+    Checking tracing-core v0.1.36
+    Checking futures-util v0.3.32
+    Checking writeable v0.6.3
+    Checking sha1-checked v0.10.0
+    Checking base64ct v1.8.3
+    Checking tinystr v0.8.3
+    Checking hash32 v0.3.1
+    Checking litemap v0.8.2
+    Checking pem-rfc7468 v0.7.0
+    Checking tracing v0.1.44
+    Checking heapless v0.8.0
+    Checking der v0.7.10
+    Checking icu_locale_core v2.2.0
+    Checking bstr v1.12.1
+    Checking potential_utf v0.1.5
+    Checking zerotrie v0.2.4
+    Checking utf8_iter v1.0.4
+    Checking jiff v0.2.23
+    Checking gix-validate v0.11.0
+    Checking gix-utils v0.3.1
+    Checking gix-path v0.11.2
+    Checking gix-error v0.2.1
+    Checking unicode-width v0.2.2
+    Checking gix-features v0.46.2
+    Checking icu_provider v2.2.0
+    Checking spki v0.7.3
+    Checking icu_collections v2.2.0
+    Checking faster-hex v0.10.0
+    Checking sha2 v0.10.9
+    Checking indexmap v2.13.1
+    Checking base64 v0.22.1
+    Checking pkcs8 v0.10.2
+    Checking num-traits v0.2.19
+    Checking icu_properties_data v2.2.0
+    Checking icu_normalizer_data v2.2.0
+    Checking http v1.4.0
+    Checking percent-encoding v2.3.2
+    Checking utf16_iter v1.0.5
+    Checking write16 v1.0.0
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer v2.2.0
+    Checking gix-hash v0.23.0
+    Checking fnv v1.0.7
+    Checking either v1.15.0
+    Checking bytemuck v1.25.0
+    Checking signature v2.2.0
+    Checking spin v0.9.9
+    Checking ryu v1.0.23
+    Checking gix-hashtable v0.13.0
+    Checking rustls-pki-types v1.14.0
+    Checking lazy_static v1.5.0
+    Checking aws-lc-sys v0.45.0
+    Checking memmap2 v0.9.10
+    Checking encoding_rs v0.8.35
+    Checking simd-adler32 v0.3.9
+    Checking ipnet v2.12.0
+    Checking untrusted v0.9.0
+    Checking foldhash v0.1.5
+    Checking adler2 v2.0.1
+    Checking tokio-util v0.7.18
+    Checking hashbrown v0.15.5
+    Checking aws-lc-rs v1.18.1
+    Checking miniz_oxide v0.8.9
+    Checking ring v0.17.14
+    Checking tempfile v3.27.0
+    Checking zerocopy v0.8.48
+    Checking regex v1.12.3
+    Checking gix-date v0.15.1
+    Checking httparse v1.10.1
+    Checking http-body v1.0.1
+    Checking thread_local v1.1.9
+    Checking getrandom v0.3.4
+    Checking gix-actor v0.40.0
+    Checking idna_adapter v1.2.1
+    Checking form_urlencoded v1.2.2
+    Checking gix-fs v0.19.2
+    Checking gix-chunk v0.7.0
+    Checking atomic-waker v1.1.2
+    Checking gix-object v0.58.0
+    Checking tower-service v0.3.3
+    Checking try-lock v0.2.5
+    Checking h2 v0.4.16
+    Checking idna v1.1.0
+    Checking want v0.3.1
+    Checking gix-quote v0.7.0
+    Checking nonempty v0.12.0
+    Checking hashbrown v0.14.5
+    Checking static_assertions v1.1.0
+    Checking signal-hook v0.4.4
+    Checking rand_core v0.9.5
+    Checking url v2.5.8
+    Checking rustls-webpki v0.103.16
+    Checking num-integer v0.1.46
+    Checking sync_wrapper v1.0.2
+    Checking data-encoding v2.10.0
+    Checking dashmap v6.1.0
+    Checking tower-layer v0.3.3
+    Checking openssl-probe v0.2.1
+    Checking curve25519-dalek v4.1.3
+    Checking tower v0.5.3
+    Checking gix-commitgraph v0.35.0
+    Checking rustls-native-certs v0.8.3
+    Checking rustls v0.23.46
+    Checking gix-tempfile v21.0.2
+    Checking sharded-slab v0.1.7
+    Checking ed25519 v2.2.3
+    Checking gix-glob v0.24.0
+    Checking matchers v0.2.0
+    Checking tracing-log v0.2.0
+    Checking colorchoice v1.0.5
+    Checking nu-ansi-term v0.50.3
+    Checking iri-string v0.7.12
+    Checking gimli v0.32.3
+    Checking gix-revwalk v0.29.0
+    Checking tracing-subscriber v0.3.23
+    Checking object v0.37.3
+    Checking ed25519-dalek v2.2.0
+    Checking http-body-util v0.1.3
+    Checking arc-swap v1.9.1
+    Checking hyper v1.9.0
+    Checking iana-time-zone v0.1.65
+    Checking rustc-demangle v0.1.28
+    Checking anstyle v1.0.14
+    Checking ppv-lite86 v0.2.21
+    Checking strsim v0.11.1
+    Checking tower-http v0.6.8
+    Checking mime v0.3.17
+    Checking chrono v0.4.44
+    Checking unicode-bom v2.0.3
+    Checking rand_chacha v0.9.0
+    Checking is_ci v1.2.0
+    Checking unicode-linebreak v0.1.5
+    Checking utf8parse v0.2.2
+    Checking hyper-util v0.1.20
+    Checking anstyle-parse v1.0.0
+    Checking rand v0.9.3
+    Checking addr2line v0.25.1
+    Checking textwrap v0.16.2
+    Checking supports-color v3.0.2
+    Checking owo-colors v4.3.0
+    Checking gix-lock v21.0.2
+    Checking terminal_size v0.4.4
+    Checking inout v0.1.4
+    Checking filetime v0.2.27
+    Checking rustc-hash v2.1.2
+    Checking sha1_smol v1.0.1
+    Checking bumpalo v3.20.2
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstyle-query v1.1.5
+    Checking supports-unicode v3.0.0
+    Checking supports-hyperlinks v3.2.0
+    Checking unicode-width v0.1.14
+    Checking anstream v1.0.0
+    Checking uuid v1.23.0
+    Checking cipher v0.4.4
+    Checking anyhow v1.0.102
+    Checking strum v0.26.3
+    Checking derive_more v2.1.1
+    Checking kstring v2.0.2
+    Checking universal-hash v0.5.1
+    Checking clap_lex v1.1.0
+    Checking shell-words v1.1.1
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking parking v2.2.1
+    Checking opaque-debug v0.3.1
+    Checking gix-attributes v0.31.0
+    Checking gix-command v0.8.0
+    Checking clap_builder v4.6.0
+    Checking polyval v0.6.2
+    Checking futures-lite v2.6.1
+    Checking backtrace v0.3.76
+    Checking pin-project v1.1.11
+    Checking hyper-rustls v0.27.7
+    Checking portable-atomic v1.13.1
+    Checking icu_locale_data v2.2.0
+    Checking futures-executor v0.3.32
+    Checking gix-config-value v0.17.1
+    Checking reqwest v0.13.2
+    Checking icu_locale v2.2.0
+    Checking futures v0.3.32
+    Checking ghash v0.5.1
+    Checking backtrace-ext v0.2.1
+    Checking memoffset v0.9.1
+    Checking io-lifetimes v3.0.1
+    Checking miette v7.6.0
+    Checking icu_collator_data v2.2.0
+    Checking io-lifetimes v2.0.4
+    Checking aes v0.8.4
+    Checking ctr v0.9.2
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking twox-hash v2.1.2
+    Checking num-bigint v0.4.8
+    Checking tokio-stream v0.1.18
+    Checking xattr v1.6.1
+    Checking aead v0.5.2
+    Checking vte v0.15.0
+    Checking siphasher v1.0.2
+    Checking softaes v0.1.7
+    Checking powerfmt v0.2.0
+    Checking vt100 v0.16.2
+    Checking turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking fastbloom v0.14.1
+    Checking aegis v0.9.8
+    Checking aes-gcm v0.10.3
+    Checking deranged v0.5.8
+    Checking async-stream v0.3.6
+    Checking aristo v0.4.1
+    Checking clap v4.6.0
+    Checking icu_collator v2.2.1
+    Checking zstd-safe v7.2.4
+    Checking fs-set-times v0.20.3
+    Checking io-extras v0.19.0
+    Checking intrusive-collections v0.9.7
+    Checking serde_with v3.18.0
+    Checking crc32c v0.6.8
+    Checking branches v0.4.6
+    Checking simsimd v6.5.16
+    Checking bigdecimal v0.4.11
+    Checking libmimalloc-sys v0.1.44
+    Checking uncased v0.9.10
+    Checking io-uring v0.7.15
+    Checking turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking gix-traverse v0.55.0
+    Checking rustix-linux-procfs v0.1.1
+    Checking polling v3.11.0
+    Checking roaring v0.11.4
+    Checking pack1 v1.1.0
+    Checking gix-packetline v0.21.2
+    Checking console v0.16.3
+    Checking rapidhash v4.5.1
+    Checking chacha20 v0.10.0
+    Checking hmac v0.12.1
+    Checking libloading v0.8.9
+    Checking unit-prefix v0.5.2
+    Checking allocator-api2 v0.4.0
+    Checking cordyceps v0.3.4
+    Checking diatomic-waker v0.2.3
+    Checking time-core v0.1.8
+    Checking hex v0.4.3
+    Checking genawaiter-macro v0.99.1
+    Checking spin v0.10.0
+    Checking simdutf8 v0.1.5
+    Checking ambient-authority v0.0.2
+    Checking bitflags v1.3.2
+    Checking maybe-owned v0.3.4
+    Checking fallible-iterator v0.3.0
+    Checking num-conv v0.2.1
+    Checking cfg_block v0.1.1
+    Checking futures-buffered v0.2.13
+    Checking genawaiter v0.99.1
+    Checking indicatif v0.18.4
+    Checking cap-primitives v4.0.2
+    Checking time v0.3.47
+    Checking rand v0.10.1
+    Checking mimalloc v0.1.48
+    Checking zstd v0.13.3
+    Checking turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking nix v0.31.3
+    Checking bzip2-sys v0.1.13+1.0.8
+    Checking lzma-sys v0.1.20
+    Checking memoffset v0.6.5
+    Checking reqwest-middleware v0.5.1
+    Checking typeid v1.0.3
+    Checking serde_urlencoded v0.7.1
+    Checking flate2 v1.1.9
+    Checking itertools v0.15.0
+    Checking quick-xml v0.40.1
+    Checking md-5 v0.10.6
+    Checking env_filter v2.0.0
+    Checking gix-sec v0.13.2
+    Checking hybrid-array v0.4.13
+    Checking nibble_vec v0.1.0
+    Checking matchit v0.8.4
+    Checking humantime v2.3.0
+    Checking endian-type v0.1.2
+    Checking symlink v0.1.0
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/fuse-backend-rs)
+   Compiling nix-compat v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/nix-compat)
+    Checking reqwest-tracing v0.6.0
+    Checking radix_trie v0.2.1
+    Checking tracing-appender v0.2.5
+    Checking thiserror v1.0.69
+    Checking n0-error v0.1.3
+    Checking env_logger v0.11.11
+    Checking erased-serde v0.4.10
+    Checking tracing-indicatif v0.3.14
+    Checking cap-std v4.0.2
+    Checking nix v0.24.3
+    Checking xz2 v0.1.7
+    Checking bzip2 v0.5.2
+    Checking prost v0.14.3
+    Checking object_store v0.14.0
+    Checking n0-future v0.3.2
+    Checking num_enum v0.7.6
+    Checking vmm-sys-util v0.11.2
+    Checking clap-verbosity-flag v3.0.4
+    Checking astral-tokio-tar v0.6.4
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-attestation-core)
+    Checking gix-bitmap v0.3.0
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking mio v0.8.11
+    Checking num_cpus v1.17.0
+    Checking vm-memory v0.10.0
+    Checking caps v0.5.6
+    Checking cobs v0.3.0
+    Checking nom v8.0.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-castore)
+    Checking fixedbitset v0.4.2
+    Checking petgraph v0.6.5
+    Checking ref-cast v1.0.25
+    Checking irpc v0.13.0
+    Checking postcard v1.1.3
+    Checking threadpool v1.8.1
+    Checking gix-index v0.49.0
+    Checking snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-tracing)
+    Checking serde_tagged v0.3.0
+    Checking async-compression v0.4.19
+    Checking cap-fs-ext v4.0.2
+    Checking serde_qs v0.12.0
+    Checking redb v3.1.3
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking gix-filter v0.28.0
+    Checking fastcdc v3.2.1
+    Checking gix-ref v0.61.0
+    Checking gix-ignore v0.19.1
+    Checking safe_arch v0.7.4
+    Checking safe_arch v1.2.0
+    Checking itertools v0.14.0
+    Checking serde_bytes v0.11.19
+    Checking ff v0.13.1
+    Checking inplace-vec-builder v0.1.1
+    Checking base16ct v0.2.0
+    Checking binary-merge v0.1.2
+    Checking const-oid v0.10.2
+    Checking winnow v1.0.1
+    Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+    Checking digest v0.11.3
+    Checking range-collections v0.4.6
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking sec1 v0.7.3
+    Checking group v0.13.0
+    Checking wide v1.7.0
+    Checking wide v0.7.33
+    Checking malachite-base v0.9.2
+    Checking gix-worktree v0.50.0
+    Checking derive_builder v0.20.2
+    Checking crunch-attestation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-attestation)
+    Checking hkdf v0.12.4
+    Checking iroh-io v0.6.2
+    Checking gix-pathspec v0.16.1
+    Checking rand_chacha v0.3.1
+    Checking rand_xoshiro v0.7.0
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking crypto-bigint v0.5.5
+    Checking positioned-io v0.3.5
+    Checking imbl-sized-chunks v0.2.0
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-store)
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking self_cell v1.3.0
+    Checking archery v1.2.3
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-build)
+    Checking imbl v7.0.2
+    Checking bao-tree v0.16.1
+    Checking elliptic-curve v0.13.8
+    Checking typed-builder v0.22.0
+    Checking rand v0.8.6
+    Checking oci-spec v0.7.1
+    Checking nix v0.29.0
+    Checking md-5 v0.11.0
+    Checking fastcdc v5.0.0
+    Checking tar v0.4.45
+    Checking nix-archive v0.6.0
+    Checking nix-archive v0.1.0
+    Checking fs4 v1.1.0
+    Checking itertools v0.12.1
+    Checking gix-url v0.35.2
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-plan-core)
+    Checking lru v0.16.4
+    Checking count-write v0.1.0
+    Checking crunch-nar v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nar)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-action-result-core)
+    Checking rfc6979 v0.4.0
+    Checking gix-prompt v0.14.1
+    Checking gix-revision v0.43.0
+    Checking imara-diff v0.1.8
+    Checking imara-diff v0.2.0
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-repair-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-composition-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-gc-core)
+    Checking serde_spanned v1.1.1
+    Checking fs2 v0.4.3
+    Checking unicode-segmentation v1.13.2
+    Checking termcolor v1.4.1
+    Checking bitmaps v3.2.1
+    Checking codespan-reporting v0.13.1
+    Checking toml v0.9.12+spec-1.1.0
+    Checking gix-refspec v0.39.0
+    Checking malachite-nz v0.9.2
+    Checking imbl-sized-chunks v0.1.3
+    Checking gix-diff v0.61.0
+    Checking gix-credentials v0.37.1
+    Checking ecdsa v0.16.9
+    Checking gix-discover v0.49.0
+    Checking hashlink v0.10.0
+    Checking clru v0.6.3
+    Checking uluru v3.1.0
+    Checking arraydeque v0.5.1
+    Checking arrayvec v0.5.2
+    Checking typed-arena v2.0.2
+    Checking aliasable v0.1.3
+    Checking gix-pack v0.68.0
+    Checking gix-dir v0.23.0
+    Checking ouroboros v0.18.5
+    Checking saphyr-parser v0.0.6
+    Checking gix-transport v0.55.1
+    Checking pretty v0.12.5
+    Checking nickel-lang-vector v0.2.0
+    Checking logos v0.16.1
+    Checking codespan v0.13.1
+    Checking signal-hook v0.3.18
+    Checking toml_edit v0.24.1+spec-1.1.0
+    Checking gix-config v0.54.0
+    Checking gix-worktree-stream v0.30.0
+    Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking gix-shallow v0.10.0
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rust-cache-core)
+    Checking gix-negotiate v0.29.0
+    Checking num-iter v0.1.46
+    Checking lalrpop-util v0.22.2
+    Checking io-close v0.3.7
+    Checking vte v0.14.1
+    Checking simple-counter v0.1.0
+    Checking unsafe-libyaml v0.2.11
+    Checking crc-catalog v2.4.0
+    Checking linux-raw-sys v0.4.15
+    Checking strip-ansi-escapes v0.2.1
+    Checking crc v3.4.0
+    Checking gix-protocol v0.59.0
+    Checking gix-worktree-state v0.28.0
+    Checking rustix v0.38.44
+    Checking gix-submodule v0.28.0
+    Checking gix-odb v0.78.0
+    Checking num-bigint-dig v0.8.6
+    Checking serde_yaml v0.9.34+deprecated
+    Checking gix-archive v0.30.0
+    Checking signal-hook-mio v0.2.5
+    Checking gix-status v0.28.0
+    Checking gix-blame v0.11.0
+    Checking mantle-rust-differential-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-differential-core)
+    Checking primeorder v0.13.6
+    Checking gix-mailmap v0.32.0
+    Checking ureq-proto v0.6.0
+    Checking webpki-roots v1.0.10
+    Checking pkcs1 v0.7.5
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-remote-core)
+    Checking sha-1 v0.10.1
+    Checking json_scanner v0.1.0
+    Checking utf8-zero v0.8.1
+    Checking verus_builtin v0.0.0-2026-01-25-0057
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-build)
+    Checking vstd v0.0.0-2026-01-25-0057
+    Checking ureq v3.3.0
+    Checking rsa v0.9.10
+    Checking gix v0.81.0
+    Checking crossterm v0.29.0
+    Checking gethostname v0.5.0
+    Checking lzma-rs v0.3.0
+    Checking redb v2.6.4
+    Checking ruzstd v0.9.1
+    Checking fuzzy-matcher v0.3.7
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-spacewasm-core)
+    Checking mantle-causal-trace-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-causal-trace-core)
+    Checking replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking bzip2-rs v0.1.2
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking hashbrown v0.17.1
+    Checking bs58 v0.5.1
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking toml_write v0.1.2
+    Checking dyn-clone v1.0.20
+    Checking toml_edit v0.22.27
+    Checking iddqd v0.4.6
+    Checking inquire v0.9.4
+    Checking crunch-test-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test-core)
+    Checking verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking snafu v0.8.9
+    Checking linkme v0.3.37
+    Checking p384 v0.13.1
+    Checking p256 v0.13.2
+    Checking k256 v0.13.4
+    Checking crunch-glue v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-glue)
+    Checking ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-wasm-component-core)
+    Checking revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking secrecy v0.10.3
+    Checking etcetera v0.11.0
+    Checking predicates-core v1.0.10
+    Checking colored v3.1.1
+    Checking detect-coding-agent v0.1.0
+    Checking dotenvy v0.15.7
+    Checking toml v0.8.23
+    Checking jsonwebtoken v11.0.0
+    Checking ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking secretspec v0.17.0
+    Checking crunch-test-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test-app)
+    Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-project-core)
+    Checking float-cmp v0.10.0
+    Checking crunch-source-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-source-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-shell-core)
+    Checking malachite-q v0.9.2
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-evaluation-stream-core)
+    Checking normalize-line-endings v0.3.0
+    Checking crunch-nix-gateway-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nix-gateway-core)
+    Checking termtree v0.5.1
+    Checking difflib v0.4.0
+    Checking crunch-watch-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-watch-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-delta-core)
+    Checking predicates v3.1.4
+    Checking predicates-tree v1.0.13
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-wasm-component)
+    Checking malachite-float v0.9.2
+    Checking crunch-shell v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-shell)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-release-core)
+    Checking crunch-test v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+    Checking crunch-remote-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-remote-app)
+    Checking mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-cargo-build-bundle-core)
+    Checking mantle-rust-plan-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-plan-app)
+    Checking mantle-application-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-application-contract)
+    Checking crunch-project v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-project)
+    Checking chapter-tgz v0.1.0
+    Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+    Checking nix-derivation v0.1.0
+    Checking malachite v0.9.2
+    Checking nickel-lang-parser v0.3.0
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-hardware-simulation-core)
+    Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-bootstrap-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantlepkgs-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-eval-budget-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-build-contract)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-portable-client-core)
+    Checking wait-timeout v0.2.1
+    Checking yansi v1.0.1
+    Checking mantle-lock-vendor-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-lock-vendor-core)
+    Checking turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking diff v0.1.13
+    Checking crunch-service-readiness-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-service-readiness-core)
+    Checking pretty_assertions v1.4.1
+    Checking assert_cmd v2.2.0
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-hardware-simulation)
+    Checking mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-wasm-consumer-verifier)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-kernelscript-core)
+    Checking crunch-android-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-android-core)
+    Checking transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+    Checking ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+    Checking turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+    Checking casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+    Checking nickel-lang-core v0.18.0
+    Checking nickel-lang v2.2.0
+    Checking crunch-eval v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-eval)
+    Checking crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rustc-wrapper)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-pipeline)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nix-gateway)
+    Checking mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+error: enclosing `Ok` and `?` operator are unneeded
+   --> src/source_built_fixed_point_stagex_adoption.rs:354:5
+    |
+354 |     Ok(measure_tree(destination)?)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_question_mark
+    = note: `-D clippy::needless-question-mark` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_question_mark)]`
+help: remove the enclosing `Ok` and `?` operator
+    |
+354 -     Ok(measure_tree(destination)?)
+354 +     measure_tree(destination)
+    |
+
+error: could not compile `mantle` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `mantle` (lib test) due to 1 previous error
++ status=101
++ printf 'signed_adoption_focused_exit=%s\n' 101
+signed_adoption_focused_exit=101
++ printf '%s\n' 101
++ exit 101

@@ -1,0 +1,740 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c /run/current-system/sw/bin/bash -c $'\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\nrustc -Vv\ncargo -V\ncargo fmt --check -p mantle\ncargo test --release --locked --offline -p mantle --bin mantle source_built_mantle_programs::native::tests:: -- --test-threads=1\ncargo test --release --locked --offline -p mantle --bin mantle generated_script_tree_fits_heapless_probe_without_narrowing_its_authority -- --test-threads=1\ncargo test --release --locked --offline -p mantle --bin mantle output_seed_admission_preserves_produced_kind_and_declared_bound -- --test-threads=1\ncargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings\ncargo -Zscript build --release --offline --manifest-path scripts/adopt-source-built-stagex.rs\ncargo -Zscript build --release --offline --manifest-path scripts/check-native-row-receipts.rs\n"$CARGO_TARGET_DIR/release/adopt-source-built-stagex" --help\n"$CARGO_TARGET_DIR/release/check-native-row-receipts" --contract\n'
+unpacking 'github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D' into the Git cache...
+unpacking 'github:oxalica/rust-overlay/e013376c32a8fcf07ddb6ec71739552bc118b7bd?narHash=sha256-DsSIQSRMrLOz40LrGZ03sp2RlJ9sz3wKpd8XPTOzXnw%3D' into the Git cache...
+building '/nix/store/y84saga4qsmk7xrprd0qv8rgdqjk67g1-bash-5.3.tar.gz.drv'...
+building '/nix/store/avf6vbj4jmpnn5cdsjyj2693samnvqsa-bash53-001.drv'...
+building '/nix/store/ii3jsqp9rrwv0g21lwbvb94ddg8c5m7n-bash53-002.drv'...
+building '/nix/store/5m6vm7vkilsgas517yf8f321k5r3g1m3-bash53-003.drv'...
+building '/nix/store/n9w1dvf9k6617mqdqj9vr74ajzpq2b3a-bash53-004.drv'...
+building '/nix/store/sf7cx6m8hjb2f8m0fhq0d2lwndq61xbg-bash53-005.drv'...
+building '/nix/store/m1gq6x7srswfl66arij6spxqnrp7sdcl-bash53-006.drv'...
+building '/nix/store/avmqlilnsjmv8lg7442mjb21qx981d2j-bash53-007.drv'...
+building '/nix/store/gz9irkx06fl1lavrwxkghxnmlm4h5fgh-bash53-008.drv'...
+building '/nix/store/lw7n1gm9yimbrnr00h6l6pb4c9hkb6dc-bash53-009.drv'...
+building '/nix/store/mhrxc5w6drwi4m5ykbdrayz7869i9mx9-bzip2-1.0.8.tar.gz.drv'...
+building '/nix/store/4qzz1320hw56id4n4irdwzyyxlfz2llq-xz-5.8.2.tar.xz.drv'...
+building '/nix/store/0m3f1ah9m6p2s2fpdklrz1z9ph4hkyyg-libredirect-0.drv'...
+building '/nix/store/a0dalzxfsskyqfp5b6wfnmvr7fnfnhkb-Python-3.14.2.tar.xz.drv'...
+building '/nix/store/0442lf73plz43gym6ahgydmp752dxczk-acl-2.3.2.tar.gz.drv'...
+building '/nix/store/7byvrfyi1f00i8jxsc1q8z997j9r10y5-attr-2.5.2.tar.gz.drv'...
+building '/nix/store/yp4zsyn8fp1v5y8zpvp430lv339lvr7p-gcc-g++-4.6.4.tar.gz.drv'...
+building '/nix/store/imyy7rg9gyf2qyhg3jjnmal8grabvra9-glibc-2.42.tar.xz.drv'...
+building '/nix/store/ia4sjsi3cl16751r14yfv92603830nnn-gmp-4.3.2.tar.gz.drv'...
+building '/nix/store/r1rf2p01za5ckcbz87fjvdnz2mpvy3bz-gmp-6.2.1.tar.xz.drv'...
+building '/nix/store/z4x4wa4ahsc6xn40j847dsrnagxd41w0-gmp-6.3.0.tar.bz2.drv'...
+building '/nix/store/1hgh3ynq1lsicaxr0r5pdbvkbbhb0vrr-gmp-6.3.0.tar.xz.drv'...
+building '/nix/store/pxxi73ah5w9h8987s2fdwspybf6jabvh-grep-2.4.tar.gz.drv'...
+building '/nix/store/vsbymyzgxr2pbsbdk5zfn74nb73njni5-grep-3.12.tar.xz.drv'...
+building '/nix/store/mbfqb9y6ryn2axyvg797s3lw1w49liz5-gzip-1.14.tar.xz.drv'...
+building '/nix/store/rvcb8pzv5f8ax35ggc1hdk2vh5n6fq25-gzip-1.2.4.tar.gz.drv'...
+building '/nix/store/b9bd2bl75650mdckkiqshw1bld86vn0r-heirloom-070715.tar.bz2.drv'...
+building '/nix/store/qxz8v1gxrrw9j138k2ajl36vcajra8mb-isl-0.20.tar.xz.drv'...
+building '/nix/store/0q1fkyw9jc9fafyswh9gkv48wph52yzy-isl-0.24.tar.bz2.drv'...
+building '/nix/store/vlibinkl01vk64a09qs0k997fwxvl3vg-inheritCargoArtifactsHook.drv'...
+building '/nix/store/z6v5624dkfqg57qjzg6fadpxp07axkhv-libunistring-1.4.2.tar.gz.drv'...
+building '/nix/store/8lfpv18kcxvb7ipxrbw10pahkg5iw61k-linux-6.18.7.tar.xz.drv'...
+building '/nix/store/3xs5n9hmbbmc5qis9zzs764ilbjk0v72-libidn2-2.3.8.tar.gz.drv'...
+building '/nix/store/0rjn4fs706rp2zf5xfyycf1pfqnkjmgg-linux-6.5.6.tar.xz.drv'...
+building '/nix/store/64w55pscmwz6wl53nh5x11n5qag8gylp-sed-4.0.9.tar.gz.drv'...
+building '/nix/store/n9y1n1w3cwwlivnqhv98axp155wv1b76-sed-4.2.tar.gz.drv'...
+building '/nix/store/iv3hf1ml1fdmiwipnbz2g6ijaxy0kss8-sed-4.9.tar.xz.drv'...
+building '/nix/store/fxhhf9vlwrvj4q9c5smk87kmk4h9k63b-patchelf-0.18.0.tar.gz.drv'...
+building '/nix/store/3siddy2kzlx0pj7h8s15jgqdicg3j3lr-pcre2-10.46.tar.bz2.drv'...
+building '/nix/store/kwzj6kkxm22kdpk0hidlv9ys6j6yp21r-musl-1.2.5.tar.gz.drv'...
+building '/nix/store/59pgig863abfc3p6lmz20vh8gjf2nsv1-musl-1.2.6.tar.gz.drv'...
+building '/nix/store/h7ijrlrjxvy87frncwpqivqxn9zaqx5x-patch-2.8.tar.xz.drv'...
+building '/nix/store/0i89ydplmfyhw5rykihdpcr1ndki1bp3-patchelf-0.15.2.tar.bz2.drv'...
+building '/nix/store/r5yk7nin7qyfhnvd04pcvzmcwqadgrbs-mpc-1.4.0.tar.xz.drv'...
+building '/nix/store/cxpi1vdfflr3zh9xhgsqz44vqjk0jfk8-mpfr-2.4.2.tar.gz.drv'...
+building '/nix/store/ixwy12didmgk7j4z7ghlirpw46ahmhbd-mpfr-4.2.2.tar.xz.drv'...
+building '/nix/store/fj69pic5k2hr161cw3spagly2cspp3x7-main.mk.drv'...
+building '/nix/store/cxh8cwlp0z4a7xl6bk7zsqr7ci1hzdq6-make-4.4.1.tar.gz.drv'...
+building '/nix/store/37zapxlhmx12r050xsjw39n4vw3nck3a-mpc-1.0.3.tar.gz.drv'...
+building '/nix/store/zzgcx00wj6bml7sdl4zzg1yy5zvzddl0-mpc-1.3.1.tar.gz.drv'...
+building '/nix/store/5mplhc8aq762nj5z56bk5vvwqkb98maz-m4-1.4.20.tar.xz.drv'...
+building '/nix/store/zc4i6kv4525v20s2zh7fhxj1gcbcgggq-sigsetjmp.patch.drv'...
+building '/nix/store/mvwqinqcy1zjvb5zmhji91rjnmzh0fqf-tar-1.12.tar.gz.drv'...
+building '/nix/store/2kbbzfsz1hzd21yj0h989s3z40cgrp58-stage0-posix-1.9.1-source.drv'...
+building '/nix/store/4m76wqg80yx0yg0wv4z6kqc1y78yd58p-tar-1.35.tar.gz.drv'...
+building '/nix/store/0jr6j56c1gplhpnzjby0ll5297nh65hg-zlib-1.3.1.tar.xz.drv'...
+building '/nix/store/akag406i2x9yrv04yz1ydq9hnh63pkks-zlib-1.3.2.tar.gz.drv'...
+building '/nix/store/cjhk1ql7nc0lljz70znw70zjl0nnrh7x-xz-5.4.7.tar.gz.drv'...
+building '/nix/store/pc5v80nx8jivzxhxffm70bs1zh63qvyw-xz-5.8.2.tar.gz.drv'...
+building '/nix/store/q1rm5rl861j6yy2mi0avl6n6p2s32pf7-xz-5.8.3.tar.xz.drv'...
+error: Cannot build '/nix/store/2kbbzfsz1hzd21yj0h989s3z40cgrp58-stage0-posix-1.9.1-source.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/4f7nm8dblrdy74gmsl62b25rjrh4jcz3-stage0-posix-1.9.1-source
+       Last 20 log lines:
+       > error: executing '#
+       >        #
+       >        # Neither your store nor your substituters seems to have:
+       >        #
+       >        #  /1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9
+       >        #
+       >        # You can create this path from an already-bootstrapped nixpkgs
+       >        # using the following command:
+       >        #
+       >        #   nix-build '<nixpkgs>' -A make-minimal-bootstrap-sources
+       >        #
+       >        # Or, if you prefer, you can create this file using only `git`,
+       >        # `nix`, and `xz`.  For the commands needed in order to do this,
+       >        # see `make-bootstrap-sources.nix`.  Once you have the manual
+       >        # result, do:
+       >        #
+       >        #   nix-store --add-fixed --recursive sha256 ./stage0-posix-1.9.1-source
+       >        #
+       >        # to add it to your store.
+       >        ': No such file or directory
+       For full logs, run:
+         nix log /nix/store/2kbbzfsz1hzd21yj0h989s3z40cgrp58-stage0-posix-1.9.1-source.drv
+building '/nix/store/cblshqv4b81g5gxis3zpb4inagkaffi1-binutils-2.46.0.tar.xz.drv'...
+building '/nix/store/vr93scipsw4jv37apjfhxy5nspn09y8i-binutils-with-gold-2.46.tar.bz2.drv'...
+building '/nix/store/72cmq1ms8qih2svpnw3v1rs9a035h2gy-tar-1.35.tar.xz.drv'...
+error: Cannot build '/nix/store/mls5sqcps3yi6iwbn5bbyr1pymsk8cyy-kaem-unwrapped-1.9.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/0ql80hyg6dqs00x15fggfz7a0dhs7swq-kaem-unwrapped-1.9.1
+error: Cannot build '/nix/store/pz3m6g7iabylyazm40p363y8795vybf9-mescc-tools-1.9.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/53zd871rgpcvi7qmqkffxhzaiq0is7k4-mescc-tools-1.9.1
+error: Cannot build '/nix/store/yjp7zwabw9xcm6g42736mbhlvcddw410-mescc-tools-extra-1.9.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/nf45b5s985mn73828jb6pfq0g85j0hvg-mescc-tools-extra-1.9.1
+error: Cannot build '/nix/store/acdys51wsyfilv4vv9aj1pqrkqs6zzh6-bash-5.3.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wwxl5d2d4zh2x4dyabjxk5ysadhz62p1-bash-5.3
+error: Cannot build '/nix/store/cg916z49diwb05r29cwhd7fpl8blw1sa-bash-5.3.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/r8wvq1b4hqjk86g538cx142a6c1cd939-bash-5.3
+error: Cannot build '/nix/store/zib5f070ccrda8rm3gdxdmkybspmxv5s-bash-5.3.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ynis8hhcik8g12i9yl6rrv8ndibl1y49-bash-5.3
+error: Cannot build '/nix/store/dx3lsr28j81fkpl5zsjnhvjg08qnxn3v-bootstrap-coreutils-musl-9.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/k47pf7hg4l108g6hxlclkfllpmrva142-bootstrap-coreutils-musl-9.9
+error: Cannot build '/nix/store/m4lc7dzd6x5x0jdak6vzcg2drqdwa7ym-bootstrap-coreutils-musl-9.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/k3z32yw1d0sn0a3lfwyjvr3xdk502dzm-bootstrap-coreutils-musl-9.9
+error: Cannot build '/nix/store/xy1k75jwj9p5ga8kmsxggy9kq478y23x-bootstrap-coreutils-musl-9.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/24wz2wsk16d268zasx16g63qb16rggxn-bootstrap-coreutils-musl-9.9
+error: Cannot build '/nix/store/j6lkqi11783aizwc51nxwfdkl4bxss37-diffutils-3.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/xacyc8bypbl26cb1971fmgmgs8q8rmmk-diffutils-3.8
+error: Cannot build '/nix/store/2jzdj3gdwl9bwb22hw0msld0bma42a6n-gawk-5.3.2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/5qd4d8b6ngp420y363gd4x4yj5p5ljjf-gawk-5.3.2
+error: Cannot build '/nix/store/fpqmg4rvfpvhi5zgh8zgmwi0ci2rg11d-gnugrep-2.4.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hlcn5x8wmqsh318rsx9k45w9lqzavrlh-gnugrep-2.4
+error: Cannot build '/nix/store/v44k8gkcdk79f3m0af2m4kpwmrik3j3i-gnugrep-2.4.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/b6vph4pv0j9940xg9bgdwm2vd486vswc-gnugrep-2.4
+error: Cannot build '/nix/store/01dr4daka76b2pgkddq9bwh26i3kyxli-gnumake-musl-4.4.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hyzv3rdx2r4cgazzndzl6h713gfjmm6r-gnumake-musl-4.4.1
+error: Cannot build '/nix/store/qmf1arbfgn9w9q5pc0rmkpd9xr815i08-gnumake-musl-4.4.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mjg6yp1gscbndnbhbrs11zynrb4gzhx1-gnumake-musl-4.4.1
+error: Cannot build '/nix/store/zqhjlv60x08cikcf17sb1zamqqrwp0zi-gnumake-musl-4.4.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/gfj4izj0l3hympbh2sb59hkqw9am3vv2-gnumake-musl-4.4.1
+error: Cannot build '/nix/store/9vwpv7wm4fvy127102i1jkg1bzh6m8xr-gnupatch-2.5.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/cakvkj55gxf1x6c9ypi146w78f13bwnq-gnupatch-2.5.9
+error: Cannot build '/nix/store/7kcyj25cgdb40v84pkfmaa0z6nfz410x-gnused-4.2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wkvf8fi1xlpb6p006yqw62wg8m2929qk-gnused-4.2
+error: Cannot build '/nix/store/gy8kgnvglw5j08wgxjkwzln0q6pi6274-gnused-4.2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/yviaqzwrdda2mi7cmkcnklfrq9nh8cr0-gnused-4.2
+error: Cannot build '/nix/store/yy2mz6n0dcf7s41a0fwvmawhi0sg9ari-gnused-4.2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/24vc2ky6km5695cjf6hgcgb53w9248ar-gnused-4.2
+error: Cannot build '/nix/store/fh47c7j9x9m86k64szpz1hwg3q28p9m3-gnutar-1.12.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/vbc2pij1pi3rmrnad2gh4nwzj8x3lcab-gnutar-1.12
+error: Cannot build '/nix/store/kfc01jdwg0mcz5rvh945mgrzwvjh8nwl-gnutar-1.12.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/sr1nv7r8g2hkrw43sr2m1qxgfm8z78fg-gnutar-1.12
+error: Cannot build '/nix/store/6hiwiz3jkxsdc3qz4dglh35xjz6qdg0j-gzip-1.2.4.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/3fqpkfqpr8kgpkijjiqzl0mfvhpi5l5g-gzip-1.2.4
+error: Cannot build '/nix/store/njb7mqx3y9izjbg1l7nfmwl4jynv5vbk-gzip-1.2.4.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/zdp3hnd1rzm2xx3rbybx0v4v99jvswxy-gzip-1.2.4
+error: Cannot build '/nix/store/0gw5rja45w8hbys2n9rfhaja7y52vhqh-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/300m1gqwf528rfqqq412c7jv9vhbjvl3-stdenv-linux
+error: Cannot build '/nix/store/iqspw7sg8q4sfkshb0vcn0xwkrfqd3rp-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/gk5lm70hazc67xcszwz8vprqlc987gdj-stdenv-linux
+error: Cannot build '/nix/store/j9qwwgs5fz895w05r4lj3c6c75qwgg15-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/02x1g6hfhvs9s9bnrr8cpma1hvc7dgvy-stdenv-linux
+error: Cannot build '/nix/store/n6dq8ck4644r9gc7cs1l9a27vvhjb0qa-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/s2grcjv8pklvkajk3mkh75aja5dppx6z-stdenv-linux
+error: Cannot build '/nix/store/q2xn5647kadsgpz40xcmjssa0pmdmiwi-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/w708nqm6lvvikrq8d3x45g96hzfij0r8-stdenv-linux
+error: Cannot build '/nix/store/s1xwskq8mmirknxqn30sa8bwbb902167-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/zkiy4zv8wz3v95bj6fdmkqwql8x1vnhb-stdenv-linux
+error: Cannot build '/nix/store/sr21xvzhxjfvy5r1165dw2f5iw76xw4g-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/3g91zqani2ij2n3bzdk181nq5fqlzl00-stdenv-linux
+error: Cannot build '/nix/store/zg3zzlfvf4ia0d3xcxj7z9lhblgl8z50-stdenv-linux.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/74ma22y9kdxjvvrrgz3q1dqnm8r4d99d-stdenv-linux
+building '/nix/store/vgjfnqbxgxa8a5575bhq07nm35b2l31m-bison-3.8.2.tar.gz.drv'...
+building '/nix/store/0p6bbqs599hggq6xvxn67x91pxszgqil-bison-3.8.2.tar.xz.drv'...
+building '/nix/store/bamwxswxacs3cjdcydv0z7bj22d7g2kc-config.guess-948ae97.drv'...
+building '/nix/store/nbsdqpfzh1jlpmh95s69b3iivfcvv3lh-config.sub-948ae97.drv'...
+building '/nix/store/ja9gdbx4l7f8gpi26j7srpsydf028rw1-coreutils-9.10.tar.xz.drv'...
+building '/nix/store/pc7ml4gzr0vknd71zq43ccj1bi1fplmg-coreutils-9.9.tar.gz.drv'...
+building '/nix/store/f71iilg1zrkznpsjvsj5hxfvcj11xm4r-curl-8.18.0.tar.xz.drv'...
+building '/nix/store/mag3pq29n9f6jw0rb17crny8ilm4kfjy-diffutils-3.12.tar.xz.drv'...
+building '/nix/store/klfl82nqgac8fyl7z83q1i7rngka20d3-file-5.45.tar.gz.drv'...
+building '/nix/store/130xp3xbhxwms383bbf7wpcvc6ksjjnk-findutils-4.10.0.tar.xz.drv'...
+error: Cannot build '/nix/store/lh5z7q4kk7f4q0c1gjapa3d16svf69zc-0001-Add-prototype-to-function-definitions.patch.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/xwkk0ingzql9g686b33rj5b04bacixsc-0001-Add-prototype-to-function-definitions.patch
+error: Cannot build '/nix/store/1lnhdsgy9zr1sqaz190b3w54r433jsld-0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch?id=62b9c816a5000dc01b28e78213bde26b58cbca9d.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/lsxbs3l053zpfp6h5xc1nk33fmrgpy72-0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch?id=62b9c816a5000dc01b28e78213bde26b58cbca9d
+error: Cannot build '/nix/store/4yhkhvqdsr93dklasva21qmirab4nh35-001-fix-rpath.patch.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9lg9y2sarvcb0bhdbx3n39kvzmjqzgmh-001-fix-rpath.patch
+error: Cannot build '/nix/store/93cv339k6k0cqg37wk2xswn97wlfpvr2-07631601e6602bc49b8eac3aab9d2b35968d3e7a.patch.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ir6sycy7p1yxbk9vbsdwkwihdr54sv9k-07631601e6602bc49b8eac3aab9d2b35968d3e7a.patch
+error: Cannot build '/nix/store/vsh0flryd6v7lnlys57l0076xd2bzapf-?id=d628b3bfe40338d4efff6b0ae50f250a0eb884c7.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/dygy9w5kqqijfq3zp7p8j0dmdk1bpd3l-?id=d628b3bfe40338d4efff6b0ae50f250a0eb884c7
+error: Cannot build '/nix/store/nhmkraw24cwzrj6lmg99ccdjzdp65105-CUnit-2.1-3.tar.bz2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/4zasdvbbqdw4h44302ai76v0i7wczzg6-CUnit-2.1-3.tar.bz2
+error: Cannot build '/nix/store/rcr0dychkbfpkv2kpan79m5sxghhpvcz-CVE-2026-0989.patch.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/nvkvv7iiar0g0z1if6qpfrxfr8q9bqgm-CVE-2026-0989.patch
+error: Cannot build '/nix/store/vxik9nsnx9yvbk048xh5hxy7hc80mvhp-auditable-cargo-1.94.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/m6w11rfia26k2ghc8s0bfvacwdvqcg1z-auditable-cargo-1.94.0
+error: Cannot build '/nix/store/5a5pxd1shwzfdsgvyxd6qqm8ypj6372k-auditable-cargo-bootstrap-1.94.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/vv5inkq4pr6f10msfq5883933qa28vf1-auditable-cargo-bootstrap-1.94.0
+error: Cannot build '/nix/store/6q2gr3xi2as87l0z5ab7x4d75nblx516-auto-patchelf-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/54n7qgfjg6gijbd98gnwyw2jnf3ms1lf-auto-patchelf-hook
+error: Cannot build '/nix/store/772i789xym2sp8r46aqd8ndvaazg9jml-autoconf-2.72.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hf5ab1paj4x99m48hnbnqn04n8nplkmr-autoconf-2.72.tar.xz
+error: Cannot build '/nix/store/3bpf9dlxsrdqfmwfw0pls3ac6z18d8jl-automake-1.18.1.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/l31miwgfvjn6yzhnaqs1igvhm1h3ca75-automake-1.18.1.tar.xz
+error: Cannot build '/nix/store/q73i258992glspjlk96wndq1crmkpl36-autoreconf-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hwd14p8bfnp0lmfl2zfjbwmxhksn2aih-autoreconf-hook
+error: Cannot build '/nix/store/1p18hlp28jxhrgvxkbskvagghkhsp41i-bash-5.3.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/kwm524zjlnnq4yfhhmb5r14f2wxf8a2j-bash-5.3.tar.gz
+error: Cannot build '/nix/store/z3rzqafbrn3w769h6j5sjbfa2xilcq4b-bash-static-5.3.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/gqsbahjmi9g6d7q5j3qm4r68m89ff41l-bash-static-5.3
+error: Cannot build '/nix/store/zrqg9kcvp063ddklr1kndylpas2j8p6h-binutils-static-2.46.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1zndpvl4jx97l1ydjs3zyh92c2rd49i6-binutils-static-2.46.0
+error: Cannot build '/nix/store/4h1vwyglql0p90pqzyy5h624b8xglm1g-bison-3.8.2.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9vm1ihdg1ysmrjdbb80g834iizzxb4yk-bison-3.8.2.tar.gz
+error: Cannot build '/nix/store/i0lhrq4mw9x7dy3b2yg8xgbd4kmv1pb6-busybox-static-x86_64-unknown-linux-musl-1.37.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0
+         /nix/store/vpbyixr6hdhfwfy8adnj1p2f9ha4j98p-busybox-static-x86_64-unknown-linux-musl-1.37.0-debug
+error: Cannot build '/nix/store/6h2q2qxbb0nq0mnxjd96j9i71xaia31l-byacc-20241231.tgz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ra6dm7jyqr32wy3mih9mh9gwpw86551f-byacc-20241231.tgz
+error: Cannot build '/nix/store/xx9m45fdrnq0df4szik56vl7wq4xlbsf-bzip2-static-1.0.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/a0hzb50yxv25rkyl7xbgj35cpch5akj4-bzip2-static-1.0.8
+error: Cannot build '/nix/store/qywvskzianq1y3af17dv1c7s63p8bpfj-c-ares-1.34.6.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/p8k4d8a43zbyls37b568x9zzd84z3hq9-c-ares-1.34.6.tar.gz
+error: Cannot build '/nix/store/gaaj0c2phbdirs36qh1yz89vjgm6aq6y-cargo-build-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/plcr35g3apn2z5lh4fx2i28nz64b740p-cargo-build-hook.sh
+error: Cannot build '/nix/store/0zj0bbddiyzhzmq1i425js03assrkxa7-cargo-check-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/5c6wn924rq7rc3n5f7pwhm8chbmib2yx-cargo-check-hook.sh
+error: Cannot build '/nix/store/ifs4la1kzjs8hhyb3ykxhskbhpmavcri-cargo-install-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/skvkdbn4n27m6i84sbjjfbj39bc9lg47-cargo-install-hook.sh
+error: Cannot build '/nix/store/vcsbbk9df7idb1raw37aypali1r75la5-cargo-setup-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/k8x3djh69qhx7xnl55qyn5wyjk7bxq7p-cargo-setup-hook.sh
+error: Cannot build '/nix/store/i6i3c3b9k3jsalg5rbvj6dzxig5rpaw8-cargoHelperFunctionsHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/v5yp1d630d87wxlxd3agc9qhxvc0i6l1-cargoHelperFunctionsHook
+error: Cannot build '/nix/store/4rd7gylypp5fgb9qh4rjksxg32xrrs02-cmake-4.1.2.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ccxz9mak33ykrdw0fhkk44l0wlr8n63y-cmake-4.1.2.tar.gz
+error: Cannot build '/nix/store/p423l26kqc21ja10ysm311r2qps8f4yf-cmocka-2.0.1.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/qxhl5n7a19d10g62bc2xf8lqpfnn1qi2-cmocka-2.0.1.tar.xz
+error: Cannot build '/nix/store/a1ccfwdiz782iwpx0jm6hrabarfpclfx-configureCargoCommonVarsHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/08xffhw17d4vwf7gx8xfjv9i50462map-configureCargoCommonVarsHook
+error: Cannot build '/nix/store/bwfw73p1vkhrrwd1fpskhs8y73hfnk0v-configureCargoVendoredDepsHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/j322w2xkvv0q419n591zmyh24201r3b8-configureCargoVendoredDepsHook
+error: Cannot build '/nix/store/hfkyngy2q20nlhqk759963adgzdxfa9y-coreutils-static-9.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/52m99c9d9zzmbqzpkf42gdlzxhx1kq3n-coreutils-static-9.9
+error: Cannot build '/nix/store/dkzw3x0vfix5w6hx6y6624jqq00rzdcp-curl-8.18.0.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/79a3ki5zivmm28yxszqnfwcq6kwhr4j7-curl-8.18.0.tar.xz
+error: Cannot build '/nix/store/dh0mzs8jkclkhc2yv1m0vzadpd830b1k-dejagnu-1.6.3.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/lhfgbqdaizrv41549mm458r900qqya8r-dejagnu-1.6.3.tar.gz
+error: Cannot build '/nix/store/qg4i6i6jmzzazli70n4l2bg3zlx57fys-diffutils-static-3.12.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/6jqn0l2hf4rbqyvdhsad0h49pqbhz69y-diffutils-static-3.12
+error: Cannot build '/nix/store/cj6p3iwmvrp0b58xk08pdps6aisw1zmw-docbook-xml-4.3.zip.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/3kdvplhx6q3wq9g19i75d82bhwr537pl-docbook-xml-4.3.zip
+error: Cannot build '/nix/store/wg7bcqlr280qvjmfwiy569vhpwx54lra-editables-0.5.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mp04mmd7glpsck0fh7z8wxww31l32vyg-editables-0.5.tar.gz
+error: Cannot build '/nix/store/fcmg7xbvr5liv4sjnx17ar75cnvfaz05-ensure-newer-sources-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/z6z3ysqf5hy6mkk4gs5w8gyijmixpp4m-ensure-newer-sources-hook
+error: Cannot build '/nix/store/8ks83wggp5jh3kpc39609smlk65f45kx-expat-2.7.4.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/pd12nbpx15isdcv7ml3c1sbi3kzljp6n-expat-2.7.4.tar.xz
+error: Cannot build '/nix/store/hlxz2rvlav61ygipbwrb62xc4k5mc1i0-findutils-static-4.10.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/a0dchlvvbwn8x6vnh3d9jdhjkgys83f2-findutils-static-4.10.0
+error: Cannot build '/nix/store/kbv6kjz0s04b4pdxjb1hdxnp29i1kkra-gawk-static-5.3.2.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ad9k20qn5ddfpazzbcnypwk141r8kifp-gawk-static-5.3.2
+error: Cannot build '/nix/store/bpkn7x5r54wz03rr8nx83dn4pcl0anvl-gcc-15.2.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/h31qj6s31sb2hvddbfx74msvf6bmqmsy-gcc-15.2.0
+error: Cannot build '/nix/store/j4gy50n6n9ch9kzdsxm0n8218vl8i075-gettext-1.07.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/53ar6y7s69wmgf5bsb2grphlq5hp2zfd-gettext-1.07.tar.gz
+error: Cannot build '/nix/store/2a5c0phmyaz0msmd81lfk8lw3pnh9db5-glibc-2.42.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/yj1pjc2syqq4gn6gr9jjda2sxhlhaqnk-glibc-2.42
+error: Cannot build '/nix/store/7vfh5x2v9x812j0zracmayp3m3c4scv7-glibc-2.42.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/6zxixmszg0vbhpaa8rxwfr05by9axj68-glibc-2.42.tar.xz
+error: Cannot build '/nix/store/1lczl7pf09pf0zgc9g774f2pfg08h4hx-gnugrep-static-3.12.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mwdiachzsag67vf49kvbxr61lc3dvahl-gnugrep-static-3.12
+error: Cannot build '/nix/store/31sn4sqavxh3xmkq2zij2fhql680qinh-gnumake-static-4.4.1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/anwzxxjpkgim0n5jgvqbggrwi9yq08pd-gnumake-static-4.4.1
+error: Cannot build '/nix/store/xsb5v4gm6ili0q0c06b6r10v236xykv2-gnupatch-static-2.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hyg16l6dj178dfxlhkr8ldw8wc2zss21-gnupatch-static-2.8
+error: Cannot build '/nix/store/q7fxgb0qadga0h37cp9654jhq0gpvnzz-gnused-static-4.9.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/fhr7908hmdn4msb2b2z27djfk6q4a6rn-gnused-static-4.9
+error: Cannot build '/nix/store/yhip61ixcdhpsj16n8i8gxxfasnnyvl3-gnutar-static-1.35.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/y7ls975p7gq1xszmz6baig0c97b9hndf-gnutar-static-1.35
+error: Cannot build '/nix/store/cligf97v75l4bfip5r0a05mxic7jb0vn-go1.24.13.linux-amd64.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/vy4g162lrjj6xs9r1q6dc2rq28kfjx64-go1.24.13.linux-amd64.tar.gz
+error: Cannot build '/nix/store/1vpn81jx6gx0asc28cw8f6ic88bm0j1v-go1.26.1.src.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/b3iyrfl5d63q3pz7zdssap7rn0y740is-go1.26.1.src.tar.gz
+error: Cannot build '/nix/store/0jy45q717fxfjcxrdsb83b99xfikwm1y-gzip-static-1.14.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/d4r1rih1w3bfvx5br8b2gzlh9882ibhd-gzip-static-1.14
+error: Cannot build '/nix/store/l8yw96n6zsgds65dbca1aslgr45r8w68-help2man-1.49.3.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/c201y3gfa32md7qx03i2i7swadsb4xpi-help2man-1.49.3.tar.xz
+error: Cannot build '/nix/store/y0mnz4xbb30xkkhmncrqi76wdb8bxs1w-inheritCargoArtifactsHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/prban8j4881f109m51jl4b5jd45lvmd7-inheritCargoArtifactsHook
+error: Cannot build '/nix/store/33cw374lsp6s03nnzj3dp63sv23yab84-install-shell-files.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/6f7mk03ngckrz2n1vgxr9g6sf4m5zzjn-install-shell-files
+error: Cannot build '/nix/store/5v59665akvr4b57ir2wjgr71l05lf4w1-installCargoArtifactsHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/7wqzl3njiars2sxyiqb4lh4qzkxxkgqv-installCargoArtifactsHook
+error: Cannot build '/nix/store/zc2hcxb8s4nx4vyx7ybsj34zypair4dg-installFromCargoBuildLogHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1ka84n9hvnxaq8rdwk9ksg82599j40yk-installFromCargoBuildLogHook
+error: Cannot build '/nix/store/axrzv4bbqvd1lbajqykl4ck03fnd3gav-keyutils-1.6.3.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9n3d2g1pplp7bacghxkqb73z0fipgn2h-keyutils-1.6.3.tar.gz
+error: Cannot build '/nix/store/6cvyxa18zq6iwzxivmzy8624slw960qw-krb5-1.22.1.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/3y6wrd1c4xfjld9xjr6dyb8zi4v192p2-krb5-1.22.1.tar.gz
+error: Cannot build '/nix/store/6wlnswwbwjbmh8sfz0b7hwwy26m2sfmf-libbfd-plugin-api-header.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/88aly9q3l70f7b7lmh3j051dzd7lpdrn-libbfd-plugin-api-header
+error: Cannot build '/nix/store/lr17s9jymr9zf0qp2l3f915y7icbvch1-libffi-3.5.2.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/llrva3nbji6g593izd02y0g1gk0py9d9-libffi-3.5.2.tar.gz
+error: Cannot build '/nix/store/fsjqakvhvyf486bgjqapd6izfz6alrcl-libfido2-1.16.0.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/nxp4y1v97ss76d0jgqcx1c7nc3ag2rbs-libfido2-1.16.0.tar.gz
+error: Cannot build '/nix/store/dhr6y4ndmal36kvn4sqshh13hppr0g9q-libidn2-2.3.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ggvahagxrxjjjy52s938vdcy0m2w5p0n-libidn2-2.3.8
+         /nix/store/l7xglz65mpg9g2w38cbfvls2ja0wwhkx-libidn2-2.3.8-dev
+         /nix/store/zdjv7hya0hplzsr9xacwkmgi09hasgn5-libidn2-2.3.8-bin
+error: Cannot build '/nix/store/ljqvzlm66s4fn3p170bjb9misqnsl2x9-libpfm-4.13.0.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/fpf66pbi61806dpr2j3phsckpmvc6my3-libpfm-4.13.0.tar.gz
+error: Cannot build '/nix/store/6q9sb0jy856jw18wsmhdzd28v53syxyq-libsepol-3.10.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/xz1dgmhmpfs8hawwhnbzbxcifslksagm-libsepol-3.10.tar.gz
+error: Cannot build '/nix/store/gj5wnnw7hqhhg0ws065s91a2bph7h6vs-libssh2-1.11.1.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/j04yfblg6sk5abb4n067xv0x0dfraf73-libssh2-1.11.1.tar.gz
+error: Cannot build '/nix/store/hwz40wlbmsxhcgnm6dy4m6fnf1dxg8ad-libtool-2.5.4.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/jajhcicf36zaby6nqdsrz5qcl2hqbx3a-libtool-2.5.4.tar.gz
+error: Cannot build '/nix/store/q6zhzf5g3q7gabgk6s31i6sga5pg3rww-linux-headers-6.18.7.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wznqf8cv0bpanpys0wkr7q248vxfgrqp-linux-headers-6.18.7
+error: Cannot build '/nix/store/8qb953i5w5sah3qsn1lm7n70wz5vaddq-lld-src-21.1.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wavk82lfjiab757x1rr1y9nrzizc1nl9-lld-src-21.1.8
+error: Cannot build '/nix/store/vwb2lprckpd4kbg67sczakiqqqd4jxzy-llvm-tblgen-src-21.1.8.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/kbxynf3j48iljjlibxrd6qnjcc4izlgh-llvm-tblgen-src-21.1.8
+error: Cannot build '/nix/store/l2zmrjcixcxprgqma9sy2l6hk2rsi7cb-locales-setup-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/23m2g9vkq2l52v5s42ws19dzkq1g47bi-locales-setup-hook.sh
+error: Cannot build '/nix/store/k5hyvpfmqgbsdzi334hpivdmna2b9k2i-lzip-1.25.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/8jaj1xfcj1i3sl6m8zh2wn8k0rzxq9nh-lzip-1.25.tar.gz
+error: Cannot build '/nix/store/0hrh032xh15lpj61wbix84xigy9sdqr8-lzo-2.10.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/dyxwzd4w19giqla96hbdiji3d2x4d0c8-lzo-2.10.tar.gz
+error: Cannot build '/nix/store/awhn4hw1j2d98r1q86ipqraa709jznn0-make-shell-wrapper-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/qmbai9ywd5lvigv0rq1i8ap5pf4b67ym-make-shell-wrapper-hook
+error: Cannot build '/nix/store/4cx1l1vj9m10lhpipbrcbmqhb9h39g3b-mold-unwrapped-wrapper-2.40.4.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mwygqdwl6ysbw4aygi0hy3x0si09nkqn-mold-unwrapped-wrapper-2.40.4
+error: Cannot build '/nix/store/snz4sbngnfg6zjrv366hvwpdrfqd80w8-packaging-25.0.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9zpzy12ffz5y9x4dmsqp64r7bkj6h6wc-packaging-25.0.tar.gz
+error: Cannot build '/nix/store/f2xfxb85q1i18gmrmhrcd1v229xz9fjd-patchelf-static-0.18.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/i1ghnpc4n7vwhihhfvlzh997la5s2y53-patchelf-static-0.18.0
+error: Cannot build '/nix/store/1mkimcz89vkzf38kmqnaz19r8csh6pj0-pypa-build-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1yyh1phkm34hy5figimsa6nh97dvqqz2-pypa-build-hook.sh
+error: Cannot build '/nix/store/nky8i9l77r7b1x0qrl11w2g1jq6khjy1-pypa-build-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/sbx7hvz06qiid69r7i2qnlbj4x5zg686-pypa-build-hook.sh
+error: Cannot build '/nix/store/5k01rjbg78cdv6w46zv4yk8981gzkqib-pypa-install-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/bnvmhxlsyyzb7dgdzca9wvx0rkzlmzd4-pypa-install-hook
+error: Cannot build '/nix/store/gsqbns4nsv59yvkgijbaqq7sdcwf143b-pypa-install-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/b6imhdlb9cs2ma4q6xxyz1vzr06871s2-pypa-install-hook
+error: Cannot build '/nix/store/1bgnm3viymwqajydksjnl5lpw4whhz9k-pytest-check-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/qr4qy0spvcbhlry2l0yh6d4b4492amrx-pytest-check-hook
+error: Cannot build '/nix/store/vfjcxqrpa47ghjsy3mpf2jqcprfwvj1z-python-catch-conflicts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hn6lg997pwqz4d0yfkp2a9szcgq6xcfv-python-catch-conflicts-hook
+error: Cannot build '/nix/store/h37g7vwlwsz49kh3ng1i0biy0l365yr9-python-imports-check-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/zdfdm33w83a487awxj7ag9gs3ms567in-python-imports-check-hook.sh
+error: Cannot build '/nix/store/zrrrk01jm6550pl53pfqbazx3qvw6c5s-python-namespaces-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/wpvq4vqvr5xy7agk48c3adjq5mcpl8hg-python-namespaces-hook.sh
+error: Cannot build '/nix/store/6n208prfs4z3anrgj0bd5mr2qrhc7bq6-python-output-dist-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/pzkp1q9fxvwl17y4whj38qjkb10vj3km-python-output-dist-hook
+error: Cannot build '/nix/store/3zv1yisn1xcnj215ciyk2mc625y16bfg-python-relax-deps-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/34w5hh58zhslckyckgqdsl4zgmwdzy4i-python-relax-deps-hook
+error: Cannot build '/nix/store/8d5f4q0jrxsq3rqlnrgnycbs52hq50nn-python-remove-bin-bytecode-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/683y88dafxmzpsfbjn93li883g0fc30h-python-remove-bin-bytecode-hook
+error: Cannot build '/nix/store/fmvqrqz7s2xl01y5y6myk09ac8s7g8ps-python-remove-tests-dir-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/sdy6v11p0d9hwbyw4h0lyrs6aybxnxkw-python-remove-tests-dir-hook
+error: Cannot build '/nix/store/69dbgchq0f1i5apygm90mwf9hhjpddic-python-runtime-deps-check-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/rf79mj904s82affanfiz7gy6v8wmrq04-python-runtime-deps-check-hook.sh
+error: Cannot build '/nix/store/q3qhj33pzbqn98w5w9p7xk5ksf7pkv06-python-runtime-deps-check-hook.sh.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/26p09qki1vmm29xpv925bvd8r6ni6w7k-python-runtime-deps-check-hook.sh
+error: Cannot build '/nix/store/igqv3iymas0yh1jp018pnarf8hzvcjaz-readline-8.3.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/4wzrbkgi3m2dz7acyg2224l2kw7f1pc2-readline-8.3.tar.gz
+error: Cannot build '/nix/store/0zwl16d7lka6ii0n5l6jdv1bndhvwnx8-removeReferencesToRustToolchainHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1zvh0wd690j0bk43rbvip37nq9m5wsms-removeReferencesToRustToolchainHook
+error: Cannot build '/nix/store/br1ml30xbdik1y1jfibmjb5ggbr0xq97-removeReferencesToVendoredSourcesHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1s8dhbqgmc0hq6rkbl1sc2g7viwk77z0-removeReferencesToVendoredSourcesHook
+error: Cannot build '/nix/store/kzap9ndipfd0drnhg7vjmcg8zmwjw56m-replaceCargoLockHook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/436f6x16baznfrm5qpvk25nldcw4vp3f-replaceCargoLockHook
+error: Cannot build '/nix/store/75q238r3bk5xsnr3i2l0qz9rlp64rp1c-rust-1.94.0-x86_64-unknown-linux-gnu.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/n6r63fhx10mjzxh6hjpflhlczm450gpl-rust-1.94.0-x86_64-unknown-linux-gnu.tar.gz
+error: Cannot build '/nix/store/wzb6bvj98i4wz9xi3dq7hhhhj1b3p92b-rust-default-1.96.0-nightly-2026-04-08.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08
+error: Cannot build '/nix/store/3mqjmpc3c2nnizv4ijj2a0zqid265jc9-rustc-1.94.0-src.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/y6yd8c68afji3b3rigqhbl3inq8xvagc-rustc-1.94.0-src.tar.gz
+error: Cannot build '/nix/store/3xwg368gmkxfsfqhw0zq6psyp2z9n4z3-rustc-bootstrap-wrapper-1.94.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/4ccsp8cd78v5mq501hxnjkkdcjk3flwm-rustc-bootstrap-wrapper-1.94.0
+error: Cannot build '/nix/store/glj8xcxcpmlwvcqy6dfygw00m78lf2p2-rustc-wrapper-1.94.0.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/0nppgrwkmlzwzrxvaskahps9vwkn18ra-rustc-wrapper-1.94.0-doc
+         /nix/store/0xjd3nsmh0ffrwl54bagfrx9kzx1cwic-rustc-wrapper-1.94.0
+         /nix/store/jx11xay19n65xnk0hkhh1xvlj0hnkjxl-rustc-wrapper-1.94.0-man
+error: Cannot build '/nix/store/sr08jbc528fg7v1b9vl0zszcfc16njzk-setuptools-build-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ygn7q8nsk9vcw5jyy4lzj707hcn8pss3-setuptools-build-hook
+error: Cannot build '/nix/store/0cahfgzcxagzc9ssm8rsvli8np5jld7x-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/3w7hqffirj2mj1vchhyy8c2ry3fkwm5a-source
+error: Cannot build '/nix/store/0rdazcr0rx16sldfp67fbwyvzmn0hxi7-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/gya6m2k6flic6hv9n40bqsslyhkj8cj2-source
+error: Cannot build '/nix/store/0z394jvghfdkn5iphvppd3l1zym8wgxr-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ms1zpcb6l8ylwnx8nl8d6ir81y668z58-source
+error: Cannot build '/nix/store/kr5rfx5wparzzi1g4pvagfk4aj8vk4xj-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/rawihb8wn1qdv7ylxims26whxgw8hsb0-source
+error: Cannot build '/nix/store/kz18k227r59qy678sg0smvmcpg2clz2c-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/ynb1266mhkyfrvd7g827khgg9n47lyi5-source
+error: Cannot build '/nix/store/ncfjf9c8nvk0vnshv6prdgxac6v1b9xi-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/068xq78pd6x7da0ldm5cgwl8f57dcik0-source
+error: Cannot build '/nix/store/nsl3zd2bsgkgahxhaa0p36vw1k2z2amd-source.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/n4rqq7q61svya8gz4b9m0ac554bvmcb1-source
+error: Cannot build '/nix/store/qjisp0c2jvjnnnhswnf0hqv5bg02k8yw-tcl-package-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/l86dv306i6kqk716kgl11m8b59w68qv1-tcl-package-hook
+error: Cannot build '/nix/store/whvwyc3xxljc2152mnwzmp6ik0n3r1bk-tcl8.6.16-src.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/i1j1k4b7gfgxh2kncb3b89g7j34ca9rc-tcl8.6.16-src.tar.gz
+error: Cannot build '/nix/store/b5wiwv48zkgy3vlprvrvrnzkwaymns60-texinfo-7.2.tar.xz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/v5jj5cqqj25gzfvz3srcs0fdc4bjpqrh-texinfo-7.2.tar.xz
+error: Cannot build '/nix/store/2id6wdwigdljdl7840vd4qmklqjqh4br-tzcode2026a.tar.gz.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mbfc1ncsaqjn9sw4r81q1qqx62hzyjg9-tzcode2026a.tar.gz
+error: Cannot build '/nix/store/c34pvwm0mjfjvg8yiak8vc22j5drznp4-udev-check-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/sn16cf162wrwl1rs3lxd9cs1kamx6svr-udev-check-hook
+error: Cannot build '/nix/store/40ahw6n2bq4sfavz0mmq0f61wx8xsxkc-unittest-check-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/9kh78bl4pf38x9jnchdj3hir5561j3vv-unittest-check-hook
+error: Cannot build '/nix/store/iz4s6nngv6hqfmiri7pw9j13hm4hpidx-update-autotools-gnu-config-scripts-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/hspnv5s09qp3rcdcqi57zr4h050krxnq-update-autotools-gnu-config-scripts-hook
+error: Cannot build '/nix/store/6sgkbqak129l1by0d6wzzrhisxr528l3-wrap-python-hook.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/6jnxjzpyvmxc3zny5jsfgsn07iqhzf53-wrap-python-hook
+building '/nix/store/k34j4cx3wl05cdr885s84h0pw1wr2fvn-Python-3.13.12.tar.xz.drv'...
+building '/nix/store/6kxn0zj4ipzpg2p4csxzy64njknwydy6-autoconf-2.69.tar.xz.drv'...
+building '/nix/store/i2pfgljh1az3v0xga8s4kvn7l1kb1nj4-autoconf-2.72.tar.xz.drv'...
+building '/nix/store/2rmk35vbqb6q9r4aqmsz7iicmi44jx6d-automake-1.18.1.tar.xz.drv'...
+building '/nix/store/2ayyjhs9mz8nb1yfml9lsmfnd1lkw8h4-gcc-15.2.0.tar.xz.drv'...
+building '/nix/store/z9czfpvc7mmy6ms93sxqr3f3b8fgl5vn-gettext-0.26.tar.gz.drv'...
+building '/nix/store/44sw3grr08hzn0jjg6vcdlxwpakf9jbq-binutils-with-gold-2.44.tar.bz2.drv'...
+building '/nix/store/izbfj3rckm6lyip0y99dw9hyyap52kg6-libtool-2.5.4.tar.gz.drv'...
+building '/nix/store/9b6fqyahkq36md44m6fwnzvh2xm8666n-libunistring-1.4.1.tar.gz.drv'...
+building '/nix/store/55d91flpk4776srkw66wdx69wll7b5zr-libxcrypt-4.5.2.tar.xz.drv'...
+building '/nix/store/j54kvd8mlj8cl9ycvlkh5987fqvzl4p5-m4-1.4.20.tar.bz2.drv'...
+building '/nix/store/4y9kzg6h4wxyfpvw3ml99ia9cgn8p6n7-perl-5.42.0.tar.gz.drv'...
+building '/nix/store/896vsnl7w7rhd17b65j8sp3g4kc0zh35-texinfo-7.2.tar.xz.drv'...
+building '/nix/store/g39zbiv8d8qbgzkqk2s03zdfc39b1j4a-which-2.23.tar.gz.drv'...
+error: Cannot build '/nix/store/539l02hh6rcbnmqbspc070miwcx7dhki-nix-shell-env.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/n05r4ks9zkadrlqbf3jv9yc44shjnbmz-nix-shell-env
++ status=1
++ printf 'signed_adoption_focused_exit=%s\n' 1
+signed_adoption_focused_exit=1
++ printf '%s\n' 1
++ exit 1

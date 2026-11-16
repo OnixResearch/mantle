@@ -1,0 +1,26 @@
+{
+  "pueue_task": 28,
+  "reports": {
+    "validation": {
+      "valid": true,
+      "verdict": null,
+      "issues": []
+    },
+    "proposal": {
+      "valid": true,
+      "verdict": "PASS",
+      "issues": []
+    },
+    "design": {
+      "valid": true,
+      "verdict": "PASS",
+      "issues": []
+    },
+    "tasks": {
+      "valid": true,
+      "verdict": "PASS",
+      "issues": []
+    }
+  },
+  "scope": "Current-root lifecycle shape and gates, not proof completion."
+}

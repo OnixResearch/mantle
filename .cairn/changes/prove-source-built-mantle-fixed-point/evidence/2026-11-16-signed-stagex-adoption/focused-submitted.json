@@ -1,0 +1,13 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1634,
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh",
+  "development_source": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+  "base_frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+  "source_overlay_bytes_blake3": "9721a1796063c7eb86ebf94b376a8b30db2c97309435d86edfb67c4ee17655b1",
+  "source_overlay": "/home/brittonr/sbfp-20261113-berdKH/incoming/mantle-signed-adoption-20261116-overlay.tar.gz",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-focused-20261116.log",
+  "check_driver": "verify-adoption.sh",
+  "reused_development_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace",
+  "non_claim": "Submission only. Reused-target development verification cannot qualify a fresh isolated runner, the final changed-source cohort, a genuine cold producer, signed adoption, native-row execution or release. The sealed task1633 source, profile and runner are not edited."
+}

@@ -196,6 +196,18 @@ path = "tools/generate_operator_command_contract.rs"
 name = "generate-portable-platform-profiles"
 path = "tools/generate_portable_platform_profiles.rs"
 
+[[bin]]
+name = "adopt-source-built-stagex"
+path = "scripts/adopt-source-built-stagex.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "check-native-row-receipts"
+path = "scripts/check-native-row-receipts.rs"
+test = false
+bench = false
+
 [[example]]
 name = "benchmark_compare"
 path = "examples/benchmark_compare.rs"

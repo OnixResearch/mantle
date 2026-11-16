@@ -1,0 +1,38 @@
+{
+  "pueue_task": 27,
+  "process_result": "Success",
+  "semantic_result": "rejected",
+  "reports": [
+    {
+      "command": "validate",
+      "valid": false,
+      "issues": [
+        "cairn.gate.validation: prove-source-built-mantle-fixed-point: 2 task(s) missing concurrency markers",
+        "prove-source-built-mantle-fixed-point: 2 task(s) missing concurrency markers"
+      ]
+    },
+    {
+      "command": "gate proposal",
+      "valid": true,
+      "issues": []
+    },
+    {
+      "command": "gate design",
+      "valid": true,
+      "issues": []
+    },
+    {
+      "command": "gate tasks",
+      "valid": false,
+      "issues": [
+        {
+          "code": "cairn.gate.validation",
+          "message": "prove-source-built-mantle-fixed-point: 2 task(s) missing concurrency markers",
+          "promoted": "no",
+          "scope": "tasks"
+        }
+      ]
+    }
+  ],
+  "repair": "Add existing serial concurrency markers to N1/N2 and require every captured report to have top-level valid=true; process exit alone is not acceptance."
+}

@@ -242,7 +242,7 @@ fn perlasm(
             ("native-perl".into(), perl.clone()),
             ("package".into(), tools.package.clone()),
         ]),
-        outputs: outputs("authenticated", ArtifactKind::Text),
+        outputs: outputs("authenticated", ArtifactKind::Text, super::BYTES_MAX),
         operation: RecipeOperation::Exec {
             command_state: None,
             merge_stderr: false,
@@ -300,7 +300,7 @@ fn perlasm(
         output("command-status"),
         output("files"),
     ]);
-    let mut result_outputs = outputs("files", ArtifactKind::Tree);
+    let mut result_outputs = outputs("files", ArtifactKind::Tree, super::BYTES_MAX);
     for name in ["command-stdout", "command-stderr", "command-status"] {
         result_outputs.insert(name.into(), RecipeOutput {
             kind: ArtifactKind::Text,
@@ -389,7 +389,7 @@ pub(crate) fn append_schedule(
                 ("package".into(), tools.package.clone()),
                 ("generated".into(), generated_dir),
             ]),
-            outputs: outputs("package", ArtifactKind::Tree),
+            outputs: outputs("package", ArtifactKind::Tree, super::BYTES_MAX),
             operation: RecipeOperation::Exec {
                 command_state: None,
                 merge_stderr: false,

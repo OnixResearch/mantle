@@ -29,6 +29,37 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX: u32 = 524_288;
 const SOURCE_RECORD_COUNT_MAX: u32 = 65_536;
 const MANTLE_STAGE2_INDEX: usize = 5;
 
+pub(crate) const STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT: usize = 8;
+pub(crate) const STAGEX_TRANSITION_HANDOFF_DIRECTORIES: [&str; STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT] = [
+    "bash-full-stage/runtime/output",
+    "coreutils-stage/runtime/output",
+    "diffutils-stage/runtime/output",
+    "gawk-stage/runtime/output",
+    "grep-stage/runtime/output",
+    "m4-stage/runtime/output",
+    "make-stage/runtime/output",
+    "sed-stage/runtime/output",
+];
+pub(crate) const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT: usize = 9;
+pub(crate) const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES: [&str; STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT] = [
+    "bash-full-stage/runtime/output/bin/bash-full",
+    "coreutils-stage/runtime/output/bin/cp",
+    "diffutils-stage/runtime/output/bin/cmp",
+    "diffutils-stage/runtime/output/bin/diff",
+    "gawk-stage/runtime/output/bin/gawk",
+    "grep-stage/runtime/output/bin/grep",
+    "m4-stage/runtime/output/bin/m4",
+    "make-stage/runtime/output/bin/make",
+    "sed-stage/runtime/output/bin/sed",
+];
+pub(crate) const STAGEX_TRANSITION_STORE_BASENAME: &str = "ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
+pub(crate) const STAGEX_TRANSITION_LOGICAL_PATH: &str =
+    "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
+pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
+    "snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
+pub(crate) const STAGEX_PROVIDER_LOGICAL_PATH: &str =
+    "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
+
 const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT] = [
     SourceAuthorityRole::StagexSeed,
     SourceAuthorityRole::StagexLineage,

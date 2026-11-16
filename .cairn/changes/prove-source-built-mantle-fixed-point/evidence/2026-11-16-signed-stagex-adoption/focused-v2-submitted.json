@@ -1,0 +1,13 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1635,
+  "attempt": "v2",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v2",
+  "development_source": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+  "base_source_overlay_bytes_blake3": "9721a1796063c7eb86ebf94b376a8b30db2c97309435d86edfb67c4ee17655b1",
+  "formatting_overlay_bytes_blake3": "f035d9542fc7ebf0151ad40f78076031e71f8da7d1b8f16a9ac9e4653b80c6e5",
+  "formatting_overlay": "/home/brittonr/sbfp-20261113-berdKH/incoming/mantle-signed-adoption-20261116-v2-overlay.tar.gz",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-focused-20261116-v2.log",
+  "prior_attempt": {"task": 1634, "result": "Failed(1)", "blocker": "cargo fmt --check rejected two shared-policy formatting differences before Rust compilation"},
+  "non_claim": "Formatting-corrected development verification submission only; no canonical, fresh-runner, cold-proof, adoption or native-row success is implied."
+}

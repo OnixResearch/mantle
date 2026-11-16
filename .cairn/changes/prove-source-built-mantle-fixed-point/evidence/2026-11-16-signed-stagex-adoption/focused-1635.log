@@ -1,0 +1,833 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c /run/current-system/sw/bin/bash -c $'\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\nrustc -Vv\ncargo -V\ncargo fmt --check -p mantle\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_stagex_adoption::tests:: -- --test-threads=1\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_trust_report::receipt_tests:: -- --test-threads=1\ncargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings\ncargo -Zscript build --release --offline --manifest-path scripts/adopt-source-built-stagex.rs\ncargo -Zscript build --release --offline --manifest-path scripts/check-native-row-receipts.rs\n"$CARGO_TARGET_DIR/release/adopt-source-built-stagex" --help\n"$CARGO_TARGET_DIR/release/check-native-row-receipts" --contract\n'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling version_check v0.9.5
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling crossbeam-utils v0.8.21
+   Compiling itoa v1.0.18
+   Compiling smallvec v1.15.1
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling parking_lot_core v0.9.12
+   Compiling syn v2.0.117
+   Compiling generic-array v0.14.7
+   Compiling jobserver v0.1.34
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.10
+   Compiling cc v1.2.59
+   Compiling bitflags v2.11.0
+   Compiling once_cell v1.21.4
+   Compiling getrandom v0.2.17
+   Compiling scopeguard v1.2.0
+   Compiling rand_core v0.6.4
+   Compiling lock_api v0.4.14
+   Compiling const-oid v0.9.6
+   Compiling parking_lot v0.12.5
+   Compiling thiserror v2.0.18
+   Compiling equivalent v1.0.2
+   Compiling allocator-api2 v0.2.21
+   Compiling cpufeatures v0.2.17
+   Compiling crossbeam-epoch v0.9.20
+   Compiling arrayvec v0.7.6
+   Compiling zmij v1.0.21
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde_json v1.0.149
+   Compiling foldhash v0.2.0
+   Compiling fastrand v2.4.1
+   Compiling regex-automata v0.4.14
+   Compiling cpufeatures v0.3.0
+   Compiling rayon-core v1.13.0
+   Compiling rustix v1.1.4
+   Compiling crossbeam-deque v0.8.6
+   Compiling hashbrown v0.16.1
+   Compiling blake3 v1.8.5
+   Compiling errno v0.3.14
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.29
+   Compiling signal-hook-registry v1.4.8
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling pin-project-lite v0.2.17
+   Compiling serde_derive v1.0.228
+   Compiling zeroize_derive v1.5.0
+   Compiling thiserror-impl v2.0.18
+   Compiling crc32fast v1.5.0
+   Compiling zeroize v1.9.0
+   Compiling autocfg v1.5.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling futures-core v0.3.32
+   Compiling digest v0.10.7
+   Compiling same-file v1.0.6
+   Compiling crossbeam-channel v0.5.15
+   Compiling synstructure v0.13.2
+   Compiling walkdir v2.5.0
+   Compiling byteorder v1.5.0
+   Compiling tinyvec_macros v0.1.1
+   Compiling tinyvec v1.11.0
+   Compiling gix-trace v0.1.18
+   Compiling pkg-config v0.3.32
+   Compiling mio v1.2.0
+   Compiling rand_core v0.10.0
+   Compiling libm v0.2.16
+   Compiling unicode-normalization v0.1.25
+   Compiling getrandom v0.4.2
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling tokio-macros v2.7.0
+   Compiling gix-validate v0.11.0
+   Compiling gix-path v0.11.2
+   Compiling gix-utils v0.3.1
+   Compiling socket2 v0.6.3
+   Compiling rustversion v1.0.22
+   Compiling zerofrom v0.1.7
+   Compiling tokio v1.51.0
+   Compiling yoke-derive v0.8.2
+   Compiling futures-io v0.3.32
+   Compiling bytesize v2.3.1
+   Compiling human_format v1.2.1
+   Compiling prodash v31.0.0
+   Compiling gix-error v0.2.1
+   Compiling yoke v0.8.2
+   Compiling winnow v0.7.15
+   Compiling zlib-rs v0.6.3
+   Compiling sha1 v0.10.6
+   Compiling zerovec-derive v0.11.3
+   Compiling futures-sink v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling displaydoc v0.2.5
+   Compiling zerovec v0.11.6
+   Compiling futures-macro v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling tracing-core v0.1.36
+   Compiling writeable v0.6.3
+   Compiling futures-util v0.3.32
+   Compiling sha1-checked v0.10.0
+   Compiling heapless v0.8.0
+   Compiling gix-features v0.46.2
+   Compiling base64ct v1.8.3
+   Compiling semver v1.0.28
+   Compiling pem-rfc7468 v0.7.0
+   Compiling rustc_version v0.4.1
+   Compiling tinystr v0.8.3
+   Compiling tempfile v3.27.0
+   Compiling hash32 v0.3.1
+   Compiling tracing-attributes v0.1.31
+   Compiling litemap v0.8.2
+   Compiling icu_locale_core v2.2.0
+   Compiling der v0.7.10
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling tracing v0.1.44
+   Compiling syn v3.0.3
+   Compiling utf8_iter v1.0.4
+   Compiling unicode-width v0.2.2
+   Compiling jiff v0.2.23
+   Compiling spki v0.7.3
+   Compiling icu_provider v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling faster-hex v0.10.0
+   Compiling sha2 v0.10.9
+   Compiling num-traits v0.2.19
+   Compiling indexmap v2.13.1
+   Compiling icu_normalizer_data v2.2.0
+   Compiling base64 v0.22.1
+   Compiling icu_properties_data v2.2.0
+   Compiling pkcs8 v0.10.2
+   Compiling http v1.4.0
+   Compiling cmake v0.1.58
+   Compiling fs_extra v1.3.0
+   Compiling utf16_iter v1.0.5
+   Compiling gix-date v0.15.1
+   Compiling dunce v1.0.5
+   Compiling write16 v1.0.0
+   Compiling percent-encoding v2.3.2
+   Compiling icu_normalizer v2.2.0
+   Compiling aws-lc-sys v0.45.0
+   Compiling icu_properties v2.2.0
+   Compiling gix-hash v0.23.0
+   Compiling fnv v1.0.7
+   Compiling bytemuck_derive v1.12.1
+   Compiling tokio-util v0.7.18
+   Compiling cfg_aliases v0.2.1
+   Compiling either v1.15.0
+   Compiling gix-actor v0.40.0
+   Compiling bytemuck v1.25.0
+   Compiling signature v2.2.0
+   Compiling ring v0.17.14
+   Compiling aws-lc-rs v1.18.1
+   Compiling ryu v1.0.23
+   Compiling spin v0.9.9
+   Compiling gix-hashtable v0.13.0
+   Compiling lazy_static v1.5.0
+   Compiling rustls-pki-types v1.14.0
+   Compiling unicode-xid v0.2.6
+   Compiling zerocopy v0.8.48
+   Compiling gix-object v0.58.0
+   Compiling memmap2 v0.9.10
+   Compiling encoding_rs v0.8.35
+   Compiling httparse v1.10.1
+   Compiling ipnet v2.12.0
+   Compiling anyhow v1.0.102
+   Compiling untrusted v0.9.0
+   Compiling adler2 v2.0.1
+   Compiling heck v0.5.0
+   Compiling foldhash v0.1.5
+   Compiling simd-adler32 v0.3.9
+   Compiling miniz_oxide v0.8.9
+   Compiling hashbrown v0.15.5
+   Compiling regex v1.12.3
+   Compiling getrandom v0.3.4
+   Compiling ident_case v1.0.1
+   Compiling strsim v0.11.1
+   Compiling rustls v0.23.46
+   Compiling http-body v1.0.1
+   Compiling thread_local v1.1.9
+   Compiling idna_adapter v1.2.1
+   Compiling form_urlencoded v1.2.2
+   Compiling gix-fs v0.19.2
+   Compiling gix-chunk v0.7.0
+   Compiling try-lock v0.2.5
+   Compiling tower-service v0.3.3
+   Compiling signal-hook v0.4.4
+   Compiling atomic-waker v1.1.2
+   Compiling want v0.3.1
+   Compiling idna v1.1.0
+   Compiling h2 v0.4.16
+   Compiling itertools v0.14.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling gix-quote v0.7.0
+   Compiling static_assertions v1.1.0
+   Compiling nonempty v0.12.0
+   Compiling hashbrown v0.14.5
+   Compiling url v2.5.8
+   Compiling rand_core v0.9.5
+   Compiling dashmap v6.1.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling num-integer v0.1.46
+   Compiling sync_wrapper v1.0.2
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling data-encoding v2.10.0
+   Compiling openssl-probe v0.2.1
+   Compiling tower-layer v0.3.3
+   Compiling object v0.37.3
+   Compiling tower v0.5.3
+   Compiling hyper v1.9.0
+   Compiling rustls-native-certs v0.8.3
+   Compiling gix-tempfile v21.0.2
+   Compiling hyper-util v0.1.20
+   Compiling gix-commitgraph v0.35.0
+   Compiling sharded-slab v0.1.7
+   Compiling ed25519 v2.2.3
+   Compiling gix-glob v0.24.0
+   Compiling tracing-log v0.2.0
+   Compiling matchers v0.2.0
+   Compiling iri-string v0.7.12
+   Compiling colorchoice v1.0.5
+   Compiling nu-ansi-term v0.50.3
+   Compiling gimli v0.32.3
+   Compiling ed25519-dalek v2.2.0
+   Compiling gix-revwalk v0.29.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling http-body-util v0.1.3
+   Compiling arc-swap v1.9.1
+   Compiling anstyle v1.0.14
+   Compiling mime v0.3.17
+   Compiling iana-time-zone v0.1.65
+   Compiling syn v1.0.109
+   Compiling unicode-segmentation v1.13.2
+   Compiling tower-http v0.6.8
+   Compiling addr2line v0.25.1
+   Compiling owo-colors v4.3.0
+   Compiling rustc-demangle v0.1.28
+   Compiling convert_case v0.10.0
+   Compiling chrono v0.4.44
+   Compiling rand_chacha v0.9.0
+   Compiling is_ci v1.2.0
+   Compiling glob v0.3.3
+   Compiling backtrace v0.3.76
+   Compiling unicode-linebreak v0.1.5
+   Compiling unicode-bom v2.0.3
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling textwrap v0.16.2
+   Compiling clang-sys v1.9.1
+   Compiling rand v0.9.3
+   Compiling backtrace-ext v0.2.1
+   Compiling supports-color v3.0.2
+   Compiling derive_more-impl v2.1.1
+   Compiling gix-lock v21.0.2
+   Compiling darling_core v0.23.0
+   Compiling strum_macros v0.26.4
+   Compiling terminal_size v0.4.4
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling inout v0.1.4
+   Compiling miette-derive v7.6.0
+   Compiling filetime v0.2.27
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling portable-atomic v1.13.1
+   Compiling supports-hyperlinks v3.2.0
+   Compiling bumpalo v3.20.2
+   Compiling supports-unicode v3.0.0
+   Compiling unicode-width v0.1.14
+   Compiling prettyplease v0.2.37
+   Compiling rustc-hash v2.1.2
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling sha1_smol v1.0.1
+   Compiling icu_locale_data v2.2.0
+   Compiling anstyle-query v1.1.5
+   Compiling rustix v0.38.44
+   Compiling uuid v1.23.0
+   Compiling anstream v1.0.0
+   Compiling darling_macro v0.23.0
+   Compiling miette v7.6.0
+   Compiling strum v0.26.3
+   Compiling syn-mid v0.5.4
+   Compiling cipher v0.4.4
+   Compiling derive_more v2.1.1
+   Compiling kstring v2.0.2
+   Compiling universal-hash v0.5.1
+   Compiling memoffset v0.9.1
+   Compiling pin-project-internal v1.1.11
+   Compiling proc-macro-error v0.4.12
+   Compiling shell-words v1.1.1
+   Compiling linux-raw-sys v0.4.15
+   Compiling icu_collator_data v2.2.0
+   Compiling io-lifetimes v3.0.1
+   Compiling winnow v1.0.1
+   Compiling parking v2.2.1
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling opaque-debug v0.3.1
+   Compiling minimal-lexical v0.2.1
+   Compiling clap_lex v1.1.0
+   Compiling io-lifetimes v2.0.4
+   Compiling nom v7.1.3
+   Compiling clap_builder v4.6.0
+   Compiling pin-project v1.1.11
+   Compiling polyval v0.6.2
+   Compiling futures-lite v2.6.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling gix-command v0.8.0
+   Compiling gix-attributes v0.31.0
+   Compiling darling v0.23.0
+   Compiling clap_derive v4.6.0
+   Compiling libloading v0.8.9
+   Compiling futures-executor v0.3.32
+   Compiling branches v0.4.6
+   Compiling crc32c v0.6.8
+   Compiling gix-config-value v0.17.1
+   Compiling bigdecimal v0.4.11
+   Compiling turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling async-trait v0.1.89
+   Compiling simsimd v6.5.16
+   Compiling aegis v0.9.8
+   Compiling libmimalloc-sys v0.1.44
+   Compiling uncased v0.9.10
+   Compiling bindgen v0.69.5
+   Compiling io-uring v0.7.15
+   Compiling zstd-safe v7.2.4
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling home v0.5.12
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling io-extras v0.19.0
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling which v4.4.2
+   Compiling clap v4.6.0
+   Compiling futures v0.3.32
+   Compiling icu_locale v2.2.0
+   Compiling serde_with_macros v3.18.0
+   Compiling cexpr v0.6.0
+   Compiling ghash v0.5.1
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling twox-hash v2.1.2
+   Compiling num-bigint v0.4.8
+   Compiling darling_core v0.20.11
+   Compiling itertools v0.12.1
+   Compiling tokio-stream v0.1.18
+   Compiling nix v0.31.3
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling xattr v1.6.1
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling aead v0.5.2
+   Compiling memoffset v0.6.5
+   Compiling async-stream-impl v0.3.6
+   Compiling aristo-macros v0.4.1
+   Compiling vte v0.15.0
+   Compiling siphasher v1.0.2
+   Compiling lazycell v1.3.0
+   Compiling softaes v0.1.7
+   Compiling cap-primitives v4.0.2
+   Compiling typeid v1.0.3
+   Compiling powerfmt v0.2.0
+   Compiling rustc-hash v1.1.0
+   Compiling deranged v0.5.8
+   Compiling async-stream v0.3.6
+   Compiling aristo v0.4.1
+   Compiling fastbloom v0.14.1
+   Compiling vt100 v0.16.2
+   Compiling aes-gcm v0.10.3
+   Compiling darling_macro v0.20.11
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling fs-set-times v0.20.3
+   Compiling icu_collator v2.2.1
+   Compiling serde_with v3.18.0
+   Compiling intrusive-collections v0.9.7
+   Compiling proc-macro-crate v3.5.0
+   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling gix-traverse v0.55.0
+   Compiling roaring v0.11.4
+   Compiling pack1 v1.1.0
+   Compiling n0-future v0.3.2
+   Compiling gix-packetline v0.21.2
+   Compiling console v0.16.3
+   Compiling rapidhash v4.5.1
+   Compiling polling v3.11.0
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling chacha20 v0.10.0
+   Compiling hmac v0.12.1
+   Compiling ambient-authority v0.0.2
+   Compiling diatomic-waker v0.2.3
+   Compiling allocator-api2 v0.4.0
+   Compiling fallible-iterator v0.3.0
+   Compiling cordyceps v0.3.4
+   Compiling erased-serde v0.4.10
+   Compiling cfg_block v0.1.1
+   Compiling simdutf8 v0.1.5
+   Compiling pastey v0.2.3
+   Compiling unit-prefix v0.5.2
+   Compiling num-conv v0.2.1
+   Compiling cap-std v4.0.2
+   Compiling spin v0.10.0
+   Compiling genawaiter-macro v0.99.1
+   Compiling bitflags v1.3.2
+   Compiling maybe-owned v0.3.4
+   Compiling time-core v0.1.8
+   Compiling thiserror v1.0.69
+   Compiling hex v0.4.3
+   Compiling time v0.3.47
+   Compiling genawaiter v0.99.1
+   Compiling futures-buffered v0.2.13
+   Compiling indicatif v0.18.4
+   Compiling rand v0.10.1
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling num_enum_derive v0.7.6
+   Compiling mimalloc v0.1.48
+   Compiling prost-derive v0.14.3
+   Compiling darling v0.20.11
+   Compiling serde_urlencoded v0.7.1
+   Compiling flate2 v1.1.9
+   Compiling itertools v0.15.0
+   Compiling quick-xml v0.40.1
+   Compiling md-5 v0.10.6
+   Compiling spez v0.1.2
+   Compiling n0-error-macros v0.1.3
+   Compiling thiserror-impl v1.0.69
+   Compiling env_filter v2.0.0
+   Compiling gix-sec v0.13.2
+   Compiling hybrid-array v0.4.13
+   Compiling nibble_vec v0.1.0
+   Compiling redb v3.1.3
+   Compiling cap-fs-ext v4.0.2
+   Compiling ref-cast v1.0.25
+   Compiling humantime v2.3.0
+   Compiling matchit v0.8.4
+   Compiling nix-compat v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/nix-compat)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/fuse-backend-rs)
+   Compiling endian-type v0.1.2
+   Compiling symlink v0.1.0
+   Compiling tracing-appender v0.2.5
+   Compiling radix_trie v0.2.1
+   Compiling phf_shared v0.11.3
+   Compiling n0-error v0.1.3
+   Compiling env_logger v0.11.11
+   Compiling xz2 v0.1.7
+   Compiling prost v0.14.3
+   Compiling nix v0.24.3
+   Compiling derive_builder_core v0.20.2
+   Compiling num_enum v0.7.6
+   Compiling bzip2 v0.5.2
+   Compiling tracing-indicatif v0.3.14
+   Compiling vmm-sys-util v0.11.2
+   Compiling astral-tokio-tar v0.6.4
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-attestation-core)
+   Compiling gix-bitmap v0.3.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling cobs v0.3.0
+   Compiling irpc-derive v0.10.0
+   Compiling ref-cast-impl v1.0.25
+   Compiling turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling auto_impl v1.3.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/nix-compat-derive)
+   Compiling mio v0.8.11
+   Compiling vm-memory v0.10.0
+   Compiling num_cpus v1.17.0
+   Compiling caps v0.5.6
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling term v1.2.1
+   Compiling fixedbitset v0.4.2
+   Compiling bit-vec v0.8.0
+   Compiling heck v0.4.1
+   Compiling snix-castore v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-castore)
+   Compiling new_debug_unreachable v1.0.6
+   Compiling keccak v0.1.6
+   Compiling precomputed-hash v0.1.1
+   Compiling fixedbitset v0.5.7
+   Compiling sha3 v0.10.8
+   Compiling petgraph v0.7.1
+   Compiling string_cache v0.8.9
+   Compiling bit-set v0.8.0
+   Compiling ascii-canvas v4.0.0
+   Compiling petgraph v0.6.5
+   Compiling proc-macro-error2 v2.0.1
+   Compiling threadpool v1.8.1
+   Compiling irpc v0.13.0
+   Compiling postcard v1.1.3
+   Compiling gix-index v0.49.0
+   Compiling derive_builder_macro v0.20.2
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling gix-filter v0.28.0
+   Compiling fastcdc v3.2.1
+   Compiling gix-ref v0.61.0
+   Compiling gix-ignore v0.19.1
+   Compiling ena v0.14.4
+   Compiling lalrpop-util v0.22.2
+   Compiling safe_arch v0.7.4
+   Compiling safe_arch v1.2.0
+   Compiling nix v0.29.0
+   Compiling serde_bytes v0.11.19
+   Compiling ff v0.13.1
+   Compiling inplace-vec-builder v0.1.1
+   Compiling malachite-nz v0.9.2
+   Compiling pico-args v0.5.0
+   Compiling base16ct v0.2.0
+   Compiling binary-merge v0.1.2
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling const-oid v0.10.2
+   Compiling malachite-base v0.9.2
+   Compiling digest v0.11.3
+   Compiling range-collections v0.4.6
+   Compiling sec1 v0.7.3
+   Compiling lalrpop v0.22.2
+   Compiling group v0.13.0
+   Compiling wide v1.7.0
+   Compiling wide v0.7.33
+   Compiling gix-worktree v0.50.0
+   Compiling derive_builder v0.20.2
+   Compiling getset v0.1.6
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-attestation)
+   Compiling hkdf v0.12.4
+   Compiling gix-pathspec v0.16.1
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling iroh-io v0.6.2
+   Compiling rand_chacha v0.3.1
+   Compiling rand_xoshiro v0.7.0
+   Compiling crypto-bigint v0.5.5
+   Compiling typed-builder-macro v0.22.0
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling positioned-io v0.3.5
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling self_cell v1.3.0
+   Compiling snix-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-store)
+   Compiling archery v1.2.3
+   Compiling imbl-sized-chunks v0.2.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling typed-builder v0.22.0
+   Compiling bao-tree v0.16.1
+   Compiling elliptic-curve v0.13.8
+   Compiling rand v0.8.6
+   Compiling imbl v7.0.2
+   Compiling oci-spec v0.7.1
+   Compiling md-5 v0.11.0
+   Compiling fastcdc v5.0.0
+   Compiling tar v0.4.45
+   Compiling gix-url v0.35.2
+   Compiling zstd v0.13.3
+   Compiling nix-archive v0.1.0
+   Compiling async-compression v0.4.19
+   Compiling nix-archive v0.6.0
+   Compiling fs4 v1.1.0
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-plan-core)
+   Compiling lru v0.16.4
+   Compiling yansi v1.0.1
+   Compiling count-write v0.1.0
+   Compiling crunch-nar v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nar)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-action-result-core)
+   Compiling rfc6979 v0.4.0
+   Compiling gix-prompt v0.14.1
+   Compiling gix-revision v0.43.0
+   Compiling logos-codegen v0.16.1
+   Compiling imara-diff v0.1.8
+   Compiling imara-diff v0.2.0
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-composition-core)
+   Compiling indexmap v1.9.3
+   Compiling malachite-q v0.9.2
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-repair-core)
+   Compiling serde_spanned v1.1.1
+   Compiling fs2 v0.4.3
+   Compiling verus_syn v0.0.0-2026-01-25-0057
+   Compiling bitmaps v3.2.1
+   Compiling verus_prettyplease v0.0.0-2026-01-25-0057
+   Compiling termcolor v1.4.1
+   Compiling signal-hook v0.3.18
+   Compiling codespan-reporting v0.13.1
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling malachite-float v0.9.2
+   Compiling gix-diff v0.61.0
+   Compiling logos-derive v0.16.1
+   Compiling gix-refspec v0.39.0
+   Compiling gix-credentials v0.37.1
+   Compiling ecdsa v0.16.9
+   Compiling ouroboros_macro v0.18.5
+   Compiling nickel-lang-parser v0.3.0
+   Compiling gix-discover v0.49.0
+   Compiling hashlink v0.10.0
+   Compiling clru v0.6.3
+   Compiling uluru v3.1.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling aliasable v0.1.3
+   Compiling paste v1.0.15
+   Compiling arrayvec v0.5.2
+   Compiling arraydeque v0.5.1
+   Compiling typed-arena v2.0.2
+   Compiling hashbrown v0.12.3
+   Compiling pretty v0.12.5
+   Compiling saphyr-parser v0.0.6
+   Compiling ouroboros v0.18.5
+   Compiling gix-pack v0.68.0
+   Compiling gix-dir v0.23.0
+   Compiling malachite v0.9.2
+   Compiling logos v0.16.1
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling gix-shallow v0.10.0
+   Compiling gix-negotiate v0.29.0
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rust-cache-core)
+   Compiling num-iter v0.1.46
+   Compiling maybe-async v0.2.10
+   Compiling io-close v0.3.7
+   Compiling vte v0.14.1
+   Compiling vstd v0.0.0-2026-01-25-0057
+   Compiling simple-counter v0.1.0
+   Compiling litrs v1.0.0
+   Compiling crc-catalog v2.4.0
+   Compiling linkme-impl v0.3.37
+   Compiling unsafe-libyaml v0.2.11
+   Compiling redb v2.6.4
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling document-features v0.2.12
+   Compiling crc v3.4.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling gix-worktree-state v0.28.0
+   Compiling gix-submodule v0.28.0
+   Compiling gix-archive v0.30.0
+   Compiling gix-odb v0.78.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+   Compiling gix-status v0.28.0
+   Compiling verus_state_machines_macros v0.0.0-2026-01-25-0057
+   Compiling gix-blame v0.11.0
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-differential-core)
+   Compiling primeorder v0.13.6
+   Compiling ureq-proto v0.6.0
+   Compiling webpki-roots v1.0.10
+   Compiling gix-mailmap v0.32.0
+   Compiling pkcs1 v0.7.5
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-remote-core)
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling indoc v2.0.7
+   Compiling crunch-build v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-build)
+   Compiling verus_builtin v0.0.0-2026-01-25-0057
+   Compiling utf8-zero v0.8.1
+   Compiling linkme v0.3.37
+   Compiling rsa v0.9.10
+   Compiling crossterm v0.29.0
+   Compiling gethostname v0.5.0
+   Compiling lzma-rs v0.3.0
+   Compiling snafu-derive v0.8.9
+   Compiling ruzstd v0.9.1
+   Compiling fuzzy-matcher v0.3.7
+   Compiling rustls-webpki v0.103.16
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling toml_datetime v0.6.11
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-causal-trace-core)
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-spacewasm-core)
+   Compiling serde_spanned v0.6.9
+   Compiling bzip2-rs v0.1.2
+   Compiling hashbrown v0.17.1
+   Compiling predicates-core v1.0.10
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling toml_write v0.1.2
+   Compiling bs58 v0.5.1
+   Compiling dyn-clone v1.0.20
+   Compiling inquire v0.9.4
+   Compiling toml_edit v0.22.27
+   Compiling tokio-rustls v0.26.4
+   Compiling hyper-rustls v0.27.7
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling reqwest v0.13.2
+   Compiling ureq v3.3.0
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-transport v0.55.1
+   Compiling snix-tracing v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/vendor/snix-tracing)
+   Compiling gix-protocol v0.59.0
+   Compiling gix v0.81.0
+   Compiling verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test-core)
+   Compiling iddqd v0.4.6
+   Compiling snafu v0.8.9
+   Compiling p256 v0.13.2
+   Compiling p384 v0.13.1
+   Compiling k256 v0.13.4
+   Compiling crunch-glue v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-glue)
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling float-cmp v0.10.0
+   Compiling secrecy v0.10.3
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-wasm-component-core)
+   Compiling etcetera v0.11.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling difflib v0.4.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling termtree v0.5.1
+   Compiling dotenvy v0.15.7
+   Compiling colored v3.1.1
+   Compiling assert_cmd v2.2.0
+   Compiling secretspec v0.17.0
+   Compiling predicates-tree v1.0.13
+   Compiling predicates v3.1.4
+   Compiling ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling jsonwebtoken v11.0.0
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test-app)
+   Compiling toml v0.8.23
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-project-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-shell-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-hardware-simulation-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-source-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-evaluation-stream-core)
+   Compiling wait-timeout v0.2.1
+   Compiling crunch-watch-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-watch-core)
+   Compiling diff v0.1.13
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-delta-core)
+   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nix-gateway-core)
+   Compiling pretty_assertions v1.4.1
+   Compiling crunch-project v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-project)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-hardware-simulation)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-release-core)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-shell)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-wasm-component)
+   Compiling crunch-test v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-test)
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-remote-app)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-cargo-build-bundle-core)
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-rust-plan-app)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-application-contract)
+   Compiling chapter-tgz v0.1.0
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-android-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-bootstrap-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-portable-client-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-build-contract)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantlepkgs-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-eval-budget-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-kernelscript-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-service-readiness-core)
+   Compiling mantle-lock-vendor-core v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/mantle-lock-vendor-core)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-eval)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-rustc-wrapper)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-nix-gateway)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+error[E0382]: borrow of moved value: `path`
+   --> src/source_built_fixed_point_stagex_adoption.rs:835:37
+    |
+829 |             let path = canonical.join(tool);
+    |                 ---- move occurs because `path` has type `std::path::PathBuf`, which does not implement the `Copy` trait
+830 |             fs::create_dir_all(path.parent().unwrap()).unwrap();
+831 |             fs::write(path, b"canonical tool").unwrap();
+    |                       ---- value moved here
+...
+835 |                 fs::set_permissions(&path, fs::Permissions::from_mode(0o751)).unwrap();
+    |                                     ^^^^^ value borrowed here after move
+    |
+help: consider borrowing `path`
+    |
+831 |             fs::write(&path, b"canonical tool").unwrap();
+    |                       +
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `mantle` (lib test) due to 1 previous error
++ status=101
++ printf 'signed_adoption_focused_exit=%s\n' 101
+signed_adoption_focused_exit=101
++ printf '%s\n' 101
++ exit 101

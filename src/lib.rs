@@ -25,6 +25,7 @@ mod source_built_fixed_point_action_trust;
 mod source_built_fixed_point_planning;
 #[cfg(test)]
 mod source_built_fixed_point_receipt;
+pub mod source_built_fixed_point_stagex_adoption;
 pub mod source_built_fixed_point_trust_report;
 pub mod source_built_fixed_point_verifier_self_test;
 pub mod user_profile_cmd;

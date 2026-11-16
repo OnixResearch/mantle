@@ -901,3 +901,51 @@ identities. Together with the separately accepted physical/source criteria
 is retained. Current Cairn gates and sealed review/fresh launch preconditions
 remain before protected execution; I3-I5 and proof-dependent V2/V3 stay open.
 
+## Native-row operator consumer prerequisites
+
+- [ ] [serial] N1 Implement and verify receipt-bound cold StageX snapshot/projection and fresh signed adoption, then the complete five-row source-selected qualification and original receipt-validation workflow. r[bootstrap_inventory.cold_stagex_native_row_adoption]
+- [ ] [serial] N2 Publish and freeze the changed source, qualify isolated runner and canonical targets, regenerate its source-only cohort and complete fresh current-data review before final changed-source proof or native-row promotion. r[bootstrap_inventory.cold_stagex_native_row_adoption]
+
+The existing 869a461d attempt remains an immutable earlier-cohort run. Its
+result cannot qualify changed Rust/operator source. No legacy task1580 retry,
+old-output adoption, expected-pin refresh, partial-row acceptance or new v2
+claim is authorized by these implementation prerequisites.
+
+## Signed-adoption mechanisms and seed-contract repair observed (2026-11-16)
+
+Cold task 1633 failed before protected provider execution. Its retained staging,
+plan and absent successful aliases remain unchanged; the disposition is
+`evidence/2026-11-15-leviathan-869a461d/cold-proof-1633-disposition.json`.
+The retained inventory identifies 1013 invalid local seeds in each Mantle stage:
+1012 native continuations and one generated Rust probe narrowed a Produced
+tree's existing 2147483648-byte authority to a 536870912-byte output contract.
+Both kinds were already Tree. The authors now retain the original bound;
+generic exact-kind and bound admission remain unchanged.
+
+Task 1640 executed five native regressions, one generated-probe regression and
+one strict seed-admission regression successfully, plus formatting and strict
+library/test Clippy. It subsequently failed on the independent script manifest's
+missing vendored-Git lockfile, not those completed checks. The two operator
+sources now use regular workspace binary targets and the existing lockfile and
+patches. Task 1641 passed formatting, strict selected-binary Clippy, release
+builds and the actual adoption, five-row checker and Python operator CLI surfaces.
+
+The adoption and receipt-verification legs in task 1637 passed nine and eighteen
+tests respectively before its separately retained Clippy failure. Three Python
+regressions cover genuine diagnostic rejection versus launch/signal failure,
+streamed escaped profile metadata and invalid source/manifest selection. The
+complete-source guard smoke accepted an unchanged tree and rejected an imported
+library mutation outside the row-file subset. These are mechanism observations,
+not evidence that a genuine cold proof or native-row qualification completed.
+
+Commands, transcripts, failed attempts and measured verdicts are retained in
+`evidence/2026-11-16-signed-stagex-adoption/`. ADR 0156 and the operator workflow
+own the repeatable snapshot, signed-adoption and five-row qualification path.
+The user separately authorized two fresh `underclass/gpt-6-sol` reviews for the
+replacement signed-adoption/seed-repair cohort; no old review is reused and no
+coverage or launch gate is relaxed.
+
+N1's real completed-proof adoption and all five native rows, N2's published
+fresh qualification/regeneration/review, I3-I5 and proof-dependent V2/V3 remain
+open. A warm-target developer check cannot qualify the changed frozen source.
+

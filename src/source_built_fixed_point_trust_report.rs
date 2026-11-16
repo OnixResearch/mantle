@@ -2617,7 +2617,7 @@ pub(crate) fn receipt_error(message: String) -> RunError {
 }
 #[cfg(test)]
 #[path = "source_built_fixed_point_receipt_fixture.rs"]
-mod source_built_fixed_point_receipt_fixture;
+pub(crate) mod source_built_fixed_point_receipt_fixture;
 
 #[cfg(test)]
 mod receipt_tests {

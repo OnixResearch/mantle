@@ -33,6 +33,7 @@ pub(crate) const METADATA_HELPER_PATH: &str = "source_built_mantle_metadata_help
 pub(crate) const COMPILE_ENVIRONMENT_VARIABLE: &str = "MANTLE_CAIRN_COMPILE_ENV";
 pub(crate) const SCRIPT_ENVIRONMENT_VARIABLE: &str = "MANTLE_CAIRN_SCRIPT_ENV";
 pub(crate) const SOURCE_OVERLAY_VARIABLE: &str = "MANTLE_CAIRN_SOURCE_OVERLAY";
+pub(crate) const SCRIPT_OUT_DIR_BYTES_MAX: u64 = 2 * 1024 * 1024 * 1024;
 
 fn literal(text: impl Into<String>) -> RecipeWord {
     RecipeWord {
@@ -125,7 +126,7 @@ pub(crate) fn original_script_run(
             id: id.into(),
             inputs: extra_inputs,
             outputs: BTreeMap::from([
-                ("out-dir".into(), spec(ArtifactKind::Tree, 2 * 1024 * 1024 * 1024)),
+                ("out-dir".into(), spec(ArtifactKind::Tree, SCRIPT_OUT_DIR_BYTES_MAX)),
                 ("stdout".into(), spec(ArtifactKind::Text, 16 * 1024 * 1024)),
                 ("stderr".into(), spec(ArtifactKind::Text, 16 * 1024 * 1024)),
                 ("exit-status".into(), spec(ArtifactKind::Text, 4)),

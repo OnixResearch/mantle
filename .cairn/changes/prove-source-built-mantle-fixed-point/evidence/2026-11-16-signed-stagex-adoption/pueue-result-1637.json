@@ -1,0 +1,27 @@
+{
+  "1637": {
+    "task": {
+      "id": 1637,
+      "created_at": "2026-11-16T14:18:44.459471425-05:00",
+      "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v4",
+      "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v4",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+      "envs": {},
+      "group": "default",
+      "dependencies": [],
+      "priority": 0,
+      "label": null,
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-11-16T14:18:44.459456127-05:00",
+          "start": "2026-11-16T14:18:44.633196113-05:00",
+          "end": "2026-11-16T14:21:46.290802439-05:00",
+          "result": {
+            "Failed": 101
+          }
+        }
+      }
+    },
+    "output": ""
+  }
+}

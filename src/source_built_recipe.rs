@@ -2264,11 +2264,80 @@ pub(crate) fn read_manifest_source_member(
 }
 
 #[cfg(test)]
+pub(crate) use tests::lower_authored_step_for_test;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::source_built_fixed_point_planning::InitialOutputAuthorityState;
     use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanInput;
     use crate::source_built_fixed_point_planning::plan_source_built_fixed_point;
+
+    /// Compile supplied producer contracts only; no source program or sandbox runs.
+    pub(crate) fn lower_authored_step_for_test(
+        recipe: &SourceRecipe,
+        step: &RecipeStep,
+        external: &BTreeMap<ArtifactRef, RecipeOutput>,
+    ) -> Result<Vec<ActionSpec>, RunError> {
+        let root = tempfile::tempdir().unwrap();
+        let original = crate::source_built_fixed_point_action_trust::tests::fixture().0;
+        let mut bounds = original.resource_bounds;
+        bounds.disk_bytes_max = 4 * 1024 * 1024 * 1024;
+        let proof = plan_source_built_fixed_point(SourceBuiltFixedPointPlanInput {
+            proof_id: original.proof_id,
+            logical_store_prefix: original.logical_store_prefix,
+            source_inputs: original.source_inputs,
+            initial_output_authority: InitialOutputAuthorityState {
+                stagex_transition_entries: 0,
+                native_provider_entries: 0,
+                rust_provider_entries: 0,
+                mantle_output_entries: 0,
+            },
+            policies: original.policies,
+            resource_bounds: bounds,
+        })
+        .unwrap();
+        let mut contracts = external.clone();
+        for producer in &recipe.steps {
+            for (name, output) in &producer.outputs {
+                contracts.insert(
+                    ArtifactRef::Produced {
+                        action_id: action_id(&recipe.stage_id, &producer.id),
+                        output_id: name.clone(),
+                    },
+                    output.clone(),
+                );
+            }
+        }
+        let mut bindings = BTreeMap::new();
+        for (index, reference) in step.inputs.values().enumerate() {
+            let contract = contracts.get(reference).expect("fixture supplies every producer contract");
+            bindings.insert(reference.clone(), ArtifactBinding {
+                reference: reference.clone(),
+                path: root.path().join(format!("input-{index}")),
+                kind: contract.kind,
+                bytes_max: contract.bytes_max,
+            });
+        }
+        lower_step(
+            &proof,
+            &recipe.stage_id,
+            &[],
+            &[],
+            &RecipePaths {
+                source_roots: &BTreeMap::new(),
+                runtime_root: root.path(),
+                sandbox_binary: root.path(),
+            },
+            root.path(),
+            &"a".repeat(64),
+            &"b".repeat(64),
+            &[],
+            &[],
+            step,
+            &mut bindings,
+        )
+    }
 
     fn text_recipe(stage: &str, step: &str, output: &str, export: &str) -> SourceRecipe {
         let reference = ArtifactRef::Produced {

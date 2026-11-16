@@ -1,0 +1,6 @@
+{
+  "unchanged_complete_source_accepted": true,
+  "imported_library_drift_rejected": true,
+  "baseline_normalized_tar_blake3": "76f42db325336a1f6ea7b7037adf703e8e53eec1e602ea374f1347b439100ee3",
+  "scope": "Temporary source-guard mechanism using independently computed normalized GNU-tar/BLAKE3 baseline, then an imported library mutation outside the row-file subset. No native build, producer proof, or current-source pin refresh. Temporary files were removed by TemporaryDirectory."
+}

@@ -1,0 +1,189 @@
++ nix develop --profile /tmp/mantle-signed-adoption-cairn-profile --no-write-lock-file -c bash -c $'\nset -euo pipefail\nexpected_cairn=$(nix eval --raw github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872#packages.x86_64-linux.default.outPath)\nactual_cairn=$(readlink -f "$(command -v cairn)")\ntest "$actual_cairn" = "$expected_cairn/bin/cairn"\ncairn --version\ncairn validate --root .\ncairn gate proposal prove-source-built-mantle-fixed-point --root .\ncairn gate design prove-source-built-mantle-fixed-point --root .\ncairn gate tasks prove-source-built-mantle-fixed-point --root .\n'
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 5 ms: Could not connect to server; retrying in 24 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 145 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 84 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 50 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+warning: unable to download 'http://100.100.103.95:39400/nix-cache-info': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+error: unknown command: --version
+
+usage: cairn <command> [args]
+
+commands:
+  init [--root PATH]
+  setup plan --root PATH --source-root PATH --bundle RELATIVE_PATH  # preview only; no apply
+  change create <name> [--profile PROFILE] [--root PATH] [--policy PATH]
+  change depend list <name> [--root PATH]
+  change depend add <name> <dependency> [--root PATH] [--execute]
+  change depend remove <name> <dependency> [--root PATH] [--execute]
+  change list [--root PATH] [--group LABEL] [--target-after YYYY-MM-DD] [--target-before YYYY-MM-DD]
+  change graph [--root PATH] [--format json|mermaid|dot]
+  change next [--root PATH]
+  change show <name> [--root PATH]
+  compact archive [--root PATH] [--policy PATH] [--profile lossless-pack] [--out FILE]
+  compact archive [--root PATH] [--policy PATH] --plan FILE --execute
+  compact verify [--root PATH] [--policy PATH]
+  compact unpack [--root PATH] [--policy PATH] --archive ID [--execute]
+  template list [--root PATH]
+  template apply <id> [--root PATH] [--execute]
+  scaffold change <name> --request TEXT [--domain DOMAIN] [--root PATH] [--execute]
+  discover-specs [--root PATH] --include PATH [--include PATH ...] [--out PATH]
+  spec list [--root PATH | --lifecycle-store ID]
+  spec show <id> [--root PATH | --lifecycle-store ID]
+  status [--root PATH | --lifecycle-store ID]
+  readiness CHANGE [--root PATH] [--policy PATH] [--format json|summary] [--contract FILE --results FILE --subject-hash HASH]
+  adoption report --snapshot FILE [--root PATH]
+  workflow status CHANGE [--root PATH] [--policy PATH] [--schema ID]
+  workflow instructions ARTIFACT --change CHANGE [--root PATH] [--policy PATH] [--schema ID]
+  context [--root PATH | --lifecycle-store ID] [--profile ID] [--artifact ID] [--operation ID]
+  config export --kind store|project --root PATH [--check] [--execute]
+  store setup ID --path PATH [--remote VALUE] [--execute]
+  store register PATH [--id ID] [--execute]
+  store unregister ID [--execute]
+  store list
+  store show ID
+  store doctor [ID]
+  view <kanban|mindmap|graph> [--root PATH] [--policy PATH] [--format json|markdown|mermaid|dot] [--interactive]
+  workset create ID --member PATH [--member PATH ...] --opener ID [--policy PATH] [--execute]
+  workset list [--policy PATH]
+  workset show ID [--policy PATH]
+  workset remove ID [--policy PATH] [--execute]
+  workset open ID [--opener ID] [--policy PATH] [--execute]
+  doctor [--root PATH | --lifecycle-store ID] [--policy PATH]
+  validate [--root PATH | --lifecycle-store ID] [--policy PATH] [--cross-repo-evidence FILE|DIR ...] [--strict]
+  release-readiness [--root PATH] [--policy PATH] [--review-ledger FILE] [--stack-provenance FILE] [--stack-provenance-graph FILE] [--stack-provenance-authentication FILE] [--function-address-valence FILE] [--function-address-mantle FILE] [--function-address-kamacite FILE] [--function-address-graph FILE] [--function-address-authentication FILE] [--workspace-contract-matrix-receipt FILE] [--cross-repo-evidence FILE|DIR ...]
+  lifecycle check --source PATH
+  lifecycle export --source PATH --output PATH [--check]
+  lifecycle render-markdown --source PATH [--out-dir DIR]
+  lifecycle import-markdown --root PATH --out PATH [--execute]
+  lifecycle-patterns validate --input PATH [--root PATH]
+  release-evidence index --root PATH --out FILE [--artifact-dir DIR]
+  release-evidence check-index --root PATH --index FILE [--mode current-head|audited-payload]
+  release-evidence publish --root PATH --index FILE --artifact-dir DIR --publish-dir DIR [--channel LABEL] [--release LABEL] [--retention LABEL]
+  release-evidence retention-plan --root PATH --publish-root DIR --out FILE [--channel LABEL] [--keep-latest N] [--retain LABEL]
+  release-evidence rotate --root PATH --plan FILE [--execute]
+  release-run <validate|status|explain> --input FILE [--root PATH] [--policy PATH]
+  determinism coverage-audit [--root PATH]
+  determinism replay [--root PATH] [--case ID] [--group ID] [--format json|jsonl|summary] [--out PATH]
+  determinism verify-receipt <receipt.json> [--root PATH]
+  check-evidence plan --contract FILE --profiles FILE --applicability FILE [--root PATH] [--policy PATH]
+  check-evidence developer-loop --execute --root PATH --profile PROFILE --subject-hash HASH --out DIR [--policy PATH]
+  developer-loop list [--policy PATH]
+  developer-loop plan PROFILE [--policy PATH]
+  developer-loop verify PROFILE --receipt FILE --subject-hash HASH [--dependency-hash HASH ...] [--root PATH] [--policy PATH]
+  preserves-corpus update --path <corpus.json> [--execute]
+  probe run --root PATH --probe-file PATH [--out PATH]
+  probe validate --root PATH --probe-file PATH --receipt PATH
+  runtime-evidence verify --chain PATH [--checkpoint PATH] [--root PATH] [--policy PATH]
+  rfd import --store DIR --document-id ID --base-revision KIND:VALUE --authors A [--spec FILE] [--execute]
+  rfd status --store DIR --document-id ID
+  rfd checkout --store DIR --document-id ID --out DIR [--execute]
+  rfd update --store DIR --document-id ID --actor ACTOR --kind discussion|artifact [--text T] [--execute]
+  rfd conflict --store DIR --document-id ID
+  rfd resolve --store DIR --document-id ID --actor ACTOR --text T [--execute]
+  rfd number --store DIR --document-id ID --number N --registry SNAPSHOT_ID --publisher ACTOR
+  rfd publish --store DIR --document-id ID --out DIR
+  adr import --store DIR --document-id ID --base-revision KIND:VALUE --authors A --approvers Q --decision FILE [--execute]
+  adr status --store DIR --document-id ID
+  adr update --store DIR --document-id ID --actor ACTOR --text T [--execute]
+  adr accept --store DIR --document-id ID --actor APPROVER [--execute]
+  adr deprecate --store DIR --document-id ID --actor ACTOR [--execute]
+  adr supersede --store DIR --document-id ID --actor ACTOR --replaces ADR_ID [--execute]
+  adr conflict --store DIR --document-id ID
+  adr resolve --store DIR --document-id ID --actor ACTOR --text T [--execute]
+  adr number --store DIR --document-id ID --number N --registry SNAPSHOT_ID --publisher ACTOR
+  adr publish --store DIR --document-id ID --out DIR
+  verification-obligation import --store DIR --obligation-id ID --base-revision KIND:VALUE --submitters A (--contributors C --verifiers V --invalidators I) --claim CLAIM --decision FILE [--execute]
+  verification-obligation status --store DIR --obligation-id ID
+  verification-obligation update --store DIR --obligation-id ID --actor ACTOR --text T [--execute]
+  verification-obligation evidence --store DIR --obligation-id ID --actor ACTOR --evidence-id E --evidence-kind K --verification-role R --claim-scope S --external-identity X [--execute]
+  verification-obligation finding --store DIR --obligation-id ID --actor ACTOR --finding-id F [--blocker-class B] [--source-span S] [--execute]
+  verification-obligation response --store DIR --obligation-id ID --actor ACTOR --finding-id F --response R [--execute]
+  verification-obligation discharge|reject|invalidate --store DIR --obligation-id ID --actor VERIFIER [--execute]
+  verification-obligation conflict --store DIR --obligation-id ID
+  verification-obligation resolve --store DIR --obligation-id ID --actor ACTOR --text T [--execute]
+  verification-obligation export --store DIR --obligation-id ID
+  release-decision create --store DIR --decision-id ID --base-revision git_oid:OID --source-revision S --artifact-manifest M --artifact-identity A --target-label T --release-label R (--proposers P --reviewers Q --approvers A --withdrawers W --invalidators I) [--execute]
+  release-decision status --store DIR --decision-id ID
+  release-decision evidence --store DIR --decision-id ID --actor ACTOR --evidence-id E --schema S --verification-role R --verdict V --external-identity X [--execute]
+  release-decision finding --store DIR --decision-id ID --actor ACTOR --finding-id F [--blocker-class B] [--execute]
+  release-decision vote --store DIR --decision-id ID --actor ACTOR --kind approve|reject [--execute]
+  release-decision withdraw|invalidate|supersede --store DIR --decision-id ID --actor ACTOR [--reason R] [--execute]
+  release-decision conflict --store DIR --decision-id ID
+  release-decision export --store DIR --decision-id ID
+  policy-exception request --store DIR --exception-id ID --base-revision git_oid:OID --rules r --targets t --rationale X --controls c (--requesters R --reviewers Q --approvers A --revokers W --observers O) [--execute]
+  policy-exception status --store DIR --exception-id ID
+  policy-exception approve|reject|revoke|expire|close --store DIR --exception-id ID --actor ACTOR [--reason R] [--execute]
+  policy-exception supersede --store DIR --exception-id ID --actor ACTOR --successor ID [--execute]
+  policy-exception observe-validity --store DIR --exception-id ID --actor ACTOR --observed-epoch N --finite-valid-until N [--execute]
+  policy-exception conflict --store DIR --exception-id ID
+  policy-exception export --store DIR --exception-id ID
+  collaboration import <change> --backend portable-json.v1 --store PATH --workspace ID --base-revision KIND:VALUE --actor ID [--root PATH] [--policy PATH] [--execute]
+  collaboration status <change> --backend portable-json.v1 --store PATH [--root PATH] [--policy PATH]
+  collaboration checkout <change> --backend portable-json.v1 --store PATH [--root PATH] [--policy PATH] [--execute]
+  collaboration import <change> --backend radicle-cob.v1 --git-repository PATH --keystore PATH --workspace ID [--delegate PUBLIC_KEY ...] [--root PATH] [--policy PATH] [--execute]
+  collaboration status <change> --backend radicle-cob.v1 --git-repository PATH [--root PATH] [--policy PATH]
+  collaboration checkout <change> --backend radicle-cob.v1 --git-repository PATH [--root PATH] [--policy PATH] [--execute]
+  collaboration update <change> --backend radicle-cob.v1 --git-repository PATH --keystore PATH [--root PATH] [--policy PATH] [--execute]
+  collaboration conflicts <change> --backend radicle-cob.v1 --git-repository PATH [--root PATH] [--policy PATH] [--show-head ARTIFACT=REVISION]
+  collaboration resolve <change> --backend radicle-cob.v1 --git-repository PATH --keystore PATH --choose-head ARTIFACT=REVISION [--lifecycle open] [--root PATH] [--policy PATH] [--execute]
+  cob <import|status|checkout|update|conflicts|resolve> ...  # direct COB-only entry point
+  state-machine-receipt validate --input PATH [--root PATH]
+  agent workflow list [--policy PATH]
+  agent workflow show ID [--policy PATH]
+  agent workflow <plan|check|install> --root PATH --adapter ID --destination RELATIVE_PATH [--policy PATH] [--execute --plan-hash HASH]
+  agent-receipt validate <path>
+  agent-receipt verify-bundle <bundle.json> [--root PATH]
+  agent-receipt smoke-mcp [--root PATH]
+  review profiles
+  review validate <receipt.json> [--root PATH]
+  review ledger --include PATH [--include PATH ...] [--root PATH]
+  review revision validate <receipt.json> [--root PATH]
+  review completeness [--root PATH] [--change NAME]
+  steel-orchestration receipt [--root PATH] [--policy PATH] [--profile ID] [--script-hash HASH]
+  evidence export --root PATH --out DIR [--agent-receipt PATH] [--runtime-chain PATH] [--witness-checkpoint PATH]
+  evidence verify --root PATH --bundle DIR [--policy PATH] [--stack-provenance FILE] [--stack-provenance-graph FILE]
+  evidence import --root PATH --bundle DIR --into DIR
+  evidence republish --root PATH --imported DIR --out DIR
+  evidence index --root PATH --bundle DIR --out FILE
+  evidence index verify --root PATH --index FILE
+  evidence registry build --root PATH --index FILE [--index FILE ...] --out FILE [--channel CHANNEL] [--release YYYY-MM-DD] [--platform PLATFORM] [--compatibility-class CLASS]
+  evidence registry verify --root PATH --registry FILE
+  evidence registry mirror-verify --root PATH --registry FILE --mirror DIR
+  evidence registry select --root PATH --registry FILE --out FILE [--bundle-kind KIND] [--policy-hash HASH] [--channel CHANNEL] [--release YYYY-MM-DD] [--platform PLATFORM] [--compatibility-class CLASS] [--index-receipt-hash HASH]
+  evidence registry fetch-plan --root PATH --registry FILE --out FILE [--bundle-kind KIND] [--policy-hash HASH] [--channel CHANNEL] [--release YYYY-MM-DD] [--platform PLATFORM] [--compatibility-class CLASS]
+  evidence-manifest generate --bundle PATH --agent-receipt PATH --replay PATH --replay-verification PATH [--release-readiness PATH] [--coverage-audit PATH] [--requirement-registry PATH] [--trace-index PATH] [--trace-index-verification PATH] [--runtime-evidence PATH] [--runtime-chain PATH] [--witness-checkpoint PATH] [--registry PATH] [--registry-verification PATH] [--registry-selection PATH] [--registry-fetch-plan PATH] [--signer-metadata PATH] [--anchor-metadata PATH] [--out PATH|-] [--root PATH]
+  evidence-manifest verify <manifest.json> [--root PATH]
+  hash-policy verify --input PATH
+  registry import --scope ID --adapter ID --store FILE --ingest ID --input FILE [--expected-snapshot HASH] [--policy PATH] [--execute]
+  registry query --scope ID --adapter ID --registry FILE (--id ID | --tag NAMESPACE:KEY=VALUE ...) [--policy PATH]
+  registry graph --scope ID --adapter ID --registry FILE --profile ID [--start ID] [--direction ancestors|descendants|both] [--policy PATH]
+  registry export --scope ID --adapter ID --registry FILE --output FILE [--policy PATH] [--execute]
+  registry verify --registry FILE [--policy PATH]
+  requirement-registry export --root PATH --repository-id ID --revision-kind git|jujutsu|opaque --revision VALUE --out FILE [--policy RELATIVE_PATH]
+  requirement-registry verify --root PATH --registry FILE --repository-id ID [--policy RELATIVE_PATH]
+  requirement-registry verify --input PATH  # legacy compatibility
+  toolchain-profile verify --input PATH
+  workspace-contract verify --input PATH [--root PATH]
+  policy [--policy PATH]
+  policy export [--source PATH] [--output PATH] [--check]
+  traceability coverage [--root PATH] [--policy PATH] [--profile ID] [--json]
+  traceability export --root PATH --registry FILE --out FILE [--policy PATH] [--profile ID]
+  traceability verify --root PATH --registry FILE --index FILE [--policy PATH] [--profile ID]
+  traceability show REQUIREMENT_ID --index FILE [--root PATH]
+  tracey coverage [--root PATH] [--policy PATH] [--profile ID] [--json]  # compatibility alias
+  test-harness [--root PATH] [--case pass|product-fail|harness-fail|environment-fail|timeout-flake] [--rail validate|traceability-coverage|tracey-coverage|release-readiness|policy-export-check] [--seed SEED] [--out FILE]
+  rename-classification [--output PATH]
+  migrate <cairn|openspec|ironspec> [--root PATH] [--policy PATH] [--execute --plan-hash HASH]
+  mcp [--describe] [--call TOOL JSON] [--allow-mutations]
+  gate <proposal|design|tasks> <change> [--root PATH] [--policy PATH] [--run-probes]
+  gate-context <change> [--root PATH]
+  sync <change> [--root PATH] [--policy PATH] [--cross-repo-evidence FILE|DIR ...] [--execute]
+  archive <change> [--root PATH] [--policy PATH] [--cross-repo-evidence FILE|DIR ...] [--execute]
++ status=1
++ printf 'current_cairn_exit=%s\n' 1
+current_cairn_exit=1
++ printf '%s\n' 1
++ exit 1

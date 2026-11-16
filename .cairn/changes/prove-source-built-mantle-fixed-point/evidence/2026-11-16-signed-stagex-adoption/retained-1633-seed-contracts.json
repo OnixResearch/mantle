@@ -1,0 +1,331 @@
+{
+  "scope": "Read-only local Produced-seed comparison in all six retained/prepared recipe JSONs; no proof rerun or protected execution",
+  "recipes": [
+    {
+      "stage": "stagex-transition",
+      "step_count": 8131,
+      "invalid_local_seed_count": 0,
+      "first_violations": []
+    },
+    {
+      "stage": "stagex-provider-publication",
+      "step_count": 18,
+      "invalid_local_seed_count": 0,
+      "first_violations": []
+    },
+    {
+      "stage": "full-source-native-provider",
+      "step_count": 5122,
+      "invalid_local_seed_count": 0,
+      "first_violations": []
+    },
+    {
+      "stage": "full-source-rust-provider",
+      "step_count": 63882,
+      "invalid_local_seed_count": 0,
+      "first_violations": []
+    },
+    {
+      "stage": "mantle-stage1",
+      "step_count": 24101,
+      "invalid_local_seed_count": 1013,
+      "first_violations": [
+        {
+          "step": "unit-00031-script.native-0.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-0",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-1.invoke",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-1",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-2.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-2",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-3.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-3",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-4.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-4",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-5.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-5",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-6.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-6",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-7.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage1/unit-00031-script.continuation-7",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        }
+      ]
+    },
+    {
+      "stage": "mantle-stage2",
+      "step_count": 24101,
+      "invalid_local_seed_count": 1013,
+      "first_violations": [
+        {
+          "step": "unit-00031-script.native-0.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-0",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-1.invoke",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-1",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-2.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-2",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-3.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-3",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-4.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-4",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-5.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-5",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-6.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-6",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        },
+        {
+          "step": "unit-00031-script.native-7.invoke.phase-0",
+          "source_input": "cc-work",
+          "destination_output": "native-files",
+          "produced": {
+            "kind": "produced",
+            "action_id": "mantle-stage2/unit-00031-script.continuation-7",
+            "output_id": "out-dir"
+          },
+          "source": {
+            "kind": "tree",
+            "bytes_max": 2147483648
+          },
+          "destination": {
+            "kind": "tree",
+            "bytes_max": 536870912
+          }
+        }
+      ]
+    }
+  ]
+}

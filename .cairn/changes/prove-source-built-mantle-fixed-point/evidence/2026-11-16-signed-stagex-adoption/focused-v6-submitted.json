@@ -1,0 +1,12 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1639,
+  "attempt": "v6",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v6",
+  "base_affected_overlay_bytes_blake3": "8a54616574289379a59751f1c9cfd8f736707e6f065605e614cf8bb279d625dc",
+  "caller_overlay_bytes_blake3": "cf22e99118c3265d3716da399cdddd808e5f80d7746cd767612f8bf458bb0095",
+  "caller_overlay": "/home/brittonr/sbfp-20261113-berdKH/incoming/mantle-signed-adoption-20261116-v6-overlay.tar.gz",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-focused-20261116-v6.log",
+  "prior_attempt": {"task": 1638, "result": "Failed(101)", "blocker": "three child-module callers still used the old private output-constructor arity; one obsolete shared-policy import was unused"},
+  "scope": "Completes all native schedule callers without changing their existing bounds. Continues affected author tests, unchanged generic seed admission, strict Clippy and standalone entrypoint checks. No proof rerun or fresh-target qualification."
+}

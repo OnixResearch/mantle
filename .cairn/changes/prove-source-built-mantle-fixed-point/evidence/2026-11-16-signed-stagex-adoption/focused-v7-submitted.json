@@ -1,0 +1,11 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1640,
+  "attempt": "v7",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v7",
+  "source_subject": "unchanged development source from the v5 affected overlay plus v6 caller overlay",
+  "tooling_profile": "/home/brittonr/sbfp-20261113-berdKH/tooling-profile-signed-stagex-adoption",
+  "change": "Restore and root the unchanged flake-pinned development shell with normal Nix substitution; retain no-write-lock-file, disabled remote builders, Cargo locked/offline operation and wrapper clearing.",
+  "prior_attempt": {"task": 1639, "result": "Failed(1)", "blocker": "offline Nix evaluation lacked the pinned stage0-posix-1.9.1-source store path before any Rust command ran"},
+  "non_claim": "Development tooling restoration and verification only. No source/proof pin, protected execution policy, output authority or proof input changes."
+}

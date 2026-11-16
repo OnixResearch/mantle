@@ -728,6 +728,95 @@ whole-recipe scans without granting authority to unused input labels, foreign
 producers or invented observed outputs. Neither indexing nor source-program
 preparation substitutes for protected execution and action reconciliation.
 
+### Signed cold StageX adoption and native rows
+
+The five native parity rows consume two reserved StorePaths. A completed cold
+proof retains canonical StageX exports but does not publish signed PathInfo for
+those paths. Use the separate operator boundary in
+`scripts/adopt-source-built-stagex.rs`; do not import historical development
+state, replay a legacy transition, or add these outputs to a cold proof's empty
+initial authority. See [ADR 0156](../adr/0156-adopt-only-verified-cold-stagex-outputs-for-native-rows.md).
+
+Build the `adopt-source-built-stagex` and `check-native-row-receipts` workspace
+binary targets from the reviewed frozen checkout. Their source files are under
+`scripts/`, but they use the workspace lockfile and patches, not independent
+`cargo -Zscript` manifests:
+
+```bash
+nix develop -c cargo build --release --locked --offline -p mantle \
+  --bin adopt-source-built-stagex --bin check-native-row-receipts
+```
+
+Invoke the compiled executables directly. Retain their source/build binding
+and independently selected BLAKE3 identities; the checker must not authenticate
+itself. The selected GNU tar and `b3sum` must be trusted absolute regular
+executable paths, not ambient PATH discoveries or symlink aliases.
+
+After genuine current-cohort cold execution and complete v2 verification,
+select the semantic plan digest and the BLAKE3 of the exact final receipt bytes
+through the reviewed evidence. They are different identities. Then run:
+
+```bash
+"$STAGEX_ADOPTION" --json \
+  --proof-root "$PROOF_ROOT" \
+  --expected-plan-blake3 "$PROOF_PLAN_BLAKE3" \
+  --expected-receipt-bytes-blake3 "$PROOF_RECEIPT_BYTES_BLAKE3" \
+  --store "$FRESH_NATIVE_STORE" --state-dir "$FRESH_NATIVE_STATE" \
+  --signing-key "$EXISTING_SIGNING_KEY" \
+  --report "$ADOPTION_REPORT" --backend snix
+```
+
+The output and report paths must be absent, absolute and nonoverlapping with
+each other, state and proof. Snix state must also be absent. For `--backend
+casita`, the operator first provisions a state directory containing only the
+regular `casita-trusted-public-keys` policy that authorizes the selected signer.
+No backend, identity or snapshot may already exist there. Adoption never
+creates, copies or extends that policy or copies the private key; see
+[Casita trust](store-backends.md#casita-layout-and-trust). Backend identity is
+established before retaining private full-export snapshots in state.
+
+Adoption rechecks the complete proof before publication, snapshots both full
+producer-bound exports, and projects the shared transition runtime directories
+without substituting a selectively matching tree. Both signed outputs are
+reopened and checked against current NAR bytes, the selected signer and exact
+artifact identities before the create-new success report appears. A partial
+effect retains evidence but is not an atomic-pair claim or permission to run
+native builds. Adoption proves no new provider construction, fixed point,
+compiler correctness, native-row acceptance or release authority.
+
+Review and pin the complete adoption report, then qualify all five native rows
+from the same selected source/profile/signing context:
+
+```bash
+python3 scripts/qualify-native-rows.py \
+  --mantle "$MANTLE" --checker "$NATIVE_ROW_CHECKER" \
+  --tar "$GNU_TAR" --b3sum "$B3SUM" \
+  --source-root "$FROZEN_SOURCE" --source-profile "$SOURCE_PROFILE" \
+  --adoption-report "$ADOPTION_REPORT" --signing-key "$EXISTING_SIGNING_KEY" \
+  --run-root "$FRESH_NATIVE_EVIDENCE" --store-backend snix --jobs 16 \
+  --expected-manifest-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-adoption-blake3 "$ADOPTION_REPORT_BYTES_BLAKE3" \
+  --expected-mantle-blake3 "$MANTLE_BYTES_BLAKE3" \
+  --expected-checker-blake3 "$CHECKER_BYTES_BLAKE3" \
+  --expected-source-tree-blake3 "$COMPLETE_SOURCE_TREE_BLAKE3"
+```
+
+The source-tree pin is the complete frozen snapshot's normalized GNU-tar
+BLAKE3, not a Git revision, profile manifest digest or row-file subset. The
+operator checks that tree before native evaluation and after qualification,
+including evaluator imports. It verifies and imports the complete source
+bundle, not an ad hoc profile schema, and retains bounded command/probe output.
+`--build-seconds` bounds each build/profile command to at most one day.
+
+`qualification.json` is emitted only after fresh no-substitution builds,
+source-owned acceptance logs, runtime/rejection/relocation observations,
+regeneration and signed artifact facts pass all five original Rust receipt
+validators. Mechanism tests, compiled entrypoints and source preparation are
+not evidence that those builds or a cold proof ran. If Rust or operator source
+changes after a freeze, publish and independently qualify a new frozen runner,
+regenerate source programs, complete current-cohort review, and perform genuine
+execution; an older proof or review cannot cover the changed source.
+
 ## Offline Cargo project-build lane
 
 Use `mantle build .#name` for the supported near-term Rust project workflow.

@@ -52,3 +52,42 @@ GIVEN the full-source fixed point succeeds
 WHEN operators or release tooling cite it
 THEN the claim MUST identify seed, source, lineage, native/Rust providers, closure policy, orchestration authority, root action trust plan, planned-versus-observed execution result, platform, stage outputs, audits, and matching digests
 AND it MUST NOT claim compiler correctness, seed correctness, kernel isolation, independent rebuild agreement, bit-for-bit release reproducibility, deployment success, or full Cargo compatibility.
+
+### Requirement: Receipt-bound cold StageX adoption for native rows
+
+r[bootstrap_inventory.cold_stagex_native_row_adoption] Mantle MUST provide a separate operator boundary that admits only the exact producer-bound StageX exports of a completed reverified cold v2 proof into fresh signed native-row state, and MUST NOT treat that publication as new source construction, a fixed point, or native-row acceptance.
+
+#### Scenario: complete proof identity precedes publication effects
+
+GIVEN independently selected semantic plan and raw receipt identities and an explicit existing signing key
+WHEN an operator requests cold StageX output adoption
+THEN Mantle MUST reverify the complete v2 receipt, source and policy bindings, stage artifacts and full action reconciliation before publication
+AND a failed, partial, development, wrong-plan, wrong-receipt, stale or tampered proof MUST NOT create successful adoption evidence.
+
+#### Scenario: projected bytes come from a verified complete snapshot
+
+GIVEN canonical StageX exports contain runtime and original/intermediate artifacts
+WHEN Mantle selects native-row inputs
+THEN it MUST bound and snapshot each complete canonical export, compare its exact receipt-bound artifact identity, project only the shared eight transition runtime directories with all nine required tools, and preserve the canonical provider tree
+AND unsafe paths, escaping links, source substitution, copy or mode drift, or a matching NAR without exact artifact identity MUST fail rather than authorize a projection.
+
+#### Scenario: signed publication is complete and separate from cold execution
+
+GIVEN both projected inputs are valid and output/store state is fresh and nonoverlapping
+WHEN Mantle publishes the reserved transition and provider StorePaths
+THEN it MUST use strict local signed admission with the selected key and verify current content and signed readback for both paths before emitting complete adoption evidence
+AND a partial publication MUST NOT authorize native builds or imply an atomic pair, imported proof input, provider construction, or a new v2 receipt.
+
+#### Scenario: all current native rows retain their own observations
+
+GIVEN complete verified adoption and authenticated current source records
+WHEN native-row qualification runs
+THEN it MUST explicitly cover binutils.tcc, gcc.4.0, gcc.4.7, gcc.10 and full-musl-binutils without substitution and preserve each existing validator's current source, predecessor, regeneration, artifact/NAR, runtime, rejection, relocation, fallback, acceptance and trust evidence
+AND historical receipts, unsigned state, unselected signing authority, missing observations or a partial build/attestation loop MUST NOT become current native-row acceptance.
+
+#### Scenario: source changes require a new current proof cohort
+
+GIVEN operator or Rust source changes after an earlier cohort was frozen
+WHEN final changed-source proof or native-row qualification is promoted
+THEN source, isolated runner and canonical qualification, regenerated source programs, complete review and genuine execution MUST be bound to the new selected cohort
+AND an earlier frozen attempt or its model acceptance MUST NOT retroactively cover the changed source.

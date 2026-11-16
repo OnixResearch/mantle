@@ -1,0 +1,94 @@
++ date -Is
+2026-11-16T11:57:28-05:00
++ hostname
+leviathan
++ uname -srm
+Linux 6.18.63 x86_64
++ cat /proc/sys/kernel/random/boot_id
+3fcb079b-a910-47cf-8301-25c4e0eaa757
++ df -B1 /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol
+Filesystem         1B-blocks          Used    Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 3110046568448 626716209152  84% /
++ free -b
+               total        used        free      shared  buff/cache   available
+Mem:     269805268992 50474708992 54152347648  1173184512 168437927936 219330560000
+Swap:    137438949376 22166425600 115272523776
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-869a461d-request-workspace.exit
++ test 0 = 0
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/qualification-869a461d-request-workspace.exit
++ test 0 = 0
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/canonical-qualification-869a461d-request-workspace.exit
++ test 0 = 0
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/mantle-869a461d-request-workspace
++ test ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b = ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ test f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911 = f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json
++ test 9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442 = 9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-program-preparation.json
++ test 0fbebd51eb6bf87d5b5b0187385bf3a78f10b409d9b34c4bc1e3f47f60211f46 = 0fbebd51eb6bf87d5b5b0187385bf3a78f10b409d9b34c4bc1e3f47f60211f46
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ test ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
++ /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --unshare-all --unshare-user --ro-bind / / -- /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox true
++ PROFILE_ID=79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce
++ jq -e --arg profile /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json --arg identity 79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce '.schema == "mantle-source-built-source-programs-v1" and .source_profile == $profile and .output_profile_blake3 == $identity' /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-program-preparation.json
+true
++ mkdir /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/home /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/tmp
++ record_aliases before
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest ']'
++ printf 'alias_%s %s absent\n' before latest
+alias_before latest absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point ']'
++ printf 'alias_%s %s absent\n' before latest-source-built-fixed-point
+alias_before latest-source-built-fixed-point absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current ']'
++ printf 'alias_%s %s absent\n' before .source-built-fixed-point-current
+alias_before .source-built-fixed-point-current absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-869a461d-request-workspace --json source bundle verify --from /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json
++ jq -e '.ready_class == "ready" and ([.missing_records, .stale_records, .unsupported_records, .untrusted_records] | all(length == 0))' /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/source-verification.json
+true
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/bin/mantle-869a461d-request-workspace --json self-build --source-built-fixed-point --source-profile /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json --expected-source-profile-blake3 79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/proof
+{"error":"source-built fixed-point proof failed closed: error: build failed\nsource recipe: output seed must preserve its exact Produced kind and fit the output bound; preserved_attempt=/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.proof.source-built-fixed-point-staging-3292026","code":1,"kind":"build"}
++ status=1
++ '[' 1 -eq 0 ']'
++ record_aliases after
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest ']'
++ printf 'alias_%s %s absent\n' after latest
+alias_after latest absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/latest-source-built-fixed-point ']'
++ printf 'alias_%s %s absent\n' after latest-source-built-fixed-point
+alias_after latest-source-built-fixed-point absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.source-built-fixed-point-current ']'
++ printf 'alias_%s %s absent\n' after .source-built-fixed-point-current
+alias_after .source-built-fixed-point-current absent
++ printf 'cold_proof_exit=%s\n' 1
+cold_proof_exit=1
++ printf '%s\n' 1
++ exit 1

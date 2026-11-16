@@ -14,8 +14,8 @@ use crate::source_built_fixed_point_receipt::ColdProviderObservation;
 use crate::source_built_fixed_point_receipt::ColdStageObservation;
 use crate::source_built_fixed_point_receipt::write_cold_source_built_fixed_point_receipt;
 
-pub(super) struct SyntheticReceiptFixture {
-    pub(super) root: tempfile::TempDir,
+pub(crate) struct SyntheticReceiptFixture {
+    pub(crate) root: tempfile::TempDir,
     pub(super) proof: SourceBuiltFixedPointPlan,
     pub(super) actions: ActionTrustPlan,
     pub(super) events: Vec<ActionExecutionEvent>,
@@ -88,7 +88,7 @@ fn dependencies(action: &mut ActionSpec) {
 }
 
 impl SyntheticReceiptFixture {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
         let (mut template, mut adapters, _) = crate::source_built_fixed_point_action_trust::tests::fixture();
         Self::write_sources(&root, &mut template);

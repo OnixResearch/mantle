@@ -1,0 +1,63 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c /run/current-system/sw/bin/bash -c $'\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\nrustc -Vv\ncargo -V\ncargo fmt --check -p mantle\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_stagex_adoption::tests:: -- --test-threads=1\ncargo test --release --locked --offline -p mantle --lib source_built_fixed_point_trust_report::receipt_tests:: -- --test-threads=1\ncargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings\ncargo -Zscript build --release --offline --manifest-path scripts/adopt-source-built-stagex.rs\ncargo -Zscript build --release --offline --manifest-path scripts/check-native-row-receipts.rs\n"$CARGO_TARGET_DIR/release/adopt-source-built-stagex" --help\n"$CARGO_TARGET_DIR/release/check-native-row-receipts" --contract\n'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+    Finished `release` profile [optimized] target(s) in 36.16s
+     Running unittests src/lib.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-b4cc276fb4acdef1)
+
+running 8 tests
+test source_built_fixed_point_stagex_adoption::tests::captured_v2_stage_binding_rejects_metadata_substitution ... ok
+test source_built_fixed_point_stagex_adoption::tests::complete_v2_fixture_wrong_plan_or_receipt_pin_has_no_effects ... ok
+test source_built_fixed_point_stagex_adoption::tests::fresh_locations_reject_overlap_aliases_and_existing_state ... ok
+test source_built_fixed_point_stagex_adoption::tests::missing_verified_receipt_never_creates_state_or_success_report ... ok
+test source_built_fixed_point_stagex_adoption::tests::owned_snapshot_detects_drift_and_rejects_escaping_links ... ok
+test source_built_fixed_point_stagex_adoption::tests::provider_projection_refuses_wrong_verified_identity ... ok
+test source_built_fixed_point_stagex_adoption::tests::signed_publication_reopens_and_rejects_other_signers_and_tree_drift ... FAILED
+test source_built_fixed_point_stagex_adoption::tests::transition_projection_omits_unselected_artifacts_and_detects_copy_drift ... ok
+
+failures:
+
+---- source_built_fixed_point_stagex_adoption::tests::signed_publication_reopens_and_rejects_other_signers_and_tree_drift stdout ----
+
+thread 'source_built_fixed_point_stagex_adoption::tests::signed_publication_reopens_and_rejects_other_signers_and_tree_drift' (3412199) panicked at src/source_built_fixed_point_stagex_adoption.rs:897:73:
+called `Result::unwrap()` on an `Err` value: Internal("cold StageX adoption: signing stagex-transition: store: persisting PathInfo: store: casita-signer-untrusted: ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition has no valid signature from destination trust policy")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    source_built_fixed_point_stagex_adoption::tests::signed_publication_reopens_and_rejects_other_signers_and_tree_drift
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 251 filtered out; finished in 0.28s
+
+error: test failed, to rerun pass `-p mantle --lib`
++ status=101
++ printf 'signed_adoption_focused_exit=%s\n' 101
+signed_adoption_focused_exit=101
++ printf '%s\n' 101
++ exit 101

@@ -1,0 +1,94 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --offline --builders '' --no-write-lock-file -c /run/current-system/sw/bin/bash -c $'\nset -euo pipefail\nunset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\nrustc -Vv\ncargo -V\ncargo fmt --check -p mantle\ncargo test --release --locked --offline -p mantle --bin mantle source_built_mantle_programs::native::tests:: -- --test-threads=1\ncargo test --release --locked --offline -p mantle --bin mantle generated_script_tree_fits_heapless_probe_without_narrowing_its_authority -- --test-threads=1\ncargo test --release --locked --offline -p mantle --bin mantle output_seed_admission_preserves_produced_kind_and_declared_bound -- --test-threads=1\ncargo clippy --release --locked --offline -p mantle --lib --tests --no-deps -- -D warnings\ncargo -Zscript build --release --offline --manifest-path scripts/adopt-source-built-stagex.rs\ncargo -Zscript build --release --offline --manifest-path scripts/check-native-row-receipts.rs\n"$CARGO_TARGET_DIR/release/adopt-source-built-stagex" --help\n"$CARGO_TARGET_DIR/release/check-native-row-receipts" --contract\n'
+rustc 1.96.0-nightly (c75612477 2026-04-07)
+binary: rustc
+commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
+commit-date: 2026-04-07
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.2
+cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+warning: unused import: `crate::source_built_fixed_point::STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT`
+  --> src/source_built_fixed_point_shell.rs:29:5
+   |
+29 | use crate::source_built_fixed_point::STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> src/source_built_mantle_programs_native_schedules.rs:245:18
+    |
+245 |         outputs: outputs("authenticated", ArtifactKind::Text),
+    |                  ^^^^^^^------------------------------------- argument #3 of type `u64` is missing
+    |
+note: function defined here
+   --> src/source_built_mantle_programs_native.rs:120:4
+    |
+120 | fn outputs(name: &str, kind: ArtifactKind, bytes_max: u64) -> BTreeMap<String, RecipeOutput> {
+    |    ^^^^^^^                                 --------------
+help: provide the argument
+    |
+245 |         outputs: outputs("authenticated", ArtifactKind::Text, /* u64 */),
+    |                                                             +++++++++++
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> src/source_built_mantle_programs_native_schedules.rs:303:30
+    |
+303 |     let mut result_outputs = outputs("files", ArtifactKind::Tree);
+    |                              ^^^^^^^----------------------------- argument #3 of type `u64` is missing
+    |
+note: function defined here
+   --> src/source_built_mantle_programs_native.rs:120:4
+    |
+120 | fn outputs(name: &str, kind: ArtifactKind, bytes_max: u64) -> BTreeMap<String, RecipeOutput> {
+    |    ^^^^^^^                                 --------------
+help: provide the argument
+    |
+303 |     let mut result_outputs = outputs("files", ArtifactKind::Tree, /* u64 */);
+    |                                                                 +++++++++++
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> src/source_built_mantle_programs_native_schedules.rs:392:22
+    |
+392 |             outputs: outputs("package", ArtifactKind::Tree),
+    |                      ^^^^^^^------------------------------- argument #3 of type `u64` is missing
+    |
+note: function defined here
+   --> src/source_built_mantle_programs_native.rs:120:4
+    |
+120 | fn outputs(name: &str, kind: ArtifactKind, bytes_max: u64) -> BTreeMap<String, RecipeOutput> {
+    |    ^^^^^^^                                 --------------
+help: provide the argument
+    |
+392 |             outputs: outputs("package", ArtifactKind::Tree, /* u64 */),
+    |                                                           +++++++++++
+
+For more information about this error, try `rustc --explain E0061`.
+warning: `mantle` (bin "mantle" test) generated 1 warning
+error: could not compile `mantle` (bin "mantle" test) due to 3 previous errors; 1 warning emitted
++ status=101
++ printf 'signed_adoption_focused_exit=%s\n' 101
+signed_adoption_focused_exit=101
++ printf '%s\n' 101
++ exit 101

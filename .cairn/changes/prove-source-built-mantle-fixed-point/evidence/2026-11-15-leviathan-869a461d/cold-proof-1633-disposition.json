@@ -1,0 +1,16 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1633,
+  "result": "Failed(1)",
+  "sealed_product_revision": "869a461d6170404e752865a2029092391240b741",
+  "source_profile_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "retained_attempt": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/.proof.source-built-fixed-point-staging-3292026",
+  "attempt_plan_digest_blake3": "9134b0c189ebac1abbb401f5934e29f28b98ebc71f26d43cdfae77d2448da71a",
+  "blocker": "source recipe: output seed must preserve its exact Produced kind and fit the output bound",
+  "actual_before_and_after_aliases": {"latest": "absent", "latest-source-built-fixed-point": "absent", ".source-built-fixed-point-current": "absent"},
+  "driver_log": "cold-proof-1633.log",
+  "attempt_status": "attempt-status-1633.json",
+  "read_only_diagnosis": "../2026-11-16-signed-stagex-adoption/retained-1633-seed-contracts.json",
+  "concrete_mantle_contracts": "../2026-11-16-signed-stagex-adoption/retained-1633-seed-contract-groups.json",
+  "non_claim": "No protected provider/stage1/stage2 success or v2 receipt was observed. This failed frozen subject is retained, not mutated or retried. Changed authors/operator source require fresh publication, isolated qualification, regeneration, complete current-data review and genuine execution."
+}

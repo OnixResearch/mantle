@@ -1,0 +1,8 @@
+test_diagnostic_rejection_is_distinct_from_signal_or_launch_failure (test_native_row_qualification_matrix.NativeNegativeProbeTests.test_diagnostic_rejection_is_distinct_from_signal_or_launch_failure) ... ok
+test_escaped_metadata_and_large_unselected_payload_preserve_selection (test_native_row_qualification_profile.SourceProfileSelectionTests.test_escaped_metadata_and_large_unselected_payload_preserve_selection) ... ok
+test_wrong_profile_identity_and_missing_source_fail (test_native_row_qualification_profile.SourceProfileSelectionTests.test_wrong_profile_identity_and_missing_source_fail) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.086s
+
+OK

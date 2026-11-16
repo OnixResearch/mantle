@@ -501,7 +501,17 @@ fn append_probe(
         id: id.clone(),
         inputs,
         outputs: BTreeMap::from([
-            ("compiler-products".into(), spec(ArtifactKind::Tree, TREE_MAX)),
+            (
+                "compiler-products".into(),
+                spec(
+                    ArtifactKind::Tree,
+                    if probe.seed_out_dir {
+                        metadata::SCRIPT_OUT_DIR_BYTES_MAX
+                    } else {
+                        TREE_MAX
+                    },
+                ),
+            ),
             ("stdout".into(), spec(ArtifactKind::Text, TEXT_MAX)),
             ("stderr".into(), spec(ArtifactKind::Text, TEXT_MAX)),
             ("exit-status".into(), spec(ArtifactKind::Text, 4)),
@@ -743,3 +753,102 @@ pub(crate) fn with_stdin(command: &mut std::process::Command, source: &[u8]) -> 
     Ok(result)
 }
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_built_recipe::RecipePreparation;
+    use crate::source_built_recipe::SCHEMA;
+    use crate::source_built_recipe::lower_authored_step_for_test;
+
+    fn seeded_probe_recipe(stage: &str) -> SourceRecipe {
+        let prior = |name: &str| produced("full-source-rust-provider", name, "artifact");
+        let mut program = SourceRecipe {
+            schema: SCHEMA.into(),
+            stage_id: stage.into(),
+            preparation: RecipePreparation {
+                tool: "seeded-probe-fixture".into(),
+                provenance: "action admission only".into(),
+            },
+            steps: Vec::new(),
+            roots: Vec::new(),
+            exports: BTreeMap::new(),
+            semantic_roots: BTreeMap::new(),
+            timeout_groups: Vec::new(),
+        };
+        let original = metadata::original_script_run(
+            stage,
+            "original-script",
+            prior("build-script"),
+            prior("package"),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let generated = original.out_dir;
+        program.steps.push(original.step);
+        let script = ProbeScript {
+            id: "heapless",
+            helper: prior("helper"),
+            compiler: prior("rustc"),
+            script: prior("build-script"),
+            package: prior("package"),
+            environment: BTreeMap::new(),
+            runtime_inputs: BTreeMap::from([("rust-provider".into(), prior("runtime"))]),
+            runtime_mounts: BTreeMap::new(),
+            generated_inputs: BTreeMap::new(),
+        };
+        let probe = RustProbe {
+            arguments: vec![
+                input("probe-generated", "probe.rs"),
+                literal("--crate-type=lib"),
+                literal("-o"),
+                output("compiler-products", "probe.rmeta"),
+            ],
+            exit_policy: RecipeExitPolicy::Exact { code: 0 },
+            stdin: false,
+            seed_out_dir: true,
+            autocfg_index: None,
+        };
+        append_probe(
+            &mut program,
+            &script,
+            0,
+            &probe,
+            prior("request"),
+            prior("source"),
+            prior("state"),
+            generated,
+            prior("status"),
+        )
+        .unwrap();
+        program
+    }
+
+    #[test]
+    fn generated_script_tree_fits_heapless_probe_without_narrowing_its_authority() {
+        let external = [
+            ("helper", ArtifactKind::Executable),
+            ("rustc", ArtifactKind::Executable),
+            ("build-script", ArtifactKind::Executable),
+            ("package", ArtifactKind::Tree),
+            ("runtime", ArtifactKind::Tree),
+            ("request", ArtifactKind::Text),
+        ]
+        .into_iter()
+        .map(|(name, kind)| (produced("full-source-rust-provider", name, "artifact"), spec(kind, TEXT_MAX)))
+        .collect();
+        for stage in ["mantle-stage1", "mantle-stage2"] {
+            let program = seeded_probe_recipe(stage);
+            let source_bound = program.steps[0].outputs["out-dir"].bytes_max;
+            let step = program.steps.iter().find(|step| step.id == "heapless-probe-0").unwrap();
+            let actions = lower_authored_step_for_test(&program, step, &external).unwrap();
+            assert!(actions.iter().any(|action| action.producer_actions.contains(&format!("{stage}/original-script"))));
+            let mut narrowed = step.clone();
+            narrowed.outputs.get_mut("compiler-products").unwrap().bytes_max = source_bound.checked_sub(1).unwrap();
+            let error = lower_authored_step_for_test(&program, &narrowed, &external).unwrap_err();
+            assert!(error.to_string().contains("output seed"));
+        }
+    }
+}

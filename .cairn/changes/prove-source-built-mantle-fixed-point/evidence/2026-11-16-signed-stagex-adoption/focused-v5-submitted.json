@@ -1,0 +1,12 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1638,
+  "attempt": "v5",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v5",
+  "overlay_bytes_blake3": "8a54616574289379a59751f1c9cfd8f736707e6f065605e614cf8bb279d625dc",
+  "overlay": "/home/brittonr/sbfp-20261113-berdKH/incoming/mantle-signed-adoption-20261116-v5-overlay.tar.gz",
+  "log": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-focused-20261116-v5.log",
+  "scope": "Actual original-script producer to native compiler/assembler and seeded Rust-probe admission, existing seed kind/bound regression, strict Clippy and standalone entrypoint compilation. Reuses the development target; no fresh-runner or canonical qualification.",
+  "prior_mechanism_evidence": {"task": 1637, "adoption_tests": "9 passed; 0 failed", "complete_receipt_tests": "18 passed; 0 failed", "remaining_blocker": "Clippy needless_question_mark at transition_projection return; corrected without behavior change"},
+  "non_claim": "Submission only. No genuine cold producer, adoption from a completed real proof, native row, stage2 or v2 success is implied."
+}

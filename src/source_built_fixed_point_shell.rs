@@ -22,6 +22,13 @@ use crate::native_toolchain_closure::NativeToolchainClosureOptions;
 use crate::source_built_fixed_point::ProofHermeticityMode;
 use crate::source_built_fixed_point::ProofStageKind;
 use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
+use crate::source_built_fixed_point::STAGEX_PROVIDER_LOGICAL_PATH;
+use crate::source_built_fixed_point::STAGEX_PROVIDER_STORE_BASENAME;
+use crate::source_built_fixed_point::STAGEX_TRANSITION_HANDOFF_DIRECTORIES;
+use crate::source_built_fixed_point::STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT;
+use crate::source_built_fixed_point::STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES;
+use crate::source_built_fixed_point::STAGEX_TRANSITION_LOGICAL_PATH;
+use crate::source_built_fixed_point::STAGEX_TRANSITION_STORE_BASENAME;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -96,35 +103,6 @@ pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FORMAT: &str = "mantle-stagex-transition-handoff-v1";
 const STAGEX_TRANSITION_HANDOFF_NON_CLAIM: &str = "this projection exposes only declared StageX runtime outputs; the preserved execution tree owns transition evidence";
-const STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT: usize = 8;
-const STAGEX_TRANSITION_HANDOFF_DIRECTORIES: [&str; STAGEX_TRANSITION_HANDOFF_DIRECTORY_COUNT] = [
-    "bash-full-stage/runtime/output",
-    "coreutils-stage/runtime/output",
-    "diffutils-stage/runtime/output",
-    "gawk-stage/runtime/output",
-    "grep-stage/runtime/output",
-    "m4-stage/runtime/output",
-    "make-stage/runtime/output",
-    "sed-stage/runtime/output",
-];
-const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT: usize = 9;
-const STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES: [&str; STAGEX_TRANSITION_HANDOFF_REQUIRED_FILE_COUNT] = [
-    "bash-full-stage/runtime/output/bin/bash-full",
-    "coreutils-stage/runtime/output/bin/cp",
-    "diffutils-stage/runtime/output/bin/cmp",
-    "diffutils-stage/runtime/output/bin/diff",
-    "gawk-stage/runtime/output/bin/gawk",
-    "grep-stage/runtime/output/bin/grep",
-    "m4-stage/runtime/output/bin/m4",
-    "make-stage/runtime/output/bin/make",
-    "sed-stage/runtime/output/bin/sed",
-];
-pub(crate) const STAGEX_TRANSITION_STORE_BASENAME: &str = "ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
-const STAGEX_TRANSITION_LOGICAL_PATH: &str = "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition";
-pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
-    "snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
-const STAGEX_PROVIDER_LOGICAL_PATH: &str =
-    "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
 const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
     "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";

@@ -1,0 +1,15 @@
+{
+  "scope": "The replacement frozen source cohort containing the signed StageX adoption and task1633 seed-contract repairs",
+  "previous_cohort": "869a461d6170404e752865a2029092391240b741",
+  "authorized_review_model": "underclass/gpt-6-sol",
+  "authorization_date": "2026-11-16",
+  "authorization_source": "Direct interactive user answer in this continuation",
+  "submitted_field": "review_model_authority",
+  "submitted_value": "approve-gpt-6-sol-replacement-cohort",
+  "authorized_action": "Two fresh independent reviews using the complete existing graph/template and physical/source criteria, bound to the replacement cohort's actual frozen identities.",
+  "coverage_reduced": false,
+  "qualification_gates_relaxed": false,
+  "launch_gates_relaxed": false,
+  "old_reviews_reused": false,
+  "non_claim": "Model authorization is not review acceptance, source qualification, protected execution, v2 proof, native-row acceptance or release eligibility."
+}

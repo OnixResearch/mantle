@@ -1,0 +1,9 @@
+{
+  "host": "local",
+  "task": 27,
+  "command": "bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/cairn-current.sh current-v2",
+  "cairn_source_pin": "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872",
+  "prior_attempt": {"task": 26, "result": "Failed(1)", "blocker": "pinned Cairn does not implement --version; no validation or gate ran"},
+  "change": "Remove the unsupported version probe, retain evaluated exact executable-path comparison, record executable BLAKE3, and use separate no-overwrite transcript/exit paths.",
+  "scope": "Current-root lifecycle validation and proposal/design/tasks gates only; no proof or lifecycle completion claim."
+}

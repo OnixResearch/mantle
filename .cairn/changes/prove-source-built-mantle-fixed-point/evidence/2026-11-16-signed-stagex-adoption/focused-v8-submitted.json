@@ -1,0 +1,10 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": 1641,
+  "attempt": "v8",
+  "overlay_blake3": "f73040e835bd0f807a350acc363358d31738fa02881baf92fcd7ac83426ada59",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/verify-adoption.sh v8",
+  "change": "Register the two operator sources as normal Mantle workspace binary targets with test/bench disabled to avoid duplicating the included validators' test modules. Remove independent inline manifests and use the existing workspace lockfile and patches.",
+  "verification": "Formatting, strict Clippy and release build of both selected targets, actual compiled adoption --help and checker --contract, and Python operator --help. Already-passing native/probe/strict-seed tests from task1640 are not repeated.",
+  "non_claim": "Warm-target development verification only; no frozen runner, source-only cohort, protected execution or native-row qualification."
+}

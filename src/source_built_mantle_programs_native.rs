@@ -117,12 +117,9 @@ fn produced(reference: &ArtifactRef) -> Result<(), RunError> {
         Err(error("native generator, compiler and object authority must be Produced"))
     }
 }
-fn outputs(name: &str, kind: ArtifactKind) -> BTreeMap<String, RecipeOutput> {
+fn outputs(name: &str, kind: ArtifactKind, bytes_max: u64) -> BTreeMap<String, RecipeOutput> {
     BTreeMap::from([
-        (name.into(), RecipeOutput {
-            kind,
-            bytes_max: BYTES_MAX,
-        }),
+        (name.into(), RecipeOutput { kind, bytes_max }),
         ("stdout".into(), RecipeOutput {
             kind: ArtifactKind::Text,
             bytes_max: BYTES_MAX,
@@ -250,7 +247,7 @@ pub(crate) fn append_native_archive(
                         executable: tools.cc1.clone(),
                         expected_image: tools.cc1_image.clone(),
                         inputs: BTreeMap::new(),
-                        outputs: outputs("assembly", ArtifactKind::Text),
+                        outputs: outputs("assembly", ArtifactKind::Text, BYTES_MAX),
                         path_mappings: mappings,
                         runtime_mounts: tools.runtime_mounts.clone(),
                         output_seeds: BTreeMap::new(),
@@ -277,7 +274,7 @@ pub(crate) fn append_native_archive(
         fragment.steps.push(RecipeStep {
             id: assemble_id.clone(),
             inputs,
-            outputs: outputs("object", ArtifactKind::Object),
+            outputs: outputs("object", ArtifactKind::Object, BYTES_MAX),
             operation: RecipeOperation::Exec {
                 command_state: None,
                 merge_stderr: false,
@@ -314,7 +311,7 @@ pub(crate) fn append_native_archive(
     fragment.steps.push(RecipeStep {
         id: archive_id.clone(),
         inputs,
-        outputs: outputs("archive", ArtifactKind::Archive),
+        outputs: outputs("archive", ArtifactKind::Archive, BYTES_MAX),
         operation: RecipeOperation::Exec {
             command_state: None,
             merge_stderr: false,
@@ -690,7 +687,7 @@ pub(crate) fn append_x86_64_perlasm(
     steps.push(RecipeStep {
         id: generate_id.clone(),
         inputs,
-        outputs: outputs("raw", ArtifactKind::Text),
+        outputs: outputs("raw", ArtifactKind::Text, BYTES_MAX),
         operation: RecipeOperation::Exec {
             command_state: None,
             merge_stderr: false,
@@ -720,7 +717,7 @@ pub(crate) fn append_x86_64_perlasm(
             ("source".into(), source_tree),
             ("raw".into(), product(&program.stage_id, &generate_id, "raw")),
         ]),
-        outputs: outputs("assembly", ArtifactKind::Text),
+        outputs: outputs("assembly", ArtifactKind::Text, BYTES_MAX),
         operation: RecipeOperation::Exec {
             command_state: None,
             merge_stderr: false,
@@ -775,7 +772,7 @@ pub(crate) fn append_native_link_and_run(
         RecipeStep {
             id: link_id,
             inputs,
-            outputs: outputs("executable", ArtifactKind::Executable),
+            outputs: outputs("executable", ArtifactKind::Executable, BYTES_MAX),
             operation: RecipeOperation::Exec {
                 command_state: None,
                 merge_stderr: false,
@@ -869,7 +866,7 @@ pub(crate) struct NativeCommandProducts {
 }
 
 fn command_outputs() -> BTreeMap<String, RecipeOutput> {
-    outputs("native-files", ArtifactKind::Tree)
+    outputs("native-files", ArtifactKind::Tree, super::metadata::SCRIPT_OUT_DIR_BYTES_MAX)
 }
 
 /// Lower one authenticated original cc process request. The source helper
@@ -961,7 +958,7 @@ pub(crate) fn append_native_request(
         id: decode_id.clone(),
         inputs: decode_inputs,
         outputs: {
-            let mut result = outputs("invocation", ArtifactKind::Text);
+            let mut result = outputs("invocation", ArtifactKind::Text, BYTES_MAX);
             result.insert("environment-data".into(), RecipeOutput {
                 kind: ArtifactKind::Text,
                 bytes_max: BYTES_MAX,
@@ -1169,7 +1166,7 @@ pub(crate) fn append_native_request(
                         ("assembler-phase".into(), product(&program.stage_id, &observation_id, "phase")),
                     ]),
                     outputs: {
-                        let mut values = outputs("files", ArtifactKind::Tree);
+                        let mut values = outputs("files", ArtifactKind::Tree, BYTES_MAX);
                         for name in ["command-stdout", "command-stderr", "command-status"] {
                             values.insert(name.into(), RecipeOutput {
                                 kind: ArtifactKind::Text,
@@ -1257,7 +1254,7 @@ pub(crate) fn append_native_request(
     result_inputs
         .insert("final-files".into(), final_files.ok_or_else(|| error("native result has no actual phase state"))?);
     arguments.push(input("final-files", ""));
-    let mut result_outputs = outputs("files", ArtifactKind::Tree);
+    let mut result_outputs = outputs("files", ArtifactKind::Tree, BYTES_MAX);
     for name in ["command-stdout", "command-stderr", "command-status"] {
         result_outputs.insert(name.into(), RecipeOutput {
             kind: ArtifactKind::Text,
@@ -1361,14 +1358,14 @@ mod tests {
     use crate::source_built_recipe::SCHEMA;
     use crate::source_built_recipe::validate_source_recipe;
 
-    fn probe_recipe(phase: NativeCommandPhase) -> SourceRecipe {
+    fn probe_recipe(stage: &str, phase: NativeCommandPhase) -> SourceRecipe {
         let prior = |name: &str| ArtifactRef::Produced {
             action_id: format!("full-source-native-provider/{name}"),
             output_id: "artifact".into(),
         };
         let mut recipe = SourceRecipe {
             schema: SCHEMA.into(),
-            stage_id: "mantle-stage1".into(),
+            stage_id: stage.into(),
             preparation: RecipePreparation {
                 tool: "native-probe-authoring-fixture".into(),
                 provenance: "graph admission only; no provider execution".into(),
@@ -1400,10 +1397,85 @@ mod tests {
             archiver_program: lit("ar"),
             assembler_image: lit("as"),
         };
-        let products =
-            append_native_request(&mut recipe, &tools, phase, "probe", prior("request"), prior("files")).unwrap();
+        let original = super::super::metadata::original_script_run(
+            stage,
+            "original-script",
+            prior("build-script"),
+            prior("package"),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let work = original.out_dir;
+        recipe.steps.push(original.step);
+        let products = append_native_request(&mut recipe, &tools, phase, "probe", prior("request"), work).unwrap();
         recipe.roots = vec![products.stdout, products.stderr, products.status, products.files];
         recipe
+    }
+
+    #[test]
+    fn original_script_trees_survive_all_native_seeded_phases() {
+        use crate::source_built_recipe::lower_authored_step_for_test;
+        for stage in ["mantle-stage1", "mantle-stage2"] {
+            for phase in [
+                NativeCommandPhase::DriverProbe,
+                NativeCommandPhase::ArchiveCreate,
+                NativeCommandPhase::ArchiveIndex,
+                NativeCommandPhase::Preprocess,
+                NativeCommandPhase::Compile,
+                NativeCommandPhase::CapabilityCompile,
+            ] {
+                let recipe = probe_recipe(stage, phase);
+                let external = [
+                    "driver",
+                    "splitter",
+                    "cc1",
+                    "assembler",
+                    "archiver",
+                    "helper",
+                    "phase-helper",
+                    "build-script",
+                    "package",
+                    "request",
+                ]
+                .into_iter()
+                .map(|name| {
+                    let kind = match name {
+                        "package" => ArtifactKind::Tree,
+                        "request" => ArtifactKind::Text,
+                        _ => ArtifactKind::Executable,
+                    };
+                    (product("full-source-native-provider", name, "artifact"), RecipeOutput {
+                        kind,
+                        bytes_max: BYTES_MAX,
+                    })
+                })
+                .collect();
+                for step in &recipe.steps {
+                    let RecipeOperation::Exec { output_seeds, .. } = &step.operation else {
+                        continue;
+                    };
+                    for (output, input) in output_seeds {
+                        let ArtifactRef::Produced { action_id, output_id } = &step.inputs[input] else {
+                            unreachable!()
+                        };
+                        let producer = recipe
+                            .steps
+                            .iter()
+                            .find(|producer| format!("{stage}/{}", producer.id) == *action_id)
+                            .unwrap();
+                        let bound = producer.outputs[output_id].bytes_max;
+                        let actions = lower_authored_step_for_test(&recipe, step, &external).unwrap();
+                        assert!(actions.iter().any(|action| action.producer_actions.contains(action_id)));
+                        let mut undersized = step.clone();
+                        undersized.outputs.get_mut(output).unwrap().bytes_max = bound.checked_sub(1).unwrap();
+                        let error = lower_authored_step_for_test(&recipe, &undersized, &external).unwrap_err();
+                        assert!(error.to_string().contains("output seed"));
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -1417,7 +1489,7 @@ mod tests {
                 "probe.invoke.phase-0",
             ),
         ] {
-            let mut recipe = probe_recipe(phase);
+            let mut recipe = probe_recipe("mantle-stage1", phase);
             validate_source_recipe(&recipe).unwrap();
             let consumer = recipe.steps.iter_mut().find(|step| step.id == consumer).unwrap();
             consumer.inputs.insert(input_name.into(), product("mantle-stage1", producer, "native-files"));
