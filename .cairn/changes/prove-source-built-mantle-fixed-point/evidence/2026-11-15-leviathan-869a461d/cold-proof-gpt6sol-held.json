@@ -1,0 +1,24 @@
+{
+  "name": "869a461d-request-workspace-gpt6sol",
+  "run_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol",
+  "out": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/proof",
+  "script_remote": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol.sh",
+  "script_blake3": "99b46b265336e662e41222f1347aed06a7cc9523f578b6cbe95b3c56e613cd9e",
+  "transfer_equal": true,
+  "shell_syntax_check": "passed",
+  "required_parent_acceptance": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-869a461d-request-workspace-gpt6sol.json",
+  "required_review_hash_argument": true,
+  "independent_model": "underclass/gpt-6-sol",
+  "model_authorization_bytes_blake3": "27023e6df44ff65d0b4c53f52f4963706d4a1e51e79908457161a338383f0dba",
+  "subject_manifest": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "resource_bounds": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "open_file_descriptors_max": 4096,
+    "protected_exec_events_max": 524288,
+    "source_records_max": 65536
+  },
+  "queued": false,
+  "protected_attempt_launched": false,
+  "non_claim": "Existing sealed-review driver interface, complete current-cohort parameters, syntax and transfer checked only. No run directory or proof output is created by this preparation; independent reports and parent acceptance remain required."
+}

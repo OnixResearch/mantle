@@ -843,3 +843,30 @@ v2 receipt and native signed-row qualification remain unproven. I3–I5 and
 proof-dependent V2/V3 remain open; no protected launch or lifecycle archive
 is authorized by these static results.
 
+## Authorized independent review continuation (2026-11-16)
+
+The user explicitly authorized two independent `underclass/gpt-6-sol` reviews
+of the same complete graph/template and physical/source criteria, replacing
+only this cohort's earlier exact Luna model requirement. The direct answer is
+retained in `evidence/2026-11-15-leviathan-869a461d/independent-review-model-authorization.json`.
+No coverage, launch precondition, independent pin, resource bound or proof claim
+was relaxed. Earlier Luna quota failures remain historical failures.
+
+Detached remote task 1631 was recovered as Success without rerunning it.
+Its complete captured transcript matches the remote bytes, and all four Cairn
+reports are valid: validation plus proposal/design/tasks gates. The recovery
+receipt is `inspection-publication-cairn-fixed-recovery-result.json` under the
+same evidence root; it supersedes only the earlier unknown transport result.
+
+`IndependentGraph869` and `IndependentPhysical869` are conducting the two
+read-only current-subject reviews in separate evidence directories. Parent
+checks and a model's text do not grant acceptance: all findings and uncovered
+criteria must be integrated before a fresh cold attempt can be selected.
+
+The current-cohort held driver reuses the sealed launch-review hash interface.
+Its source/runner/profile/tool identities and 24-hour/200-GB bounds are explicit;
+it uses a fresh proof/alias namespace and no development/cache/resume flags.
+Shell syntax and transfer parity passed. An actual invalid review-hash argument
+was rejected with exit 1 before the proof parent existed. This is a negative
+launch-gate observation only; the proof is not queued or launched.
+

@@ -1,0 +1,34 @@
+{
+  "task": "26",
+  "result": "Success",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-15-leviathan-869a461d/review-model-authorization-cairn.sh",
+  "transcript": "review-model-authorization-cairn.log",
+  "transcript_blake3": "552d9e3530858f1dca8d189ded9c0440cee361c86ea40b2ab02906b2f15dc595",
+  "reports": [
+    {
+      "command_index": 1,
+      "stage": null,
+      "valid": true,
+      "verdict": null
+    },
+    {
+      "command_index": 2,
+      "stage": "proposal",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 3,
+      "stage": "design",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 4,
+      "stage": "tasks",
+      "valid": true,
+      "verdict": "PASS"
+    }
+  ],
+  "non_claim": "Current authorization/evidence Cairn validation and proposal/design/tasks gates only. Does not accept independent review or launch the protected cold proof."
+}

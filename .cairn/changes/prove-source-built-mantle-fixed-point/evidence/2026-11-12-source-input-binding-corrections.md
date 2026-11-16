@@ -1421,3 +1421,18 @@ native-row acceptance, compiler correctness or release claim follows. The
 remaining cold-launch prerequisite is independent current-subject review;
 the proof-dependent lifecycle items remain open.
 
+## Explicit review-model authorization and recovered lifecycle result (2026-11-16)
+
+The direct interactive user answer authorizes `underclass/gpt-6-sol` for both
+complete current-cohort independent review slices. Only the reviewer model
+changes; every coverage criterion and launch/proof gate remains mandatory.
+`2026-11-15-leviathan-869a461d/independent-review-model-authorization.json` records
+the exact answer. Earlier Luna quota failures are retained, not recast as success.
+
+The previously unreachable remote Cairn task 1631 was recovered as Success,
+with all four actual reports valid and complete transcript transfer parity.
+It was not rerun. Independent graph/template and physical/source reviews are
+now in progress. The sealed current-cohort cold driver remains held, with an
+exercised invalid-review-digest rejection and no proof output namespace created.
+No protected execution, v2 receipt or native-row acceptance follows yet.
+

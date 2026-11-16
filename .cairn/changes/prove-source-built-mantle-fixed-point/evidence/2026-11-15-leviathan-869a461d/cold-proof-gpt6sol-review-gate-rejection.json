@@ -1,0 +1,11 @@
+{
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol.sh not-a-digest",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "actual_exit_code": 1,
+  "captured_output": "",
+  "launch_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol",
+  "launch_parent_absent_after_rejection": true,
+  "invalid_review_digest_rejected_before_output_authority": true,
+  "protected_attempt_launched": false,
+  "non_claim": "Negative sealed-review gate smoke only; no accepted review, positive proof command or protected execution."
+}

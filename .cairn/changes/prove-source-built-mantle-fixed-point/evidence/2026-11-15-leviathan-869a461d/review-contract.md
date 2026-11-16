@@ -40,11 +40,14 @@ provider, helper, controller, compiler, NCL or recipe execution; no source/cohor
 mutation, expected-pin update, cached output adoption, proof launch, trust
 relaxation, lifecycle archive or deletion of unrelated data.
 
-The required independent review model is exactly `underclass/gpt-6-luna`.
-`independent-review-unavailable.json` records both workers' actual quota errors.
-No model was substituted. Parent-owned integration and actual inspector runs
-are reachable work, but are not independent exact-model acceptance. A model's
-text is advisory evidence, not durable completion or launch authority.
+The current user-authorized independent review model is exactly
+`underclass/gpt-6-sol`. `independent-review-model-authorization.json` records
+the direct interactive authorization replacing the earlier exact Luna model
+for two complete current-cohort reviews. Coverage and every launch/proof gate
+are unchanged. `independent-review-unavailable.json` preserves the earlier
+Luna quota failures; they are not reclassified as acceptance. Parent-owned
+checks are not independent acceptance, and model text remains advisory evidence,
+not durable completion or launch authority.
 
 ## Required complete current-data coverage
 
@@ -130,7 +133,8 @@ combined check uses the complete actual generated scopes and all graph guard,
 source, native, Rust and Mantle criteria. All 71 static operand-unused step
 diagnostics remain explicit; no minimal-authority claim is made.
 
-These are parent-owned results only. The exact-model independent review is
-still unavailable with retained quota errors. The original cold-launch and
-protected/v2/native-row claim boundaries remain unchanged.
+These are parent-owned results only. The earlier Luna workers were unavailable
+with retained quota errors. The authorized independent GPT-6-sol reviews have
+not yet supplied acceptance. The original cold-launch and protected/v2/native-row
+claim boundaries remain unchanged.
 

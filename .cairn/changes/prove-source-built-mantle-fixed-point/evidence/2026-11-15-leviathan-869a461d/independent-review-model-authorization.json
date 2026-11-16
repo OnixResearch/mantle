@@ -1,0 +1,16 @@
+{
+  "scope": "Current 869a461d source cohort independent review only",
+  "subject_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "previous_required_model": "underclass/gpt-6-luna",
+  "authorized_review_model": "underclass/gpt-6-sol",
+  "authorization_date": "2026-11-16",
+  "authorization_source": "Direct interactive user answer in this continuation",
+  "submitted_field": "review_model_authority",
+  "submitted_value": "approve-gpt-6-sol",
+  "authorized_action": "Two independent GPT-6-sol reviews of the same complete graph/template and physical/source criteria. Change only the recorded model requirement; keep all launch and proof gates.",
+  "coverage_reduced": false,
+  "launch_gates_relaxed": false,
+  "prior_quota_failures_reclassified": false,
+  "independent_acceptance_already_obtained": false,
+  "non_claim": "User authorization changes the reviewer model only. It does not constitute review acceptance, protected execution, a v2 receipt, native-row acceptance or release eligibility."
+}

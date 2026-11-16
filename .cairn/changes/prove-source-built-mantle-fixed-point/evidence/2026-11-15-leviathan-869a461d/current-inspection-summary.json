@@ -487,10 +487,13 @@
     }
   ],
   "independent_review": {
-    "required_model": "underclass/gpt-6-luna",
-    "available": false,
-    "error": "429 quota_exhausted",
-    "substitute_used": false,
+    "required_model": "underclass/gpt-6-sol",
+    "status": "user-authorized; independent review pending",
+    "previous_required_model": "underclass/gpt-6-luna",
+    "previous_model_error": "429 quota_exhausted",
+    "model_change": "explicit user-authorized replacement, not an automatic fallback",
+    "authorization_record": "independent-review-model-authorization.json",
+    "independent_acceptance_obtained": false,
     "parent_checks_are_not_independent_acceptance": true
   },
   "authority": {

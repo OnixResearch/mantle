@@ -1,0 +1,7 @@
+{
+  "task": "26",
+  "host": "local",
+  "command": "review-model-authorization-cairn.sh",
+  "scope": "Current model-authorization/held-launch prose and evidence; unchanged checked-in shell, Cairn pin and validation/proposal/design/tasks gates.",
+  "non_claim": "Submission is not a gate result or independent review acceptance."
+}

@@ -1,0 +1,36 @@
+{
+  "task": "1631",
+  "result": "Success",
+  "result_retrieval_only_no_rerun": true,
+  "transcript": "inspection-publication-cairn-fixed-recovered.log",
+  "transcript_blake3": "dad44940f17034eaed60f17e2e1ef2683cd99171a6813710139ad6d63de5ba99",
+  "remote_transcript_equal": true,
+  "reports": [
+    {
+      "command_index": 1,
+      "stage": null,
+      "valid": true,
+      "verdict": null
+    },
+    {
+      "command_index": 2,
+      "stage": "proposal",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 3,
+      "stage": "design",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "command_index": 4,
+      "stage": "tasks",
+      "valid": true,
+      "verdict": "PASS"
+    }
+  ],
+  "supersedes_unknown_transport_observation": "inspection-publication-transport-lost.json",
+  "non_claim": "Cairn validation/gates only. Does not replace independent current-cohort review or establish protected proof execution."
+}

@@ -1,0 +1,21 @@
+{
+  "model": "underclass/gpt-6-sol",
+  "authorization": "independent-review-model-authorization.json",
+  "subject_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "workers": [
+    {
+      "name": "IndependentGraph869",
+      "scope": "review-contract criteria 1–6: complete current graph/template/consumer contracts",
+      "output_directory": "independent-gpt6sol-graph"
+    },
+    {
+      "name": "IndependentPhysical869",
+      "scope": "review-contract criteria 7–8: complete current physical/source identity contracts",
+      "output_directory": "independent-gpt6sol-physical"
+    }
+  ],
+  "execution_authority": "Read-only inert-data and frozen-consumer review; only own review outputs may be written. No source/cohort mutation, product execution, build/test/lint/format, proof launch, pin change or lifecycle archive.",
+  "parent_integration_required": true,
+  "acceptance_obtained": false,
+  "non_claim": "Dispatch records requests, not completed independent review or cold-launch authority."
+}
