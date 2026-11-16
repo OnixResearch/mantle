@@ -1,0 +1,30 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "task": "1633",
+  "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol.sh f1e3cdcb29a9eb68be24643f0f6087569d9c83fd42d115866824c663b0ddf01f",
+  "driver_bytes_blake3": "99b46b265336e662e41222f1347aed06a7cc9523f578b6cbe95b3c56e613cd9e",
+  "sealed_review": "launch-review-acceptance-gpt6sol.json",
+  "sealed_review_bytes_blake3": "f1e3cdcb29a9eb68be24643f0f6087569d9c83fd42d115866824c663b0ddf01f",
+  "product_revision": "869a461d6170404e752865a2029092391240b741",
+  "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace",
+  "frozen_complete_source_blake3": "f1c0468c177aa6ccc0cfed3ea950726123f9528cce0b9e6b7c18229e607fa911",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-869a461d-request-workspace",
+  "runner_blake3": "ef890d46746969a4010632ea28ad138fa916e6f832007b468e12530007cd7f8b",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-869a461d-request-workspace/source-profile.json",
+  "source_profile_manifest_blake3": "79f9c65041788459714b26dd7dccc3dd6463e864a0b2d4feca703b09760da2ce",
+  "source_profile_bytes_blake3": "9d26367b89e60c7b980339ddb4da9400d15c3487720dcdee8e57220680f7c442",
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol",
+  "proof_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-869a461d-request-workspace-gpt6sol/proof",
+  "resource_bounds": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "open_file_descriptors_max": 4096,
+    "protected_exec_events_max": 524288,
+    "source_records_max": 65536
+  },
+  "jobs": 16,
+  "graph_review_bytes_blake3": "fd6c14b08e15eeea549515ecb105766a5e52eb2c6a231a509f976c7c87eb5d0a",
+  "physical_review_bytes_blake3": "ef80c20e978b9ee53276b8fd4aa70cd900cd8806afc52c8fccd71d7045725635",
+  "current_cairn_result": "graph-review/semantic-root-cairn-result.json",
+  "non_claim": "Submission after complete bounded review integration and current lifecycle passes. Actual fresh-source/output/bwrap guards, protected stages, runtime payloads, stage2 equality, action reconciliation and v2 verification still require observed execution. No cached output/resume/remote build dispatch."
+}

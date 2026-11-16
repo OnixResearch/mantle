@@ -513,9 +513,16 @@
     "remote_bytes_equal": true,
     "fresh_driver_preconditions_still_required": true
   },
+  "cold_proof_submission": {
+    "host": "leviathan.cymric-daggertooth.ts.net",
+    "task": "1633",
+    "submission": "cold-proof-gpt6sol-submitted.json",
+    "startup_observation": "cold-proof-gpt6sol-startup.json",
+    "proof_success_observed": false
+  },
   "independent_review": {
     "required_model": "underclass/gpt-6-sol",
-    "status": "both bounded slices parent-integrated; current Cairn gates passed and exact launch review sealed; protected attempt not yet launched",
+    "status": "qualified cold-driver task 1633 passed fresh source/tool/bwrap and namespace guards; source-bundle verification invoked, protected execution not yet observed",
     "previous_required_model": "underclass/gpt-6-luna",
     "previous_model_error": "429 quota_exhausted",
     "model_change": "explicit user-authorized replacement, not an automatic fallback",
