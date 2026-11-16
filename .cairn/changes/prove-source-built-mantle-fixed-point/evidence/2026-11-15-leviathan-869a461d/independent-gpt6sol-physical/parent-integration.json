@@ -1,0 +1,85 @@
+{
+  "model": "underclass/gpt-6-sol",
+  "review": "review.json",
+  "review_blake3": "ef80c20e978b9ee53276b8fd4aa70cd900cd8806afc52c8fccd71d7045725635",
+  "review_remote": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-869a461d-request-workspace-gpt6sol.json",
+  "remote_bytes_equal": true,
+  "assigned_criteria": [
+    "7",
+    "8"
+  ],
+  "criteria_coverage": {
+    "7": {
+      "total": 18,
+      "covered": 18,
+      "uncovered": []
+    },
+    "8": {
+      "total": 17,
+      "covered": 17,
+      "uncovered": []
+    }
+  },
+  "evidence_and_frozen_consumers": [
+    {
+      "path": "identity-review/identity-review.json",
+      "blake3": "ed739002f918a8b7b7241c2ee9a7cd179a701dfa24176dddfcc99eabbf6417aa",
+      "actual_matches_review": true
+    },
+    {
+      "path": "identity-review/identity-audit.py",
+      "blake3": "76793c40b6713bec876a4bdbc70f7cde133ec3fddd8f99d63b1dc1adba4f098f",
+      "actual_matches_review": true
+    },
+    {
+      "path": "identity-review/preauthor-role-physical-review.json",
+      "blake3": "e5c209546d762de6992a9480afa71f7604324b2d9a9158e6464671ea264989c7",
+      "actual_matches_review": true
+    },
+    {
+      "path": "identity-review/preauthor-role-physical-audit.py",
+      "blake3": "b2e073d072d628ecdc239a9ef2d323512a6c3ba82f303d6015fa342016302ca1",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/release_tree_copy.rs",
+      "blake3": "c7098192cdc8a1a1add76bca927fcfd07d214b9eb3bcf9b447daf7430164afa4",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/source_bundle.rs",
+      "blake3": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/self_build.rs",
+      "blake3": "7a56ab295ee1d13534a3b4e74e083d868fbeb7a1f3a3841515a3888e7983518f",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/source_built_fixed_point_planning.rs",
+      "blake3": "91be8df65a37d1344c194062f3d09043567479a4efc295f86d09144ba43181bd",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/source_built_fixed_point_shell.rs",
+      "blake3": "e7343037d6f1dae709f0a15cb1601af8eccf5a9213a0d26ff76288de7ebf4fcb",
+      "actual_matches_review": true
+    },
+    {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-869a461d-request-workspace/src/source_built_fixed_point_authoring.rs",
+      "blake3": "2755d9ab07792600ce5491c4d134b33339c3119f67b71148558262157d6817c8",
+      "actual_matches_review": true
+    }
+  ],
+  "accepted_for_assigned_physical_source_scope": true,
+  "measurement_method": "Independent reviewer source/inspector assessment over exact captured measurements; parent checked complete counters, subject, cited report/inspector hashes and current actual frozen consumer hashes. No expensive physical check was rerun.",
+  "retained_limitations": [
+    "The 59 original native bodies are independently fingerprinted from bootstrap input, assembled plan and augmented closure, not a fourth time from the prepared profile; the frozen source authoring consumer retains the original source records while recapturing exactly three role records and appending four programs (src/source_built_fixed_point_authoring.rs:66-119); actual prepared-profile source verification also succeeded. Do not claim a fourth independent body-hash pass.",
+    "The third Mantle program helper, source_built_mantle_metadata_helper.rs, is dynamically composed from frozen helper text and CC/native request source (src/source_built_mantle_programs_graph.rs:32-43), not an exact source-file copy; its embedded record and archive member are nevertheless covered. The fourteen exact-copy counter includes the two native-owned LLVM CMake members, not this composed helper.",
+    "The snapshot's 27 absent paths do not assert future absence at launch. Authenticated source availability and installed-member provenance do not assert source production, execution semantics or runtime outputs."
+  ],
+  "combined_launch_acceptance": false,
+  "remaining_gate": "Complete independent graph/template review and parent integration, then fresh launch preconditions.",
+  "non_claim": "This integrates only physical/source criteria7–8. It does not accept graph/templates, runtime payload observations, protected execution, v2, native rows or release eligibility."
+}
