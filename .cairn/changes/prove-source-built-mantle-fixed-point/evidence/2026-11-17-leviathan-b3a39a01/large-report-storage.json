@@ -1,0 +1,39 @@
+{
+  "reason": "Actual GitHub publication warned that the two raw reports exceed its 50 MB recommended file size. Preserve exact reviewed bytes as deterministic gzip in the current tree; keep raw observed files locally and retain already-published history without rewriting it.",
+  "records": [
+    {
+      "observed_name": "graph-results/controller-template-audit.json",
+      "storage": "graph-results/controller-template-audit.json.gz",
+      "observed_bytes": 59786481,
+      "storage_bytes": 1242210,
+      "decoded_blake3": "6ff800bdc16091798c32648a71628728be798ede739f39eb2f4af65dd0e7ac46",
+      "storage_blake3": "7ea9e94738ed1793602f6fad6261a37f0a7d4653e434c7ac0055855a1e57d11a",
+      "roundtrip_equal": true,
+      "restore_command": [
+        "gzip",
+        "--decompress",
+        "--stdout",
+        "graph-results/controller-template-audit.json.gz"
+      ],
+      "raw_local_file_retained": true
+    },
+    {
+      "observed_name": "graph-results/helper-authority-audit.json",
+      "storage": "graph-results/helper-authority-audit.json.gz",
+      "observed_bytes": 76559516,
+      "storage_bytes": 3060322,
+      "decoded_blake3": "f0ef61656f7901a4b63af1c583a26807ae6b44ace24f1174a3b768594c9b97da",
+      "storage_blake3": "44d958544dbf0b09c3aef32a630114ea343214cd4f4574cec05b0fb77788da60",
+      "roundtrip_equal": true,
+      "restore_command": [
+        "gzip",
+        "--decompress",
+        "--stdout",
+        "graph-results/helper-authority-audit.json.gz"
+      ],
+      "raw_local_file_retained": true
+    }
+  ],
+  "consumer_contract": "Every existing report path/hash continues to name the exact decoded observed bytes, not the gzip identity. Restore each original filename from its gzip member before tools that require that path; verify decoded_blake3. No review, source or frozen proof input is changed.",
+  "scope": "Storage-only response to the actual publication warning; no reinspection, expected-pin change, proof rerun or new behavioral acceptance."
+}
