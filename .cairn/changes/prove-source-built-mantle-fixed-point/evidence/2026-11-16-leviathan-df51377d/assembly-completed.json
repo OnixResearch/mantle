@@ -1,0 +1,19 @@
+{
+  "task": 1680,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-df51377d-unit-plans.sh"
+  ],
+  "transcript": "assembly.log",
+  "captured_exit": 0,
+  "complete_source": "complete-source.json",
+  "normalized_complete_source_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+  "non_claim": "Complete source assembly only; no runner/canonical qualification, current inspection, independent acceptance, protected proof or native-row acceptance."
+}

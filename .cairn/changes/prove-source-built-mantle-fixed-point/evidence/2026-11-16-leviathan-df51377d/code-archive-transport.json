@@ -1,0 +1,11 @@
+{
+  "revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "local_path": "/home/brittonr/git/.mantle-unit-plan-freeze-20261116.Ureg1p/source-df51377d592bf6a3412b436a10e8fc708e8dbe3d.tar.gz",
+  "remote_path": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-df51377d592bf6a3412b436a10e8fc708e8dbe3d.tar.gz",
+  "compressed_blake3": "febdc358b8f50d50a6424f3f56b9ad7f052ae7d54a87bb1cb90120225cd2e665",
+  "remote_observed_blake3": "febdc358b8f50d50a6424f3f56b9ad7f052ae7d54a87bb1cb90120225cd2e665",
+  "transfer_equal": true,
+  "raw_tar_blake3": "ae019919d5a38b38b5291b5afc185847ebe556d5bb8a25b18a780bc7c4a56e44",
+  "method": "Exact git archive --format=tar.gz from published immutable revision; local decompressed raw-tar BLAKE3 and independent post-rsync remote compressed BLAKE3.",
+  "scope": "Code archive transport only; no frozen qualification, source-program review, protected execution or proof."
+}

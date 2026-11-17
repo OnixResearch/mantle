@@ -1,0 +1,27 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "archive": "inspector-tools.tar.gz",
+  "archive_blake3": "9d7a3165340b711d6049a8c5bc4d702a048f572bdd8ca9adc4fbf4e1f7802e20",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/inert-inspectors-df51377d-unit-plans.tar.gz",
+  "remote_dir": "/home/brittonr/sbfp-20261113-berdKH/review-tools-df51377d-unit-plans",
+  "transfer_equal": true,
+  "archive_inventory": [
+    "graph-review/",
+    "graph-review/helper-authority-audit.py",
+    "graph-review/mantle-selector-audit.py",
+    "graph-review/controller-template-audit.py",
+    "graph-review/graph-audit.py",
+    "graph-review/run-semantic-root-inspection.sh",
+    "identity-review/",
+    "identity-review/run-preauthor-roles.sh",
+    "identity-review/run-full-identity.sh",
+    "identity-review/preauthor-role-physical-audit.py",
+    "identity-review/identity-audit.py"
+  ],
+  "basis": {
+    "graph": "../2026-11-16-unit-plan-facts/graph-review",
+    "identity": "../2026-11-16-leviathan-b520cf57/identity-review"
+  },
+  "changes": "Graph/helper/selector inspector algorithms and integrated fail-closed wrapper retained exactly; physical inspectors rebind only exact product revision and source/cohort locators. No counts, predicates, bounds, original-source pins or consumer rules are relaxed.",
+  "non_claim": "Inspector source transfer only; no current-data execution, independent acceptance, protected execution or proof."
+}

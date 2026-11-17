@@ -1,0 +1,7 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "compressed_code_archive_blake3": "febdc358b8f50d50a6424f3f56b9ad7f052ae7d54a87bb1cb90120225cd2e665",
+  "authorization": "../2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json",
+  "authorized_review_model": "underclass/gpt-6-sol",
+  "scope": "The same user-authorized signed-adoption/seed-repair replacement, with source-owned unit plans and fully measured helper/package/feature inspection. All qualification, complete current-data criteria and launch gates remain unchanged; no predecessor acceptance is reused."
+}
