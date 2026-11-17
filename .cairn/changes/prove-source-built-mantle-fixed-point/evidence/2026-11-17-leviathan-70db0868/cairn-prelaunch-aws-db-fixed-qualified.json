@@ -1,0 +1,32 @@
+{
+  "task": 27,
+  "result": "Success",
+  "original_command": "bash /home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed.sh",
+  "path": "/home/brittonr/git/OnixResearch/mantle",
+  "start": "2026-11-17T16:15:33.975460269-05:00",
+  "end": "2026-11-17T16:16:04.092239199-05:00",
+  "all_four_reports_valid": true,
+  "reports": {
+    "validation": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-validation.json",
+      "valid": true,
+      "blake3": "28150683fbdd7d2c2bb21e01dd2b8e2e987b983688027e791d711a3e46c5bde0"
+    },
+    "proposal": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-proposal.json",
+      "valid": true,
+      "blake3": "b88bf1b7d628b324ee2a56c9972f92d08bec55e09a58d55ab09164fb7e6f32ae"
+    },
+    "design": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-design.json",
+      "valid": true,
+      "blake3": "7a354842374beb16b702c377d010ba8f4c2d13c4e412a8c2577c352d423d0afc"
+    },
+    "tasks": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-tasks.json",
+      "valid": true,
+      "blake3": "7bacb6a950b06b5cabce6054720d48adde8687407e32bca371103b9994ff3554"
+    }
+  },
+  "transcript": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed.log"
+}

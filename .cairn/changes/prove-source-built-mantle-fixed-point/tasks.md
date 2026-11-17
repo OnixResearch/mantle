@@ -1463,3 +1463,35 @@ current launch acceptance is assumed. The corrected cold command, signed
 adoption and five-row commands remain held. Protected stages, stage1-owned
 stage2 equality, verified v2 receipt and genuine native rows remain open.
 
+## Complete independent current-cohort reviews reconciled (2026-11-17)
+
+Both fresh `underclass/gpt-6-sol` reviews accept their complete bounded static
+scopes for the corrected subject2081b08f and frozen product70db0868. Graph
+criteria1-6 are complete; physical criteria7-8 cover72,015/72,015 and
+33,820/33,820. The three preauthor directory obligations were independently
+reconstructed, not discarded. The graph review byte BLAKE3 is
+`c7d201be0070dfcf66680139f28ea209acc0adb7e753107d009c939b530ee1e4`;
+the physical review byte BLAKE3 is
+`f0aad47fe41f63e044525b69afc3700b378eed4a1978e1e78fcae4a15b5867cd`.
+
+Parent reconciliation passes643 graph bindings/counters/raw-result checks and
+144 physical bindings/counters. Exact independent submitted sources, complete
+successful stdout, failed checker versions and raw failure notices are retained
+under the current evidence directory. Reconstructed prior scratch versions are
+explicitly distinguished from captured original output; no inspection rerun is
+claimed for retention. Both full profile streams and both embedded unit plans
+match, including all2,098 primary sources and16 unchanged root-unit digests.
+
+Raw graph HOLD and14,037 mis-scoped word flags remain retained. Complete
+controller scopes have zero corrected failures. The independent all-declared
+topology has859,422 edges; the operation-consumed topology has859,396. All six
+recipes pass genuine-root validator reachability. The35 native generator-base
+steps outside the narrower operation-consumed root closure remain explicitly
+named; all their static instructions were inspected and source-order execution
+remains a runtime obligation. Neither metric is substituted for the other.
+
+Fresh validation/proposal/design/tasks Cairn gates, sealed parent acceptance,
+exact review transport and current source/resource/tool/namespace checks remain
+required before protected execution. I3-I5, proof-dependent V2/V3 and all genuine
+native rows remain open; static review establishes no stage success, fixed-point
+equality, verified v2 receipt, signing, native-row acceptance or release claim.

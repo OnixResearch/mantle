@@ -1,0 +1,7 @@
+{
+  "failed_independent_analyzer_sha256": "73b3cf05338fbaa60472e02b6c56441f4819ef74571e4b1f66a569942082959d",
+  "failed_source_version": "local://independent-physical-remote-failed.py",
+  "exit_code": 1,
+  "raw_stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 316, in <module>\n  File \"<stdin>\", line 308, in main\n  File \"<stdin>\", line 291, in routes_and_helpers\n  File \"<stdin>\", line 19, in need\nRuntimeError: original assembler probe differs\n",
+  "reconciliation": "Initial independent checker incorrectly required an assembler-probe literal in every rsaz-* AWS script, including rsaz-avx2.pl. The frozen AWS helper and three original selected rsaz-2k/3k/4k-avx512 scripts limit this obligation to exactly the three avx512 scripts. The follow-up independent checker changed only this checker selector; no source, cohort, pin, official inspector or consumer changed."
+}

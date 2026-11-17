@@ -1,0 +1,19 @@
+{
+  "task": 27,
+  "command": [
+    "pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/git/OnixResearch/mantle",
+    "--label",
+    "complete-current-review-prelaunch",
+    "--",
+    "bash",
+    "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed.sh"
+  ],
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "graph_review_blake3": "c7d201be0070dfcf66680139f28ea209acc0adb7e753107d009c939b530ee1e4",
+  "physical_review_blake3": "f0aad47fe41f63e044525b69afc3700b378eed4a1978e1e78fcae4a15b5867cd",
+  "scope": "All four current lifecycle reports only; sealed parent acceptance and held driver preflights still required."
+}

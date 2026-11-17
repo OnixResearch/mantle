@@ -1,0 +1,8 @@
+{
+  "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-physical-review-aws-db-fixed.json",
+  "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "bytes_blake3": "f0aad47fe41f63e044525b69afc3700b378eed4a1978e1e78fcae4a15b5867cd",
+  "transport_equal": true,
+  "scope": "Complete advisory physical review only; launch remains held pending graph review, parent reconciliation and all current Cairn gates."
+}

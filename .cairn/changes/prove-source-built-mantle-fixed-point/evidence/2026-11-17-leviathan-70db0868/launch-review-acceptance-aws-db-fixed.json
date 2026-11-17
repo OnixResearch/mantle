@@ -1,0 +1,403 @@
+{
+  "schema": "mantle-cohort-launch-review-v1",
+  "code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "source_tree_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "runner_blake3": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "source_profile_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+  "source_profile_bytes_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "source_preparation_report_bytes_blake3": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+  "independent_review_model": "underclass/gpt-6-sol",
+  "graph": {
+    "accepted": true,
+    "scope": "Complete static graph/source/template criteria1-6, including all six recipes, nested/scoped words, helpers, selectors, primary operands, immutable compiler digests and retained raw diagnostics; runtime payloads unobserved.",
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+    "review_bytes_blake3": "c7d201be0070dfcf66680139f28ea209acc0adb7e753107d009c939b530ee1e4",
+    "parent_reconciliation_path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/parent-graph-review-reconciliation-aws-db-fixed.json",
+    "parent_reconciliation_blake3": "542b161bca6be8677e43f71e0960dc2c21777265ea56fb8113f62af8c2a84648",
+    "parent_binding_checks": 643
+  },
+  "identity": {
+    "accepted": true,
+    "scope": "Complete static physical/source criteria7-8, all original and authored records and embedded/physical source identities, with all three exact supplemental directory reconstructions.",
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+    "review_bytes_blake3": "f0aad47fe41f63e044525b69afc3700b378eed4a1978e1e78fcae4a15b5867cd",
+    "parent_reconciliation_path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/parent-physical-review-reconciliation-aws-db-fixed.json",
+    "parent_reconciliation_blake3": "384f47aa4ad6ead66d0d8139980597418aada0b7b9a7d6ac8a44da027ca5af89",
+    "parent_binding_checks": 144
+  },
+  "model_authorization": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-70db0868-primary-sources-gpt6sol.json",
+    "bytes_blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884"
+  },
+  "profile_transfer_equal": true,
+  "parent_acceptance": true,
+  "uncovered_criteria": [],
+  "cairn": {
+    "task": 27,
+    "result": "Success",
+    "original_command": "bash /home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed.sh",
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "start": "2026-11-17T16:15:33.975460269-05:00",
+    "end": "2026-11-17T16:16:04.092239199-05:00",
+    "all_four_reports_valid": true,
+    "reports": {
+      "validation": {
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-validation.json",
+        "valid": true,
+        "blake3": "28150683fbdd7d2c2bb21e01dd2b8e2e987b983688027e791d711a3e46c5bde0"
+      },
+      "proposal": {
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-proposal.json",
+        "valid": true,
+        "blake3": "b88bf1b7d628b324ee2a56c9972f92d08bec55e09a58d55ab09164fb7e6f32ae"
+      },
+      "design": {
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-design.json",
+        "valid": true,
+        "blake3": "7a354842374beb16b702c377d010ba8f4c2d13c4e412a8c2577c352d423d0afc"
+      },
+      "tasks": {
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed-tasks.json",
+        "valid": true,
+        "blake3": "7bacb6a950b06b5cabce6054720d48adde8687407e32bca371103b9994ff3554"
+      }
+    },
+    "transcript": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cairn-prelaunch-aws-db-fixed.log"
+  },
+  "qualification": {
+    "assembly": {
+      "task": 1718,
+      "result": "Success",
+      "start": "2026-11-17T12:48:59.752566742-05:00",
+      "end": "2026-11-17T12:49:19.718234822-05:00",
+      "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+      "complete_source": {
+        "schema": "mantle-complete-source-snapshot-v1",
+        "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+        "code_archive_blake3": "e40bff16144520416cacb3b865b2eaba01dab4bf194a44c0b0d9cc18b9ec19fe",
+        "code_tree_blake3": "59db1a2a2128cbe8120514d4c1eeeee57c56444a3e0337972896c367d07efbde",
+        "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+        "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+        "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+        "original_source_normalized_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+        "complete_archive_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+        "compressed_archive_blake3": "fe0f8c720cc4fa9ce790c8dea260d26f76bfc1a658862504c37abfb5da21c217",
+        "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-70db0868-primary-sources.tar",
+        "assembly_root": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources",
+        "non_claim": "Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"
+      },
+      "assembly_log": "assembly.log",
+      "exact_archive_transfer_equal": true,
+      "inspector_copy_task": 1723,
+      "inspector_copy_result": "Success",
+      "inspector_log": "inert-tools-copy.log",
+      "scope": "Source assembly and exact external inert-tool byte-copy observations only. Canonical/runner qualifications, source-only regeneration and complete fresh review still require their actual results."
+    },
+    "canonical": {
+      "task": 1719,
+      "enqueued_at": "2026-11-17T12:49:00.029666820-05:00",
+      "start": "2026-11-17T12:49:19.791514015-05:00",
+      "end": "2026-11-17T12:59:38.670516269-05:00",
+      "result": "Success",
+      "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+      "source_root": "/home/brittonr/sbfp-20261113-berdKH/canonical-source-70db0868-primary-sources",
+      "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-70db0868-primary-sources",
+      "target_absent_precondition_retained": true,
+      "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+      "source_before_after_equal": true,
+      "log": "canonical-qualification.log",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.05s",
+        "test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.11s",
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.79s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.71s",
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 2.11s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 251 filtered out; finished in 1.58s",
+        "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 2922 filtered out; finished in 0.14s",
+        "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 2929 filtered out; finished in 0.02s",
+        "test result: ok. 172 passed; 0 failed; 0 ignored; 0 measured; 2809 filtered out; finished in 0.20s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 232 filtered out; finished in 0.05s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s"
+      ],
+      "reports": [
+        {
+          "label": "validation",
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/canonical-cairn-validation.json",
+          "valid": true
+        },
+        {
+          "label": "proposal",
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/canonical-cairn-proposal.json",
+          "valid": true
+        },
+        {
+          "label": "design",
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/canonical-cairn-design.json",
+          "valid": true
+        },
+        {
+          "label": "tasks",
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/canonical-cairn-tasks.json",
+          "valid": true
+        }
+      ],
+      "scope": "Exact frozen-source canonical gate observations only; complete new source-only regeneration, full current-data review and protected proof still require actual results."
+    },
+    "isolated_runner": {
+      "task": 1720,
+      "enqueued_at": "2026-11-17T12:49:00.661467555-05:00",
+      "start": "2026-11-17T12:49:19.860620244-05:00",
+      "end": "2026-11-17T13:09:01.329470890-05:00",
+      "result": "Success",
+      "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+      "source_root": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+      "target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-70db0868-primary-sources",
+      "target_absent_precondition_retained": true,
+      "distinct_from_canonical": true,
+      "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+      "source_before_after_equal": true,
+      "log": "runner-qualification.log",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.01s",
+        "test result: ok. 273 passed; 0 failed; 27 ignored; 0 measured; 2681 filtered out; finished in 5.45s"
+      ],
+      "installed_binaries": {
+        "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+        "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources": "fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873",
+        "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources": "817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879"
+      },
+      "scope": "Exact isolated frozen-source runner/operator builds and selected test/format/strict Clippy observations only; no regenerated-data, protected proof, native-row or release acceptance."
+    },
+    "preparation": {
+      "task": 1721,
+      "enqueued_at": "2026-11-17T12:49:01.713568216-05:00",
+      "start": "2026-11-17T13:09:01.381078671-05:00",
+      "end": "2026-11-17T13:59:11.952669950-05:00",
+      "result": "Success",
+      "source_before_after_equal": true,
+      "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+      "output_profile_manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+      "output_profile_bytes": 17318852974,
+      "program_records": {
+        "fixed-point-native-source-program": "223efadf90b32091fe43452a870f873e252763fe93f9e6f16d2a1fc6868315f8",
+        "fixed-point-rust-source-program": "c5a53ac4fcba19834595e67d77d8eefd369bba140bc4e2dc1c1756169748392a",
+        "source-built-mantle-programs": "c2c5acec206d84612e4ab983f266145b77b717d8748dfe49343a9277dd64cb05",
+        "source-built-stagex-programs": "2f5acd44852caa44d2c4af6305b3e0d11866ed464cfe59c9ce4989a6712db645"
+      },
+      "scope": "Actual complete source-only preparation and source-profile validation. Full profile stream parity, complete current-data inspection/rejections, independent review and protected execution remain required."
+    },
+    "current_subject": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-subject-aws-db-fixed.json",
+      "bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+      "correction_record": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/subject-aws-git-db-correction.json"
+    },
+    "current_inspection_tasks": {
+      "graph": {
+        "task": 1730,
+        "enqueued_at": "2026-11-17T14:46:26.759940347-05:00",
+        "start": "2026-11-17T14:46:26.991060465-05:00",
+        "end": "2026-11-17T15:04:14.909596764-05:00",
+        "result": "Success"
+      },
+      "identity": {
+        "task": 1731,
+        "enqueued_at": "2026-11-17T14:46:27.293865256-05:00",
+        "start": "2026-11-17T14:46:27.382971786-05:00",
+        "end": "2026-11-17T14:54:46.119396070-05:00",
+        "result": "Success"
+      },
+      "preauthor": {
+        "task": 1732,
+        "enqueued_at": "2026-11-17T14:46:28.587139800-05:00",
+        "start": "2026-11-17T14:46:28.664372075-05:00",
+        "end": "2026-11-17T15:07:54.893595987-05:00",
+        "result": "Success"
+      },
+      "helper_mutations": {
+        "task": 1733,
+        "enqueued_at": "2026-11-17T14:46:29.749661360-05:00",
+        "start": "2026-11-17T15:04:14.974273512-05:00",
+        "end": "2026-11-17T15:18:17.803761879-05:00",
+        "result": "Success"
+      },
+      "selector_mutations": {
+        "task": 1734,
+        "enqueued_at": "2026-11-17T14:46:30.330223710-05:00",
+        "start": "2026-11-17T15:04:15.038471287-05:00",
+        "end": "2026-11-17T15:06:21.440611396-05:00",
+        "result": "Success"
+      },
+      "seed_source_mutations": {
+        "task": 1735,
+        "enqueued_at": "2026-11-17T14:46:30.880132228-05:00",
+        "start": "2026-11-17T15:04:15.106866283-05:00",
+        "end": "2026-11-17T15:05:35.891042118-05:00",
+        "result": "Success"
+      }
+    },
+    "current_primary_source_agreement": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/current-primary-source-agreement-aws-db-fixed.json",
+      "bytes_blake3": "a03a3fad264a5900635ade4ed7ffbe2fe76fc3c89b4a642e0724ef9616221591"
+    },
+    "current_report_bindings": {
+      "graph-results-aws-db-fixed/graph-audit.json": "f8082ee076e195494c6825d0b3b97e27d321678a73324bc37e1799949b9c1648",
+      "graph-results-aws-db-fixed/source-binding-kind-inventory.json": "354e76abb2ba3b9afd357fb8e337fd38dc49f149edc128f1d57f940b7323de04",
+      "graph-results-aws-db-fixed/controller-template-audit.json": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+      "graph-results-aws-db-fixed/helper-authority-audit.json": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+      "graph-results-aws-db-fixed/mantle-selector-audit.json": "6e76ac8a137c1a5e59daf97539d6c1ad14f6df49a38665ee7d7dc37c968c0b22",
+      "graph-results-aws-db-fixed/semantic-root-regression.json": "a3d7883ffba1ffd2ddd2bd4e3513c453f5b90a8f3ade963b2b9bd0cdbabcea52",
+      "identity-results-aws-db-fixed/identity-review.json": "aefe5ef1efddd55748661ed4ed601e3cafd27e9f0ad0158493cf3900cedb10df",
+      "preauthor-results-aws-db-fixed/preauthor-role-physical-review.json": "ba6d789a2d4d5fbd007c3604cba5da519178624ae9cc533f382447a2738ded31",
+      "graph-results-aws-db-fixed/helper-authority-negative.json": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+      "selector-mutations-aws-db-fixed.json": "82ab5285696ad6c81cfe37b679bc4e69962bee933c13c2bfce81eb23973c9a1b",
+      "graph-results-aws-db-fixed/output-seed-immutable-source-regressions.json": "f7d56d5ea8256d49cd7a6917eaf5fe40bef90820e0cdc64508ea9fd670f6dc3d",
+      "review-subject-aws-db-fixed.json": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+      "source-program-preparation.json": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+      "source-program-preparation-input-plan.json": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+      "graph-current-inputs-aws-db-fixed.json": "1ab3b9cc31e44d7a364d6c6ec2707499ad49a8994a63cdf14f8a4228840d075e",
+      "physical-current-inputs-aws-db-fixed.json": "aee9118c46f2fe57fb67015bb7663f18dc3afb525c33cfd7ffa81a11bf9a9eaa",
+      "current-primary-source-agreement-aws-db-fixed.json": "a03a3fad264a5900635ade4ed7ffbe2fe76fc3c89b4a642e0724ef9616221591",
+      "current-inspection-outcomes-aws-db-fixed.json": "be787c398f6fc18b8e4785e9eb8567813432fe887cbc53da16c508b408938410",
+      "review-contract.md": "e827e674b1140dcab3f0b963a3e33868950ff04d77a06dff7f042c4287d3e5b0",
+      "subject-aws-git-db-correction.json": "b90cfd070d2dfb4216fd3cd6c12c14efa0e1e777e423331b1f7b02e726f17969"
+    },
+    "review_packet": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-packet-aws-db-fixed.json",
+      "bytes_blake3": "333a3402b3f084942f312a023c2d518416e540c2549535dbb71be8b219135f0c"
+    }
+  },
+  "retained_failures": {
+    "rejected_subject": {
+      "record": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/subject-aws-git-db-correction.json",
+      "old_subject_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+      "failed_identity_log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/identity-failed-1725.log",
+      "failed_preauthor_log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/preauthor-failed-1726.log",
+      "old_reports_are_not_current_acceptance": true
+    },
+    "independent_graph_inert_checks": [
+      {
+        "corrected_execution_blake3": "fb77d3cabd1d8bc8c7bd5c0a4bc48daaf6ae783a54bcfe282b8ca49f289b672e",
+        "effective_script_blake3": "01fd548f0d70a5bc21d4385e12e4ea1c2a23a5e8fc04e8daf6ceac4141e92a0a",
+        "error": "FileNotFoundError for remote __file__ <stdin>",
+        "outcome": "failed before census",
+        "scope": "initial independent census stdin"
+      },
+      {
+        "corrected_source_script_blake3": "731937cb2408227c8c96fb1190bd0670af1390a5d56838c98cdf1ad20700b9be",
+        "error": "KeyError arguments; static request has invocation.arguments envelope",
+        "initial_source_script_blake3": "0b0d38c168f831537bef2454aef905fb1093695ea79a2d68ee4bbcb6f987d75e",
+        "outcome": "failed before coverage",
+        "scope": "independent primary source JSON template projection"
+      }
+    ],
+    "independent_graph_captured_provenance": {
+      "source_files_blake3": {
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-census.py": "45969892e4a6dafadd9a1c480bf176cec8bab88a923011d7b5e397151b45ce7a",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-reconcile.py": "67a9a790535577eb60f11bf2c291461ee2501ad8b7e0c2af31f32f29114fbe50",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-controller.py": "7f63bfbcb7b9a98ea85c712801abebb8cc308cfeba282b8285d916d09bc5dc60",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-profile.py": "c0674581281fa2ceaa1bb4da900b64112786be81835d13b7c30ad8400a5fdb45",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-profile-fix.py": "311ff7ae399e894ca0ab5a421edbf9d45b82fee947818ba0d097b25059ea5a6e",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-source.py": "731937cb2408227c8c96fb1190bd0670af1390a5d56838c98cdf1ad20700b9be",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-source-fix.py": "6822f4e05a8d4b2cb37b3651bf772d331f35c5e39d637e6d0c75c8a166b7bba1",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-result.py": "e01bf810424b7254d2c16ef142b9efe89e84338d9e0105bd04d10639f7814819",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-census-submitted.py": "fb77d3cabd1d8bc8c7bd5c0a4bc48daaf6ae783a54bcfe282b8ca49f289b672e",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-profile-submitted.py": "4e21fcc062523c483a50fda358037b902c5412ba6fe46880b0c0deac53ee18bd",
+        ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/independent-graph-70db0868-source-submitted.py": "731937cb2408227c8c96fb1190bd0670af1390a5d56838c98cdf1ad20700b9be"
+      },
+      "raw_files": {
+        "failed_notice_outputs/bg_458": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_notice_outputs-bg_458.txt",
+          "blake3": "54b55148659e963cde48c74e5224fd51ad2df2c7a63733d18f91ef73f19e3676"
+        },
+        "failed_notice_outputs/bg_459": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_notice_outputs-bg_459.txt",
+          "blake3": "b756a323dfcfc06057288be54defe73aa5940be1dbdc8c17e85530bd93be2198"
+        },
+        "failed_notice_outputs/bg_462": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_notice_outputs-bg_462.txt",
+          "blake3": "f58ff5c65ebdca972dd577b72b48a20927ee82cc4d7925e134e6238fd38bb7c6"
+        },
+        "failed_notice_outputs/bg_468": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_notice_outputs-bg_468.txt",
+          "blake3": "869d8f8a652be39bbb9883d298b4dcd3b18ec7541069ac7780c943c709f8e315"
+        },
+        "failed_notice_outputs/bg_470": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_notice_outputs-bg_470.txt",
+          "blake3": "79c4a00782b573037318c6143f0ca73a984f6412e8856b207ade75f7c85ea96c"
+        },
+        "failed_submitted_versions/reconcile-stdin-failed": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_submitted_versions-reconcile-stdin-failed.py",
+          "blake3": "c71b9cd970def42b722578c4780f8098dff9a51a4cf7d9d03623b600e1525a6c"
+        },
+        "failed_submitted_versions/source-initial-failed": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_submitted_versions-source-initial-failed.py",
+          "blake3": "0b0d38c168f831537bef2454aef905fb1093695ea79a2d68ee4bbcb6f987d75e"
+        },
+        "failed_submitted_versions/source-unique-but-unnested-failed": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/failed_submitted_versions-source-unique-but-unnested-failed.py",
+          "blake3": "238394ee2209dad1b73fe43e04a6a04a4d3d07a50ee29bca8e08c4bde4bc7a4b"
+        },
+        "successful_outputs/census": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/successful_outputs-census.stdout.json",
+          "blake3": "9c9a2e32111859c2ed9d4096cefcf9a8fa76fd5e9c116302025fd0477767deb5"
+        },
+        "successful_outputs/complete-profile-stream": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/successful_outputs-complete-profile-stream.stdout.json",
+          "blake3": "fa4c52444ff2a39d6900751d5a1ab95194744cc60e7cefddc5cebb3e2458e94a"
+        },
+        "successful_outputs/controller": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/successful_outputs-controller.stdout.json",
+          "blake3": "06b4bd7153b7667e85ae79867e614e73f2faf49246c84f0ee20c7bebc4dbcae1"
+        },
+        "successful_outputs/primary-source": {
+          "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-provenance/successful_outputs-primary-source.stdout.json",
+          "blake3": "2f10ddae8bb38d1ea67b3235515f0fa429937486069afe5ac158767865155e86"
+        }
+      },
+      "all_declared_inspector_source_hashes_match": true,
+      "all_captured_stdout_hashes_match": true,
+      "reconstructed_prior_source_versions_label": "Failed-source versions are reconstructions from observed prior edits and hashes; raw failure notices are captured bytes. They are not claimed as untouched original files."
+    },
+    "independent_physical_inert_checks": {
+      "failed_independent_draft": {
+        "exit_code": 1,
+        "failed_independent_analyzer_sha256": "73b3cf05338fbaa60472e02b6c56441f4819ef74571e4b1f66a569942082959d",
+        "failed_source_version": "local://independent-physical-remote-failed.py",
+        "raw_stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 316, in <module>\n  File \"<stdin>\", line 308, in main\n  File \"<stdin>\", line 291, in routes_and_helpers\n  File \"<stdin>\", line 19, in need\nRuntimeError: original assembler probe differs\n",
+        "reconciliation": "Initial independent checker incorrectly required an assembler-probe literal in every rsaz-* AWS script, including rsaz-avx2.pl. The frozen AWS helper and three original selected rsaz-2k/3k/4k-avx512 scripts limit this obligation to exactly the three avx512 scripts. The follow-up independent checker changed only this checker selector; no source, cohort, pin, official inspector or consumer changed."
+      },
+      "failed_independent_draft_source_blake3": "60af6b1d7e043f65e7e22999dce5e32b58907e84874c2b16d330d350ed1236c6",
+      "failed_metadata_collator": {
+        "exit_code": 1,
+        "failed_collator_source": "local://independent-physical-finalize-failed.py",
+        "raw_stderr": "Traceback (most recent call last):\n  File \"/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-physical-finalize.py\", line 61, in <module>\n    check(pkt['frozen_source']['complete_source_blake3']==b3(BASE/'complete-source.json') and sub['frozen_complete_source_blake3']==pkt['frozen_source']['complete_source_blake3'],'complete source identity differs')\n  File \"/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-physical-finalize.py\", line 14, in check\n    if not ok:raise RuntimeError(msg)\n              ^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: complete source identity differs\n",
+        "reconciliation": "The first local collator incorrectly compared the 0e5731f8 complete source archive content digest to the independent complete-source.json metadata file raw digest 36b72e5a. The corrected collator compares complete-source.json.complete_archive_blake3 with the separately bound archive digest, and retains the metadata file hash separately. No frozen source/cohort/pin/consumer or scope changed."
+      },
+      "failed_metadata_collator_source_blake3": "b5c7eb1fd89c0888d6e8ad752be816697e7c6c472cfedbadb723fbe1f8776ce2",
+      "rejected_original_identity_1725_stderr": "++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.exit\n+ test 0 = 0\n+ /run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity /home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources.json 70db08685c0c5fa5c326bfe32db78576d7e2e182\nBLOCKER AuditError: original AWS source differs from unchanged independently frozen pins\nTraceback (most recent call last):\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py\", line 1506, in <module>\n    main()\n    ~~~~^^\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py\", line 1136, in main\n    configure()\n    ~~~~~~~~~^^\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py\", line 93, in configure\n    require(AWS_DB == RUN / 'aws-original-source-02561621.TGISLN/aws-lc.git'\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            and (AWS_COMMIT, AWS_TREE, AWS_TREE_B3) == (ORIGINAL_COMMIT, ORIGINAL_TREE, ORIGINAL_TREE_B3),\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            'original AWS source differs from unchanged independently frozen pins')\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py\", line 48, in require\n    raise AuditError(message)\nAuditError: original AWS source differs from unchanged independently frozen pins\n+ status=1\n+ printf 'identity_inspection_exit=%s\\n' 1\nidentity_inspection_exit=1\n+ exit 1\n",
+      "rejected_original_preauthor_1726_stderr": "++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.exit\n+ test 0 = 0\n+ /run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor /home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources.json 70db08685c0c5fa5c326bfe32db78576d7e2e182\nBLOCKER AuditError: original source pins differ from frozen inputs\nTraceback (most recent call last):\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py\", line 377, in <module>\n    main()\n    ~~~~^^\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py\", line 273, in main\n    require(subject['original_aws']=={\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        'capture':str(run_root/'aws-original-source-02561621.TGISLN/aws-lc.git'),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        'normalized_tree_blake3':'8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89'},\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        'original source pins differ from frozen inputs')\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py\", line 34, in require\n    if not ok: raise AuditError(msg)\n               ^^^^^^^^^^^^^^^^^^^^^\nAuditError: original source pins differ from frozen inputs\n+ status=1\n+ printf 'preauthor_inspection_exit=%s\\n' 1\npreauthor_inspection_exit=1\n+ exit 1\n"
+    }
+  },
+  "allowed_next_action": {
+    "kind": "one-genuine-cold-source-built-fixed-point-attempt",
+    "driver": "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources-aws-db-fixed.sh",
+    "driver_bytes_blake3": "bacb29b4eebf67aacaf0b05ce8d66190778bff92c57908d2f3204cc2468a7b15",
+    "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+    "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+    "required_fresh_driver_preflights": [
+      "exact source tree, runner, source-profile and source-preparation bytes",
+      "trusted bwrap, static shell and tar bytes; actual namespace smoke",
+      "fresh absent proof namespace and all empty initial output/provider/store authorities",
+      "bounded resources and complete source-bundle verification"
+    ]
+  },
+  "non_claims": [
+    "This authorizes only the declared cold attempt after its strict fresh preflights. It does not establish protected execution, stage success, stage1-owned stage2, equality, action-trust reconciliation or a verified v2 receipt.",
+    "Raw graph HOLD, fourteen-thousand-thirty-seven mis-scoped diagnostics, both distinct dependency metrics, thirty-five consumed-root-unreachable native checks and all runtime-unobserved obligations remain explicit in bound reviews and reconciliations.",
+    "Native signing/adoption and all five genuine native rows remain blocked until a fully verified current cold v2 proof; no old output import, expected pin refresh, development-cache reuse, source/consumer change or trust-policy relaxation is authorized.",
+    "No compiler correctness, seed correctness, kernel isolation, independent reproducibility, deployment or release acceptance follows."
+  ]
+}

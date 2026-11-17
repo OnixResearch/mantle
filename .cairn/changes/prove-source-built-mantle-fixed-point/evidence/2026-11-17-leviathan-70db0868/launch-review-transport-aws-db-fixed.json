@@ -1,0 +1,26 @@
+{
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "graph": {
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-review-aws-db-fixed.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+    "host": "leviathan.cymric-daggertooth.ts.net",
+    "bytes_blake3": "c7d201be0070dfcf66680139f28ea209acc0adb7e753107d009c939b530ee1e4",
+    "transport_equal": true,
+    "scope": "Complete static graph review only; current Cairn and sealed parent launch acceptance remain required."
+  },
+  "physical": {
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-physical-review-aws-db-fixed.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+    "host": "leviathan.cymric-daggertooth.ts.net",
+    "bytes_blake3": "f0aad47fe41f63e044525b69afc3700b378eed4a1978e1e78fcae4a15b5867cd",
+    "transport_equal": true,
+    "scope": "Complete advisory physical review only; launch remains held pending graph review, parent reconciliation and all current Cairn gates."
+  },
+  "acceptance": {
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/launch-review-acceptance-aws-db-fixed.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+    "bytes_blake3": "59ac07605425ed3f3a31e716ca6e3d739425b8a973192e35d93ad9d97ae4a992",
+    "transport_equal": true
+  },
+  "protected_execution_launched": false
+}

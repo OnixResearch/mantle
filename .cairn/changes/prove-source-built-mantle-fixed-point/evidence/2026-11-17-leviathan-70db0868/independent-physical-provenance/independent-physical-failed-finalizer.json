@@ -1,0 +1,6 @@
+{
+  "failed_collator_source": "local://independent-physical-finalize-failed.py",
+  "exit_code": 1,
+  "raw_stderr": "Traceback (most recent call last):\n  File \"/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-physical-finalize.py\", line 61, in <module>\n    check(pkt['frozen_source']['complete_source_blake3']==b3(BASE/'complete-source.json') and sub['frozen_complete_source_blake3']==pkt['frozen_source']['complete_source_blake3'],'complete source identity differs')\n  File \"/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-physical-finalize.py\", line 14, in check\n    if not ok:raise RuntimeError(msg)\n              ^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: complete source identity differs\n",
+  "reconciliation": "The first local collator incorrectly compared the 0e5731f8 complete source archive content digest to the independent complete-source.json metadata file raw digest 36b72e5a. The corrected collator compares complete-source.json.complete_archive_blake3 with the separately bound archive digest, and retains the metadata file hash separately. No frozen source/cohort/pin/consumer or scope changed."
+}

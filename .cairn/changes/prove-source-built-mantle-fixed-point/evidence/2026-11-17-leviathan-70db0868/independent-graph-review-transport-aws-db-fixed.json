@@ -1,0 +1,8 @@
+{
+  "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-review-aws-db-fixed.json",
+  "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "bytes_blake3": "c7d201be0070dfcf66680139f28ea209acc0adb7e753107d009c939b530ee1e4",
+  "transport_equal": true,
+  "scope": "Complete static graph review only; current Cairn and sealed parent launch acceptance remain required."
+}

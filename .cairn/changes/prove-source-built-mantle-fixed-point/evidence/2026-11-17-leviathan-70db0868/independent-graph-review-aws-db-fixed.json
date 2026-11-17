@@ -1,0 +1,1603 @@
+{
+  "assigned_criteria": {
+    "covered": 6,
+    "total": 6,
+    "uncovered": 0
+  },
+  "bounded_acceptance": true,
+  "bounded_findings": [],
+  "complete_source": {
+    "blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+    "frozen_tree": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+    "git_code_archive_blake3": "e40bff16144520416cacb3b865b2eaba01dab4bf194a44c0b0d9cc18b9ec19fe"
+  },
+  "consumer_hashes": {
+    "crates/mantle-rust-plan-core/src/features.rs": {
+      "blake3": "dc4071b58a23fc9cd6887cf47c3fd22c63607e8bcab7d6fae169c2d237737eef",
+      "path": "crates/mantle-rust-plan-core/src/features.rs",
+      "scopes": [
+        "selector"
+      ],
+      "size_bytes": 11055
+    },
+    "src/rust_plan.rs": {
+      "blake3": "19a69880e0b071de85c17d41b0b530bbd9a2452abec7ed203bf4ab6a4c1b0323",
+      "path": "src/rust_plan.rs",
+      "scopes": [
+        "selector"
+      ],
+      "size_bytes": 1255044
+    },
+    "src/source_built_fixed_point.rs": {
+      "blake3": "e6eca51ccd06f2a20911ab9dd5d3210df8cb0e5c10eca420102a2eb0b987fd50",
+      "scopes": [
+        "controller"
+      ],
+      "size_bytes": 48335
+    },
+    "src/source_built_fixed_point_action_controller.rs": {
+      "blake3": "aafd4668ae21b831b33f726121fb9894b5da517e4f29353fee79e02eb8a12768",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 36587
+    },
+    "src/source_built_fixed_point_action_trust.rs": {
+      "blake3": "af9a141259548a73baf13bd60487412c01ee0c871ae572f1daac2ed97f681754",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 93151
+    },
+    "src/source_built_fixed_point_authoring.rs": {
+      "blake3": "4669d884c8eec834a6b0a5d7d2c8eb28f800dc1914879a72d2939e520a70cabd",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 33159
+    },
+    "src/source_built_fixed_point_cold.rs": {
+      "blake3": "59a3b489bc29a7706e228b81b5af0bdae50c19962313b5472dc0466fc1ba1f04",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 25240
+    },
+    "src/source_built_fixed_point_mantle_actions.rs": {
+      "blake3": "c4739d5d2654d777912605eb4f30ab7ad144318e41c5bbeee4d60dffaf0b935e",
+      "path": "src/source_built_fixed_point_mantle_actions.rs",
+      "scopes": [
+        "graph",
+        "controller",
+        "selector"
+      ],
+      "size_bytes": 48730
+    },
+    "src/source_built_fixed_point_native_actions.rs": {
+      "blake3": "027be7f263cb328aaea5340cdc3be639bf8d9499ba3382897180b9212cb8caef",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 24424
+    },
+    "src/source_built_fixed_point_rust_actions.rs": {
+      "blake3": "03347c19dea92ab80d08b0f65df54ec9cb020443b5dda5f62bb6a9dcbc9bf55f",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 15755
+    },
+    "src/source_built_fixed_point_stagex_actions.rs": {
+      "blake3": "32937f01d8199b5a83c0a2af692c1755324de87e65d176a801fe1286346d29fd",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 51795
+    },
+    "src/source_built_mantle_programs.rs": {
+      "blake3": "e47236d982a44902c4beb6ea9e9a95a10e99d357a8f55cf6a56e594580272625",
+      "path": "src/source_built_mantle_programs.rs",
+      "scopes": [
+        "graph",
+        "controller",
+        "selector"
+      ],
+      "size_bytes": 45336
+    },
+    "src/source_built_mantle_programs_aws_helper.rs": {
+      "blake3": "79b30f32724f2d7528b787ace20da86be7760db319987e3c8e4e5792c1c9e1ff",
+      "scopes": [
+        "controller"
+      ],
+      "size_bytes": 12042
+    },
+    "src/source_built_mantle_programs_graph.rs": {
+      "blake3": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3",
+      "path": "src/source_built_mantle_programs_graph.rs",
+      "scopes": [
+        "graph",
+        "controller",
+        "selector"
+      ],
+      "size_bytes": 35357
+    },
+    "src/source_built_mantle_programs_metadata.rs": {
+      "blake3": "c2a54ef4b73a8bc165ba5f57a82a9faeb92a3009bc0d86b1e7fe92868d5d6645",
+      "path": "src/source_built_mantle_programs_metadata.rs",
+      "scopes": [
+        "selector"
+      ],
+      "size_bytes": 33792
+    },
+    "src/source_built_mantle_programs_metadata_helper.rs": {
+      "blake3": "a3e2e1ae870459019462b11832f37827b489fe371856ee61d02b0a33728ce831",
+      "path": "src/source_built_mantle_programs_metadata_helper.rs",
+      "scopes": [
+        "graph",
+        "controller",
+        "selector"
+      ],
+      "size_bytes": 51749
+    },
+    "src/source_built_mantle_programs_native_helper.rs": {
+      "blake3": "44f4bf3ddebf711cf51390879245bccaf63ed71e13f2a89f8fb3ca8f0a4cb550",
+      "scopes": [
+        "controller"
+      ],
+      "size_bytes": 7176
+    },
+    "src/source_built_native_programs_host_controller.rs": {
+      "blake3": "33ee5374c41b6b185f527eb325da7f22eddb47891a66d61dd9a88074071f55e2",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 4499
+    },
+    "src/source_built_native_programs_host_nested.c": {
+      "blake3": "38d305a6454a0453135ab7655efb5bf0e9a28dc871a8413b3346468beadb8a90",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 16827
+    },
+    "src/source_built_native_programs_host_root.rs": {
+      "blake3": "16bdecc85eaf1edf7a12aedd25335871a7493dfd22efc50800e2f88d81898174",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 18031
+    },
+    "src/source_built_recipe.rs": {
+      "blake3": "5e80f79f0f92a01618391c9bf0fbfd23b6bf03f3ed20c5981842078ffd0faa07",
+      "path": "src/source_built_recipe.rs",
+      "scopes": [
+        "graph",
+        "controller",
+        "selector"
+      ],
+      "size_bytes": 172291
+    },
+    "src/source_built_recipe_controller.rs": {
+      "blake3": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 12429
+    },
+    "src/source_built_recipe_exec.rs": {
+      "blake3": "ec7d233b69c57375dd3ca7df4d33cf964f6a82e3ffa9b7acccc4b9740d41fc29",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 90193
+    },
+    "src/source_built_rust_programs.rs": {
+      "blake3": "dd4c2abfec0de583680a72dec332586ec329b138ade03102d466773c77eccd7e",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 27773
+    },
+    "src/source_built_rust_programs_minicargo.rs": {
+      "blake3": "1b32d78a7d3f3465a75beb2a84a4da069f80d88712a15e1cc24436082969f515",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 65491
+    },
+    "src/source_built_rust_programs_minicargo_resolve.rs": {
+      "blake3": "1bdc2799885f49496421d3843fccf7bfc8ed14751d43e6de7687bc50b4a09efe",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 42321
+    },
+    "src/source_built_rust_programs_successors.rs": {
+      "blake3": "2a5b773712dcae713568a04f3744847ccfe6347c5c98450fd4a3786401cd1f0a",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 29578
+    },
+    "src/source_built_rust_programs_successors_graph.rs": {
+      "blake3": "111bc095d017920735be537c1ca61ad62e5320f1a7a6c4ee3c09749831cefb4d",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 49965
+    },
+    "src/source_built_rust_programs_successors_invocation.rs": {
+      "blake3": "80eef322f01952048856fc708b6966f42d318a3d5c598b73fc4151b9048462c6",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 4432
+    },
+    "src/source_built_rust_programs_successors_profile.rs": {
+      "blake3": "8770968eb1c3fc3eee3396e3c4ec2b3e3e6fddd5d7572f93c6e1e026ebba76df",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 5317
+    },
+    "src/source_built_rust_programs_translation.rs": {
+      "blake3": "11713cc382596b2994c11c02c758623fdafdc6e109fe6009d1088b4739d57549",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 48773
+    },
+    "src/source_built_stagex_programs_controller.rs": {
+      "blake3": "65fdd81998efff77e665ccd4bde4f5389ffc19736b5b50419bb392839fa05b94",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 27240
+    },
+    "src/source_built_stagex_programs_controller_paths.c": {
+      "blake3": "e84760566f10f1d2a7fb71c32f7731b892f317ada6725bf889c43b9544410c95",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 35468
+    },
+    "src/source_built_stagex_programs_controller_protocol.c": {
+      "blake3": "90cedfe17d94566a541f37b46ab5e15ed6e44950c4182cabc3ef9309e9058352",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 55925
+    },
+    "src/source_built_stagex_programs_transform.c": {
+      "blake3": "27815ae950dbccafc17e07323333e8f57eacfdd2e53e12bb4384f0a2bb168a0f",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 6660
+    },
+    "src/source_bundle.rs": {
+      "blake3": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282",
+      "scopes": [
+        "graph",
+        "controller"
+      ],
+      "size_bytes": 472123
+    }
+  },
+  "criterion_1_all_six_recipes_and_expansions": {
+    "independent_check": "Inert full-JSON census across six actual recipe bytes, exact step IDs, owner and partition identities; no bounded issues; stage ordering, producer references, and cycles inspected.",
+    "independent_recipe_census": {
+      "Produced_direct_input_refs": {
+        "covered": 1174542,
+        "total": 1174542,
+        "uncovered": 0
+      },
+      "all_direct_input_refs": {
+        "covered": 1183783,
+        "total": 1183783,
+        "uncovered": 0
+      },
+      "cycle_count": 0,
+      "partition_nodes_native_rust_transition": {
+        "covered": 162,
+        "total": 162,
+        "uncovered": 0
+      },
+      "partition_step_assignments_native_rust_transition": {
+        "covered": 77135,
+        "total": 77135,
+        "uncovered": 0
+      },
+      "partition_unassigned_duplicate_or_unknown": 0,
+      "publication_index_member": "stagex-provider-publication.json",
+      "root_reachable_steps": {
+        "covered": 125407,
+        "total": 125407,
+        "uncovered": 0
+      }
+    },
+    "native_derivation_edges": {
+      "covered": 341,
+      "total": 341,
+      "uncovered": 0
+    },
+    "per_stage": {
+      "full-source-native-provider": {
+        "artifact_refs": {
+          "covered": 28270,
+          "total": 28270,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 18876,
+          "total": 18876,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 15578,
+          "total": 15578,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 5122,
+          "total": 5122,
+          "uncovered": 0
+        }
+      },
+      "full-source-rust-provider": {
+        "artifact_refs": {
+          "covered": 818910,
+          "total": 818910,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 412861,
+          "total": 412861,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 296720,
+          "total": 296720,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 63882,
+          "total": 63882,
+          "uncovered": 0
+        }
+      },
+      "mantle-stage1": {
+        "artifact_refs": {
+          "covered": 400143,
+          "total": 400143,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 356829,
+          "total": 356829,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 255726,
+          "total": 255726,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 24127,
+          "total": 24127,
+          "uncovered": 0
+        }
+      },
+      "mantle-stage2": {
+        "artifact_refs": {
+          "covered": 400143,
+          "total": 400143,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 356829,
+          "total": 356829,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 255726,
+          "total": 255726,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 24127,
+          "total": 24127,
+          "uncovered": 0
+        }
+      },
+      "stagex-provider-publication": {
+        "artifact_refs": {
+          "covered": 133,
+          "total": 133,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 59,
+          "total": 59,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 36,
+          "total": 36,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 18,
+          "total": 18,
+          "uncovered": 0
+        }
+      },
+      "stagex-transition": {
+        "artifact_refs": {
+          "covered": 72699,
+          "total": 72699,
+          "uncovered": 0
+        },
+        "declared_inputs": {
+          "covered": 38329,
+          "total": 38329,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 35610,
+          "total": 35610,
+          "uncovered": 0
+        },
+        "steps": {
+          "covered": 8131,
+          "total": 8131,
+          "uncovered": 0
+        }
+      }
+    },
+    "recipes": {
+      "covered": 6,
+      "total": 6,
+      "uncovered": 0
+    },
+    "rust_bootstrap_outputs": {
+      "covered": 16,
+      "total": 16,
+      "uncovered": 0
+    },
+    "stagex_lineage_source_edges": {
+      "covered": 132,
+      "total": 132,
+      "uncovered": 0
+    },
+    "stagex_recipe_steps": {
+      "covered": 8149,
+      "total": 8149,
+      "uncovered": 0
+    },
+    "steps": {
+      "covered": 125407,
+      "total": 125407,
+      "uncovered": 0
+    }
+  },
+  "criterion_2_references_order_and_graph_guards": {
+    "ObservePhase": {
+      "covered": 80,
+      "total": 80,
+      "uncovered": 0
+    },
+    "declared_input_refs": {
+      "covered": 1183783,
+      "total": 1183783,
+      "uncovered": 0
+    },
+    "dependency_edges": {
+      "covered": 859396,
+      "total": 859396,
+      "uncovered": 0
+    },
+    "executed_skipped_state_alternatives": {
+      "covered": 32,
+      "total": 32,
+      "uncovered": 0
+    },
+    "generated_template_seeds": {
+      "covered": 9176,
+      "total": 9176,
+      "uncovered": 0
+    },
+    "guard_status_edges": {
+      "covered": 80,
+      "total": 80,
+      "uncovered": 0
+    },
+    "independent_check": "Produced producer/output exactness, same-recipe prior order, root/export binding and executable alternative/guard exit status checked against entire actual recipe data; seeds separately checked against producer kind, bounds and output IDs.",
+    "raw_output_seeds": {
+      "covered": 6832,
+      "total": 6832,
+      "uncovered": 0
+    },
+    "stage_artifact_refs": {
+      "covered": 1720298,
+      "total": 1720298,
+      "uncovered": 0
+    },
+    "unknown_artifact_binding_kinds": 0
+  },
+  "criterion_3_semantic_products_and_handoff": {
+    "binary_roots_exact_semantic_product": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "independent_check": "Per-stage 1145 semantic keys and 1243 products, unique mantle binary semantic key, exact smoke/help producer, source-level handoff and native/rust/stagex edges inspected; not a claim that the compiled binary runs.",
+    "mantle_build_script_roots": {
+      "covered": 196,
+      "total": 196,
+      "uncovered": 0
+    },
+    "mantle_semantic_product_roots": {
+      "covered": 2486,
+      "total": 2486,
+      "uncovered": 0
+    },
+    "mantle_semantic_unit_keys": {
+      "covered": 2290,
+      "total": 2290,
+      "uncovered": 0
+    },
+    "native_derivation_edges": {
+      "covered": 341,
+      "total": 341,
+      "uncovered": 0
+    },
+    "native_linux_headers_explicit_bin_make_consumption": {
+      "covered": 1,
+      "total": 1,
+      "uncovered": 0
+    },
+    "rust_bootstrap_outputs": {
+      "covered": 16,
+      "total": 16,
+      "uncovered": 0
+    },
+    "rust_source_edges": {
+      "covered": 6,
+      "total": 6,
+      "uncovered": 0
+    },
+    "smoke_export_exact_producer": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "smoke_help_consumers": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "stagex_lineage_source_edges": {
+      "covered": 132,
+      "total": 132,
+      "uncovered": 0
+    }
+  },
+  "criterion_4_typed_words_nested_invocations": {
+    "actual_runtime_invocation_bytes_observed": 0,
+    "corrected_scope_failures": 0,
+    "corrected_scoped_static_words": {
+      "covered": 2551864,
+      "total": 2551864,
+      "uncovered": 0
+    },
+    "generated_templates": {
+      "covered": 25053,
+      "total": 25053,
+      "uncovered": 0
+    },
+    "raw_graph_verdict": "HOLD",
+    "raw_graph_word_issues_retained": 14037,
+    "raw_static_words": {
+      "covered": 1488715,
+      "total": 1488715,
+      "uncovered": 0
+    },
+    "reconciliation": "All 14037 raw flags are unknown Input names in raw graph audit where ControllerSpec slot-local Input names are not in parent recipe scope (294 native + 11499 Rust + 1122 each Mantle). The full generated-template validator rechecks every generated template word using the actual slot-local and parent scopes; corrected failures zero. This does not erase or mark the raw diagnostics as successful, and actual runtime request bytes observed remain zero.",
+    "static_runtime_invocation_bindings": {
+      "covered": 6167,
+      "total": 6167,
+      "uncovered": 0
+    }
+  },
+  "criterion_5_controller_construction_and_helper_authority": {
+    "controller_slots": {
+      "covered": 4588,
+      "total": 4588,
+      "uncovered": 0
+    },
+    "controller_specs": {
+      "covered": 2294,
+      "total": 2294,
+      "uncovered": 0
+    },
+    "generated_template_output_seeds": {
+      "covered": 9176,
+      "total": 9176,
+      "uncovered": 0
+    },
+    "generated_templates": {
+      "covered": 25053,
+      "total": 25053,
+      "uncovered": 0
+    },
+    "helper_authority_uses": {
+      "covered": 1098,
+      "total": 1098,
+      "uncovered": 0
+    },
+    "independent_check": "Generated catalog from actual ControllerSpec declarations independently reproduced and compared for each of four controller-bearing recipes; 2294 specs, 4588 slots, 25053 validation templates, same-slot generated output seeds, exactly one guarded selected invocation per turn; frozen C request producer, Rust dispatch/template consumer and stage controller path read; helper source/member/hash ownership and transport verified.",
+    "runtime_generated_symbolic_payloads": {
+      "covered": 4588,
+      "total": 4588,
+      "uncovered": 0
+    },
+    "source_binding_kind_usages": {
+      "covered": 11185,
+      "total": 11185,
+      "uncovered": 0
+    },
+    "source_kind_resolutions": {
+      "covered": 819,
+      "total": 819,
+      "uncovered": 0
+    }
+  },
+  "criterion_6_primary_source_and_compiler_identity": {
+    "actual_root_source_digest": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e",
+    "actual_root_source_file_count": 12766,
+    "authenticated_pre_lowering_unit_plans": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "complete_profile_record_streams": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "feature_cfg_occurrences": {
+      "covered": 2098,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "feature_environment_occurrences": {
+      "covered": 2386,
+      "total": 2386,
+      "uncovered": 0
+    },
+    "immutable_compiler_root_digests": {
+      "covered": 16,
+      "total": 16,
+      "uncovered": 0
+    },
+    "independent_check": "Streamed complete 17.3GB output-profile and 2.37GB native-source manifest, exact selected record and embedded plan bytes vs two original plan members; matched compiler root and all 16 individual unit digests; inspected rust_plan.rs source and 2098 native/primary unit identity bindings. No normalization or predecessor count expectations.",
+    "independently_verified_single_typed_primary_inputs": {
+      "covered": 2098,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "mapped_compile_units": {
+      "covered": 2098,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "package_exclusions": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": 0
+    },
+    "per_stage_plan_derivation": {
+      "mantle-stage1": {
+        "mapped_compile_units": 1049,
+        "metadata_identity_fallbacks": 2,
+        "orphan_derivations": 0,
+        "plan_derivations_total": 1047,
+        "source_plan_digest_blake3": "f3bb798d63e217a6e3050bce8cdd8aa1b0764a157ad3496852f338f9ab489d61",
+        "uncovered": [],
+        "uncovered_count": 0
+      },
+      "mantle-stage2": {
+        "mapped_compile_units": 1049,
+        "metadata_identity_fallbacks": 2,
+        "orphan_derivations": 0,
+        "plan_derivations_total": 1047,
+        "source_plan_digest_blake3": "035dbe08dc2f38478abd7a9e55361649c92147cf1eee4a60c299eaa45ca1c36c",
+        "uncovered": [],
+        "uncovered_count": 0
+      }
+    },
+    "primary_source_occurrences": {
+      "covered": 2098,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "source_plan_derivations": {
+      "covered": 2094,
+      "total": 2094,
+      "uncovered": 0
+    }
+  },
+  "current_actual_inspection_tasks": {
+    "graph": {
+      "end": "2026-11-17T15:04:14.909596764-05:00",
+      "enqueued_at": "2026-11-17T14:46:26.759940347-05:00",
+      "result": "Success",
+      "start": "2026-11-17T14:46:26.991060465-05:00",
+      "task": 1730
+    },
+    "helper_mutations": {
+      "end": "2026-11-17T15:18:17.803761879-05:00",
+      "enqueued_at": "2026-11-17T14:46:29.749661360-05:00",
+      "result": "Success",
+      "start": "2026-11-17T15:04:14.974273512-05:00",
+      "task": 1733
+    },
+    "identity": {
+      "end": "2026-11-17T14:54:46.119396070-05:00",
+      "enqueued_at": "2026-11-17T14:46:27.293865256-05:00",
+      "result": "Success",
+      "start": "2026-11-17T14:46:27.382971786-05:00",
+      "task": 1731
+    },
+    "preauthor": {
+      "end": "2026-11-17T15:07:54.893595987-05:00",
+      "enqueued_at": "2026-11-17T14:46:28.587139800-05:00",
+      "result": "Success",
+      "start": "2026-11-17T14:46:28.664372075-05:00",
+      "task": 1732
+    },
+    "seed_source_mutations": {
+      "end": "2026-11-17T15:05:35.891042118-05:00",
+      "enqueued_at": "2026-11-17T14:46:30.880132228-05:00",
+      "result": "Success",
+      "start": "2026-11-17T15:04:15.106866283-05:00",
+      "task": 1735
+    },
+    "selector_mutations": {
+      "end": "2026-11-17T15:06:21.440611396-05:00",
+      "enqueued_at": "2026-11-17T14:46:30.330223710-05:00",
+      "result": "Success",
+      "start": "2026-11-17T15:04:15.038471287-05:00",
+      "task": 1734
+    }
+  },
+  "independent_checker_hashes": {
+    "census_reconciled_execution": "fb77d3cabd1d8bc8c7bd5c0a4bc48daaf6ae783a54bcfe282b8ca49f289b672e",
+    "census_source": "45969892e4a6dafadd9a1c480bf176cec8bab88a923011d7b5e397151b45ce7a",
+    "complete_profile_stream": "4e21fcc062523c483a50fda358037b902c5412ba6fe46880b0c0deac53ee18bd",
+    "controller": "7f63bfbcb7b9a98ea85c712801abebb8cc308cfeba282b8285d916d09bc5dc60",
+    "source_primary": "731937cb2408227c8c96fb1190bd0670af1390a5d56838c98cdf1ad20700b9be"
+  },
+  "inert_checker_attempts_preserved": [
+    {
+      "corrected_execution_blake3": "fb77d3cabd1d8bc8c7bd5c0a4bc48daaf6ae783a54bcfe282b8ca49f289b672e",
+      "effective_script_blake3": "01fd548f0d70a5bc21d4385e12e4ea1c2a23a5e8fc04e8daf6ceac4141e92a0a",
+      "error": "FileNotFoundError for remote __file__ <stdin>",
+      "outcome": "failed before census",
+      "scope": "initial independent census stdin"
+    },
+    {
+      "corrected_source_script_blake3": "731937cb2408227c8c96fb1190bd0670af1390a5d56838c98cdf1ad20700b9be",
+      "error": "KeyError arguments; static request has invocation.arguments envelope",
+      "initial_source_script_blake3": "0b0d38c168f831537bef2454aef905fb1093695ea79a2d68ee4bbcb6f987d75e",
+      "outcome": "failed before coverage",
+      "scope": "independent primary source JSON template projection"
+    }
+  ],
+  "input_hashes": {
+    "current_report_hashes": {
+      "current-inspection-outcomes-aws-db-fixed.json": {
+        "bytes_blake3": "be787c398f6fc18b8e4785e9eb8567813432fe887cbc53da16c508b408938410",
+        "size_bytes": 1370
+      },
+      "current-primary-source-agreement-aws-db-fixed.json": {
+        "bytes_blake3": "a03a3fad264a5900635ade4ed7ffbe2fe76fc3c89b4a642e0724ef9616221591",
+        "size_bytes": 2229
+      },
+      "graph-current-inputs-aws-db-fixed.json": {
+        "bytes_blake3": "1ab3b9cc31e44d7a364d6c6ec2707499ad49a8994a63cdf14f8a4228840d075e",
+        "size_bytes": 43632
+      },
+      "graph-results-aws-db-fixed/controller-template-audit.json": {
+        "bytes_blake3": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+        "size_bytes": 59786546
+      },
+      "graph-results-aws-db-fixed/graph-audit.json": {
+        "bytes_blake3": "f8082ee076e195494c6825d0b3b97e27d321678a73324bc37e1799949b9c1648",
+        "size_bytes": 500294
+      },
+      "graph-results-aws-db-fixed/helper-authority-audit.json": {
+        "bytes_blake3": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+        "size_bytes": 76558319
+      },
+      "graph-results-aws-db-fixed/helper-authority-negative.json": {
+        "bytes_blake3": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+        "size_bytes": 1404
+      },
+      "graph-results-aws-db-fixed/mantle-selector-audit.json": {
+        "bytes_blake3": "6e76ac8a137c1a5e59daf97539d6c1ad14f6df49a38665ee7d7dc37c968c0b22",
+        "size_bytes": 1554650
+      },
+      "graph-results-aws-db-fixed/output-seed-immutable-source-regressions.json": {
+        "bytes_blake3": "f7d56d5ea8256d49cd7a6917eaf5fe40bef90820e0cdc64508ea9fd670f6dc3d",
+        "size_bytes": 17017
+      },
+      "graph-results-aws-db-fixed/semantic-root-regression.json": {
+        "bytes_blake3": "a3d7883ffba1ffd2ddd2bd4e3513c453f5b90a8f3ade963b2b9bd0cdbabcea52",
+        "size_bytes": 4145
+      },
+      "graph-results-aws-db-fixed/source-binding-kind-inventory.json": {
+        "bytes_blake3": "354e76abb2ba3b9afd357fb8e337fd38dc49f149edc128f1d57f940b7323de04",
+        "size_bytes": 512362
+      },
+      "identity-results-aws-db-fixed/identity-review.json": {
+        "bytes_blake3": "aefe5ef1efddd55748661ed4ed601e3cafd27e9f0ad0158493cf3900cedb10df",
+        "size_bytes": 138677
+      },
+      "physical-current-inputs-aws-db-fixed.json": {
+        "bytes_blake3": "aee9118c46f2fe57fb67015bb7663f18dc3afb525c33cfd7ffa81a11bf9a9eaa",
+        "size_bytes": 3323
+      },
+      "preauthor-results-aws-db-fixed/preauthor-role-physical-review.json": {
+        "bytes_blake3": "ba6d789a2d4d5fbd007c3604cba5da519178624ae9cc533f382447a2738ded31",
+        "size_bytes": 12600
+      },
+      "review-contract.md": {
+        "bytes_blake3": "e827e674b1140dcab3f0b963a3e33868950ff04d77a06dff7f042c4287d3e5b0",
+        "size_bytes": 10453
+      },
+      "review-subject-aws-db-fixed.json": {
+        "bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+        "size_bytes": 5832
+      },
+      "selector-mutations-aws-db-fixed.json": {
+        "bytes_blake3": "82ab5285696ad6c81cfe37b679bc4e69962bee933c13c2bfce81eb23973c9a1b",
+        "size_bytes": 1612736
+      },
+      "source-program-preparation-input-plan.json": {
+        "bytes_blake3": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+        "size_bytes": 10329
+      },
+      "source-program-preparation.json": {
+        "bytes_blake3": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+        "size_bytes": 1061
+      },
+      "subject-aws-git-db-correction.json": {
+        "bytes_blake3": "b90cfd070d2dfb4216fd3cd6c12c14efa0e1e777e423331b1f7b02e726f17969",
+        "size_bytes": 5553
+      }
+    },
+    "graph_collation_blake3": "1ab3b9cc31e44d7a364d6c6ec2707499ad49a8994a63cdf14f8a4228840d075e",
+    "immutable_compiler_source_digest": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e",
+    "review_contract_blake3": "e827e674b1140dcab3f0b963a3e33868950ff04d77a06dff7f042c4287d3e5b0",
+    "selected_inputs": {
+      "cold_route": {
+        "blake3": "2deff2955ddc93610adef056f8bb92b37e2f50be83d9abc4672e09b664a07e78",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-mantle-programs/bootstrap/source-built-cold-route.json",
+        "size_bytes": 1206
+      },
+      "lineage": {
+        "blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/stagex-lineage/stagex-transition-lineage.json",
+        "size_bytes": 170686
+      },
+      "mantle_stage1": {
+        "blake3": "296bc2617a773f1ed63a642a9a723cf1f72b6dda97e426723496883705e45817",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-mantle-programs/bootstrap/source-built/mantle-stage1.json",
+        "size_bytes": 176214339
+      },
+      "mantle_stage2": {
+        "blake3": "a78ee751ea39db1729758c78b9bce484c128d069b922171744d1e97270ce4ecb",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-mantle-programs/bootstrap/source-built/mantle-stage2.json",
+        "size_bytes": 176214339
+      },
+      "native_index": {
+        "blake3": "35927a6242fda8c9eb5c2457624d5592163e9556cd572b9af47e644d065c38b8",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/fixed-point-native-source-program/source-built/native/program.expansion.json",
+        "size_bytes": 639412
+      },
+      "native_recipe": {
+        "blake3": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/fixed-point-native-source-program/source-built/native/program.json",
+        "size_bytes": 18269163
+      },
+      "plan": {
+        "blake3": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json",
+        "size_bytes": 10329
+      },
+      "publication_index": {
+        "blake3": "3912c022ed921a8dd11f8284062fd8fad9c8d93332d2b3ecd84865d317af2b51",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-stagex-programs/stagex-provider-publication.json.expansion.json",
+        "size_bytes": 325
+      },
+      "publication_recipe": {
+        "blake3": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-stagex-programs/stagex-provider-publication.json",
+        "size_bytes": 52226
+      },
+      "rust_index": {
+        "blake3": "82a27d0ac53f70ff44f45796a522bafdb78003e722c9a287c7d4203f1c205eee",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/rust-source-archives/source-built/rust/program.json.expansion.json",
+        "size_bytes": 4827279
+      },
+      "rust_recipe": {
+        "blake3": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/rust-source-archives/source-built/rust/program.json",
+        "size_bytes": 258937678
+      },
+      "rust_route": {
+        "blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/rust-source-archives/cairn/rust/rust-source-musl-host-plan.ncl",
+        "size_bytes": 5543
+      },
+      "stagex_transition_index": {
+        "blake3": "8c9e88c95737bc24d02c64ed36b6a2180c3980a1264681951b7ca5c81c115564",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-stagex-programs/stagex-transition.json.expansion.json",
+        "size_bytes": 367497
+      },
+      "stagex_transition_recipe": {
+        "blake3": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-stagex-programs/stagex-transition.json",
+        "size_bytes": 31730468
+      }
+    },
+    "source_profile_bytes_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+    "source_profile_manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab"
+  },
+  "inspection_authority_boundary": "Advisory bounded static source/graph/template acceptance only; parent owns collation and launch gates.",
+  "inspection_commands": [
+    "ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 - < trusted independent-graph-70db0868-controller.py",
+    "python3 independent-graph-70db0868-reconcile.py independent-graph-70db0868-census.py | ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -",
+    "python3 independent-graph-70db0868-profile-fix.py independent-graph-70db0868-profile.py | ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -",
+    "ssh leviathan.cymric-daggertooth.ts.net /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 - < trusted independent-graph-70db0868-source.py",
+    "ssh leviathan.cymric-daggertooth.ts.net /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum <frozen-consumer-paths> <graph-inspector-paths>",
+    "ssh leviathan.cymric-daggertooth.ts.net jq -c <actual frozen recipe section selectors> <current frozen JSON recipe>",
+    "python3 independent-graph-70db0868-result.py (trusted inert local result collation, writes only this owned JSON)"
+  ],
+  "inspector_hashes": {
+    "controller-template-audit.py": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+    "graph-audit.py": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+    "helper-authority-audit.py": "6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b",
+    "mantle-selector-audit.py": "4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b",
+    "seed-rejection-probe": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e"
+  },
+  "negative_fixture_checks": {
+    "helper_authority_cases": {
+      "covered": 6,
+      "total": 6,
+      "uncovered": 0
+    },
+    "immutable_source_cases": {
+      "covered": 4,
+      "total": 4,
+      "uncovered": 0
+    },
+    "seed_negative_cases": {
+      "covered": 19,
+      "total": 19,
+      "uncovered": 0
+    },
+    "selector_cases": {
+      "covered": 13,
+      "total": 13,
+      "uncovered": 0
+    },
+    "semantic_root_cases": {
+      "covered": 10,
+      "total": 10,
+      "uncovered": 0
+    },
+    "semantic_selector_cases": {
+      "covered": 5,
+      "total": 5,
+      "uncovered": 0
+    }
+  },
+  "non_claims": [
+    "Not proof of candidate/helper/compiler/provider/controller execution, stage success or executable semantics.",
+    "Not a cold replay, fixed-point equality, reproducibility, v2 proof, native signed row, release eligibility, or authority to launch.",
+    "Inspection of symbolic controller/runtime operands does not observe produced runtime payload bytes.",
+    "No frozen source/cohort/pins mutated; no product builds/tests/lints/formatters; prior rejected subject not accepted."
+  ],
+  "per_stage_complete_static_counters": {
+    "full-source-native-provider": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 98,
+        "total": 98,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 49,
+        "total": 49,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 63675,
+        "total": 63675,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 18876,
+        "total": 18876,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 15578,
+        "total": 15578,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 196,
+        "total": 196,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 539,
+        "total": 539,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 188,
+        "total": 188,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 28270,
+        "total": 28270,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 38,
+        "total": 38,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 28901,
+        "total": 28901,
+        "uncovered": 0
+      },
+      "raw_word_issues": 294,
+      "recipe_source_bytes": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab",
+      "recipe_steps": {
+        "covered": 5122,
+        "total": 5122,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 98,
+        "total": 98,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 3,
+        "total": 3,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    },
+    "full-source-rust-provider": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 3742,
+        "total": 3742,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 1871,
+        "total": 1871,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 1619549,
+        "total": 1619549,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 412861,
+        "total": 412861,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 296720,
+        "total": 296720,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 7484,
+        "total": 7484,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 20400,
+        "total": 20400,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 67,
+        "total": 67,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 818910,
+        "total": 818910,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 2803,
+        "total": 2803,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 846852,
+        "total": 846852,
+        "uncovered": 0
+      },
+      "raw_word_issues": 11499,
+      "recipe_source_bytes": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+      "recipe_steps": {
+        "covered": 63882,
+        "total": 63882,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 3742,
+        "total": 3742,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 1,
+        "total": 1,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    },
+    "mantle-stage1": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 374,
+        "total": 374,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 187,
+        "total": 187,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 400667,
+        "total": 400667,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 356829,
+        "total": 356829,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 255726,
+        "total": 255726,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 748,
+        "total": 748,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 2057,
+        "total": 2057,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 40,
+        "total": 40,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 3,
+        "total": 3,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 400143,
+        "total": 400143,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 1970,
+        "total": 1970,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 272828,
+        "total": 272828,
+        "uncovered": 0
+      },
+      "raw_word_issues": 1122,
+      "recipe_source_bytes": "296bc2617a773f1ed63a642a9a723cf1f72b6dda97e426723496883705e45817",
+      "recipe_steps": {
+        "covered": 24127,
+        "total": 24127,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 374,
+        "total": 374,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 3082,
+        "total": 3082,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 1243,
+        "total": 1243,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    },
+    "mantle-stage2": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 374,
+        "total": 374,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 187,
+        "total": 187,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 400667,
+        "total": 400667,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 356829,
+        "total": 356829,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 255726,
+        "total": 255726,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 748,
+        "total": 748,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 2057,
+        "total": 2057,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 40,
+        "total": 40,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 3,
+        "total": 3,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 400143,
+        "total": 400143,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 1970,
+        "total": 1970,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 272828,
+        "total": 272828,
+        "uncovered": 0
+      },
+      "raw_word_issues": 1122,
+      "recipe_source_bytes": "a78ee751ea39db1729758c78b9bce484c128d069b922171744d1e97270ce4ecb",
+      "recipe_steps": {
+        "covered": 24127,
+        "total": 24127,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 374,
+        "total": 374,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 3082,
+        "total": 3082,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 1243,
+        "total": 1243,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    },
+    "stagex-provider-publication": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 79,
+        "total": 79,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 59,
+        "total": 59,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 36,
+        "total": 36,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 4,
+        "total": 4,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 133,
+        "total": 133,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 79,
+        "total": 79,
+        "uncovered": 0
+      },
+      "raw_word_issues": 0,
+      "recipe_source_bytes": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+      "recipe_steps": {
+        "covered": 18,
+        "total": 18,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    },
+    "stagex-transition": {
+      "actual_runtime_payload_bytes_observed": 0,
+      "controller_slots": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "controller_specs": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "corrected_static_words": {
+        "covered": 67227,
+        "total": 67227,
+        "uncovered": 0
+      },
+      "declared_inputs": {
+        "covered": 38329,
+        "total": 38329,
+        "uncovered": 0
+      },
+      "dependency_edges": {
+        "covered": 35610,
+        "total": 35610,
+        "uncovered": 0
+      },
+      "generated_output_seeds": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "generated_templates": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "guard_status_edges": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "helper_authority_uses": {
+        "covered": 833,
+        "total": 833,
+        "uncovered": 0
+      },
+      "produced_and_other_artifact_refs": {
+        "covered": 72699,
+        "total": 72699,
+        "uncovered": 0
+      },
+      "raw_output_seeds": {
+        "covered": 51,
+        "total": 51,
+        "uncovered": 0
+      },
+      "raw_static_words": {
+        "covered": 67227,
+        "total": 67227,
+        "uncovered": 0
+      },
+      "raw_word_issues": 0,
+      "recipe_source_bytes": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+      "recipe_steps": {
+        "covered": 8131,
+        "total": 8131,
+        "uncovered": 0
+      },
+      "reference_issues": 0,
+      "runtime_controller_symbolic_payloads": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "runtime_invocation_static_bindings": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "semantic_roots": {
+        "covered": 0,
+        "total": 0,
+        "uncovered": 0
+      },
+      "unknown_source_binding_kinds": 0
+    }
+  },
+  "profile": {
+    "complete_embedded_pre_lowering_unit_plans_compared": 2,
+    "complete_record_streams_examined": 2,
+    "manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+    "raw_bytes_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+    "size_bytes": 17318852974,
+    "transport_equal": true
+  },
+  "program_identities": {
+    "fixed-point-native-source-program": "223efadf90b32091fe43452a870f873e252763fe93f9e6f16d2a1fc6868315f8",
+    "fixed-point-rust-source-program": "c5a53ac4fcba19834595e67d77d8eefd369bba140bc4e2dc1c1756169748392a",
+    "source-built-mantle-programs": "c2c5acec206d84612e4ab983f266145b77b717d8748dfe49343a9277dd64cb05",
+    "source-built-stagex-programs": "2f5acd44852caa44d2c4af6305b3e0d11866ed464cfe59c9ce4989a6712db645"
+  },
+  "raw_diagnostics_preserved": {
+    "controller_template_report": "graph-results-aws-db-fixed/controller-template-audit.json",
+    "controller_template_report_blake3": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+    "corrected_scoped_word_failures": 0,
+    "graph_report": "graph-results-aws-db-fixed/graph-audit.json",
+    "graph_report_blake3": "f8082ee076e195494c6825d0b3b97e27d321678a73324bc37e1799949b9c1648",
+    "raw_word_flags": 14037
+  },
+  "reviewer_model_actual": "underclass/gpt-6-sol",
+  "revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "runtime_unobserved_obligations": [
+    {
+      "actual_runtime_bytes_observed": 0,
+      "claim": "NOT ESTABLISHED; outside inert static acceptance; must be checked in authorized protected execution",
+      "requirement": "Protected runtime generated invocation/request/payload bytes",
+      "symbolic_bindings_checked": 6167
+    }
+  ],
+  "schema": "independent-graph-review-aws-db-fixed-v1",
+  "scope": "Current 70db0868 frozen-source/prepared-cohort graph, ControllerSpec template, helper authority, selector/primary-source, and static source-kind contracts; complete six authenticated recipes; read-only inspection. No execution of products or candidate programs.",
+  "subject": {
+    "bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+    "corrected_git_database_pointer_only": true,
+    "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-subject-aws-db-fixed.json",
+    "retained_predecessor_subject_is_rejected": true
+  },
+  "uncovered_criteria": []
+}

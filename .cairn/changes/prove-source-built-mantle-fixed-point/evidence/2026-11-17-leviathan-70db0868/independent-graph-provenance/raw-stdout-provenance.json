@@ -1,0 +1,75 @@
+{
+  "failed_notice_outputs": {
+    "bg_458": {
+      "bytes_blake3": "54b55148659e963cde48c74e5224fd51ad2df2c7a63733d18f91ef73f19e3676",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-bg_458-failure-notice.txt",
+      "size_bytes": 937
+    },
+    "bg_459": {
+      "bytes_blake3": "b756a323dfcfc06057288be54defe73aa5940be1dbdc8c17e85530bd93be2198",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-bg_459-failure-notice.txt",
+      "size_bytes": 906
+    },
+    "bg_462": {
+      "bytes_blake3": "f58ff5c65ebdca972dd577b72b48a20927ee82cc4d7925e134e6238fd38bb7c6",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-bg_462-failure-notice.txt",
+      "size_bytes": 465
+    },
+    "bg_468": {
+      "bytes_blake3": "869d8f8a652be39bbb9883d298b4dcd3b18ec7541069ac7780c943c709f8e315",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-bg_468-failure-notice.txt",
+      "size_bytes": 993
+    },
+    "bg_470": {
+      "bytes_blake3": "79c4a00782b573037318c6143f0ca73a984f6412e8856b207ade75f7c85ea96c",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-bg_470-failure-notice.txt",
+      "size_bytes": 700
+    }
+  },
+  "failed_submitted_versions": {
+    "reconcile-stdin-failed": {
+      "bytes_blake3": "c71b9cd970def42b722578c4780f8098dff9a51a4cf7d9d03623b600e1525a6c",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-reconcile-stdin-failed.py",
+      "size_bytes": 1365
+    },
+    "source-initial-failed": {
+      "bytes_blake3": "0b0d38c168f831537bef2454aef905fb1093695ea79a2d68ee4bbcb6f987d75e",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-source-initial-failed.py",
+      "size_bytes": 6694
+    },
+    "source-unique-but-unnested-failed": {
+      "bytes_blake3": "238394ee2209dad1b73fe43e04a6a04a4d3d07a50ee29bca8e08c4bde4bc7a4b",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/local/independent-graph-70db0868-source-unique-but-unnested-failed.py",
+      "size_bytes": 6694
+    }
+  },
+  "not_inspection": "Reconstructs prior submitted scratch source versions, copies captured logs; no frozen source/cohort read or candidate execution.",
+  "schema": "independent-graph-70db0868-raw-stdout-provenance-v1",
+  "source_jsonl": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/Review70dbGraphCorrected.jsonl",
+  "successful_outputs": {
+    "census": {
+      "artifact": "artifact://2109:raw:1-1",
+      "bytes_blake3": "9c9a2e32111859c2ed9d4096cefcf9a8fa76fd5e9c116302025fd0477767deb5",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/2109.bash.log",
+      "size_bytes": 5613
+    },
+    "complete-profile-stream": {
+      "artifact": "artifact://2077:raw:1-1",
+      "bytes_blake3": "fa4c52444ff2a39d6900751d5a1ab95194744cc60e7cefddc5cebb3e2458e94a",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/2077.bash.log",
+      "size_bytes": 2471
+    },
+    "controller": {
+      "artifact": "artifact://2079:raw:1-1",
+      "bytes_blake3": "06b4bd7153b7667e85ae79867e614e73f2faf49246c84f0ee20c7bebc4dbcae1",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/2079.bash.log",
+      "size_bytes": 1412
+    },
+    "primary-source": {
+      "artifact": "artifact://2113:raw:1-1",
+      "bytes_blake3": "2f10ddae8bb38d1ea67b3235515f0fa429937486069afe5ac158767865155e86",
+      "path": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/2113.bash.log",
+      "size_bytes": 1745
+    }
+  }
+}

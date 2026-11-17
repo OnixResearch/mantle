@@ -1,0 +1,10 @@
+<system-notice>
+Background job bg_462 (ssh leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -' < local://independent-graph-70db0868-source.py) has completed. Resume your work using the result below.
+Traceback (most recent call last):
+  File "<stdin>", line 118, in <module>
+  File "<stdin>", line 96, in main
+KeyError: 'arguments'
+Wall time: 4.43 seconds
+
+Command exited with code 1
+</system-notice>

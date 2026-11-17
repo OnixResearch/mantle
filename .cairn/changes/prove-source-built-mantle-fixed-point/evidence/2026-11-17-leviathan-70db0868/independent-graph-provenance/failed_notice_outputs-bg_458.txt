@@ -1,0 +1,13 @@
+<system-notice>
+Background job bg_458 (ssh leviathan.cymric-daggertooth.ts.net '/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 -' < local://independent-graph-70db0868-census.py) has completed. Resume your work using the result below.
+Traceback (most recent call last):
+  File "<stdin>", line 148, in <module>
+  File "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/lib/python3.14/pathlib/__init__.py", line 777, in read_bytes
+    with self.open(mode='rb', buffering=0) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '<stdin>'
+Command exited with code 1
+</system-notice>
