@@ -1,0 +1,19 @@
+{
+  "task": 1703,
+  "result": {
+    "Failed": 1
+  },
+  "failure": "TypeError: dict object is not callable",
+  "location": "controller-template-audit.py:522",
+  "cause": "Local typed-route loop variable ref shadows the ref() producer-reference constructor inside main",
+  "helper_task": {
+    "id": 1707,
+    "result": "DependencyFailed",
+    "executed": false
+  },
+  "selector_task": {
+    "id": 1705,
+    "result": "Success"
+  },
+  "scope": "Failed inert inspector only; no product/helper/provider/compiler/controller or protected proof executed."
+}

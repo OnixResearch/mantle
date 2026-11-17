@@ -1,0 +1,38 @@
+{
+  "task": 26,
+  "result": "Success",
+  "all_four_reports_valid": true,
+  "reports": [
+    {
+      "gate": "validation",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-validation.json",
+      "valid": true,
+      "bytes_blake3": "d2a0472916bf8e2682877c4b618c8249d897fc5fc11a1281b8f991aae004f1bf"
+    },
+    {
+      "gate": "proposal",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-proposal.json",
+      "valid": true,
+      "bytes_blake3": "d73dfc538f864c53b31d6e946728cbcc56dcb32e76a436984303e3f7ea0fe365"
+    },
+    {
+      "gate": "design",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-design.json",
+      "valid": true,
+      "bytes_blake3": "a2255e36a1aeeaf1d354c898c10eb0a12fd5055d3129161ca6990f7ae9a9fb05"
+    },
+    {
+      "gate": "tasks",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-tasks.json",
+      "valid": true,
+      "bytes_blake3": "53299cda4f6546de693a39d0a11b22d7a1619362a0aaa364671d4ae4b1503a0c"
+    }
+  ],
+  "transcript": {
+    "observed_name": "cairn-prelaunch.log",
+    "storage": "cairn-prelaunch.log.gz",
+    "decoded_blake3": "6cc413537e517773a66f459e3d0c71cc72668c7c2100abad217392e672f50cd5",
+    "storage_blake3": "efbc746d305d95de0c83666e44e3f245d5c463c97c7942a1ca6db25abba99438",
+    "roundtrip_equal": true
+  }
+}

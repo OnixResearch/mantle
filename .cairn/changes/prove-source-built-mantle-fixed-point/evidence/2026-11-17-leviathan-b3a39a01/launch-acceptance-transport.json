@@ -1,0 +1,7 @@
+{
+  "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/launch-review-acceptance.json",
+  "remote": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-b3a39a01-immutable-source-gpt6sol.json",
+  "bytes_blake3": "24cf21e41428ecdc3560359d64db8a5479e5c24aa9f834e2c922dbc2734a9411",
+  "transfer_equal": true,
+  "scope": "Exact current STATIC decision transport only. No protected proof is queued yet."
+}

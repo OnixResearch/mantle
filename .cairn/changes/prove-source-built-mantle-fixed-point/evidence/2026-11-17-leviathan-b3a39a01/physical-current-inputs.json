@@ -1,0 +1,54 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "inputs": {
+    "identity": {
+      "path": "identity-results/identity-review.json",
+      "task": 1706,
+      "blake3": "a42d93294f2822b9aa7c71329794b0550614786a660c001357a79572495a17b7",
+      "verdict": "STATIC_IDENTITY_CHECKS_CLEAR"
+    },
+    "preauthor": {
+      "path": "preauthor-results/preauthor-role-physical-review.json",
+      "task": 1704,
+      "blake3": "9c9ee0a5708387b648be5de888abb0f4052a19af790503676a0b65e517a64200",
+      "verdict": "STATIC_PREAUTHOR_IDENTITIES_CLEAR"
+    }
+  },
+  "resolved_original_report_obligations": [
+    {
+      "obligation": "preauthor embedded directory reconstruction: mantle-source",
+      "role": "mantle-source",
+      "evidence": "preauthor-results/preauthor-role-physical-review.json"
+    },
+    {
+      "obligation": "preauthor embedded directory reconstruction: rust-source-archive-set",
+      "role": "rust-source-archive-set",
+      "evidence": "preauthor-results/preauthor-role-physical-review.json"
+    },
+    {
+      "obligation": "preauthor embedded directory reconstruction: vendor-inputs",
+      "role": "vendor-inputs",
+      "evidence": "preauthor-results/preauthor-role-physical-review.json"
+    }
+  ],
+  "criterion_coverage": {
+    "7": {
+      "total": 72015,
+      "covered": 72015,
+      "uncovered": []
+    },
+    "8": {
+      "covered": 33820,
+      "total": 33820,
+      "uncovered": []
+    }
+  },
+  "preauthor_leaf_coverage": {
+    "covered": 70794,
+    "total": 70794,
+    "uncovered": []
+  },
+  "independent_review_accepted": false,
+  "scope": "Parent collation of complementary current inert physical observations only. Original reports remain unchanged with their explicit boundaries. No independent model verdict, protected execution, fixed point or native-row acceptance."
+}

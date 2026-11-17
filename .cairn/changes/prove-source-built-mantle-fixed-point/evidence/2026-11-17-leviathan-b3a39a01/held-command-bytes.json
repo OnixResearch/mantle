@@ -1,0 +1,26 @@
+{
+  "commands": [
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/held-cold-proof.sh",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol.sh",
+      "blake3": "ed288014c1b42d3a7d3a0cdefefa683315c19f8385b169b19b82054146c3ace8",
+      "transfer_equal": true,
+      "executed": false
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/held-stagex-adoption.sh",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/adopt-current-b3a39a01-immutable-source-gpt6sol.sh",
+      "blake3": "e99a35863a2ddba465c1a1e01823356ce8741db8a3a1b129f5d7c816874ccc0d",
+      "transfer_equal": true,
+      "executed": false
+    },
+    {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/held-native-rows.sh",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/qualify-current-native-rows-b3a39a01-immutable-source-gpt6sol.sh",
+      "blake3": "f8699677280af06c8d74d183c3bc3cdc3dc18344fb17ce3ffe444a4f1c010a0f",
+      "transfer_equal": true,
+      "executed": false
+    }
+  ],
+  "scope": "Final complete held commands execute from the frozen repository; byte transport only, no proof/signing/adoption/native execution is queued."
+}

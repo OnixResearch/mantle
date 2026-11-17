@@ -1,0 +1,22 @@
+{
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "records": [
+    {
+      "scope": "graph",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/independent-graph-review.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-b3a39a01-immutable-source-gpt6sol.json",
+      "bytes_blake3": "101f39df0659987d0d0d8a8fdc55df0299630d13026a698ffc8db260b219de1c",
+      "transfer_equal": true,
+      "parent_static_reconciled": true
+    },
+    {
+      "scope": "identity",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/independent-physical-review.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-b3a39a01-immutable-source-gpt6sol.json",
+      "bytes_blake3": "c2528c81cef0aed5085839ca6786f1a668177ffc1c386f91af834fb0235dc3e5",
+      "transfer_equal": true,
+      "parent_static_reconciled": true
+    }
+  ],
+  "scope": "Accepted current STATIC review byte transport only. Actual valid current Cairn gates and parent sealed acceptance still precede protected execution."
+}

@@ -872,6 +872,7 @@ def main():
     result['coverage']['immutable_root_source_digests'] = {
         'total': source_identity['root_unit_count'],
         'covered': sum(unit['matches_actual_compiler_source'] for units in source_identity['pre_lowering_root_units'].values() for unit in units),
+        'uncovered': 0,
         'invalid': sum(not unit['matches_actual_compiler_source'] for units in source_identity['pre_lowering_root_units'].values() for unit in units)}
     if not source_identity['all_match']:
         result['bounded_verdict'] = False

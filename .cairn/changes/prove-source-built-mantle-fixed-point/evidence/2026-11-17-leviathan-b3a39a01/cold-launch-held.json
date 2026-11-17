@@ -1,0 +1,15 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "script": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol.sh",
+  "output_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol",
+  "acceptance_path": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-b3a39a01-immutable-source-gpt6sol.json",
+  "model_authorization_bytes_blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884",
+  "queued": false,
+  "required": [
+    "Both actually completed current independent reports and parent reconciliation",
+    "Current four valid Cairn reports",
+    "Exact review/report/source/profile/tool identities and absent namespace at launch"
+  ],
+  "scope": "Complete held command only; no output authority was created and no protected attempt is submitted."
+}

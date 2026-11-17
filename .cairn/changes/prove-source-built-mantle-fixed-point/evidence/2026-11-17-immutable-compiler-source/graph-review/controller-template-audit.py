@@ -417,8 +417,8 @@ def main():
     if not all(base['subject_binding']['observed_claim_checks'].values()):
         raise ValueError('controller audit graph subject is not sealed')
     paths={stage:Path(selected[key]['path']) for stage,key in keys.items()}
-    for stage,member,ref in zip(('mantle-stage1','mantle-stage2'),G['MANTLE_MEMBERS'],route['mantle_recipes'],strict=True):
-        G['exact_program_ref'](ref,member)
+    for stage,member,route_ref in zip(('mantle-stage1','mantle-stage2'),G['MANTLE_MEMBERS'],route['mantle_recipes'],strict=True):
+        G['exact_program_ref'](route_ref,member)
         if paths[stage]!=G['program_member_path'](member):
             raise ValueError(f'{stage}: selected recipe is not exact authenticated program member')
     for stage,path in paths.items():

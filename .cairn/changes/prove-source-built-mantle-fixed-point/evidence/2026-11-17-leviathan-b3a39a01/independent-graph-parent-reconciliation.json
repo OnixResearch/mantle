@@ -1,0 +1,20 @@
+{
+  "accepted": true,
+  "model": "underclass/gpt-6-sol",
+  "agent": "ReviewB3GraphCurrent",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "review_bytes_blake3": "101f39df0659987d0d0d8a8fdc55df0299630d13026a698ffc8db260b219de1c",
+  "criteria": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "uncovered_static_obligations": [],
+  "initial_copied_digest_error_retained": "independent-graph-review-initial-binding-error.json",
+  "exact_authored_record_identities_reconciled": true,
+  "actual_inspector_and_frozen_consumer_bytes_reconciled": true,
+  "scope": "Parent reconciled exact current independent criteria1–6 STATIC acceptance only, including explicit unobserved runtime boundaries. No protected execution, v2 receipt, fixed point, adoption, native rows or release."
+}

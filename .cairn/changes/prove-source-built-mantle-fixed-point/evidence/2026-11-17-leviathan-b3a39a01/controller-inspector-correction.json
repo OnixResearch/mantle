@@ -1,0 +1,13 @@
+{
+  "failed_task": 1703,
+  "original_archive_blake3": "46f5733d0682c39c732d792f6a3f37f3d39a758000ff1f3e3708ded5bb86bf38",
+  "original_source_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "original_source": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/controller-template-audit.py",
+  "corrected_inspector_bytes_blake3": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+  "corrected_remote_directory": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source-route-ref-fixed",
+  "source_patch": "Rename only the typed-route loop ref local to route_ref; preserve every existing predicate and check.",
+  "resume_driver": "/home/brittonr/sbfp-20261113-berdKH/inspect-graph-route-ref-fixed-b3a39a01-immutable-source.sh",
+  "resume_script": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source-route-ref-fixed/graph-review/resume-controller-ref-fixed.sh",
+  "source_and_cohort_unchanged": true,
+  "scope": "External inert inspector correction only, not a new product runner, regenerated source or proof acceptance."
+}

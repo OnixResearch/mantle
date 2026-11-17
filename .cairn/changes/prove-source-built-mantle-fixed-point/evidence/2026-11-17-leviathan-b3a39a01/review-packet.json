@@ -1,0 +1,101 @@
+{
+  "repository": "/home/brittonr/git/OnixResearch/mantle",
+  "contract": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-contract.md",
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject": {
+    "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-subject.json",
+    "blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+    "remote_path": "/home/brittonr/sbfp-20261113-berdKH/review-subject-b3a39a01-immutable-source.json"
+  },
+  "frozen_source": {
+    "remote_host": "leviathan.cymric-daggertooth.ts.net",
+    "remote_tree": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+    "ssh_read_prefix": "ssh://leviathan.cymric-daggertooth.ts.net/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source/",
+    "local_git_code_archive": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/source-b3a39a0118839fd6f7267c9b1c99258155ff40af.tar.gz",
+    "git_code_archive_blake3": "1746db51499dae55736d17bda8c7a81f0572ace12dd9643c8c11cc35f760c393",
+    "complete_source_metadata": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/complete-source.json",
+    "complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be"
+  },
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+  "profile": {
+    "bytes": 17318938368,
+    "manifest_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+    "raw_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+    "full_transfer_equal": true
+  },
+  "current_reports": {
+    "review-subject.json": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+    "source-program-preparation.json": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37",
+    "source-program-preparation-input-plan.json": "bbabab56c2b2b73e2dbe6007b80d67ab0e03fdf55c49c09d426229a35cfdb2a7",
+    "graph-results/graph-audit.json": "2d873408dcf7e7ccf130f237760b804621a877e84972ab5c74d87fc2e100b08d",
+    "graph-results/source-binding-kind-inventory.json": "ef5e5db17300e3b81822b25bd58bbadaa34591e6bc55a5855786f1eeb997191e",
+    "graph-results/controller-template-audit.json": "6ff800bdc16091798c32648a71628728be798ede739f39eb2f4af65dd0e7ac46",
+    "graph-results/helper-authority-audit.json": "f0ef61656f7901a4b63af1c583a26807ae6b44ace24f1174a3b768594c9b97da",
+    "graph-results/mantle-selector-audit.json": "8885723a50e1cdf9b438a2892f8da271143e24572def1406d3154ba5118bc185",
+    "graph-results/semantic-root-regression.json": "84d5d2de6bcd420ec9fbaf7b8d4977e69f9f64dcb43ec83fb1a62ccda0543629",
+    "graph-results/helper-authority-negative.json": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+    "graph-results/output-seed-immutable-source-regressions.json": "41caa563fc306c57774d7c24f3a182e9929cb93381b12b302fb4762015026151",
+    "selector-mutations.json": "dda6175a0c65fde78de62f0c7f3ebe0be984a253f8c6e794a3fe38c8c46f4980",
+    "identity-results/identity-review.json": "a42d93294f2822b9aa7c71329794b0550614786a660c001357a79572495a17b7",
+    "preauthor-results/preauthor-role-physical-review.json": "9c9ee0a5708387b648be5de888abb0f4052a19af790503676a0b65e517a64200",
+    "physical-current-inputs.json": "a71c2059946d1cb84ed4a6afc93e75cbf24106f5f320090394284a4ede547acf"
+  },
+  "graph_collation": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/graph-current-inputs.json",
+  "physical_collation": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/physical-current-inputs.json",
+  "inspector_sources": {
+    "graph-audit.py": {
+      "path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/graph-review/graph-audit.py",
+      "blake3": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c"
+    },
+    "controller-template-audit.py": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/controller-template-audit.py",
+      "blake3": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62"
+    },
+    "helper-authority-audit.py": {
+      "path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/graph-review/helper-authority-audit.py",
+      "blake3": "6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b"
+    },
+    "mantle-selector-audit.py": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/mantle-selector-audit.py",
+      "blake3": "c7c52a94e288dc30c0d30a1b1e923d94df2859b85907670feb6930a4529ee7a6"
+    },
+    "identity-audit.py": {
+      "path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/identity-review/identity-audit.py",
+      "blake3": "ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59"
+    },
+    "preauthor-role-physical-audit.py": {
+      "path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/identity-review/preauthor-role-physical-audit.py",
+      "blake3": "9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940"
+    },
+    "check-seed-source-regressions.py": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/check-seed-source-regressions.py",
+      "blake3": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e"
+    }
+  },
+  "remote_current_graph_inspector_root": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source-complete-coverage",
+  "retained_inspector_failures": [
+    {
+      "task": 1703,
+      "disposition": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/graph-1703-failure.json",
+      "log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/graph-execution-failed-1703.log.gz"
+    },
+    {
+      "task": 1708,
+      "disposition": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/selector-coverage-correction.json",
+      "log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/graph-resume-failed-1708.log"
+    }
+  ],
+  "model_authorization": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json",
+  "required_model": "underclass/gpt-6-sol",
+  "outputs": {
+    "graph": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/independent-graph-review.json",
+    "physical": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/independent-physical-review.json"
+  },
+  "boundaries": [
+    "All current data and source identities are measured, not predecessor expectations. Parent collations are evidence pointers, not independent acceptance.",
+    "Read complete relevant reports and frozen consumer sources; verify inspector coverage and binding logic. Do not trust verdict text alone.",
+    "Inert byte/data inspection only. No product/helper/compiler/controller/provider/recipe/NCL execution; no build/test/lint/formatter runs, trust changes, pin refreshes, source/cohort mutation or proof launch.",
+    "Writes allowed only to the assigned independent report. Do not alter current evidence or another report. Runtime invocation payload bytes remain unobserved, not synthesized.",
+    "Both reports are advisory evidence. Parent reconciliation, current Cairn gates and actual cold execution remain separate obligations."
+  ]
+}

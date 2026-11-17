@@ -1,0 +1,48 @@
+{
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "probe_blake3": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e",
+  "tasks": {
+    "helper_mutations_resumed": {
+      "id": 1710,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "helper_mutations_resumed-b3a39a01-immutable-source",
+        "--after",
+        "1708",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-helper-mutations-b3a39a01-immutable-source.sh",
+        "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919"
+      ],
+      "dependencies": [
+        1708
+      ]
+    },
+    "seed_source_regressions": {
+      "id": 1709,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "seed_source_regressions-b3a39a01-immutable-source",
+        "--after",
+        "1708",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-seed-source-regressions-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": [
+        1708
+      ]
+    }
+  },
+  "scope": "Inert actual-current-data checks only; no product/protected execution, expected-pin change or source/cohort mutation. Submitted is not accepted."
+}

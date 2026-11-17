@@ -1,0 +1,24 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "cold_proof_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol/proof",
+  "adoption_parent": "/home/brittonr/sbfp-20261113-berdKH/native-adoption-b3a39a01-immutable-source-gpt6sol",
+  "native_row_root": "/home/brittonr/sbfp-20261113-berdKH/native-rows-b3a39a01-immutable-source-gpt6sol",
+  "drivers": {
+    "held-stagex-adoption.sh": {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/held-stagex-adoption.sh",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/adopt-current-b3a39a01-immutable-source-gpt6sol.sh"
+    },
+    "held-native-rows.sh": {
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/held-native-rows.sh",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/qualify-current-native-rows-b3a39a01-immutable-source-gpt6sol.sh"
+    }
+  },
+  "queued": false,
+  "prerequisites": [
+    "Successful genuine current cold proof and actual verified v2 receipt",
+    "Independent parent selection of exact semantic plan and receipt-byte digests",
+    "Actual fresh signed StageX adoption then complete report review and byte pin",
+    "Actual execution and original receipt validation for every one of the five native rows"
+  ],
+  "scope": "Two separately held complete operator commands only. Existing signer is explicitly selected; no private-key bytes copied, trust policy change, signing, adoption, native build or proof acceptance occurs here."
+}

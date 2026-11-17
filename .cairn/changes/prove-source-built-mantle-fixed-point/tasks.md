@@ -1263,3 +1263,63 @@ complete-source identities. The installed runner byte identity is
 Preparation and all actual current-data/review/proof obligations remain open;
 these qualification results do not authorize protected execution.
 
+
+## Current immutable-source data inspected (2026-11-17)
+
+Qualification evidence is published in `b438c5817`; the frozen product remains
+`b3a39a0118839fd6f7267c9b1c99258155ff40af`. Preparation1701 and facts1702
+completed with equal before/after complete-source identities. The full
+17,318,938,368-byte output-profile stream is byte-equal to the remote file;
+its manifest identity is
+`8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4`.
+
+Physical1706 and full preauthor1704 jointly cover criteria7/8 with no remaining
+obligations: all seven original roles, all four authored records, every original
+native body and all 70,794 preauthor embedded leaves are measured. The original
+identity report retains its three explicitly supplemental directory obligations;
+`physical-current-inputs.json` binds their complete independent reconstruction.
+
+Failed inert runs1703/1708 are retained. The first exposed a route-loop local
+shadowing the controller reference constructor; the second exposed the omitted
+`uncovered` field in the new immutable-source coverage bucket. Only those
+inspector producers were repaired. No consumer predicate, source digest framing,
+expected provider/lineage pin, frozen source or prepared cohort was weakened or
+changed. Corrected continuation1711 passed; the preceding controller/helper
+phases were retained rather than rerun.
+
+All 16 root-package units across both Mantle stages match the complete unchanged
+compiler source: 12,766 files, path-source digest
+`e781c15339a2827b974bdd58979f404e40406e9d7bdf3ad6a38b5c59b6f99c10`.
+Current selectors cover 2,098 feature cfgs, 2,386 feature environments and both
+package exclusions. Probe1713 traversed all 6,832 raw and 9,176 generated output
+seeds, rejected 19 seed mutations and four wrong/empty compiler-source unit
+cases. Current source-selected semantic/route rejection cases also passed.
+
+At this checkpoint helper-negative1712 and both fresh complete independent
+`underclass/gpt-6-sol` reviews remain required. I3-I5, proof-dependent V2/V3 and
+all five genuine signed native rows remain open; no protected retry or v2 proof
+is accepted from these inert results.
+
+
+## Both fresh current independent reviews reconciled (2026-11-17)
+
+Helper-negative1712 passed all six current owning-stage rejection cases. Both
+fresh `underclass/gpt-6-sol` reviewers then accepted their complete bounded
+static scopes: graph criteria1-6 and physical criteria7-8. Parent reconciliation
+checked the exact subject, four authored record identities, current inspector
+and frozen-consumer bindings, complete coverage and explicit runtime non-claims.
+
+The graph review's copied Rust-record digest typo was retained in its exact
+initial report, independently corrected by that reviewer, and reconciled before
+acceptance. No source/profile/provider/lineage expected pin was refreshed.
+The accepted graph report byte identity is
+`101f39df0659987d0d0d8a8fdc55df0299630d13026a698ffc8db260b219de1c`;
+the physical report is
+`c2528c81cef0aed5085839ca6786f1a668177ffc1c386f91af834fb0235dc3e5`.
+
+Current Cairn gates and publication still precede the held cold command. The
+separate signed-adoption and five-row commands remain held behind an actual
+successful current proof, verified v2 receipt and reviewed adoption report.
+These static acceptances do not complete I3-I5, proof-dependent V2/V3 or any
+native row.
+

@@ -1,0 +1,9 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "local_subject": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-subject.json",
+  "remote_subject": "/home/brittonr/sbfp-20261113-berdKH/review-subject-b3a39a01-immutable-source.json",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "transfer_equal": true,
+  "prepared_native_source_manifest_raw_blake3": "a5cb8fc34e459e8c3133da06de8f53e936ad87926b290afb833c9f7e7fff1456",
+  "non_claim": "Complete current subject facts and transfer only; no inspector or independent-review acceptance and no protected launch."
+}

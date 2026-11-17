@@ -1,0 +1,15 @@
+{
+  "task": 1701,
+  "result": "Success",
+  "start": "2026-11-17T06:11:44.048703706-05:00",
+  "end": "2026-11-17T06:53:19.766013901-05:00",
+  "command": [
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/prepare-source-b3a39a01-immutable-source.sh"
+  ],
+  "dependencies": [
+    1699,
+    1700
+  ],
+  "scope": "Actual source-only preparation completion; not current-data inspection, review or protected execution."
+}

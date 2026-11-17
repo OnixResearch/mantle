@@ -1,0 +1,12 @@
+{
+  "task": 26,
+  "command": [
+    "bash",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch.sh"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "graph_review_bytes_blake3": "101f39df0659987d0d0d8a8fdc55df0299630d13026a698ffc8db260b219de1c",
+  "physical_review_bytes_blake3": "c2528c81cef0aed5085839ca6786f1a668177ffc1c386f91af834fb0235dc3e5",
+  "scope": "Actual current lifecycle validation/proposal/design/tasks gate submission only; not gate acceptance or protected execution."
+}

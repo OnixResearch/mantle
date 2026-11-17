@@ -1,0 +1,102 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "frozen_product_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+  "frozen_complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "runner": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-b3a39a01-immutable-source",
+  "runner_blake3": "9c13e989f2410ecca83469ff1aec7faade0672186bdbf1759a68604cd0c3ab84",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+  "evidence_root": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01",
+  "input_manifest_blake3": "a706fa165458bd053fd8845499c4c632766dbf15c49a1bb3678a4696fbb51b6e",
+  "input_plan_blake3": "26b4e26f06d5fbceedb6d4efd451b5bb42ed5457547325967399ed5707dbf4dc",
+  "prepared_manifest_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+  "profile_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/source-profile.json",
+  "profile_file_bytes": 17318938368,
+  "profile_file_raw_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+  "full_profile_ssh_stream_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+  "profile_transport_equal": true,
+  "preparation_report": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/source-program-preparation.json",
+  "preparation_report_raw_blake3": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37",
+  "input_plan": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/source-program-preparation-input-plan.json",
+  "program_records": {
+    "fixed-point-native-source-program": "f100905e5c71ae0507a973687732cd8465b77d5f511c2b124a48710cd9d7bf4a",
+    "fixed-point-rust-source-program": "7ca01d558f37960e0b900049ee455a49b5e2f349f1fab349787b89ec28370057",
+    "source-built-mantle-programs": "2192ef62c8dc860a7fe45449b4594336c43ad457b76af35df0caa52d29090b6c",
+    "source-built-stagex-programs": "a1b6a24939468e19f0f18996458c74209c8a8cdea5218a3ea75afe58c5df385c"
+  },
+  "source_inputs": [
+    {
+      "id": "mantle-source",
+      "role": "mantle-source",
+      "kind": "directory",
+      "digest_blake3": "fb38b047deffff84de4c7bbe3e9074cdd603bf46050be9d76a359d3670b14d91",
+      "size_bytes": 359106568
+    },
+    {
+      "id": "native-source-bundle",
+      "role": "native-source-bundle",
+      "kind": "regular-file",
+      "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+      "size_bytes": 968316247
+    },
+    {
+      "id": "rust-source-archive-set",
+      "role": "rust-source-archive-set",
+      "kind": "directory",
+      "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+      "size_bytes": 3164874699
+    },
+    {
+      "id": "stagex-lineage",
+      "role": "stagex-lineage",
+      "kind": "regular-file",
+      "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "size_bytes": 170686
+    },
+    {
+      "id": "stagex-seed",
+      "role": "stagex-seed",
+      "kind": "regular-file",
+      "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+      "size_bytes": 229
+    },
+    {
+      "id": "stagex-source-bundle",
+      "role": "stagex-source-bundle",
+      "kind": "regular-file",
+      "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+      "size_bytes": 87616094
+    },
+    {
+      "id": "vendor-inputs",
+      "role": "vendor-inputs",
+      "kind": "directory",
+      "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+      "size_bytes": 1213371949
+    }
+  ],
+  "resource_bounds": {
+    "elapsed_seconds_max": 86400,
+    "disk_bytes_max": 200000000000,
+    "open_file_descriptors_max": 4096,
+    "protected_exec_events_max": 524288,
+    "source_records_max": 65536
+  },
+  "expected_stagex_lineage_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  "expected_native_provider_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "original_aws": {
+    "capture": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git",
+    "commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+    "normalized_tree_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89"
+  },
+  "inert_tools": {
+    "python": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+    "b3sum": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+  },
+  "prior_reference_inspector": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d/identity-review/identity-audit.py",
+  "prior_reference_identity_result": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d/identity-results/identity-review.json",
+  "authority": "Measured b3a39a0118839fd6f7267c9b1c99258155ff40af/8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4 exact source/current data for complete inert inspection only. Prior-reference fields identify historical code/data context, not acceptance. No candidate/helper/provider/controller/compiler/recipe execution, source/cohort mutation, expected-pin refresh or protected launch. Both fresh complete independent underclass/gpt-6-sol reviews are mandatory.",
+  "prepared_native_source_manifest_raw_blake3": "a5cb8fc34e459e8c3133da06de8f53e936ad87926b290afb833c9f7e7fff1456"
+}

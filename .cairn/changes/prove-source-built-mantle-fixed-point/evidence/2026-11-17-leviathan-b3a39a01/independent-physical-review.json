@@ -1,0 +1,193 @@
+{
+  "schema": "mantle-independent-physical-review-v1",
+  "verdict": "ACCEPT_COMPLETE_STATIC_SCOPE",
+  "subject": {
+    "review_subject_path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-subject.json",
+    "review_subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+    "frozen_product_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+    "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+    "frozen_complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+    "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+    "input_plan_digest_blake3": "26b4e26f06d5fbceedb6d4efd451b5bb42ed5457547325967399ed5707dbf4dc",
+    "input_profile_manifest_blake3": "a706fa165458bd053fd8845499c4c632766dbf15c49a1bb3678a4696fbb51b6e",
+    "output_profile_manifest_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+    "output_profile_bytes": 17318938368,
+    "output_profile_raw_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+    "prepared_native_source_manifest_raw_blake3": "a5cb8fc34e459e8c3133da06de8f53e936ad87926b290afb833c9f7e7fff1456"
+  },
+  "evidence_bindings": {
+    "review_packet": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-packet.json", "blake3": "841c55a6a5ac979999a4dbe9a63684cce3a592e900c3bf5e10b50b271c5262d3"},
+    "review_contract": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-contract.md", "blake3": "16636597444cd94bca22d3b21a68f35e70219524203b0f6c14f5ddb308f0c2d4"},
+    "main_physical_report": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/identity-results/identity-review.json", "blake3": "a42d93294f2822b9aa7c71329794b0550614786a660c001357a79572495a17b7"},
+    "complementary_preauthor_report": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/preauthor-results/preauthor-role-physical-review.json", "blake3": "9c9ee0a5708387b648be5de888abb0f4052a19af790503676a0b65e517a64200"},
+    "physical_collation_not_independent_authority": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/physical-current-inputs.json", "blake3": "a71c2059946d1cb84ed4a6afc93e75cbf24106f5f320090394284a4ede547acf"},
+    "source_program_preparation": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/source-program-preparation.json", "raw_blake3": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37"},
+    "original_input_plan": {"path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/source-program-preparation-input-plan.json", "raw_blake3": "bbabab56c2b2b73e2dbe6007b80d67ab0e03fdf55c49c09d426229a35cfdb2a7"},
+    "parent_authored_inspectors": {
+      "identity-audit.py": {"path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/identity-review/identity-audit.py", "blake3": "ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59"},
+      "preauthor-role-physical-audit.py": {"path": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/review-tools/identity-review/preauthor-role-physical-audit.py", "blake3": "9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940"}
+    },
+    "frozen_consumer_blake3": {
+      "src/release_tree_copy.rs": "c7098192cdc8a1a1add76bca927fcfd07d214b9eb3bcf9b447daf7430164afa4",
+      "src/source_bundle.rs": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282",
+      "src/self_build.rs": "7a56ab295ee1d13534a3b4e74e083d868fbeb7a1f3a3841515a3888e7983518f",
+      "src/source_built_fixed_point_planning.rs": "91be8df65a37d1344c194062f3d09043567479a4efc295f86d09144ba43181bd",
+      "src/source_built_fixed_point_shell.rs": "9c8ac67d2fdc9fbea394975c8922a5c03e77f2cb6df6cc204a4221674e2cdddd",
+      "src/source_built_fixed_point_authoring.rs": "4669d884c8eec834a6b0a5d7d2c8eb28f800dc1914879a72d2939e520a70cabd",
+      "src/source_built_mantle_programs_native.rs": "3e2bb42a6c9c396515b0e1e2a4c980a7ee5c1b69b68852b47c4220f2b70da645",
+      "src/source_built_mantle_programs_graph.rs": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3",
+      "src/source_built_recipe.rs": "5e80f79f0f92a01618391c9bf0fbfd23b6bf03f3ed20c5981842078ffd0faa07"
+    },
+    "inert_tool_blake3": {
+      "python3.14": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb",
+      "b3sum": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "git": "b8fcf8cfa77c731cb3460ed6dbfdddf8991061e693760817ec411098ab9e505a",
+      "tar": "4f9b080ceb6c38fee8d89aa972d4aaf54ce4ee8bbdfa3850c3059ddaeee17e11",
+      "nix": "10a89016fda3e60a7262562d0d2e855077296966b7431d9210e1538657dfeb2e"
+    },
+    "recorded_inert_commands": [
+      "b3sum --derive-key mantle-source-built-fixed-point-plan-v2 --no-names",
+      "b3sum --no-names (streaming canonical record, source tree and actual file bytes)",
+      "git --git-dir=<pinned-original-AWS-Git> ls-tree -r -z <pinned-commit>",
+      "git --git-dir=<pinned-original-AWS-Git> hash-object --no-filters --stdin-paths",
+      "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory <source> . | b3sum --no-names",
+      "nix --extra-experimental-features blake3-hashes hash path --type blake3 --base16 <authored-program-directory>"
+    ],
+    "independent_read_only_observations": [
+      "b3sum --no-names over the local subject, both physical reports, collation, both inspector sources, contract, packet, plan and preparation evidence; the inspected byte hashes match the bindings above",
+      "ssh read-only diff -rq of the complete fixed-point-rust-source-program directory against inputs/rust-source-archives: no differing common files; the six original Rust archive tarballs occur only in the archive-set directory",
+      "ssh read-only b3sum --no-names of frozen src/source_built_recipe.rs yielded 5e80f79f0f92a01618391c9bf0fbfd23b6bf03f3ed20c5981842078ffd0faa07"
+    ]
+  },
+  "criterion_7": {
+    "decision": "ACCEPT_STATIC",
+    "coverage": {"total": 72015, "covered": 72015, "uncovered": []},
+    "main_report_original_coverage_unchanged": {"total": 72015, "covered": 72012, "uncovered_count": 3},
+    "complementary_directory_coverage": {"total": 3, "covered": 3, "uncovered": []},
+    "complete_bucket_coverage": {
+      "source_roles": {"total": 7, "covered": 7},
+      "output_profile_embedded_role_entries": {"total": 70844, "covered": 70844},
+      "authored_program_records": {"total": 4, "covered": 4},
+      "authored_program_embedded_entries": {"total": 488, "covered": 488},
+      "authored_recursive_nars": {"total": 4, "covered": 4},
+      "original_native_record_body_comparisons": {"total": 177, "covered": 177},
+      "authored_archive_members": {"total": 481, "covered": 481},
+      "preauthor_directory_roles": {"total": 3, "covered": 3},
+      "compiler_source_record_and_tree_equality": {"total": 2, "covered": 2},
+      "selected_mantle_v2_program_members": {"total": 5, "covered": 5}
+    },
+    "additional_preauthor_coverage_not_added_to_main_totals": {
+      "input_profile_records_decoded": 66,
+      "input_profile_original_native_records_seen": 59,
+      "preauthor_embedded_leaf_entries": {"total": 70794, "covered": 70794},
+      "preauthor_file_role_bodies": {"total": 4, "covered": 4}
+    },
+    "source_roles_from_original_plan": {
+      "mantle-source": {"kind": "directory", "digest_blake3": "fb38b047deffff84de4c7bbe3e9074cdd603bf46050be9d76a359d3670b14d91", "bytes": 359106568},
+      "native-source-bundle": {"kind": "regular-file", "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f", "bytes": 968316247},
+      "rust-source-archive-set": {"kind": "directory", "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24", "bytes": 3164874699},
+      "stagex-lineage": {"kind": "regular-file", "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d", "bytes": 170686},
+      "stagex-seed": {"kind": "regular-file", "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80", "bytes": 229},
+      "stagex-source-bundle": {"kind": "regular-file", "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98", "bytes": 87616094},
+      "vendor-inputs": {"kind": "directory", "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705", "bytes": 1213371949}
+    },
+    "native_authority_separation": {
+      "input_profile_bootstrap_source_raw_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "input_profile_bootstrap_source_bytes": 544909751,
+      "preauthor_plan_native_closure_raw_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+      "preauthor_plan_native_closure_bytes": 968316247,
+      "preauthor_plan_native_records": 59,
+      "augmented_native_closure_raw_blake3": "a5cb8fc34e459e8c3133da06de8f53e936ad87926b290afb833c9f7e7fff1456",
+      "augmented_native_closure_bytes": 2372498846,
+      "augmented_native_records": 63,
+      "added_identities_are_exactly_the_four_authored_programs": true,
+      "unchanged_original_record_bodies": {"total": 59, "covered": 59, "comparison_sources": ["preauthor-plan", "augmented-closure", "launch-input-profile"]}
+    },
+    "separately_authenticated_authored_program_records": {
+      "fixed-point-native-source-program": {"record_content_blake3": "f100905e5c71ae0507a973687732cd8465b77d5f511c2b124a48710cd9d7bf4a", "embedded_entries": 132, "unique_archive_members": 132, "recursive_nar_blake3": "40ee3117c1c237a12d498bce00fef75f790e0511042cd96d7a52633de1f0c88a"},
+      "fixed-point-rust-source-program": {"record_content_blake3": "7ca01d558f37960e0b900049ee455a49b5e2f349f1fab349787b89ec28370057", "embedded_entries": 23, "unique_archive_members": 20, "recursive_nar_blake3": "14b8619ce87a14680aa254db0c43bc5f783bc8345d9e3eae8e81bd118d723ca3"},
+      "source-built-mantle-programs": {"record_content_blake3": "2192ef62c8dc860a7fe45449b4594336c43ad457b76af35df0caa52d29090b6c", "embedded_entries": 12, "unique_archive_members": 8, "recursive_nar_blake3": "53d2fb96b0cdd9f7382c043adf3902373984b23052fd9e31570ece1bcb02495f"},
+      "source-built-stagex-programs": {"record_content_blake3": "a1b6a24939468e19f0f18996458c74209c8a8cdea5218a3ea75afe58c5df385c", "embedded_entries": 321, "unique_archive_members": 321, "recursive_nar_blake3": "aa6823dd20b7034bf19133b23c106f6215d6f6d675527151ea6cfa91cf2a3c23"}
+    },
+    "unchanged_compiler_source": {
+      "original_and_output_record_content_blake3": "89e1d122294eea974302f238c69e202093a1f7d15aff752182f0d78bedc4b6e3",
+      "original_and_output_record_body_blake3": "79e8254dcf6103bd5eb788facdd642836054b5e99423e4f38e1c1ee2ef498c4e",
+      "original_and_output_tree_blake3": "fb38b047deffff84de4c7bbe3e9074cdd603bf46050be9d76a359d3670b14d91",
+      "regular_leaves": 12766,
+      "required_parent_directories": 1131,
+      "physical_tree_entries": 13897,
+      "authored_file_or_directory_additions": 0
+    },
+    "basis": "The inspected unfiltered source-record loops compare each of 59 entire original native bodies across the input profile, retained preauthor plan, augmented closure and output profile. All seven roles, 70 output records, 488 authored embedded entries and 481 archive members are accounted for; each authored archive member is compared bytewise to a file whose embedded chunks were decoded, and the four full recursive NAR identities equal authenticated record metadata. The frozen source-bundle consumer verifies every record payload and digest on admission; source-built authoring preserves the original compiler source record and materialized tree."
+  },
+  "criterion_8": {
+    "decision": "ACCEPT_STATIC",
+    "coverage": {"total": 33820, "covered": 33820, "uncovered": []},
+    "complete_bucket_coverage": {
+      "original_AWS_Git_leaves_across_two_copies": {"total": 20854, "covered": 20854},
+      "admitted_frozen_Mantle_source_leaves": {"total": 12766, "covered": 12766},
+      "v2_route_recipe_manifest_refs": {"total": 2, "covered": 2},
+      "selected_AWS_and_Ring_script_routes": {"total": 76, "covered": 76},
+      "selected_pipe_sources": {"total": 76, "covered": 76},
+      "selected_assembler_probe_boundaries": {"total": 3, "covered": 3},
+      "frozen_helper_translator_copies": {"total": 14, "covered": 14},
+      "native_owned_LLVM_members": {"total": 2, "covered": 2},
+      "initial_authority_paths": {"total": 27, "covered": 27}
+    },
+    "original_AWS_Git": {
+      "commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+      "tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+      "complete_regular_blob_members_per_copy": 10427,
+      "mode_0644_per_copy": 10207,
+      "mode_0755_per_copy": 220,
+      "frozen_and_prepared_copies_have_zero_missing_extra_or_mismatched_Git_blobs": true,
+      "normalized_gnu_tar_blake3_per_copy": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89"
+    },
+    "Mantle_source_capture": {
+      "frozen_admitted_regular_leaves_compared_bytewise": 12766,
+      "required_parents_in_hydrated_tree": 1131,
+      "prepared_role_record_entries": 12766,
+      "excluded_sibling_vendor_role": "vendor-inputs",
+      "capture_skips_name": ".git",
+      "extra_compiler_tree_entries": 0,
+      "comparison_rule": "Frozen self_build staged top-level allowlist minus vendor-deps, with source_bundle .git exclusion; compare every admitted regular leaf byte and executable flag and every required parent, then compare the complete materialized tree digest to the preauthor plan and original record. Directory materialization and hash modes follow frozen release_tree_copy.rs."
+    },
+    "selected_physical_source_paths": {
+      "stage1_AWS_original_scripts": 26,
+      "stage1_Ring_original_scripts": 12,
+      "stage2_AWS_original_scripts": 26,
+      "stage2_Ring_original_scripts": 12,
+      "same_AWS_and_Ring_selection_across_stages": true,
+      "one_frozen_PIPE_SOURCE_product_per_selected_generator": 76,
+      "frozen_PIPE_SOURCE_blake3": "66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df",
+      "AWS_rsaz_original_probe_literal_occurrences": 3,
+      "AWS_and_Ring_original_pipe_boundary_checks": 38,
+      "authenticator_routing": "The 12 Ring authenticators per stage consume original vendor Ring paths, original Perl command request and source, then feed a Produced Text file to their generator. The frozen native helper ring_request checks executable, three exact operands, cwd and OUT_DIR before copying the selected script; generated raw and translator outputs feed the corresponding result. Each AWS generator consumes the authenticated perlasm source tree, its matching PIPE_SOURCE and, for RSaz, the Produced assembler probe. No runtime request content is asserted."
+    },
+    "copy_and_member_ownership": {
+      "frozen_helper_translator_exact_byte_copies": 14,
+      "authored_Rust_files_exactly_present_in_rust_source_archive_set": 20,
+      "original_Rust_archive_tarballs_only_in_archive_set": 6,
+      "native_owned_LLVM_members": ["fixed-point-native-source-program/source-built/native/llvm-cmake-patch.c", "fixed-point-native-source-program/source-built/native/llvm-cmake-phase.h"],
+      "original_Rust_route_three_way_byte_match": true,
+      "compiler_tree_authored_additions": 0
+    },
+    "initial_authority": {"absent_provider_and_store_roots": 20, "absent_first_launch_outputs": 7, "total_absent_paths": 27, "initial_output_authority_entries": 0},
+    "basis": "The Git commit/tree were pinned, their full 10427-member inventory, modes and blob identities compared against each complete frozen and prepared copy, and both normalized trees matched. Complete capture-rule source trees, selected script and pipe routes, original probes, copied helpers and separately native-owned LLVM members were reviewed against frozen recipe, helper and materialization consumers. No provider, store, transition or first-launch output authority was observed."
+  },
+  "resolved_main_report_gaps": [
+    {"gap": "preauthor embedded directory reconstruction: mantle-source", "original_main_report": {"total": 1, "covered": 0}, "complementary_report": {"total": 1, "covered": 1, "record_leaf_entries": 12766, "required_parent_directories": 1131, "total_tree_entries": 13897, "payload_file_bytes": 359106568, "reconstructed_tree_blake3": "fb38b047deffff84de4c7bbe3e9074cdd603bf46050be9d76a359d3670b14d91", "equals_actual_preauthor_plan": true}},
+    {"gap": "preauthor embedded directory reconstruction: rust-source-archive-set", "original_main_report": {"total": 1, "covered": 0}, "complementary_report": {"total": 1, "covered": 1, "record_leaf_entries_including_chunks": 50, "unique_regular_files": 6, "required_parent_directories": 0, "total_tree_entries": 6, "payload_file_bytes": 3164874699, "reconstructed_tree_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24", "equals_actual_preauthor_plan": true}},
+    {"gap": "preauthor embedded directory reconstruction: vendor-inputs", "original_main_report": {"total": 1, "covered": 0}, "complementary_report": {"total": 1, "covered": 1, "record_leaf_entries": 57965, "required_parent_directories": 10803, "total_tree_entries": 68768, "payload_file_bytes": 1213371949, "reconstructed_tree_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705", "equals_actual_preauthor_plan": true}}
+  ],
+  "unresolved_findings": [],
+  "uncovered_obligations_within_criteria_7_8": [],
+  "runtime_payload_bytes_observed": 0,
+  "non_claims": [
+    "STATIC physical source identity and authentication acceptance only, not protected launch or receipt authority; parent reconciliation remains required.",
+    "No runtime invocation or authenticator payload bytes were observed or synthesized.",
+    "No compiler correctness, runtime success, fixed point, seed correctness, kernel isolation, independent rebuild, reproducibility, deployment or release claim.",
+    "No I3-I5, proof-dependent V2/V3, signed adoption or any of the five native rows is accepted by this review.",
+    "Neither the preauthor bootstrap-source input role nor its raw identity is substituted for the distinct assembled plan closure or augmented native closure. The original main report remains 72012/72015 for criterion 7 with three explicit gaps; only the separate complementary report resolves them."
+  ]
+}

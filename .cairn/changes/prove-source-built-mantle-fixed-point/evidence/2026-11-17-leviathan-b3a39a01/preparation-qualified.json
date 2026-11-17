@@ -1,0 +1,22 @@
+{
+  "preparation_task": 1701,
+  "facts_task": 1702,
+  "result": "Success",
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "complete_source_before_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "complete_source_after_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "source_before_after_equal": true,
+  "report_bytes_blake3": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37",
+  "plan_bytes_blake3": "bbabab56c2b2b73e2dbe6007b80d67ab0e03fdf55c49c09d426229a35cfdb2a7",
+  "profile_file_bytes": 17318938368,
+  "profile_file_raw_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+  "input_manifest_blake3": "a706fa165458bd053fd8845499c4c632766dbf15c49a1bb3678a4696fbb51b6e",
+  "prepared_manifest_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+  "program_records": {
+    "fixed-point-native-source-program": "f100905e5c71ae0507a973687732cd8465b77d5f511c2b124a48710cd9d7bf4a",
+    "fixed-point-rust-source-program": "7ca01d558f37960e0b900049ee455a49b5e2f349f1fab349787b89ec28370057",
+    "source-built-mantle-programs": "2192ef62c8dc860a7fe45449b4594336c43ad457b76af35df0caa52d29090b6c",
+    "source-built-stagex-programs": "a1b6a24939468e19f0f18996458c74209c8a8cdea5218a3ea75afe58c5df385c"
+  },
+  "scope": "Actual current source-only preparation/facts and exact metadata transfer; full-profile transport parity, complete data inspection, independent reviews and genuine execution remain required."
+}

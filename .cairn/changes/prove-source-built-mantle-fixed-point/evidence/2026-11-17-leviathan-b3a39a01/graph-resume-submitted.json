@@ -1,0 +1,18 @@
+{
+  "task": 1708,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--label",
+    "graph-route-ref-fixed-b3a39a01-immutable-source",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/inspect-graph-route-ref-fixed-b3a39a01-immutable-source.sh"
+  ],
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "failed_predecessor": 1703,
+  "scope": "Affected controller/helper/selector/semantic phases only; prior current graph bytes are reused and revalidated; submitted is not accepted."
+}

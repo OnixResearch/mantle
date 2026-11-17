@@ -1,0 +1,450 @@
+{
+  "bindings": {
+    "current_input_blake3": {
+      "cold_route": "2deff2955ddc93610adef056f8bb92b37e2f50be83d9abc4672e09b664a07e78",
+      "mantle_stage1_recipe": "8366b907527ad0bc18c0ab59005cfaf05a0a5649b28422e8fd47aedb809dcf02",
+      "mantle_stage2_recipe": "c90844db6b30127b22a15dedc95e3d605fe786ee151304d80883121a3a36c8f8",
+      "native_index": "35927a6242fda8c9eb5c2457624d5592163e9556cd572b9af47e644d065c38b8",
+      "native_recipe": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab",
+      "preparation_input_plan_file": "bbabab56c2b2b73e2dbe6007b80d67ab0e03fdf55c49c09d426229a35cfdb2a7",
+      "rust_index": "82a27d0ac53f70ff44f45796a522bafdb78003e722c9a287c7d4203f1c205eee",
+      "rust_recipe": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+      "source_plan_digests": {
+        "mantle-stage1": "503bc38c6bdab2320d439c1fe0f8b0e678738431d1162fc7319837dc5865525b",
+        "mantle-stage2": "f185790ae9abb10c55568f9a4613d890be37a97af665c07d8016233242aee9c9"
+      },
+      "source_program_records": {
+        "fixed-point-native-source-program": "f100905e5c71ae0507a973687732cd8465b77d5f511c2b124a48710cd9d7bf4a",
+        "fixed-point-rust-source-program": "7ca01d558f37960e0b900049ee455a49b5e2f349787b89ec28370057",
+        "source-built-mantle-programs": "2192ef62c8dc860a7fe45449b4594336c43ad457b76af35df0caa52d29090b6c",
+        "source-built-stagex-programs": "a1b6a24939468e19f0f18996458c74209c8a8cdea5218a3ea75afe58c5df385c"
+      },
+      "stagex_publication_index": "3912c022ed921a8dd11f8284062fd8fad9c8d93332d2b3ecd84865d317af2b51",
+      "stagex_publication_recipe": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+      "stagex_transition_index": "8c9e88c95737bc24d02c64ed36b6a2180c3980a1264681951b7ca5c81c115564",
+      "stagex_transition_recipe": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34"
+    },
+    "frozen_consumer_blake3": {
+      "crates/mantle-rust-plan-core/src/features.rs": "dc4071b58a23fc9cd6887cf47c3fd22c63607e8bcab7d6fae169c2d237737eef",
+      "src/rust_plan.rs": "0890464dcf1da3d64dd9544018412d8908bc9b53da41db4aadb30d326d8ab90c",
+      "src/source_built_fixed_point_action_controller.rs": "aafd4668ae21b831b33f726121fb9894b5da517e4f29353fee79e02eb8a12768",
+      "src/source_built_mantle_programs_graph.rs": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3",
+      "src/source_built_recipe.rs": "5e80f79f0f92a01618391c9bf0fbfd23b6bf03f3ed20c5981842078ffd0faa07",
+      "src/source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+      "src/source_built_recipe_exec.rs": "ec7d233b69c57375dd3ca7df4d33cf964f6a82e3ffa9b7acccc4b9740d41fc29",
+      "src/source_built_stagex_programs_controller.rs": "65fdd81998efff77e665ccd4bde4f5389ffc19736b5b50419bb392839fa05b94",
+      "src/source_built_stagex_programs_controller_paths.c": "e84760566f10f1d2a7fb71c32f7731b892f317ada6725bf889c43b9544410c95",
+      "src/source_built_stagex_programs_controller_protocol.c": "90cedfe17d94566a541f37b46ab5e15ed6e44950c4182cabc3ef9309e9058352",
+      "src/source_bundle.rs": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282"
+    },
+    "independent_review_operations": "Read-only report/inspector/frozen-consumer and exact-subject inspection using read and grep; no parent checker, product or protected command rerun. Hashes above are bound to exact current packet and report observations, not a claim that this reviewer rehashed all source/cohort bytes.",
+    "inspector_blake3": {
+      "check-seed-source-regressions.py": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e",
+      "controller-template-audit.py": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+      "graph-audit.py": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+      "helper-authority-audit.py": "6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b",
+      "mantle-selector-audit.py": "c7c52a94e288dc30c0d30a1b1e923d94df2859b85907670feb6930a4529ee7a6"
+    },
+    "other_parent_recorded_inspection_commands": [
+      "python3 controller-template-audit.py COHORT FROZEN_SOURCE REVIEW_SCRATCH SUBJECT_JSON",
+      "python3 mantle-selector-audit.py COHORT FROZEN_SOURCE REVIEW_SCRATCH SUBJECT_JSON",
+      "b3sum --no-names <bound inputs>"
+    ],
+    "parent_recorded_inspection_command": [
+      "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source/graph-review/graph-audit.py",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+      "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+      "/home/brittonr/sbfp-20261113-berdKH/inspection-b3a39a01-immutable-source-graph",
+      "/home/brittonr/sbfp-20261113-berdKH/review-subject-b3a39a01-immutable-source.json"
+    ],
+    "tool_blake3": {
+      "b3sum-1.8.7": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "python3.14": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb"
+    }
+  },
+  "criteria": {
+    "1": {
+      "categories": {
+        "declared_input_references": {
+          "covered": 1183783,
+          "total": 1183783,
+          "uncovered": 0
+        },
+        "dependency_edges": {
+          "covered": 859396,
+          "total": 859396,
+          "uncovered": 0
+        },
+        "raw_output_seeds": {
+          "covered": 6832,
+          "invalid": 0,
+          "total": 6832,
+          "uncovered": 0
+        },
+        "recipe_artifact_references": {
+          "covered": 1720298,
+          "total": 1720298,
+          "uncovered": 0
+        },
+        "selected_recipes": {
+          "covered": 6,
+          "total": 6,
+          "uncovered": 0
+        },
+        "source_order_recipe_steps": {
+          "covered": 125407,
+          "total": 125407,
+          "uncovered": 0
+        },
+        "static_invocation_requests": {
+          "covered": 4279,
+          "total": 4279,
+          "uncovered": 0
+        }
+      },
+      "citations": [
+        "graph-results/graph-audit.json:coverage.recipe_count,coverage.recipe_steps,coverage.stages,six_recipe_reports",
+        "graph-results/controller-template-audit.json:coverage.raw_output_seeds",
+        "frozen src/source_built_recipe_exec.rs::run",
+        "frozen src/source_built_recipe.rs::validate_operation,decode_invocation",
+        "review-subject.json:program_records"
+      ],
+      "diagnostics": "All six plan/route/index selected recipes and local/prior exact declarations have zero reference, order, cycle, producer or admission failures. Thirty-five native steps classified dependency-unreachable remain in source-order static inspection; 4278 Rust plus one native static requests are inspected rather than omitted. 6167 separate generated requests are symbolic, not falsely decoded bytes.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static"
+    },
+    "2": {
+      "categories": {
+        "generated_guard_conditions": {
+          "covered": 13402,
+          "total": 13402,
+          "uncovered": 0
+        },
+        "generated_guarded_templates": {
+          "covered": 8995,
+          "total": 8995,
+          "uncovered": 0
+        },
+        "generated_observation_templates": {
+          "covered": 4588,
+          "total": 4588,
+          "uncovered": 0
+        },
+        "raw_guard_status_edges": {
+          "covered": 80,
+          "total": 80,
+          "uncovered": 0
+        },
+        "raw_guarded_commands": {
+          "covered": 80,
+          "total": 80,
+          "uncovered": 0
+        },
+        "raw_observe_phase_steps": {
+          "covered": 80,
+          "total": 80,
+          "uncovered": 0
+        },
+        "raw_optional_failure_ordinary_outputs": {
+          "covered": 232,
+          "total": 232,
+          "uncovered": 0
+        }
+      },
+      "citations": [
+        "graph-results/graph-audit.json:six_recipe_reports.*.graph_guards,coverage.stages",
+        "graph-results/controller-template-audit.json:per_stage,coverage.per_stage",
+        "frozen src/source_built_recipe.rs::validate_guarded_reference,RecipeGuard,RecipeExitPolicy",
+        "frozen src/source_built_recipe_exec.rs::run"
+      ],
+      "diagnostics": "Per Mantle stage, 40 guarded commands, 40 guard-status edges, 40 ObservePhase steps and 109 optional-failure outputs are accounted for; StageX adds 14 optional-failure outputs. The actual executed/skipped path is conditional on future observed status and neither alternative is represented as an observed run. Generated template guard placement and observation/resume use were checked in their instantiated scopes.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static"
+    },
+    "3": {
+      "categories": {
+        "linux_headers_actual_bin_make_consumers": {
+          "covered": 2,
+          "total": 2,
+          "uncovered": 0
+        },
+        "mantle_semantic_products_each_stage": {
+          "covered_per_stage": 1243,
+          "stages": 2,
+          "total_per_stage": 1243,
+          "uncovered": 0
+        },
+        "native_derivation_edges": {
+          "covered": 341,
+          "total": 341,
+          "uncovered": 0
+        },
+        "rust_bootstrap_output_edges": {
+          "covered": 16,
+          "total": 16,
+          "uncovered": 0
+        },
+        "rust_source_edges": {
+          "covered": 6,
+          "total": 6,
+          "uncovered": 0
+        },
+        "semantic_root_regression_cases": {
+          "covered": 10,
+          "negative_rejected": 8,
+          "total": 10,
+          "uncovered": 0
+        },
+        "stagex_lineage_and_admission_edges": {
+          "covered": 132,
+          "total": 132,
+          "uncovered": 0
+        }
+      },
+      "citations": [
+        "graph-results/graph-audit.json:mantle_stage_semantic_root_and_smoke_inventory,rust_route_expansion_and_canonical_handoffs,native_expansion_edges_and_make_uses,stagex_lineage_expansion_publication",
+        "graph-results/semantic-root-regression.json:cases",
+        "frozen src/source_built_mantle_programs_graph.rs",
+        "frozen src/source_built_recipe.rs::RecipeOperation::ProjectTreeMember"
+      ],
+      "diagnostics": "Each Mantle stage has 1145 exact semantic keys, including 1047 rust-unit keys and 98 build-script keys, resolving 1243 products; binary is the exact Executable semantic product, mantle-help consumes it and the smoke export names its genuine producer. Native linux-headers has a projected installed bin/make Executable consumed by two host make/version steps, not only a Tree anchor. Rust final rustc/cargo/rustdoc/rustlib/receipt and StageX publication handoffs retain exact identities. The two positive semantic cases and eight changed/missing/ambiguous/shorthand negative cases were classified without normalization.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static"
+    },
+    "4": {
+      "categories": {
+        "all_output_seeds_raw_and_generated": {
+          "covered": 16008,
+          "invalid": 0,
+          "total": 16008,
+          "uncovered": 0
+        },
+        "generated_invocation_symbolic_bindings": {
+          "actual_runtime_bytes_observed": 0,
+          "covered": 6167,
+          "total": 6167,
+          "uncovered_static": 0
+        },
+        "raw_static_words": {
+          "covered": 1488715,
+          "total": 1488715,
+          "uncovered": 0
+        },
+        "scoped_raw_and_generated_words": {
+          "covered": 2551864,
+          "invalid": 0,
+          "total": 2551864,
+          "uncovered": 0
+        },
+        "static_decoded_invocations": {
+          "covered": 4279,
+          "total": 4279,
+          "uncovered": 0
+        }
+      },
+      "citations": [
+        "graph-results/graph-audit.json:coverage.static_words,coverage.finding_counts,six_recipe_reports",
+        "graph-results/controller-template-audit.json:combined_static_contract_check,coverage,full_category_tally,runtime_payload_producer_consumer_contract",
+        "graph-results/output-seed-immutable-source-regressions.json:complete_seed_coverage,seed_negative_cases",
+        "frozen src/source_built_recipe.rs::RecipeInvocation,decode_invocation,WordPart",
+        "frozen src/source_built_stagex_programs_controller_protocol.c::mantle_controller_invocation",
+        "frozen src/source_built_stagex_programs_controller_paths.c"
+      ],
+      "diagnostics": "The graph first recorded 14037 raw word flags from evaluating ControllerSpec words with outer generic controller-input-N aliases. The scoped template reconstruction rechecks all words under their actual generated input aliases and has zero corrected word, kind, environment-name or reference issues; the raw flags remain visible rather than being deleted. Strict input/output/runtime/workspace ownership, cwd/argv0/executable path, readonly mounts, lexical and byte limits, process attributes and descriptors were compared to the frozen decoder; compiler text supplies operand data, not extra path authority. Generated invocation bytes cannot be evaluated statically; the 6167 producer/emitter/router/decoder links are only symbolic.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static_symbolic_boundary"
+    },
+    "5": {
+      "categories": {
+        "ControllerSpecs": {
+          "covered": 2294,
+          "total": 2294,
+          "uncovered": 0
+        },
+        "executable_slots": {
+          "covered": 4588,
+          "total": 4588,
+          "uncovered": 0
+        },
+        "generated_observations": {
+          "covered": 4588,
+          "total": 4588,
+          "uncovered": 0
+        },
+        "generated_output_seeds": {
+          "covered": 9176,
+          "invalid": 0,
+          "total": 9176,
+          "uncovered": 0
+        },
+        "generated_step_templates": {
+          "covered": 25053,
+          "total": 25053,
+          "uncovered": 0
+        },
+        "runtime_derived_payload_symbolic_bindings": {
+          "actual_payload_bytes_observed": 0,
+          "covered": 4588,
+          "total": 4588,
+          "uncovered_static": 0
+        },
+        "slot_variants": {
+          "adapted": {
+            "covered": 0,
+            "total": 0
+          },
+          "fixed": {
+            "covered": 181,
+            "total": 181
+          },
+          "inventory": {
+            "covered": 2294,
+            "total": 2294
+          },
+          "request_output": {
+            "covered": 2113,
+            "total": 2113
+          }
+        }
+      },
+      "citations": [
+        "graph-results/controller-template-audit.json:per_stage,coverage,combined_static_contract_check,runtime_payload_producer_consumer_contract",
+        "frozen src/source_built_recipe_controller.rs::step_templates,instantiate",
+        "frozen src/source_built_fixed_point_action_controller.rs::run_controller,validate_controller_template_resume",
+        "frozen src/source_built_stagex_programs_controller.rs::template_recipe",
+        "frozen src/source_built_recipe_exec.rs::run_controller"
+      ],
+      "diagnostics": "All actual start, per-slot prepare/executable/command/observation, resume and finish templates are reconstructed with their original catalog binding, same-turn/slot Text invocation producer and consumer routing. The adapted variant has no selected instance (0 of 0); its constructor branch was still examined, not counted as a positive instance. The generated 9176 Tree seeds resolve only in the controller-validation namespace with exact prior producers, kinds and nonshrinking bytes_max. The consumer role dispatcher and observation/resume validation were read; no new cross-boundary role is silently discarded. Actual generated payload bytes and execution state are not claimed.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static_symbolic_boundary"
+    },
+    "6": {
+      "categories": {
+        "actual_compiler_source_root_unit_digests": {
+          "covered": 16,
+          "invalid": 0,
+          "total": 16,
+          "uncovered": 0
+        },
+        "actual_source_member_resolutions": {
+          "covered": 819,
+          "kinds": {
+            "text": 653,
+            "tree": 166
+          },
+          "total": 819,
+          "uncovered": 0
+        },
+        "both_original_package_exclusions": {
+          "covered": 2,
+          "invalid": 0,
+          "total": 2,
+          "uncovered": 0
+        },
+        "cargo_feature_environment_contexts": {
+          "covered": 2386,
+          "invalid": 0,
+          "total": 2386,
+          "uncovered": 0
+        },
+        "compiler_feature_cfg_selectors": {
+          "covered": 2098,
+          "invalid": 0,
+          "total": 2098,
+          "uncovered": 0
+        },
+        "mapped_pre_lowering_compile_units": {
+          "covered": 2098,
+          "total": 2098,
+          "uncovered": 0
+        },
+        "owning_stage_helper_uses": {
+          "covered": 1098,
+          "invalid": 0,
+          "total": 1098,
+          "uncovered": 0
+        },
+        "pre_lowering_plan_derivations": {
+          "covered": 2094,
+          "orphan": 0,
+          "total": 2094,
+          "uncovered": 0
+        },
+        "recipe_source_binding_kind_occurrences": {
+          "covered": 11185,
+          "total": 11185,
+          "uncovered": 0
+        }
+      },
+      "citations": [
+        "graph-results/source-binding-kind-inventory.json:resolved_references",
+        "graph-results/graph-audit.json:coverage.stages",
+        "graph-results/helper-authority-audit.json:stages,totals",
+        "graph-results/helper-authority-negative.json:cases",
+        "graph-results/mantle-selector-audit.json:coverage,source_plan_derivations,inputs,per_stage",
+        "selector-mutations.json:negative_cases",
+        "graph-results/output-seed-immutable-source-regressions.json:immutable_compiler_source",
+        "frozen src/source_bundle.rs::materialize_source_record_payload",
+        "frozen src/source_built_recipe.rs::lower_step",
+        "frozen src/rust_plan.rs::hash_path_source_tree,collect_source_files",
+        "frozen crates/mantle-rust-plan-core/src/features.rs"
+      ],
+      "diagnostics": "The 819 unique source/member resolutions derive from admitted exact leaf/parent records (603) or exact existing members (216); directory roots lower as Tree and regular files as Text, with no inferred unknown kind. Helper uses partition 188 native, 67 Rust, three per Mantle stage, four publication, 833 transition and match their four owning program records. Each of two source-only unit plans maps 1047 derivations to 1049 compile units with two identified metadata fallbacks and no orphan; authenticated embedded program members, complete 17318938368-byte output-profile stream and subject source inputs are bound. The unchanged blake3-tree-v1 Rust framing counted 12766 actual compiler-source files and 13897 visited entries, producing e781c15339a2827b974bdd58979f404e40406e9d7bdf3ad6a38b5c59b6f99c10; all eight root units per plan match without skipped authored files. Nine selector mutations, six helper authority mutations and four compiler-source identity mutations reject on the actual data; an empty root set is not accepted.",
+      "uncovered_obligations": [],
+      "verdict": "accept_static"
+    }
+  },
+  "diagnostics": {
+    "checker_failures_retained": [
+      {
+        "cause": "controller-template-audit.py local ref variable shadowed ref constructor; checker TypeError, no product execution",
+        "evidence": "graph-1703-failure.json; graph-execution-failed-1703.log.gz",
+        "task": 1703
+      },
+      {
+        "cause": "mantle-selector-audit.py coverage producer omitted required uncovered counter, causing KeyError; current inspector adds counter and requires nonempty actual root-unit set",
+        "evidence": "selector-coverage-correction.json; graph-resume-failed-1708.log; graph-results/mantle-selector-audit.json",
+        "task": 1708
+      }
+    ],
+    "independent_assessment": "No concrete unaddressed static blocker identified against the frozen source semantics. No predecessor verdict or prior counts used to fill coverage. Current report counters remain measurements, not claims of actual runtime payloads or protected outcomes.",
+    "original_graph_report_status": "HOLD: 14037 generic-alias word flags, not erased; reinterpreted only after complete frozen-consumer template reconstruction with zero corrected issues. Original failure evidence retained.",
+    "seed_positive_and_negative": {
+      "evidence": "graph-results/output-seed-immutable-source-regressions.json",
+      "generated": "9176/9176 Tree",
+      "inert_negative_cases": "raw 10 of 10; generated 9 of 9; unknown kind, wrong kind, unknown producer/output, non-input, guard, stream, nonprior local, unresolved/shrinking bounds rejected where applicable",
+      "raw": "6832/6832; archive 1, text 81, tree 6750"
+    },
+    "static_scope_blockers": []
+  },
+  "limitations_and_non_claims": {
+    "full_static_scope": "ACCEPT: no uncovered static criterion 1-6 class, unknown source kind, mis-scoped unexamined ControllerSpec, omitted raw/generated output seed, or unbound current source-plan root established; no concrete static blocker found.",
+    "other_non_claims": [
+      "No executable/build/compiler correctness, seed correctness, fixed-point completion or runtime bytes inferred from hashes and static contracts",
+      "No kernel isolation, independent rebuild, reproducibility, deployment, native-row acceptance, signed adoption or release claim",
+      "No launch/trust/pin/source/cohort mutation performed; report is advisory and parent reconciliation and current Cairn gates remain required"
+    ],
+    "physical_scope": "Criteria 7-8 require separate independent physical reviewer; current physical-current-inputs.json is parent collation only, not independent acceptance.",
+    "protected_scope": "BLOCKED pending actual fresh protected stages, runtime-generated RecipeInvocation bytes and strict decode results, executed/skipped outcomes, stage1-owned stage2 equality, root action-trust reconciliation and independently verified mantle-deterministic-proof-receipt-v2."
+  },
+  "overall_correctness": "correct_for_bounded_static_scope",
+  "schema": "mantle-independent-graph-review-v1",
+  "subject": {
+    "evidence": [
+      "review-packet.json",
+      "review-subject.json",
+      "review-contract.md",
+      "graph-results/graph-audit.json:subject_binding",
+      "graph-results/mantle-selector-audit.json:subject_binding"
+    ],
+    "frozen_complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+    "full_profile_file_and_ssh_stream_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+    "input_plan_blake3": "26b4e26f06d5fbceedb6d4efd451b5bb42ed5457547325967399ed5707dbf4dc",
+    "prepared_manifest_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+    "prepared_native_source_manifest_raw_blake3": "a5cb8fc34e459e8c3133da06de8f53e936ad87926b290afb833c9f7e7fff1456",
+    "review_subject_exact_byte_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+    "review_subject_path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/review-subject.json",
+    "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af"
+  },
+  "verdict": "ACCEPT_FULL_STATIC_SCOPE_ONLY"
+}

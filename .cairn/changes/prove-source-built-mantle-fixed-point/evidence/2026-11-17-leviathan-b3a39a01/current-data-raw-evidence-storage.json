@@ -1,0 +1,76 @@
+{
+  "reason": "Lossless byte-bound storage; preserve raw CR-bearing SSH/build/audit output without normalization. Original observed logs remain available locally.",
+  "files": [
+    {
+      "observed_name": "preparation.log",
+      "storage": "preparation.log.gz",
+      "decoded_blake3": "131da70295137c5de12145c0e418638225a79db4105ba9767d5a46b77385811b",
+      "storage_blake3": "f432de57adccfbba518ad651bb90c49550855b955b888650c6dc1ae4b7d2dd83",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "subject-facts.log",
+      "storage": "subject-facts.log.gz",
+      "decoded_blake3": "13c39d6320281dd26f4b53068b200e31a379bda9204fcad0cf709fec25cc63ec",
+      "storage_blake3": "da3464bf53c2fe3f7df451c4ce46963e4580991af7ae90fd0f0300f4cfa9938a",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "selector-mutations-execution.log",
+      "storage": "selector-mutations-execution.log.gz",
+      "decoded_blake3": "771daa1d0f6ac6010438a5423bdb8a9d81c1b6752de3b95001ef4cdc42961436",
+      "storage_blake3": "a3e5a32727c6ab396029df9d4acbad57ca1f0ac511d1e099d28279ab02fb3ed7",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "identity-execution.log",
+      "storage": "identity-execution.log.gz",
+      "decoded_blake3": "2c76dc5a7cd736e9970947ace4409eefa9b1632bdb19e2e75b2660528b602678",
+      "storage_blake3": "0189e952f0771b853cce20ed6822b098376773d15c2c523ef8bccc0ee9489c70",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "graph-execution-failed-1703.log",
+      "storage": "graph-execution-failed-1703.log.gz",
+      "decoded_blake3": "372ab16bfca033520547d2937742b6c0cc9e8cb44ce130d375a2bf0ba937db7e",
+      "storage_blake3": "714f0fd10fe50652b12ba1ddf490bf4a708d10f5af2a0394786c8ae89bdb5b54",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "graph-resume-failed-1708.log",
+      "storage": "graph-resume-failed-1708.log.gz",
+      "decoded_blake3": "34c314d6f4f4d9793b63610894ee7e7d65fc7110c69889dd70df6a5ffabce35b",
+      "storage_blake3": "1eafda7c514d5fbb2ff4706964d436ce0c1a98a9e6366040f88d41873513c21c",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "helper-mutations-execution.log",
+      "storage": "helper-mutations-execution.log.gz",
+      "decoded_blake3": "dff6f61dc8745192f3a0a0bccc1bc89c5300eda2b3ceff00d8d02cc93ff2be2e",
+      "storage_blake3": "587cd49ae84864434f74a885e58ce97b462503ad6cad6d77f809e7f9c45642e0",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "preauthor-execution.log",
+      "storage": "preauthor-execution.log.gz",
+      "decoded_blake3": "de85e208879161b1dc44dacbf95e06fb8b265c066b79344b2f5fc3b4222b03ad",
+      "storage_blake3": "0fd4df9ab442875e0f06c6668944407723e1a96cb82eafbb776cf880d3867550",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "seed-source-regressions-execution.log",
+      "storage": "seed-source-regressions-execution.log.gz",
+      "decoded_blake3": "0b8ba7ce8690be52d4598bb2a77c7ba3d6de5f533b623b09f696865178a02c70",
+      "storage_blake3": "7639f0febf507729ce96a3e934f2bfe7032b45a54120286378f63ab047c15300",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "graph-selector-execution.log",
+      "storage": "graph-selector-execution.log.gz",
+      "decoded_blake3": "73c57e25dd48e6638c3daf3b2c7df2d82978b41a8238e055291f82aec8bf8366",
+      "storage_blake3": "9b1e0cf1734548c5103988a79a22f5b5bc3dbc8661432e4ca833655ff6d3c6a3",
+      "roundtrip_equal": true
+    }
+  ],
+  "scope": "Original successful and failed current inert runs only; no additional execution or proof claim."
+}

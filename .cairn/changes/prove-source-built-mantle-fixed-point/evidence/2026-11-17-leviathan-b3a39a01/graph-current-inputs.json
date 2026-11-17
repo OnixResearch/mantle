@@ -1,0 +1,83 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "selector_coverage": {
+    "feature_cfg": {
+      "covered": 2098,
+      "invalid": 0,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "feature_environment": {
+      "covered": 2386,
+      "invalid": 0,
+      "total": 2386,
+      "uncovered": 0
+    },
+    "immutable_root_source_digests": {
+      "covered": 16,
+      "invalid": 0,
+      "total": 16,
+      "uncovered": 0
+    },
+    "package_exclusions": {
+      "covered": 2,
+      "invalid": 0,
+      "total": 2,
+      "uncovered": 0
+    }
+  },
+  "raw_output_seed_coverage": {
+    "covered": 6832,
+    "invalid": 0,
+    "total": 6832
+  },
+  "generated_output_seed_coverage": {
+    "covered": 9176,
+    "invalid": 0,
+    "total": 9176
+  },
+  "helper_totals": {
+    "covered": 1098,
+    "failure_count": 0,
+    "global_failures": 0,
+    "invalid": 0,
+    "total": 1098,
+    "uncovered": 0
+  },
+  "executed_rejections": {
+    "selectors": 9,
+    "helpers": 6,
+    "output_seeds": 19,
+    "immutable_source": 4,
+    "semantic": 10,
+    "route": 5
+  },
+  "tasks": {
+    "graph_initial": 1703,
+    "controller_helper": 1708,
+    "selector_semantic": 1711,
+    "selector_negative": 1705,
+    "helper_negative": 1712,
+    "seed_source_negative": 1713
+  },
+  "reports": {
+    "review-subject.json": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+    "source-program-preparation.json": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37",
+    "source-program-preparation-input-plan.json": "bbabab56c2b2b73e2dbe6007b80d67ab0e03fdf55c49c09d426229a35cfdb2a7",
+    "graph-results/graph-audit.json": "2d873408dcf7e7ccf130f237760b804621a877e84972ab5c74d87fc2e100b08d",
+    "graph-results/source-binding-kind-inventory.json": "ef5e5db17300e3b81822b25bd58bbadaa34591e6bc55a5855786f1eeb997191e",
+    "graph-results/controller-template-audit.json": "6ff800bdc16091798c32648a71628728be798ede739f39eb2f4af65dd0e7ac46",
+    "graph-results/helper-authority-audit.json": "f0ef61656f7901a4b63af1c583a26807ae6b44ace24f1174a3b768594c9b97da",
+    "graph-results/mantle-selector-audit.json": "8885723a50e1cdf9b438a2892f8da271143e24572def1406d3154ba5118bc185",
+    "graph-results/semantic-root-regression.json": "84d5d2de6bcd420ec9fbaf7b8d4977e69f9f64dcb43ec83fb1a62ccda0543629",
+    "graph-results/helper-authority-negative.json": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+    "graph-results/output-seed-immutable-source-regressions.json": "41caa563fc306c57774d7c24f3a182e9929cb93381b12b302fb4762015026151",
+    "selector-mutations.json": "dda6175a0c65fde78de62f0c7f3ebe0be984a253f8c6e794a3fe38c8c46f4980",
+    "identity-results/identity-review.json": "a42d93294f2822b9aa7c71329794b0550614786a660c001357a79572495a17b7",
+    "preauthor-results/preauthor-role-physical-review.json": "9c9ee0a5708387b648be5de888abb0f4052a19af790503676a0b65e517a64200",
+    "physical-current-inputs.json": "a71c2059946d1cb84ed4a6afc93e75cbf24106f5f320090394284a4ede547acf"
+  },
+  "independent_review_accepted": false,
+  "scope": "Parent reconciliation of actual complete current inert reports and rejection runs only. Failed predecessors remain retained. No model review, protected execution, fixed point or native-row acceptance."
+}

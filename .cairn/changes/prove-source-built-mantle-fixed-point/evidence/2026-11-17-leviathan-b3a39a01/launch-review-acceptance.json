@@ -1,0 +1,91 @@
+{
+  "schema": "mantle-cohort-launch-review-v1",
+  "code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "source_tree_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "runner_blake3": "9c13e989f2410ecca83469ff1aec7faade0672186bdbf1759a68604cd0c3ab84",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+  "subject_bytes_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "source_profile_blake3": "8c86d017b2cc676d216f2bdbdc7b39448fa200aced5c5ef7eca98af4402cb4c4",
+  "source_profile_bytes_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+  "source_preparation_report_bytes_blake3": "dbe445eabb41e0e0fef5ab56100635c9bc0036d416d1fe194288dddda79e4f37",
+  "independent_review_model": "underclass/gpt-6-sol",
+  "graph": {
+    "accepted": true,
+    "scope": "Complete current criteria1–6 STATIC only; runtime-produced bytes and execution remain unobserved",
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-b3a39a01-immutable-source-gpt6sol.json",
+    "review_bytes_blake3": "101f39df0659987d0d0d8a8fdc55df0299630d13026a698ffc8db260b219de1c"
+  },
+  "identity": {
+    "accepted": true,
+    "scope": "Complete current criteria7–8 STATIC only; separate full preauthor reconstruction resolves all three main-report gaps",
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-b3a39a01-immutable-source-gpt6sol.json",
+    "review_bytes_blake3": "c2528c81cef0aed5085839ca6786f1a668177ffc1c386f91af834fb0235dc3e5"
+  },
+  "model_authorization": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-b3a39a01-immutable-source-gpt6sol.json",
+    "bytes_blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884"
+  },
+  "profile_transfer_equal": true,
+  "parent_acceptance": true,
+  "uncovered_criteria": [],
+  "cairn": {
+    "task": 26,
+    "result": "Success",
+    "all_four_reports_valid": true,
+    "reports": [
+      {
+        "gate": "validation",
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-validation.json",
+        "valid": true,
+        "bytes_blake3": "d2a0472916bf8e2682877c4b618c8249d897fc5fc11a1281b8f991aae004f1bf"
+      },
+      {
+        "gate": "proposal",
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-proposal.json",
+        "valid": true,
+        "bytes_blake3": "d73dfc538f864c53b31d6e946728cbcc56dcb32e76a436984303e3f7ea0fe365"
+      },
+      {
+        "gate": "design",
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-design.json",
+        "valid": true,
+        "bytes_blake3": "a2255e36a1aeeaf1d354c898c10eb0a12fd5055d3129161ca6990f7ae9a9fb05"
+      },
+      {
+        "gate": "tasks",
+        "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/cairn-prelaunch-tasks.json",
+        "valid": true,
+        "bytes_blake3": "53299cda4f6546de693a39d0a11b22d7a1619362a0aaa364671d4ae4b1503a0c"
+      }
+    ],
+    "transcript": {
+      "observed_name": "cairn-prelaunch.log",
+      "storage": "cairn-prelaunch.log.gz",
+      "decoded_blake3": "6cc413537e517773a66f459e3d0c71cc72668c7c2100abad217392e672f50cd5",
+      "storage_blake3": "efbc746d305d95de0c83666e44e3f245d5c463c97c7942a1ca6db25abba99438",
+      "roundtrip_equal": true
+    }
+  },
+  "qualification": {
+    "canonical": 1699,
+    "isolated_runner": 1700,
+    "preparation": 1701,
+    "facts": 1702,
+    "physical": 1706,
+    "preauthor": 1704,
+    "selector_semantic": 1711,
+    "selector_rejections": 1705,
+    "helper_rejections": 1712,
+    "seed_source_rejections": 1713
+  },
+  "retained_failures": [
+    1703,
+    1708
+  ],
+  "retained_initial_graph_report_binding_error": "independent-graph-review-initial-binding-error.json",
+  "allowed_next_action": "One fresh genuine cold proof of this exact frozen subject, with launch-time source/profile/tool/namespace checks and unchanged provider/lineage/resource pins",
+  "non_claims": [
+    "No protected stage has run for this subject.",
+    "This static decision is not a deterministic v2 proof, stage1-owned stage2 byte equality, root action-trust reconciliation, signed adoption, native-row acceptance or release."
+  ]
+}

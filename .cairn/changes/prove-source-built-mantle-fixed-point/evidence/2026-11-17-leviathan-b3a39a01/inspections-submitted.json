@@ -1,0 +1,95 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "profile_file_raw_blake3": "24e47d5a6481ae5aaf094d162b3ce864133c16df053ea9bc4117e0c4415487f0",
+  "full_profile_transfer_equal": true,
+  "tasks": {
+    "graph": {
+      "id": 1703,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "graph-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-graph-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": []
+    },
+    "preauthor": {
+      "id": 1704,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "preauthor-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-preauthor-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": []
+    },
+    "selector_mutations": {
+      "id": 1705,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "selector_mutations-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-selector-mutations-b3a39a01-immutable-source.sh",
+        "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919"
+      ],
+      "dependencies": []
+    },
+    "identity": {
+      "id": 1706,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "identity-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-identity-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": []
+    },
+    "helper_mutations": {
+      "id": 1707,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "helper_mutations-b3a39a01-immutable-source",
+        "--after",
+        "1703",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-helper-mutations-b3a39a01-immutable-source.sh",
+        "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919"
+      ],
+      "dependencies": [
+        1703
+      ]
+    }
+  },
+  "scope": "Inert current-data inspection and in-memory mutation probes only; submitted is not accepted, model reviews are not run and no protected proof is queued."
+}

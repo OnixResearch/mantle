@@ -1,0 +1,13 @@
+{
+  "initial_report": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/independent-graph-review-initial-binding-error.json",
+  "initial_report_blake3": "86982ee1e3586f2832ccaa219519f162072d5f29deb02517e87013ff735e756a",
+  "mismatches": [
+    {
+      "key": "fixed-point-rust-source-program",
+      "expected": "7ca01d558f37960e0b900049ee455a49b5e2f349f1fab349787b89ec28370057",
+      "reported": "7ca01d558f37960e0b900049ee455a49b5e2f349787b89ec28370057"
+    }
+  ],
+  "accepted": false,
+  "scope": "Parent blocks independent report acceptance on this exact copied digest mismatch. No source/cohort mutation or protected launch."
+}

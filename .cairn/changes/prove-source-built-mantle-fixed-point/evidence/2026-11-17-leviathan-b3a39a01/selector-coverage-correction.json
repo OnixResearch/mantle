@@ -1,0 +1,76 @@
+{
+  "failed_task": 1708,
+  "exception": "KeyError: 'uncovered'",
+  "completed_controller_verdict": "STATIC_TEMPLATE_REVIEW_CLEAR",
+  "completed_helper_totals": {
+    "total": 1098,
+    "covered": 1098,
+    "invalid": 0,
+    "uncovered": 0,
+    "failure_count": 0,
+    "global_failures": 0
+  },
+  "dependency_failed_unexecuted_tasks": [
+    1709,
+    1710
+  ],
+  "correction": "Add the required uncovered counter at the immutable-root-source coverage producer; all root units are actually visited, unmatched units remain invalid, missing root-unit sets still reject.",
+  "inspector_hashes": {
+    "controller-template-audit.py": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+    "mantle-selector-audit.py": "c7c52a94e288dc30c0d30a1b1e923d94df2859b85907670feb6930a4529ee7a6"
+  },
+  "inspector_directory": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source-complete-coverage",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "tasks": {
+    "selector_coverage_resume": {
+      "id": 1711,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "selector_coverage_resume-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-selector-coverage-fixed-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": []
+    },
+    "helper_mutations_current": {
+      "id": 1712,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "helper_mutations_current-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-helper-mutations-b3a39a01-immutable-source.sh",
+        "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919"
+      ],
+      "dependencies": []
+    },
+    "seed_source_regressions_current": {
+      "id": 1713,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "seed_source_regressions_current-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-seed-source-regressions-v2-b3a39a01-immutable-source.sh"
+      ],
+      "dependencies": []
+    }
+  },
+  "scope": "Current inert inspector bookkeeping correction only. No checks weakened, source/cohort mutations, product/protected execution or model acceptance."
+}

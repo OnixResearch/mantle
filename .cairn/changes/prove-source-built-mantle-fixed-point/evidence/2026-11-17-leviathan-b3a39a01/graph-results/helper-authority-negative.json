@@ -1,0 +1,50 @@
+{
+  "cases": [
+    {
+      "case": "missing-owning-source-role",
+      "stage": "mantle-stage1",
+      "classification": "invalid",
+      "rejected_count": 3,
+      "passed": true
+    },
+    {
+      "case": "foreign-source-record",
+      "stage": "mantle-stage2",
+      "classification": "invalid",
+      "rejected_count": 1,
+      "passed": true
+    },
+    {
+      "case": "different-authenticated-own-member",
+      "stage": "full-source-native-provider",
+      "classification": "invalid",
+      "rejected_count": 1,
+      "passed": true
+    },
+    {
+      "case": "gcc-map-wrong-destination",
+      "stage": "full-source-rust-provider",
+      "classification": "invalid",
+      "rejected_count": 1,
+      "passed": true
+    },
+    {
+      "case": "missing-helper-source-producer",
+      "stage": "stagex-provider-publication",
+      "classification": "uncovered",
+      "rejected_count": 1,
+      "passed": true
+    },
+    {
+      "case": "missing-stdin-source-consumer",
+      "stage": "stagex-transition",
+      "classification": "invalid",
+      "rejected_count": 1,
+      "passed": true
+    }
+  ],
+  "all_assertions_passed": true,
+  "mutated_data_verdict": "HOLD",
+  "scope": "Six independent in-memory mutations over all six genuine current recipes; immutable inputs unchanged; no candidate execution.",
+  "inspector_blake3": "6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b"
+}
