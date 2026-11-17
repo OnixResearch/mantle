@@ -35,5 +35,12 @@
     }
   ],
   "consumer_contract": "Every existing report path/hash continues to name the exact decoded observed bytes, not the gzip identity. Restore each original filename from its gzip member before tools that require that path; verify decoded_blake3. No review, source or frozen proof input is changed.",
+  "decoded_input_ignore": {
+    "policy": ".gitignore retains only the two canonical gzip reports in normal staging",
+    "raw_paths_observed_ignored": 2,
+    "canonical_gzip_paths_observed_not_ignored": 2,
+    "canonical_single_path_check_ignore_exit": 1,
+    "initial_invalid_multi_path_quiet_probe_not_used_as_evidence": true
+  },
   "scope": "Storage-only response to the actual publication warning; no reinspection, expected-pin change, proof rerun or new behavioral acceptance."
 }

@@ -1,0 +1,3 @@
+# Reconstructible decoded inputs stay local; full byte-bound gzip reports are retained.
+/graph-results/controller-template-audit.json
+/graph-results/helper-authority-audit.json
