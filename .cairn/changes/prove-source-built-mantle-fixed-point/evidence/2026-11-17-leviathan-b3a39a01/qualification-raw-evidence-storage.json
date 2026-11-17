@@ -1,0 +1,34 @@
+{
+  "reason": "Retain exact raw SSH and build stderr without normalizing bytes or introducing text whitespace churn. Uncompressed observed logs remain available locally; tracked gzip members decode byte-for-byte.",
+  "files": [
+    {
+      "observed_name": "assembly.log",
+      "storage": "assembly.log.gz",
+      "decoded_blake3": "b9752554f2817391ea8acfc4bed794467a4816cef65d3175d9bc35f146024a0f",
+      "storage_blake3": "8d18bb5efc3a90dd2e81ba1676ef22ed0a6441b7be56b264218c6686e79a3ef3",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "canonical-qualification.log",
+      "storage": "canonical-qualification.log.gz",
+      "decoded_blake3": "fe5c68754624e5ae1ff85039aaef4a05941b1cd4144d0af1612f845139ba7eac",
+      "storage_blake3": "70b8b9a26521b6c688b4dac22142a48bf894fab8099c19d621004cd4315749ee",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "runner-qualification.log",
+      "storage": "runner-qualification.log.gz",
+      "decoded_blake3": "d9a33cd7a373a6424b47f165a78b35cd5851a0bebc18940e6a04613b17fbac25",
+      "storage_blake3": "02ee1570efa1ffe1bc30a9e05fb58d62a09b01bb3fd388f91bd4bf679cabb329",
+      "roundtrip_equal": true
+    },
+    {
+      "observed_name": "cairn-qualified-evidence.log",
+      "storage": "cairn-qualified-evidence.log.gz",
+      "decoded_blake3": "78aae883eb7d11e96ac688c570f0b52f88c89c3e54cd2c7d3656a071a3aadea7",
+      "storage_blake3": "8b1bdcce3ec90b7cf4589b91869a25baa7c023873daf95fb754e5a2aae0a9059",
+      "roundtrip_equal": true
+    }
+  ],
+  "scope": "Lossless qualification and evidence-validation storage only; no new code, data/review acceptance or protected proof."
+}

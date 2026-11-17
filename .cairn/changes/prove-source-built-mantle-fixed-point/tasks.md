@@ -1234,3 +1234,32 @@ reported `mantle 0.1.0`. The failed intermediate runs remain retained. Four
 current lifecycle reports are valid. These checks do not reuse the warm target
 as an isolated runner or current proof qualification.
 
+## Immutable compiler-source replacement published (2026-11-17)
+
+The verified cutover is published on main as
+`b3a39a0118839fd6f7267c9b1c99258155ff40af`. Its exact Git archive transferred
+byte-equal. Task1698 assembled the complete source with the unchanged pinned
+original AWS source and passed every original-source guard; normalized complete
+source identity is
+`45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be`.
+
+Separate absent-target canonical1699 and runner1700 are submitted against that
+snapshot. Preparation1701 depends on both; actual facts1702 depend on successful
+preparation and separately record the augmented native manifest's raw identity.
+The full output-profile transport, all current inert checks and both fresh
+complete independent exact-model reviews remain held prerequisites. No new
+protected proof or native row is queued or accepted from this checkpoint.
+
+Exact commands, dependency IDs, source/archive bindings, assembly transcript and
+held review contract are retained in `evidence/2026-11-17-leviathan-b3a39a01/`.
+
+Both fresh qualifications are now observed successful. Canonical task1699 ran
+all ten selected CLI/receipt/closure/release test legs, the machine-contract gate
+and all four Cairn reports. Runner task1700 passed 273 source-built tests with
+27 explicit ignored probes, formatting, strict Clippy and all three binary
+builds. Each used its own previously absent target and retained equal pre/post
+complete-source identities. The installed runner byte identity is
+`9c13e989f2410ecca83469ff1aec7faade0672186bdbf1759a68604cd0c3ab84`.
+Preparation and all actual current-data/review/proof obligations remain open;
+these qualification results do not authorize protected execution.
+

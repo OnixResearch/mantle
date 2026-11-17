@@ -1,0 +1,10 @@
+{
+  "task": 1698,
+  "result": "Success",
+  "complete_source": "complete-source.json",
+  "log": "assembly.log",
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "all_original_source_pins_equal": true,
+  "non_claim": "Composite source assembly only; no isolated compiler/runner, prepared-cohort, review or protected proof acceptance."
+}

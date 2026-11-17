@@ -1,0 +1,10 @@
+{
+  "task": 28,
+  "command": [
+    "bash",
+    ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/validate-qualified-evidence.sh"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "scope": "Current qualification metadata and task notes only; no product rebuild, protected proof or native row.",
+  "non_claim": "Submitted only, not validated or proof accepted."
+}

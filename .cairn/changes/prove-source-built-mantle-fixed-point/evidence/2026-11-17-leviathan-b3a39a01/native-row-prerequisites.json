@@ -1,0 +1,23 @@
+{
+  "existing_dedicated_signing_key": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/config/signing-key",
+  "private_file_metadata_only": {
+    "mode": "0o600",
+    "size_bytes": 129,
+    "kind": "regular file",
+    "not_symlink": true
+  },
+  "public_key_file": "/home/brittonr/sbfp-20261113-berdKH/native-row-qualification-20261115.axozfy/config/public-key",
+  "public_key_file_bytes_blake3": "dcf2bff85b0e3533474353d4419464c7cc33150b304177e50e454ba966dd2c0b",
+  "gnu_tar": {
+    "path": "/nix/store/80c50gsgpxymdhvs5c2vvnq4zfc44k2r-gnutar-1.35/bin/tar",
+    "bytes_blake3": "4f9b080ceb6c38fee8d89aa972d4aaf54ce4ee8bbdfa3850c3059ddaeee17e11",
+    "version": "tar (GNU tar) 1.35"
+  },
+  "interpreter": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+  "prior_probe": {
+    "interpreter": "/run/current-system/sw/bin/python3",
+    "exit": 127,
+    "reason": "absent; inspection did not execute"
+  },
+  "non_claim": "Fresh prerequisite metadata and public/tool byte observations only. Private-key contents were not read or copied; no signing, key creation, trust change, adoption, proof acceptance or native build occurred. Actual adoption must load the explicitly selected existing key and verify its signer."
+}

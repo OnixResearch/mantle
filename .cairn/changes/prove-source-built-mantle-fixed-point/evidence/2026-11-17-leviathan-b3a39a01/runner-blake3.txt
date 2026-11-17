@@ -1,0 +1,3 @@
+9c13e989f2410ecca83469ff1aec7faade0672186bdbf1759a68604cd0c3ab84  /home/brittonr/sbfp-20261113-berdKH/bin/mantle-b3a39a01-immutable-source
+7d5d82e9b84c18dcede96f50f74896cefa9a9efb156c2af3ee259c8b19d3d025  /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-b3a39a01-immutable-source
+17e18d4c5a17ec709da5a734233e03a9eac123853561a02d1d141ac2863a344e  /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-b3a39a01-immutable-source

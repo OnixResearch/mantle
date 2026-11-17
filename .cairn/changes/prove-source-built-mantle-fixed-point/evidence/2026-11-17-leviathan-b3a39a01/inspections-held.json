@@ -1,0 +1,25 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+  "assembly_task": 1698,
+  "assembly_observed_success": true,
+  "complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "canonical_task": 1699,
+  "runner_task": 1700,
+  "preparation_task": 1701,
+  "subject_facts_task": 1702,
+  "inspection_drivers": {
+    "identity": "/home/brittonr/sbfp-20261113-berdKH/inspect-identity-b3a39a01-immutable-source.sh",
+    "preauthor": "/home/brittonr/sbfp-20261113-berdKH/inspect-preauthor-b3a39a01-immutable-source.sh",
+    "graph": "/home/brittonr/sbfp-20261113-berdKH/inspect-graph-b3a39a01-immutable-source.sh"
+  },
+  "scratch": {
+    "graph": "/home/brittonr/sbfp-20261113-berdKH/inspection-b3a39a01-immutable-source-graph",
+    "identity": "/home/brittonr/sbfp-20261113-berdKH/inspection-b3a39a01-immutable-source-identity",
+    "preauthor": "/home/brittonr/sbfp-20261113-berdKH/inspection-b3a39a01-immutable-source-preauthor"
+  },
+  "subject": "/home/brittonr/sbfp-20261113-berdKH/review-subject-b3a39a01-immutable-source.json",
+  "inspection_started": false,
+  "non_claim": "Exact held commands only. Do not launch before both isolated qualifications, actual preparation/facts and full profile parity are accepted; no current source-data verdict or independent review yet."
+}

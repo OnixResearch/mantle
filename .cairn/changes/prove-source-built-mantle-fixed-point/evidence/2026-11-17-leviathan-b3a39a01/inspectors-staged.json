@@ -1,0 +1,10 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "archive_source": "Only exact selected members extracted from the published Git archive; not a mutable worktree copy",
+  "archive": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/inspector-tools.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/inspector-tools-b3a39a01-immutable-source.tar.gz",
+  "archive_blake3": "46f5733d0682c39c732d792f6a3f37f3d39a758000ff1f3e3708ded5bb86bf38",
+  "remote_directory": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b3a39a01-immutable-source",
+  "transfer_equal": true,
+  "non_claim": "Inspector code transfer only; no current-data result or independent review."
+}

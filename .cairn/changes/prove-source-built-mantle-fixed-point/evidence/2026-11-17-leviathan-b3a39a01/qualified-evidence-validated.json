@@ -1,0 +1,10 @@
+{
+  "task": 28,
+  "result": "Success",
+  "exit": 0,
+  "report": "cairn-qualified-evidence-validation.json",
+  "report_blake3": "c252847d6147cea0afcd374aecf22f36cbf720fd524daf21fe037b67b568fbc9",
+  "valid": true,
+  "frozen_product_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "scope": "Current task notes and qualification evidence validation only. Frozen product source remains b3a39a01; no current prepared-profile inspection, independent review or protected proof is accepted."
+}

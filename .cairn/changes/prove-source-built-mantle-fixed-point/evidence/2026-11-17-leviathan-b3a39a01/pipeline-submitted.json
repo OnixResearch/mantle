@@ -1,0 +1,109 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "name": "b3a39a01-immutable-source",
+  "tasks": {
+    "assembly": {
+      "id": 1698,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "assembly-b3a39a01-immutable-source",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-b3a39a01-immutable-source.sh"
+      ]
+    },
+    "canonical": {
+      "id": 1699,
+      "dependencies": [
+        1698
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "canonical-b3a39a01-immutable-source",
+        "--after",
+        "1698",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-b3a39a01-immutable-source-run.sh"
+      ]
+    },
+    "runner": {
+      "id": 1700,
+      "dependencies": [
+        1698
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "runner-b3a39a01-immutable-source",
+        "--after",
+        "1698",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/qualify-source-b3a39a01-immutable-source.sh"
+      ]
+    },
+    "preparation": {
+      "id": 1701,
+      "dependencies": [
+        1699,
+        1700
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "preparation-b3a39a01-immutable-source",
+        "--after",
+        "1699",
+        "1700",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/prepare-source-b3a39a01-immutable-source.sh"
+      ]
+    },
+    "subject_facts": {
+      "id": 1702,
+      "dependencies": [
+        1701
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "subject_facts-b3a39a01-immutable-source",
+        "--after",
+        "1701",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/capture-review-subject-facts-b3a39a01-immutable-source.sh"
+      ]
+    }
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+  "runner_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-b3a39a01-immutable-source",
+  "canonical_target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-b3a39a01-immutable-source",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source",
+  "non_claim": "Queued only. Every fresh source/target must pass its original exact guard before downstream work; no preparation, review or proof result yet."
+}

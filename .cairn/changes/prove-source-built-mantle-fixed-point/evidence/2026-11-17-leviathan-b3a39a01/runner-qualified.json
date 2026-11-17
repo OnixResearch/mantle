@@ -1,0 +1,21 @@
+{
+  "task": 1700,
+  "result": "Success",
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "source_root": "/home/brittonr/sbfp-20261113-berdKH/runner-source-b3a39a01-immutable-source",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-b3a39a01-immutable-source",
+  "target_absent_precondition_retained": true,
+  "distinct_from_canonical": true,
+  "complete_source_blake3": "45344056501e2ed0c23b1a122d0dd300b02cf0fc0d2fe5e0808d6159a93e60be",
+  "source_before_after_equal": true,
+  "log": "runner-qualification.log",
+  "test_results": [
+    "test result: ok. 273 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.30s"
+  ],
+  "installed_binaries": {
+    "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-b3a39a01-immutable-source": "9c13e989f2410ecca83469ff1aec7faade0672186bdbf1759a68604cd0c3ab84",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-b3a39a01-immutable-source": "7d5d82e9b84c18dcede96f50f74896cefa9a9efb156c2af3ee259c8b19d3d025",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-b3a39a01-immutable-source": "17e18d4c5a17ec709da5a734233e03a9eac123853561a02d1d141ac2863a344e"
+  },
+  "scope": "Exact frozen-source isolated runner/operator build and selected test/format/Clippy observations only; source-only preparation, full current-data inspection/reviews and genuine proof/native rows remain required."
+}

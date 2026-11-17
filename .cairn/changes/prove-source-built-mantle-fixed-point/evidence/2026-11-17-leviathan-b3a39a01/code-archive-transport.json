@@ -1,0 +1,12 @@
+{
+  "source_code_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "source_name": "b3a39a01-immutable-source",
+  "local_archive": "/home/brittonr/git/.mantle-immutable-source-freeze-20261117.U0IAtU/source-b3a39a0118839fd6f7267c9b1c99258155ff40af.tar.gz",
+  "remote_archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/source-b3a39a0118839fd6f7267c9b1c99258155ff40af.tar.gz",
+  "compressed_archive_blake3": "1746db51499dae55736d17bda8c7a81f0572ace12dd9643c8c11cc35f760c393",
+  "decompressed_git_tar_blake3": "1346e0834ec90be2b871da9f555a172bb72e982e5ab05ddfb4d4ff83d45bbeba",
+  "transfer_equal": true,
+  "developer_evidence": "../2026-11-17-immutable-compiler-source/developer-qualified.json",
+  "publication_gates": "../2026-11-17-immutable-compiler-source/publication-cairn-final-qualified.json",
+  "non_claim": "Published immutable Git source and byte-equal transfer only; fresh isolated runner/canonical qualification, regeneration, current-data review and genuine proof remain required."
+}
