@@ -1,0 +1,23 @@
+{
+  "task": {
+    "id": 1688,
+    "created_at": "2026-11-17T00:16:28.809716820-05:00",
+    "original_command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-selector-mutations-df51377d-unit-plans.py 08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+    "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-selector-mutations-df51377d-unit-plans.py 08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "envs": {},
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": null,
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-17T00:16:28.809693797-05:00",
+        "start": "2026-11-17T00:16:29.075205076-05:00",
+        "end": "2026-11-17T00:18:08.367850050-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "output": "{\"bounded_verdict\": true, \"coverage\": {\"package_exclusions\": {\"total\": 2, \"covered\": 2, \"uncovered\": 0, \"invalid\": 0}, \"feature_environment\": {\"total\": 2386, \"covered\": 2386, \"uncovered\": 0, \"invalid\": 0}, \"feature_cfg\": {\"total\": 2098, \"covered\": 2098, \"uncovered\": 0, \"invalid\": 0}}, \"source_plan_projections\": {\"mantle-stage1\": {\"plan_derivations_total\": 1047, \"mapped_compile_units\": 1049, \"orphan_derivations\": 0, \"metadata_identity_fallbacks\": 2, \"uncovered\": [], \"uncovered_count\": 0, \"source_plan_digest_blake3\": \"bd8225d450d717e6e5729aeb1060c02a1c7f21578e610e0f7d0a277874ce721e\"}, \"mantle-stage2\": {\"plan_derivations_total\": 1047, \"mapped_compile_units\": 1049, \"orphan_derivations\": 0, \"metadata_identity_fallbacks\": 2, \"uncovered\": [], \"uncovered_count\": 0, \"source_plan_digest_blake3\": \"7e12529f936aff8c72568654f07f215027badb4e5f6dc5e623589b17bb360062\"}}, \"negative_case_count\": 9, \"all_assertions_passed\": true, \"output\": \"/home/brittonr/sbfp-20261113-berdKH/selector-mutations-df51377d-unit-plans.json\"}"
+}

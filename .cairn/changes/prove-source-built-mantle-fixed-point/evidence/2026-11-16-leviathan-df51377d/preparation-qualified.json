@@ -1,0 +1,19 @@
+{
+  "task": 1683,
+  "subject_fact_task": 1684,
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+  "input_manifest_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+  "prepared_manifest_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "profile_raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+  "profile_file_bytes": 15839323096,
+  "preparation_report_raw_blake3": "c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95",
+  "input_plan_raw_blake3": "c39c3552820088094e44a9b10d9c195e4a8665a6afd217773c065497f0206aee",
+  "metadata_transport_equal": true,
+  "source_verifications": [
+    "input-source-verification.json",
+    "prepared-source-verification.json"
+  ],
+  "source_verifications_ready": true,
+  "non_claim": "Genuine inert source preparation and exact current metadata only. Full SSH profile transport, complete current-data inspection, independent acceptance, protected execution, v2 proof and native rows remain separate."
+}

@@ -1,0 +1,138 @@
+{
+  "task": 1688,
+  "file": "selector-mutations.json",
+  "blake3": "2418dbe54e37b64ce84091388e0141dfe2a266639777a809be1d1e3d6418bc5b",
+  "transfer_equal": true,
+  "positive": {
+    "package_exclusions": {
+      "total": 2,
+      "covered": 2,
+      "uncovered": 0,
+      "invalid": 0
+    },
+    "feature_environment": {
+      "total": 2386,
+      "covered": 2386,
+      "uncovered": 0,
+      "invalid": 0
+    },
+    "feature_cfg": {
+      "total": 2098,
+      "covered": 2098,
+      "uncovered": 0,
+      "invalid": 0
+    }
+  },
+  "negative_cases": [
+    {
+      "case": "missing-package-exclusion",
+      "category": "package_exclusions",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "untyped-grammar-exclusion",
+      "category": "package_exclusions",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "changed-compiler-feature-cfg",
+      "category": "feature_cfg",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "changed-cargo-feature-environment",
+      "category": "feature_environment",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "unowned-nested-feature-selector",
+      "category": "feature_cfg",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "foreign-original-package-source",
+      "category": "package_exclusions",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "missing-continuation-feature-environment",
+      "category": "feature_environment",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "missing-template-feature-environment",
+      "category": "feature_environment",
+      "invalid": 1,
+      "uncovered": 0,
+      "passed": true
+    },
+    {
+      "case": "missing-source-selected-build-script-root",
+      "category": "feature_environment",
+      "invalid": 1,
+      "uncovered": 1,
+      "passed": true
+    }
+  ],
+  "source_plan_projections": {
+    "mantle-stage1": {
+      "plan_derivations_total": 1047,
+      "mapped_compile_units": 1049,
+      "orphan_derivations": 0,
+      "metadata_identity_fallbacks": 2,
+      "uncovered": [],
+      "uncovered_count": 0,
+      "source_plan_digest_blake3": "bd8225d450d717e6e5729aeb1060c02a1c7f21578e610e0f7d0a277874ce721e"
+    },
+    "mantle-stage2": {
+      "plan_derivations_total": 1047,
+      "mapped_compile_units": 1049,
+      "orphan_derivations": 0,
+      "metadata_identity_fallbacks": 2,
+      "uncovered": [],
+      "uncovered_count": 0,
+      "source_plan_digest_blake3": "7e12529f936aff8c72568654f07f215027badb4e5f6dc5e623589b17bb360062"
+    }
+  },
+  "authenticated_unit_plans": {
+    "bootstrap/source-built/mantle-stage1.unit-plan.json": {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-built/mantle-stage1.unit-plan.json",
+      "size_bytes": 8697030,
+      "blake3": "9fd747cfbb711b4c434dbd4ab807f42be2b7c2c3a69c778df236ff3a48970055",
+      "record_content_blake3": "0beb2de5a176b74ac35d5a09b292d97c8a82615cefea933692b7be298f80a028",
+      "record_identity": "mantle-source-tree",
+      "chunks": 1,
+      "chunk_blake3": [
+        "9fd747cfbb711b4c434dbd4ab807f42be2b7c2c3a69c778df236ff3a48970055"
+      ],
+      "embedded_bytes_compared": 8697030
+    },
+    "bootstrap/source-built/mantle-stage2.unit-plan.json": {
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-built/mantle-stage2.unit-plan.json",
+      "size_bytes": 8697030,
+      "blake3": "9b075232912a85357159388388011ceadc74c805eb0058335e2476c28828cd47",
+      "record_content_blake3": "0beb2de5a176b74ac35d5a09b292d97c8a82615cefea933692b7be298f80a028",
+      "record_identity": "mantle-source-tree",
+      "chunks": 1,
+      "chunk_blake3": [
+        "9b075232912a85357159388388011ceadc74c805eb0058335e2476c28828cd47"
+      ],
+      "embedded_bytes_compared": 8697030
+    }
+  },
+  "scope": "Exact current frozen-cohort source-plan/selector and in-memory rejection observations only. No complete graph/physical review acceptance, protected proof or native rows."
+}

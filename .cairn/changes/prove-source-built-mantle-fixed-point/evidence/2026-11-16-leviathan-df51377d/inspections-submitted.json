@@ -1,0 +1,94 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "subject": "/home/brittonr/sbfp-20261113-berdKH/review-subject-df51377d-unit-plans.json",
+  "profile_stream_transport_equal": true,
+  "complete_coverage_contract": "review-contract.md",
+  "inspector_bundle": "inspectors-staged.json",
+  "tasks": {
+    "graph": {
+      "id": 1685,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/review-tools-df51377d-unit-plans/graph-review/run-semantic-root-inspection.sh",
+        "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+        "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+        "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph",
+        "/home/brittonr/sbfp-20261113-berdKH/review-subject-df51377d-unit-plans.json"
+      ]
+    },
+    "identity": {
+      "id": 1686,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-identity-df51377d-unit-plans.sh"
+      ]
+    },
+    "preauthor": {
+      "id": 1687,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-preauthor-df51377d-unit-plans.sh"
+      ]
+    },
+    "selector_mutations": {
+      "id": 1688,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+        "/home/brittonr/sbfp-20261113-berdKH/check-selector-mutations-df51377d-unit-plans.py",
+        "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5"
+      ]
+    },
+    "helper_mutations": {
+      "id": 1689,
+      "dependencies": [
+        1685
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--after",
+        "1685",
+        "--",
+        "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+        "/home/brittonr/sbfp-20261113-berdKH/check-helper-mutations-df51377d-unit-plans.py"
+      ]
+    }
+  },
+  "scratch": {
+    "graph": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph",
+    "identity": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity",
+    "preauthor": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-preauthor"
+  },
+  "non_claim": "Current-data inert checks and mutations submitted only. No results, independent acceptance, protected proof or native rows."
+}

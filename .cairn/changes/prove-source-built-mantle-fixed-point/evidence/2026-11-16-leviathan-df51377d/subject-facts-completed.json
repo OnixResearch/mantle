@@ -1,0 +1,19 @@
+{
+  "task": 1684,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--after",
+    "1683",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/capture-review-subject-facts-df51377d-unit-plans.sh"
+  ],
+  "facts": "review-subject-facts.json",
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "non_claim": "Exact current-data facts only; not transport equality, independent acceptance, protected execution or proof."
+}

@@ -1086,3 +1086,27 @@ current prepared data. Both fresh authorized-model reviews still precede any
 protected launch. No provider, stage equality, v2 receipt, native-row acceptance
 or release claim follows; N1-N2, I3-I5 and proof-dependent V2/V3 remain open.
 
+## Source-unit-plan replacement prepared subject observed (2026-11-17)
+
+Source-only task 1683 and subject capture 1684 completed successfully on the
+qualified df51377d source. The new prepared manifest is
+`a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077`.
+Both actual input/output source verifiers reported ready with empty rejection
+sets. The complete 15,839,323,096-byte profile has independent SSH-stream parity
+at raw BLAKE3 `08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5`;
+that raw identity is distinct from its canonical manifest identity.
+
+Fresh task 1688 authenticated both source-only unit-plan members and passed
+the complete actual selector comparison plus all nine in-memory rejection
+cases. Its exact full report and matching transport are retained beside the
+measured subject. Complete graph/helper/selector task 1685, physical task 1686,
+preauthor task 1687 and dependent helper-mutation task 1689 are separate pending
+acceptance obligations. No predecessor counts are expected totals.
+
+The current sealed launcher has an actual malformed-review-digest rejection
+and an absent proof parent. It is not queued. Both fresh authorized-model
+reviews and parent integration still precede protected execution. All complete
+commands, subject identities and observations are in
+`evidence/2026-11-16-leviathan-df51377d/`; no provider, stage comparison, v2 proof,
+native-row acceptance or release eligibility is claimed.
+

@@ -1,0 +1,11 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-profile.json",
+  "server_observed_size_bytes": 15839323096,
+  "remote_observed_raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+  "full_profile_ssh_stream_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+  "transfer_equal": true,
+  "command": "bash profile-stream-parity.sh",
+  "complete_stream_received": true,
+  "non_claim": "Full exact current-profile transport only. Not static review, protected execution, fixed point or release eligibility."
+}

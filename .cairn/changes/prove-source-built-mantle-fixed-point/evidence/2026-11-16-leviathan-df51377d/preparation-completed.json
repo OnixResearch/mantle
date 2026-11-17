@@ -1,0 +1,22 @@
+{
+  "task": 1683,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--after",
+    "1681",
+    "1682",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/prepare-source-df51377d-unit-plans.sh"
+  ],
+  "captured_exit": 0,
+  "transcript": "preparation.log",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "non_claim": "Genuine inert source-program preparation only; full profile transport, current-data static inspection, independent review, provider execution, stage equality, v2 proof and native rows remain separate."
+}

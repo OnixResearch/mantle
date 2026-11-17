@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-source-built-source-programs-v1",
+  "input_profile_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+  "input_plan_blake3": "1152d66e5cae4c4469cdbb927c30530372a8231d9e03d22c7bbf1189ecabc328",
+  "output_profile_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-profile.json",
+  "program_records": {
+    "fixed-point-native-source-program": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+    "fixed-point-rust-source-program": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+    "source-built-mantle-programs": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+    "source-built-stagex-programs": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96"
+  },
+  "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+}
