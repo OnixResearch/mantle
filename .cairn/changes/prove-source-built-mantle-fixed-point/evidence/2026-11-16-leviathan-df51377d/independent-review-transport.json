@@ -1,0 +1,14 @@
+{
+  "graph": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-df51377d-unit-plans-gpt6sol.json",
+    "blake3": "a24b7af38fd1d4384806dd0a14af88c48e111e8f0bb554538a26eebc7e993214",
+    "transfer_equal": true
+  },
+  "physical": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-df51377d-unit-plans-gpt6sol.json",
+    "blake3": "1d98d67093031adb96499e63d7a873c4fa21efe465d46b335b521c0a161e30c5",
+    "transfer_equal": true
+  },
+  "subject_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+  "scope": "Full exact independent review decision transport only. Current lifecycle/fresh launch checks precede any protected execution."
+}

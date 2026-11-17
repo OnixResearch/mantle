@@ -1,0 +1,71 @@
+{
+  "schema": "mantle-cohort-launch-review-v1",
+  "code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "source_tree_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+  "runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+  "source_profile_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "source_profile_bytes_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+  "source_preparation_report_bytes_blake3": "c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95",
+  "subject_json_bytes_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+  "independent_review_model": "underclass/gpt-6-sol",
+  "graph": {
+    "accepted": true,
+    "criteria": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-df51377d-unit-plans-gpt6sol.json",
+    "review_bytes_blake3": "a24b7af38fd1d4384806dd0a14af88c48e111e8f0bb554538a26eebc7e993214"
+  },
+  "identity": {
+    "accepted": true,
+    "criteria": [
+      7,
+      8
+    ],
+    "review_path": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-df51377d-unit-plans-gpt6sol.json",
+    "review_bytes_blake3": "1d98d67093031adb96499e63d7a873c4fa21efe465d46b335b521c0a161e30c5"
+  },
+  "model_authorization": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-df51377d-unit-plans-gpt6sol.json",
+    "bytes_blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884"
+  },
+  "profile_transfer_equal": true,
+  "parent_acceptance": true,
+  "uncovered_criteria": [],
+  "prelaunch_cairn": {
+    "task": 26,
+    "command": "nix develop --offline --no-write-lock-file -c bash .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d/prelaunch-cairn.sh",
+    "reports": [
+      {
+        "file": "prelaunch-cairn-validation.json",
+        "valid": true,
+        "blake3": "a3b32d422a7c1faf8f7420dc969b5d8408dd844b177f92207aa158e7ca4f98e5"
+      },
+      {
+        "file": "prelaunch-cairn-proposal.json",
+        "valid": true,
+        "blake3": "9349c0e758cf18893a0cdf520877c413afb957da5bd0a9b7167bbc654210a212"
+      },
+      {
+        "file": "prelaunch-cairn-design.json",
+        "valid": true,
+        "blake3": "d58a0c0542afecf4759c831acb15446e49fdc1f25ff13099d47f99dcffd2e9a4"
+      },
+      {
+        "file": "prelaunch-cairn-tasks.json",
+        "valid": true,
+        "blake3": "e10b20dcca86d0061e34d1a7da50f82a896028c25eae9703d62e1f5a023f817d"
+      }
+    ],
+    "transcript": "prelaunch-cairn.log",
+    "captured_exit": 0
+  },
+  "evidence_root": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d",
+  "non_claim": "Parent accepts complete exact current bounded static launch prerequisites based on independently checked deterministic observations and both authorized model reviews. This is not provider completion, actual runtime-byte validation, compiler correctness, fixed-point equality, a verified v2 receipt, native-row acceptance or release eligibility."
+}

@@ -1,0 +1,37 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "current_prepared_manifest": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "parent_acceptance": "launch-review-acceptance.json",
+  "parent_acceptance_remote": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-df51377d-unit-plans-gpt6sol.json",
+  "parent_acceptance_blake3": "3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5",
+  "parent_acceptance_transfer_equal": true,
+  "current_prelaunch_cairn_reports": [
+    {
+      "file": "prelaunch-cairn-validation.json",
+      "valid": true,
+      "blake3": "a3b32d422a7c1faf8f7420dc969b5d8408dd844b177f92207aa158e7ca4f98e5"
+    },
+    {
+      "file": "prelaunch-cairn-proposal.json",
+      "valid": true,
+      "blake3": "9349c0e758cf18893a0cdf520877c413afb957da5bd0a9b7167bbc654210a212"
+    },
+    {
+      "file": "prelaunch-cairn-design.json",
+      "valid": true,
+      "blake3": "d58a0c0542afecf4759c831acb15446e49fdc1f25ff13099d47f99dcffd2e9a4"
+    },
+    {
+      "file": "prelaunch-cairn-tasks.json",
+      "valid": true,
+      "blake3": "e10b20dcca86d0061e34d1a7da50f82a896028c25eae9703d62e1f5a023f817d"
+    }
+  ],
+  "all_current_prelaunch_cairn_valid": true,
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol",
+  "proof_parent_absent": true,
+  "both_current_independent_reviews_accepted": true,
+  "uncovered_criteria": [],
+  "queued": false,
+  "non_claim": "Exact sealed current-subject launch prerequisites and fresh-namespace observation only. No protected attempt, provider, stage equality, v2 receipt, native-row acceptance or release claim."
+}

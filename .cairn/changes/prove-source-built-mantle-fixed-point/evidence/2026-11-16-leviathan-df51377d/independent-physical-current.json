@@ -1,0 +1,173 @@
+{
+  "verdict": "ACCEPT_CRITERIA_7_8_ONLY",
+  "subject": {
+    "revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+    "subject_path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d/review-subject.json",
+    "subject_raw_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+    "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+    "frozen_source_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+    "runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+    "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+    "prepared_manifest_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+    "complete_profile_raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+    "complete_profile_bytes": 15839323096
+  },
+  "evidence_bindings": {
+    "root": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d",
+    "reports_relative_to_root": {
+      "identity-results/identity-review.json": "5ad8662a7f7dd73fbf5e62f9d2b2454bf4c1c821c9deb7bab00915fbb82c9b31",
+      "preauthor-results/preauthor-role-physical-review.json": "6ec949ce2a0d4bae33ed33f141fdb786766204ef48e1fc0c9c5f238ed3ad0640"
+    },
+    "transport_metadata_relative_to_root": [
+      "identity-result-transport.json",
+      "preauthor-result-transport.json"
+    ],
+    "inspectors_relative_to_root": {
+      "identity-review/identity-audit.py": "76da5556ccc3cf789d9d8147bbce248255774c1eb0891ddfed80b5a17e3a1a34",
+      "identity-review/preauthor-role-physical-audit.py": "9cc9f0d994a08bca03200b2ac783f3c76e554fc75b76cdeaad186ab244802c65"
+    },
+    "input_plan_raw_blake3": "c39c3552820088094e44a9b10d9c195e4a8665a6afd217773c065497f0206aee",
+    "input_plan_canonical_blake3": "1152d66e5cae4c4469cdbb927c30530372a8231d9e03d22c7bbf1189ecabc328",
+    "preauthor_profile_raw_blake3": "ee2b8cc23484769179cfd922128d853e2bc3e37f1240aad04efc2c181bbe1767",
+    "preauthor_manifest_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+    "preparation_report_raw_blake3": "c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95",
+    "qualification": "Complete assembly task 1680, canonical qualification 1681, runner qualification 1682 and preparation 1683 succeeded; retained full-profile SSH-stream parity equals the prepared profile raw hash.",
+    "inert_tool_blake3": {
+      "python3.14": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb",
+      "b3sum": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "git": "b8fcf8cfa77c731cb3460ed6dbfdddf8991061e693760817ec411098ab9e505a",
+      "tar": "4f9b080ceb6c38fee8d89aa972d4aaf54ce4ee8bbdfa3850c3059ddaeee17e11",
+      "nix": "10a89016fda3e60a7262562d0d2e855077296966b7431d9210e1538657dfeb2e",
+      "jq": "9ed7522051c7f59af05775cea2c9f781d05e3c4667c743bece820cc2d8edeb22"
+    },
+    "frozen_consumer_blake3": {
+      "src/release_tree_copy.rs": "c7098192cdc8a1a1add76bca927fcfd07d214b9eb3bcf9b447daf7430164afa4",
+      "src/source_bundle.rs": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282",
+      "src/self_build.rs": "7a56ab295ee1d13534a3b4e74e083d868fbeb7a1f3a3841515a3888e7983518f",
+      "src/source_built_fixed_point_planning.rs": "91be8df65a37d1344c194062f3d09043567479a4efc295f86d09144ba43181bd",
+      "src/source_built_fixed_point_shell.rs": "9c8ac67d2fdc9fbea394975c8922a5c03e77f2cb6df6cc204a4221674e2cdddd",
+      "src/source_built_fixed_point_authoring.rs": "2755d9ab07792600ce5491c4d134b33339c3119f67b71148558262157d6817c8",
+      "src/source_built_mantle_programs_native.rs": "3e2bb42a6c9c396515b0e1e2a4c980a7ee5c1b69b68852b47c4220f2b70da645",
+      "src/source_built_mantle_programs_graph.rs": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3"
+    },
+    "recorded_inspection_command": "Bound Python 3.14 runs each cited inspector with COHORT FROZEN_SOURCE REVIEW_SCRATCH SUBJECT_JSON; the two distinct scratch paths and full commands are recorded in their reports. Identity inspection records Git ls-tree/hash-object --no-filters, normalized GNU tar piped to b3sum, and nix hash path --type blake3 --base16; the supplement records streaming b3sum and the plan derive-key command."
+  },
+  "criterion_7": {
+    "verdict": "ACCEPT",
+    "covered": 71992,
+    "total": 71992,
+    "basis": "The main report measures 71989/71992 and explicitly leaves three preauthor directory reconstructions open. The exact current supplement covers those same three, 3/3; its total is not added again to the main denominator.",
+    "roles": "7/7 current physical role records; 7/7 preauthor roles, comprising 3/3 reconstructed directory roles and 4/4 file/input-role bodies",
+    "preauthor_embedded_leaves": "70794/70794",
+    "current_profile_embedded_role_entries": "70842/70842",
+    "preauthor_directory_trees": {
+      "mantle-source": {
+        "blake3": "2882371f97e4c2c4cdc52e97ac2308c6f345ffcfa73a2349101889d36913d0b5",
+        "files": 12766,
+        "parents": 1131,
+        "bytes": 359094665
+      },
+      "rust-source-archive-set": {
+        "blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+        "files": 6,
+        "source_chunk_entries": 50,
+        "bytes": 3164874699
+      },
+      "vendor-inputs": {
+        "blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "files": 57965,
+        "parents": 10803,
+        "bytes": 1213371949
+      }
+    },
+    "distinct_native_identities": {
+      "preauthor_bootstrap_input": {
+        "raw_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+        "bytes": 544909751,
+        "chunks_verified": 9
+      },
+      "assembled_preauthor_plan_closure": {
+        "raw_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+        "bytes": 968316247,
+        "records": 59
+      },
+      "augmented_closure": {
+        "raw_blake3": "2c53dd60e404293e92a792d2acaa8e0bef025318c2a171b89c2035ff04b1b001",
+        "bytes": 1632752835,
+        "records": 63
+      },
+      "original_native_body_comparisons": "177/177: all 59 original complete bodies against each of preauthor plan, augmented closure and launch-input profile; no mismatches"
+    },
+    "programs": {
+      "records": "4/4",
+      "embedded_entries": "479/479",
+      "archive_members_exact_bytes": "476/476",
+      "recursive_nars": "4/4",
+      "by_identity": {
+        "fixed-point-native-source-program": {
+          "record_blake3": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+          "archive_members": 132,
+          "archive_blake3": "d503640352d84de5a27a058f134403b0d0e0656a9b52ac8e0563e38ae3dd1761",
+          "nar_blake3": "40ee3117c1c237a12d498bce00fef75f790e0511042cd96d7a52633de1f0c88a"
+        },
+        "fixed-point-rust-source-program": {
+          "record_blake3": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+          "archive_members": 20,
+          "record_entries": 23,
+          "archive_blake3": "0bf46efee867e7727e9fb5e09a26fb89991666c8229e97ae16cd6189ecf7c9b9",
+          "nar_blake3": "14b8619ce87a14680aa254db0c43bc5f783bc8345d9e3eae8e81bd118d723ca3"
+        },
+        "source-built-mantle-programs": {
+          "record_blake3": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+          "archive_members": 3,
+          "archive_blake3": "29ee25f9fc4d3aa9222ba43d6dcf7eedb6601b8cf718a6a9ed8453296268c68c",
+          "nar_blake3": "6834e14a120df4db2d401111a07ee4efc32625b7983759498634453d44d80709"
+        },
+        "source-built-stagex-programs": {
+          "record_blake3": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96",
+          "archive_members": 321,
+          "archive_blake3": "63d9663458bdeeaf0952cf0a6815897e75fd8fbba8a1da1eec3571b4a29bd27c",
+          "nar_blake3": "aa6823dd20b7034bf19133b23c106f6215d6f6d675527151ea6cfa91cf2a3c23"
+        }
+      }
+    }
+  },
+  "criterion_8": {
+    "verdict": "ACCEPT",
+    "covered": 33818,
+    "total": 33818,
+    "original_aws_git": "20854/20854 blob-byte and mode comparisons: 10427 entries in each frozen and prepared copy, each with 10207 mode-0644 and 220 mode-0755 files, zero extra members. Both normalized trees match 8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89 at commit 02561621ffa4cf17c0c4f70bc11a82df36b42ae9.",
+    "mantle_capture": {
+      "admitted_leaves": "12766/12766 byte/kind/executable comparisons",
+      "required_parent_directories": "1131/1131 present as directories; 13897 original leaves-plus-parents preserved",
+      "original_payload_bytes": 359094665,
+      "excluded_frozen_leaves": 12214,
+      "separate_authored_additions": [
+        "bootstrap/source-built",
+        "bootstrap/source-built-cold-route.json",
+        "bootstrap/source-built/mantle-stage1.json",
+        "bootstrap/source-built/mantle-stage1.unit-plan.json",
+        "bootstrap/source-built/mantle-stage2.json",
+        "bootstrap/source-built/mantle-stage2.unit-plan.json"
+      ]
+    },
+    "selected_original_sources": "76/76 AWS/Ring routes and 76/76 corresponding frozen PIPE_SOURCE products: each of the two stages selects 26 AWS and 12 Ring routes, with equal selections. Three selected AWS assembler-probe boundaries are checked; Ring authenticated Text feeds its generator, translator and result products. Frozen PIPE_SOURCE BLAKE3 is 66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df.",
+    "copies": "14/14 frozen helper/translator copies and the original Rust route copy match exactly. Both authored Rust-authority copies match.",
+    "native_llvm_ownership": "2/2: llvm-cmake-patch.c and llvm-cmake-phase.h are byte-equal to frozen sources and owned by fixed-point-native-source-program; the frozen LLVM recipe consumer selects that native record.",
+    "initial_authorities": "27/27 absent at inspection: 20 cohort/input provider-store paths and seven first-launch output paths"
+  },
+  "resolved_main_report_gaps": [
+    "preauthor embedded directory reconstruction: mantle-source",
+    "preauthor embedded directory reconstruction: rust-source-archive-set",
+    "preauthor embedded directory reconstruction: vendor-inputs"
+  ],
+  "unresolved_findings": [],
+  "uncovered_obligations_within_criteria_7_8": [],
+  "runtime_payload_bytes_observed": 0,
+  "non_claims": [
+    "The main identity report's CLEAR verdict alone does not satisfy criterion 7; acceptance requires the exact hashed supplement.",
+    "This is bounded inert physical/source acceptance, not static graph acceptance or launch permission.",
+    "No protected execution or runtime-generated payload was observed or inferred.",
+    "No proof, compiler-correctness, reproducibility, release eligibility or native-row acceptance is made."
+  ]
+}

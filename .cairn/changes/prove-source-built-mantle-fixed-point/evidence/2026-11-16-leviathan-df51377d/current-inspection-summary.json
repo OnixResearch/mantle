@@ -128,10 +128,20 @@
     }
   },
   "pending": [
-    "two fresh authorized underclass/gpt-6-sol reviews",
-    "parent acceptance and current prelaunch lifecycle gates",
     "genuine protected stages and verified v2 receipt",
     "fresh signed native rows"
   ],
-  "non_claim": "Current inert measured facts and complete transport only. Raw graph HOLD observations are not suppressed; the complete consumer-faithful report classifies them. Combined physical coverage explicitly uses the distinct preauthor supplement. No model acceptance, protected execution, compiler correctness, v2 proof, native-row acceptance or release eligibility."
+  "non_claim": "Current inert measured facts and complete transport only. Raw graph HOLD observations are not suppressed; the complete consumer-faithful report classifies them. Combined physical coverage explicitly uses the distinct preauthor supplement. No model acceptance, protected execution, compiler correctness, v2 proof, native-row acceptance or release eligibility.",
+  "independent_static_review_criteria_accepted": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "current_prelaunch_gates_all_valid": true,
+  "parent_acceptance_blake3": "3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5"
 }

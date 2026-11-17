@@ -904,7 +904,7 @@ remain before protected execution; I3-I5 and proof-dependent V2/V3 stay open.
 ## Native-row operator consumer prerequisites
 
 - [ ] [serial] N1 Implement and verify receipt-bound cold StageX snapshot/projection and fresh signed adoption, then the complete five-row source-selected qualification and original receipt-validation workflow. r[bootstrap_inventory.cold_stagex_native_row_adoption]
-- [ ] [serial] N2 Publish and freeze the changed source, qualify isolated runner and canonical targets, regenerate its source-only cohort and complete fresh current-data review before final changed-source proof or native-row promotion. r[bootstrap_inventory.cold_stagex_native_row_adoption]
+- [x] [serial] N2 Publish and freeze the changed source, qualify isolated runner and canonical targets, regenerate its source-only cohort and complete fresh current-data review before final changed-source proof or native-row promotion. r[bootstrap_inventory.cold_stagex_native_row_adoption]
 
 The existing 869a461d attempt remains an immutable earlier-cohort run. Its
 result cannot qualify changed Rust/operator source. No legacy task1580 retry,
@@ -1140,4 +1140,28 @@ Current helper-mutation task 1691, both fresh exact-model independent reviews,
 parent acceptance and current prelaunch gates remain separate prerequisites.
 No protected attempt, stage equality, v2 receipt or native-row acceptance is
 claimed. Full evidence is in `evidence/2026-11-16-leviathan-df51377d/`.
+
+## Complete current independent static acceptance observed (2026-11-17)
+
+Current helper-mutation task 1691 passed all six genuine in-memory rejection
+cases. Both fresh authorized `underclass/gpt-6-sol` reviews then accepted their
+complete domains: criteria 1-6 and criteria 7-8, with no uncovered static
+obligation. Each review binds the exact df51377d/a43964e7 subject; parent verified
+their complete report, inspector, selected-recipe and frozen-consumer citations
+against current artifacts before integration.
+
+The graph review explicitly resolves the retained raw HOLD diagnostics through
+actual consumer scopes and checks both metadata-associated native build-script
+compilers against their upstream unit facts. The physical review explicitly
+combines the distinct preauthor supplement with the main report's three gaps,
+without double-counting its denominator. Both retain absent runtime bytes and
+all proof/compiler/release/native-row non-claims.
+
+N2's published-source, separate fresh-target qualification, regeneration and
+complete fresh-review prerequisite is satisfied. N1's genuine proof adoption
+and five native rows, I3-I5 and proof-dependent V2/V3 remain open. Current
+prelaunch lifecycle/fresh-namespace checks still precede protected execution.
+Exact independent decisions, current binding checks and integration are retained
+in `evidence/2026-11-16-leviathan-df51377d/`; neither model text nor this checkpoint
+is a v2 proof or release authority.
 

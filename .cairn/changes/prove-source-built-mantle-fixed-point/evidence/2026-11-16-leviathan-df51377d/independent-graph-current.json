@@ -1,0 +1,121 @@
+{
+  "verdict": "ACCEPT_STATIC_CRITERIA_1_TO_6_ONLY",
+  "overall_correctness": "correct",
+  "subject": {
+    "revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+    "subject_json_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+    "frozen_source": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+    "frozen_source_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+    "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+    "prepared_manifest_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+    "source_profile_raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5"
+  },
+  "criteria": {
+    "1": {
+      "verdict": "accept_static",
+      "recipes": {"total": 6, "covered": 6, "uncovered": 0},
+      "steps": {"total": 125407, "covered": 125407, "uncovered": 0},
+      "artifact_references": {"total": 1720298, "covered": 1720298, "uncovered": 0},
+      "dependency_edges": {"total": 859396, "covered": 859396, "uncovered": 0},
+      "raw_output_seeds": {"total": 6832, "covered": 6832, "invalid": 0, "uncovered": 0},
+      "evidence": "Selected inputs resolve through the current route and indexes. Local/prior Produced declarations, kinds, ordering, cycles and consumer-defined roots were checked. Native and Rust original-node partitions assign respectively 5122/5122 and 63882/63882 recipe steps, without unknown or duplicate assignments. All raw seeds resolve to genuine Produced inputs of exactly the destination kind with source bounds no greater than destination bounds."
+    },
+    "2": {
+      "verdict": "accept_static",
+      "raw_guard_status_edges": {"total": 80, "covered": 80, "uncovered": 0},
+      "raw_observe_phase": {"total": 80, "covered": 80, "uncovered": 0},
+      "generated_guard_conditions": {"total": 13402, "covered": 13402, "uncovered": 0},
+      "generated_observe_phase": {"total": 4588, "covered": 4588, "uncovered": 0},
+      "evidence": "Guard/status dependencies, optional-failure ordinary outputs, observation dominance and executed/skipped state alternatives have zero reported guard issues. No runtime outcome was invented."
+    },
+    "3": {
+      "verdict": "accept_static",
+      "stagex_source_admission_edges": {"total": 132, "covered": 132, "uncovered": 0},
+      "native_derivation_edges": {"total": 341, "covered": 341, "uncovered": 0},
+      "rust_source_edges": {"total": 6, "covered": 6, "uncovered": 0},
+      "rust_bootstrap_outputs": {"total": 16, "covered": 16, "uncovered": 0},
+      "mantle_semantic_products": {"total": 2486, "covered": 2486, "uncovered": 0},
+      "canonical_root_scenarios": {"total": 10, "covered": 10, "uncovered": 0},
+      "evidence": "Both Linux-header consumers use the actual bin/make member. Rust handoffs and six final exports match their selected producers. Each Mantle stage has 1243 produced semantic roots, its exact qualified binary root, a produced smoke export and an actual help consumer. Both selected recipes pass the canonical-root checks; eight malformed-root scenarios are rejected."
+    },
+    "4": {
+      "verdict": "accept_static",
+      "consumer_scoped_static_words": {"total": 2551864, "covered": 2551864, "uncovered": 0},
+      "static_invocation_json": {"total": 4279, "covered": 4279, "uncovered": 0},
+      "source_binding_uses": {"total": 11185, "covered": 11185, "uncovered": 0},
+      "raw_output_seeds": {"total": 6832, "covered": 6832, "invalid": 0, "uncovered": 0},
+      "evidence": "The full consumer-scoped traversal covers nested typed words and static invocation descriptors, including cwd, argv0, executable path, mounts and authority uses. The source-kind inventory resolves 816 unique references to 650 Text and 166 Tree bindings; unknown static kinds: 0."
+    },
+    "5": {
+      "verdict": "accept_static_symbolic_contract_only",
+      "controller_specs": {"total": 2294, "covered": 2294, "uncovered": 0},
+      "slots": {"total": 4588, "covered": 4588, "uncovered": 0},
+      "generated_templates": {"total": 25053, "covered": 25053, "uncovered": 0},
+      "generated_output_seeds": {"total": 9176, "covered": 9176, "invalid": 0, "uncovered": 0},
+      "symbolic_runtime_payloads": {"total": 4588, "covered": 4588, "uncovered": 0, "payload_bytes_observed": 0},
+      "runtime_invocation_static_bindings": {"total": 6167, "covered": 6167, "uncovered": 0, "invocation_bytes_observed": 0},
+      "evidence": "Actual local constructor, executable-variant, slot, template, same-turn/same-slot reference and seed scopes have no corrected word, reference, constructor or unknown-kind issues. Generated seeds are Tree-to-Tree Produced links satisfying the frozen bound rule. Producer, strict decoder and controller-role routing were inspected symbolically, not executed."
+    },
+    "6": {
+      "verdict": "accept_static",
+      "helper_source_uses": {"total": 1098, "covered": 1098, "invalid": 0, "uncovered": 0},
+      "package_exclusions": {"total": 2, "covered": 2, "invalid": 0, "uncovered": 0},
+      "feature_environment": {"total": 2386, "covered": 2386, "invalid": 0, "uncovered": 0},
+      "feature_cfg": {"total": 2098, "covered": 2098, "invalid": 0, "uncovered": 0},
+      "authenticated_unit_plans": {
+        "mantle-stage1": {"derivations": 1047, "mapped_compile_units": 1049, "uncovered": 0, "raw_blake3": "9fd747cfbb711b4c434dbd4ab807f42be2b7c2c3a69c778df236ff3a48970055"},
+        "mantle-stage2": {"derivations": 1047, "mapped_compile_units": 1049, "uncovered": 0, "raw_blake3": "9b075232912a85357159388388011ceadc74c805eb0058335e2476c28828cd47"}
+      },
+      "metadata_associations": "I separately read both pre-lowering unit plans and both actual recipes. In each stage, ring's source build-script unit has metadata 24a3a3ea8afd346e and cfg alloc/default/dev_urandom_fallback, matching unit-01078-compile and its vendor-inputs/ring operand. aws-lc-sys has metadata c3ec60f80587db96 and cfg prebuilt-nasm, matching unit-01084-compile and vendor-inputs/aws-lc-sys. These associations use the source unit facts, not a copied recipe-selector mapping."
+    }
+  },
+  "diagnostics": {
+    "static_findings": [],
+    "uncovered_static_obligations": [],
+    "raw_graph_hold": "The raw graph inspector flags 14037 unknown Input names in uninstantiated ControllerSpecs. Complete consumer-faithful local template instantiation replaces those scopes; all 14037 raw flags are classified and corrected-scope word issues are zero. This does not erase or reinterpret other graph findings.",
+    "native_reachability": "Thirty-five generator-base steps are unreachable through actual input dependencies alone, but have zero validator-unreachable steps and execute in recipe source order; their static invocations remain inspected.",
+    "correction_and_negative_evidence": "The failed selector CLI used hyphenated stage IDs for underscore-keyed selected inputs. The recorded narrow correction and successful task 1690 retain earlier complete reports; current-data negative evidence records 9/9 selector mutations, 6/6 helper mutations and 10/10 canonical-root scenarios."
+  },
+  "bindings": {
+    "report_root": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-df51377d",
+    "reports_blake3": {
+      "graph-results/graph-audit.json": "f3615338e59da036dbfc039252f83d307ea67c34d87cb104f188d239303afd66",
+      "graph-results/controller-template-audit.json": "f3bad0f61e228525c6fb52a9ad748695e9f0138fee58b145299269905b036a0f",
+      "graph-results/source-binding-kind-inventory.json": "4f685e68f409a24b0e5f4cc65e137bbe600d812fb232a78f9d10034f7b44653a",
+      "graph-results/helper-authority-audit.json": "634f74ed2ec0bc9a902aa9cb123efe5cd5460aa1441f593ed51c46ca7f5cdcdb",
+      "graph-results/mantle-selector-audit.json": "b981fc75f9705a0d331bc7570eded908b948a71488e6d066a8e671c22e0cc154",
+      "graph-results/semantic-root-regression.json": "af1435cc30fe8696641fe4a557eaedd73d434d91a86fdb45f09e80e1ed26b04d",
+      "selector-mutations.json": "2418dbe54e37b64ce84091388e0141dfe2a266639777a809be1d1e3d6418bc5b",
+      "helper-mutations.json": "599cccdceeb2a226f4952c9cfeee50d3fc3c637a7ead980672660a2ea0baff8b",
+      "graph-selector-key-correction.json": "50a9fe1d39cdaf1abb2d785b3c77456f9536fa2d3e0cb518764da98fa5e135b2"
+    },
+    "inspectors_blake3": {
+      "graph-review/graph-audit.py": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd",
+      "graph-review/controller-template-audit.py": "20c85b4e3c3990c582354bf59c56730c7ca8464f372b9e0f58700ccce81fade5",
+      "graph-review/helper-authority-audit.py": "4be2e95223f11e66d7da94b0a2c315d31d68d6079b7e8c7d6d82ee62e31acad1",
+      "graph-review/mantle-selector-audit.py": "e44b6a0fccd4d9cfbf1d880bf0e4e874cfb1ad3c174ea63d0ef2e52ab7a47467"
+    },
+    "frozen_consumers_blake3": {
+      "src/source_built_recipe.rs": "2205f4fa074b23b5b2059e8e2c4b214f17c3447ce97d9c86e6f3e95478f243f3",
+      "src/source_built_recipe_exec.rs": "ec7d233b69c57375dd3ca7df4d33cf964f6a82e3ffa9b7acccc4b9740d41fc29",
+      "src/source_built_recipe_controller.rs": "ddfd8444bcc9e70d3c32fb4dcd2af4b181109df4b8cf0e62527bd09e8721e755",
+      "src/source_built_fixed_point_action_controller.rs": "aafd4668ae21b831b33f726121fb9894b5da517e4f29353fee79e02eb8a12768",
+      "src/source_built_mantle_programs_graph.rs": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3",
+      "src/rust_plan.rs": "0890464dcf1da3d64dd9544018412d8908bc9b53da41db4aadb30d326d8ab90c",
+      "crates/mantle-rust-plan-core/src/features.rs": "dc4071b58a23fc9cd6887cf47c3fd22c63607e8bcab7d6fae169c2d237737eef"
+    },
+    "selected_recipe_blake3": {
+      "stagex-transition": "8340c69c2e898193ba7a95d861718c1681e5d446c7e5cf7210be784eb18d9e34",
+      "stagex-provider-publication": "95b34b8881195c596046834e806f0324150387b2fc4a91c09ef05f499d4eccd8",
+      "full-source-native-provider": "7ecc72acad81d798f4370c83b3154ecb643ace91bb2cf619146c1f5c73c823ab",
+      "full-source-rust-provider": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+      "mantle-stage1": "fb6b7f63a4033070dd52bb8ed27091e364289aa62afc91bdf97ff36e9ad46cd5",
+      "mantle-stage2": "9ff5ef7fa0ba2bac5cec7f497288006e7913fbed72c63a25892842c5ee6b6c71"
+    }
+  },
+  "limitations_and_non_claims": [
+    "Runtime-produced invocation bytes and their eventual decoding, outputs and outcomes were not observed; symbolic static binding is not execution acceptance.",
+    "No build, test, formatter, product, helper, compiler, controller, recipe or protected execution was run in this review.",
+    "This is neither an independent review of criteria 7–8 nor authority for protected launch, compiler correctness, fixed-point equality, a v2 receipt, reproducibility, release eligibility or native-row acceptance."
+  ]
+}
