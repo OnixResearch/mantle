@@ -1,0 +1,84 @@
+{
+  "schema": "mantle-cold-semantic-unit-diagnosis-v1",
+  "subject_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "proof_task": 1694,
+  "source_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2/.proof.source-built-fixed-point-staging-4176107/inputs/mantle-source",
+  "recorded_root_units": [
+    {
+      "unit_id": "native:06cd112ac6f482b381e9ad5d7fb386b128598565f08a4ac56f3da859b0154ab5:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build",
+      "target_name": "generate-portable-platform-profiles",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:106cedf32f7f2c88549bfde4d565fdb29a27732fffebb3ee1db10bf8dc34021d:path+native#mantle@0.1.0:check-native-row-receipts:bin:build",
+      "target_name": "check-native-row-receipts",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:6493f7b7c348e22e60944be6188db811243ec894d90604342d9509767779bb2e:path+native#mantle@0.1.0:mantle:bin:build",
+      "target_name": "mantle",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:7c3292b5261bc2a0e15a614fc448e8920f3d83661d65be5b5efe46ba29b5f441:path+native#mantle@0.1.0:adopt-source-built-stagex:bin:build",
+      "target_name": "adopt-source-built-stagex",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:bd04852769a630dbbdb4c1f8d643bd59312f6283150001b892fe4e689b3abb7c:path+native#mantle@0.1.0:crunch:bin:build",
+      "target_name": "crunch",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:c67ce252c36a7ab2ce9706a3ffce3338565e23b82be570804dc216a03a457297:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build",
+      "target_name": "generate-operator-command-contract",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:e3c4a43515f8658a53813b115dfaa9f068fd1309265d37c01d57a6cdad00ddd5:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build",
+      "target_name": "mantle-protected-build-runner",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    },
+    {
+      "unit_id": "native:f75f02cda73130e4c35ffc3363b7488130b6173089f4a1ba7db3b40ce218b5da:path+native#mantle@0.1.0:mantle:lib:build",
+      "target_name": "mantle",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c"
+      }
+    }
+  ],
+  "runtime_path_source_digest": "4b5f41d1178406f4f718666bd06182d62f6217dc106ed3e20d80e7baaf30cc39",
+  "preauthor_projection_path_source_digest": "ab44854e554d9c855b93b7e43abbc158c14938a23fab7ddbe96b38190c9e818c",
+  "root_units_match_exact_preauthor_projection": true,
+  "root_units_differ_from_augmented_runtime_source": true,
+  "authored_files_added_after_planning": {
+    "bootstrap/source-built/mantle-stage1.json": 176214339,
+    "bootstrap/source-built/mantle-stage1.unit-plan.json": 8697030,
+    "bootstrap/source-built/mantle-stage2.json": 176214339,
+    "bootstrap/source-built/mantle-stage2.unit-plan.json": 8697030,
+    "bootstrap/source-built-cold-route.json": 902
+  },
+  "non_claim": "Read-only file and retained-plan comparison; no source/cohort mutation, admission relaxation, compiler execution or proof acceptance."
+}

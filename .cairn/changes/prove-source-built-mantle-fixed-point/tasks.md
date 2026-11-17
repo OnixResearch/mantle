@@ -1199,3 +1199,38 @@ The failed output parent remains intact. Fresh sealed task 1694 uses the separat
 source/profile/review identities and resource bounds. Only submission is observed
 here; genuine stages, reconciliation, equality, v2 and native rows remain open.
 
+## Circular compiler-source identity diagnosed and repaired (2026-11-17)
+
+Task 1694 invoked the genuine frozen runner and failed closed at semantic-unit
+inventory equality before protected stages. The attempt status, outer driver
+and failed output root remain retained. No success alias, stage equality or v2
+receipt was published.
+
+Read-only comparison reproduced Rust's exact path-source framing. All eight
+root-package units retained the original source digest, while preparation's two
+recipes, two unit plans and selector changed the runtime tree digest. Omitting
+exactly those five additions reproduced the retained planner digest; no source
+or cohort was mutated to obtain that observation.
+
+- [x] [serial] Diagnose the actual prepared-versus-runtime identity difference without changing admission. r[bootstrap_inventory.source_built_mantle_fixed_point]
+- [x] [serial] Keep original compiler source immutable; move authored members into the existing independently authenticated program record and use v2 typed selectors. r[bootstrap_inventory.source_built_mantle_fixed_point]
+- [x] [serial] Exercise the new source-identity and selector-authority regressions; task1695's captured source-built leg reports 273 passed, 0 failed and 27 ignored. r[bootstrap_inventory.source_built_mantle_fixed_point]
+- [x] [serial] Complete strict developer checks after removing the obsolete path-only adapter exposed by task1695's actual Clippy failure. r[bootstrap_inventory.source_built_mantle_fixed_point]
+- [ ] [serial] Publish and freeze corrected source, qualify isolated runner and canonical targets, regenerate all source programs and complete fresh full current-data independent reviews before another protected launch. r[bootstrap_inventory.source_built_mantle_fixed_point]
+- [ ] [serial] Complete genuine I3-I5, proof-dependent V2/V3 and separately signed current-source native rows. r[bootstrap_inventory.source_built_mantle_fixed_point] r[bootstrap_inventory.cold_stagex_native_row_adoption]
+
+ADR 0158 records the clean cutover. Source hashing, semantic inventory equality,
+compiler metadata checks, producer/source authority and every protected event
+remain exact. The new inspector rejects all sixteen retained stage1/stage2
+root-unit digests against the old augmented runtime tree. These are bounded
+developer/inert observations only, not a new source qualification or proof.
+
+The remaining developer correction completed in tasks1696/1697: all four old
+wrapper callers were migrated, 17 affected execution tests passed with 24
+explicitly ignored probes, formatting and strict Clippy passed, the existing
+internal artifact family now owns the selector fixtures, the machine gate
+reports `PASS (24 contracted, 67 classified)`, and the release binary built and
+reported `mantle 0.1.0`. The failed intermediate runs remain retained. Four
+current lifecycle reports are valid. These checks do not reuse the warm target
+as an isolated runner or current proof qualification.
+

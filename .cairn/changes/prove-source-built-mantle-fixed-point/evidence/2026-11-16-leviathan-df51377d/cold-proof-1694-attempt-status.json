@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "459970e3354b97d80a6d2e58d4a652f542568a1b612281abe5a042ac895b250c",
+  "blocker": "error: build failed\nsource-built Mantle actions: source recipe omits, duplicates, or adds Cargo-free semantic units/build scripts"
+}

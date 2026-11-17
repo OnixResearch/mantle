@@ -5,8 +5,6 @@ use crate::source_built_recipe::ArtifactRef;
 use crate::source_built_recipe::RecipePaths;
 use crate::source_built_recipe::{self as recipe};
 
-const COLD_ROUTE_SOURCE: &str = "bootstrap/source-built-cold-route.json";
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ColdNativeSource {
@@ -24,7 +22,7 @@ struct ColdSourceRoute {
     stagex_publication: ArtifactRef,
     native: ColdNativeSource,
     rust_provider: ArtifactRef,
-    mantle_recipes: [String; 2],
+    mantle_recipes: [ArtifactRef; 2],
 }
 
 struct PreparedColdActions {
@@ -96,6 +94,52 @@ pub(super) fn cold_source_roots(
     Ok(roots)
 }
 
+fn read_cold_source_route(
+    proof: &SourceBuiltFixedPointPlan,
+    roots: &BTreeMap<SourceAuthorityRole, PathBuf>,
+) -> Result<ColdSourceRoute, RunError> {
+    let cache = tempfile::tempdir().map_err(|error| proof_error(error.to_string()))?;
+    let selector = ArtifactRef::ManifestSource {
+        role: SourceAuthorityRole::NativeSourceBundle,
+        record_identity: crate::source_built_mantle_programs::PROGRAM_RECORD.into(),
+        member: crate::source_built_mantle_programs::COLD_ROUTE_MEMBER.into(),
+    };
+    let path = recipe::hydrate_reference(proof, roots, cache.path(), &selector)
+        .map_err(|error| proof_error(format!("missing authenticated cold source program selector: {error}")))?;
+    let metadata = fs::symlink_metadata(&path).map_err(|error| proof_error(error.to_string()))?;
+    if !metadata.is_file() || metadata.len() > 1024 * 1024 {
+        return Err(proof_error("cold source selector is not bounded regular source text".into()));
+    }
+    let route: ColdSourceRoute =
+        serde_json::from_slice(&fs::read(&path).map_err(|error| proof_error(error.to_string()))?)
+            .map_err(|error| proof_error(format!("cold source selector syntax: {error}")))?;
+    if route.schema != "mantle-source-built-cold-route-v2" {
+        return Err(proof_error("cold source selector schema differs".into()));
+    }
+    for (reference, expected_member) in route.mantle_recipes.iter().zip([
+        "bootstrap/source-built/mantle-stage1.json",
+        "bootstrap/source-built/mantle-stage2.json",
+    ]) {
+        let ArtifactRef::ManifestSource {
+            role: SourceAuthorityRole::NativeSourceBundle,
+            record_identity,
+            member,
+        } = reference
+        else {
+            return Err(proof_error("Mantle recipe must be independently authenticated program source".into()));
+        };
+        if record_identity != crate::source_built_mantle_programs::PROGRAM_RECORD {
+            return Err(proof_error("Mantle recipe selects a foreign program source record".into()));
+        }
+        if member != expected_member {
+            return Err(proof_error("Mantle recipe selects a different source member".into()));
+        }
+    }
+    debug_assert_eq!(route.schema, "mantle-source-built-cold-route-v2");
+    debug_assert!(route.mantle_recipes.iter().all(|reference| matches!(reference, ArtifactRef::ManifestSource { .. })));
+    Ok(route)
+}
+
 fn prepare_cold_actions(
     root: &Path,
     proof: &SourceBuiltFixedPointPlan,
@@ -104,19 +148,7 @@ fn prepare_cold_actions(
 ) -> Result<PreparedColdActions, RunError> {
     let roots = cold_source_roots(root, proof)?;
     let source = &roots[&SourceAuthorityRole::MantleSource];
-    let route_path = recipe::source_member(source, COLD_ROUTE_SOURCE).map_err(|error| proof_error(format!(
-        "missing authenticated cold source program selector {COLD_ROUTE_SOURCE}; supply genuine StageX/native/Rust/Mantle expanded source recipes retaining their original generators: {error}"
-    )))?;
-    let metadata = fs::symlink_metadata(&route_path).map_err(|error| proof_error(error.to_string()))?;
-    if !metadata.is_file() || metadata.len() > 1024 * 1024 {
-        return Err(proof_error("cold source selector is not bounded regular source text".into()));
-    }
-    let route: ColdSourceRoute =
-        serde_json::from_slice(&fs::read(&route_path).map_err(|error| proof_error(error.to_string()))?)
-            .map_err(|error| proof_error(format!("cold source selector syntax: {error}")))?;
-    if route.schema != "mantle-source-built-cold-route-v1" {
-        return Err(proof_error("cold source selector schema differs".into()));
-    }
+    let route = read_cold_source_route(proof, &roots)?;
     let runtime = root.join("cold-runtime");
     let transition_root = runtime.join("stagex-transition");
     let publication_root = runtime.join("stagex-provider-publication");
@@ -193,7 +225,7 @@ fn prepare_cold_actions(
                 sandbox_binary: bwrap,
             },
         ],
-        recipe_paths: [&route.mantle_recipes[0], &route.mantle_recipes[1]],
+        recipe_sources: [&route.mantle_recipes[0], &route.mantle_recipes[1]],
         future_rustc: &rust.recipe().export("rustc")?.path,
         future_rustc_host: rust.compiler_host(),
         targets: &targets,
@@ -420,4 +452,108 @@ pub(crate) fn cmd_source_built_replay(
         crate::source_built_fixed_point_mantle_actions::replay_stage(&actions.mantle, stage_id, &mut stream)
     })();
     port.finish(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_built_fixed_point_planning::InitialOutputAuthorityState;
+    use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanInput;
+    use crate::source_built_fixed_point_planning::plan_source_built_fixed_point;
+
+    fn route() -> serde_json::Value {
+        let member = |path| {
+            serde_json::json!({
+                "kind": "manifest-source", "role": "native-source-bundle",
+                "record_identity": crate::source_built_mantle_programs::PROGRAM_RECORD, "member": path,
+            })
+        };
+        serde_json::json!({
+            "schema": "mantle-source-built-cold-route-v2",
+            "stagex_transition": member("stagex-transition.json"),
+            "stagex_publication": member("stagex-provider-publication.json"),
+            "native": {"record_identity": "native-program", "recipe_member": "native.json", "index_member": "native.expansion.json"},
+            "rust_provider": {"kind": "source", "role": "rust-source-archive-set", "path": "rust.json"},
+            "mantle_recipes": [member("bootstrap/source-built/mantle-stage1.json"), member("bootstrap/source-built/mantle-stage2.json")],
+        })
+    }
+
+    fn selector_fixture(
+        root: &Path,
+        route: &serde_json::Value,
+    ) -> (SourceBuiltFixedPointPlan, BTreeMap<SourceAuthorityRole, PathBuf>) {
+        let programs = root.join("programs");
+        let member = programs.join(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER);
+        fs::create_dir_all(member.parent().unwrap()).unwrap();
+        fs::write(&member, serde_json::to_vec_pretty(route).unwrap()).unwrap();
+        let bundle = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                identity: crate::source_built_mantle_programs::PROGRAM_RECORD.into(),
+                path: programs,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let manifest = root.join("native-sources.json");
+        crate::source_bundle::write_source_bundle(&manifest, &bundle).unwrap();
+        let mut original = crate::source_built_fixed_point_action_trust::tests::fixture().0;
+        let native = original
+            .source_inputs
+            .iter_mut()
+            .find(|input| input.role == SourceAuthorityRole::NativeSourceBundle)
+            .unwrap();
+        (native.size_bytes, native.digest_blake3) = recipe::digest(&manifest).unwrap();
+        let proof = plan_source_built_fixed_point(SourceBuiltFixedPointPlanInput {
+            proof_id: original.proof_id,
+            logical_store_prefix: original.logical_store_prefix,
+            source_inputs: original.source_inputs,
+            initial_output_authority: InitialOutputAuthorityState {
+                stagex_transition_entries: 0,
+                native_provider_entries: 0,
+                rust_provider_entries: 0,
+                mantle_output_entries: 0,
+            },
+            policies: original.policies,
+            resource_bounds: original.resource_bounds,
+        })
+        .unwrap();
+        (proof, BTreeMap::from([(SourceAuthorityRole::NativeSourceBundle, manifest)]))
+    }
+
+    #[test]
+    fn cold_selector_uses_program_record_not_compiler_source_or_legacy_route() {
+        let directory = tempfile::tempdir().unwrap();
+        let (proof, mut roots) = selector_fixture(directory.path(), &route());
+        let source = directory.path().join("compiler-source");
+        let legacy = source.join(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER);
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(&legacy, "invalid legacy selector must never be consulted").unwrap();
+        roots.insert(SourceAuthorityRole::MantleSource, source);
+        let selected = read_cold_source_route(&proof, &roots).unwrap();
+        assert_eq!(selected.schema, "mantle-source-built-cold-route-v2");
+        assert!(matches!(&selected.mantle_recipes[0], ArtifactRef::ManifestSource { record_identity, member, .. }
+            if record_identity == crate::source_built_mantle_programs::PROGRAM_RECORD && member == "bootstrap/source-built/mantle-stage1.json"));
+        roots.remove(&SourceAuthorityRole::NativeSourceBundle);
+        assert!(read_cold_source_route(&proof, &roots).is_err());
+        assert_eq!(fs::read_to_string(legacy).unwrap(), "invalid legacy selector must never be consulted");
+    }
+
+    #[test]
+    fn cold_selector_rejects_old_schema_and_foreign_or_unqualified_mantle_recipes() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut old = route();
+        old["schema"] = "mantle-source-built-cold-route-v1".into();
+        let mut foreign = route();
+        foreign["mantle_recipes"][0]["record_identity"] = "foreign-program".into();
+        let mut unqualified = route();
+        unqualified["mantle_recipes"][0] = serde_json::json!({"kind": "source", "role": "mantle-source", "path": "bootstrap/source-built/mantle-stage1.json"});
+        let mut wrong_member = route();
+        wrong_member["mantle_recipes"][1]["member"] = "bootstrap/source-built/mantle-stage1.json".into();
+        for (index, invalid) in [old, foreign, unqualified, wrong_member].iter().enumerate() {
+            let (proof, roots) = selector_fixture(&directory.path().join(index.to_string()), invalid);
+            assert!(read_cold_source_route(&proof, &roots).is_err());
+        }
+    }
 }

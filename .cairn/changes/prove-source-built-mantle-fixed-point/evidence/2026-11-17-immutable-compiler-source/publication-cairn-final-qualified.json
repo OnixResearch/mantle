@@ -1,0 +1,29 @@
+{
+  "task": 27,
+  "driver": "publication-cairn-v3.sh",
+  "log": "publication-cairn-v3.log",
+  "reports": [
+    {
+      "label": "validation",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v3-validation.json",
+      "valid": true
+    },
+    {
+      "label": "proposal",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v3-proposal.json",
+      "valid": true
+    },
+    {
+      "label": "design",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v3-design.json",
+      "valid": true
+    },
+    {
+      "label": "tasks",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v3-tasks.json",
+      "valid": true
+    }
+  ],
+  "source_bindings": "developer-source-parity.json",
+  "scope": "Current structural publication gates and exercised developer code/policy bytes only; new frozen qualifications and proof remain open."
+}

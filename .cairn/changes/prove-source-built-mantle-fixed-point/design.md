@@ -86,6 +86,25 @@ behavior are different claims. The current frozen attempt remains immutable;
 changed Rust/operator source requires a new published and qualified source
 cohort before final changed-source proof or native-row promotion.
 
+### Decision: keep authored instructions outside compiler source identity
+
+**Choice:** Source-program preparation retains the original Mantle source-role
+record and tree exactly. Both recipes, both pre-lowering unit plans and the v2
+cold selector join the existing independently authenticated
+`source-built-mantle-programs` record. The runtime resolves the selector and
+recipes through exact `ManifestSource` references. Preparation verifies original
+source size and digest before publication; source hashing, independent topology
+planning and semantic inventory equality remain unchanged. ADR 0158 owns this
+boundary.
+
+**Rationale:** Recipes contain their own source-derived semantic keys and
+compiler metadata. Writing them into that compiler source tree after planning
+creates a circular identity and correctly fails fresh runtime admission.
+Replanning those same self-describing bytes or adding hash exceptions cannot
+establish the required original-source identity. Changed source still requires
+new publication, isolated qualification, regeneration and complete independent
+current-data review before any protected launch.
+
 ## Risks / Trade-offs
 
 - A clean proof can run for many hours and require substantial disk; preflight must bound both before construction.

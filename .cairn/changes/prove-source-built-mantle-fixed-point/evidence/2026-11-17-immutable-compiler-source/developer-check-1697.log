@@ -1,0 +1,33 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --profile /home/brittonr/sbfp-20261113-berdKH/tooling-profile-immutable-compiler-source-dev --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo -Zscript scripts/check-machine-schema-contracts.rs; cargo build --release --locked --offline -p mantle --bin mantle'
+machine schema contract check: PASS (24 contracted, 67 classified)
+warning: /home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117)
+    Finished `release` profile [optimized] target(s) in 3m 13s
++ /home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/mantle --version
+mantle 0.1.0
++ printf 'immutable_compiler_source_developer_complete=1\n'
+immutable_compiler_source_developer_complete=1
++ status=0
++ printf 'immutable_compiler_source_developer_exit=%s\n' 0
+immutable_compiler_source_developer_exit=0
++ printf '%s\n' 0
++ exit 0

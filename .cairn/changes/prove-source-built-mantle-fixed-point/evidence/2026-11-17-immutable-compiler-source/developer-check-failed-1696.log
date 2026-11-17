@@ -1,0 +1,82 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --profile /home/brittonr/sbfp-20261113-berdKH/tooling-profile-immutable-compiler-source-dev --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo fmt --check -p mantle; cargo test --release --locked --offline -p mantle --bin mantle source_built_recipe_exec::tests:: -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --no-deps -- -D warnings; cargo -Zscript scripts/check-machine-schema-contracts.rs; cargo build --release --locked --offline -p mantle --bin mantle'
+warning: /home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117)
+    Finished `release` profile [optimized] target(s) in 3m 56s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-61d96712292a8e06)
+
+running 41 tests
+test source_built_recipe_exec::tests::archive_extraction_preserves_original_root_and_enforces_member_output_bounds ... ok
+test source_built_recipe_exec::tests::clone3_never_grants_authority_from_mutable_flags ... ok
+test source_built_recipe_exec::tests::installed_image_member_requires_same_real_regular_executable_without_symlink_projection ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_decodes_original_archive_and_verifies_recursive_pin ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_preserves_flat_bytes_and_rejects_wrong_pin_and_bound ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_manifest_drift_after_preparation ... ok
+test source_built_recipe_exec::tests::materialize_fetcher_rejects_nonfetchers_wrong_kinds_unknown_records_and_undeclared_roles ... ok
+test source_built_recipe_exec::tests::nested_source_timeout_uses_tightest_original_deadline_not_a_per_leaf_cap ... ok
+test source_built_recipe_exec::tests::phase_state_projection_forwards_exact_prior_envelope_checkpoint_and_rejects_invalid_members ... ok
+test source_built_recipe_exec::tests::protected_filter_preserves_legacy_threads_without_clone3 ... ok
+test source_built_recipe_exec::tests::protected_initial_exec_decision_has_a_deadline ... ok
+test source_built_recipe_exec::tests::protected_listener_teardown_cancels_already_blocked_receive ... ok
+test source_built_recipe_exec::tests::protected_parallel_launch_timeout_does_not_cancel_another_listener ... ok
+test source_built_recipe_exec::tests::protected_recipe_smoke_actual_argv0_does_not_change_exact_image_authority ... ignored, requires parent-built libc-free ELF verify mode, reviewed bwrap --argv0 and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_cancellation ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_invocation_uses_exact_produced_executable ... ignored, requires parent-built libc-free ELF request/self-copy and probe0 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_generated_workspace ... ignored, requires parent-built libc-free ELF with workspace mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_guarded_phase_and_immutable_output_seeds ... ignored, requires parent-built libc-free ELF with probe0/probe1/workspace modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_process_clone ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_handled_second_exec ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_path_preserves_real_image_cwd_and_data_context ... ignored, requires parent-built libc-free ELF request/self-copy and image-context modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_installed_image_rejects_wrong_member_and_forged_whole_tree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_merge_preserves_actual_descriptor_write_order ... ignored, requires parent-built libc-free ELF merged mode writing alternating descriptors, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_normal_probe_records_actual_non_whitelisted_exit ... ignored, requires parent-built libc-free ELF normal-probe mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_observes_actual_workspace_mtimes_and_seeked_stream_offsets ... ignored, requires parent-built libc-free ELF observation mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_original_creation_masks_do_not_mutate_parent ... ignored, requires parent-built libc-free ELF umask mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_preserves_sparse_64_fd_aliases_null_and_actual_status_flags ... ignored, requires parent-built libc-free ELF backing mode, reviewed bwrap/ADDFD and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_preserves_actual_zero_and_one ... ignored, requires parent-built libc-free ELF with probe0/probe1 modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_probe_exit_policy_rejects_unlisted_exit ... ignored, requires parent-built libc-free ELF with probe2 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_invocation_before_launch ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_rejects_forged_status_before_conditional_launch ... ignored, requires parent-built libc-free ELF with probe1 mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_success ... ignored, requires parent-built libc-free ELF, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_reaches_nested_input_and_output_tree_consumers ... ignored, requires parent-built libc-free ELF request/self-copy and local modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_cwd_rejects_forged_noncanonical_unknown_conflicting_and_escape_requests ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_typed_text_slices_and_runtime_tree_reach_actual_leaf ... ignored, requires parent-built libc-free ELF request/self-copy and data modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_captures_actual_original_tmp_write ... ignored, requires parent-built libc-free ELF request/self-copy and temporary modes, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::protected_recipe_smoke_workspace_mount_does_not_recreate_missing_subtree ... ignored, requires parent-built libc-free ELF request/self-copy mode, reviewed bwrap and fresh evidence root
+test source_built_recipe_exec::tests::rooted_directory_selection_does_not_follow_symlinks_create_missing_members_or_accept_files ... ok
+test source_built_recipe_exec::tests::shared_timeout_arena_never_restarts_for_resumed_leaves_or_observation ... ok
+test source_built_recipe_exec::tests::text_operands_authenticate_whole_source_and_share_utf8_safe_snapshot ... ok
+test source_built_recipe_exec::tests::text_slice_rejects_forged_whole_frame_even_when_selected_bytes_match ... ok
+
+test result: ok. 17 passed; 0 failed; 24 ignored; 0 measured; 2939 filtered out; finished in 3.55s
+
+warning: /home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117)
+    Finished `release` profile [optimized] target(s) in 1m 08s
+machine schema contract check failed: root JSON producer family coverage rejected:
+  - registry [schema] source:src/source_built_fixed_point_cold.rs: root JSON serialization source has no inventory family decision
++ status=1
++ printf 'immutable_compiler_source_developer_exit=%s\n' 1
+immutable_compiler_source_developer_exit=1
++ printf '%s\n' 1
++ exit 1

@@ -1,0 +1,10 @@
+{
+  "task": 1696,
+  "result": {
+    "Failed": 1
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117",
+  "driver": "developer-check-v2.sh",
+  "log": "developer-check-failed-1696.log",
+  "non_claim": "Captured developer failure; decisive gate details remain in the log, no isolated qualification or protected proof claim."
+}

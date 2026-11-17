@@ -1,0 +1,10 @@
+{
+  "task": 1695,
+  "result": {
+    "Failed": 101
+  },
+  "source": "/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117",
+  "driver": "developer-check.sh",
+  "log": "developer-check-failed-1695.log",
+  "non_claim": "Actual failed developer validation; not source qualification or proof authority."
+}

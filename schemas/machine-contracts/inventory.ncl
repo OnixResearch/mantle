@@ -2158,6 +2158,7 @@ let Registry = {
           "src/source_built_fixed_point_shell.rs",
           "src/bin/mantle-protected-build-runner.rs",
           "src/source_built_fixed_point_authoring.rs",
+          "src/source_built_fixed_point_cold.rs",
           "src/source_built_fixed_point_mantle_actions.rs",
           "src/source_built_fixed_point_native_actions.rs",
           "src/source_built_fixed_point_trust_report.rs",

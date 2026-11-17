@@ -53,6 +53,13 @@ WHEN operators or release tooling cite it
 THEN the claim MUST identify seed, source, lineage, native/Rust providers, closure policy, orchestration authority, root action trust plan, planned-versus-observed execution result, platform, stage outputs, audits, and matching digests
 AND it MUST NOT claim compiler correctness, seed correctness, kernel isolation, independent rebuild agreement, bit-for-bit release reproducibility, deployment success, or full Cargo compatibility.
 
+#### Scenario: authored programs cannot change compiler source identity
+
+GIVEN the original source-only Cargo-free unit topology and its admitted Mantle source-role record
+WHEN source-program preparation emits its recipes, pre-lowering unit plans and selector
+THEN the original compiler source record and physical tree MUST retain their exact size and content identities, and all authored members MUST be independently authenticated in the existing program record
+AND the v2 selector and both Mantle recipes MUST resolve through exact native-manifest `ManifestSource` references, without reading old compiler-tree selectors, excluding authored paths from hashing, normalizing semantic keys or weakening inventory equality.
+
 ### Requirement: Receipt-bound cold StageX adoption for native rows
 
 r[bootstrap_inventory.cold_stagex_native_row_adoption] Mantle MUST provide a separate operator boundary that admits only the exact producer-bound StageX exports of a completed reverified cold v2 proof into fresh signed native-row state, and MUST NOT treat that publication as new source construction, a fixed point, or native-row acceptance.

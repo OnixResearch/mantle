@@ -155,3 +155,4 @@ compatibility surface, crate name, or historical decision.
 | [0155](0155-bind-complete-inert-reviews-to-measured-frozen-subject.md) | Bind complete inert reviews to a measured frozen subject | Accepted |
 | [0156](0156-adopt-only-verified-cold-stagex-outputs-for-native-rows.md) | Adopt only verified cold StageX outputs for native rows | Accepted |
 | [0157](0157-retain-source-unit-plans-before-recipe-lowering.md) | Retain source-owned unit plans before recipe lowering | Accepted |
+| [0158](0158-keep-authored-programs-outside-compiler-source-identity.md) | Keep authored source programs outside compiler source identity | Accepted |

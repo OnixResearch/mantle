@@ -1681,7 +1681,7 @@ pub(crate) fn validate_source_imports(root: &Path, file: &Path, search: &[std::f
     }
     Ok(())
 }
-fn hydrate_reference(
+pub(crate) fn hydrate_reference(
     proof: &SourceBuiltFixedPointPlan,
     roots: &BTreeMap<SourceAuthorityRole, PathBuf>,
     cache: &Path,
@@ -1742,27 +1742,6 @@ pub(super) fn fetcher_output_kind(record: &crate::source_bundle::SourceRecord) -
         } else {
             ArtifactKind::Text
         },
-    )
-}
-pub(crate) fn prepare(
-    proof: &SourceBuiltFixedPointPlan,
-    stage_id: &str,
-    recipe_role: SourceAuthorityRole,
-    recipe_path: &str,
-    paths: &RecipePaths<'_>,
-    prior: &[&PreparedRecipe],
-    host_mantle_digest: &str,
-) -> Result<PreparedRecipe, RunError> {
-    prepare_from_reference(
-        proof,
-        stage_id,
-        &ArtifactRef::Source {
-            role: recipe_role,
-            path: recipe_path.to_string(),
-        },
-        paths,
-        prior,
-        host_mantle_digest,
     )
 }
 fn prior_stage_output(

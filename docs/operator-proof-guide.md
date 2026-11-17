@@ -299,10 +299,14 @@ Before launch, freeze the final Mantle source and matching lock/vendor cohort;
 export and verify the complete native, Rust host-tool, and StageX source
 closures from that source. The source-built profile must contain all seven
 authority roles, including the audited seed and lineage, not a built provider
-substituted for source. Keep Mantle and vendor trees disjoint. A retained
-profile that lacks `bootstrap/source-built-cold-route.json` requires explicit
-source-program preparation; it is not a ready cold-proof input. Refreshing only
-the Mantle record does not author that selector or the programs it names.
+substituted for source. Keep Mantle and vendor trees disjoint. A prepared
+profile must authenticate the v2 cold selector, both Mantle recipes and both
+unit plans in the `source-built-mantle-programs` record of its native
+source-authority manifest. The original compiler source record/tree must remain
+identical to the unexpanded input; authored instruction data cannot change its
+Cargo unit identities. A selector in the compiler source tree is not a ready
+cold-proof input. Refreshing only the Mantle record does not prepare the program
+record; regenerate old expanded cohorts instead of reusing their reviews.
 
 The v2 core receipt's `source_blake3` identifies the declared Mantle source
 record, not the aggregate source-authority-set digest. The plan and receipt

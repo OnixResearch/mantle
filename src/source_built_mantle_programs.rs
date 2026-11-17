@@ -37,6 +37,7 @@ pub(super) mod native;
 pub(super) mod rust_probes;
 
 pub(crate) const PROGRAM_RECORD: &str = "source-built-mantle-programs";
+pub(crate) const COLD_ROUTE_MEMBER: &str = "bootstrap/source-built-cold-route.json";
 
 pub(crate) fn source_files() -> BTreeMap<String, String> {
     graph::source_files()

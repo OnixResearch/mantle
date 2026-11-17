@@ -998,11 +998,13 @@ fn recipe_case(mode: &str, seconds: u64) -> (PreparedRecipe, PathBuf) {
     })
     .unwrap();
     let runtime = root.join("runtime");
-    let prepared = crate::source_built_recipe::prepare(
+    let prepared = crate::source_built_recipe::prepare_from_reference(
         &proof,
         "stagex-transition",
-        SourceAuthorityRole::StagexLineage,
-        "",
+        &crate::source_built_recipe::ArtifactRef::Source {
+            role: SourceAuthorityRole::StagexLineage,
+            path: ("").to_string(),
+        },
         &RecipePaths {
             source_roots: &roots,
             runtime_root: &runtime,
@@ -1551,11 +1553,13 @@ fn prepare_fetcher_fixture(
     // No sandbox launch occurs for source materialization. Its declared identity
     // still comes from a real executable; this is not a mock execution path.
     let sandbox = fs::canonicalize(env!("SNIX_BUILD_SANDBOX_SHELL")).unwrap();
-    crate::source_built_recipe::prepare(
+    crate::source_built_recipe::prepare_from_reference(
         &proof,
         "stagex-transition",
-        SourceAuthorityRole::StagexLineage,
-        "",
+        &crate::source_built_recipe::ArtifactRef::Source {
+            role: SourceAuthorityRole::StagexLineage,
+            path: ("").to_string(),
+        },
         &RecipePaths {
             source_roots: &roots,
             runtime_root: &root.join("runtime"),

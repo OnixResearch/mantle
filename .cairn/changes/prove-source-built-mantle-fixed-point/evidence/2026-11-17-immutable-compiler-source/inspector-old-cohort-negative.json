@@ -1,0 +1,21 @@
+{
+  "schema": "mantle-immutable-source-inspector-negative-v1",
+  "source_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2/.proof.source-built-fixed-point-staging-4176107/inputs/mantle-source",
+  "source_cohort": "df51377d/a43964e7 failed task1694",
+  "inspector_blake3": "41bd4cc427d67da0794300e46161abd071f5a9a5896de86a52e4a2b3a3d7b962",
+  "actual_path_source_digest": {
+    "algorithm": "blake3-tree-v1",
+    "value": "4b5f41d1178406f4f718666bd06182d62f6217dc106ed3e20d80e7baaf30cc39",
+    "root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2/.proof.source-built-fixed-point-staging-4176107/inputs/mantle-source",
+    "file_count": 12771,
+    "visited_entries": 13903,
+    "consumer": "src/rust_plan.rs::collect_source_files/hash_path_source_tree"
+  },
+  "covered_root_units": 16,
+  "stages": [
+    "mantle-stage1",
+    "mantle-stage2"
+  ],
+  "all_actual_stale_unit_digests_rejected": true,
+  "non_claim": "Read-only negative exercise on the retained failed cohort and exact recorded runtime hash; not fresh-cohort acceptance, compiler/protected execution or proof authority."
+}

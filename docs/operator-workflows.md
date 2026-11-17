@@ -697,15 +697,27 @@ mantle self-build \
   --out /absolute/fresh/path/source-program-cohort
 ```
 
-This path reads the declared source profile, authors the inert source programs
-from the authenticated source authority (StageX transition, native host and
-final phases, the Rust provider, and the Mantle recipe leaves), records them
-into the native source record and the profile, writes the cold route selector,
-and publishes a new authenticated cohort under `--out` with a fresh profile
-BLAKE3. The output path must not exist, the source profile must not already
-carry a cold selector, and the declared profile, StageX lineage, and native
-provider digests must match the inputs. Development caches and resume modes are
-rejected.
+This path reads the declared source profile and authors the inert source
+programs from authenticated source authority: StageX transition, native host and
+final phases, the Rust provider, and the Mantle recipe leaves. Authored program
+records are carried in the native source-authority manifest and output profile.
+The existing `source-built-mantle-programs` record contains its helper sources,
+both complete Mantle recipes and pre-lowering unit plans, and
+`bootstrap/source-built-cold-route.json`. The original Mantle compiler source
+record and tree remain unchanged; preparation rejects any size or identity drift.
+
+The selector uses `mantle-source-built-cold-route-v2`; runtime reads it from that
+exact program record, and both Mantle recipe selectors are typed `ManifestSource`
+references into the same record. No selector or recipe is added to, or read back
+from, the compiler source tree. Existing source hashing and exact semantic-unit
+inventory admission are unchanged ([ADR 0158](../adr/0158-keep-authored-programs-outside-compiler-source-identity.md)).
+
+Preparation publishes a new authenticated cohort under `--out` with a fresh
+profile BLAKE3. The output path must not exist, inputs must be original
+unexpanded sources rather than an already prepared cohort, and declared profile,
+StageX lineage, and native-provider digests must match. Development caches and
+resume modes are rejected. Old expanded cohorts require fresh preparation; they
+have no compatibility fallback.
 
 Preparation changes the source cohort identity, so the expected profile digest
 for a later proof run must be recomputed from the published cohort. The

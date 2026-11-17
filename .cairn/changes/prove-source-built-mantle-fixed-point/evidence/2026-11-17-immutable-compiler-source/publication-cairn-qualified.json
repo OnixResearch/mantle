@@ -1,0 +1,28 @@
+{
+  "task": 26,
+  "reports": [
+    {
+      "label": "validation",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v2-validation.json",
+      "valid": true
+    },
+    {
+      "label": "proposal",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v2-proposal.json",
+      "valid": true
+    },
+    {
+      "label": "design",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v2-design.json",
+      "valid": true
+    },
+    {
+      "label": "tasks",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/publication-cairn-v2-tasks.json",
+      "valid": true
+    }
+  ],
+  "driver": "publication-cairn-v2.sh",
+  "log": "publication-cairn-v2.log",
+  "scope": "Current structural lifecycle checks only. Not compiler-source freeze, independent current-cohort review or protected proof authority."
+}

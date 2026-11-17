@@ -1,0 +1,53 @@
+{
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117",
+  "source_base_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "bindings": [
+    {
+      "path": "src/source_built_fixed_point_authoring.rs",
+      "blake3": "4669d884c8eec834a6b0a5d7d2c8eb28f800dc1914879a72d2939e520a70cabd",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_fixed_point_cold.rs",
+      "blake3": "59a3b489bc29a7706e228b81b5af0bdae50c19962313b5472dc0466fc1ba1f04",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_fixed_point_mantle_actions.rs",
+      "blake3": "c4739d5d2654d777912605eb4f30ab7ad144318e41c5bbeee4d60dffaf0b935e",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_mantle_programs.rs",
+      "blake3": "e47236d982a44902c4beb6ea9e9a95a10e99d357a8f55cf6a56e594580272625",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_recipe.rs",
+      "blake3": "5e80f79f0f92a01618391c9bf0fbfd23b6bf03f3ed20c5981842078ffd0faa07",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_recipe_exec_tests.rs",
+      "blake3": "2049d46d2fb755fb3a2fe7d16db8bff8c0497985fe7cfeda24e1701ce0342a20",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_rust_programs_macro_smoke_tests.rs",
+      "blake3": "ff6dbe534b4b6e89c897529b5ad58468d29f43b352f91c0c44cfce9ecdfa59a5",
+      "local_remote_equal": true
+    },
+    {
+      "path": "src/source_built_rust_programs_native_smoke_tests.rs",
+      "blake3": "08d6daf88793c969861e0633b9e7151957f99bbb42fda8dc9ca95cc3e911920b",
+      "local_remote_equal": true
+    },
+    {
+      "path": "schemas/machine-contracts/inventory.ncl",
+      "blake3": "78a9809ed52b3534a72d1d50b578e544dbf57af1293ec41bf5cf8976c2b3ae6a",
+      "local_remote_equal": true
+    }
+  ],
+  "all_equal": true,
+  "scope": "Exact nine touched code/policy file byte parity for the developer observations; not an isolated published-source qualification or protected proof."
+}

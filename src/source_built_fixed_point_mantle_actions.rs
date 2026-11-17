@@ -27,7 +27,7 @@ use crate::source_built_recipe::{self};
 
 pub(crate) struct AdapterPaths<'a> {
     pub(crate) stage_paths: [RecipePaths<'a>; 2],
-    pub(crate) recipe_paths: [&'a str; 2],
+    pub(crate) recipe_sources: [&'a ArtifactRef; 2],
     pub(crate) future_rustc: &'a Path,
     pub(crate) future_rustc_host: &'a str,
     pub(crate) targets: &'a [String],
@@ -78,22 +78,20 @@ pub(crate) fn plan_actions(
     if rustc.kind != ArtifactKind::Executable {
         return Err(failure("Rust compiler export is not an executable".into()));
     }
-    let first = source_built_recipe::prepare(
+    let first = source_built_recipe::prepare_from_reference(
         proof,
         "mantle-stage1",
-        SourceAuthorityRole::MantleSource,
-        paths.recipe_paths[0],
+        paths.recipe_sources[0],
         &paths.stage_paths[0],
         prior,
         host_mantle_digest,
     )?;
     let mut second_prior = prior.to_vec();
     second_prior.push(&first);
-    let mut second = source_built_recipe::prepare(
+    let mut second = source_built_recipe::prepare_from_reference(
         proof,
         "mantle-stage2",
-        SourceAuthorityRole::MantleSource,
-        paths.recipe_paths[1],
+        paths.recipe_sources[1],
         &paths.stage_paths[1],
         &second_prior,
         host_mantle_digest,

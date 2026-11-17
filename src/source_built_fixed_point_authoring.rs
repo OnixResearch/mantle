@@ -18,7 +18,6 @@ use crate::source_bundle::SourceRecordKind;
 
 const PROFILE_FILE: &str = "source-profile.json";
 const REPORT_FILE: &str = "source-program-preparation.json";
-const SELECTOR: &str = "bootstrap/source-built-cold-route.json";
 const PROGRAMS_DIR: &str = "program-sources";
 const NON_CLAIM: &str = "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility";
 
@@ -70,9 +69,9 @@ fn prepare_source_profile(
     mut profile: SourceBundleManifest,
 ) -> Result<PreparationReport, RunError> {
     let selected = source_built_fixed_point_profile_records(&profile)?;
-    let mantle_identity = selected.mantle_source.identity.clone();
     let native_identity = selected.native_source_manifest.identity.clone();
-    let (programs, mantle_files) = author_programs(prepared, roots, options.disk_bytes_max)?;
+    let programs = author_programs(prepared, roots, options.disk_bytes_max)?;
+    verify_original_mantle_source(&prepared.source_root, &prepared.plan)?;
     let program_records =
         programs.iter().map(|record| (record.identity.clone(), record.content_blake3.clone())).collect();
     let native_path = &roots[&SourceAuthorityRole::NativeSourceBundle];
@@ -103,12 +102,8 @@ fn prepare_source_profile(
         }
         fs::copy(&source, &destination).map_err(|error| proof_error(error.to_string()))?;
     }
-    write_source_files(&prepared.source_root, &mantle_files, options.disk_bytes_max)?;
-    write_selector(&prepared.source_root)?;
     for record in &mut profile.records {
-        if record.identity == mantle_identity {
-            crate::source_bundle::recapture_source_record_payload(record, &prepared.source_root)?;
-        } else if record.identity == native_identity {
+        if record.identity == native_identity {
             crate::source_bundle::recapture_source_record_payload(record, native_path)?;
         } else if record.identity == rust_identity {
             crate::source_bundle::recapture_source_record_payload(record, rust_root)?;
@@ -133,12 +128,30 @@ fn prepare_source_profile(
     Ok(report)
 }
 
+fn verify_original_mantle_source(source_root: &Path, proof: &SourceBuiltFixedPointPlan) -> Result<(), RunError> {
+    let original = proof
+        .source_inputs
+        .iter()
+        .find(|source| source.role == SourceAuthorityRole::MantleSource)
+        .ok_or_else(|| proof_error("missing original Mantle source authority".into()))?;
+    let (size_bytes, digest_blake3) = recipe::digest(source_root)?;
+    if size_bytes != original.size_bytes {
+        return Err(proof_error("source-program authoring changed the original Mantle source size".into()));
+    }
+    if digest_blake3 != original.digest_blake3 {
+        return Err(proof_error("source-program authoring changed the original Mantle source identity".into()));
+    }
+    assert_eq!(size_bytes, original.size_bytes);
+    assert_eq!(digest_blake3, original.digest_blake3);
+    Ok(())
+}
+
 fn author_programs(
     prepared: &PreparedAttempt,
     roots: &BTreeMap<SourceAuthorityRole, PathBuf>,
     bytes_max: u64,
-) -> Result<(Vec<SourceRecord>, BTreeMap<String, String>), RunError> {
-    match fs::symlink_metadata(prepared.source_root.join(SELECTOR)) {
+) -> Result<Vec<SourceRecord>, RunError> {
+    match fs::symlink_metadata(prepared.source_root.join(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER)) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(proof_error(format!("checking original source selector: {error}"))),
         Ok(_) => {
@@ -182,17 +195,23 @@ fn author_programs(
         bytes_max,
     )?;
     let mantle = crate::source_built_mantle_programs::author(&authoring_request(prepared, roots, &exports, &targets))?;
-    let helpers = crate::source_built_mantle_programs::source_files();
+    let mut files = crate::source_built_mantle_programs::source_files();
+    for (path, content) in mantle.files {
+        if files.insert(path, content).is_some() {
+            return Err(proof_error("authored Mantle program member collides with helper source".into()));
+        }
+    }
+    write_selector(&mut files)?;
     records.push(package_programs(
         &prepared.staging_dir,
         &prepared.final_dir,
         crate::source_built_mantle_programs::PROGRAM_RECORD,
-        helpers,
+        files,
         bytes_max,
     )?);
     assert_eq!(records.len(), 4);
-    assert!(!mantle.files.is_empty());
-    Ok((records, mantle.files))
+    assert!(!records[3].files.is_empty());
+    Ok(records)
 }
 
 fn authoring_request<'a>(
@@ -449,17 +468,18 @@ fn write_program_archive(path: &Path, files: &BTreeMap<String, String>) -> Resul
     Ok(())
 }
 
-fn write_selector(root: &Path) -> Result<(), RunError> {
-    // Authored program records are carried by the native source-authority
-    // closure; the Rust actions read the authored program from the Rust source
-    // archive root. The selectors mirror those exact authorities.
-    let stagex = |member: &str| ArtifactRef::ManifestSource {
+fn write_selector(files: &mut BTreeMap<String, String>) -> Result<(), RunError> {
+    // Authored programs are independently authenticated source records, never
+    // additions to the Cargo source tree whose unit identities they describe.
+    let program = |record: &str, member: &str| ArtifactRef::ManifestSource {
         role: SourceAuthorityRole::NativeSourceBundle,
-        record_identity: crate::source_built_stagex_programs::PROGRAM_RECORD.into(),
+        record_identity: record.into(),
         member: member.into(),
     };
+    let stagex = |member: &str| program(crate::source_built_stagex_programs::PROGRAM_RECORD, member);
+    let mantle = |member: &str| program(crate::source_built_mantle_programs::PROGRAM_RECORD, member);
     let route = serde_json::json!({
-        "schema": "mantle-source-built-cold-route-v1",
+        "schema": "mantle-source-built-cold-route-v2",
         "stagex_transition": stagex("stagex-transition.json"),
         "stagex_publication": stagex("stagex-provider-publication.json"),
         "native": {
@@ -471,10 +491,19 @@ fn write_selector(root: &Path) -> Result<(), RunError> {
             role: SourceAuthorityRole::RustSourceArchiveSet,
             path: crate::source_built_rust_programs::RECIPE_MEMBER.into(),
         },
-        "mantle_recipes": ["bootstrap/source-built/mantle-stage1.json", "bootstrap/source-built/mantle-stage2.json"],
+        "mantle_recipes": [
+            mantle("bootstrap/source-built/mantle-stage1.json"),
+            mantle("bootstrap/source-built/mantle-stage2.json"),
+        ],
     });
-    let path = source_destination(root, SELECTOR)?;
-    write_json_create_new(&path, &route)
+    let mut text = serde_json::to_string_pretty(&route).map_err(|error| proof_error(error.to_string()))?;
+    text.push('\n');
+    if files.insert(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER.into(), text).is_some() {
+        return Err(proof_error("authored cold selector member already exists".into()));
+    }
+    assert!(files.contains_key(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER));
+    assert!(!files.is_empty());
+    Ok(())
 }
 
 fn publish_preparation(prepared: &PreparedAttempt) -> Result<(), RunError> {
@@ -599,5 +628,84 @@ mod tests {
         assert!(!outside.path().join("helper.c").exists());
         write_source_files(temp.path(), &BTreeMap::from([("safe/helper.c".into(), "int x;".into())]), 1024).unwrap();
         assert_eq!(fs::read_to_string(temp.path().join("safe/helper.c")).unwrap(), "int x;");
+    }
+}
+
+#[cfg(test)]
+mod immutable_source_tests {
+    use super::*;
+
+    fn compiler_options(root: &Path) -> crate::rust_plan::RustPlanOptions {
+        let host_triple = crate::rust_plan::host_target_triple();
+        crate::rust_plan::RustPlanOptions {
+            root: root.to_path_buf(),
+            cargo: PathBuf::from("cargo-forbidden"),
+            rustc: PathBuf::from("rustc-not-produced"),
+            targets: vec![host_triple.clone()],
+            host_triple,
+            profile: crate::rust_plan::default_profile(),
+            profile_table: crate::rust_plan::load_root_profile_table(root).unwrap(),
+            workspace_members: std::collections::BTreeSet::new(),
+            features: Vec::new(),
+            all_features: false,
+            no_default_features: false,
+            no_cargo_oracle: true,
+            deterministic_release_paths: true,
+            path_remaps: crate::rust_plan::deterministic_release_path_remaps(root, None),
+        }
+    }
+
+    #[test]
+    fn source_program_packaging_preserves_cargo_unit_identity_and_rejects_source_mutation() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("compiler-source");
+        fs::create_dir_all(source.join("src")).unwrap();
+        fs::write(
+            source.join("Cargo.toml"),
+            "[package]\nname = \"identity-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        fs::write(
+            source.join("Cargo.lock"),
+            "version = 4\n[[package]]\nname = \"identity-fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(source.join("src/main.rs"), "fn main() {0;}\n").unwrap();
+        let options = compiler_options(&source);
+        let before = crate::rust_plan::plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        let mut proof = crate::source_built_fixed_point_action_trust::tests::fixture().0;
+        let original = proof
+            .source_inputs
+            .iter_mut()
+            .find(|input| input.role == SourceAuthorityRole::MantleSource)
+            .unwrap();
+        (original.size_bytes, original.digest_blake3) = recipe::digest(&source).unwrap();
+        let mut files = BTreeMap::from([(
+            "bootstrap/source-built/mantle-stage1.unit-plan.json".into(),
+            "{\"unit\":\"original\"}\n".into(),
+        )]);
+        write_selector(&mut files).unwrap();
+        let record = package_programs(
+            directory.path(),
+            directory.path(),
+            crate::source_built_mantle_programs::PROGRAM_RECORD,
+            files,
+            1024 * 1024,
+        )
+        .unwrap();
+        let decoded = directory.path().join("decoded-program");
+        crate::source_bundle::materialize_source_record_for_offline_use(&record, &decoded).unwrap();
+        assert_eq!(
+            fs::read_to_string(decoded.join("bootstrap/source-built/mantle-stage1.unit-plan.json")).unwrap(),
+            "{\"unit\":\"original\"}\n"
+        );
+        verify_original_mantle_source(&source, &proof).unwrap();
+        let after = crate::rust_plan::plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        assert_eq!(before.effects[0].unit_id, after.effects[0].unit_id);
+        assert!(!source.join(crate::source_built_mantle_programs::COLD_ROUTE_MEMBER).exists());
+        fs::write(source.join("src/main.rs"), "fn main() {1;}\n").unwrap();
+        assert!(verify_original_mantle_source(&source, &proof).is_err());
+        let changed = crate::rust_plan::plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        assert_ne!(before.effects[0].unit_id, changed.effects[0].unit_id);
     }
 }

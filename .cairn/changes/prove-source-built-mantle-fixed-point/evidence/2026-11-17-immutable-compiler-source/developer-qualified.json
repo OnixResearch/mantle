@@ -1,0 +1,33 @@
+{
+  "source_base_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/immutable-compiler-source-dev-20261117",
+  "changed_rust_files": [
+    "src/source_built_fixed_point_authoring.rs",
+    "src/source_built_fixed_point_cold.rs",
+    "src/source_built_fixed_point_mantle_actions.rs",
+    "src/source_built_mantle_programs.rs",
+    "src/source_built_recipe.rs",
+    "src/source_built_recipe_exec_tests.rs",
+    "src/source_built_rust_programs_macro_smoke_tests.rs",
+    "src/source_built_rust_programs_native_smoke_tests.rs"
+  ],
+  "additional_policy": "schemas/machine-contracts/inventory.ncl",
+  "test_legs": [
+    {
+      "task": 1695,
+      "log": "developer-check-failed-1695.log",
+      "result": "273 passed; 0 failed; 27 ignored; source_built_ filter; later obsolete-wrapper Clippy failure retained"
+    },
+    {
+      "task": 1696,
+      "log": "developer-check-failed-1696.log",
+      "result": "17 passed; 0 failed; 24 ignored; affected execution fixtures; formatting and strict Clippy passed; later missing-family inventory failure retained"
+    }
+  ],
+  "remaining_gate_task": 1697,
+  "remaining_gate_result": "Success",
+  "remaining_gate_log": "developer-check-1697.log",
+  "owner": "Mantle source-program authoring and proof-inspection adapters",
+  "durable_capability": "Immutable compiler-source identity across separately authenticated program preparation, with exact reference-bound runtime admission",
+  "non_claim": "Warm-target developer behavior and gate observations only. New published-source isolated qualifications, complete regenerated current-data inspection, both independent exact-model reviews and genuine proof/native rows remain required."
+}

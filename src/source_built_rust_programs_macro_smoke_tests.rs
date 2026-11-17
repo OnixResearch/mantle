@@ -19,7 +19,6 @@ use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point_planning::plan_source_built_fixed_point;
 use crate::source_built_recipe::RecipePaths;
 use crate::source_built_recipe::digest;
-use crate::source_built_recipe::prepare;
 use crate::source_built_recipe::run;
 
 const FIXTURE_SOURCE: &str = r#"
@@ -397,11 +396,13 @@ fn exercise(root: &Path, seed: &Path, sandbox: &Path, count: u32, slots: usize, 
     let roots = sources(root, seed, &recipe, &recipe);
     let proof = proof(root, &roots);
     let host = digest(&std::env::current_exe().unwrap()).unwrap().1;
-    let stage = prepare(
+    let stage = crate::source_built_recipe::prepare_from_reference(
         &proof,
         "stagex-transition",
-        SourceAuthorityRole::StagexLineage,
-        "",
+        &crate::source_built_recipe::ArtifactRef::Source {
+            role: SourceAuthorityRole::StagexLineage,
+            path: ("").to_string(),
+        },
         &RecipePaths {
             source_roots: &roots,
             runtime_root: &root.join("macros"),
