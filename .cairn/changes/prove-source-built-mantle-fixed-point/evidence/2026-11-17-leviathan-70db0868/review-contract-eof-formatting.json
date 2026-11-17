@@ -1,0 +1,9 @@
+{
+  "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-contract.md",
+  "before_bytes_blake3": "ad1354af933ac7c3e8e839c2ac1413cb7e7c4b3d6ad0f1e05afc6a8c9717d872",
+  "preserved_exact_before": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-contract.md.gz",
+  "preserved_before_roundtrip_equal": true,
+  "after_bytes_blake3": "e827e674b1140dcab3f0b963a3e33868950ff04d77a06dff7f042c4287d3e5b0",
+  "change": "Delete exactly one trailing blank line at EOF required by git diff --cached --check. Every criterion and all current subject/source/profile/report values remain unchanged.",
+  "scope": "Formatting-only review-contract byte update, not a source/policy/criterion/data change. Both active reviewers are notified to use the updated packet contract byte hash."
+}

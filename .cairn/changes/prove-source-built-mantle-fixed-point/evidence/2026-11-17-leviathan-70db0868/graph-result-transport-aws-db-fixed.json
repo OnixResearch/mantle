@@ -1,0 +1,51 @@
+[
+  {
+    "name": "graph-audit.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/graph-audit.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/graph-audit.json",
+    "bytes_blake3": "f8082ee076e195494c6825d0b3b97e27d321678a73324bc37e1799949b9c1648",
+    "transfer_equal": true
+  },
+  {
+    "name": "source-binding-kind-inventory.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/source-binding-kind-inventory.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/source-binding-kind-inventory.json",
+    "bytes_blake3": "354e76abb2ba3b9afd357fb8e337fd38dc49f149edc128f1d57f940b7323de04",
+    "transfer_equal": true
+  },
+  {
+    "name": "controller-template-audit.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/controller-template-audit.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/controller-template-audit.json",
+    "bytes_blake3": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+    "transfer_equal": true
+  },
+  {
+    "name": "helper-authority-audit.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/helper-authority-audit.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/helper-authority-audit.json",
+    "bytes_blake3": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+    "transfer_equal": true
+  },
+  {
+    "name": "mantle-selector-audit.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/mantle-selector-audit.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/mantle-selector-audit.json",
+    "bytes_blake3": "6e76ac8a137c1a5e59daf97539d6c1ad14f6df49a38665ee7d7dc37c968c0b22",
+    "transfer_equal": true
+  },
+  {
+    "name": "semantic-root-regression.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/semantic-root-regression.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/semantic-root-regression.json",
+    "bytes_blake3": "a3d7883ffba1ffd2ddd2bd4e3513c453f5b90a8f3ade963b2b9bd0cdbabcea52",
+    "transfer_equal": true
+  },
+  {
+    "name": "execution.log",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/execution.log",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/execution.log",
+    "bytes_blake3": "d32833bcb04a87dceab8e29575b2b2b5ff2757d0e9d45fee87a610a432cd2d80",
+    "transfer_equal": true
+  }
+]

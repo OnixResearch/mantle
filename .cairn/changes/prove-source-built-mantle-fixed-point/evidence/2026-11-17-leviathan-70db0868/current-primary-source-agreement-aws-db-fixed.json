@@ -1,0 +1,57 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "coverage": {
+    "covered": 2098,
+    "invalid": 0,
+    "total": 2098,
+    "uncovered": 0
+  },
+  "actual_failed_package_units": [
+    {
+      "stage": "mantle-stage1",
+      "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+      "target_kind": "custom-build",
+      "planned_primary": "vendor/snix-build/build.rs",
+      "source_plan_bytes_blake3": "705d6f4008ed2496be70c43fd4684251e7156a9856d190e085ee8961ce49518a",
+      "compiler_ordinals": [
+        "00000"
+      ],
+      "exact_primary_source_consumed": true
+    },
+    {
+      "stage": "mantle-stage1",
+      "unit_id": "native:4eb04807244b864682d2659c765dc290e83cff78e612fcbccb51f4dd2d0ceb49:path+native#snix-build@0.1.0:snix-build:lib:build",
+      "target_kind": "lib",
+      "planned_primary": "vendor/snix-build/src/lib.rs",
+      "source_plan_bytes_blake3": "705d6f4008ed2496be70c43fd4684251e7156a9856d190e085ee8961ce49518a",
+      "compiler_ordinals": [
+        "00675"
+      ],
+      "exact_primary_source_consumed": true
+    },
+    {
+      "stage": "mantle-stage2",
+      "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+      "target_kind": "custom-build",
+      "planned_primary": "vendor/snix-build/build.rs",
+      "source_plan_bytes_blake3": "9d20212a92b4b7ccb103523518eee65116b49374938553580c622c09b5e2cbd5",
+      "compiler_ordinals": [
+        "00000"
+      ],
+      "exact_primary_source_consumed": true
+    },
+    {
+      "stage": "mantle-stage2",
+      "unit_id": "native:4eb04807244b864682d2659c765dc290e83cff78e612fcbccb51f4dd2d0ceb49:path+native#snix-build@0.1.0:snix-build:lib:build",
+      "target_kind": "lib",
+      "planned_primary": "vendor/snix-build/src/lib.rs",
+      "source_plan_bytes_blake3": "9d20212a92b4b7ccb103523518eee65116b49374938553580c622c09b5e2cbd5",
+      "compiler_ordinals": [
+        "00675"
+      ],
+      "exact_primary_source_consumed": true
+    }
+  ],
+  "scope": "Actual corrected-subject authenticated current source-unit and compiler-consumption facts only; no protected execution."
+}

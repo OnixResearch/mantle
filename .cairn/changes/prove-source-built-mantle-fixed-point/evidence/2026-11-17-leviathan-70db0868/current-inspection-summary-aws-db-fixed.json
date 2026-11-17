@@ -1,0 +1,319 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "current_tasks": {
+    "graph": {
+      "task": 1730,
+      "enqueued_at": "2026-11-17T14:46:26.759940347-05:00",
+      "start": "2026-11-17T14:46:26.991060465-05:00",
+      "end": "2026-11-17T15:04:14.909596764-05:00",
+      "result": "Success"
+    },
+    "identity": {
+      "task": 1731,
+      "enqueued_at": "2026-11-17T14:46:27.293865256-05:00",
+      "start": "2026-11-17T14:46:27.382971786-05:00",
+      "end": "2026-11-17T14:54:46.119396070-05:00",
+      "result": "Success"
+    },
+    "preauthor": {
+      "task": 1732,
+      "enqueued_at": "2026-11-17T14:46:28.587139800-05:00",
+      "start": "2026-11-17T14:46:28.664372075-05:00",
+      "end": "2026-11-17T15:07:54.893595987-05:00",
+      "result": "Success"
+    },
+    "helper_mutations": {
+      "task": 1733,
+      "enqueued_at": "2026-11-17T14:46:29.749661360-05:00",
+      "start": "2026-11-17T15:04:14.974273512-05:00",
+      "end": "2026-11-17T15:18:17.803761879-05:00",
+      "result": "Success"
+    },
+    "selector_mutations": {
+      "task": 1734,
+      "enqueued_at": "2026-11-17T14:46:30.330223710-05:00",
+      "start": "2026-11-17T15:04:15.038471287-05:00",
+      "end": "2026-11-17T15:06:21.440611396-05:00",
+      "result": "Success"
+    },
+    "seed_source_mutations": {
+      "task": 1735,
+      "enqueued_at": "2026-11-17T14:46:30.880132228-05:00",
+      "start": "2026-11-17T15:04:15.106866283-05:00",
+      "end": "2026-11-17T15:05:35.891042118-05:00",
+      "result": "Success"
+    }
+  },
+  "graph_scoped_verdict": "STATIC_TEMPLATE_REVIEW_CLEAR",
+  "primary_sources": {
+    "covered": 2098,
+    "invalid": 0,
+    "total": 2098,
+    "uncovered": 0
+  },
+  "actual_failed_unit_count": 4,
+  "helper_coverage": {
+    "covered": 1098,
+    "failure_count": 0,
+    "global_failures": 0,
+    "invalid": 0,
+    "total": 1098,
+    "uncovered": 0
+  },
+  "selector_coverage": {
+    "feature_cfg": {
+      "covered": 2098,
+      "invalid": 0,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "feature_environment": {
+      "covered": 2386,
+      "invalid": 0,
+      "total": 2386,
+      "uncovered": 0
+    },
+    "immutable_root_source_digests": {
+      "covered": 16,
+      "invalid": 0,
+      "total": 16,
+      "uncovered": 0
+    },
+    "package_exclusions": {
+      "covered": 2,
+      "invalid": 0,
+      "total": 2,
+      "uncovered": 0
+    },
+    "primary_sources": {
+      "covered": 2098,
+      "invalid": 0,
+      "total": 2098,
+      "uncovered": 0
+    }
+  },
+  "helper_negative_cases": 6,
+  "selector_negative_cases": 13,
+  "seed_complete_coverage": {
+    "generated": {
+      "covered": 9176,
+      "invalid": 0,
+      "total": 9176
+    },
+    "raw": {
+      "covered": 6832,
+      "invalid": 0,
+      "total": 6832
+    }
+  },
+  "immutable_source_regressions": {
+    "negative_cases": [
+      {
+        "case": "changed-root-unit-source-digest",
+        "rejected": true,
+        "stage": "mantle-stage1",
+        "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+      },
+      {
+        "case": "empty-root-unit-set",
+        "rejected": true,
+        "rejection": "mantle-stage1: no pre-lowering root-package derivations",
+        "stage": "mantle-stage1"
+      },
+      {
+        "case": "changed-root-unit-source-digest",
+        "rejected": true,
+        "stage": "mantle-stage2",
+        "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+      },
+      {
+        "case": "empty-root-unit-set",
+        "rejected": true,
+        "rejection": "mantle-stage2: no pre-lowering root-package derivations",
+        "stage": "mantle-stage2"
+      }
+    ],
+    "positive": {
+      "actual_immutable_compiler_source": {
+        "algorithm": "blake3-tree-v1",
+        "consumer": "src/rust_plan.rs::collect_source_files/hash_path_source_tree",
+        "file_count": 12766,
+        "root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/mantle-source",
+        "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e",
+        "visited_entries": 13897
+      },
+      "all_match": true,
+      "pre_lowering_root_units": {
+        "mantle-stage1": [
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:18895fbd79695961b76c06276583ab093e41c0f247c5c6f0eda4937a5d618d5d:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a1d9f1a322a1b6403b5d897a66864cdb94ebab11ebf67a32d6c5d511842f4d0:path+native#mantle@0.1.0:check-native-row-receipts:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a816d11ccab8d95ea5f03e6cab17768baa75106cfe6311d2e8f879b4ca37df7:path+native#mantle@0.1.0:mantle:lib:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:71ad5ab147d6304de2967bdee84b09745ee9d729b45c5cd00e1dbe92968e852f:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:974f6b60b6de51141e4a2f1d182490504c0f3713975931cdbb8eee072c8095ac:path+native#mantle@0.1.0:adopt-source-built-stagex:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:fd644ba510eee19a7c632508ef9f77fade663bda953442e7326ca6f9808e478d:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build"
+          }
+        ],
+        "mantle-stage2": [
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:18895fbd79695961b76c06276583ab093e41c0f247c5c6f0eda4937a5d618d5d:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a1d9f1a322a1b6403b5d897a66864cdb94ebab11ebf67a32d6c5d511842f4d0:path+native#mantle@0.1.0:check-native-row-receipts:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a816d11ccab8d95ea5f03e6cab17768baa75106cfe6311d2e8f879b4ca37df7:path+native#mantle@0.1.0:mantle:lib:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:71ad5ab147d6304de2967bdee84b09745ee9d729b45c5cd00e1dbe92968e852f:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:974f6b60b6de51141e4a2f1d182490504c0f3713975931cdbb8eee072c8095ac:path+native#mantle@0.1.0:adopt-source-built-stagex:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:fd644ba510eee19a7c632508ef9f77fade663bda953442e7326ca6f9808e478d:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build"
+          }
+        ]
+      },
+      "root_unit_count": 16
+    }
+  },
+  "physical_criteria": {
+    "7": {
+      "total": 72015,
+      "covered": 72015,
+      "uncovered": []
+    },
+    "8": {
+      "covered": 33820,
+      "total": 33820,
+      "uncovered": []
+    }
+  },
+  "preauthor_leaf_coverage": {
+    "covered": 70794,
+    "total": 70794,
+    "uncovered": []
+  },
+  "independent_model_acceptance": false,
+  "scope": "Complete actual current input/results collation for fresh independent review only; no protected execution, signed adoption, native rows or release."
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "observed_name": "graph-results/controller-template-audit.json",
+    "storage": "graph-results/controller-template-audit.json.gz",
+    "observed_bytes": 59786444,
+    "storage_bytes": 1242154,
+    "decoded_blake3": "0445ae31197d2c67fb1cb419a9a4a8977e4b0f7d34b150ec692049b750003220",
+    "storage_blake3": "e76f16b0952db84185c1c371c2538b5eef637a2345b46523a1b66ff14c0b87ad",
+    "roundtrip_equal": true,
+    "restore_command": [
+      "gzip",
+      "--decompress",
+      "--stdout",
+      "graph-results/controller-template-audit.json.gz"
+    ],
+    "raw_local_file_retained": true
+  },
+  {
+    "observed_name": "graph-results/helper-authority-audit.json",
+    "storage": "graph-results/helper-authority-audit.json.gz",
+    "observed_bytes": 76558267,
+    "storage_bytes": 3060703,
+    "decoded_blake3": "308afcc05773dc86628e47740d35d81717b517e6aa92137449933e40a06ceb7c",
+    "storage_blake3": "39399e13b86e5aae695313ec17d18b2003705ac44aee21f0cb751bd4b84f8380",
+    "roundtrip_equal": true,
+    "restore_command": [
+      "gzip",
+      "--decompress",
+      "--stdout",
+      "graph-results/helper-authority-audit.json.gz"
+    ],
+    "raw_local_file_retained": true
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "task": 26,
+  "command": [
+    "pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/git/OnixResearch/mantle",
+    "--label",
+    "complete-current-inspection-evidence",
+    "--",
+    "bash",
+    "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/validate-current-inspection-evidence.sh"
+  ],
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "scope": "Current complete data/evidence/prose lifecycle validation only, not independent review or protected proof."
+}

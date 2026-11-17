@@ -1,0 +1,38 @@
+[
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/helper-authority-negative.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/helper-authority-negative.json",
+    "bytes_blake3": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+    "transfer_equal": true
+  },
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-selector-mutations-aws-db-fixed/selector-mutations.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/selector-mutations-aws-db-fixed.json",
+    "bytes_blake3": "82ab5285696ad6c81cfe37b679bc4e69962bee933c13c2bfce81eb23973c9a1b",
+    "transfer_equal": true
+  },
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/output-seed-immutable-source-regressions.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-results-aws-db-fixed/output-seed-immutable-source-regressions.json",
+    "bytes_blake3": "f7d56d5ea8256d49cd7a6917eaf5fe40bef90820e0cdc64508ea9fd670f6dc3d",
+    "transfer_equal": true
+  },
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-helper-mutations-70db0868-primary-sources-aws-db-fixed.log",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/helper-mutations-aws-db-fixed.log",
+    "bytes_blake3": "c6f4b851d1afd6f69bda9e1b3eb8490df3cd9bcc0b95f560363d79e34a934d30",
+    "transfer_equal": true
+  },
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-selector-mutations-70db0868-primary-sources-aws-db-fixed.log",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/selector-mutations-aws-db-fixed.log",
+    "bytes_blake3": "86a8e850ff264cf39cea506fa37cd0b90baf0fc105dba92720ac0c6d759dbaef",
+    "transfer_equal": true
+  },
+  {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-seed-source-regressions-v2-70db0868-primary-sources-aws-db-fixed.log",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/seed-source-regressions-aws-db-fixed.log",
+    "bytes_blake3": "4b48827fcc6b7ec8a96c7b9f17f87884a7472a282bf454ec1b23ed9dcd14078c",
+    "transfer_equal": true
+  }
+]

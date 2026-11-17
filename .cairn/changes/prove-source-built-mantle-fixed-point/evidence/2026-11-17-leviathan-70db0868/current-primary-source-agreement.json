@@ -1,0 +1,154 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+  "selector_report_blake3": "d6509ea41c921dec199e8ac09f5615baaa99b0ffe24cd9eef132f681ab05a6da",
+  "coverage": {
+    "covered": 2098,
+    "invalid": 0,
+    "total": 2098,
+    "uncovered": 0
+  },
+  "actual_failed_package_units": [
+    {
+      "stage": "mantle-stage1",
+      "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_kind": "custom-build",
+      "planned_primary_argument": "vendor/snix-build/build.rs",
+      "source_roots": {
+        "stagex-seed": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-seed/hex0-seed",
+        "stagex-lineage": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-lineage/stagex-transition-lineage.json",
+        "stagex-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-source-bundle/stagex-source-closure.json",
+        "native-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/native-source-authority/native-source-closure.json",
+        "rust-source-archive-set": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/rust-source-archives",
+        "mantle-source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+        "vendor-inputs": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/vendor-deps"
+      },
+      "source_plan_member": "bootstrap/source-built/mantle-stage1.unit-plan.json",
+      "source_plan_bytes_blake3": "705d6f4008ed2496be70c43fd4684251e7156a9856d190e085ee8961ce49518a",
+      "authenticated_program_record": "source-built-mantle-programs",
+      "compiler_owners": [
+        {
+          "ordinal": "00000",
+          "exact_primary_source_consumed": true,
+          "fact_available": true,
+          "source_package": {
+            "kind": "source",
+            "path": "vendor/snix-build",
+            "role": "mantle-source"
+          },
+          "projection": {
+            "consumer_step": "unit-00000-compile",
+            "projection": "direct"
+          }
+        }
+      ],
+      "exact_primary_consumption": true
+    },
+    {
+      "stage": "mantle-stage1",
+      "unit_id": "native:4eb04807244b864682d2659c765dc290e83cff78e612fcbccb51f4dd2d0ceb49:path+native#snix-build@0.1.0:snix-build:lib:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_kind": "lib",
+      "planned_primary_argument": "vendor/snix-build/src/lib.rs",
+      "source_roots": {
+        "stagex-seed": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-seed/hex0-seed",
+        "stagex-lineage": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-lineage/stagex-transition-lineage.json",
+        "stagex-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-source-bundle/stagex-source-closure.json",
+        "native-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/native-source-authority/native-source-closure.json",
+        "rust-source-archive-set": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/rust-source-archives",
+        "mantle-source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+        "vendor-inputs": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/vendor-deps"
+      },
+      "source_plan_member": "bootstrap/source-built/mantle-stage1.unit-plan.json",
+      "source_plan_bytes_blake3": "705d6f4008ed2496be70c43fd4684251e7156a9856d190e085ee8961ce49518a",
+      "authenticated_program_record": "source-built-mantle-programs",
+      "compiler_owners": [
+        {
+          "ordinal": "00675",
+          "exact_primary_source_consumed": true,
+          "fact_available": true,
+          "source_package": null,
+          "projection": {
+            "consumer_step": "unit-00675-compile",
+            "producer_step": "unit-00675-compile-invocation",
+            "projection": "static-template",
+            "template_step": "unit-00675-compile-invocation-template"
+          }
+        }
+      ],
+      "exact_primary_consumption": true
+    },
+    {
+      "stage": "mantle-stage2",
+      "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_kind": "custom-build",
+      "planned_primary_argument": "vendor/snix-build/build.rs",
+      "source_roots": {
+        "stagex-seed": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-seed/hex0-seed",
+        "stagex-lineage": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-lineage/stagex-transition-lineage.json",
+        "stagex-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-source-bundle/stagex-source-closure.json",
+        "native-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/native-source-authority/native-source-closure.json",
+        "rust-source-archive-set": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/rust-source-archives",
+        "mantle-source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+        "vendor-inputs": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/vendor-deps"
+      },
+      "source_plan_member": "bootstrap/source-built/mantle-stage2.unit-plan.json",
+      "source_plan_bytes_blake3": "9d20212a92b4b7ccb103523518eee65116b49374938553580c622c09b5e2cbd5",
+      "authenticated_program_record": "source-built-mantle-programs",
+      "compiler_owners": [
+        {
+          "ordinal": "00000",
+          "exact_primary_source_consumed": true,
+          "fact_available": true,
+          "source_package": {
+            "kind": "source",
+            "path": "vendor/snix-build",
+            "role": "mantle-source"
+          },
+          "projection": {
+            "consumer_step": "unit-00000-compile",
+            "projection": "direct"
+          }
+        }
+      ],
+      "exact_primary_consumption": true
+    },
+    {
+      "stage": "mantle-stage2",
+      "unit_id": "native:4eb04807244b864682d2659c765dc290e83cff78e612fcbccb51f4dd2d0ceb49:path+native#snix-build@0.1.0:snix-build:lib:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_kind": "lib",
+      "planned_primary_argument": "vendor/snix-build/src/lib.rs",
+      "source_roots": {
+        "stagex-seed": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-seed/hex0-seed",
+        "stagex-lineage": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-lineage/stagex-transition-lineage.json",
+        "stagex-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/stagex-source-bundle/stagex-source-closure.json",
+        "native-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/native-source-authority/native-source-closure.json",
+        "rust-source-archive-set": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/rust-source-archives",
+        "mantle-source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+        "vendor-inputs": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/vendor-deps"
+      },
+      "source_plan_member": "bootstrap/source-built/mantle-stage2.unit-plan.json",
+      "source_plan_bytes_blake3": "9d20212a92b4b7ccb103523518eee65116b49374938553580c622c09b5e2cbd5",
+      "authenticated_program_record": "source-built-mantle-programs",
+      "compiler_owners": [
+        {
+          "ordinal": "00675",
+          "exact_primary_source_consumed": true,
+          "fact_available": true,
+          "source_package": null,
+          "projection": {
+            "consumer_step": "unit-00675-compile",
+            "producer_step": "unit-00675-compile-invocation",
+            "projection": "static-template",
+            "template_step": "unit-00675-compile-invocation-template"
+          }
+        }
+      ],
+      "exact_primary_consumption": true
+    }
+  ],
+  "scope": "Actual source-derived current unit plans and authenticated compiler-consumption results for both Mantle stages. Every current compiler primary is covered. This repairs the former admission mismatch; it is not protected execution or proof acceptance."
+}

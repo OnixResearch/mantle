@@ -1,0 +1,214 @@
+{
+  "repository": "/home/brittonr/git/OnixResearch/mantle",
+  "contract": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-contract.md",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject": {
+    "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-subject-aws-db-fixed.json",
+    "blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+    "remote_path": "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json"
+  },
+  "frozen_source": {
+    "remote_host": "leviathan.cymric-daggertooth.ts.net",
+    "remote_tree": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+    "ssh_read_prefix": "ssh://leviathan.cymric-daggertooth.ts.net/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources/",
+    "local_git_code_archive": "/home/brittonr/git/.mantle-primary-source-freeze-20261117.iAYEcZ/source-70db08685c0c5fa5c326bfe32db78576d7e2e182.tar.gz",
+    "git_code_archive_blake3": "e40bff16144520416cacb3b865b2eaba01dab4bf194a44c0b0d9cc18b9ec19fe",
+    "complete_source_metadata": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/complete-source.json",
+    "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1"
+  },
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+  "profile": {
+    "bytes": 17318852974,
+    "manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+    "raw_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+    "full_transfer_equal": true
+  },
+  "program_records": {
+    "fixed-point-native-source-program": "223efadf90b32091fe43452a870f873e252763fe93f9e6f16d2a1fc6868315f8",
+    "fixed-point-rust-source-program": "c5a53ac4fcba19834595e67d77d8eefd369bba140bc4e2dc1c1756169748392a",
+    "source-built-mantle-programs": "c2c5acec206d84612e4ab983f266145b77b717d8748dfe49343a9277dd64cb05",
+    "source-built-stagex-programs": "2f5acd44852caa44d2c4af6305b3e0d11866ed464cfe59c9ce4989a6712db645"
+  },
+  "current_reports": {
+    "graph-results-aws-db-fixed/graph-audit.json": "f8082ee076e195494c6825d0b3b97e27d321678a73324bc37e1799949b9c1648",
+    "graph-results-aws-db-fixed/source-binding-kind-inventory.json": "354e76abb2ba3b9afd357fb8e337fd38dc49f149edc128f1d57f940b7323de04",
+    "graph-results-aws-db-fixed/controller-template-audit.json": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+    "graph-results-aws-db-fixed/helper-authority-audit.json": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+    "graph-results-aws-db-fixed/mantle-selector-audit.json": "6e76ac8a137c1a5e59daf97539d6c1ad14f6df49a38665ee7d7dc37c968c0b22",
+    "graph-results-aws-db-fixed/semantic-root-regression.json": "a3d7883ffba1ffd2ddd2bd4e3513c453f5b90a8f3ade963b2b9bd0cdbabcea52",
+    "identity-results-aws-db-fixed/identity-review.json": "aefe5ef1efddd55748661ed4ed601e3cafd27e9f0ad0158493cf3900cedb10df",
+    "preauthor-results-aws-db-fixed/preauthor-role-physical-review.json": "ba6d789a2d4d5fbd007c3604cba5da519178624ae9cc533f382447a2738ded31",
+    "graph-results-aws-db-fixed/helper-authority-negative.json": "59c00b03fe7cd38a3238c36bad0a4c7b0445a9706fb18d098f445d2f5fd8ac20",
+    "selector-mutations-aws-db-fixed.json": "82ab5285696ad6c81cfe37b679bc4e69962bee933c13c2bfce81eb23973c9a1b",
+    "graph-results-aws-db-fixed/output-seed-immutable-source-regressions.json": "f7d56d5ea8256d49cd7a6917eaf5fe40bef90820e0cdc64508ea9fd670f6dc3d",
+    "review-subject-aws-db-fixed.json": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+    "source-program-preparation.json": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+    "source-program-preparation-input-plan.json": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+    "graph-current-inputs-aws-db-fixed.json": "1ab3b9cc31e44d7a364d6c6ec2707499ad49a8994a63cdf14f8a4228840d075e",
+    "physical-current-inputs-aws-db-fixed.json": "aee9118c46f2fe57fb67015bb7663f18dc3afb525c33cfd7ffa81a11bf9a9eaa",
+    "current-primary-source-agreement-aws-db-fixed.json": "a03a3fad264a5900635ade4ed7ffbe2fe76fc3c89b4a642e0724ef9616221591",
+    "current-inspection-outcomes-aws-db-fixed.json": "be787c398f6fc18b8e4785e9eb8567813432fe887cbc53da16c508b408938410",
+    "review-contract.md": "e827e674b1140dcab3f0b963a3e33868950ff04d77a06dff7f042c4287d3e5b0",
+    "subject-aws-git-db-correction.json": "b90cfd070d2dfb4216fd3cd6c12c14efa0e1e777e423331b1f7b02e726f17969"
+  },
+  "graph_collation": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/graph-current-inputs-aws-db-fixed.json",
+  "physical_collation": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/physical-current-inputs-aws-db-fixed.json",
+  "primary_agreement": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/current-primary-source-agreement-aws-db-fixed.json",
+  "large_report_storage": [
+    {
+      "observed_name": "graph-results-aws-db-fixed/controller-template-audit.json",
+      "storage": "graph-results-aws-db-fixed/controller-template-audit.json.gz",
+      "observed_bytes": 59786546,
+      "storage_bytes": 1242193,
+      "decoded_blake3": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+      "storage_blake3": "056257b7d63260532856554215d99ec6b5dd74c79c5f80cb7c97be2961448fa8",
+      "roundtrip_equal": true,
+      "raw_local_file_retained": true
+    },
+    {
+      "observed_name": "graph-results-aws-db-fixed/helper-authority-audit.json",
+      "storage": "graph-results-aws-db-fixed/helper-authority-audit.json.gz",
+      "observed_bytes": 76558319,
+      "storage_bytes": 3060705,
+      "decoded_blake3": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+      "storage_blake3": "db47341356f7d00d6c6eecfa13018f31ac02616f8999f738fc8a1ab04ed0346a",
+      "roundtrip_equal": true,
+      "raw_local_file_retained": true
+    }
+  ],
+  "current_graph_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed",
+  "current_identity_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed",
+  "current_preauthor_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor-aws-db-fixed",
+  "current_selector_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-selector-mutations-aws-db-fixed",
+  "current_inspector_root": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources",
+  "inspector_bindings": {
+    "graph": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+    "controller": {
+      "controller-template-audit.py": {
+        "blake3": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+        "size_bytes": 54801
+      },
+      "graph-audit.py": {
+        "blake3": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+        "size_bytes": 109176
+      }
+    },
+    "helper": {
+      "argv": [
+        "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py",
+        "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed",
+        "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json"
+      ],
+      "blake3": "6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b",
+      "graph_inspector_blake3": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+      "graph_inspector_path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py",
+      "hash_tool_blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "hash_tool_path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+      "interpreter_blake3": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb",
+      "interpreter_path": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py"
+    },
+    "selector": "4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b",
+    "identity": {
+      "blake3": "ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59",
+      "command": [
+        "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+        "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py",
+        "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed",
+        "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json",
+        "70db08685c0c5fa5c326bfe32db78576d7e2e182"
+      ],
+      "path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py"
+    },
+    "preauthor": {
+      "blake3": "9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940",
+      "command": [
+        "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+        "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py",
+        "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+        "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor-aws-db-fixed",
+        "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json",
+        "70db08685c0c5fa5c326bfe32db78576d7e2e182"
+      ],
+      "path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py"
+    },
+    "seed_probe": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e"
+  },
+  "current_actual_tasks": {
+    "graph": {
+      "task": 1730,
+      "enqueued_at": "2026-11-17T14:46:26.759940347-05:00",
+      "start": "2026-11-17T14:46:26.991060465-05:00",
+      "end": "2026-11-17T15:04:14.909596764-05:00",
+      "result": "Success"
+    },
+    "identity": {
+      "task": 1731,
+      "enqueued_at": "2026-11-17T14:46:27.293865256-05:00",
+      "start": "2026-11-17T14:46:27.382971786-05:00",
+      "end": "2026-11-17T14:54:46.119396070-05:00",
+      "result": "Success"
+    },
+    "preauthor": {
+      "task": 1732,
+      "enqueued_at": "2026-11-17T14:46:28.587139800-05:00",
+      "start": "2026-11-17T14:46:28.664372075-05:00",
+      "end": "2026-11-17T15:07:54.893595987-05:00",
+      "result": "Success"
+    },
+    "helper_mutations": {
+      "task": 1733,
+      "enqueued_at": "2026-11-17T14:46:29.749661360-05:00",
+      "start": "2026-11-17T15:04:14.974273512-05:00",
+      "end": "2026-11-17T15:18:17.803761879-05:00",
+      "result": "Success"
+    },
+    "selector_mutations": {
+      "task": 1734,
+      "enqueued_at": "2026-11-17T14:46:30.330223710-05:00",
+      "start": "2026-11-17T15:04:15.038471287-05:00",
+      "end": "2026-11-17T15:06:21.440611396-05:00",
+      "result": "Success"
+    },
+    "seed_source_mutations": {
+      "task": 1735,
+      "enqueued_at": "2026-11-17T14:46:30.880132228-05:00",
+      "start": "2026-11-17T15:04:15.106866283-05:00",
+      "end": "2026-11-17T15:05:35.891042118-05:00",
+      "result": "Success"
+    }
+  },
+  "actual_cold_command": {
+    "script": "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources-aws-db-fixed.sh",
+    "bytes_blake3": "bacb29b4eebf67aacaf0b05ce8d66190778bff92c57908d2f3204cc2468a7b15",
+    "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+    "held": true
+  },
+  "retained_subject_failure": {
+    "record": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/subject-aws-git-db-correction.json",
+    "old_subject_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+    "failed_identity_log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/identity-failed-1725.log",
+    "failed_preauthor_log": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/preauthor-failed-1726.log",
+    "old_reports_are_not_current_acceptance": true
+  },
+  "model_authorization": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json",
+  "required_model": "underclass/gpt-6-sol",
+  "outputs": {
+    "graph": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-graph-review-aws-db-fixed.json",
+    "physical": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/independent-physical-review-aws-db-fixed.json"
+  },
+  "boundaries": [
+    "Two fresh complete independent scopes, graph criteria1-6 and physical criteria7-8. Inspector authors are not independent reviewers.",
+    "Use corrected subject2081b08f and corrected aws-db-fixed reports only. Preserve rejected subject8269aab8 and old successful/failed reports as history, not acceptance.",
+    "Read full current reports and frozen actual consumer sources; complete counters and symbolic contracts are mandatory, no sampling or prior-count expectations.",
+    "Trusted inert Python, BLAKE3, Git, tar and NAR data inspection may write only owned scratch/results outside frozen source/cohort roots.",
+    "Never execute candidate/product/compiler/helper/provider/controller/recipe/NCL programs, mutate frozen input roots, refresh expected provider/lineage pins, import outputs, alter trust, launch proofs or archive lifecycle state.",
+    "Both reviews are advisory evidence. Parent reconciliation, sealed review-byte guards and current Cairn gates remain required before protected execution.",
+    "No stage success, fixed point, verified v2 proof, native row, signing or release acceptance follows from these static checks."
+  ]
+}

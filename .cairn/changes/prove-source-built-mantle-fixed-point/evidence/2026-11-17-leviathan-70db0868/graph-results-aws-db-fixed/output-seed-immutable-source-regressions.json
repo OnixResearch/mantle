@@ -1,0 +1,397 @@
+{
+  "all_assertions_passed": true,
+  "complete_seed_coverage": {
+    "generated": {
+      "covered": 9176,
+      "invalid": 0,
+      "total": 9176
+    },
+    "raw": {
+      "covered": 6832,
+      "invalid": 0,
+      "total": 6832
+    }
+  },
+  "immutable_compiler_source": {
+    "negative_cases": [
+      {
+        "case": "changed-root-unit-source-digest",
+        "rejected": true,
+        "stage": "mantle-stage1",
+        "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+      },
+      {
+        "case": "empty-root-unit-set",
+        "rejected": true,
+        "rejection": "mantle-stage1: no pre-lowering root-package derivations",
+        "stage": "mantle-stage1"
+      },
+      {
+        "case": "changed-root-unit-source-digest",
+        "rejected": true,
+        "stage": "mantle-stage2",
+        "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+      },
+      {
+        "case": "empty-root-unit-set",
+        "rejected": true,
+        "rejection": "mantle-stage2: no pre-lowering root-package derivations",
+        "stage": "mantle-stage2"
+      }
+    ],
+    "positive": {
+      "actual_immutable_compiler_source": {
+        "algorithm": "blake3-tree-v1",
+        "consumer": "src/rust_plan.rs::collect_source_files/hash_path_source_tree",
+        "file_count": 12766,
+        "root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/mantle-source",
+        "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e",
+        "visited_entries": 13897
+      },
+      "all_match": true,
+      "pre_lowering_root_units": {
+        "mantle-stage1": [
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:18895fbd79695961b76c06276583ab093e41c0f247c5c6f0eda4937a5d618d5d:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a1d9f1a322a1b6403b5d897a66864cdb94ebab11ebf67a32d6c5d511842f4d0:path+native#mantle@0.1.0:check-native-row-receipts:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a816d11ccab8d95ea5f03e6cab17768baa75106cfe6311d2e8f879b4ca37df7:path+native#mantle@0.1.0:mantle:lib:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:71ad5ab147d6304de2967bdee84b09745ee9d729b45c5cd00e1dbe92968e852f:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:974f6b60b6de51141e4a2f1d182490504c0f3713975931cdbb8eee072c8095ac:path+native#mantle@0.1.0:adopt-source-built-stagex:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:fd644ba510eee19a7c632508ef9f77fade663bda953442e7326ca6f9808e478d:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build"
+          }
+        ],
+        "mantle-stage2": [
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:03ac55e41d648d0ae318e5a54397bcf21b90c6e9097a2cfc7a71b3e3eadb1220:path+native#mantle@0.1.0:crunch:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:18895fbd79695961b76c06276583ab093e41c0f247c5c6f0eda4937a5d618d5d:path+native#mantle@0.1.0:generate-operator-command-contract:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a1d9f1a322a1b6403b5d897a66864cdb94ebab11ebf67a32d6c5d511842f4d0:path+native#mantle@0.1.0:check-native-row-receipts:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:2a816d11ccab8d95ea5f03e6cab17768baa75106cfe6311d2e8f879b4ca37df7:path+native#mantle@0.1.0:mantle:lib:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:71ad5ab147d6304de2967bdee84b09745ee9d729b45c5cd00e1dbe92968e852f:path+native#mantle@0.1.0:mantle-protected-build-runner:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:974f6b60b6de51141e4a2f1d182490504c0f3713975931cdbb8eee072c8095ac:path+native#mantle@0.1.0:adopt-source-built-stagex:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+          },
+          {
+            "matches_actual_compiler_source": true,
+            "planned_source_root": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-70db0868-primary-sources.source-built-fixed-point-staging-2275366/inputs/mantle-source",
+            "source_digest": {
+              "algorithm": "blake3-tree-v1",
+              "value": "e6a8d28aa4268856875f0f40561347d9e67c2181b33e14e8b2d7100c3d48437e"
+            },
+            "unit_id": "native:fd644ba510eee19a7c632508ef9f77fade663bda953442e7326ca6f9808e478d:path+native#mantle@0.1.0:generate-portable-platform-profiles:bin:build"
+          }
+        ]
+      },
+      "root_unit_count": 16
+    }
+  },
+  "inspector_hashes": {
+    "controller-template-audit.py": "347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62",
+    "graph-audit.py": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+    "mantle-selector-audit.py": "4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b"
+  },
+  "non_claim": "Complete actual-current-data inert seed traversal and in-memory rejection cases only. Compiler source was hashed in full with unchanged Rust framing; no sampled source set or file exception. Frozen source/cohort were not modified. No product, helper, compiler, controller, provider, recipe or protected command executed.",
+  "probe_blake3": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e",
+  "schema": "mantle-current-seed-source-regressions-v1",
+  "seed_negative_cases": [
+    {
+      "case": "unknown-source-kind",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "source or destination artifact kind is unknown": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "mismatched-destination-kind",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source and destination artifact kinds differ": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "unresolved-source-bound",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "source or destination bytes_max is unresolved/invalid": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "undersized-destination",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source bytes_max exceeds destination bytes_max": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "unknown-exact-producer",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "exact seed producer is unknown": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "unknown-producer-output",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "exact seed producer output is unknown": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "undeclared-seed-input",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "seed input is not a genuine nonguard Produced reference": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "guard-input-as-seed",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "seed input is not a genuine nonguard Produced reference": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "stream-output-as-seed",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source and destination artifact kinds differ": 1,
+        "seed target is not a declared ordinary output": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "nonprior-local-producer",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "seed producer is not a prior local declaration": 1
+      },
+      "scope": "raw"
+    },
+    {
+      "case": "unknown-source-kind",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "source or destination artifact kind is unknown": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "mismatched-destination-kind",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source and destination artifact kinds differ": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "unresolved-source-bound",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "source or destination bytes_max is unresolved/invalid": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "undersized-destination",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source bytes_max exceeds destination bytes_max": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "unknown-exact-producer",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "exact seed producer is unknown": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "unknown-producer-output",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "exact seed producer output is unknown": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "undeclared-seed-input",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "seed input is not a genuine nonguard Produced reference": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "guard-input-as-seed",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "seed input is not a genuine nonguard Produced reference": 1,
+        "source Produced declaration and bound unresolved": 1
+      },
+      "scope": "generated"
+    },
+    {
+      "case": "stream-output-as-seed",
+      "invalid": 1,
+      "passed": true,
+      "rejection_reasons": {
+        "Produced source and destination artifact kinds differ": 1,
+        "Produced source bytes_max exceeds destination bytes_max": 1,
+        "seed target is not a declared ordinary output": 1
+      },
+      "scope": "generated"
+    }
+  ],
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d"
+}

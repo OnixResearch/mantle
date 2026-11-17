@@ -1380,3 +1380,86 @@ and current launch gates must follow those facts. No new protected attempt,
 signed adoption, native row or successful v2 proof is accepted from these
 qualification observations; the downstream adoption command remains held.
 
+## Current regenerated primary-source agreement (2026-11-17)
+
+Preparation1721 and subject-facts1722 completed successfully for frozen product
+`70db08685c0c5fa5c326bfe32db78576d7e2e182`, with unchanged source before/after.
+The entire 17,318,852,974-byte output-profile stream matches remote BLAKE3
+`11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534`.
+Its manifest is
+`28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab`;
+the sealed current subject is
+`8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a`.
+
+Complete graph/template/helper/selector task1724 passed. All 2,098 current
+compiler primaries are covered with zero invalid or uncovered operands. Both
+snix-build build-script and library units now retain canonical planned members
+and consume their exact admitted source inputs in both Mantle stages. The
+actual failing-unit verification is retained in
+`current-primary-source-agreement.json`; this closes the producer repair, not
+the protected fixed point.
+
+The raw graph retains its HOLD and 14,037 mis-scoped word flags. The complete
+scoped controller pass reconciles those flags and returns
+`STATIC_TEMPLATE_REVIEW_CLEAR` with no launch blockers, guard failures,
+non-word findings or unknown static source kinds. All 1,098 owning-stage helper
+obligations are covered. All 16 root-package unit digests match the complete
+unchanged 12,766-file compiler source under the original Rust framing.
+Full unsampled reports, exact transport identities and compression roundtrips
+are retained; raw diagnostics and unobserved runtime payloads are not dropped.
+
+Current physical/preauthor and rejection runs1725-1729 still require result
+reconciliation before the two fresh complete independent reviews. The guarded
+cold command remains held; its actual missing-acceptance rejection leaves proof,
+adoption and row namespaces absent. No protected execution, signed adoption,
+native row or successful v2 receipt is accepted from current static results.
+
+## Physical subject Git-database pointer correction (2026-11-17)
+
+Identity1725 and preauthor1726 rejected their subject during configuration,
+before source inspection: `original_aws.capture` named the capture directory
+instead of its existing `aws-lc.git` object database. The independently frozen
+AWS commit, Git tree and normalized-tree BLAKE3 did not change. The strict
+checker predicates remain unchanged; no alternative source or pin is admitted.
+
+The rejected subject8269aab8, all completed graph/rejection outputs and both
+failure transcripts remain retained. Only that metadata field changes in the
+new sealed subject
+`2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d`.
+The source, cohort, profile stream, authored records and qualified binaries are
+unchanged. Complete corrected-subject runs1730-1735 are submitted in fresh
+scratch namespaces, including every graph/physical/preauthor and rejection
+exercise; old-subject results cannot substitute for them.
+
+The corrected held cold command names only the new subject and new acceptance
+and independent-review paths. Its proof namespace remains absent. No compiler
+or provider execution, successful v2 proof, signing or native row is accepted.
+
+## Complete corrected-subject inspection and fresh review dispatch (2026-11-17)
+
+All corrected-subject tasks1730-1735 succeeded. The final complete scoped
+template verdict is `STATIC_TEMPLATE_REVIEW_CLEAR`; raw graph HOLD diagnostics
+remain retained. All 2,098 compiler primary obligations, both actual snix-build
+target kinds in both Mantle stages, all 1,098 helper-source obligations and all
+16 unchanged compiler-root unit digests are covered without invalid/uncovered
+static obligations.
+
+Identity1731 and preauthor1732 now cover every criterion7 obligation
+(72,015/72,015) and criterion8 obligation (33,820/33,820). The three explicitly
+retained directory-role obligations are closed by exact full preauthor
+reconstruction, including all 70,794 embedded leaves. The compiler record/tree
+is identical to its original input, with zero authored additions.
+
+Current rejection runs passed six helper cases, thirteen selector cases
+(including same-file parent aliases) and nineteen output-seed mutations, plus
+the complete immutable-source cases. Full actual outcomes, exact input/tool/
+consumer hashes, unsampled report bytes and verified compressed storage are
+bound in `review-packet-aws-db-fixed.json` under the current cohort evidence.
+
+Fresh `underclass/gpt-6-sol` agents `Review70dbGraphCorrected` and
+`Review70dbPhysicalCorrected` are dispatched for all criteria1-6 and7-8. Their
+outputs require parent byte/coverage reconciliation; no model verdict or
+current launch acceptance is assumed. The corrected cold command, signed
+adoption and five-row commands remain held. Protected stages, stage1-owned
+stage2 equality, verified v2 receipt and genuine native rows remain open.
+

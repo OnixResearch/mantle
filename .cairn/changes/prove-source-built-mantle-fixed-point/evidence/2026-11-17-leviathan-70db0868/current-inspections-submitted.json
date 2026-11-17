@@ -1,0 +1,136 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+  "tasks": {
+    "graph": {
+      "id": 1724,
+      "dependencies": [
+        1722,
+        1723
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "graph-70db0868-primary-sources",
+        "--after",
+        "1722",
+        "1723",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-graph-70db0868-primary-sources.sh"
+      ]
+    },
+    "identity": {
+      "id": 1725,
+      "dependencies": [
+        1722,
+        1723
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "identity-70db0868-primary-sources",
+        "--after",
+        "1722",
+        "1723",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-identity-70db0868-primary-sources.sh"
+      ]
+    },
+    "preauthor": {
+      "id": 1726,
+      "dependencies": [
+        1722,
+        1723
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "preauthor-70db0868-primary-sources",
+        "--after",
+        "1722",
+        "1723",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-preauthor-70db0868-primary-sources.sh"
+      ]
+    },
+    "helper_mutations": {
+      "id": 1727,
+      "dependencies": [
+        1724
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "helper_mutations-70db0868-primary-sources",
+        "--after",
+        "1724",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-helper-mutations-70db0868-primary-sources.sh",
+        "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a"
+      ]
+    },
+    "selector_mutations": {
+      "id": 1728,
+      "dependencies": [
+        1724
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "selector_mutations-70db0868-primary-sources",
+        "--after",
+        "1724",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-selector-mutations-70db0868-primary-sources.sh",
+        "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a"
+      ]
+    },
+    "seed_source_mutations": {
+      "id": 1729,
+      "dependencies": [
+        1724
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "seed_source_mutations-70db0868-primary-sources",
+        "--after",
+        "1724",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/inspect-seed-source-regressions-70db0868-primary-sources.sh",
+        "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a"
+      ]
+    }
+  },
+  "scope": "Inert complete current-data traversal and rejection exercises only. No prior report/model acceptance, protected execution or output authority is reused."
+}

@@ -1,0 +1,11 @@
+{
+  "held_driver": "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources.sh",
+  "held_driver_bytes_blake3": "cddeccb01ae01ed9b0dba7d1409dd0ec5c6332eaced1511b93faa2b956683b61",
+  "argument": "0000000000000000000000000000000000000000000000000000000000000000",
+  "actual_exit": 1,
+  "actual_log": "held-missing-review-rejection.log",
+  "missing_acceptance": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-70db0868-primary-sources-gpt6sol.json",
+  "proof_adoption_rows_namespaces_absent_after": true,
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "scope": "Actual shell guard refusal before any protected namespace, product execution or signing. Tests missing acceptance only; a valid reviewed-acceptance wrong-digest refusal still precedes the eventual authorized launch."
+}

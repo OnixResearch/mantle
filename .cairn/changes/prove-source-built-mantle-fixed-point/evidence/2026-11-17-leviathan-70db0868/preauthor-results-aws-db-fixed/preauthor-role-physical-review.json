@@ -1,0 +1,289 @@
+{
+  "bounded_physical_identity_verdict": "STATIC_PREAUTHOR_IDENTITIES_CLEAR",
+  "commands": {
+    "plan_digest": "<exact subject inert b3sum> --derive-key mantle-source-built-fixed-point-plan-v2 --no-names",
+    "record_and_tree_hash": "<exact subject inert b3sum> --no-names (streaming stdin)"
+  },
+  "coverage": {
+    "preauthor_directory_roles": {
+      "covered": 3,
+      "total": 3,
+      "uncovered": []
+    },
+    "preauthor_embedded_leaf_entries": {
+      "covered": 70794,
+      "total": 70794,
+      "uncovered": []
+    },
+    "preauthor_file_role_bodies": {
+      "covered": 4,
+      "total": 4,
+      "uncovered": []
+    }
+  },
+  "frozen_consumer_paths_and_hashes": {
+    "src/release_tree_copy.rs": {
+      "blake3": "c7098192cdc8a1a1add76bca927fcfd07d214b9eb3bcf9b447daf7430164afa4",
+      "bytes": 59270,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources/src/release_tree_copy.rs"
+    },
+    "src/source_built_fixed_point_planning.rs": {
+      "blake3": "91be8df65a37d1344c194062f3d09043567479a4efc295f86d09144ba43181bd",
+      "bytes": 5841,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources/src/source_built_fixed_point_planning.rs"
+    },
+    "src/source_built_fixed_point_shell.rs": {
+      "blake3": "9c8ac67d2fdc9fbea394975c8922a5c03e77f2cb6df6cc204a4221674e2cdddd",
+      "bytes": 188980,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources/src/source_built_fixed_point_shell.rs"
+    },
+    "src/source_bundle.rs": {
+      "blake3": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282",
+      "bytes": 472123,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources/src/source_bundle.rs"
+    }
+  },
+  "input_plan": {
+    "canonical_blake3": "5af4bd570d551670412ef31d8a4b4092588f2ba248abc17e139215b99f9cbb95",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json",
+    "raw_blake3": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c"
+  },
+  "input_profile": {
+    "bytes": 11730624979,
+    "manifest_blake3": "becd5a0997094f1186a30aa039ad09e49f82f1785274ab4685cdee9226cc23d4",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/source-profile-70db0868-primary-sources.json",
+    "raw_blake3": "0e3b41f54ce6e893ed251ca6dcb2a24c6d2ab87e5c472dad6d867ee01c1b221c"
+  },
+  "inspector": {
+    "blake3": "9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940",
+    "command": [
+      "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+      "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+      "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+      "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor-aws-db-fixed",
+      "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json",
+      "70db08685c0c5fa5c326bfe32db78576d7e2e182"
+    ],
+    "path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py"
+  },
+  "non_claims": [
+    "No multi-gigabyte materialized scratch copies were created; directory identity is reconstructed from exact leaf bytes, required parent paths, source modes, and frozen release_tree_copy ordering.",
+    "The bootstrap-source input role is measured separately from the assembled native-source-bundle plan closure.",
+    "Does not repeat output-profile, original Git, program archive/NAR, selected-source, helper-copy, or initial-authority checks.",
+    "No proof launch, protected execution, compiler/runtime/fixed-point/reproducibility/release/native-row claim."
+  ],
+  "nonrole_records_seen": 59,
+  "profile_records_decoded": 66,
+  "profile_roles_covered": 7,
+  "profile_roles_expected": 7,
+  "role_checks": [
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 1,
+      "leaf_records_expected": 1,
+      "profile_class": "stagex-seed",
+      "role": "stagex-seed"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 1,
+      "leaf_records_expected": 1,
+      "profile_class": "stagex-lineage",
+      "role": "stagex-lineage"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 2,
+      "leaf_records_expected": 2,
+      "profile_class": "stagex-source-bundle",
+      "role": "stagex-source-bundle"
+    },
+    {
+      "covered": 1,
+      "criterion": "input-role canonical body/payload (native plan closure checked separately)",
+      "expected": 1,
+      "leaf_records_covered": 9,
+      "leaf_records_expected": 9,
+      "profile_class": "bootstrap-source",
+      "role": "native-source-bundle"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 50,
+      "leaf_records_expected": 50,
+      "profile_class": "proof-input",
+      "role": "rust-source-archive-set"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 12766,
+      "leaf_records_expected": 12766,
+      "profile_class": "mantle-source",
+      "role": "mantle-source"
+    },
+    {
+      "covered": 1,
+      "criterion": "preauthor physical identity equals actual plan",
+      "expected": 1,
+      "leaf_records_covered": 57965,
+      "leaf_records_expected": 57965,
+      "profile_class": "vendored-cargo-inputs",
+      "role": "vendor-inputs"
+    }
+  ],
+  "roles": {
+    "bootstrap-source": {
+      "canonical_record_body_verified": true,
+      "input_role_bytes": 544909751,
+      "input_role_path": "native-source-closure.json",
+      "input_role_raw_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "plan_comparison": "distinct input role: assembled native-source-bundle plan closure is independently bound by the current identity audit.",
+      "profile_class": "bootstrap-source",
+      "record_content_blake3": "df6643c4d3ad281164dccf75df5873f5edd09255f64bdc16364ac7924e000b95",
+      "record_file_entries_covered": 9,
+      "record_file_entries_expected": 9,
+      "record_identity": "bootstrap-source-0001",
+      "role": "native-source-bundle"
+    },
+    "mantle-source": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "plan_bytes": 359109099,
+      "plan_digest_blake3": "ac4bd74b757a427ab6b6e7c4aeb3dbeba702f7c28d7b6ddc87f391c522dc9a42",
+      "preauthor_tree": {
+        "digest_blake3": "ac4bd74b757a427ab6b6e7c4aeb3dbeba702f7c28d7b6ddc87f391c522dc9a42",
+        "directory_entries": 1131,
+        "entry_count": 13897,
+        "payload_file_bytes": 359109099,
+        "regular_file_count": 12766,
+        "source_leaf_record_entries": 12766,
+        "symlink_count": 0
+      },
+      "profile_class": "mantle-source",
+      "record_content_blake3": "7efb0142fffd981b875253602b7622f7dc97f45c731500a44948602d753030b5",
+      "record_file_entries_covered": 12766,
+      "record_file_entries_expected": 12766,
+      "record_identity": "mantle-source-tree",
+      "role": "mantle-source"
+    },
+    "proof-input": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "plan_bytes": 3164874699,
+      "plan_digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+      "preauthor_tree": {
+        "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+        "directory_entries": 0,
+        "entry_count": 6,
+        "payload_file_bytes": 3164874699,
+        "regular_file_count": 6,
+        "source_leaf_record_entries": 50,
+        "symlink_count": 0
+      },
+      "profile_class": "proof-input",
+      "record_content_blake3": "cbff6a9eca5092915b4c11e51c8fa4e6a6d0c5dd2ecefd15d638ca74cea2c2ad",
+      "record_file_entries_covered": 50,
+      "record_file_entries_expected": 50,
+      "record_identity": "proof-input-0001",
+      "role": "rust-source-archive-set"
+    },
+    "stagex-lineage": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "physical_file_path": "stagex-transition-lineage.json",
+      "plan_bytes": 170686,
+      "plan_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "preauthor_bytes": 170686,
+      "preauthor_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "profile_class": "stagex-lineage",
+      "record_content_blake3": "3f5a62df63892e1b5f3fe650d70d1f106cffd73dfdf57dd5e01edcb4e4b48018",
+      "record_file_entries_covered": 1,
+      "record_file_entries_expected": 1,
+      "record_identity": "stagex-lineage",
+      "role": "stagex-lineage"
+    },
+    "stagex-seed": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "physical_file_path": "hex0-seed",
+      "plan_bytes": 229,
+      "plan_digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+      "preauthor_bytes": 229,
+      "preauthor_digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+      "profile_class": "stagex-seed",
+      "record_content_blake3": "ad50d1ba64d1a241ba467d32f4f59a3aee513568bc3f89bbc69dff2222638c4b",
+      "record_file_entries_covered": 1,
+      "record_file_entries_expected": 1,
+      "record_identity": "stagex-seed",
+      "role": "stagex-seed"
+    },
+    "stagex-source-bundle": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "physical_file_path": "stagex-source-closure.json",
+      "plan_bytes": 87616094,
+      "plan_digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+      "preauthor_bytes": 87616094,
+      "preauthor_digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+      "profile_class": "stagex-source-bundle",
+      "record_content_blake3": "37642997a0c6e620faec05f31017e8d68fb0d64edb550f8ff8eb22f8235c02a3",
+      "record_file_entries_covered": 2,
+      "record_file_entries_expected": 2,
+      "record_identity": "stagex-source-bundle",
+      "role": "stagex-source-bundle"
+    },
+    "vendored-cargo-inputs": {
+      "canonical_record_body_verified": true,
+      "matches_plan": true,
+      "plan_bytes": 1213371949,
+      "plan_digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+      "preauthor_tree": {
+        "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "directory_entries": 10803,
+        "entry_count": 68768,
+        "payload_file_bytes": 1213371949,
+        "regular_file_count": 57965,
+        "source_leaf_record_entries": 57965,
+        "symlink_count": 0
+      },
+      "profile_class": "vendored-cargo-inputs",
+      "record_content_blake3": "719e1550cbc0b99a311a779a1583a34c1e8c17a625e08d79f7635b04e2705de5",
+      "record_file_entries_covered": 57965,
+      "record_file_entries_expected": 57965,
+      "record_identity": "vendored-cargo-inputs",
+      "role": "vendor-inputs"
+    }
+  },
+  "schema": "mantle-preauthor-source-role-physical-review-v1",
+  "scope": "Current preauthor physical identities only; bootstrap input role is distinct from the native plan closure bound by the main identity checker.",
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "subject_cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+  "subject_path": "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json",
+  "supplemental_criterion7_coverage": {
+    "covered": 3,
+    "total": 3,
+    "uncovered": []
+  },
+  "tool_paths_and_hashes": {
+    "b3sum": {
+      "blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+    },
+    "python": {
+      "blake3": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb",
+      "path": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14"
+    }
+  },
+  "uncovered_roles": []
+}

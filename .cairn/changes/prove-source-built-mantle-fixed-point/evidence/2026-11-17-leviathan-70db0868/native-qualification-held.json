@@ -1,0 +1,20 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "source_profile_manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+  "source_tree_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "mantle_blake3": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+  "adoption_operator_blake3": "fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873",
+  "native_checker_blake3": "817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879",
+  "adoption_driver": "/home/brittonr/sbfp-20261113-berdKH/held-stagex-adoption-70db0868-primary-sources.sh",
+  "native_rows_driver": "/home/brittonr/sbfp-20261113-berdKH/held-native-rows-70db0868-primary-sources.sh",
+  "expected_proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+  "fresh_adoption_parent": "/home/brittonr/sbfp-20261113-berdKH/native-adoption-70db0868-primary-sources-gpt6sol",
+  "fresh_native_rows_root": "/home/brittonr/sbfp-20261113-berdKH/native-rows-70db0868-primary-sources-gpt6sol",
+  "held": true,
+  "prerequisites": [
+    "Both complete independent current-data reviews and actual successful cold execution",
+    "Independently verified current v2 receipt and exact proof plan/receipt byte identities",
+    "Fresh signed adoption and measured adoption-report byte identity"
+  ],
+  "scope": "Complete held commands bound to actually qualified operators and prepared source. No proof output, key use, signed state, adoption, native row or release has occurred."
+}

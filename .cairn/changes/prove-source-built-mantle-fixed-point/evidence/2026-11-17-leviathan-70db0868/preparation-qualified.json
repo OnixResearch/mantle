@@ -1,0 +1,18 @@
+{
+  "task": 1721,
+  "enqueued_at": "2026-11-17T12:49:01.713568216-05:00",
+  "start": "2026-11-17T13:09:01.381078671-05:00",
+  "end": "2026-11-17T13:59:11.952669950-05:00",
+  "result": "Success",
+  "source_before_after_equal": true,
+  "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "output_profile_manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+  "output_profile_bytes": 17318852974,
+  "program_records": {
+    "fixed-point-native-source-program": "223efadf90b32091fe43452a870f873e252763fe93f9e6f16d2a1fc6868315f8",
+    "fixed-point-rust-source-program": "c5a53ac4fcba19834595e67d77d8eefd369bba140bc4e2dc1c1756169748392a",
+    "source-built-mantle-programs": "c2c5acec206d84612e4ab983f266145b77b717d8748dfe49343a9277dd64cb05",
+    "source-built-stagex-programs": "2f5acd44852caa44d2c4af6305b3e0d11866ed464cfe59c9ce4989a6712db645"
+  },
+  "scope": "Actual complete source-only preparation and source-profile validation. Full profile stream parity, complete current-data inspection/rejections, independent review and protected execution remain required."
+}

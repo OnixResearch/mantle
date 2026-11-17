@@ -1,0 +1,44 @@
+{
+  "actual_results": {
+    "identity": {
+      "task": 1731,
+      "enqueued_at": "2026-11-17T14:46:27.293865256-05:00",
+      "start": "2026-11-17T14:46:27.382971786-05:00",
+      "end": "2026-11-17T14:54:46.119396070-05:00",
+      "result": "Success"
+    },
+    "preauthor": {
+      "task": 1732,
+      "enqueued_at": "2026-11-17T14:46:28.587139800-05:00",
+      "start": "2026-11-17T14:46:28.664372075-05:00",
+      "end": "2026-11-17T15:07:54.893595987-05:00",
+      "result": "Success"
+    }
+  },
+  "transfers": [
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed/identity-review.json",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/identity-results-aws-db-fixed/identity-review.json",
+      "bytes_blake3": "aefe5ef1efddd55748661ed4ed601e3cafd27e9f0ad0158493cf3900cedb10df",
+      "transfer_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed/execution.log",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/identity-results-aws-db-fixed/execution.log",
+      "bytes_blake3": "c5a5d74f216715092eacfe790a32a37cf5b6e2af38c89b3e14b806ae23ff5f2a",
+      "transfer_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor-aws-db-fixed/preauthor-role-physical-review.json",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/preauthor-results-aws-db-fixed/preauthor-role-physical-review.json",
+      "bytes_blake3": "ba6d789a2d4d5fbd007c3604cba5da519178624ae9cc533f382447a2738ded31",
+      "transfer_equal": true
+    },
+    {
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor-aws-db-fixed/execution.log",
+      "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/preauthor-results-aws-db-fixed/execution.log",
+      "bytes_blake3": "9665a8fc8c73ef0b32fbcb8031eb555b2b29bc5d40a554610686b87679ab07bc",
+      "transfer_equal": true
+    }
+  ]
+}

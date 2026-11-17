@@ -1,0 +1,391 @@
+{
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "profile_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json",
+  "profile_file_bytes": 17318852974,
+  "profile_file_raw_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "preparation_report_raw_blake3": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+  "input_plan_raw_blake3": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+  "runner_blake3": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+  "adoption_operator_blake3": "fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873",
+  "native_row_checker_blake3": "817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879",
+  "prepared_native_source_manifest_raw_blake3": "87480463278bf0d94cf540f92c0f20f9dc3a8a7963a74b982a41bd9ba9523233",
+  "preparation": {
+    "schema": "mantle-source-built-source-programs-v1",
+    "input_profile_blake3": "becd5a0997094f1186a30aa039ad09e49f82f1785274ab4685cdee9226cc23d4",
+    "input_plan_blake3": "5af4bd570d551670412ef31d8a4b4092588f2ba248abc17e139215b99f9cbb95",
+    "output_profile_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+    "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json",
+    "program_records": {
+      "fixed-point-native-source-program": "223efadf90b32091fe43452a870f873e252763fe93f9e6f16d2a1fc6868315f8",
+      "fixed-point-rust-source-program": "c5a53ac4fcba19834595e67d77d8eefd369bba140bc4e2dc1c1756169748392a",
+      "source-built-mantle-programs": "c2c5acec206d84612e4ab983f266145b77b717d8748dfe49343a9277dd64cb05",
+      "source-built-stagex-programs": "2f5acd44852caa44d2c4af6305b3e0d11866ed464cfe59c9ce4989a6712db645"
+    },
+    "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+  },
+  "input_plan": {
+    "schema": "mantle-source-built-fixed-point-plan-v2",
+    "proof_id": "source-built-fixed-point-becd5a0997094f11",
+    "logical_store_prefix": "/mantle/store",
+    "source_authority_digest_blake3": "02bbee8c05d78caac8b452b77d4ca5c97da79b75e49f2e337ee1fb5270c8d805",
+    "source_inputs": [
+      {
+        "id": "mantle-source",
+        "role": "mantle-source",
+        "kind": "directory",
+        "digest_blake3": "ac4bd74b757a427ab6b6e7c4aeb3dbeba702f7c28d7b6ddc87f391c522dc9a42",
+        "size_bytes": 359109099
+      },
+      {
+        "id": "native-source-bundle",
+        "role": "native-source-bundle",
+        "kind": "regular-file",
+        "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+        "size_bytes": 968316247
+      },
+      {
+        "id": "rust-source-archive-set",
+        "role": "rust-source-archive-set",
+        "kind": "directory",
+        "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+        "size_bytes": 3164874699
+      },
+      {
+        "id": "stagex-lineage",
+        "role": "stagex-lineage",
+        "kind": "regular-file",
+        "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "size_bytes": 170686
+      },
+      {
+        "id": "stagex-seed",
+        "role": "stagex-seed",
+        "kind": "regular-file",
+        "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "size_bytes": 229
+      },
+      {
+        "id": "stagex-source-bundle",
+        "role": "stagex-source-bundle",
+        "kind": "regular-file",
+        "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "size_bytes": 87616094
+      },
+      {
+        "id": "vendor-inputs",
+        "role": "vendor-inputs",
+        "kind": "directory",
+        "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "size_bytes": 1213371949
+      }
+    ],
+    "policies": {
+      "expected_native_provider_digest_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+      "closure_policy_digest_blake3": "3af261ed5c4d755cea94b4a25ad49f2070dc390c321a6706fa9d4c6c8fbb8493",
+      "hermeticity_policy_digest_blake3": "61c463677defa1e7fa2e28b8fa33da9374f861a585d3272ae77d41e3b28ed9a8",
+      "protected_execution_policy_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "effect_policy_digest_blake3": "d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+      "normalization_policy_digest_blake3": "63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+      "hermeticity_mode": "strict",
+      "live_fetch_allowed": false,
+      "cargo_invocation_allowed": false,
+      "ambient_discovery_allowed": false,
+      "fallback_allowed": false,
+      "provider_cache_completion_allowed": false
+    },
+    "resource_bounds": {
+      "elapsed_seconds_max": 86400,
+      "disk_bytes_max": 200000000000,
+      "open_file_descriptors_max": 4096,
+      "protected_exec_events_max": 524288,
+      "source_records_max": 65536
+    },
+    "stages": [
+      {
+        "stage_id": "stagex-transition",
+        "kind": "stagex-transition",
+        "orchestrator": "host-mantle",
+        "inputs": [
+          {
+            "authority": "source",
+            "role": "stagex-seed"
+          },
+          {
+            "authority": "source",
+            "role": "stagex-lineage"
+          },
+          {
+            "authority": "source",
+            "role": "stagex-source-bundle"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          }
+        ],
+        "output": "stagex-transition"
+      },
+      {
+        "stage_id": "stagex-provider-publication",
+        "kind": "stagex-provider-publication",
+        "orchestrator": "host-mantle",
+        "inputs": [
+          {
+            "authority": "output",
+            "role": "stagex-transition"
+          },
+          {
+            "authority": "source",
+            "role": "stagex-lineage"
+          },
+          {
+            "authority": "source",
+            "role": "stagex-source-bundle"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          },
+          {
+            "authority": "policy",
+            "role": "hermeticity"
+          }
+        ],
+        "output": "stagex-provider"
+      },
+      {
+        "stage_id": "full-source-native-provider",
+        "kind": "full-source-native-provider",
+        "orchestrator": "host-mantle",
+        "inputs": [
+          {
+            "authority": "output",
+            "role": "stagex-provider"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "source",
+            "role": "mantle-source"
+          },
+          {
+            "authority": "policy",
+            "role": "closure"
+          },
+          {
+            "authority": "policy",
+            "role": "hermeticity"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          },
+          {
+            "authority": "policy",
+            "role": "effect"
+          }
+        ],
+        "output": "full-source-native-provider"
+      },
+      {
+        "stage_id": "full-source-rust-provider",
+        "kind": "full-source-rust-provider",
+        "orchestrator": "host-mantle",
+        "inputs": [
+          {
+            "authority": "output",
+            "role": "full-source-native-provider"
+          },
+          {
+            "authority": "source",
+            "role": "rust-source-archive-set"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "policy",
+            "role": "closure"
+          },
+          {
+            "authority": "policy",
+            "role": "hermeticity"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          },
+          {
+            "authority": "policy",
+            "role": "effect"
+          }
+        ],
+        "output": "full-source-rust-provider"
+      },
+      {
+        "stage_id": "mantle-stage1",
+        "kind": "mantle-stage1",
+        "orchestrator": "host-mantle",
+        "inputs": [
+          {
+            "authority": "output",
+            "role": "full-source-native-provider"
+          },
+          {
+            "authority": "output",
+            "role": "full-source-rust-provider"
+          },
+          {
+            "authority": "source",
+            "role": "mantle-source"
+          },
+          {
+            "authority": "source",
+            "role": "vendor-inputs"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "policy",
+            "role": "closure"
+          },
+          {
+            "authority": "policy",
+            "role": "hermeticity"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          },
+          {
+            "authority": "policy",
+            "role": "effect"
+          },
+          {
+            "authority": "policy",
+            "role": "normalization"
+          }
+        ],
+        "output": "mantle-stage1"
+      },
+      {
+        "stage_id": "mantle-stage2",
+        "kind": "mantle-stage2",
+        "orchestrator": "stage1-mantle",
+        "inputs": [
+          {
+            "authority": "output",
+            "role": "full-source-native-provider"
+          },
+          {
+            "authority": "output",
+            "role": "full-source-rust-provider"
+          },
+          {
+            "authority": "output",
+            "role": "mantle-stage1"
+          },
+          {
+            "authority": "source",
+            "role": "mantle-source"
+          },
+          {
+            "authority": "source",
+            "role": "vendor-inputs"
+          },
+          {
+            "authority": "source",
+            "role": "native-source-bundle"
+          },
+          {
+            "authority": "policy",
+            "role": "closure"
+          },
+          {
+            "authority": "policy",
+            "role": "hermeticity"
+          },
+          {
+            "authority": "policy",
+            "role": "protected-execution"
+          },
+          {
+            "authority": "policy",
+            "role": "effect"
+          },
+          {
+            "authority": "policy",
+            "role": "normalization"
+          }
+        ],
+        "output": "mantle-stage2"
+      }
+    ],
+    "receipt_contract": {
+      "schema": "mantle-deterministic-proof-receipt-v2",
+      "workflow_version": "mantle-deterministic-proof-receipt-v2",
+      "selected_provider_kind": "full-source",
+      "source_blake3": "ac4bd74b757a427ab6b6e7c4aeb3dbeba702f7c28d7b6ddc87f391c522dc9a42",
+      "vendor_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+      "logical_store_prefix": "/mantle/store",
+      "effect_policy_version": "mantle-build-effects-v1",
+      "run_ids": [
+        "stage1",
+        "stage2"
+      ],
+      "derivation_identity_source": "cargo-free-native-topology-plan",
+      "toolchain_provider_identity_source": "full-source-native-provider-output",
+      "toolchain_stage_roots_source": "provider-construction-stage-receipts",
+      "physical_store_isolation": "fresh-proof-root-per-run",
+      "declared_effects": [
+        "read-store",
+        "write-store",
+        "execute-process"
+      ],
+      "normalized_execution_envelope": [
+        "cargo-forbidden",
+        "live-fetch-forbidden",
+        "open-file-descriptors-bounded",
+        "strict-hermeticity",
+        "stage1-orchestrates-stage2"
+      ],
+      "sandbox_profile_identities": [
+        "mantle-proof-sandbox-v1:stage1",
+        "mantle-proof-sandbox-v1:stage2"
+      ],
+      "require_content_bound_rebuild_descriptor": true,
+      "require_rebuild_authority_plan": true,
+      "require_matching_output_digests": true,
+      "require_zero_authority_violations": true,
+      "require_zero_hermeticity_events": true,
+      "require_zero_substitutions": true,
+      "require_zero_live_fetches": true,
+      "require_zero_cargo_invocations": true,
+      "require_zero_fallback_events": true
+    },
+    "non_claims": [
+      "not-compiler-correctness",
+      "not-bootstrap-seed-correctness",
+      "not-kernel-isolation",
+      "not-independent-rebuild-agreement",
+      "not-release-reproducibility",
+      "not-deployment-success",
+      "not-full-cargo-compatibility"
+    ],
+    "plan_digest_blake3": "5af4bd570d551670412ef31d8a4b4092588f2ba248abc17e139215b99f9cbb95"
+  },
+  "non_claim": "Exact current prepared-data and executable observations only; no independent review, protected execution, fixed point or native-row acceptance."
+}

@@ -131,3 +131,33 @@ Fresh signed adoption and every one of the five native rows need their own
 current-source no-substitution and runtime/negative/relocation/artifact/acceptance
 receipts. No compiler-correctness, seed correctness, kernel-isolation,
 independent-rebuild, reproducibility, deployment or release claim is authorized.
+
+## Exact corrected subject for these two reviews
+
+Use `review-subject-aws-db-fixed.json`, byte BLAKE3
+`2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d`.
+The remote subject is
+`/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json`.
+Its output-profile manifest is
+`28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab`;
+the complete 17,318,852,974-byte SSH stream matches remote bytes BLAKE3
+`11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534`.
+
+Identity1725 and preauthor1726 rejected the prior subject8269aab8 because its
+AWS capture field named the containing directory rather than the unchanged
+pinned `aws-lc.git` database. The correction changes only that metadata field;
+all source/cohort/profile bytes, source pins, consumers and inspector predicates
+remain unchanged. Prior subjects, reports and failed transcripts stay retained.
+Do not accept any old-subject report in place of corrected runs1730-1735.
+
+Current graph/source collation is `graph-current-inputs-aws-db-fixed.json`;
+physical/source collation is `physical-current-inputs-aws-db-fixed.json`.
+Complete reports live under `graph-results-aws-db-fixed/`,
+`identity-results-aws-db-fixed/` and `preauthor-results-aws-db-fixed/`.
+Large raw reports have verified full gzip counterparts and exact decoded hashes;
+raw local copies remain available. These are complete bytes, not samples.
+
+The model packet supplies the actual current rejection-result paths and hashes
+only after all1730-1735 outcomes are measured. Both required reviewers must
+verify those results as well as every full criterion above. Parent collations
+and static clear results are evidence to check, not independent acceptance.

@@ -1,0 +1,75 @@
+{
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "inputs": {
+    "identity": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/identity-results-aws-db-fixed/identity-review.json",
+      "bytes_blake3": "aefe5ef1efddd55748661ed4ed601e3cafd27e9f0ad0158493cf3900cedb10df",
+      "raw_explicit_supplemental_obligations_retained": [
+        "preauthor embedded directory reconstruction: mantle-source",
+        "preauthor embedded directory reconstruction: rust-source-archive-set",
+        "preauthor embedded directory reconstruction: vendor-inputs"
+      ]
+    },
+    "preauthor": {
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/preauthor-results-aws-db-fixed/preauthor-role-physical-review.json",
+      "bytes_blake3": "ba6d789a2d4d5fbd007c3604cba5da519178624ae9cc533f382447a2738ded31"
+    }
+  },
+  "resolved_original_report_obligations": [
+    {
+      "obligation": "preauthor embedded directory reconstruction: mantle-source",
+      "role": "mantle-source",
+      "digest_blake3": "ac4bd74b757a427ab6b6e7c4aeb3dbeba702f7c28d7b6ddc87f391c522dc9a42",
+      "payload_bytes": 359109099,
+      "leaf_records_expected": 12766,
+      "leaf_records_covered": 12766,
+      "resolved_by": "preauthor-role-physical-review.json",
+      "complete": true
+    },
+    {
+      "obligation": "preauthor embedded directory reconstruction: rust-source-archive-set",
+      "role": "rust-source-archive-set",
+      "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+      "payload_bytes": 3164874699,
+      "leaf_records_expected": 50,
+      "leaf_records_covered": 50,
+      "resolved_by": "preauthor-role-physical-review.json",
+      "complete": true
+    },
+    {
+      "obligation": "preauthor embedded directory reconstruction: vendor-inputs",
+      "role": "vendor-inputs",
+      "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+      "payload_bytes": 1213371949,
+      "leaf_records_expected": 57965,
+      "leaf_records_covered": 57965,
+      "resolved_by": "preauthor-role-physical-review.json",
+      "complete": true
+    }
+  ],
+  "criterion_coverage": {
+    "7": {
+      "total": 72015,
+      "covered": 72015,
+      "uncovered": []
+    },
+    "8": {
+      "covered": 33820,
+      "total": 33820,
+      "uncovered": []
+    }
+  },
+  "preauthor_leaf_coverage": {
+    "covered": 70794,
+    "total": 70794,
+    "uncovered": []
+  },
+  "all_seven_roles_covered": true,
+  "immutable_original_compiler_record_and_tree_match": true,
+  "authored_compiler_source_additions": 0,
+  "actual_held_launch_proof_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+  "actual_held_proof_adoption_rows_namespaces_absent": true,
+  "independent_review_accepted": false,
+  "scope": "Complete corrected-subject parent physical/preauthor reconciliation only. Three explicit directory-role obligations are resolved by complete matching embedded reconstructions, without discarding original obligations. No prior counts or model verdict is acceptance; no product/protected execution, signing, native rows or release."
+}

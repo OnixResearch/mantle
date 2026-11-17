@@ -1,0 +1,22 @@
+[
+  {
+    "observed_name": "graph-results-aws-db-fixed/controller-template-audit.json",
+    "storage": "graph-results-aws-db-fixed/controller-template-audit.json.gz",
+    "observed_bytes": 59786546,
+    "storage_bytes": 1242193,
+    "decoded_blake3": "8b8422cefff7c8a13109cc2eb42e528504f38ecd0e7f5632c6288d4b242c332a",
+    "storage_blake3": "056257b7d63260532856554215d99ec6b5dd74c79c5f80cb7c97be2961448fa8",
+    "roundtrip_equal": true,
+    "raw_local_file_retained": true
+  },
+  {
+    "observed_name": "graph-results-aws-db-fixed/helper-authority-audit.json",
+    "storage": "graph-results-aws-db-fixed/helper-authority-audit.json.gz",
+    "observed_bytes": 76558319,
+    "storage_bytes": 3060705,
+    "decoded_blake3": "17213d54ce7f7f2cceea677d056ee06a44938b608d336c8b8b19d8ddb55cbb7d",
+    "storage_blake3": "db47341356f7d00d6c6eecfa13018f31ac02616f8999f738fc8a1ab04ed0346a",
+    "roundtrip_equal": true,
+    "raw_local_file_retained": true
+  }
+]

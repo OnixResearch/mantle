@@ -1,0 +1,7 @@
++ /nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-seed-source-regressions-70db0868-primary-sources.py /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed /home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources
+{"output": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-graph-aws-db-fixed/output-seed-immutable-source-regressions.json", "complete_seed_coverage": {"raw": {"total": 6832, "covered": 6832, "invalid": 0}, "generated": {"total": 9176, "covered": 9176, "invalid": 0}}, "seed_negative_cases": 19, "immutable_source_negative_cases": 4, "all_assertions_passed": true}
++ status=0
++ printf 'seed_source_regressions_exit=%s\n' 0
+seed_source_regressions_exit=0
++ printf '%s\n' 0
++ exit 0

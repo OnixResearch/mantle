@@ -1,0 +1,125 @@
+{
+  "cases": [
+    {
+      "canonical_match": true,
+      "case": "actual_selected_recipe",
+      "failure_count": 0,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "missing_qualified_unit",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": false,
+      "case": "nonunique_qualified_units",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:0000000000000000000000000000000000000000000000000000000000000000:path+native#mantle@0.1.0:mantle:bin:build",
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "wrong_produced_binary",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": [
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "shorthand_unit_not_qualified",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage1",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": true,
+      "case": "actual_selected_recipe",
+      "failure_count": 0,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "missing_qualified_unit",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": []
+    },
+    {
+      "canonical_match": false,
+      "case": "nonunique_qualified_units",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:0000000000000000000000000000000000000000000000000000000000000000:path+native#mantle@0.1.0:mantle:bin:build",
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "wrong_produced_binary",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": [
+        "rust-unit:native:d17cc82fbf2218d3c8c15b9440d86a2f8efdd45f5ae32191b8604bc4dbe56235:path+native#mantle@0.1.0:mantle:bin:build"
+      ]
+    },
+    {
+      "canonical_match": false,
+      "case": "shorthand_unit_not_qualified",
+      "failure_count": 1,
+      "other_consumer_checks_passed": true,
+      "stage": "mantle-stage2",
+      "unit_keys": []
+    }
+  ],
+  "inspector_blake3": "8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c",
+  "non_claim": "Inert recipe-data validation only. Mutations are in-memory fixtures; actual source/cohort and expected pins are unchanged. No product, compiler or protected execution.",
+  "route_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/program-sources/source-built-mantle-programs/bootstrap/source-built-cold-route.json",
+  "schema": "mantle-semantic-root-regression-v2",
+  "selected_recipes": 2,
+  "selector_cases": [
+    {
+      "case": "old_path_string",
+      "rejected": true
+    },
+    {
+      "case": "foreign_role",
+      "rejected": true
+    },
+    {
+      "case": "foreign_record",
+      "rejected": true
+    },
+    {
+      "case": "malformed_extra_key",
+      "rejected": true
+    },
+    {
+      "case": "wrong_stage_member",
+      "rejected": true
+    }
+  ]
+}

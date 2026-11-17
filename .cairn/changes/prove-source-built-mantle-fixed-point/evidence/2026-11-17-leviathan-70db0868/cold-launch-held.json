@@ -1,0 +1,25 @@
+{
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+  "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "runner_blake3": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+  "manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+  "profile_bytes_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "preparation_report_bytes_blake3": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+  "held_script": "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources.sh",
+  "held_script_bytes_blake3": "cddeccb01ae01ed9b0dba7d1409dd0ec5c6332eaced1511b93faa2b956683b61",
+  "acceptance_path": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-70db0868-primary-sources-gpt6sol.json",
+  "independent_graph_review": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-70db0868-primary-sources-gpt6sol.json",
+  "independent_physical_review": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-70db0868-primary-sources-gpt6sol.json",
+  "exact_model": "underclass/gpt-6-sol",
+  "authorization": {
+    "source": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-70db0868-primary-sources-gpt6sol.json",
+    "bytes_blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884",
+    "transfer_equal": true
+  },
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+  "all_proof_review_adoption_row_namespaces_absent": true,
+  "held": true,
+  "scope": "Complete current-source guarded command and exact existing direct-user model authorization only. Current inspections, both new independent reviews, parent reconciliation and current launch gates remain required. No protected proof or signing occurred."
+}

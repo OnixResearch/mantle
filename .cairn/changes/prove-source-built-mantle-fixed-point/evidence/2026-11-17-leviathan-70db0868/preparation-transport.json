@@ -1,0 +1,50 @@
+[
+  {
+    "local": "review-subject-facts.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/review-subject-facts-70db0868-primary-sources.json",
+    "bytes_blake3": "5477de5c5b2e2e2c9b5622546c7feadbcb32c8462f01167b6797d91ccf62e07f",
+    "transfer_equal": true
+  },
+  {
+    "local": "subject-facts.log",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/review-subject-facts-70db0868-primary-sources.log",
+    "bytes_blake3": "92d14c31fbabc205c38d41bc6f191a31d55dd7e390c83bfd318daca2017c81b3",
+    "transfer_equal": true
+  },
+  {
+    "local": "preparation.log",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.log",
+    "bytes_blake3": "59f49a08eab7961ea5e3eaa3b50fba4ec85094ac8ff7d49ed792cb461539ecff",
+    "transfer_equal": true
+  },
+  {
+    "local": "source-refresh.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/source-refresh-70db0868-primary-sources.json",
+    "bytes_blake3": "08464948680b4eb7766170994b736cfb22ff50aacd222d57547cdd44198c0440",
+    "transfer_equal": true
+  },
+  {
+    "local": "input-source-profile-verification.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/source-profile-verification-70db0868-primary-sources.json",
+    "bytes_blake3": "23edcec35310dd6dae6b2ebd1a183b363997f85ee9508264129d5431b12d0a0c",
+    "transfer_equal": true
+  },
+  {
+    "local": "prepared-source-profile-verification.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/prepared-source-profile-verification-70db0868-primary-sources.json",
+    "bytes_blake3": "40d4d9eb53a3adc1f35fef3beafc35e44a53d7f83c911d481b784f4de378d4eb",
+    "transfer_equal": true
+  },
+  {
+    "local": "source-program-preparation.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json",
+    "bytes_blake3": "830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87",
+    "transfer_equal": true
+  },
+  {
+    "local": "source-program-preparation-input-plan.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json",
+    "bytes_blake3": "0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c",
+    "transfer_equal": true
+  }
+]

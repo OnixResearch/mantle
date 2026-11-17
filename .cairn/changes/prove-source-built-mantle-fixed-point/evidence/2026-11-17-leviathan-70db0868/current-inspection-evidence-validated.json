@@ -1,0 +1,16 @@
+{
+  "task": 26,
+  "enqueued_at": "2026-11-17T15:34:19.786795199-05:00",
+  "start": "2026-11-17T15:34:19.885721772-05:00",
+  "end": "2026-11-17T15:34:50.601247176-05:00",
+  "result": "Success",
+  "valid": true,
+  "report": "cairn-current-inspection-evidence-validation.json",
+  "transcript": "cairn-current-inspection-evidence.log",
+  "subject_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "independent_reviews_pending": [
+    "Review70dbGraphCorrected",
+    "Review70dbPhysicalCorrected"
+  ],
+  "scope": "Complete current-data evidence/prose validation only. Independent report reconciliation and all current launch gates remain required; no protected execution or proof/native-row acceptance."
+}

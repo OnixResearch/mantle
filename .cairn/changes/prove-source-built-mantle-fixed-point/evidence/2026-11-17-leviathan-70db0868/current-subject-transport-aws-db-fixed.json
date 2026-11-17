@@ -1,0 +1,22 @@
+{
+  "subject_local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/review-subject-aws-db-fixed.json",
+  "subject_remote": "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "subject_transfer_equal": true,
+  "profile_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json",
+  "profile_bytes": 17318852974,
+  "remote_profile_raw_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "entire_ssh_stream_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "full_profile_transport_equal": true,
+  "profile_unchanged": true,
+  "rejected_subject_bytes_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+  "only_corrected_metadata_field": "original_aws.capture",
+  "held_script": "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources-aws-db-fixed.sh",
+  "held_script_bytes_blake3": "bacb29b4eebf67aacaf0b05ce8d66190778bff92c57908d2f3204cc2468a7b15",
+  "launch_acceptance": "/home/brittonr/sbfp-20261113-berdKH/launch-review-acceptance-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+  "graph_review": "/home/brittonr/sbfp-20261113-berdKH/independent-graph-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+  "physical_review": "/home/brittonr/sbfp-20261113-berdKH/independent-physical-70db0868-primary-sources-aws-db-fixed-gpt6sol.json",
+  "proof_namespace_absent": true,
+  "review_files_absent": true,
+  "scope": "Only the operator subject Git-database pointer changed; every source/cohort/profile/independent original pin is unchanged. All complete inspections and rejection checks are repeated against this one corrected subject. No protected execution or signing."
+}

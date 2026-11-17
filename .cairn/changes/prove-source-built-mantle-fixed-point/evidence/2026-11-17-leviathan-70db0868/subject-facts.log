@@ -1,0 +1,63 @@
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.exit
++ test 0 = 0
++ PROFILE=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json
++ REPORT=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json
++ PLAN=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json
++ PREPARED_NATIVE=/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/native-source-authority/native-source-closure.json
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/native-source-authority/native-source-closure.json
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/native-source-authority/native-source-closure.json
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources
++ for path in "$PROFILE" "$REPORT" "$PLAN" "$PREPARED_NATIVE" "$ROOT/bin/mantle-$NAME" "$ROOT/bin/adopt-source-built-stagex-$NAME" "$ROOT/bin/check-native-row-receipts-$NAME"
++ test -f /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources
+++ /run/current-system/sw/bin/stat -c %s /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json
++ PROFILE_BYTES=17318852974
++ for path in "$REPORT" "$PLAN"
+++ /run/current-system/sw/bin/stat -c %s /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json
++ METADATA_BYTES=1061
++ test 1061 -gt 0
++ test 1061 -le 16777216
++ for path in "$REPORT" "$PLAN"
+++ /run/current-system/sw/bin/stat -c %s /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json
++ METADATA_BYTES=10329
++ test 10329 -gt 0
++ test 10329 -le 16777216
++ test 17318852974 -gt 0
++ test 17318852974 -le 21474836480
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json
++ PROFILE_B3=11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json
++ REPORT_B3=830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json
++ PLAN_B3=0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources
++ RUNNER_B3=a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources
++ ADOPTION_B3=fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources
++ CHECKER_B3=817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/inputs/native-source-authority/native-source-closure.json
++ PREPARED_NATIVE_B3=87480463278bf0d94cf540f92c0f20f9dc3a8a7963a74b982a41bd9ba9523233
++ /run/current-system/sw/bin/jq -n --arg revision 70db08685c0c5fa5c326bfe32db78576d7e2e182 --arg profile /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json --argjson profile_bytes 17318852974 --arg profile_b3 11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534 --arg report_b3 830e8ec38f3194bccc864e444b4bd9c41d9053c981fbf0d7c86c722b9c1d7d87 --arg plan_b3 0ead43d37f1278be3d42f8b6e9af0c9ec127406226bee65390807536f0c7413c --arg runner_b3 a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019 --arg adoption_b3 fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873 --arg checker_b3 817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879 --arg prepared_native_b3 87480463278bf0d94cf540f92c0f20f9dc3a8a7963a74b982a41bd9ba9523233 --slurpfile preparation /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation.json --slurpfile plan /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-program-preparation-input-plan.json '{source_code_revision:$revision,profile_file:$profile,profile_file_bytes:$profile_bytes,profile_file_raw_blake3:$profile_b3,preparation_report_raw_blake3:$report_b3,input_plan_raw_blake3:$plan_b3,runner_blake3:$runner_b3,adoption_operator_blake3:$adoption_b3,native_row_checker_blake3:$checker_b3,prepared_native_source_manifest_raw_blake3:$prepared_native_b3,preparation:$preparation[0],input_plan:$plan[0],non_claim:"Exact current prepared-data and executable observations only; no independent review, protected execution, fixed point or native-row acceptance."}'
++ printf 'subject_facts_complete=1\n'
+subject_facts_complete=1
++ status=0
++ printf 'subject_facts_exit=%s\n' 0
+subject_facts_exit=0
++ printf '%s\n' 0
++ exit 0

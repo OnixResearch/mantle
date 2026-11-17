@@ -1,0 +1,20 @@
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.exit
++ test 0 = 0
++ /run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed /home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources-aws-db-fixed.json 70db08685c0c5fa5c326bfe32db78576d7e2e182
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+profile_role_bound=bootstrap-source
+profile_role_bound=stagex-seed
+profile_role_bound=mantle-source
+profile_role_bound=vendored-cargo-inputs
+profile_role_bound=proof-input
+profile_role_bound=stagex-source-bundle
+profile_role_bound=stagex-lineage
+phase=profile-role-program-and-original-native-bytes-bound
+phase=selected-authenticated-sources-bound
+{"aws_scripts": 26, "new_program_records": 4, "original_records_preserved": 59, "result": "/home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-identity-aws-db-fixed/identity-review.json", "ring_scripts": 12, "roles": 7, "source_profile_bytes": 17318852974, "source_profile_raw_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534", "status": "STATIC_IDENTITY_CHECKS_CLEAR"}
++ status=0
++ printf 'identity_inspection_exit=%s\n' 0
+identity_inspection_exit=0
++ exit 0

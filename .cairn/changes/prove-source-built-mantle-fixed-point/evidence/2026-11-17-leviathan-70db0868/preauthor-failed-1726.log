@@ -1,0 +1,26 @@
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-70db0868-primary-sources.exit
++ test 0 = 0
++ /run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources /home/brittonr/sbfp-20261113-berdKH/inspection-70db0868-primary-sources-preauthor /home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources.json 70db08685c0c5fa5c326bfe32db78576d7e2e182
+BLOCKER AuditError: original source pins differ from frozen inputs
+Traceback (most recent call last):
+  File "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py", line 377, in <module>
+    main()
+    ~~~~^^
+  File "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py", line 273, in main
+    require(subject['original_aws']=={
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'capture':str(run_root/'aws-original-source-02561621.TGISLN/aws-lc.git'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        'normalized_tree_blake3':'8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89'},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'original source pins differ from frozen inputs')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py", line 34, in require
+    if not ok: raise AuditError(msg)
+               ^^^^^^^^^^^^^^^^^^^^^
+AuditError: original source pins differ from frozen inputs
++ status=1
++ printf 'preauthor_inspection_exit=%s\n' 1
+preauthor_inspection_exit=1
++ exit 1

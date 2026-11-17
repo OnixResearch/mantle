@@ -1,0 +1,11 @@
+{
+  "subject_bytes_blake3": "8269aab8957d7b56be042631e89b24397edc46fb5edf29f50fbfb3b67f6e558a",
+  "remote_subject": "/home/brittonr/sbfp-20261113-berdKH/review-subject-70db0868-primary-sources.json",
+  "subject_transfer_equal": true,
+  "profile_file": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json",
+  "profile_bytes": 17318852974,
+  "remote_profile_raw_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "entire_ssh_stream_blake3": "11c2b350fc9944d8bf71f2dea4ceb48b20eea869bf09922b20efa7168a92c534",
+  "full_profile_transport_equal": true,
+  "scope": "Measured complete current input transport and subject sealing only, not review or proof acceptance."
+}
