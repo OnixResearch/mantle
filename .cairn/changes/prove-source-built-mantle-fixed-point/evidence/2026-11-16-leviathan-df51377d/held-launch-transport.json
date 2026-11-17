@@ -1,0 +1,13 @@
+{
+  "script": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol.sh",
+    "blake3": "143e73f9486a97174c091d4332d6eb507ca740fa08b07caa5f7af9f2dace6e93",
+    "transfer_equal": true
+  },
+  "model_authorization": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/independent-model-authorization-df51377d-unit-plans-gpt6sol.json",
+    "blake3": "b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884",
+    "transfer_equal": true
+  },
+  "scope": "Exact held launcher and user authorization transport only. Required fresh independent reviews and parent acceptance are absent; no protected launch is authorized by this record."
+}

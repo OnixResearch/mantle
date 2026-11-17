@@ -1110,3 +1110,34 @@ commands, subject identities and observations are in
 `evidence/2026-11-16-leviathan-df51377d/`; no provider, stage comparison, v2 proof,
 native-row acceptance or release eligibility is claimed.
 
+## Current complete static measurements and CLI correction observed (2026-11-17)
+
+Task 1685 completed graph, controller/template and all 1,098 helper-authority
+checks, then failed in the selector CLI's report-key lookup. The graph producer
+uses `mantle_stage1` / `mantle_stage2`, not hyphenated stage identifiers. The
+failed source/log and unexecuted dependent task 1689 remain retained. Only that
+inspector lookup changed; source, cohort, expected pins and every completed
+report remained unchanged. Narrow continuation 1690 passed the actual selector
+CLI and all ten current canonical-root scenarios without repeating those checks.
+
+Complete consumer-faithful coverage measures all 125,407 recipe steps, 2,294
+ControllerSpecs, 25,053 generated templates and 2,551,864 scoped words, with no
+launch blockers. All 6,832 raw and 9,176 generated output seeds match exact
+source kinds/bounds. Raw graph HOLD diagnostics are retained, not suppressed;
+the complete controller report classifies their actual local consumer scopes.
+Source-bound exclusions, feature environments and cfg selections are all
+covered. All 14 selected-input and 30 frozen-consumer byte bindings agree.
+
+Physical 1686 and preauthor 1687 cover complete criteria 7-8 together: 177
+original native bodies across all three contexts, all seven roles, all four
+programs, 20,854 original Git leaves, 12,766 captured source leaves and all
+three preauthor directory roles. The corrected chunk counter covers all nine
+bootstrap-source chunks. Their full reports and exact transfers are retained.
+
+All eight graph report/transcript files have matching full transport identities
+and a verified complete compression roundtrip in `graph-results.tar.gz`.
+Current helper-mutation task 1691, both fresh exact-model independent reviews,
+parent acceptance and current prelaunch gates remain separate prerequisites.
+No protected attempt, stage equality, v2 receipt or native-row acceptance is
+claimed. Full evidence is in `evidence/2026-11-16-leviathan-df51377d/`.
+

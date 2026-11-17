@@ -1,0 +1,42 @@
+{
+  "original_task": 1685,
+  "original_task_disposition": "Failed at selector CLI graph-key lookup after complete graph/controller/helper checks",
+  "continuation_task": 1690,
+  "continuation_result": "Success",
+  "report_directory": "graph-results",
+  "original_failure_retained": "graph-integration-failed.json",
+  "correction": "graph-selector-key-correction.json",
+  "controller_verdict": "STATIC_TEMPLATE_REVIEW_CLEAR",
+  "helper_verdict": "CLEAR",
+  "helper_totals": {
+    "covered": 1098,
+    "failure_count": 0,
+    "global_failures": 0,
+    "invalid": 0,
+    "total": 1098,
+    "uncovered": 0
+  },
+  "selector_verdict": true,
+  "selector_coverage": {
+    "feature_cfg": {
+      "covered": 2098,
+      "invalid": 0,
+      "total": 2098,
+      "uncovered": 0
+    },
+    "feature_environment": {
+      "covered": 2386,
+      "invalid": 0,
+      "total": 2386,
+      "uncovered": 0
+    },
+    "package_exclusions": {
+      "covered": 2,
+      "invalid": 0,
+      "total": 2,
+      "uncovered": 0
+    }
+  },
+  "semantic_root_cases": 10,
+  "non_claim": "Complete current-data inert graph/template/helper/selector observations and canonical-root scenarios only. Raw graph diagnostics are retained and interpreted through the separately complete consumer-faithful controller report; independent review and protected execution remain separate."
+}

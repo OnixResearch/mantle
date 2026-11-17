@@ -1,0 +1,60 @@
+{
+  "original_task": 1685,
+  "continuation_task": 1690,
+  "files": [
+    {
+      "file": "graph-results/graph-audit.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/graph-audit.json",
+      "blake3": "f3615338e59da036dbfc039252f83d307ea67c34d87cb104f188d239303afd66",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/source-binding-kind-inventory.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/source-binding-kind-inventory.json",
+      "blake3": "4f685e68f409a24b0e5f4cc65e137bbe600d812fb232a78f9d10034f7b44653a",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/controller-template-audit.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/controller-template-audit.json",
+      "blake3": "f3bad0f61e228525c6fb52a9ad748695e9f0138fee58b145299269905b036a0f",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/helper-authority-audit.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/helper-authority-audit.json",
+      "blake3": "634f74ed2ec0bc9a902aa9cb123efe5cd5460aa1441f593ed51c46ca7f5cdcdb",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/mantle-selector-audit.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/mantle-selector-audit.json",
+      "blake3": "b981fc75f9705a0d331bc7570eded908b948a71488e6d066a8e671c22e0cc154",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/semantic-root-regression.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/semantic-root-regression.json",
+      "blake3": "af1435cc30fe8696641fe4a557eaedd73d434d91a86fdb45f09e80e1ed26b04d",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/execution.log",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/execution.log",
+      "blake3": "7ba67d0a414176a4dec037062a8f02423e9f14d055eb4246bdff5454f1a5a079",
+      "transfer_equal": true
+    },
+    {
+      "file": "graph-results/selector-resume-v2.log",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph/selector-resume-v2.log",
+      "blake3": "c6d1f240179ebb1eec67c785d21b1f4c1ef16935d5cdb0896115a3b2c65518b3",
+      "transfer_equal": true
+    }
+  ],
+  "archive": "graph-results.tar.gz",
+  "archive_blake3": "94c5c6686420c219d2756842c4d6a8f32fe1a840381c492cf53c9613bf1dd1f3",
+  "normalized_raw_tar_blake3": "4f4d77b4a9b7dcb7fd2782ff372931a9295b5633a7a3055bf332a6045085bff8",
+  "compressed_roundtrip_raw_tar_blake3": "4f4d77b4a9b7dcb7fd2782ff372931a9295b5633a7a3055bf332a6045085bff8",
+  "full_compression_roundtrip_equal": true,
+  "scope": "Every byte of all eight current reports/transcripts retained and transported, including failed combined-wrapper output, complete corrected consumer-faithful diagnostics and resumed selector/root evidence. Not independent acceptance or protected proof."
+}

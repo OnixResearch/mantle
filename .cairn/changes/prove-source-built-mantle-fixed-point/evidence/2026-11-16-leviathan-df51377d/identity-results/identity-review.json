@@ -1,0 +1,2535 @@
+{
+  "actual_plan": {
+    "digest_blake3": "1152d66e5cae4c4469cdbb927c30530372a8231d9e03d22c7bbf1189ecabc328",
+    "lineage_pin": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "native_provider_pin": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-program-preparation-input-plan.json",
+    "raw_blake3": "c39c3552820088094e44a9b10d9c195e4a8665a6afd217773c065497f0206aee",
+    "source_roles": [
+      {
+        "digest_blake3": "2882371f97e4c2c4cdc52e97ac2308c6f345ffcfa73a2349101889d36913d0b5",
+        "id": "mantle-source",
+        "kind": "directory",
+        "role": "mantle-source",
+        "size_bytes": 359094665
+      },
+      {
+        "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+        "id": "native-source-bundle",
+        "kind": "regular-file",
+        "role": "native-source-bundle",
+        "size_bytes": 968316247
+      },
+      {
+        "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+        "id": "rust-source-archive-set",
+        "kind": "directory",
+        "role": "rust-source-archive-set",
+        "size_bytes": 3164874699
+      },
+      {
+        "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "id": "stagex-lineage",
+        "kind": "regular-file",
+        "role": "stagex-lineage",
+        "size_bytes": 170686
+      },
+      {
+        "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "id": "stagex-seed",
+        "kind": "regular-file",
+        "role": "stagex-seed",
+        "size_bytes": 229
+      },
+      {
+        "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "id": "stagex-source-bundle",
+        "kind": "regular-file",
+        "role": "stagex-source-bundle",
+        "size_bytes": 87616094
+      },
+      {
+        "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "id": "vendor-inputs",
+        "kind": "directory",
+        "role": "vendor-inputs",
+        "size_bytes": 1213371949
+      }
+    ]
+  },
+  "actual_preparation_report": {
+    "input_plan_blake3": "1152d66e5cae4c4469cdbb927c30530372a8231d9e03d22c7bbf1189ecabc328",
+    "input_profile_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+    "output_profile_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-program-preparation.json",
+    "program_records": {
+      "fixed-point-native-source-program": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+      "fixed-point-rust-source-program": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+      "source-built-mantle-programs": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+      "source-built-stagex-programs": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96"
+    },
+    "raw_blake3": "c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95",
+    "schema": "mantle-source-built-source-programs-v1"
+  },
+  "aws_lc_original_git": {
+    "commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "copies": [
+      {
+        "executable_0755": 220,
+        "extra_members": 0,
+        "git_blob_bytes_match": 10427,
+        "label": "FROZEN",
+        "member_count": 10427,
+        "normalized_gnu_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+        "regular_0644": 10207
+      },
+      {
+        "executable_0755": 220,
+        "extra_members": 0,
+        "git_blob_bytes_match": 10427,
+        "label": "PREPARED",
+        "member_count": 10427,
+        "normalized_gnu_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+        "regular_0644": 10207
+      }
+    ],
+    "git_dir": "/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git",
+    "normalized_tree_blake3_expected": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+    "tree": "969d75db5c0494de4a26bbb2dcbf6837058054c1"
+  },
+  "bounded_identity_verdict": "STATIC_IDENTITY_CHECKS_CLEAR",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+  "commands_and_tools": {
+    "b3sum": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+    "git": "/run/current-system/sw/bin/git",
+    "git_blob_command": "/run/current-system/sw/bin/git --git-dir=/home/brittonr/sbfp-20261113-berdKH/aws-original-source-02561621.TGISLN/aws-lc.git hash-object --no-filters --stdin-paths",
+    "jq": "/run/current-system/sw/bin/jq",
+    "nix": "/run/current-system/sw/bin/nix",
+    "program_nar_command": "/run/current-system/sw/bin/nix --extra-experimental-features blake3-hashes hash path --type blake3 --base16 <program-source-dir>",
+    "python": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+    "source_hash_command": "/run/current-system/sw/bin/tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory <source> . | /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names",
+    "tar": "/run/current-system/sw/bin/tar"
+  },
+  "coverage": {
+    "admitted_frozen_source_leaves": {
+      "covered": 12766,
+      "total": 12766,
+      "uncovered": []
+    },
+    "archive_members": {
+      "covered": 476,
+      "total": 476,
+      "uncovered": []
+    },
+    "frozen_helper_translator_copies": {
+      "covered": 14,
+      "total": 14,
+      "uncovered": []
+    },
+    "initial_authority_paths": {
+      "covered": 27,
+      "total": 27,
+      "uncovered": []
+    },
+    "native_owned_llvm_members": {
+      "covered": 2,
+      "total": 2,
+      "uncovered": []
+    },
+    "original_git_leaves": {
+      "covered": 20854,
+      "total": 20854,
+      "uncovered": []
+    },
+    "original_native_body_comparisons": {
+      "comparison_sources": [
+        "preauthor-plan",
+        "augmented-closure",
+        "launch-input-profile"
+      ],
+      "covered": 177,
+      "total": 177,
+      "uncovered": []
+    },
+    "preauthor_directory_roles": {
+      "covered": 0,
+      "total": 3,
+      "uncovered": [
+        "preauthor embedded directory reconstruction: mantle-source",
+        "preauthor embedded directory reconstruction: rust-source-archive-set",
+        "preauthor embedded directory reconstruction: vendor-inputs"
+      ]
+    },
+    "profile_embedded_role_entries": {
+      "covered": 70842,
+      "total": 70842,
+      "uncovered": []
+    },
+    "program_embedded_entries": {
+      "covered": 479,
+      "total": 479,
+      "uncovered": []
+    },
+    "program_records": {
+      "covered": 4,
+      "total": 4,
+      "uncovered": []
+    },
+    "program_recursive_nars": {
+      "covered": 4,
+      "total": 4,
+      "uncovered": []
+    },
+    "selected_assembler_probe_boundaries": {
+      "covered": 3,
+      "total": 3,
+      "uncovered": []
+    },
+    "selected_aws_and_ring_script_routes": {
+      "covered": 76,
+      "total": 76,
+      "uncovered": []
+    },
+    "selected_pipe_sources": {
+      "covered": 76,
+      "total": 76,
+      "uncovered": []
+    },
+    "source_roles": {
+      "covered": 7,
+      "total": 7,
+      "uncovered": []
+    }
+  },
+  "criterion_coverage": {
+    "7": {
+      "covered": 71989,
+      "total": 71992,
+      "uncovered": [
+        "preauthor embedded directory reconstruction: mantle-source",
+        "preauthor embedded directory reconstruction: rust-source-archive-set",
+        "preauthor embedded directory reconstruction: vendor-inputs"
+      ]
+    },
+    "8": {
+      "covered": 33818,
+      "total": 33818,
+      "uncovered": []
+    }
+  },
+  "frozen_identity_consumers": {
+    "src/release_tree_copy.rs": "c7098192cdc8a1a1add76bca927fcfd07d214b9eb3bcf9b447daf7430164afa4",
+    "src/self_build.rs": "7a56ab295ee1d13534a3b4e74e083d868fbeb7a1f3a3841515a3888e7983518f",
+    "src/source_built_fixed_point_authoring.rs": "2755d9ab07792600ce5491c4d134b33339c3119f67b71148558262157d6817c8",
+    "src/source_built_fixed_point_planning.rs": "91be8df65a37d1344c194062f3d09043567479a4efc295f86d09144ba43181bd",
+    "src/source_built_fixed_point_shell.rs": "9c8ac67d2fdc9fbea394975c8922a5c03e77f2cb6df6cc204a4221674e2cdddd",
+    "src/source_built_mantle_programs_graph.rs": "478a92febf5a89f28a8250cfa76a81f0bb3602231aa3d8065ee02067f8dae0c3",
+    "src/source_built_mantle_programs_native.rs": "3e2bb42a6c9c396515b0e1e2a4c980a7ee5c1b69b68852b47c4220f2b70da645",
+    "src/source_bundle.rs": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282"
+  },
+  "frozen_product_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "frozen_source_and_runner": {
+    "expected_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+    "expected_runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+    "normalized_gnu_tar_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+    "runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+    "runner_path": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-df51377d-unit-plans"
+  },
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "initial_authority_absence": {
+    "absent_first_launch_outputs": [
+      "/home/brittonr/sbfp-20261113-berdKH/proof-df51377d-unit-plans",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans.log",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans.exit",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-report-df51377d-unit-plans.json",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-trust-report-df51377d-unit-plans.json",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-home",
+      "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-tmp"
+    ],
+    "absent_provider_store_roots": [
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/native-store",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/native-state",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/transcripts",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/full-source-rust-host-tools",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/rust-provider",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/rust-provider-scratch",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/cargo-free-fixed-point",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/stagex-transition-execution",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/stagex-transition-handoff-replay",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/stagex-provider-replay",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/native-store",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/native-state",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/transcripts",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/full-source-rust-host-tools",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/rust-provider",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/rust-provider-scratch",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/cargo-free-fixed-point",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-transition-execution",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-transition-handoff-replay",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-provider-replay"
+    ],
+    "all_absent": true,
+    "cohort_top_level_entries": [
+      "inputs",
+      "native-source-closure.json",
+      "program-sources",
+      "source-profile.json",
+      "source-program-preparation-input-plan.json",
+      "source-program-preparation.json"
+    ]
+  },
+  "input_source_profile": {
+    "bootstrap_source_role": {
+      "chunks_verified": 9,
+      "embedded_payload_bytes_compared": 544909751,
+      "entry_count": 9,
+      "physical_file": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/original-native-source-closure.json",
+      "physical_file_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "physical_file_bytes": 544909751,
+      "profile_class": "bootstrap-source",
+      "record_content_blake3": "df6643c4d3ad281164dccf75df5873f5edd09255f64bdc16364ac7924e000b95",
+      "record_identity": "bootstrap-source-0001",
+      "record_kind": "bootstrap-archive",
+      "record_payload_bytes": 544909751
+    },
+    "bytes": 11730596111,
+    "manifest_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+    "native_source_record_count": 59,
+    "path": "/home/brittonr/sbfp-20261113-berdKH/source-profile-df51377d-unit-plans.json",
+    "profile_role_record_count": 7,
+    "profile_role_records": {
+      "bootstrap-source": {
+        "chunks_verified": 9,
+        "embedded_payload_bytes_compared": 544909751,
+        "entry_count": 9,
+        "physical_file": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/original-native-source-closure.json",
+        "physical_file_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+        "physical_file_bytes": 544909751,
+        "profile_class": "bootstrap-source",
+        "record_content_blake3": "df6643c4d3ad281164dccf75df5873f5edd09255f64bdc16364ac7924e000b95",
+        "record_identity": "bootstrap-source-0001",
+        "record_kind": "bootstrap-archive",
+        "record_payload_bytes": 544909751
+      },
+      "mantle-source": {
+        "entry_count": 12766,
+        "profile_class": "mantle-source",
+        "record_content_blake3": "8910e5c8ea65899bdf6bb4c5b270dc6445a60cd8d3aced97565c7e0b37c1fe22",
+        "record_identity": "mantle-source-tree",
+        "record_kind": "local-path",
+        "record_payload_bytes": 359094665
+      },
+      "proof-input": {
+        "entry_count": 50,
+        "profile_class": "proof-input",
+        "record_content_blake3": "cbff6a9eca5092915b4c11e51c8fa4e6a6d0c5dd2ecefd15d638ca74cea2c2ad",
+        "record_identity": "proof-input-0001",
+        "record_kind": "proof-input",
+        "record_payload_bytes": 3164874699
+      },
+      "stagex-lineage": {
+        "entry_count": 1,
+        "profile_class": "stagex-lineage",
+        "record_content_blake3": "3f5a62df63892e1b5f3fe650d70d1f106cffd73dfdf57dd5e01edcb4e4b48018",
+        "record_identity": "stagex-lineage",
+        "record_kind": "provider-manifest",
+        "record_payload_bytes": 170686
+      },
+      "stagex-seed": {
+        "entry_count": 1,
+        "profile_class": "stagex-seed",
+        "record_content_blake3": "ad50d1ba64d1a241ba467d32f4f59a3aee513568bc3f89bbc69dff2222638c4b",
+        "record_identity": "stagex-seed",
+        "record_kind": "bootstrap-archive",
+        "record_payload_bytes": 229
+      },
+      "stagex-source-bundle": {
+        "entry_count": 2,
+        "profile_class": "stagex-source-bundle",
+        "record_content_blake3": "37642997a0c6e620faec05f31017e8d68fb0d64edb550f8ff8eb22f8235c02a3",
+        "record_identity": "stagex-source-bundle",
+        "record_kind": "proof-input",
+        "record_payload_bytes": 87616094
+      },
+      "vendored-cargo-inputs": {
+        "entry_count": 57965,
+        "profile_class": "vendored-cargo-inputs",
+        "record_content_blake3": "719e1550cbc0b99a311a779a1583a34c1e8c17a625e08d79f7635b04e2705de5",
+        "record_identity": "vendored-cargo-inputs",
+        "record_kind": "package-mirror",
+        "record_payload_bytes": 1213371949
+      }
+    },
+    "raw_blake3": "ee2b8cc23484769179cfd922128d853e2bc3e37f1240aad04efc2c181bbe1767",
+    "total_records": 66
+  },
+  "inspector": {
+    "blake3": "76da5556ccc3cf789d9d8147bbce248255774c1eb0891ddfed80b5a17e3a1a34",
+    "command": [
+      "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+      "/home/brittonr/sbfp-20261113-berdKH/review-tools-df51377d-unit-plans/identity-review/identity-audit.py",
+      "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+      "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+      "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity",
+      "/home/brittonr/sbfp-20261113-berdKH/review-subject-df51377d-unit-plans.json"
+    ],
+    "path": "/home/brittonr/sbfp-20261113-berdKH/review-tools-df51377d-unit-plans/identity-review/identity-audit.py"
+  },
+  "native_closure": {
+    "augmented_bytes": 1632752835,
+    "augmented_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/native-source-authority/native-source-closure.json",
+    "augmented_raw_blake3": "2c53dd60e404293e92a792d2acaa8e0bef025318c2a171b89c2035ff04b1b001",
+    "augmented_record_count": 63,
+    "new_record_ids": [
+      "fixed-point-native-source-program",
+      "fixed-point-rust-source-program",
+      "source-built-mantle-programs",
+      "source-built-stagex-programs"
+    ],
+    "original_record_body_fingerprints_compared": 59,
+    "original_record_body_mismatches": [],
+    "output_profile_original_record_body_comparisons": 59,
+    "preauthor_bootstrap_source_input_role": {
+      "chunks_verified": 9,
+      "embedded_payload_bytes_compared": 544909751,
+      "entry_count": 9,
+      "physical_file": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/original-native-source-closure.json",
+      "physical_file_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "physical_file_bytes": 544909751,
+      "profile_class": "bootstrap-source",
+      "record_content_blake3": "df6643c4d3ad281164dccf75df5873f5edd09255f64bdc16364ac7924e000b95",
+      "record_identity": "bootstrap-source-0001",
+      "record_kind": "bootstrap-archive",
+      "record_payload_bytes": 544909751
+    },
+    "preauthor_input_profile_bytes": 11730596111,
+    "preauthor_input_profile_manifest_blake3": "166755bff7085489039e350451dbd107e0ce4149fc61b955f09723e329620ff8",
+    "preauthor_input_profile_path": "/home/brittonr/sbfp-20261113-berdKH/source-profile-df51377d-unit-plans.json",
+    "preauthor_input_profile_raw_blake3": "ee2b8cc23484769179cfd922128d853e2bc3e37f1240aad04efc2c181bbe1767",
+    "preauthor_native_record_count": 59,
+    "preauthor_plan_bundle_raw_file_available_after_authoring": true,
+    "preauthor_plan_closure_bytes": 968316247,
+    "preauthor_plan_closure_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/native-source-closure.json",
+    "preauthor_plan_closure_raw_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+    "preauthor_plan_closure_record_count": 59,
+    "preauthor_plan_native_body_mismatches": [],
+    "preauthor_plan_source_bundle_bytes": 968316247,
+    "preauthor_plan_source_bundle_digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f"
+  },
+  "non_claims": [
+    "no product/helper/generator/provider/controller/recipe was executed",
+    "no proof/build/test/lint/formatter was run",
+    "no compiler-correctness, runtime-success, fixed-point, reproducibility or release claim",
+    "overall launch authority remains with parent integration and protected execution"
+  ],
+  "profile_role_and_program_records": {
+    "manifest_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+    "original_native_records": {
+      "fixed-url-08fc9bbfa8cbf77e5bbfca6cffcfe7116d4927854bfc2b9352b912a00e017545": {
+        "canonical_body_blake3": "26b300f1f366678e20f5146b429583eb2c51ae7e304c7e079fd712d2a3aa22dc",
+        "entry_count": 1,
+        "payload_bytes": 201926,
+        "record_content_blake3": "d7dd692b74dea83bc6b6aed6efbd9f874aa991a1ba5722e8f4b06bf0c20a21e0"
+      },
+      "fixed-url-13a948d11e966296df587a675b7e20037cf1ec4ed23bc6b59caeb709e4d5c53c": {
+        "canonical_body_blake3": "ac1733c11369bea7f7190b167807b263bd0ecfd0bcb9c5d56c3b7663dbc121b9",
+        "entry_count": 1,
+        "payload_bytes": 925073,
+        "record_content_blake3": "656626cf1f48c25f4f23bb3127a2b21012609e6cbd21b8125cc0a1ef8f7898e2"
+      },
+      "fixed-url-17a6467b17b592906f6443b36c3cb40011d193153ffe14e25bb6f8ad89fe53cf": {
+        "canonical_body_blake3": "299020602e3f797f7a942e271549e7e1c54558ee170cc8f42a7994461476af1f",
+        "entry_count": 1,
+        "payload_bytes": 312312,
+        "record_content_blake3": "36714b7ee4e36f7f39ca3fb32010c5babe8a09532ee991f565771f9ca26daf90"
+      },
+      "fixed-url-2179e46878b45feeb495b37c34079f80024d8692163c0388e714b91e4542e02a": {
+        "canonical_body_blake3": "6453bf841660434564a67178e23fceaaf4919580c09b1b186ab8727745068417",
+        "entry_count": 1,
+        "payload_bytes": 6255479,
+        "record_content_blake3": "8168ae4c434cc8590b2590a6b1e6a3460ea709c7771cb0acd258c47c205a278e"
+      },
+      "fixed-url-26df0c332cbf1ba0f74000fa7384284180e583a84eeec6976e989dee9e869b77": {
+        "canonical_body_blake3": "f467362b07baca5bd4695dcad47189fbb9d146db88a60940b2c5b86396a7d7b8",
+        "entry_count": 1,
+        "payload_bytes": 1027134,
+        "record_content_blake3": "db0f59d2c7905c1e16d8c45df3548e304a593bdd193444da7e550ff109deb9aa"
+      },
+      "fixed-url-28390b124a4e4a0426e370860163351efc23ff1d3d3b6be84a5609868b00f45d": {
+        "canonical_body_blake3": "a156e35a73136b90aac63c3469f57551bd50438f8dd1bfabcd798fb5291efd2e",
+        "entry_count": 1,
+        "payload_bytes": 220623,
+        "record_content_blake3": "de8516b8bfc78a91f5d37837ff70d6926f4b03cf68924ae7ef6ed602f7f316fd"
+      },
+      "fixed-url-2861bfe2bbe8003326313432362cdd09a73a549a874abb706bce6ba4e5378011": {
+        "canonical_body_blake3": "adc2fe319a942f9e1505a5992ba226e1b3fdc316b2466c90e379133b2e9a0e02",
+        "entry_count": 1,
+        "payload_bytes": 769849,
+        "record_content_blake3": "65aa1a57a2966a247b4992de6525e319adb99f8ad2fe4cc2eb543a28740994ad"
+      },
+      "fixed-url-29051c18498ee931a89eb96a6c890e06b4098c8ec2e0f4242f0d8337192a8070": {
+        "canonical_body_blake3": "5f5128571947e24cff09612f08eab3a9efbc1704d11195c06b3dadd4895918e9",
+        "entry_count": 1,
+        "payload_bytes": 810029,
+        "record_content_blake3": "969e26e40644aaed6137a7403c29397ada624f6dc20d38dfae5fec9d2079292d"
+      },
+      "fixed-url-3060addfed31008220c7bdaf42744913c766041ec42776a3f69047127e98d613": {
+        "canonical_body_blake3": "f44c119d7adac4327d6efbb1f987d08959ecd6c4febeb30b9b84aa95500286ca",
+        "entry_count": 1,
+        "payload_bytes": 782420,
+        "record_content_blake3": "e64ece3ed0242922c6614c5756a1bf5c1b28bf81648a986347dc43442f01729a"
+      },
+      "fixed-url-308d194967d5de3d83a7ff91d2e2eb90e3e761e80d04789d0c6d38dd0b6aca24": {
+        "canonical_body_blake3": "e5e7c79a7ffcc078fe51667a68fd40131f4b1783318903712b5bda73221a7ea9",
+        "entry_count": 1,
+        "payload_bytes": 2198020,
+        "record_content_blake3": "c5de2a7c4531f1f900e0cb8783237bc8706b6f30dd7a88e144ea325a60074d76"
+      },
+      "fixed-url-347ffc99fbfa4b5c36c266c1dddd4510e4d5f3118c3a20a0c17d602d6cf4a25d": {
+        "canonical_body_blake3": "86817b6b7935b465908d957ff3bd33d3cb3d80963dab82d0d6d53b21eefa2f67",
+        "entry_count": 1,
+        "payload_bytes": 32642939,
+        "record_content_blake3": "6f6068765031f6f93e58278ceba0b7443c72616dde1c47902d7cfa136a1b1e49"
+      },
+      "fixed-url-45a652eead26ff894ef0645f83c90553b6752e1675e0c47ba2068fe4164fe3fc": {
+        "canonical_body_blake3": "28b2bdbbdd5f4307c89790976c2e150611e9e4904bd5123279b3e6e5bcd07b1f",
+        "entry_count": 1,
+        "payload_bytes": 1525476,
+        "record_content_blake3": "ab36c1119ddfd172abff273d4a319c39cb96b2fb557e9352db4a2da316ddc563"
+      },
+      "fixed-url-5083e79bbe47e5e6e11a0f4db90767a8d9802c0cedfdbf0b66f5d45755795830": {
+        "canonical_body_blake3": "7821f4b173fe598cbf1dd563c6d22a3e6b5d03443135ab0449a7a99c0d7a9d2f",
+        "entry_count": 1,
+        "payload_bytes": 2027316,
+        "record_content_blake3": "0a6cdf955da2ca27ce8f076bee38e459a0b3f58d7e8aae3b34476e41b1ca5ca3"
+      },
+      "fixed-url-55d3b8c817bb1fe5fda738e69dfbc6b2985166f020ab2c5d7ff56e208e96c821": {
+        "canonical_body_blake3": "f7e38732a2e89dd567edb3bcf4b7dca1519c6e2b87292e9f9caa596f908400ef",
+        "entry_count": 1,
+        "payload_bytes": 419724,
+        "record_content_blake3": "b40c519f58ef370f44bbafc37a76ae843a3cf621a44ef83158294fb29ada14d0"
+      },
+      "fixed-url-56372665c26229fd9923e24885bba78d12de4459e7fb19f3ee6d5cb21dd1f1ac": {
+        "canonical_body_blake3": "df632bc28cf57ecaebb7a210f0493c601ab93e4f42488777056668baf444cdc7",
+        "entry_count": 1,
+        "payload_bytes": 867759,
+        "record_content_blake3": "0cbc269e6eccf79f32b9f64204a0277a0e6df877dc1a6d0fd0d3e240365abdff"
+      },
+      "fixed-url-5a836e9ec46a6fb6afb1e0e3a5cd5f705404ab1b7b7d0684710272a22648c048": {
+        "canonical_body_blake3": "8fcb0c05cbd145bca4657d24923c15bc32a974e62ed8505f4822a33abd8e3461",
+        "entry_count": 1,
+        "payload_bytes": 807645,
+        "record_content_blake3": "0a3d127bd696f94e552cb47cdd797448747e58ba2f49f4e68db665b17764e93e"
+      },
+      "fixed-url-5fda7b5bed4dbf8d8da85b3dd19ee873cae96c563d0b33d7d796c645aaf2e14d": {
+        "canonical_body_blake3": "50dc93e254670610c5173bc4c5db7ac4e67929ecc7ecbf57ef7dadb4370bdd08",
+        "entry_count": 1,
+        "payload_bytes": 756876,
+        "record_content_blake3": "dd0e49258701c541d8fc097a899e4d00ae987d49951346ee22bd5743d5e81582"
+      },
+      "fixed-url-61814c646c0a35930a96b389ab3d211f942a0dfd503ee8f33247bdfbb41cb980": {
+        "canonical_body_blake3": "8ddd7c1cb77470ff5700f709a6e7982485a3a456c9028011f146ef04aaa2a502",
+        "entry_count": 1,
+        "payload_bytes": 1419096,
+        "record_content_blake3": "6a84744fa55e734f9640c58c694c509dba34ddff104ab83e0131b9bc2468f8c0"
+      },
+      "fixed-url-62e1b90422b8fcc2101590edd36dc56e7a72e8bc233854bb1e8b63dc0f76a6c0": {
+        "canonical_body_blake3": "794058bd42219f3e41af926c9c871deeb2ac891c1822a4e72f823d5564d74ce8",
+        "entry_count": 1,
+        "payload_bytes": 1956216,
+        "record_content_blake3": "130da251856869c8d04a52d35299181bc6c3be8e38624e731a9323382c3d755e"
+      },
+      "fixed-url-68bebeda098382cc954174d8fa8698eaac9633caee505c0072596dfad8139ee8": {
+        "canonical_body_blake3": "baa75833318157370d67130e4238b01b2df20f41f090dbf657f4df9664775f9c",
+        "entry_count": 1,
+        "payload_bytes": 756398,
+        "record_content_blake3": "37074eeccb35664ad22b3194428bd6f1db6dd46c39b3b16d22b9841090a0b387"
+      },
+      "fixed-url-69a9734ff8cf5b25adafed78fba527bac05601a9da4bebafd91c75abe45f512e": {
+        "canonical_body_blake3": "b0961e78413ea49c2657a2caa5c2b6abb86680a185913cc75ef3d01bdbdf0afa",
+        "entry_count": 1,
+        "payload_bytes": 20286700,
+        "record_content_blake3": "809e8c1d946b14650362cf2929520efe07623fe069ce8c16c5870dafe6d93603"
+      },
+      "fixed-url-6b4961e6c9fff76f8cf2bab720817eff96172d622164c4b23580203514d4b7b2": {
+        "canonical_body_blake3": "dd97a1a0b99e03a133556a8ab40f2b93ef4a0d706e741217591374f74655c9e0",
+        "entry_count": 1,
+        "payload_bytes": 756876,
+        "record_content_blake3": "438536d1095c3cd1f19b2645572dbe4ec265353513076db6ba5c395e23e6841a"
+      },
+      "fixed-url-71495e1ddb39612a9f8197f340bf7254942f843ef7ff361eca64dae0b0a7bd2f": {
+        "canonical_body_blake3": "e39400fb4965beb56f82c9c277f56d3614e61704f746976656d510b3b54951e2",
+        "entry_count": 1,
+        "payload_bytes": 758936,
+        "record_content_blake3": "db8c11387fd0db5783b4d2349b578ba1edfc739bf13d0865ab8b6b5f83a0711b"
+      },
+      "fixed-url-7389915e14cb1112dfe0cce68d3b67e6e24775ca79a3e60d2f7dae699558e4df": {
+        "canonical_body_blake3": "0f8587db920889a4d98e03e81804ff31d55aab0b5c42109e5fb607cd27c9d729",
+        "entry_count": 1,
+        "payload_bytes": 1080786,
+        "record_content_blake3": "29bf451ff677fc137daa11a7d05c76eaec4b4ad2135c4ae32e608929231536da"
+      },
+      "fixed-url-73d41d722734e302f2802383817638ed5589fc0b363ba621eae6452b5ef226c3": {
+        "canonical_body_blake3": "e727dcce696ab64a8aa3bad77551fc58619e8b3d972621f9a4b3d3dd786ad2f7",
+        "entry_count": 1,
+        "payload_bytes": 1214744,
+        "record_content_blake3": "143c9713226daa220c008dc1b5323211e007b870fa1149094680ac8705481dab"
+      },
+      "fixed-url-758798ffe110eb26e73f9f7832f4addd66c8b8722387fba4513bb786c8528d76": {
+        "canonical_body_blake3": "6b92edd001df6e5aa6b9f548203532bd870d4edc6dc10523a038427d6e92c5be",
+        "entry_count": 1,
+        "payload_bytes": 3952653,
+        "record_content_blake3": "82d3dd8a0cbb5b5032512d747b5bb79b5dfdfd94b2cd11d9ae50a1dd0b05d814"
+      },
+      "fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4": {
+        "canonical_body_blake3": "b1aba7d45b4a4e4658b3bfbd814a97afa2e0339ab13be5fe134fcd34461150ff",
+        "entry_count": 1,
+        "payload_bytes": 634999,
+        "record_content_blake3": "a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d"
+      },
+      "fixed-url-809778e55f2ea5bb42c28a2acbaff93b5a34e24b5d71420a3c570b5639946859": {
+        "canonical_body_blake3": "eadce776312a49e51bd5d97597eaa6ef9cacb1ae867e57e050b556611b92ebff",
+        "entry_count": 1,
+        "payload_bytes": 2348200,
+        "record_content_blake3": "174a0bffd42573e33ce76019c7089f8a09e7137b464a3d2c392c6e02292e41e8"
+      },
+      "fixed-url-82d30005710a65570ca414c30136ded9514e39e45515716d533a85f818453729": {
+        "canonical_body_blake3": "39f6d3b88a80c1c19425a69fb697a1e793134a77ebd07f307075034a951c2f7b",
+        "entry_count": 1,
+        "payload_bytes": 2565764,
+        "record_content_blake3": "8548116700d6ad66af75337303317c3467194c43a487b3eb95643d041ae8c908"
+      },
+      "fixed-url-82f9536a4fee1d373564718adcdd825712ef0cb0b8bee13b09beb69d7c2b37a3": {
+        "canonical_body_blake3": "884859fdca6de72b7af190e9ef4d0542b8fef16550a6edc29d59792e79b4ab9d",
+        "entry_count": 1,
+        "payload_bytes": 26765692,
+        "record_content_blake3": "a0d940f3e0cfb8be14e292b02fb1b62e5ee21bf0666bc0a593710a61cfbe4a32"
+      },
+      "fixed-url-8327e9a4982c5acae2e1e2a8c56d969213732759d83a54742dbd7b2cd0198fbf": {
+        "canonical_body_blake3": "bba71c8a8e94308908221c4ba3e0f1a71a633113258e25008a02c0eb7d801fed",
+        "entry_count": 1,
+        "payload_bytes": 443844,
+        "record_content_blake3": "2eded72c00b46b98f29bebfe9231f9b6c6b258e54a8e1c6a6f6d5b598527eb1b"
+      },
+      "fixed-url-8745d4ab53f736cb95bcba742469b758d769f4dd23b94cda0072bd6332f7b78e": {
+        "canonical_body_blake3": "1a0003e59cdbd98d53b644a145e1ec0fc6145f95495e4762a413de1e8ec74d17",
+        "entry_count": 1,
+        "payload_bytes": 511803,
+        "record_content_blake3": "1acf045348ef14f9fb38dc1e23fec5146d32b4fb6b7bb5c4dfb9742da12ce0d1"
+      },
+      "fixed-url-8b37b1b3f20c4d83991fed87c33e49dab8234a8da86a211c981888ca82ceb6db": {
+        "canonical_body_blake3": "e97046ad827c55061c549bcdfa1231a14a9456edee349cb00b8a72948e99d6af",
+        "entry_count": 1,
+        "payload_bytes": 1042439,
+        "record_content_blake3": "4245bde1607568bfd7bd722cb70044b0bdf22acf8328208b9536c73c6fd49811"
+      },
+      "fixed-url-910e4c08ea03c767abab0a75110370dc9fe3d40b8044cc465fc4f35b5165d055": {
+        "canonical_body_blake3": "e9142778b2d9746f8455c29857f42bfe677a89b698c2659caf42882668297420",
+        "entry_count": 1,
+        "payload_bytes": 1509496,
+        "record_content_blake3": "76d2c60ab4cf3ac326780c0a4829ee515c640ead53da6f2f766bba8910042041"
+      },
+      "fixed-url-921d7d74218bec47f9cb0aff06d13aeb69ede1b881474b6e9569c532438f9f9f": {
+        "canonical_body_blake3": "6d0ed1926fa4a16996b5c005f71363aae07022ff2311736c46aa93eb682bcd52",
+        "entry_count": 1,
+        "payload_bytes": 1584362,
+        "record_content_blake3": "fdb922b153a1746a1b591cc2b0c378f524b6a55e5a6da8cf07d230afe9366751"
+      },
+      "fixed-url-a674f552ef5345d19cb7e37f3c6f80f38dcf1a2f54b188894680bda6c6930c1a": {
+        "canonical_body_blake3": "46a3438ec0092e648aa95c46b17970ea297c495d7eb6c5b9ee6a8ba417665215",
+        "entry_count": 1,
+        "payload_bytes": 37639,
+        "record_content_blake3": "b1ea74a498a000f5f27160860fd44042d738295c78c1db56a4e0fdd10ea5ee76"
+      },
+      "fixed-url-a6aa1b20f6d114191e90c66df97fc4c2987641a49d86e5bc5cbd5c6d36edd09f": {
+        "canonical_body_blake3": "c00f65036efbd44bbe090ffd95c60d2d0de07bfe323400dd437c7ae2508931c5",
+        "entry_count": 1,
+        "payload_bytes": 381054,
+        "record_content_blake3": "9a36ccc0a97cfd3188989f151940b4677ebbb6768029c69e81d5dfd1eb5e856e"
+      },
+      "fixed-url-ae11d5ec6f5d6b01fdeeb081181a8a51ad8208ab2d8b651cd2d8383f8fcda3f0": {
+        "canonical_body_blake3": "d4ac867888a37a0f39972ad074e557811d57ececfd5fd14422eb6dca431bc827",
+        "entry_count": 1,
+        "payload_bytes": 1242186,
+        "record_content_blake3": "b768ff74b8f16f6c41fb869833582c7cf614e98a8728a1c74616a6b6157ece77"
+      },
+      "fixed-url-b521235e5a3a5e77878c924be8d478dc16198c9cfadd16af1c2d62ffaa676898": {
+        "canonical_body_blake3": "105c50bb570d5859cf296e9fbd315081a5690e24bb12715e02e7335f7ea75f63",
+        "entry_count": 1,
+        "payload_bytes": 838731,
+        "record_content_blake3": "f84ec632e72e7c94062549e9f06f0ef3010307fd1ec9d34a7a6c26e76e1b3d6d"
+      },
+      "fixed-url-bb6b73eaa0b1974dd6cbebba4701f123311492b599f1b8efc8d71f3031164dbd": {
+        "canonical_body_blake3": "1aa2a76b43687041c3fc47837fe8198dd00487fa2281b6f5d53a05d3a0dcf7d5",
+        "entry_count": 3,
+        "payload_bytes": 140064536,
+        "record_content_blake3": "0815f609cafb10aba441bcff16f60d9c3d920b437a81feeef403d1b76069d3e6"
+      },
+      "fixed-url-c48c7187470adb61c24ce9b5a82edb8f1de72a0995e96eaec0e7065af97f9917": {
+        "canonical_body_blake3": "777069b5929893ec207a49433c4b96afbaa150e9de6f10b15ed2436c4bb51261",
+        "entry_count": 1,
+        "payload_bytes": 632887,
+        "record_content_blake3": "4571cf90a9acd442da7a39d0b1622b9c2d9358cda08cca31ebd250dce331b800"
+      },
+      "fixed-url-cc30b64ee779dd06de3d86b5e0af1dfc65d04d8a4087d5a41441a9954731ef51": {
+        "canonical_body_blake3": "76500a8b3c74c84e3d8d181b26807848b05fc7cdb2ab0b2e44b06ea0f9302ccc",
+        "entry_count": 1,
+        "payload_bytes": 22856016,
+        "record_content_blake3": "fe8cefc00395c9832a66ef9c2578ffed1c67415226865ff6de72a46fbf218ebe"
+      },
+      "fixed-url-cc3d97f8a1c6486f4393ae3002300713a08781fc4b8ec843a9bd2fe73ba082bc": {
+        "canonical_body_blake3": "50e64a823fd4339f24fc7be9e51787c878ca4a8203c92375c95b63985eaca291",
+        "entry_count": 1,
+        "payload_bytes": 1266116,
+        "record_content_blake3": "3cdb842d8699276ce030e5fbbab455193d12ab41cfb36aabfc3f3bbdfa4c47db"
+      },
+      "fixed-url-cffd5053638c10e2e4b248fcc79abb99c7d8b99ce854a83e89b5f4f8389c926f": {
+        "canonical_body_blake3": "bf9f99ff712cb13dbe508f6a9593c2be17bb14893c763cb050a42221f3b92454",
+        "entry_count": 1,
+        "payload_bytes": 11713806,
+        "record_content_blake3": "2a1ff9be2308e35a5f5b30e3420721c5bf6c9fc37b59c4647f15efca45bea14c"
+      },
+      "fixed-url-d0049ae9e006c4a728bd8282aec0090f60f21f268bd74867912e8f82c67f8b7f": {
+        "canonical_body_blake3": "28c9e223e4c98d1c99564427820266499edf252cf0e1cac8a5fa5eb6a10631cb",
+        "entry_count": 1,
+        "payload_bytes": 14117518,
+        "record_content_blake3": "7c24cc2a5bb683734667e0f8f531fb03e2d198e88a439f0f37cb3801cc68ed4d"
+      },
+      "fixed-url-d21c98cffd677a618e3dfe37a7c851a7992a182430d4c0d743565a35feedfde2": {
+        "canonical_body_blake3": "436c37be5f7d51cbf477e44caa6f8caf76d00cde1fc011cc14543b7f7ab9a7e9",
+        "entry_count": 2,
+        "payload_bytes": 77846412,
+        "record_content_blake3": "03591f6d27f493eac6881abad2996cf0d166055577756439f04064efaffcbf4d"
+      },
+      "fixed-url-d6f948b474bded49b2a59dd8e0a1679c58ef422a142ed44fb44f0a8dcac40768": {
+        "canonical_body_blake3": "5323dfce0db3704dbacc82be8f740aa56d69fb2dcea2ce974738e66516f24df1",
+        "entry_count": 2,
+        "payload_bytes": 82935453,
+        "record_content_blake3": "04ec700892f88c07c6452acb47d1b882df8b737d298852e3f7777cb2ff064457"
+      },
+      "fixed-url-e0dde97e74bed7af9dc6972212e38fb80651d2d2f8e0a44353f9bfdf0943c415": {
+        "canonical_body_blake3": "b72d8aac02fea0d29c29973a5dfea081f410b48dc544b04763c68283cfa7fa50",
+        "entry_count": 1,
+        "payload_bytes": 546284,
+        "record_content_blake3": "2b08ffc73a7b7e0750a1707f7b7e54309a024e02691a5f4e48ffc32a6bb51a09"
+      },
+      "fixed-url-e0f3266af117bd5b6d8b3d87ecba475162a1515f6b4ab286879d85b89f8cbce8": {
+        "canonical_body_blake3": "a48642f71dc9295fe613a5bd02b2996a84a1c1a1302483c282305885c08f2482",
+        "entry_count": 1,
+        "payload_bytes": 811439,
+        "record_content_blake3": "e9d89f82c4dc3e668eb15cc09bf58c55156913bdfeb91c3258f9d91b0bdd5c46"
+      },
+      "fixed-url-e5130672fe4e4cdd9b19e8602ae7cbe70696d8de4b08732ff6bc01fa3c9b7d85": {
+        "canonical_body_blake3": "eda2edda0642e3136d3c735cd1f2a730ce579d17b9e031af2d5e16f45a58d874",
+        "entry_count": 1,
+        "payload_bytes": 1024988,
+        "record_content_blake3": "2abcaf25adf8f529b9f45e5549bfaa5cc5827305624c081e9388ac2ad828ba17"
+      },
+      "fixed-url-eb9a2eda57a4defe597f3db08ec664c41d9db4dcbf20674e7d34f47fd5114cf8": {
+        "canonical_body_blake3": "cc58746e7182c79897d46f04eab98470ec2efd684b8b92675a8b9966c8f37c52",
+        "entry_count": 1,
+        "payload_bytes": 1080319,
+        "record_content_blake3": "45e40c482750cf4aa35637a7f62ee4f865a8a6d5dcf06aa557be8797c7bc4c62"
+      },
+      "fixed-url-f6a301449f4d3422ceef64376d2a8b9426d66e25f0c6fb30925edd420c0d2db5": {
+        "canonical_body_blake3": "37e63794d9603455f54d9c08688e390b67e1f3d1de4d94eb8127cae82c090902",
+        "entry_count": 1,
+        "payload_bytes": 1113892,
+        "record_content_blake3": "a54dd6cd1c68c0c28c27167582887efca6617a8a853892757cc0e5aeaddaa07d"
+      },
+      "vcs-snapshot-4dd119ff3bd1f576831a32e891c41026154beaa3b8a3592b861dfa116ac62bff": {
+        "canonical_body_blake3": "2ca394388e9baefedae86783a907b9631b0624c851e34e10030e2f179640721b",
+        "entry_count": 241,
+        "payload_bytes": 891356,
+        "record_content_blake3": "a4b081c01854e735697908471cd6170e270f5084170a64e51c5a20302c842d89"
+      },
+      "vcs-snapshot-72e4bb78e1983da24fdfc01a705d3407ab1daa68d31e28e1ff957a04318b23f4": {
+        "canonical_body_blake3": "b59e6a17273ae00471dc98ac23fafa598ec81c2b8ef14f863860e85f88f3627d",
+        "entry_count": 35,
+        "payload_bytes": 885261,
+        "record_content_blake3": "f983a7b79acdd53fd4d31c8959c62ca24eabbea491327aaa113c4bc11549e5f9"
+      },
+      "vcs-snapshot-ce93f682b3a3e51ede2a84f6617aa1241c3352b2d6a94b4bccd96bfdf8262319": {
+        "canonical_body_blake3": "926e51f78b04857285fdab6bc3d9a9fbde4063e5ed75a28927fc91970164dbea",
+        "entry_count": 38,
+        "payload_bytes": 280768,
+        "record_content_blake3": "30d135a3e1c83495b521ae969d2c0e97da44baff7e143a16bcab0919fb0a36d2"
+      },
+      "vcs-snapshot-d4cd4bf2a35aa517caef514d76901b24e0666968f0784ddb52f9670f41f31484": {
+        "canonical_body_blake3": "afc7eef6f3dbfc6b4debe4d9482b063ab0006e41c281759e605e054f770dfee3",
+        "entry_count": 105,
+        "payload_bytes": 359235,
+        "record_content_blake3": "13450e1e9a31edfbeccd0adc30c52b2d085d4c3c6b58f42a1b6f902e903f3b4a"
+      },
+      "vcs-snapshot-eb45ddab104c483e5f3619e95ad3b1c4a205a06ef8b68bf9662cfb560c4d3dca": {
+        "canonical_body_blake3": "1f4a2eaf5f638aaafbce0c7a930041191a20734e96d2b1e56c940a99719d2408",
+        "entry_count": 22,
+        "payload_bytes": 244787,
+        "record_content_blake3": "0cc000667e857118296d9abd7959a323024eed0fc09231d307985e9ffe7a6ae6"
+      },
+      "vcs-snapshot-f04629914f26de856eba20e819fc247c43b2e68c2273b812cef9110be7cf8866": {
+        "canonical_body_blake3": "b6e51216879b9e06d7f6baac691a1714eba54ca05d9c5b93381f41144c312bf6",
+        "entry_count": 142,
+        "payload_bytes": 599665,
+        "record_content_blake3": "2dcf2577f60e195efa112a8d8978b41542a13f25ef0ee3d9ab4068256096ce94"
+      },
+      "vcs-snapshot-f5b020d339ef4eb3a453549ce1280c76c38ad2198dfed82eb39b736d24ea04f0": {
+        "canonical_body_blake3": "8c825f0134cf60a1931e65c79baae808990daf425aa8abb1fea43fc49ae3912d",
+        "entry_count": 41,
+        "payload_bytes": 134267,
+        "record_content_blake3": "f2c5526d58cc9424f32e78f6d96e9c271237998a7c8ac007d80fdd118d50fa47"
+      }
+    },
+    "program_records": {
+      "fixed-point-native-source-program": {
+        "entry_count": 132,
+        "payload_bytes": 34839447,
+        "record_body_blake3": "63b984da2957cf2262495e3080e7b2d39b35c949c55d405a5e089716c18df7db",
+        "record_content_blake3": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc"
+      },
+      "fixed-point-rust-source-program": {
+        "entry_count": 23,
+        "payload_bytes": 264470864,
+        "record_body_blake3": "a8e88bfd6d3ba20776afba00849f954037c8177549a738b89e6022d603538d62",
+        "record_content_blake3": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186"
+      },
+      "source-built-mantle-programs": {
+        "entry_count": 3,
+        "payload_bytes": 100180,
+        "record_body_blake3": "ff910e60eb181c73cf1410250f108e2d044ac06b56ad36cdb927f69893d3b0a8",
+        "record_content_blake3": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109"
+      },
+      "source-built-stagex-programs": {
+        "entry_count": 321,
+        "payload_bytes": 32734110,
+        "record_body_blake3": "5d873e541940f35878e752afab6e2fa5ba2794b219d17716c5659360798542f7",
+        "record_content_blake3": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96"
+      }
+    },
+    "role_records": {
+      "bootstrap-source": {
+        "chunk_entries": 25,
+        "content_entries": 25,
+        "content_files": 1,
+        "embedded_payload_bytes_compared": 1632752835,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/native-source-authority",
+        "physical_tree": {
+          "counts": {
+            "directory": 0,
+            "regular": 1,
+            "symlink": 0
+          },
+          "digest_blake3": "5375d4091dd6b7524ff77325bc002af8a53a9a52a6b24d608be6b4416bbd8439",
+          "entry_count": 1,
+          "payload_file_bytes": 1632752835
+        },
+        "preauthor_plan": {
+          "digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+          "id": "native-source-bundle",
+          "kind": "regular-file",
+          "role": "native-source-bundle",
+          "size_bytes": 968316247
+        },
+        "profile_class": "bootstrap-source",
+        "record_content_blake3": "989799774d6c609176f3a82f59cec22f38ece86c7e15f22a883937df6e24e3c2",
+        "record_identity": "bootstrap-source-0001",
+        "record_kind": "bootstrap-archive",
+        "record_payload_bytes": 1632752835
+      },
+      "mantle-source": {
+        "chunk_entries": 6,
+        "content_entries": 12775,
+        "content_files": 12771,
+        "embedded_payload_bytes_compared": 728918305,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source",
+        "physical_tree": {
+          "counts": {
+            "directory": 1132,
+            "regular": 12771,
+            "symlink": 0
+          },
+          "digest_blake3": "b00166212d9348a42844022f81523e8d2067bbf76beab3c91b8474925bed0e4b",
+          "entry_count": 13903,
+          "payload_file_bytes": 728918305
+        },
+        "preauthor_plan": {
+          "digest_blake3": "2882371f97e4c2c4cdc52e97ac2308c6f345ffcfa73a2349101889d36913d0b5",
+          "id": "mantle-source",
+          "kind": "directory",
+          "role": "mantle-source",
+          "size_bytes": 359094665
+        },
+        "profile_class": "mantle-source",
+        "record_content_blake3": "0beb2de5a176b74ac35d5a09b292d97c8a82615cefea933692b7be298f80a028",
+        "record_identity": "mantle-source-tree",
+        "record_kind": "local-path",
+        "record_payload_bytes": 728918305
+      },
+      "proof-input": {
+        "chunk_entries": 53,
+        "content_entries": 73,
+        "content_files": 26,
+        "embedded_payload_bytes_compared": 3429345563,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/rust-source-archives",
+        "physical_tree": {
+          "counts": {
+            "directory": 6,
+            "regular": 26,
+            "symlink": 0
+          },
+          "digest_blake3": "65b8c8c9284dd2d81b5736e2d71277ae6f9c15d23ba93e7c8527098a4c6a3246",
+          "entry_count": 32,
+          "payload_file_bytes": 3429345563
+        },
+        "preauthor_plan": {
+          "digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+          "id": "rust-source-archive-set",
+          "kind": "directory",
+          "role": "rust-source-archive-set",
+          "size_bytes": 3164874699
+        },
+        "profile_class": "proof-input",
+        "record_content_blake3": "0e11a686d15de19b636a61f0ac117fa8862a706d7979033e2c07ba630a35ecf3",
+        "record_identity": "proof-input-0001",
+        "record_kind": "proof-input",
+        "record_payload_bytes": 3429345563
+      },
+      "stagex-lineage": {
+        "chunk_entries": 0,
+        "content_entries": 1,
+        "content_files": 1,
+        "embedded_payload_bytes_compared": 170686,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-lineage",
+        "physical_tree": {
+          "counts": {
+            "directory": 0,
+            "regular": 1,
+            "symlink": 0
+          },
+          "digest_blake3": "4923deb65b2bad5dca23264cebb6622dc47ddf49bb11dc62d2f17c29384e7cb8",
+          "entry_count": 1,
+          "payload_file_bytes": 170686
+        },
+        "preauthor_plan": {
+          "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+          "id": "stagex-lineage",
+          "kind": "regular-file",
+          "role": "stagex-lineage",
+          "size_bytes": 170686
+        },
+        "profile_class": "stagex-lineage",
+        "record_content_blake3": "3f5a62df63892e1b5f3fe650d70d1f106cffd73dfdf57dd5e01edcb4e4b48018",
+        "record_identity": "stagex-lineage",
+        "record_kind": "provider-manifest",
+        "record_payload_bytes": 170686
+      },
+      "stagex-seed": {
+        "chunk_entries": 0,
+        "content_entries": 1,
+        "content_files": 1,
+        "embedded_payload_bytes_compared": 229,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-seed",
+        "physical_tree": {
+          "counts": {
+            "directory": 0,
+            "regular": 1,
+            "symlink": 0
+          },
+          "digest_blake3": "49f0d1813dc4edee61fa411b30df78138eb3b9d5fbf4ef82f975391ce0aca497",
+          "entry_count": 1,
+          "payload_file_bytes": 229
+        },
+        "preauthor_plan": {
+          "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+          "id": "stagex-seed",
+          "kind": "regular-file",
+          "role": "stagex-seed",
+          "size_bytes": 229
+        },
+        "profile_class": "stagex-seed",
+        "record_content_blake3": "ad50d1ba64d1a241ba467d32f4f59a3aee513568bc3f89bbc69dff2222638c4b",
+        "record_identity": "stagex-seed",
+        "record_kind": "bootstrap-archive",
+        "record_payload_bytes": 229
+      },
+      "stagex-source-bundle": {
+        "chunk_entries": 2,
+        "content_entries": 2,
+        "content_files": 1,
+        "embedded_payload_bytes_compared": 87616094,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/stagex-source-bundle",
+        "physical_tree": {
+          "counts": {
+            "directory": 0,
+            "regular": 1,
+            "symlink": 0
+          },
+          "digest_blake3": "459aa136e6af258cc357b6f46d26377634e3156c970754cd656d9f6dd67af820",
+          "entry_count": 1,
+          "payload_file_bytes": 87616094
+        },
+        "preauthor_plan": {
+          "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+          "id": "stagex-source-bundle",
+          "kind": "regular-file",
+          "role": "stagex-source-bundle",
+          "size_bytes": 87616094
+        },
+        "profile_class": "stagex-source-bundle",
+        "record_content_blake3": "37642997a0c6e620faec05f31017e8d68fb0d64edb550f8ff8eb22f8235c02a3",
+        "record_identity": "stagex-source-bundle",
+        "record_kind": "proof-input",
+        "record_payload_bytes": 87616094
+      },
+      "vendored-cargo-inputs": {
+        "chunk_entries": 0,
+        "content_entries": 57965,
+        "content_files": 57965,
+        "embedded_payload_bytes_compared": 1213371949,
+        "physical_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps",
+        "physical_tree": {
+          "counts": {
+            "directory": 10803,
+            "regular": 57965,
+            "symlink": 0
+          },
+          "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+          "entry_count": 68768,
+          "payload_file_bytes": 1213371949
+        },
+        "preauthor_plan": {
+          "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+          "id": "vendor-inputs",
+          "kind": "directory",
+          "role": "vendor-inputs",
+          "size_bytes": 1213371949
+        },
+        "profile_class": "vendored-cargo-inputs",
+        "record_content_blake3": "719e1550cbc0b99a311a779a1583a34c1e8c17a625e08d79f7635b04e2705de5",
+        "record_identity": "vendored-cargo-inputs",
+        "record_kind": "package-mirror",
+        "record_payload_bytes": 1213371949
+      }
+    },
+    "target_records_verified": 70,
+    "total_records_decoded": 70
+  },
+  "program_records": {
+    "fixed-point-native-source-program": {
+      "archive_bytes": 35034624,
+      "archive_member_bytes_compared_exactly": true,
+      "archive_member_count": 132,
+      "archive_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-native-source-program.tar",
+      "archive_raw_blake3": "d503640352d84de5a27a058f134403b0d0e0656a9b52ac8e0563e38ae3dd1761",
+      "canonical_record_content_blake3": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+      "chunk_entries": 0,
+      "entry_count": 132,
+      "identity": "fixed-point-native-source-program",
+      "payload_bytes": 34839447,
+      "physical_tree": {
+        "counts": {
+          "directory": 2,
+          "regular": 132,
+          "symlink": 0
+        },
+        "digest_blake3": "55e7b64213a579750b5b00aa00ea1dcda2452195fd37f9d90dde8d45d238e6f5",
+        "entry_count": 134,
+        "payload_file_bytes": 34839447
+      },
+      "record_content_blake3": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+      "record_metadata_nar_blake3": "40ee3117c1c237a12d498bce00fef75f790e0511042cd96d7a52633de1f0c88a",
+      "recursive_nar_blake3": "40ee3117c1c237a12d498bce00fef75f790e0511042cd96d7a52633de1f0c88a",
+      "report_content_blake3": "ce24ae532a5f5d58b4e4416fdc913f192349eeadc0671e3338011167aadb8bfc",
+      "unique_files": 132
+    },
+    "fixed-point-rust-source-program": {
+      "archive_bytes": 264487936,
+      "archive_member_bytes_compared_exactly": true,
+      "archive_member_count": 20,
+      "archive_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program.tar",
+      "archive_raw_blake3": "0bf46efee867e7727e9fb5e09a26fb89991666c8229e97ae16cd6189ecf7c9b9",
+      "canonical_record_content_blake3": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+      "chunk_entries": 4,
+      "entry_count": 23,
+      "identity": "fixed-point-rust-source-program",
+      "payload_bytes": 264470864,
+      "physical_tree": {
+        "counts": {
+          "directory": 6,
+          "regular": 20,
+          "symlink": 0
+        },
+        "digest_blake3": "f2a09afc0c83836cbb5de9dd00252fe48f6be74240e11b6e3dfebacde3cb68b1",
+        "entry_count": 26,
+        "payload_file_bytes": 264470864
+      },
+      "record_content_blake3": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+      "record_metadata_nar_blake3": "14b8619ce87a14680aa254db0c43bc5f783bc8345d9e3eae8e81bd118d723ca3",
+      "recursive_nar_blake3": "14b8619ce87a14680aa254db0c43bc5f783bc8345d9e3eae8e81bd118d723ca3",
+      "report_content_blake3": "72542c32c667f9bb76bd651d31a34f553665b716659ad2629185409a674d3186",
+      "unique_files": 20
+    },
+    "source-built-mantle-programs": {
+      "archive_bytes": 103936,
+      "archive_member_bytes_compared_exactly": true,
+      "archive_member_count": 3,
+      "archive_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/source-built-mantle-programs.tar",
+      "archive_raw_blake3": "29ee25f9fc4d3aa9222ba43d6dcf7eedb6601b8cf718a6a9ed8453296268c68c",
+      "canonical_record_content_blake3": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+      "chunk_entries": 0,
+      "entry_count": 3,
+      "identity": "source-built-mantle-programs",
+      "payload_bytes": 100180,
+      "physical_tree": {
+        "counts": {
+          "directory": 0,
+          "regular": 3,
+          "symlink": 0
+        },
+        "digest_blake3": "ef3c9d88f2eadaf04ecff65d03a6477e1264de9245bf04d3edba1e59238cb165",
+        "entry_count": 3,
+        "payload_file_bytes": 100180
+      },
+      "record_content_blake3": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+      "record_metadata_nar_blake3": "6834e14a120df4db2d401111a07ee4efc32625b7983759498634453d44d80709",
+      "recursive_nar_blake3": "6834e14a120df4db2d401111a07ee4efc32625b7983759498634453d44d80709",
+      "report_content_blake3": "cf51f7c49567808dc2d8f2c0bd1e1084273e99a2788d79f0439bfa0ed2702109",
+      "unique_files": 3
+    },
+    "source-built-stagex-programs": {
+      "archive_bytes": 33010176,
+      "archive_member_bytes_compared_exactly": true,
+      "archive_member_count": 321,
+      "archive_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/source-built-stagex-programs.tar",
+      "archive_raw_blake3": "63d9663458bdeeaf0952cf0a6815897e75fd8fbba8a1da1eec3571b4a29bd27c",
+      "canonical_record_content_blake3": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96",
+      "chunk_entries": 0,
+      "entry_count": 321,
+      "identity": "source-built-stagex-programs",
+      "payload_bytes": 32734110,
+      "physical_tree": {
+        "counts": {
+          "directory": 6,
+          "regular": 321,
+          "symlink": 0
+        },
+        "digest_blake3": "d74607e0f8e67117b1dfb3a13888264c9cd1b8fc5256dc7aa0c5cc1b8d10c43e",
+        "entry_count": 327,
+        "payload_file_bytes": 32734110
+      },
+      "record_content_blake3": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96",
+      "record_metadata_nar_blake3": "aa6823dd20b7034bf19133b23c106f6215d6f6d675527151ea6cfa91cf2a3c23",
+      "recursive_nar_blake3": "aa6823dd20b7034bf19133b23c106f6215d6f6d675527151ea6cfa91cf2a3c23",
+      "report_content_blake3": "86413c1b1131c46051176a9891aa32d76ed85cca37979a8119d18221c6921e96",
+      "unique_files": 321
+    }
+  },
+  "run": "/home/brittonr/sbfp-20261113-berdKH",
+  "schema": "mantle-fresh-source-cohort-identity-review-v1",
+  "scope": "inert physical identity/authenticated-source review only",
+  "selected_authenticated_perlasm": {
+    "aws_probe_boundaries": [
+      {
+        "blake3": "262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0",
+        "bytes": 21458,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl"
+      },
+      {
+        "blake3": "0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0",
+        "bytes": 26648,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl"
+      },
+      {
+        "blake3": "10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074",
+        "bytes": 28681,
+        "literal_count": 1,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl"
+      }
+    ],
+    "aws_scripts": [
+      {
+        "blake3": "89c83891677ea6f95efa553796524a88f9d629beaba9879547389ffd60dc58be",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 66813,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/chacha/asm/chacha-x86_64.pl"
+      },
+      {
+        "blake3": "1fc47e7d80288b7a4effe28184954eca41de52300e42e82cb5b318a0daebaac5",
+        "boundary_kind": "standalone",
+        "boundary_line": 26,
+        "bytes": 58547,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl"
+      },
+      {
+        "blake3": "eaa9ea423ce573e2c0d1b75a56ae8fd12649f9a77f02b73bf737b08141f95b93",
+        "boundary_kind": "standalone",
+        "boundary_line": 113,
+        "bytes": 30738,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/ghash-x86_64.pl"
+      },
+      {
+        "blake3": "229e1e05673f81b6ae5d4471d34f9db92079a2ba836b4679b447376eaca8dbc1",
+        "boundary_kind": "standalone",
+        "boundary_line": 126,
+        "bytes": 12789,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/md5/asm/md5-x86_64.pl"
+      },
+      {
+        "blake3": "aa85ab25e25b02808d680e8af59bbe5e8e0ca9e99510443606f4bbc4fbbb2322",
+        "boundary_kind": "standalone",
+        "boundary_line": 54,
+        "bytes": 93043,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl"
+      },
+      {
+        "blake3": "73e62ed3a2fb9dab2e7e0b5ac1d2203d2944d7d089b435c9df7dc203a402d089",
+        "boundary_kind": "standalone",
+        "boundary_line": 27,
+        "bytes": 8962,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl"
+      },
+      {
+        "blake3": "58b622bcb4e91f43ab67514ed5ce855f8057d75741cb5961193a632eb8c67d50",
+        "boundary_kind": "standalone",
+        "boundary_line": 24,
+        "bytes": 1570,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/rand/asm/rdrand-x86_64.pl"
+      },
+      {
+        "blake3": "262fb6efec223f5674d66642046ce368d145fc211f9596d5ce738eff34ba3ea0",
+        "boundary_kind": "guarded",
+        "boundary_line": 68,
+        "bytes": 21458,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl"
+      },
+      {
+        "blake3": "0937552b7be9404ebfc2fadbbb90566ef6f32b5539e8fb1c0f2a1e758638d0b0",
+        "boundary_kind": "guarded",
+        "boundary_line": 67,
+        "bytes": 26648,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl"
+      },
+      {
+        "blake3": "10259f76e05d7200351004527b63997ce46ce1fa98f93f47f6c63fcaa4846074",
+        "boundary_kind": "guarded",
+        "boundary_line": 67,
+        "bytes": 28681,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl"
+      },
+      {
+        "blake3": "8884c6d710bef85d7fec1f3ee617edac45fe1114a5f1a5a579fac4b2a16e26df",
+        "boundary_kind": "standalone",
+        "boundary_line": 56,
+        "bytes": 51322,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/rsaz-avx2.pl"
+      },
+      {
+        "blake3": "810707aaa189a22282f07aedcdce8868498afac2179f058c21cd2cba070c4427",
+        "boundary_kind": "standalone",
+        "boundary_line": 111,
+        "bytes": 50927,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha1-x86_64.pl"
+      },
+      {
+        "blake3": "add51d8cb29e44fb9390ea73304e42948f8551c3edc87c395dc04b2029c8cf1c",
+        "boundary_kind": "standalone",
+        "boundary_line": 104,
+        "bytes": 40904,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aesni-sha1-x86_64.pl"
+      },
+      {
+        "blake3": "fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe",
+        "boundary_kind": "standalone",
+        "boundary_line": 135,
+        "bytes": 52908,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "fba7770359cf76e0236c56e5b8d5e252702618dcbd9029cf11b28bb4ca7562fe",
+        "boundary_kind": "standalone",
+        "boundary_line": 135,
+        "bytes": 52908,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "9bd6802d750f65b24a0247a816a9c9ccaff4c42448e0cc502958f37a9e60bebf",
+        "boundary_kind": "standalone",
+        "boundary_line": 67,
+        "bytes": 40142,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl"
+      },
+      {
+        "blake3": "2a9fc62b13ed8b0ee32a3b6622cb8a0d385ef2a4570a73e753eb696b18fe316a",
+        "boundary_kind": "standalone",
+        "boundary_line": 57,
+        "bytes": 32716,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/x86_64-mont.pl"
+      },
+      {
+        "blake3": "b9003d1b9873e3619141ccfea37fc6562d99d1fd72d63354ef74eb85ced09adf",
+        "boundary_kind": "standalone",
+        "boundary_line": 42,
+        "bytes": 85309,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/bn/asm/x86_64-mont5.pl"
+      },
+      {
+        "blake3": "2e066c06161f9d0dad38faebd3cdaf76eea0f29ff39bdf432c2a0eaeb6a11912",
+        "boundary_kind": "standalone",
+        "boundary_line": 35,
+        "bytes": 12296,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/test/asm/trampoline-x86_64.pl"
+      },
+      {
+        "blake3": "11ab8fb86f3b0c378535962f7139c16cdfc3c93944705ae53e9df6e0d2ae8ff9",
+        "boundary_kind": "standalone",
+        "boundary_line": 60,
+        "bytes": 43564,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/aesni-sha256-x86_64.pl"
+      },
+      {
+        "blake3": "91ad2dde2284b8d64adb9399b6d0ea1b8068da647d8c5287fe918ae351fa9c76",
+        "boundary_kind": "standalone",
+        "boundary_line": 26,
+        "bytes": 78528,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl"
+      },
+      {
+        "blake3": "87b1c7208ad1f55f518d8c32979d4e7a73ce6cfbc625e742b4bdfb7fe92c8a5d",
+        "boundary_kind": "guarded",
+        "boundary_line": 65,
+        "bytes": 198503,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl"
+      },
+      {
+        "blake3": "b30bdfd34ca4328d20bb971c564ea0e16e8e8e754c8b347a8f277f23d6f1fd02",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 31756,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl"
+      },
+      {
+        "blake3": "7510a0d33b63d9e522a357c822105d3742b90f7dda87e6723042b52deb21f0e0",
+        "boundary_kind": "standalone",
+        "boundary_line": 203,
+        "bytes": 103292,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/aesni-x86_64.pl"
+      },
+      {
+        "blake3": "6f12a7be63074584187c5b60b3c967280e5b894e5ae2084949f30d433d25c64c",
+        "boundary_kind": "standalone",
+        "boundary_line": 40,
+        "bytes": 90497,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl"
+      },
+      {
+        "blake3": "65bd717c0fdb5c68d8f773cdd2124395d106208a690b8dfe6ad7fef15c945ee4",
+        "boundary_kind": "standalone",
+        "boundary_line": 80,
+        "bytes": 10029,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl"
+      }
+    ],
+    "aws_selected_count": 26,
+    "aws_translator": {
+      "blake3": "95ff13079dd7701e6c6c5b00a8ba93329fc99cf2bf7a4438bf00461f0a3a914f",
+      "bytes": 57882,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-inputs/aws-lc-original-02561621ffa4cf17c0c4f70bc11a82df36b42ae9/crypto/perlasm/x86_64-xlate.pl"
+    },
+    "frozen_pipe_source_blake3": "66d27be763efba39f880c65da8f296c279f69a01ad6fc24fd8904417f2a368df",
+    "frozen_pipe_source_bytes": 1260,
+    "ring_scripts": [
+      {
+        "blake3": "8ec24e99ba7dd8aac31652b2e5b3c2ee9fcf2fc7b28b0c27cf7349e713b07439",
+        "boundary_kind": "standalone",
+        "boundary_line": 75,
+        "bytes": 46692,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/chacha/asm/chacha-x86_64.pl"
+      },
+      {
+        "blake3": "67176f5ad24afbc55024bd74af3be84ce8db9e30ee95d7d0a68f5c8bfdbcd9b5",
+        "boundary_kind": "standalone",
+        "boundary_line": 60,
+        "bytes": 42267,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl"
+      },
+      {
+        "blake3": "f4089870141639aead541de1add20ecc5251aa68298e853320722ce7251e9f98",
+        "boundary_kind": "standalone",
+        "boundary_line": 34,
+        "bytes": 79830,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/cipher/asm/chacha20_poly1305_x86_64.pl"
+      },
+      {
+        "blake3": "160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c",
+        "boundary_kind": "standalone",
+        "boundary_line": 167,
+        "bytes": 43633,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      },
+      {
+        "blake3": "607878718866b3672f44aac485d3a544c9d252212d8ef42209befeec896863e8",
+        "boundary_kind": "standalone",
+        "boundary_line": 72,
+        "bytes": 32033,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl"
+      },
+      {
+        "blake3": "97da62d6fc1533db255ffffc89d7f0c1b032768846121dc187ad6c186a2a9911",
+        "boundary_kind": "standalone",
+        "boundary_line": 206,
+        "bytes": 44616,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/aesni-x86_64.pl"
+      },
+      {
+        "blake3": "fca6dea9bccbf1a56c983fe50153af38fa6555b2f5de4ef458697badececf28b",
+        "boundary_kind": "standalone",
+        "boundary_line": 120,
+        "bytes": 29711,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/ghash-x86_64.pl"
+      },
+      {
+        "blake3": "56058492b2682b2a4a9ac074bea023ecc827210d7e972eae7337d85ddd5d8a1c",
+        "boundary_kind": "standalone",
+        "boundary_line": 75,
+        "bytes": 27318,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl"
+      },
+      {
+        "blake3": "fed94b06c9bd5c6eedd723db7ee6b1a70fa0ca3ad56549015e650de1cf0fb36c",
+        "boundary_kind": "standalone",
+        "boundary_line": 65,
+        "bytes": 32733,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/bn/asm/x86_64-mont.pl"
+      },
+      {
+        "blake3": "482e03daf2011ae4ad80c379da3b399b72ec870cc24fb5b98368135a0d65c912",
+        "boundary_kind": "standalone",
+        "boundary_line": 50,
+        "bytes": 76649,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/bn/asm/x86_64-mont5.pl"
+      },
+      {
+        "blake3": "96f377c7ef8a94c7f7d44e8baa1e7cec0db2f61d7cf48ec171e51507bf66d95b",
+        "boundary_kind": "standalone",
+        "boundary_line": 61,
+        "bytes": 92109,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl"
+      },
+      {
+        "blake3": "160fe0bd57bed4b1b0459010285f850bc5deac516a92dd8f48242645e35ea71c",
+        "boundary_kind": "standalone",
+        "boundary_line": 167,
+        "bytes": 43633,
+        "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/fipsmodule/sha/asm/sha512-x86_64.pl"
+      }
+    ],
+    "ring_selected_count": 12,
+    "ring_translator": {
+      "blake3": "f42e8bb3a5d4149a976e588f89ceadd370b3ab74d46ef317aad4b4e9a2c289fd",
+      "bytes": 59159,
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/vendor-deps/ring/crypto/perlasm/x86_64-xlate.pl"
+    },
+    "stage_selection_equal": true,
+    "stages": [
+      {
+        "aws": [
+          {
+            "assembly_output": "chacha-x86_64.S",
+            "id": "unit-00037-script.perlasm-0.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-0.pipe-source",
+            "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aes128gcmsiv-x86_64.S",
+            "id": "unit-00037-script.perlasm-1.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-1.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "ghash-x86_64.S",
+            "id": "unit-00037-script.perlasm-10.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-10.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/ghash-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "md5-x86_64.S",
+            "id": "unit-00037-script.perlasm-11.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-11.pipe-source",
+            "script_path": "crypto/fipsmodule/md5/asm/md5-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "p256-x86_64-asm.S",
+            "id": "unit-00037-script.perlasm-12.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-12.pipe-source",
+            "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "p256_beeu-x86_64-asm.S",
+            "id": "unit-00037-script.perlasm-13.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-13.pipe-source",
+            "script_path": "crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rdrand-x86_64.S",
+            "id": "unit-00037-script.perlasm-14.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-14.pipe-source",
+            "script_path": "crypto/fipsmodule/rand/asm/rdrand-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-2k-avx512.S",
+            "id": "unit-00037-script.perlasm-15.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-15.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-3k-avx512.S",
+            "id": "unit-00037-script.perlasm-16.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-16.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-4k-avx512.S",
+            "id": "unit-00037-script.perlasm-17.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-17.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-avx2.S",
+            "id": "unit-00037-script.perlasm-18.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-18.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-avx2.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha1-x86_64.S",
+            "id": "unit-00037-script.perlasm-19.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-19.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha1-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-sha1-x86_64.S",
+            "id": "unit-00037-script.perlasm-2.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-2.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aesni-sha1-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha256-x86_64.S",
+            "id": "unit-00037-script.perlasm-20.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-20.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha512-x86_64.S",
+            "id": "unit-00037-script.perlasm-21.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-21.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "vpaes-x86_64.S",
+            "id": "unit-00037-script.perlasm-22.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-22.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "x86_64-mont.S",
+            "id": "unit-00037-script.perlasm-23.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-23.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "x86_64-mont5.S",
+            "id": "unit-00037-script.perlasm-24.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-24.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "trampoline-x86_64.S",
+            "id": "unit-00037-script.perlasm-25.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-25.pipe-source",
+            "script_path": "crypto/test/asm/trampoline-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-sha256-x86_64.S",
+            "id": "unit-00037-script.perlasm-3.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-3.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aesni-sha256-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "chacha20_poly1305_x86_64.S",
+            "id": "unit-00037-script.perlasm-4.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-4.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-gcm-avx512.S",
+            "id": "unit-00037-script.perlasm-5.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-5.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-gcm-x86_64.S",
+            "id": "unit-00037-script.perlasm-6.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-6.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-x86_64.S",
+            "id": "unit-00037-script.perlasm-7.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-7.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-xts-avx512.S",
+            "id": "unit-00037-script.perlasm-8.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-8.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "ghash-ssse3-x86_64.S",
+            "id": "unit-00037-script.perlasm-9.generate",
+            "pipe_source_action": "mantle-stage1/unit-00037-script.perlasm-9.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl",
+            "source_tree_action": "mantle-stage1/unit-00037-script.perlasm-source"
+          }
+        ],
+        "aws_count": 26,
+        "pipe_source_count": 38,
+        "recipe_bytes": 176214339,
+        "recipe_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-built/mantle-stage1.json",
+        "recipe_raw_blake3": "fb6b7f63a4033070dd52bb8ed27091e364289aa62afc91bdf97ff36e9ad46cd5",
+        "ring": [
+          {
+            "assembly_output": "chacha-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-0.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-0.generate",
+            "id": "unit-00031-script.sources.perl-0.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-0.result",
+            "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-0.translate"
+          },
+          {
+            "assembly_output": "aes-gcm-avx2-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-1.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-1.generate",
+            "id": "unit-00031-script.sources.perl-1.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-1.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-1.translate"
+          },
+          {
+            "assembly_output": "chacha20_poly1305_x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-10.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-10.generate",
+            "id": "unit-00031-script.sources.perl-10.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-10.result",
+            "script_path": "crypto/cipher/asm/chacha20_poly1305_x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-10.translate"
+          },
+          {
+            "assembly_output": "sha256-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-11.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-11.generate",
+            "id": "unit-00031-script.sources.perl-11.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-11.result",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-11.translate"
+          },
+          {
+            "assembly_output": "aesni-gcm-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-2.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-2.generate",
+            "id": "unit-00031-script.sources.perl-2.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-2.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-2.translate"
+          },
+          {
+            "assembly_output": "aesni-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-3.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-3.generate",
+            "id": "unit-00031-script.sources.perl-3.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-3.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-3.translate"
+          },
+          {
+            "assembly_output": "ghash-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-4.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-4.generate",
+            "id": "unit-00031-script.sources.perl-4.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-4.result",
+            "script_path": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-4.translate"
+          },
+          {
+            "assembly_output": "vpaes-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-5.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-5.generate",
+            "id": "unit-00031-script.sources.perl-5.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-5.result",
+            "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-5.translate"
+          },
+          {
+            "assembly_output": "x86_64-mont-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-6.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-6.generate",
+            "id": "unit-00031-script.sources.perl-6.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-6.result",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+            "translator": "unit-00031-script.sources.perl-6.translate"
+          },
+          {
+            "assembly_output": "x86_64-mont5-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-7.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-7.generate",
+            "id": "unit-00031-script.sources.perl-7.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-7.result",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+            "translator": "unit-00031-script.sources.perl-7.translate"
+          },
+          {
+            "assembly_output": "p256-x86_64-asm-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-8.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-8.generate",
+            "id": "unit-00031-script.sources.perl-8.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-8.result",
+            "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+            "translator": "unit-00031-script.sources.perl-8.translate"
+          },
+          {
+            "assembly_output": "sha512-x86_64-elf.S",
+            "authenticator_output": "mantle-stage1/unit-00031-script.sources.perl-9.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-9.generate",
+            "id": "unit-00031-script.sources.perl-9.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-9.result",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-9.translate"
+          }
+        ],
+        "ring_count": 12,
+        "stage": "mantle-stage1",
+        "steps": 24127
+      },
+      {
+        "aws": [
+          {
+            "assembly_output": "chacha-x86_64.S",
+            "id": "unit-00037-script.perlasm-0.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-0.pipe-source",
+            "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aes128gcmsiv-x86_64.S",
+            "id": "unit-00037-script.perlasm-1.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-1.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "ghash-x86_64.S",
+            "id": "unit-00037-script.perlasm-10.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-10.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/ghash-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "md5-x86_64.S",
+            "id": "unit-00037-script.perlasm-11.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-11.pipe-source",
+            "script_path": "crypto/fipsmodule/md5/asm/md5-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "p256-x86_64-asm.S",
+            "id": "unit-00037-script.perlasm-12.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-12.pipe-source",
+            "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "p256_beeu-x86_64-asm.S",
+            "id": "unit-00037-script.perlasm-13.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-13.pipe-source",
+            "script_path": "crypto/fipsmodule/ec/asm/p256_beeu-x86_64-asm.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rdrand-x86_64.S",
+            "id": "unit-00037-script.perlasm-14.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-14.pipe-source",
+            "script_path": "crypto/fipsmodule/rand/asm/rdrand-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-2k-avx512.S",
+            "id": "unit-00037-script.perlasm-15.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-15.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-2k-avx512.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-3k-avx512.S",
+            "id": "unit-00037-script.perlasm-16.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-16.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-3k-avx512.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-4k-avx512.S",
+            "id": "unit-00037-script.perlasm-17.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-17.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-4k-avx512.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "rsaz-avx2.S",
+            "id": "unit-00037-script.perlasm-18.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-18.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/rsaz-avx2.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha1-x86_64.S",
+            "id": "unit-00037-script.perlasm-19.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-19.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha1-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-sha1-x86_64.S",
+            "id": "unit-00037-script.perlasm-2.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-2.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aesni-sha1-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha256-x86_64.S",
+            "id": "unit-00037-script.perlasm-20.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-20.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "sha512-x86_64.S",
+            "id": "unit-00037-script.perlasm-21.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-21.pipe-source",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "vpaes-x86_64.S",
+            "id": "unit-00037-script.perlasm-22.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-22.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "x86_64-mont.S",
+            "id": "unit-00037-script.perlasm-23.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-23.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "x86_64-mont5.S",
+            "id": "unit-00037-script.perlasm-24.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-24.pipe-source",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "trampoline-x86_64.S",
+            "id": "unit-00037-script.perlasm-25.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-25.pipe-source",
+            "script_path": "crypto/test/asm/trampoline-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-sha256-x86_64.S",
+            "id": "unit-00037-script.perlasm-3.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-3.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/aesni-sha256-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "chacha20_poly1305_x86_64.S",
+            "id": "unit-00037-script.perlasm-4.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-4.pipe-source",
+            "script_path": "crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-gcm-avx512.S",
+            "id": "unit-00037-script.perlasm-5.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-5.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-avx512.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-gcm-x86_64.S",
+            "id": "unit-00037-script.perlasm-6.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-6.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-x86_64.S",
+            "id": "unit-00037-script.perlasm-7.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-7.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "aesni-xts-avx512.S",
+            "id": "unit-00037-script.perlasm-8.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-8.pipe-source",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-xts-avx512.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          },
+          {
+            "assembly_output": "ghash-ssse3-x86_64.S",
+            "id": "unit-00037-script.perlasm-9.generate",
+            "pipe_source_action": "mantle-stage2/unit-00037-script.perlasm-9.pipe-source",
+            "script_path": "crypto/fipsmodule/modes/asm/ghash-ssse3-x86_64.pl",
+            "source_tree_action": "mantle-stage2/unit-00037-script.perlasm-source"
+          }
+        ],
+        "aws_count": 26,
+        "pipe_source_count": 38,
+        "recipe_bytes": 176214339,
+        "recipe_path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source/bootstrap/source-built/mantle-stage2.json",
+        "recipe_raw_blake3": "9ff5ef7fa0ba2bac5cec7f497288006e7913fbed72c63a25892842c5ee6b6c71",
+        "ring": [
+          {
+            "assembly_output": "chacha-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-0.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-0.generate",
+            "id": "unit-00031-script.sources.perl-0.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-0.result",
+            "script_path": "crypto/chacha/asm/chacha-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-0.translate"
+          },
+          {
+            "assembly_output": "aes-gcm-avx2-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-1.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-1.generate",
+            "id": "unit-00031-script.sources.perl-1.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-1.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aes-gcm-avx2-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-1.translate"
+          },
+          {
+            "assembly_output": "chacha20_poly1305_x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-10.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-10.generate",
+            "id": "unit-00031-script.sources.perl-10.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-10.result",
+            "script_path": "crypto/cipher/asm/chacha20_poly1305_x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-10.translate"
+          },
+          {
+            "assembly_output": "sha256-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-11.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-11.generate",
+            "id": "unit-00031-script.sources.perl-11.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-11.result",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-11.translate"
+          },
+          {
+            "assembly_output": "aesni-gcm-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-2.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-2.generate",
+            "id": "unit-00031-script.sources.perl-2.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-2.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-gcm-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-2.translate"
+          },
+          {
+            "assembly_output": "aesni-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-3.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-3.generate",
+            "id": "unit-00031-script.sources.perl-3.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-3.result",
+            "script_path": "crypto/fipsmodule/aes/asm/aesni-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-3.translate"
+          },
+          {
+            "assembly_output": "ghash-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-4.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-4.generate",
+            "id": "unit-00031-script.sources.perl-4.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-4.result",
+            "script_path": "crypto/fipsmodule/aes/asm/ghash-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-4.translate"
+          },
+          {
+            "assembly_output": "vpaes-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-5.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-5.generate",
+            "id": "unit-00031-script.sources.perl-5.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-5.result",
+            "script_path": "crypto/fipsmodule/aes/asm/vpaes-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-5.translate"
+          },
+          {
+            "assembly_output": "x86_64-mont-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-6.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-6.generate",
+            "id": "unit-00031-script.sources.perl-6.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-6.result",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont.pl",
+            "translator": "unit-00031-script.sources.perl-6.translate"
+          },
+          {
+            "assembly_output": "x86_64-mont5-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-7.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-7.generate",
+            "id": "unit-00031-script.sources.perl-7.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-7.result",
+            "script_path": "crypto/fipsmodule/bn/asm/x86_64-mont5.pl",
+            "translator": "unit-00031-script.sources.perl-7.translate"
+          },
+          {
+            "assembly_output": "p256-x86_64-asm-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-8.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-8.generate",
+            "id": "unit-00031-script.sources.perl-8.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-8.result",
+            "script_path": "crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl",
+            "translator": "unit-00031-script.sources.perl-8.translate"
+          },
+          {
+            "assembly_output": "sha512-x86_64-elf.S",
+            "authenticator_output": "mantle-stage2/unit-00031-script.sources.perl-9.authenticate:authenticated",
+            "generator": "unit-00031-script.sources.perl-9.generate",
+            "id": "unit-00031-script.sources.perl-9.authenticate",
+            "package_source_ref": {
+              "kind": "source",
+              "path": "ring",
+              "role": "vendor-inputs"
+            },
+            "result": "unit-00031-script.sources.perl-9.result",
+            "script_path": "crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+            "translator": "unit-00031-script.sources.perl-9.translate"
+          }
+        ],
+        "ring_count": 12,
+        "stage": "mantle-stage2",
+        "steps": 24127
+      }
+    ]
+  },
+  "source_copy_bindings": {
+    "frozen_helper_translator_copies": [
+      {
+        "blake3": "79b30f32724f2d7528b787ace20da86be7760db319987e3c8e4e5792c1c9e1ff",
+        "bytes": 12042,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_mantle_programs_aws_helper.rs",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/source-built-mantle-programs/aws-source-helper.rs"
+      },
+      {
+        "blake3": "44f4bf3ddebf711cf51390879245bccaf63ed71e13f2a89f8fb3ca8f0a4cb550",
+        "bytes": 7176,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_mantle_programs_native_helper.rs",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/source-built-mantle-programs/source_built_mantle_native_helper.rs"
+      },
+      {
+        "blake3": "fa60e97692a06b25117df8e541dce467a8d5d006d83f066c9d52a7b0970e3aac",
+        "bytes": 14808,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_translation.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/cairn/rust/mrustc-native-translation.c"
+      },
+      {
+        "blake3": "81d8bce63c143995a4d5ed6307d0bd111a3c9d90c4636616ea4ea7c69f7f01f7",
+        "bytes": 8725,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_phase.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-source-phase.c"
+      },
+      {
+        "blake3": "06e840a94f57af8b1b32b0b2dbb950d7959f0122ea2e8af72ab99d1a31b93ddc",
+        "bytes": 3931,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_link.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-native-link.rs"
+      },
+      {
+        "blake3": "56bccbafd578c286f5075c6f2e2f7a20bfc944c646cf80b14b67b289f4baf2dd",
+        "bytes": 2643,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_env.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-environment.rs"
+      },
+      {
+        "blake3": "d27164d3f6fc8a7c3757808c2c952d7ac7c6b2823c84ac8213306a3d3ef136f1",
+        "bytes": 3832,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_overlay.rs.in",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/cairn/rust/compiler-source-overlay.rs"
+      },
+      {
+        "blake3": "66e45fe3f07505c208b88aef6e98f196944d1881b09962d807eb550c0b769ade",
+        "bytes": 22113,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_patches.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-patches.c"
+      },
+      {
+        "blake3": "9070df77dfe11bf10746cc059b3e9c6d528e6173210555c96b36e77f3f65538c",
+        "bytes": 4762,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_mrustc_metadata.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/mantle-source-authoring/mrustc-metadata.hpp"
+      },
+      {
+        "blake3": "36688b576b66d59db339d34b97d7805365c3ab055f1c527d35305c2c0270b8ca",
+        "bytes": 8683,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_mrustc_proc_macro.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/mantle-source-authoring/mrustc-proc-macro.hpp"
+      },
+      {
+        "blake3": "8e886d0dc01938ac5730d2b7a00c9de4be504f557869ec444a2b69bbb824d1a4",
+        "bytes": 16594,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_minicargo_helper.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-minicargo.c"
+      },
+      {
+        "blake3": "853feb15acd3baed2b4560c059d8f41b86b17ff3f3484757873333db62512f32",
+        "bytes": 3686,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_llvm_source.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-rust-source-program/mantle-source-authoring/rust-llvm-products.c"
+      },
+      {
+        "blake3": "60dff5cd003a811f83f8e2b5b0a7a38f39ceaa4091f5dbc2d6f2f151e375b2f5",
+        "bytes": 9772,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_llvm_cmake_patch.c",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-native-source-program/source-built/native/llvm-cmake-patch.c"
+      },
+      {
+        "blake3": "1589ed7c19f5f66d700f5f412b5907618d3debbcd193e3d61c0531e5c0ddb46d",
+        "bytes": 19173,
+        "exact_byte_match": true,
+        "frozen_path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_built_rust_programs_llvm_cmake_phase.h",
+        "program_member": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/program-sources/fixed-point-native-source-program/source-built/native/llvm-cmake-phase.h"
+      }
+    ],
+    "frozen_source_preservation": {
+      "additional_member_count": 6,
+      "additional_member_paths": [
+        "bootstrap/source-built",
+        "bootstrap/source-built-cold-route.json",
+        "bootstrap/source-built/mantle-stage1.json",
+        "bootstrap/source-built/mantle-stage1.unit-plan.json",
+        "bootstrap/source-built/mantle-stage2.json",
+        "bootstrap/source-built/mantle-stage2.unit-plan.json"
+      ],
+      "admitted_frozen_leaf_count": 12766,
+      "capture_policy": {
+        "admitted_top_level_entries": [
+          ".cargo",
+          "Cargo.lock",
+          "Cargo.toml",
+          "bootstrap",
+          "builders",
+          "config",
+          "crates",
+          "examples",
+          "lib",
+          "rust-toolchain.toml",
+          "src",
+          "tests",
+          "tools",
+          "vendor"
+        ],
+        "frozen_policy_blake3": {
+          "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/self_build.rs": "7a56ab295ee1d13534a3b4e74e083d868fbeb7a1f3a3841515a3888e7983518f",
+          "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans/src/source_bundle.rs": "fe8c813887a3328ef306474acbf6d024f5f4c717c150a5904cecf5448d915282"
+        },
+        "separate_vendor_root": "vendor-deps",
+        "skipped_git_name": ".git"
+      },
+      "frozen_root": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+      "original_entries_preserved": 13897,
+      "original_payload_bytes_compared": 359094665,
+      "original_regular_files_compared": 12766,
+      "policy_excluded_frozen_leaf_count": 12214,
+      "policy_excluded_top_level_entries": [
+        ".autoresearch",
+        ".cairn",
+        ".config",
+        ".gitattributes",
+        ".github",
+        ".gitignore",
+        ".gitleaksignore",
+        ".pi",
+        "AGENTS.md",
+        "LICENSE",
+        "README.md",
+        "adr",
+        "cairn-policy",
+        "clippy.toml",
+        "contracts",
+        "deny.toml",
+        "docs",
+        "dylint.toml",
+        "evidence",
+        "fixtures",
+        "flake.lock",
+        "flake.nix",
+        "mantlepkgs",
+        "nix",
+        "openspec",
+        "packages",
+        "patches",
+        "rust-cache",
+        "rustfmt.toml",
+        "schemas",
+        "scripts",
+        "secretspec.toml",
+        "verus",
+        "workloads"
+      ],
+      "prepared_root": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/inputs/mantle-source",
+      "scope": "Every frozen leaf admitted by the frozen capture policy preserves kind, executable flag, symlink target and regular-file bytes. Parent directories exist; empty directories are not source records. Policy exclusions and additions are separate, not a whole-checkout mirror or preauthor/postauthor identity equivalence."
+    },
+    "original_route_copy": {
+      "blake3": "7e775ccd143fe30d260b603a5bbdba848a8306cabc0917d9004a2f915f8905ff",
+      "bytes": 5543,
+      "three_way_exact_byte_match": true
+    },
+    "rust_authority_copies": [
+      {
+        "blake3": "6d8163e9dee1126b8ab817a2b12d9d5e16fc71368353b73d7753cbd2849806f3",
+        "bytes": 258937678,
+        "exact_byte_match": true,
+        "member": "source-built/rust/program.json"
+      },
+      {
+        "blake3": "56bccbafd578c286f5075c6f2e2f7a20bfc944c646cf80b14b67b289f4baf2dd",
+        "bytes": 2643,
+        "exact_byte_match": true,
+        "member": "cairn/rust/compiler-environment.rs"
+      }
+    ]
+  },
+  "source_profile": {
+    "bytes": 15839323096,
+    "manifest_blake3": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+    "parent_full_ssh_stream_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5",
+    "parent_profile_transfer_equal": true,
+    "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-profile.json",
+    "raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5"
+  },
+  "source_roles": {
+    "mantle-source": {
+      "postauthor_payload_bytes": 728918305,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 1132,
+          "regular": 12771,
+          "symlink": 0
+        },
+        "digest_blake3": "b00166212d9348a42844022f81523e8d2067bbf76beab3c91b8474925bed0e4b",
+        "entry_count": 13903,
+        "payload_file_bytes": 728918305
+      },
+      "postauthor_record_content_blake3": "0beb2de5a176b74ac35d5a09b292d97c8a82615cefea933692b7be298f80a028",
+      "preauthor_physical_reconstructed": false,
+      "preauthor_plan_digest_blake3": "2882371f97e4c2c4cdc52e97ac2308c6f345ffcfa73a2349101889d36913d0b5",
+      "preauthor_plan_payload_bytes": 359094665
+    },
+    "native-source-bundle": {
+      "augmented_closure_bytes": 1632752835,
+      "augmented_closure_raw_blake3": "2c53dd60e404293e92a792d2acaa8e0bef025318c2a171b89c2035ff04b1b001",
+      "input_profile_bootstrap_source_role_raw_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "postauthor_payload_bytes": 1632752835,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 0,
+          "regular": 1,
+          "symlink": 0
+        },
+        "digest_blake3": "5375d4091dd6b7524ff77325bc002af8a53a9a52a6b24d608be6b4416bbd8439",
+        "entry_count": 1,
+        "payload_file_bytes": 1632752835
+      },
+      "postauthor_record_content_blake3": "989799774d6c609176f3a82f59cec22f38ece86c7e15f22a883937df6e24e3c2",
+      "preauthor_input_native_record_count": 59,
+      "preauthor_plan_digest_blake3": "da4860b26b700f044a5280f638b195b37142d06491e88a018041e1bfe5952e3f",
+      "preauthor_plan_payload_bytes": 968316247
+    },
+    "rust-source-archive-set": {
+      "postauthor_payload_bytes": 3429345563,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 6,
+          "regular": 26,
+          "symlink": 0
+        },
+        "digest_blake3": "65b8c8c9284dd2d81b5736e2d71277ae6f9c15d23ba93e7c8527098a4c6a3246",
+        "entry_count": 32,
+        "payload_file_bytes": 3429345563
+      },
+      "postauthor_record_content_blake3": "0e11a686d15de19b636a61f0ac117fa8862a706d7979033e2c07ba630a35ecf3",
+      "preauthor_physical_reconstructed": false,
+      "preauthor_plan_digest_blake3": "6e0d41b8cb7b8ceae2ce4c1d50478c3e7a965a6068711e8b3ca1efb766b42f24",
+      "preauthor_plan_payload_bytes": 3164874699
+    },
+    "stagex-lineage": {
+      "postauthor_payload_bytes": 170686,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 0,
+          "regular": 1,
+          "symlink": 0
+        },
+        "digest_blake3": "4923deb65b2bad5dca23264cebb6622dc47ddf49bb11dc62d2f17c29384e7cb8",
+        "entry_count": 1,
+        "payload_file_bytes": 170686
+      },
+      "postauthor_record_content_blake3": "3f5a62df63892e1b5f3fe650d70d1f106cffd73dfdf57dd5e01edcb4e4b48018",
+      "preauthor_physical_file_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "preauthor_physical_reconstructed": true,
+      "preauthor_plan_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
+    },
+    "stagex-seed": {
+      "postauthor_payload_bytes": 229,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 0,
+          "regular": 1,
+          "symlink": 0
+        },
+        "digest_blake3": "49f0d1813dc4edee61fa411b30df78138eb3b9d5fbf4ef82f975391ce0aca497",
+        "entry_count": 1,
+        "payload_file_bytes": 229
+      },
+      "postauthor_record_content_blake3": "ad50d1ba64d1a241ba467d32f4f59a3aee513568bc3f89bbc69dff2222638c4b",
+      "preauthor_physical_file_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+      "preauthor_physical_reconstructed": true,
+      "preauthor_plan_digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80"
+    },
+    "stagex-source-bundle": {
+      "postauthor_payload_bytes": 87616094,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 0,
+          "regular": 1,
+          "symlink": 0
+        },
+        "digest_blake3": "459aa136e6af258cc357b6f46d26377634e3156c970754cd656d9f6dd67af820",
+        "entry_count": 1,
+        "payload_file_bytes": 87616094
+      },
+      "postauthor_record_content_blake3": "37642997a0c6e620faec05f31017e8d68fb0d64edb550f8ff8eb22f8235c02a3",
+      "preauthor_physical_file_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+      "preauthor_physical_reconstructed": true,
+      "preauthor_plan_digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98"
+    },
+    "vendor-inputs": {
+      "postauthor_payload_bytes": 1213371949,
+      "postauthor_physical_tree": {
+        "counts": {
+          "directory": 10803,
+          "regular": 57965,
+          "symlink": 0
+        },
+        "digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+        "entry_count": 68768,
+        "payload_file_bytes": 1213371949
+      },
+      "postauthor_record_content_blake3": "719e1550cbc0b99a311a779a1583a34c1e8c17a625e08d79f7635b04e2705de5",
+      "preauthor_physical_reconstructed": false,
+      "preauthor_plan_digest_blake3": "3f6500660430cf88ef2af1375acbac6e097c89c13c19aec44d95a58ca4ab6705",
+      "preauthor_plan_payload_bytes": 1213371949
+    }
+  },
+  "subject_binding": {
+    "path": "/home/brittonr/sbfp-20261113-berdKH/review-subject-df51377d-unit-plans.json",
+    "raw_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2"
+  },
+  "supplemental_required_criteria": [
+    "preauthor directory-role identities from embedded input-profile bytes"
+  ],
+  "tool_hashes": {
+    "b3sum": {
+      "blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+      "path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum"
+    },
+    "git": {
+      "blake3": "b8fcf8cfa77c731cb3460ed6dbfdddf8991061e693760817ec411098ab9e505a",
+      "path": "/run/current-system/sw/bin/git"
+    },
+    "jq": {
+      "blake3": "9ed7522051c7f59af05775cea2c9f781d05e3c4667c743bece820cc2d8edeb22",
+      "path": "/run/current-system/sw/bin/jq"
+    },
+    "nix": {
+      "blake3": "10a89016fda3e60a7262562d0d2e855077296966b7431d9210e1538657dfeb2e",
+      "path": "/run/current-system/sw/bin/nix"
+    },
+    "python": {
+      "blake3": "4e68efa6d1d11a97486536067630aa94fa536c14904455040c0274c3e52d35bb",
+      "path": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14"
+    },
+    "tar": {
+      "blake3": "4f9b080ceb6c38fee8d89aa972d4aaf54ce4ee8bbdfa3850c3059ddaeee17e11",
+      "path": "/run/current-system/sw/bin/tar"
+    }
+  }
+}

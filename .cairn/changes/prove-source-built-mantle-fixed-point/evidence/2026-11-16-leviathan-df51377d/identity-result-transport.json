@@ -1,0 +1,40 @@
+{
+  "task": 1686,
+  "files": [
+    {
+      "file": "identity-results/identity-review.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/identity-review.json",
+      "blake3": "5ad8662a7f7dd73fbf5e62f9d2b2454bf4c1c821c9deb7bab00915fbb82c9b31",
+      "transfer_equal": true
+    },
+    {
+      "file": "identity-results/execution.log",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/execution.log",
+      "blake3": "99d1424295befe8f6b53bc8479af77c626de1b3ba0b755797dfc01af10beebe4",
+      "transfer_equal": true
+    }
+  ],
+  "inspector_blake3": "76da5556ccc3cf789d9d8147bbce248255774c1eb0891ddfed80b5a17e3a1a34",
+  "inspector_source_equal": true,
+  "complete_report": true,
+  "main_criterion_coverage": {
+    "7": {
+      "covered": 71989,
+      "total": 71992,
+      "uncovered": [
+        "preauthor embedded directory reconstruction: mantle-source",
+        "preauthor embedded directory reconstruction: rust-source-archive-set",
+        "preauthor embedded directory reconstruction: vendor-inputs"
+      ]
+    },
+    "8": {
+      "covered": 33818,
+      "total": 33818,
+      "uncovered": []
+    }
+  },
+  "required_supplement": [
+    "preauthor directory-role identities from embedded input-profile bytes"
+  ],
+  "scope": "Complete exact current main physical report transport only. Its explicit three preauthor gaps require the separate report, and independent review is not yet observed."
+}

@@ -1,0 +1,43 @@
+{
+  "task": 1687,
+  "result": "Success",
+  "files": [
+    {
+      "file": "preauthor-results/preauthor-role-physical-review.json",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-preauthor/preauthor-role-physical-review.json",
+      "blake3": "6ec949ce2a0d4bae33ed33f141fdb786766204ef48e1fc0c9c5f238ed3ad0640",
+      "transfer_equal": true
+    },
+    {
+      "file": "preauthor-results/execution.log",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-preauthor/execution.log",
+      "blake3": "452df7c44ecee3dab071725121d8b1c6ceec75522bae03ba89a849886df5faed",
+      "transfer_equal": true
+    }
+  ],
+  "inspector_blake3": "9cc9f0d994a08bca03200b2ac783f3c76e554fc75b76cdeaad186ab244802c65",
+  "inspector_source_equal": true,
+  "coverage": {
+    "preauthor_directory_roles": {
+      "covered": 3,
+      "total": 3,
+      "uncovered": []
+    },
+    "preauthor_embedded_leaf_entries": {
+      "covered": 70794,
+      "total": 70794,
+      "uncovered": []
+    },
+    "preauthor_file_role_bodies": {
+      "covered": 4,
+      "total": 4,
+      "uncovered": []
+    }
+  },
+  "supplemental_criterion7_coverage": {
+    "covered": 3,
+    "total": 3,
+    "uncovered": []
+  },
+  "scope": "Full current supplemental physical evidence and transport only. Covers the main report explicit three preauthor role gaps; independent acceptance and protected proof remain separate."
+}

@@ -1,0 +1,19 @@
+{
+  "task": 1686,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/inspect-identity-df51377d-unit-plans.sh"
+  ],
+  "report": "identity-results/identity-review.json",
+  "transcript": "identity-results/execution.log",
+  "captured_exit": 0,
+  "bounded_verdict": "STATIC_IDENTITY_CHECKS_CLEAR",
+  "non_claim": "Complete current main physical/source observations only. Explicit main-report preauthor gaps require the separate supplement; no independent acceptance, protected execution or proof."
+}

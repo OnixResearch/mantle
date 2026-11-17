@@ -1,0 +1,48 @@
+{
+  "failed_task": 1685,
+  "failed_dependent_task": 1689,
+  "failed_source": "graph-review/mantle-selector-audit-before-key-fix.py",
+  "corrected_source": "graph-review/mantle-selector-audit.py",
+  "defect": "Selector CLI looked up hyphenated stage ids in the graph producer selected-input map, which uses the established underscore keys.",
+  "change": "selected.get(stage.replace('-', '_'), {})",
+  "completed_reports_reused": [
+    "graph-audit.json",
+    "source-binding-kind-inventory.json",
+    "controller-template-audit.json",
+    "helper-authority-audit.json"
+  ],
+  "resume_tasks": {
+    "selector_and_roots": {
+      "id": 1690,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/review-tools-df51377d-unit-plans-selector-v2/graph-review/resume-selector-and-roots-v2.sh",
+        "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans",
+        "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+        "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-graph",
+        "/home/brittonr/sbfp-20261113-berdKH/review-subject-df51377d-unit-plans.json"
+      ]
+    },
+    "helper_mutations": {
+      "id": 1691,
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--",
+        "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14",
+        "/home/brittonr/sbfp-20261113-berdKH/check-helper-mutations-df51377d-unit-plans.py"
+      ]
+    }
+  },
+  "source_cohort_and_pins_unchanged": true,
+  "non_claim": "Failed checker and unexecuted dependent task retained. Only the failed selector CLI and skipped semantic-root scenarios are resumed; complete helper mutations use already available genuine graph data. No consumer rule, coverage, input or proof gate is weakened."
+}

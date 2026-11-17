@@ -1,0 +1,133 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "subject_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+  "prepared_manifest": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "graph": {
+    "totals": {
+      "recipe_steps": 125407,
+      "controller_specs": 2294,
+      "slots": 4588,
+      "generated_templates": 25053,
+      "static_words": 2551864
+    },
+    "consumer_faithful_verdict": "STATIC_TEMPLATE_REVIEW_CLEAR",
+    "launch_blockers": [],
+    "raw_graph_diagnostics_retained": true,
+    "helper_authority": {
+      "covered": 1098,
+      "failure_count": 0,
+      "global_failures": 0,
+      "invalid": 0,
+      "total": 1098,
+      "uncovered": 0
+    },
+    "selectors": {
+      "feature_cfg": {
+        "covered": 2098,
+        "invalid": 0,
+        "total": 2098,
+        "uncovered": 0
+      },
+      "feature_environment": {
+        "covered": 2386,
+        "invalid": 0,
+        "total": 2386,
+        "uncovered": 0
+      },
+      "package_exclusions": {
+        "covered": 2,
+        "invalid": 0,
+        "total": 2,
+        "uncovered": 0
+      }
+    },
+    "raw_output_seeds": {
+      "covered": 6832,
+      "destination_kind_counts": {
+        "archive": 1,
+        "text": 81,
+        "tree": 6750
+      },
+      "failure_examples": [],
+      "invalid": 0,
+      "producer_namespace_counts": {
+        "full-source-native-provider": 38,
+        "full-source-rust-provider": 2803,
+        "mantle-stage1": 1970,
+        "mantle-stage2": 1970,
+        "stagex-transition": 51
+      },
+      "source_kind_counts": {
+        "archive": 1,
+        "text": 81,
+        "tree": 6750
+      },
+      "total": 6832
+    },
+    "generated_output_seeds": {
+      "covered": 9176,
+      "destination_kind_counts": {
+        "tree": 9176
+      },
+      "failure_examples": [],
+      "failure_reason_counts": {},
+      "invalid": 0,
+      "producer_namespace_counts": {
+        "controller-validation": 9176
+      },
+      "source_kind_counts": {
+        "tree": 9176
+      },
+      "total": 9176
+    },
+    "runtime_invocation_bytes_observed": 0,
+    "canonical_root_scenarios": 10
+  },
+  "physical": {
+    "criterion7_combined": {
+      "total": 71992,
+      "covered": 71992,
+      "uncovered": []
+    },
+    "criterion8": {
+      "covered": 33818,
+      "total": 33818,
+      "uncovered": []
+    },
+    "supplemental_role_coverage": {
+      "preauthor_directory_roles": {
+        "covered": 3,
+        "total": 3,
+        "uncovered": []
+      },
+      "preauthor_embedded_leaf_entries": {
+        "covered": 70794,
+        "total": 70794,
+        "uncovered": []
+      },
+      "preauthor_file_role_bodies": {
+        "covered": 4,
+        "total": 4,
+        "uncovered": []
+      }
+    },
+    "original_native_body_comparisons": {
+      "comparison_sources": [
+        "preauthor-plan",
+        "augmented-closure",
+        "launch-input-profile"
+      ],
+      "covered": 177,
+      "total": 177,
+      "uncovered": []
+    }
+  },
+  "pending": [
+    "current complete helper mutation result1691",
+    "two fresh authorized underclass/gpt-6-sol reviews",
+    "parent acceptance and current prelaunch lifecycle gates",
+    "genuine protected stages and verified v2 receipt",
+    "fresh signed native rows"
+  ],
+  "non_claim": "Current inert measured facts and complete transport only. Raw graph HOLD observations are not suppressed; the complete consumer-faithful report classifies them. Combined physical coverage explicitly uses the distinct preauthor supplement. No model acceptance, protected execution, compiler correctness, v2 proof, native-row acceptance or release eligibility."
+}

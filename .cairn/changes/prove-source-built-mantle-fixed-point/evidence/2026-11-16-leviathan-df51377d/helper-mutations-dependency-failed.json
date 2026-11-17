@@ -1,0 +1,25 @@
+{
+  "task": {
+    "id": 1689,
+    "created_at": "2026-11-17T00:16:29.603752560-05:00",
+    "original_command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-helper-mutations-df51377d-unit-plans.py",
+    "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-helper-mutations-df51377d-unit-plans.py",
+    "path": "/home/brittonr/sbfp-20261113-berdKH",
+    "envs": {},
+    "group": "default",
+    "dependencies": [
+      1685
+    ],
+    "priority": 0,
+    "label": null,
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-17T00:16:29.603738213-05:00",
+        "start": "2026-11-17T00:34:36.526675852-05:00",
+        "end": "2026-11-17T00:34:36.526677745-05:00",
+        "result": "DependencyFailed"
+      }
+    }
+  },
+  "output": "(Pueue error) Failed to get log file handle: I/O error at path \"/home/brittonr/.local/share/pueue/task_logs/1689.log\" while getting log file handle:\nNo such file or directory (os error 2)"
+}

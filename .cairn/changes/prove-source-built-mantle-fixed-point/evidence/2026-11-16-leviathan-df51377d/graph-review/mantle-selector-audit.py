@@ -741,7 +741,7 @@ def main():
         if not g['normal_rel'](member, False):
             raise ValueError('noncanonical selected Mantle recipe')
         path = cohort / 'inputs/mantle-source' / member
-        claim = selected.get(stage, {})
+        claim = selected.get(stage.replace('-', '_'), {})
         actual = {'path': str(path), 'size_bytes': path.stat().st_size, 'blake3': g['b3'](path)}
         if claim != actual:
             raise ValueError(f'graph selected recipe binding mismatch: {stage}')

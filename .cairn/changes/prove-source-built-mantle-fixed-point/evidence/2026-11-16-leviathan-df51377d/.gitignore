@@ -1,0 +1,3 @@
+# Reconstructible inert extracts stay local; full reports/hashed archives are retained.
+graph-results/
+identity-results/original-native-source-closure.json

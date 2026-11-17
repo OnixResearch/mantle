@@ -1,0 +1,14 @@
+phase=plan-bound
+phase=original-git-copies-bound
+phase=native-records-and-programs-bound
+profile_role_bound=bootstrap-source
+profile_role_bound=stagex-seed
+profile_role_bound=mantle-source
+profile_role_bound=vendored-cargo-inputs
+profile_role_bound=proof-input
+profile_role_bound=stagex-source-bundle
+profile_role_bound=stagex-lineage
+phase=profile-role-program-and-original-native-bytes-bound
+phase=selected-authenticated-sources-bound
+{"aws_scripts": 26, "new_program_records": 4, "original_records_preserved": 59, "result": "/home/brittonr/sbfp-20261113-berdKH/inspection-df51377d-unit-plans-identity/identity-review.json", "ring_scripts": 12, "roles": 7, "source_profile_bytes": 15839323096, "source_profile_raw_blake3": "08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5", "status": "STATIC_IDENTITY_CHECKS_CLEAR"}
+inspection_exit=0
