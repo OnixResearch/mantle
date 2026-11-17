@@ -1,0 +1,36 @@
+{
+  "text": "Additional finding (P2, confidence 0.99): the completed supplement undercounts embedded preauthor entries. Its `bootstrap-source` input record contains **9 chunks** (`identity-review.json` → `native_closure.preauthor_bootstrap_source_input_role.entry_count`), and `hash_embedded_file` verifies them, but `preauthor-role-physical-audit.py:233-237` omits `record_file_entries_expected` on that branch. The fallback at lines 320–323 records **1**, causing `preauthor_embedded_leaf_entries` to claim 70,786/70,786 rather than the actual **70,794/70,794**. Include `len(record['files'])` for this role and retain/reissue a bound corrected supplement before asserting exact current-data counters. The three directory identities themselves match their plan digests; this is a…\nThe supplement binds the unchanged subject and reconstructs all three preauthor directory identities to their plan digests. It does not resolve the initial rejection. I found an additional coverage-accounting defect in its bootstrap chunk count, reported above; no acceptance is asserted.\n\n[Some lines truncated to 768 chars. Use agent://ReviewB520Physical:raw:1-1 to read line 1 whole]",
+  "details": {
+    "totalLines": 2,
+    "rowPrefixes": false,
+    "displayContent": {
+      "text": "Additional finding (P2, confidence 0.99): the completed supplement undercounts embedded preauthor entries. Its `bootstrap-source` input record contains **9 chunks** (`identity-review.json` → `native_closure.preauthor_bootstrap_source_input_role.entry_count`), and `hash_embedded_file` verifies them, but `preauthor-role-physical-audit.py:233-237` omits `record_file_entries_expected` on that branch. The fallback at lines 320–323 records **1**, causing `preauthor_embedded_leaf_entries` to claim 70,786/70,786 rather than the actual **70,794/70,794**. Include `len(record['files'])` for this role and retain/reissue a bound corrected supplement before asserting exact current-data counters. The three directory identities themselves match their plan digests; this is a…\nThe supplement binds the unchanged subject and reconstructs all three preauthor directory identities to their plan digests. It does not resolve the initial rejection. I found an additional coverage-accounting defect in its bootstrap chunk count, reported above; no acceptance is asserted.",
+      "startLine": 1,
+      "lineNumbers": [
+        1,
+        2
+      ]
+    },
+    "fileSize": 1124,
+    "meta": {
+      "source": {
+        "type": "internal",
+        "value": "agent://ReviewB520Physical"
+      },
+      "pagedSource": true,
+      "limits": {
+        "columnTruncated": {
+          "maxColumn": 768,
+          "unit": "chars",
+          "lines": {
+            "first": 1,
+            "last": 1
+          },
+          "selectorBase": "agent://ReviewB520Physical"
+        }
+      }
+    },
+    "resolvedPath": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-11-13T16-09-53-880Z_01a1d5ac-2fd8-765c-9a54-013d42028dd4/ReviewB520Physical.md",
+    "contentType": "text/markdown"
+  }
+}

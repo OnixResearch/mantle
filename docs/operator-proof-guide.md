@@ -525,7 +525,19 @@ as `PREPARED_PROFILE_BLAKE3`, never the original profile identity. An authored
 fetch record carries no store prefix; the bundle admits one only for
 provider-manifest and toolchain-source-root records. A dependency whose plan
 entry names no producer binds the planner's own first target-lib unit for that
-package, so the recipe and the plan agree on one producer:
+package, so the recipe and the plan agree on one producer.
+
+Preparation retains `bootstrap/source-built/mantle-stage1.unit-plan.json` and
+`mantle-stage2.unit-plan.json` beside the selected recipes. These authenticated
+Mantle source-role members preserve each source-only planner unit graph before
+recipe lowering, with its original source-root locators. Inert inspection binds
+their exact record/member bytes, maps locators lexically to current roles, and
+compares unit identity, compiler feature cfg and build-script feature environment
+against those source-owned derivations, not against a second copy of the recipe's
+observed selectors. The plans are proof-local inspection facts: they grant no
+execution authority and prove neither Cargo equivalence nor a fixed point. A
+cohort without them cannot satisfy complete selector inspection; changed Rust
+source requires a new qualified freeze, preparation and independent review.
 
 ```bash
 CRUNCH_NO_FUSE=1 "$MANTLE" --json self-build \

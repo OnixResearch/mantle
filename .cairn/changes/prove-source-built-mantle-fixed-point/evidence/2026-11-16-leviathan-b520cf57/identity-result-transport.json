@@ -1,0 +1,22 @@
+{
+  "task": 1659,
+  "result": "Success",
+  "local_results": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-b520cf57/identity-results",
+  "remote_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity",
+  "files": [
+    {
+      "file": "identity-review.json",
+      "raw_blake3": "d131a88e9ac9999a4ebef2dd080ad7b02d947b4ff01b2fb3d29ee9c6510b52ac",
+      "received_blake3": "d131a88e9ac9999a4ebef2dd080ad7b02d947b4ff01b2fb3d29ee9c6510b52ac"
+    },
+    {
+      "file": "execution.log",
+      "raw_blake3": "40d93a39360ec3647b33a20b71214716d58698e9a5203378b7f0a8ebfdd0c9df",
+      "received_blake3": "40d93a39360ec3647b33a20b71214716d58698e9a5203378b7f0a8ebfdd0c9df"
+    }
+  ],
+  "transfer_equal": true,
+  "archive": "identity-results.tar.gz",
+  "archive_compare_equal": true,
+  "scope": "Complete current main physical report transport; the separately required preauthor supplement and independent acceptance remain pending."
+}

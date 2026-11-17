@@ -367,6 +367,15 @@ fn source_overlay(source: &UnitSource) -> metadata::LibraryOverlaySource {
     }
 }
 
+#[derive(serde::Serialize)]
+struct SourceUnitPlan<'a> {
+    schema: &'static str,
+    stage_id: &'a str,
+    source_roots: &'a BTreeMap<SourceAuthorityRole, PathBuf>,
+    unit_graph: &'a crate::rust_plan::UnitDerivationGraphSummary,
+    non_claim: &'static str,
+}
+
 pub(super) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms, RunError> {
     let mut files = BTreeMap::new();
     let mut exports = BTreeMap::new();
@@ -393,6 +402,19 @@ pub(super) fn author(request: &AuthoringRequest<'_>) -> Result<AuthoredPrograms,
             timeout_groups: Vec::new(),
         };
         let topology = stage.topology()?;
+        debug_assert!(topology.graph.ready);
+        debug_assert!(!topology.graph.derivations.is_empty());
+        let unit_plan = SourceUnitPlan {
+            schema: "mantle-source-unit-derivation-plan-v1",
+            stage_id: id,
+            source_roots: request.source_roots,
+            unit_graph: &topology.graph,
+            non_claim: "inert source-only planner facts; no recipe execution, compiler correctness, fixed-point proof or release eligibility",
+        };
+        files.insert(
+            format!("bootstrap/source-built/{id}.unit-plan.json"),
+            serde_json::to_string_pretty(&unit_plan).map_err(|e| error(e.to_string()))?,
+        );
         lower(&mut stage, &topology)?;
         let recipe = stage.finish(&topology)?;
         exports.extend(recipe.exports.iter().map(|(name, reference)| (format!("{id}:{name}"), reference.clone())));

@@ -1,0 +1,22 @@
+{
+  "task": 1660,
+  "result": "Success",
+  "local_results": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-b520cf57/preauthor-results",
+  "remote_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-preauthor",
+  "files": [
+    {
+      "file": "preauthor-role-physical-review.json",
+      "raw_blake3": "e93976e57e32cdc31c2df00ea63a522068691f298277790f81a372aae52f7c9d",
+      "received_blake3": "e93976e57e32cdc31c2df00ea63a522068691f298277790f81a372aae52f7c9d"
+    },
+    {
+      "file": "execution.log",
+      "raw_blake3": "2d8e2c939a8816746cb3566b864a4d9e673b609fac19585d438e4e7ca3d5ef64",
+      "received_blake3": "2d8e2c939a8816746cb3566b864a4d9e673b609fac19585d438e4e7ca3d5ef64"
+    }
+  ],
+  "transfer_equal": true,
+  "archive": "preauthor-results.tar.gz",
+  "archive_compare_equal": true,
+  "scope": "Complete current-data preauthor identity supplement transport; independent acceptance remains withheld pending corrected main native-body coverage and renewed review."
+}

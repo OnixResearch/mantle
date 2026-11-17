@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "file": "helper-authority-audit-v7.json",
+      "blake3": "981897c9524bad821137990831e1ae57fd983c49591be199f08ebbc995ae246a",
+      "transfer_equal": true
+    },
+    {
+      "file": "helper-authority-negative-v7.json",
+      "blake3": "599cccdceeb2a226f4952c9cfeee50d3fc3c637a7ead980672660a2ea0baff8b",
+      "transfer_equal": true
+    }
+  ],
+  "positive_task": 1675,
+  "negative_task": 1674,
+  "scope": "Full current b520cf57 helper report transport and exercised static authority/rejection evidence only. Does not accept changed-source qualification, independent review, protected execution or proof."
+}

@@ -1,0 +1,34 @@
+{
+  "task": 26,
+  "reports": [
+    {
+      "label": "validation",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-unit-plan-facts/publication-cairn-validation.json",
+      "valid": true
+    },
+    {
+      "label": "proposal",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-unit-plan-facts/publication-cairn-proposal.json",
+      "valid": true
+    },
+    {
+      "label": "design",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-unit-plan-facts/publication-cairn-design.json",
+      "valid": true
+    },
+    {
+      "label": "tasks",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-unit-plan-facts/publication-cairn-tasks.json",
+      "valid": true
+    }
+  ],
+  "driver": "publication-cairn.sh",
+  "transcript": "publication-cairn.log",
+  "captured_exit": 0,
+  "source_developer_task": 1664,
+  "source_preparation_task": 1667,
+  "selector_task": 1679,
+  "helper_positive_task": 1675,
+  "helper_negative_task": 1674,
+  "scope": "Current local lifecycle publication gates and bounded developer/predecessor inspection observations. Not isolated frozen qualification, independent new-cohort acceptance, protected execution, v2 proof or native-row qualification."
+}

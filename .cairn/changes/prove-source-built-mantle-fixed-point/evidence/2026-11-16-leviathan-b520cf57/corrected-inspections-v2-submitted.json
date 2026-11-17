@@ -1,0 +1,42 @@
+{
+  "subject": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "subject_blake3": "ea4125f33c71bf315fd887838dbf2eb1fcc8dbbfab3febb675ce0cd6454ccb52",
+  "tools": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources-v2",
+  "files": [
+    {
+      "file": "graph-review/graph-audit.py",
+      "blake3": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd",
+      "received_blake3": "59cfb5663442984b1ec7a1ec86cf18a6f94c9f14fd18cb51975f6597a52f82cd"
+    },
+    {
+      "file": "graph-review/helper-authority-audit.py",
+      "blake3": "92d0f4e0b9b2f11a8238117e7d862ba5a8a54e3ed4731f3388f7bb9c8154228c",
+      "received_blake3": "92d0f4e0b9b2f11a8238117e7d862ba5a8a54e3ed4731f3388f7bb9c8154228c"
+    },
+    {
+      "file": "identity-review/identity-audit.py",
+      "blake3": "e63f8251c854d0eb7abf90c06e5767860d3a21126d21cf6b17c984a6f6f7b37f",
+      "received_blake3": "e63f8251c854d0eb7abf90c06e5767860d3a21126d21cf6b17c984a6f6f7b37f"
+    },
+    {
+      "file": "identity-review/run-full-identity.sh",
+      "blake3": "2e037e97a5e9c16f1c193df38233362975414f8d37aa5d8a7137d07f5ec20cd8",
+      "received_blake3": "2e037e97a5e9c16f1c193df38233362975414f8d37aa5d8a7137d07f5ec20cd8"
+    }
+  ],
+  "transfer_equal": true,
+  "physical_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity-v2",
+  "native_body_regression": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-native-body-regression.json",
+  "helper_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph",
+  "jobs": {
+    "physical": {
+      "task": 1661,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity-v2.log"
+    },
+    "helper": {
+      "task": 1662,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-helper-v2.log"
+    }
+  },
+  "scope": "Corrected physical full-body observation/real-record regression and new complete helper authority observation only. Previous tools/results remain unchanged. No current acceptance or protected launch."
+}

@@ -1,0 +1,12 @@
+{
+  "task": 1666,
+  "status": "Success",
+  "schema": "mantle-current-preauthor-chunk-accounting-observation-v1",
+  "actual_report": "preauthor-role-physical-review.json",
+  "bootstrap_chunk_records_expected": 9,
+  "bootstrap_chunk_records_covered": 9,
+  "all_role_records_expected": 7,
+  "all_role_records_covered": 7,
+  "regression": "chunk-counter-regression.json",
+  "scope": "Actual complete preauthor identity and chunk-accounting check plus positive/negative regression only; no proof or native-row acceptance."
+}

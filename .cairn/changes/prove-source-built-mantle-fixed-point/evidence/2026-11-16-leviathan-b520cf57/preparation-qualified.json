@@ -1,0 +1,23 @@
+{
+  "task": 1656,
+  "result": "Success",
+  "subject_facts_task": 1657,
+  "source_code_revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "input_profile_blake3": "42b517c2e6b631cdc435151e8e6c4a6e239f71b7177e6dccccca47f0f489e262",
+  "prepared_manifest_blake3": "611e9386f9fd9bfa619932f20512a195e6a510fa38eb57371f8dafad3e77aeea",
+  "profile_file_bytes": 15804532686,
+  "profile_file_raw_blake3": "97bc07115806f1b35f9320e31425bb178685d94276ab88865a9d2afa2edb2a77",
+  "preparation_report_raw_blake3": "63e847cfcd1678cdee3b4f3ce1149f2a2b8e7afc293a6a4a9e2fe6cdf9f165a0",
+  "input_plan_blake3": "65f16aff941ac81b598c5f0dc8ba7127abea09e8773a8ae11ea2c6469a797f6c",
+  "input_plan_raw_blake3": "009e2819e42419fcae55c299d33d54832d4c0c42ca4925d111d801ec3f65692c",
+  "program_records": {
+    "fixed-point-native-source-program": "615879ce16ce52453b977633d19a3e2395608447744c5c989a61dc04ad3c07ad",
+    "fixed-point-rust-source-program": "139cbe25ea143eb7bba78b6e524bbb6db95e8289f7697901fae3126bfac4c020",
+    "source-built-mantle-programs": "b55340d1b9627a5a2858245359fba00f30073c8ec35285f53cb6f98e3fd37a44",
+    "source-built-stagex-programs": "4a35a9ba4dd4ccbaaca26ca5352e5c0672b620c120d32db69ad9bf0a2e75f68b"
+  },
+  "source_roles": 7,
+  "source_verifiers": "Both ready with empty rejection sets",
+  "metadata_transfer_equal": true,
+  "scope": "Current source-only preparation and observed metadata/binary linkage only. Full profile-stream parity, complete static/physical inspection, independent reviews and genuine protected proof/native rows remain unaccepted."
+}

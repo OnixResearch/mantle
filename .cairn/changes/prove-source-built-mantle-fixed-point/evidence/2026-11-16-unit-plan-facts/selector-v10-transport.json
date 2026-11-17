@@ -1,0 +1,16 @@
+{
+  "positive_and_negative_task": 1679,
+  "files": [
+    {
+      "file": "selector-development-v10.json",
+      "blake3": "fe396b8e425308612fe79a9552294d631ed86901c7d65e8f448355952f3ff13b",
+      "transfer_equal": true
+    },
+    {
+      "file": "machine-contracts.log",
+      "blake3": "1e6e4b08458d45f1381364afea79471d1e97c233edfd9c4531d7848570306e7f",
+      "transfer_equal": true
+    }
+  ],
+  "scope": "Complete developer source-plan, selector and negative-case observations only; no changed frozen qualification, independent acceptance, protected execution or proof."
+}

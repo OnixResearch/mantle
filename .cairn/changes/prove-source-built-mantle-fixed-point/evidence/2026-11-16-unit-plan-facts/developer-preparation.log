@@ -1,0 +1,29 @@
++ MANTLE=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/mantle
++ PROFILE=/home/brittonr/sbfp-20261113-berdKH/source-profile-b520cf57-captured-operator-sources.json
++ PROFILE_ID=42b517c2e6b631cdc435151e8e6c4a6e239f71b7177e6dccccca47f0f489e262
++ BWRAP=/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ SHELL=/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ HOME_DIR=/home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-home
++ TMP_DIR=/home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-tmp
++ mkdir /home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-home /home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-tmp
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-unit-plan-development-20261116
++ env -i HOME=/home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-home TMPDIR=/home/brittonr/sbfp-20261113-berdKH/preparation-unit-plan-development-20261116-tmp PATH=/usr/bin:/bin CRUNCH_NO_FUSE=1 /home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/mantle --json self-build --source-built-fixed-point --prepare-source-programs --source-profile /home/brittonr/sbfp-20261113-berdKH/source-profile-b520cf57-captured-operator-sources.json --expected-source-profile-blake3 42b517c2e6b631cdc435151e8e6c4a6e239f71b7177e6dccccca47f0f489e262 --expected-stagex-lineage-blake3 e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d --expected-native-provider-blake3 f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f --proof-bwrap /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap --proof-sandbox-shell /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox --proof-elapsed-seconds-max 86400 --proof-disk-bytes-max 200000000000 --proof-exec-events-max 524288 --proof-source-records-max 65536 --jobs 16 --out /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-unit-plan-development-20261116
+{
+  "schema": "mantle-source-built-source-programs-v1",
+  "input_profile_blake3": "42b517c2e6b631cdc435151e8e6c4a6e239f71b7177e6dccccca47f0f489e262",
+  "input_plan_blake3": "65f16aff941ac81b598c5f0dc8ba7127abea09e8773a8ae11ea2c6469a797f6c",
+  "output_profile_blake3": "23f748d8ef7f45b2ba47efa23f7872bb9721b32f3710598b10d4c6d4edaa92f4",
+  "source_profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-unit-plan-development-20261116/source-profile.json",
+  "program_records": {
+    "fixed-point-native-source-program": "eae316c6d0a84a5710abae24b4f3ea0a5cdf08ec67250bddddbca8cc89501c5c",
+    "fixed-point-rust-source-program": "7f5144978c720107e153d04b84aebb83cf23e1dd3c0f220f27a303f3afc030c4",
+    "source-built-mantle-programs": "4c926fe8d252cc6bf096ed646d381357a239d5fb79c8e7f7e9b766cfe34839e0",
+    "source-built-stagex-programs": "b45623ee39d863a41ad70eb35a14d44782cb39130a91ed19222238204557486a"
+  },
+  "non_claim": "inert source preparation only; no provider execution, fixed-point proof, compiler correctness, reproducibility, or release eligibility"
+}
++ status=0
++ printf 'unit_plan_preparation_exit=%s\n' 0
+unit_plan_preparation_exit=0
++ printf '%s\n' 0
++ exit 0

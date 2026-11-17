@@ -1,0 +1,54 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ export GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /run/current-system/sw/bin/nix develop --profile /home/brittonr/sbfp-20261113-berdKH/tooling-profile-signed-stagex-adoption --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo fmt --check -p mantle; cargo test --release --locked --offline -p mantle --bin mantle source_built_mantle_programs::tests:: -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --no-deps -- -D warnings; cargo build --release --locked --offline -p mantle --bin mantle'
+copying path '/nix/store/9ypl7656d54kj4c8s2q7lzzfj9z976ir-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/9qa4c94rswp05pi33cw8djmr481xfmsb-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/yizimqvgzppr2amr2ksbva0b37bqrci4-source' from 'https://nix-community.cachix.org'...
+copying path '/nix/store/3x4zykgw2993df9a4l3dqcl7la79f4hf-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/77dbgds155bbz3vd3qywq1sii07i5ljs-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/j4jaky3a4hpkw6wlpjbladhfz15mvxyb-source' from 'https://nix-community.cachix.org'...
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+    Finished `release` profile [optimized] target(s) in 5m 37s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-61d96712292a8e06)
+
+running 3 tests
+test source_built_mantle_programs::tests::plan_derived_source_operands_normalize_lexically ... ok
+test source_built_mantle_programs::tests::selected_semantic_products_remain_execution_obligations ... ok
+test source_built_mantle_programs::tests::unselected_helpers_do_not_become_dummy_execution_roots ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2974 filtered out; finished in 0.00s
+
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+    Finished `release` profile [optimized] target(s) in 1m 19s
+warning: /home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116)
+    Finished `release` profile [optimized] target(s) in 3m 55s
++ status=0
++ printf 'unit_plan_development_exit=%s\n' 0
+unit_plan_development_exit=0
++ printf '%s\n' 0
++ exit 0

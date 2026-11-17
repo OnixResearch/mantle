@@ -1,0 +1,9 @@
+{
+  "path": "/nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum",
+  "gc_root": "/home/brittonr/sbfp-20261113-berdKH/inert-tool-b3sum-1.8.7-20261116",
+  "expected_original_binary_blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+  "observed_binary_stream_blake3": "b5378c4f72773015e1cc11a9096a45715371cd6f8af0115028e75eb35ddb3157",
+  "exact_original_identity_restored": true,
+  "source_cohort_and_pins_changed": false,
+  "scope": "Restored and GC-rooted the exact originally reviewed trusted hash tool after its path disappeared; not acceptance or proof."
+}

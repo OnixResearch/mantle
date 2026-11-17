@@ -1,0 +1,23 @@
+{
+  "cases": [
+    {
+      "case": "canonical-two-chunk-source",
+      "expected": 2,
+      "covered": 2,
+      "passed": true
+    },
+    {
+      "case": "wrong-chunk-count",
+      "passed": true,
+      "rejection": "invalid chunk sequence for native-source-closure.json"
+    },
+    {
+      "case": "wrong-chunk-payload-identity",
+      "passed": true,
+      "rejection": "embedded chunk identity mismatch native-source-closure.json#1"
+    }
+  ],
+  "all_assertions_passed": true,
+  "inspector_blake3": "c256af451996c1c575e2d7ae2f4d729eab7634eec3f593e356e3ab0fc4cc5534",
+  "scope": "Real-size canonical chunk accounting and rejection behavior only; no closure, execution or proof claim."
+}

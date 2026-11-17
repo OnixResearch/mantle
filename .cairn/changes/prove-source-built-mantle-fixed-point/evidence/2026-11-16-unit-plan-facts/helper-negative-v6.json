@@ -1,0 +1,71 @@
+{
+  "cases": [
+    {
+      "case": "missing-owning-source-role",
+      "stage": "mantle-stage1",
+      "rejections": [
+        [
+          "helper-metadata-compile",
+          "exact owning-stage native-source-bundle declaration absent or duplicated"
+        ],
+        [
+          "helper-native-phase-compile",
+          "exact owning-stage native-source-bundle declaration absent or duplicated"
+        ],
+        [
+          "helper-aws-source-compile",
+          "exact owning-stage native-source-bundle declaration absent or duplicated"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "case": "foreign-source-record",
+      "stage": "mantle-stage2",
+      "rejections": [
+        [
+          "helper-metadata-compile",
+          "wrong source record/member relative to frozen author-selected operand"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "case": "different-authenticated-own-member",
+      "stage": "full-source-native-provider",
+      "rejections": [
+        [
+          "original-49a4f057019a4ca4418bb7468ecb59adf14087fd4b361123ff0d2a6c2a3c8aaa.adapter-build",
+          "wrong source record/member relative to frozen author-selected operand"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "case": "gcc-map-wrong-destination",
+      "stage": "full-source-rust-provider",
+      "rejections": [
+        [
+          "rust-source-phase-helper.compile.phase-0",
+          "source input not actually consumed by a typed argument/environment operand"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "case": "missing-helper-source-producer",
+      "stage": "stagex-provider-publication",
+      "rejections": [
+        [
+          "build-normalization-helper",
+          "frozen author-selected helper compilation obligation absent"
+        ]
+      ],
+      "passed": true
+    }
+  ],
+  "all_assertions_passed": true,
+  "mutated_data_verdict": "HOLD",
+  "scope": "Five independent in-memory mutations over all six genuine current recipes; immutable inputs unchanged; no candidate execution.",
+  "inspector_blake3": "51384387f4f598f1829d96d525cd23c0a1c2f0ee1643b56f70808266eac09d9f"
+}

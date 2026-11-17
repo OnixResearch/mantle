@@ -1,0 +1,15 @@
+{
+  "reviewer": "ReviewB520Graph",
+  "model": "underclass/gpt-6-sol",
+  "subject_blake3": "ea4125f33c71bf315fd887838dbf2eb1fcc8dbbfab3febb675ce0cd6454ccb52",
+  "accepted": false,
+  "criterion6_uncovered": [
+    "every owning-stage helper-source compilation authority",
+    "both Mantle original package-exclusion operands",
+    "both Mantle Cargo feature environment/cfg selection"
+  ],
+  "uncovered_totals": "Unknown until exhaustive current-data measurement",
+  "product_failure_asserted": false,
+  "cold_launch_held": true,
+  "required_action": "Extend inert inspection and its real failure tally without changing the frozen source/cohort/pins; verify positive/negative cases and execute complete current-data traversal, then independent re-review."
+}

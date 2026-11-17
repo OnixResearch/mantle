@@ -1,0 +1,10 @@
+{
+  "profile": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b520cf57-captured-operator-sources/source-profile.json",
+  "remote_file_bytes": 15804532686,
+  "expected_raw_blake3": "97bc07115806f1b35f9320e31425bb178685d94276ab88865a9d2afa2edb2a77",
+  "observed_complete_ssh_stream_blake3": "97bc07115806f1b35f9320e31425bb178685d94276ab88865a9d2afa2edb2a77",
+  "transfer_equal": true,
+  "preparation_success_guard": true,
+  "max_profile_bytes": 21474836480,
+  "scope": "Full raw-profile transport identity only; not the semantic manifest identity or proof acceptance."
+}

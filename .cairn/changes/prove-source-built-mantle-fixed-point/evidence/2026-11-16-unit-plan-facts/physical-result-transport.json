@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "file": "preauthor-role-physical-review.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-preauthor-v5/preauthor-role-physical-review.json",
+      "raw_blake3": "d539e93c116375d6870150df2d221a9a3dd4dd926084dbecc3f48d2369c45af5",
+      "transfer_equal": true
+    },
+    {
+      "file": "complete-original-native-identity-review.json",
+      "remote": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity-v2/identity-review.json",
+      "raw_blake3": "e44bd665e17c709f768129a9a7863597f7a61a7a9077ebd0a5e526dcefd959de",
+      "transfer_equal": true
+    }
+  ],
+  "scope": "Full actual result-byte transport only; not independent acceptance, protected execution or proof."
+}

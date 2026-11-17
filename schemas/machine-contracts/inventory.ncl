@@ -2219,7 +2219,8 @@ let Registry = {
       },
       "consumers"= [
         "bootstrap implementation",
-        "StageX lineage and source-built fixed-point proof manifests"
+        "StageX lineage and source-built fixed-point proof manifests",
+        "inert source-program inspectors over authenticated per-stage unit plans"
       ],
       "artifacts"= {
         "schema"= "",
@@ -2254,9 +2255,9 @@ let Registry = {
       },
       "non_claims"= [
         "internal validation DTOs are not a public schema",
-        "StageX stage inventories, full-source binding receipts, and source-built fixed-point reports are proof-local evidence, not a public schema"
+        "StageX stage inventories, full-source binding receipts, source-only unit plans and source-built fixed-point reports are proof-local evidence, not a public schema"
       ],
-      "rationale"= "Bootstrap, StageX, authored programs and private proof artifacts, including their protocol/regression fixtures, remain governed by proof manifests and canonical digests rather than a public schema."
+      "rationale"= "Bootstrap, StageX, authored programs, per-stage source-only unit plans and private proof artifacts, including their protocol/regression fixtures, remain governed by proof manifests and canonical digests rather than a public schema."
     },
     {
       "id"= "bootstrap.cold-stagex-adoption-report",

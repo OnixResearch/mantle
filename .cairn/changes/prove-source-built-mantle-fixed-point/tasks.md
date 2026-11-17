@@ -1024,3 +1024,41 @@ reviews, protected stages, v2 receipt and all five native rows remain separate
 acceptance obligations. No predecessor acceptance or failed staging is reused;
 N1-N2, I3-I5 and proof-dependent V2/V3 remain open.
 
+## Source-owned selector facts and corrected inspection observed (2026-11-16)
+
+The original b520cf57 graph review rejected missing criterion-6 measurements;
+the original physical review rejected incomplete original-record body coverage.
+Those rejections and failed checker versions remain retained. Corrected physical
+inspection compares all 177 original native bodies across the preauthor plan,
+augmented closure and launch-input profile; the separate corrected preauthor
+report covers all three directory roles, 70,794 embedded leaves and four file
+roles. These remain bounded observations of the unchanged predecessor cohort.
+
+ADR 0157 and the operator proof guide now require authenticated source-only
+unit plans retained before Mantle recipe lowering. Developer task 1664 passed
+package formatting, three focused tests, strict release Clippy and a release
+build; preparation 1667 emitted both real 1,047-unit plans. Task 1679 authenticated
+both complete 8,740,623-byte plan members against the actual profile and passed
+all two package exclusions, 2,386 Cargo feature-environment contexts and 2,098
+compiler cfg comparisons with zero invalid/uncovered entries. Each stage maps
+1,049 authored compilers to all 1,047 source derivations, with two explicitly
+recorded unique-metadata associations and no orphan derivations. Nine actual
+in-memory recipe mutations were rejected, including removed continuation and
+invocation-template feature flags and a missing semantic build-script root.
+
+Separate predecessor helper tasks 1675/1674 passed all 1,098 owning-stage
+authorities and six rejection cases. Complete reports, source versions, failed
+attempts, exact commands and matching transport identities are retained in
+`evidence/2026-11-16-unit-plan-facts/`. The source-only unit-plan metadata stays
+inside the existing private proof-artifact family; its machine gate passed
+with 24 contracted and 67 classified families.
+
+Maintenance owner: Mantle's source-program authoring and proof-inspection
+adapters. The durable capability is a repeatable, source-bound selector
+comparison without a second feature resolver. These developer and predecessor
+observations do not qualify changed frozen source or grant launch authority.
+A new published freeze, distinct absent runner/canonical targets, genuine
+source-only regeneration, complete current-data inspection and both fresh
+authorized-model reviews still precede protected execution. N1-N2, I3-I5 and
+proof-dependent V2/V3 remain open.
+

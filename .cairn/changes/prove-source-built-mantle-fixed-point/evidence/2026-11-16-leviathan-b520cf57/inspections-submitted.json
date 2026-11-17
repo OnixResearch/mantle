@@ -1,0 +1,31 @@
+{
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "subject": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "subject_local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-b520cf57/review-subject.json",
+  "subject_remote": "/home/brittonr/sbfp-20261113-berdKH/review-subject-b520cf57-captured-operator-sources.json",
+  "subject_blake3": "ea4125f33c71bf315fd887838dbf2eb1fcc8dbbfab3febb675ce0cd6454ccb52",
+  "subject_transfer_equal": true,
+  "tools": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources",
+  "scans": {
+    "graph": {
+      "scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph",
+      "driver": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources/graph-review/run-semantic-root-inspection.sh",
+      "task": 1658,
+      "log": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph/execution.log",
+      "submission_id_capture": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph.log"
+    },
+    "identity": {
+      "scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity",
+      "driver": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources/identity-review/run-full-identity.sh",
+      "log": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-identity.log",
+      "task": 1659
+    },
+    "preauthor": {
+      "scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-preauthor",
+      "driver": "/home/brittonr/sbfp-20261113-berdKH/review-tools-b520cf57-captured-operator-sources/identity-review/run-preauthor-roles.sh",
+      "log": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-preauthor.log",
+      "task": 1660
+    }
+  },
+  "scope": "Three complete inert current-data inspections. Existing graph task1658 recovered, not restarted; no result, independent acceptance or protected execution is asserted."
+}

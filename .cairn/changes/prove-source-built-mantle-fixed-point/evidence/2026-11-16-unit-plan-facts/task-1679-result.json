@@ -1,0 +1,23 @@
+{
+  "task": {
+    "id": 1679,
+    "created_at": "2026-11-16T22:47:27.509190559-05:00",
+    "original_command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-unit-plan-selectors-development-v10-20261116.py 735741c8764836a3822055b81ebbdaabc5c34110d5a0f6663e1fd29b3495536d",
+    "command": "/nix/store/k130ks1njmmgspbh0k2cr56asb79c9xb-python3-3.14.8-env/bin/python3.14 /home/brittonr/sbfp-20261113-berdKH/check-unit-plan-selectors-development-v10-20261116.py 735741c8764836a3822055b81ebbdaabc5c34110d5a0f6663e1fd29b3495536d",
+    "path": "/home/brittonr",
+    "envs": {},
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": null,
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-16T22:47:27.509179077-05:00",
+        "start": "2026-11-16T22:47:27.615146285-05:00",
+        "end": "2026-11-16T22:49:05.860195213-05:00",
+        "result": "Success"
+      }
+    }
+  },
+  "output": "{\"bounded_verdict\": true, \"coverage\": {\"package_exclusions\": {\"total\": 2, \"covered\": 2, \"uncovered\": 0, \"invalid\": 0}, \"feature_environment\": {\"total\": 2386, \"covered\": 2386, \"uncovered\": 0, \"invalid\": 0}, \"feature_cfg\": {\"total\": 2098, \"covered\": 2098, \"uncovered\": 0, \"invalid\": 0}}, \"source_plan_projections\": {\"mantle-stage1\": {\"plan_derivations_total\": 1047, \"mapped_compile_units\": 1049, \"orphan_derivations\": 0, \"metadata_identity_fallbacks\": 2, \"uncovered\": [], \"uncovered_count\": 0, \"source_plan_digest_blake3\": \"3955529b1feca68c6e872c8a625f20baa18108650130a91639b5eea6682394e9\"}, \"mantle-stage2\": {\"plan_derivations_total\": 1047, \"mapped_compile_units\": 1049, \"orphan_derivations\": 0, \"metadata_identity_fallbacks\": 2, \"uncovered\": [], \"uncovered_count\": 0, \"source_plan_digest_blake3\": \"3deb4437b2a0e40d295f2a88e27e4ce91f204767ca677736ed8568be50c9e349\"}}, \"negative_case_count\": 9, \"all_assertions_passed\": true, \"output\": \"/home/brittonr/sbfp-20261113-berdKH/unit-plan-selectors-development-v10-20261116.json\"}"
+}

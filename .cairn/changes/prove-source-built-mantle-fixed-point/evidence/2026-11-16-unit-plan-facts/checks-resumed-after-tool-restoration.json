@@ -1,0 +1,10 @@
+{
+  "hash_tool_restoration": "hash-tool-restored.json",
+  "tasks": {
+    "selector_and_unit_member_checks": 1673,
+    "helper_negative_cases": 1674,
+    "complete_helper_authority": 1675
+  },
+  "unchanged_source_cohort_and_pins": true,
+  "scope": "New checker executions after recovery of the exact original BLAKE3 executable. No successful verdict inferred from submission."
+}

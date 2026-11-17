@@ -1,0 +1,39 @@
+{
+  "task": 1658,
+  "result": "Success",
+  "source_code_revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
+  "remote_scratch": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph",
+  "local_results": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-leviathan-b520cf57/graph-results",
+  "files": [
+    {
+      "file": "controller-template-audit.json",
+      "raw_blake3": "cac0794c58679b0cf6dd47e240845acf820e557a78a0ea86fe0724ec936eba04",
+      "received_blake3": "cac0794c58679b0cf6dd47e240845acf820e557a78a0ea86fe0724ec936eba04"
+    },
+    {
+      "file": "execution.log",
+      "raw_blake3": "15d1e686e9ff70b6081b4b6cdf23398b39d185acc6b030623a37892e36d051e0",
+      "received_blake3": "15d1e686e9ff70b6081b4b6cdf23398b39d185acc6b030623a37892e36d051e0"
+    },
+    {
+      "file": "graph-audit.json",
+      "raw_blake3": "57f11fb070a4801c01f33c540e986d481ae141282afb87c831c5f93a475dc291",
+      "received_blake3": "57f11fb070a4801c01f33c540e986d481ae141282afb87c831c5f93a475dc291"
+    },
+    {
+      "file": "semantic-root-regression.json",
+      "raw_blake3": "17a5fa810966b77fdca2a5f33b7b16352032cc305f2ad8c2991055eb8fd87aaa",
+      "received_blake3": "17a5fa810966b77fdca2a5f33b7b16352032cc305f2ad8c2991055eb8fd87aaa"
+    },
+    {
+      "file": "source-binding-kind-inventory.json",
+      "raw_blake3": "14b0fa3565dc8ddfcf79c633afcf7954d850a944c30f12011971745c09152f88",
+      "received_blake3": "14b0fa3565dc8ddfcf79c633afcf7954d850a944c30f12011971745c09152f88"
+    }
+  ],
+  "transfer_equal": true,
+  "archive": "graph-results.tar.gz",
+  "archive_blake3": "50eb29f540a821102d09792cc164e0495088aae9fa1dfb7aaf1c48e0a7e928c5",
+  "archive_compare_equal": true,
+  "scope": "Complete current-data result transport, not independent acceptance or protected execution."
+}

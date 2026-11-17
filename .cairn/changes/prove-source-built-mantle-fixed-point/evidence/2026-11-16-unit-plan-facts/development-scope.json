@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-unit-plan-development-observations-v1",
+  "qualification_task": 1664,
+  "preparation_task": 1667,
+  "selector_check_task": 1672,
+  "source_graph_staged": "src/source_built_mantle_programs_graph.rs",
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/signed-stagex-adoption-dev-20261116",
+  "developer_cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-unit-plan-development-20261116",
+  "input_manifest_blake3": "42b517c2e6b631cdc435151e8e6c4a6e239f71b7177e6dccccca47f0f489e262",
+  "output_manifest_blake3": "23f748d8ef7f45b2ba47efa23f7872bb9721b32f3710598b10d4c6d4edaa92f4",
+  "actual_full_profile_ssh_stream_blake3": "735741c8764836a3822055b81ebbdaabc5c34110d5a0f6663e1fd29b3495536d",
+  "observed_unit_counts": {
+    "mantle-stage1": 1047,
+    "mantle-stage2": 1047
+  },
+  "scope": "Warm mutable developer mechanisms and inert artifact preparation over genuine frozen predecessor input data only. Not a new qualified source freeze, independent acceptance, protected execution, fixed point or native-row evidence."
+}

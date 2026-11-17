@@ -1,0 +1,7 @@
+{
+  "recovered_graph_task": 1658,
+  "recovery_evidence": "/home/brittonr/sbfp-20261113-berdKH/inspection-b520cf57-captured-operator-sources-graph.log",
+  "cause": "The first Pueue add stdout was redirected by the outer SSH shell to the intended execution-log path; the task was queued, and its ID was recovered from that file. No duplicate graph task was started.",
+  "correction": "Quote the complete queued shell command as one Pueue argument so task-owned redirects execute only within the task.",
+  "scope": "Launch bookkeeping correction only; no inspection acceptance or input mutation."
+}
