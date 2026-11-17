@@ -1,0 +1,25 @@
+{
+  "id": 1736,
+  "host": "leviathan.cymric-daggertooth.ts.net",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+    "--label",
+    "cold-proof-70db0868-primary-sources-gpt6sol",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/held-cold-proof-70db0868-primary-sources-aws-db-fixed.sh",
+    "59ac07605425ed3f3a31e716ca6e3d739425b8a973192e35d93ad9d97ae4a992"
+  ],
+  "acceptance_blake3": "59ac07605425ed3f3a31e716ca6e3d739425b8a973192e35d93ad9d97ae4a992",
+  "held_script_blake3": "bacb29b4eebf67aacaf0b05ce8d66190778bff92c57908d2f3204cc2468a7b15",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+  "proof_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol/proof",
+  "prelaunch_checkpoint": "230ec0b1f3ca6499154ed4c54e271fa87b3dd67a",
+  "scope": "One actual new cold attempt submitted after complete fresh current reviews, parent reconciliation, exact transport, all four current Cairn reports and published authority. Submission alone proves no provider/stage execution, equality, root action-trust reconciliation, verified receipt, native row or release."
+}
