@@ -1,0 +1,46 @@
+{
+  "task": 1682,
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "source_tree_before_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+  "source_tree_after_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+  "source_tree_unchanged": true,
+  "absent_target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-df51377d-unit-plans",
+  "test_result": "test result: ok. 270 passed; 0 failed; 27 ignored; 0 measured; 2680 filtered out; finished in 5.78s",
+  "installed_binaries": [
+    {
+      "blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-df51377d-unit-plans"
+    },
+    {
+      "blake3": "c74264ed1fafc4c824354313d574ed5c9b7a4d3452baf1cf3e7fd2a600629abd",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-df51377d-unit-plans"
+    },
+    {
+      "blake3": "b267962fd45b54e4109381024a09b16dfe8c467f166af5f291034903fb07c9e4",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-df51377d-unit-plans"
+    }
+  ],
+  "checks": [
+    "package formatting",
+    "strict selected-binary/test release Clippy",
+    "locked offline release builds",
+    "actual adoption --help",
+    "actual native-row checker --contract",
+    "installed mantle --version"
+  ],
+  "transport": [
+    {
+      "file": "runner-qualification.log",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/qualification-df51377d-unit-plans.log",
+      "blake3": "3136a16254ef904b3240fa9be412cd3e85e5c76d9f33499364d9c9488d41fffb",
+      "transfer_equal": true
+    },
+    {
+      "file": "runner-blake3.txt",
+      "remote_path": "/home/brittonr/sbfp-20261113-berdKH/runner-blake3-df51377d-unit-plans.txt",
+      "blake3": "60a7670dd221ef33399bba77a4031c5d00e3358382e15bc43a5ca9ae1e95adfd",
+      "transfer_equal": true
+    }
+  ],
+  "non_claim": "Frozen source/outer runner mechanisms only. No source-program review, provider execution, fixed point, v2 receipt, native-row qualification or release eligibility."
+}

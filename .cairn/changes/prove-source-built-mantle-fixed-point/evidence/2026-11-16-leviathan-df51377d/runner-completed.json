@@ -1,0 +1,34 @@
+{
+  "task": 1682,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--after",
+    "1680",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/qualify-source-df51377d-unit-plans.sh"
+  ],
+  "transcript": "runner-qualification.log",
+  "captured_exit": 0,
+  "installed_binaries": [
+    {
+      "blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-df51377d-unit-plans"
+    },
+    {
+      "blake3": "c74264ed1fafc4c824354313d574ed5c9b7a4d3452baf1cf3e7fd2a600629abd",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-df51377d-unit-plans"
+    },
+    {
+      "blake3": "b267962fd45b54e4109381024a09b16dfe8c467f166af5f291034903fb07c9e4",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-df51377d-unit-plans"
+    }
+  ],
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "non_claim": "Exact isolated frozen-source runner/operator mechanism qualification only; no prepared/current-reviewed source cohort, protected proof, v2 receipt or native-row acceptance."
+}

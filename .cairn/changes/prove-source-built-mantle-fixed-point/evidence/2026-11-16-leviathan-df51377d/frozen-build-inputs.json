@@ -27,8 +27,9 @@
   "developer_verification": "../2026-11-16-unit-plan-facts/publication-qualified.json",
   "publication_lifecycle_task": 26,
   "rejected_prior_source_revision": "b520cf5791fb7638ab78ed59f42d890ccd75dc30",
-  "non_claim": "Published exact Git archive, matching transfer and complete-source assembly are observed. Separate absent-target qualifications, source-only regeneration, complete current-data inspection, two authorized-model acceptances, protected proof and native rows remain unaccepted.",
+  "non_claim": "Published df51377d archive transfer, complete assembly1680 and separate absent-target canonical1681/runner1682 qualifications are observed with unchanged full source identity. Source-only regeneration, complete current-data inspection, both independent reviews, protected proof and native rows remain unaccepted.",
   "complete_source_normalized_tar_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
   "complete_source_compressed_archive_blake3": "fe1595bb7cace65644f861296b17fada9201c4888b4c901aef4e1544606809e9",
-  "assembly_task": 1680
+  "assembly_task": 1680,
+  "runner_blake3": "17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6"
 }

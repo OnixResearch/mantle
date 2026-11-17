@@ -1062,3 +1062,27 @@ source-only regeneration, complete current-data inspection and both fresh
 authorized-model reviews still precede protected execution. N1-N2, I3-I5 and
 proof-dependent V2/V3 remain open.
 
+## Source-unit-plan replacement frozen qualifications observed (2026-11-16)
+
+Published code `df51377d592bf6a3412b436a10e8fc708e8dbe3d` retains ADR 0157's
+upstream unit plans. Its exact Git archive passed transport; complete-source
+assembly 1680 preserves the independently pinned original AWS source and has
+normalized identity `3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba`.
+
+Distinct absent-target canonical 1681 passed all ten selected test legs, the
+24-contracted/67-classified machine gate and all four valid Cairn reports.
+Distinct absent-target runner 1682 passed package formatting, strict selected
+release Clippy, three release builds, actual operator CLI surfaces and the
+captured result `270 passed; 0 failed; 27 ignored`. Both retained the exact
+complete source identity before/after qualification. Installed Mantle identity
+is `17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6`.
+Complete transcripts, binary identities and matching output transports are in
+`evidence/2026-11-16-leviathan-df51377d/`.
+
+Dependent source-only preparation 1683 and subject-fact capture 1684 are separate
+unfinished prerequisites. The complete corrected graph/helper/selector and
+physical inspector bundle is transferred, not executed or accepted on absent
+current prepared data. Both fresh authorized-model reviews still precede any
+protected launch. No provider, stage equality, v2 receipt, native-row acceptance
+or release claim follows; N1-N2, I3-I5 and proof-dependent V2/V3 remain open.
+

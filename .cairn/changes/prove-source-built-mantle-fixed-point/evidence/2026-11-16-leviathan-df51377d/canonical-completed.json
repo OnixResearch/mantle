@@ -1,0 +1,43 @@
+{
+  "task": 1681,
+  "result": "Success",
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--after",
+    "1680",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-df51377d-unit-plans-run.sh"
+  ],
+  "transcript": "canonical-qualification.log",
+  "captured_exit": 0,
+  "cairn_reports": [
+    {
+      "label": "validation",
+      "file": "canonical-cairn-validation.json",
+      "valid": true
+    },
+    {
+      "label": "proposal",
+      "file": "canonical-cairn-proposal.json",
+      "valid": true
+    },
+    {
+      "label": "design",
+      "file": "canonical-cairn-design.json",
+      "valid": true
+    },
+    {
+      "label": "tasks",
+      "file": "canonical-cairn-tasks.json",
+      "valid": true
+    }
+  ],
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "complete_source_blake3": "3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba",
+  "non_claim": "Exact frozen-source canonical mechanism and lifecycle qualification only. No runner result, prepared cohort, current-data review, protected stages, v2 receipt or native-row acceptance is asserted."
+}
