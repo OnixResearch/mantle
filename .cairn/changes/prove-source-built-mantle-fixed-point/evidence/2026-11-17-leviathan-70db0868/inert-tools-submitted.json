@@ -1,0 +1,21 @@
+{
+  "task": 1723,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--label",
+    "inert-tools-70db0868-primary-sources",
+    "--after",
+    "1718",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/copy-review-tools-70db0868-primary-sources.sh"
+  ],
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "source_copy_origin": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source",
+  "destination": "/home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources",
+  "scope": "Byte-identical trusted inert inspector copies outside all frozen input roots. No product or prepared program execution."
+}

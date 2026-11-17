@@ -1,0 +1,101 @@
+++ cat /home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-70db0868-primary-sources.exit
++ test 0 = 0
++ jq -e '.source_code_revision == "70db08685c0c5fa5c326bfe32db78576d7e2e182" and .code_archive_blake3 == "e40bff16144520416cacb3b865b2eaba01dab4bf194a44c0b0d9cc18b9ec19fe"' /home/brittonr/sbfp-20261113-berdKH/complete-source-70db0868-primary-sources.json
+true
++ test '!' -e /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources
++ mkdir /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources
++ rsync -a -- /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/identity-review /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/check-helper-mutations.py /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/check-selector-mutations.py /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/graph-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py
++ test 8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c = 8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py
+8bd9ad9a4129ad676420b066c24c590b41773715083b53b8d622be019021b82c  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/graph-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/controller-template-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/controller-template-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/controller-template-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/controller-template-audit.py
++ test 347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62 = 347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/controller-template-audit.py
+347f18a379f4e7ffdba30553a5356af0d336599ff7d41ea6fd17383d6b941c62  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/controller-template-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/helper-authority-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py
++ test 6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b = 6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py
+6be6a09e46609d1bcc7aa19841cf632f852b8e949de39cda62a37c101ddfe39b  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/helper-authority-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/mantle-selector-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/mantle-selector-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/mantle-selector-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/mantle-selector-audit.py
++ test 4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b = 4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/mantle-selector-audit.py
+4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/mantle-selector-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/run-semantic-root-inspection.sh
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/run-semantic-root-inspection.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/graph-review/run-semantic-root-inspection.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/run-semantic-root-inspection.sh
++ test eceeef5b717d9ccf7de36bf60b6c47cf0630fa884b90c60c2a271c189f1c5234 = eceeef5b717d9ccf7de36bf60b6c47cf0630fa884b90c60c2a271c189f1c5234
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/run-semantic-root-inspection.sh
+eceeef5b717d9ccf7de36bf60b6c47cf0630fa884b90c60c2a271c189f1c5234  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/graph-review/run-semantic-root-inspection.sh
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/identity-review/identity-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py
++ test ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59 = ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py
+ebcd9f1ddb169fc78c61a8f570ab6d61bc8c30ef9639a7f633cc308ec57e2e59  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/identity-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/identity-review/preauthor-role-physical-audit.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py
++ test 9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940 = 9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py
+9f86775abcc534484853ae5b71997de021aa99058470f1d8cd69be3332a04940  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/preauthor-role-physical-audit.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/identity-review/run-full-identity.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh
++ test 861b97664d572b04ce16a95115b73105320922d08c662ca386970c3da7f7a871 = 861b97664d572b04ce16a95115b73105320922d08c662ca386970c3da7f7a871
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh
+861b97664d572b04ce16a95115b73105320922d08c662ca386970c3da7f7a871  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-full-identity.sh
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/identity-review/run-preauthor-roles.sh
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh
++ test 97a42faa6220c3d99cb807d603a1ec1411093d246a04c5ea501192efd51c80b3 = 97a42faa6220c3d99cb807d603a1ec1411093d246a04c5ea501192efd51c80b3
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh
+97a42faa6220c3d99cb807d603a1ec1411093d246a04c5ea501192efd51c80b3  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/identity-review/run-preauthor-roles.sh
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-helper-mutations.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-helper-mutations.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/check-helper-mutations.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-helper-mutations.py
++ test 7a19f4d6653258a7cf4eb026129a6e941ce288aff879d9bfbd55559c44e97139 = 7a19f4d6653258a7cf4eb026129a6e941ce288aff879d9bfbd55559c44e97139
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-helper-mutations.py
+7a19f4d6653258a7cf4eb026129a6e941ce288aff879d9bfbd55559c44e97139  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-helper-mutations.py
++ for member in graph-review/graph-audit.py graph-review/controller-template-audit.py graph-review/helper-authority-audit.py graph-review/mantle-selector-audit.py graph-review/run-semantic-root-inspection.sh identity-review/identity-audit.py identity-review/preauthor-role-physical-audit.py identity-review/run-full-identity.sh identity-review/run-preauthor-roles.sh check-helper-mutations.py check-selector-mutations.py
++ test -f /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-selector-mutations.py
++ test '!' -L /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-selector-mutations.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-immutable-compiler-source/check-selector-mutations.py
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-selector-mutations.py
++ test 8f4586a2136c7571b2e11667c71e29a48a191e903a473f659c43eb1be43e1f53 = 8f4586a2136c7571b2e11667c71e29a48a191e903a473f659c43eb1be43e1f53
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-selector-mutations.py
+8f4586a2136c7571b2e11667c71e29a48a191e903a473f659c43eb1be43e1f53  /home/brittonr/sbfp-20261113-berdKH/review-tools-70db0868-primary-sources/check-selector-mutations.py
++ printf 'review_tools_copy_complete=1\n'
+review_tools_copy_complete=1
++ status=0
++ printf 'review_tools_copy_exit=%s\n' 0
+review_tools_copy_exit=0
++ exit 0

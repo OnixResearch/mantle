@@ -1,0 +1,25 @@
+{
+  "task": 1720,
+  "enqueued_at": "2026-11-17T12:49:00.661467555-05:00",
+  "start": "2026-11-17T12:49:19.860620244-05:00",
+  "end": "2026-11-17T13:09:01.329470890-05:00",
+  "result": "Success",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "source_root": "/home/brittonr/sbfp-20261113-berdKH/runner-source-70db0868-primary-sources",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/runner-build-target-70db0868-primary-sources",
+  "target_absent_precondition_retained": true,
+  "distinct_from_canonical": true,
+  "complete_source_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "source_before_after_equal": true,
+  "log": "runner-qualification.log",
+  "test_results": [
+    "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.01s",
+    "test result: ok. 273 passed; 0 failed; 27 ignored; 0 measured; 2681 filtered out; finished in 5.45s"
+  ],
+  "installed_binaries": {
+    "/home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources": "a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources": "fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873",
+    "/home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources": "817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879"
+  },
+  "scope": "Exact isolated frozen-source runner/operator builds and selected test/format/strict Clippy observations only; no regenerated-data, protected proof, native-row or release acceptance."
+}

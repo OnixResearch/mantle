@@ -1,0 +1,3 @@
+a535bb5fe3fda338469a4139f72c3ff5b8a59c07061b0a2ab33197ee38337019  /home/brittonr/sbfp-20261113-berdKH/bin/mantle-70db0868-primary-sources
+fa0be4a457b864ae7ad545fab1c0304a2eecb3c733a8b549ae1c94faab6a2873  /home/brittonr/sbfp-20261113-berdKH/bin/adopt-source-built-stagex-70db0868-primary-sources
+817a3c70959947d69c2bf58a114bbc444770a4545ffff677794b137bae7ca879  /home/brittonr/sbfp-20261113-berdKH/bin/check-native-row-receipts-70db0868-primary-sources

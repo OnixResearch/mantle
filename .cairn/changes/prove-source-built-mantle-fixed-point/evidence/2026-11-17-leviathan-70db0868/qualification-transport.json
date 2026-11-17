@@ -1,0 +1,44 @@
+[
+  {
+    "local": "canonical-qualification.log",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/canonical-qualification-70db0868-primary-sources.log",
+    "bytes_blake3": "c9db4a3a90076ad06811be5bba3b4fa6132dbce42adc300c054e4993d907ce4b",
+    "transfer_equal": true
+  },
+  {
+    "local": "runner-qualification.log",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/qualification-70db0868-primary-sources.log",
+    "bytes_blake3": "9a7e61ea8f4fad39e1a9851def4381d93392d53e75415245a60d1f5d8ca55dce",
+    "transfer_equal": true
+  },
+  {
+    "local": "runner-blake3.txt",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/runner-blake3-70db0868-primary-sources.txt",
+    "bytes_blake3": "49a37c3b4542db7b3f15c715290b02aca9e47b7d82a9cb850e77df3eb050e330",
+    "transfer_equal": true
+  },
+  {
+    "local": "canonical-cairn-validation.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/canonical-cairn-70db0868-primary-sources/validation.json",
+    "bytes_blake3": "0ae9403d3fda3b04251af3df0001e31b856c5ba363b2698f95336a6b7c03e644",
+    "transfer_equal": true
+  },
+  {
+    "local": "canonical-cairn-proposal.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/canonical-cairn-70db0868-primary-sources/proposal.json",
+    "bytes_blake3": "f9693fb755c53fc9f98de2eaa92de89a820eab834ce4e013e6540439474efc4f",
+    "transfer_equal": true
+  },
+  {
+    "local": "canonical-cairn-design.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/canonical-cairn-70db0868-primary-sources/design.json",
+    "bytes_blake3": "d0aa712b9b48c21db0785edfa68cc938124b63f114edfbf92ab2434f125f7f40",
+    "transfer_equal": true
+  },
+  {
+    "local": "canonical-cairn-tasks.json",
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/canonical-cairn-70db0868-primary-sources/tasks.json",
+    "bytes_blake3": "f99bbe798ec351a5c26fc5e5111e770b379cce7aad93c4c7c33890d6ae998777",
+    "transfer_equal": true
+  }
+]

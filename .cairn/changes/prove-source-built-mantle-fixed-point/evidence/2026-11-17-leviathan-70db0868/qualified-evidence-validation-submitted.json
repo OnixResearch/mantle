@@ -1,0 +1,17 @@
+{
+  "task": 27,
+  "command": [
+    "pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/git/OnixResearch/mantle",
+    "--label",
+    "primary-source-qualified-evidence",
+    "--",
+    "bash",
+    "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/validate-qualified-evidence.sh"
+  ],
+  "source_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "scope": "Current evidence/prose lifecycle validation only; no product execution or proof acceptance."
+}

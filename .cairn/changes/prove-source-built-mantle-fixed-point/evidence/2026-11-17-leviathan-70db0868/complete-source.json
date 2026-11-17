@@ -1,0 +1,15 @@
+{
+  "schema": "mantle-complete-source-snapshot-v1",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "code_archive_blake3": "e40bff16144520416cacb3b865b2eaba01dab4bf194a44c0b0d9cc18b9ec19fe",
+  "code_tree_blake3": "59db1a2a2128cbe8120514d4c1eeeee57c56444a3e0337972896c367d07efbde",
+  "original_git_commit": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+  "original_git_tree_sha1": "969d75db5c0494de4a26bbb2dcbf6837058054c1",
+  "original_source_archive_blake3": "282f13d4bb302e497915301156539943fd3e1e45f6a60f36678ae13e40636a88",
+  "original_source_normalized_tar_blake3": "8f731ad6e1c7b40d9e046a788dd7a7a088686b098e02d83c89750e7965a17f89",
+  "complete_archive_blake3": "0e5731f87c8cfe87c9dfa9d75ee8d43f3684f86b76479aa28dfe5b27908721b1",
+  "compressed_archive_blake3": "fe0f8c720cc4fa9ce790c8dea260d26f76bfc1a658862504c37abfb5da21c217",
+  "archive": "/home/brittonr/sbfp-20261113-berdKH/incoming/complete-source-70db0868-primary-sources.tar",
+  "assembly_root": "/home/brittonr/sbfp-20261113-berdKH/source-assembly-70db0868-primary-sources",
+  "non_claim": "Composite source snapshot only: frozen Mantle code plus the declared original source input; no runner build, provider execution, source correctness or fixed-point claim"
+}

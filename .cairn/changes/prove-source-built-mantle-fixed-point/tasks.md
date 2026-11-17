@@ -1356,3 +1356,27 @@ both full fresh independent reviews remain required. The regenerated snix-build
 unit must pass exact primary comparison before a protected retry; old b3a39a01
 reviews cannot authorize changed-source execution.
 
+## New primary-source isolated qualifications (2026-11-17)
+
+The producer/inspector correction and retained cold1714 failure are published
+in `70db08685c0c5fa5c326bfe32db78576d7e2e182`. Complete assembly1718 and exact
+external inspector copies1723 passed. Canonical1719 and isolated runner1720
+then passed from separate absent Cargo targets with disabled wrappers and
+unchanged complete-source identities before/after each run.
+
+The canonical transcript retains the five primary-source regressions plus the
+required release CLI, bootstrap parity, machine-contract, receipt, adoption,
+Cargo-free, closure, self-build and release-core test legs. All four frozen
+Cairn reports are valid. The isolated runner retains five primary-source and
+273 source-built tests, formatting, strict Clippy and all three regular binary
+builds. Exact commands, counts, byte identities and transport observations are
+under `evidence/2026-11-17-leviathan-70db0868/`.
+
+Dependent source-only preparation1721 and subject-facts1722 are submitted;
+their actual completion, full-profile stream parity, corrected snix-build
+primary agreement and complete current-data inspection/rejection results are
+still required. Both fresh complete independent `underclass/gpt-6-sol` reviews
+and current launch gates must follow those facts. No new protected attempt,
+signed adoption, native row or successful v2 proof is accepted from these
+qualification observations; the downstream adoption command remains held.
+

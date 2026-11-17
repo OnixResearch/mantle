@@ -1,0 +1,9 @@
+{
+  "source_author": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-b3a39a01/check-seed-source-regressions.py",
+  "remote_copy": "/home/brittonr/sbfp-20261113-berdKH/check-seed-source-regressions-70db0868-primary-sources.py",
+  "bytes_blake3": "79223ac30a0e0aa96c23c2957c80adce2b40ab3d0730575b27ceb07edaf90c4e",
+  "transfer_equal": true,
+  "driver": "/home/brittonr/sbfp-20261113-berdKH/inspect-seed-source-regressions-70db0868-primary-sources.sh",
+  "source_revision_under_inspection": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "scope": "Trusted inert checker source only. Current actual recipe/plan traversal and rejection results remain unobserved until current subject sealing and inspection."
+}

@@ -1,0 +1,104 @@
+{
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "tasks": {
+    "assembly": {
+      "id": 1718,
+      "dependencies": [],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "assembly-70db0868-primary-sources",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/assemble-complete-source-70db0868-primary-sources.sh"
+      ]
+    },
+    "canonical": {
+      "id": 1719,
+      "dependencies": [
+        1718
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "canonical-70db0868-primary-sources",
+        "--after",
+        "1718",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/canonical-checks-70db0868-primary-sources-run.sh"
+      ]
+    },
+    "runner": {
+      "id": 1720,
+      "dependencies": [
+        1718
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "runner-70db0868-primary-sources",
+        "--after",
+        "1718",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/qualify-source-70db0868-primary-sources.sh"
+      ]
+    },
+    "preparation": {
+      "id": 1721,
+      "dependencies": [
+        1719,
+        1720
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "preparation-70db0868-primary-sources",
+        "--after",
+        "1719",
+        "1720",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/prepare-source-70db0868-primary-sources.sh"
+      ]
+    },
+    "subject_facts": {
+      "id": 1722,
+      "dependencies": [
+        1721
+      ],
+      "command": [
+        "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+        "add",
+        "--print-task-id",
+        "--working-directory",
+        "/home/brittonr/sbfp-20261113-berdKH",
+        "--label",
+        "subject_facts-70db0868-primary-sources",
+        "--after",
+        "1721",
+        "--",
+        "/run/current-system/sw/bin/bash",
+        "/home/brittonr/sbfp-20261113-berdKH/capture-review-subject-facts-70db0868-primary-sources.sh"
+      ]
+    }
+  },
+  "scope": "Actual detached pipeline submission only. Canonical and runner use separate absent targets. Every dependent phase retains failure and cannot authorize proof without actual successful output and full fresh review."
+}

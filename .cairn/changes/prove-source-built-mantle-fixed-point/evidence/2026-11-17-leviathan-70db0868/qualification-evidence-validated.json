@@ -1,0 +1,10 @@
+{
+  "task": 27,
+  "result": "Success",
+  "start": "2026-11-17T13:14:12.889420725-05:00",
+  "end": "2026-11-17T13:14:40.900485149-05:00",
+  "report": "cairn-qualified-evidence-validation.json",
+  "valid": true,
+  "transcript": "cairn-qualified-evidence.log",
+  "scope": "Current qualification evidence/prose validation only. Frozen product remains 70db08685c0c5fa5c326bfe32db78576d7e2e182; preparation/current-data review and protected proof are still not accepted."
+}

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ssh -o BatchMode=yes -o ConnectTimeout=20 leviathan.cymric-daggertooth.ts.net '/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue wait --quiet 1722 && test -f /home/brittonr/sbfp-20261113-berdKH/review-subject-facts-70db0868-primary-sources.json && test "$(cat /home/brittonr/sbfp-20261113-berdKH/review-subject-facts-70db0868-primary-sources.exit)" = 0 && /run/current-system/sw/bin/cat /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources/source-profile.json' | /nix/store/0by3mqkn4gk970s8h0ns546jcm8hfl7w-b3sum-1.8.7/bin/b3sum --no-names
