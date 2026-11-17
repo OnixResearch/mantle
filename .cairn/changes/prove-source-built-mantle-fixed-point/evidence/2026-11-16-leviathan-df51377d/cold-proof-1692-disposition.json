@@ -1,0 +1,15 @@
+{
+  "task": 1692,
+  "result": "Failed",
+  "captured_exit": 1,
+  "driver_log": "cold-proof-1692-driver.log",
+  "run_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol",
+  "blocker": "Original pinned static BusyBox tool path disappeared before the driver hash guard; host-tool boundary stopped before Mantle invocation.",
+  "missing_original_path": "/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+  "original_expected_blake3": "ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc",
+  "aliases_absent_from_captured_log": true,
+  "exact_restore_task": 1693,
+  "source_cohort_reviews_and_pins_unchanged": true,
+  "retained_failed_root": true,
+  "non_claim": "Closed outer host-tool failure only; no Mantle/protected/provider/stage execution, attempt receipt or successful alias was produced. Exact tool restoration and a fresh namespace are required."
+}

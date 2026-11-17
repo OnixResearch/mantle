@@ -1,0 +1,25 @@
+{
+  "task": {
+    "id": 1692,
+    "created_at": "2026-11-17T01:15:26.360385182-05:00",
+    "original_command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol.sh 3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5",
+    "command": "/run/current-system/sw/bin/bash /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol.sh 3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5",
+    "path": "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+    "envs": {},
+    "group": "default",
+    "dependencies": [],
+    "priority": 0,
+    "label": "cold-proof-df51377d-unit-plans-gpt6sol",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-11-17T01:15:26.360335007-05:00",
+        "start": "2026-11-17T01:15:26.666786702-05:00",
+        "end": "2026-11-17T01:15:28.541255672-05:00",
+        "result": {
+          "Failed": 1
+        }
+      }
+    }
+  },
+  "output": "true\ntrue"
+}

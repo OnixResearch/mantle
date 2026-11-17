@@ -1,0 +1,27 @@
+{
+  "task": 1694,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans",
+    "--label",
+    "cold-proof-df51377d-unit-plans-gpt6sol-v2",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2.sh",
+    "3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5"
+  ],
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "prepared_manifest": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "parent_acceptance_blake3": "3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5",
+  "source_cohort_reviews_and_pins_unchanged": true,
+  "exact_tool_restore_task": 1693,
+  "failed_prior_task_retained": 1692,
+  "run_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2",
+  "proof_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2/proof",
+  "execution_host": "leviathan.cymric-daggertooth.ts.net",
+  "submitted": true,
+  "non_claim": "Fresh sealed current-cohort cold proof submitted after exact original sandbox-tool restoration/rooting. No provider/stage success, reconciliation, equality, v2 receipt or native-row acceptance is asserted."
+}

@@ -1,0 +1,19 @@
+{
+  "task": 1693,
+  "result": "Success",
+  "transcript": "restore-proof-tools.log",
+  "captured_exit": 0,
+  "static_shell": {
+    "path": "/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+    "blake3": "ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc",
+    "gc_root": "/home/brittonr/sbfp-20261113-berdKH/proof-tool-static-shell-df51377d-unit-plans"
+  },
+  "bwrap": {
+    "path": "/nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap",
+    "blake3": "9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece",
+    "gc_root": "/home/brittonr/sbfp-20261113-berdKH/proof-tool-bwrap-df51377d-unit-plans"
+  },
+  "expected_pins_unchanged": true,
+  "source_cohort_and_reviews_unchanged": true,
+  "non_claim": "Exact original outer sandbox tools restored and rooted with their original measured byte identities. Not provider/stage execution, fixed-point proof or release eligibility."
+}

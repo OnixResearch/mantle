@@ -1165,3 +1165,37 @@ Exact independent decisions, current binding checks and integration are retained
 in `evidence/2026-11-16-leviathan-df51377d/`; neither model text nor this checkpoint
 is a v2 proof or release authority.
 
+## Reviewed current cold proof submitted (2026-11-17)
+
+All four current prelaunch Cairn reports are valid. The exact parent acceptance
+binds both independent review byte hashes, all current source/profile/runner
+identities, unchanged model authority and zero uncovered static criteria. Its
+full transferred bytes and an absent fresh proof parent were checked before
+submission.
+
+Leviathan task 1692 submits the sealed df51377d/a43964e7 cold driver from the
+frozen source working directory, with the exact acceptance hash argument and
+unchanged source, lineage/native pins and resource bounds. The sole execution
+host, command and fresh output root are retained in `cold-proof-submitted.json`
+under `evidence/2026-11-16-leviathan-df51377d/`.
+
+Submission is not stage execution or success. I3-I5, genuine V2/V3 and N1 remain
+open until the actual protected result, complete root reconciliation, verified
+v2 receipt, stage equality and separately qualified signed native rows exist.
+
+## Exact host-tool restoration and fresh cold submission (2026-11-17)
+
+Task 1692 failed closed before invoking Mantle: the original static BusyBox
+store path was missing at its recorded-byte hash guard. Source, runner, profile,
+report and bubblewrap hashes had passed. Its driver log, exit 1 and absent
+successful aliases remain retained; no product/protected stage or v2 attempt
+receipt is inferred from that outer failure.
+
+Task 1693 restored and GC-rooted the exact original static shell and bubblewrap
+closures with local-only Nix tooling delegation. Both original byte pins passed;
+no substitute shell, source/cohort change, output import or pin refresh occurred.
+The failed output parent remains intact. Fresh sealed task 1694 uses the separate
+`cold-proof-df51377d-unit-plans-gpt6sol-v2` parent and unchanged current acceptance,
+source/profile/review identities and resource bounds. Only submission is observed
+here; genuine stages, reconciliation, equality, v2 and native rows remain open.
+

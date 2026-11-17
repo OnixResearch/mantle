@@ -1,0 +1,60 @@
++ date -Is
+2026-11-17T01:15:26-05:00
++ hostname
+leviathan
++ uname -srm
+Linux 6.18.63 x86_64
++ cat /proc/sys/kernel/random/boot_id
+3fcb079b-a910-47cf-8301-25c4e0eaa757
++ df -B1 /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol
+Filesystem         1B-blocks          Used    Available Use% Mounted on
+/dev/nvme0n1p1 3936818806784 2889989062656 846773714944  78% /
++ free -b
+               total        used        free      shared  buff/cache   available
+Mem:     269805268992 65138769920 34873778176   186056704 171872645120 204666499072
+Swap:    137438949376 28726472704 108712476672
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/preparation-df51377d-unit-plans.exit
++ test 0 = 0
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/qualification-df51377d-unit-plans.exit
++ test 0 = 0
++ for phase in preparation qualification canonical-qualification
+++ cat /home/brittonr/sbfp-20261113-berdKH/canonical-qualification-df51377d-unit-plans.exit
++ test 0 = 0
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/bin/mantle-df51377d-unit-plans
++ test 17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6 = 17358d92b9ce16a00fc4407334bb8c7745ff127cd2f515ec4fa74fcf6a3b24a6
+++ tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --create --file - --directory /home/brittonr/sbfp-20261113-berdKH/runner-source-df51377d-unit-plans .
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names
++ test 3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba = 3ee5b549a06a9ba23f5e8f67fe83e8e7c8ae872d0f601cdb9800e4864b6e8bba
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-profile.json
++ test 08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5 = 08b5d30a223f33b2ba28a9c118aaa3943b9d2e9bb2c98c72fc55f2812c53a5b5
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /home/brittonr/sbfp-20261113-berdKH/prepared-cohort-df51377d-unit-plans/source-program-preparation.json
++ test c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95 = c8cfa880948fc302ec84ff18aa1d30e1733567b4051f540b96f7956b9cd33b95
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+b3sum: /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox: No such file or directory (os error 2)
++ test '' = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
++ status=1
++ '[' 1 -eq 0 ']'
++ record_aliases after
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/latest ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/latest ']'
++ printf 'alias_%s %s absent\n' after latest
+alias_after latest absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/latest-source-built-fixed-point ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/latest-source-built-fixed-point ']'
++ printf 'alias_%s %s absent\n' after latest-source-built-fixed-point
+alias_after latest-source-built-fixed-point absent
++ for alias in latest latest-source-built-fixed-point .source-built-fixed-point-current
++ '[' -L /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/.source-built-fixed-point-current ']'
++ '[' -e /home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol/.source-built-fixed-point-current ']'
++ printf 'alias_%s %s absent\n' after .source-built-fixed-point-current
+alias_after .source-built-fixed-point-current absent
++ printf 'cold_proof_exit=%s\n' 1
+cold_proof_exit=1
++ printf '%s\n' 1
++ exit 1

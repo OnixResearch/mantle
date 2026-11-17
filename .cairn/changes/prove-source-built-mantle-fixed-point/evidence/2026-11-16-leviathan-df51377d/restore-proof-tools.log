@@ -1,0 +1,17 @@
++ /run/current-system/sw/bin/nix-store --option builders '' --add-root /home/brittonr/sbfp-20261113-berdKH/proof-tool-static-shell-df51377d-unit-plans --indirect --realise /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0
+this path will be fetched (694.7 KiB download, 1.4 MiB unpacked):
+  /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0
+copying path '/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0' from 'https://cache.nixos.org'...
+/home/brittonr/sbfp-20261113-berdKH/proof-tool-static-shell-df51377d-unit-plans
++ /run/current-system/sw/bin/nix-store --option builders '' --add-root /home/brittonr/sbfp-20261113-berdKH/proof-tool-bwrap-df51377d-unit-plans --indirect --realise /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0
+/home/brittonr/sbfp-20261113-berdKH/proof-tool-bwrap-df51377d-unit-plans
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
++ test ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc = ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc
+++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum --no-names /nix/store/3hqwbwxij9lxhyrf2amsm2xg24xszmmx-bubblewrap-0.12.0/bin/bwrap
++ test 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece = 9979941d82a18db70c4fa1bed4cd3d33504c1d8b35b9f08b6784e494abbdcece
++ printf 'exact_original_proof_tools_rooted=1\n'
+exact_original_proof_tools_rooted=1
++ status=0
++ printf 'restore_exact_proof_tools_exit=%s\n' 0
+restore_exact_proof_tools_exit=0
++ exit 0

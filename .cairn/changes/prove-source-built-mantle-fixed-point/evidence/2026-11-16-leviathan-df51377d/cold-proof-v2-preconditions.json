@@ -1,0 +1,17 @@
+{
+  "retained_failed_task": 1692,
+  "retained_failed_root": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol",
+  "exact_tool_restore_task": 1693,
+  "source_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "prepared_manifest": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "review_acceptance_blake3": "3c446e82ebb04d50f6aa9ff6aa4db1c5cd32865b6d3261e668481a2c5649bbe5",
+  "review_acceptance_unchanged": true,
+  "script": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2.sh",
+  "script_blake3": "780f9683c16c227af3ca8f88b51ae0ca7376f0ed9f15a9736201961b6b35c854",
+  "script_transfer_equal": true,
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-df51377d-unit-plans-gpt6sol-v2",
+  "proof_parent_absent": true,
+  "pins_and_consumer_rules_unchanged": true,
+  "queued": false,
+  "non_claim": "Only the exact original tool closures and fresh outer namespace change; all current qualified source/data/review identities remain bound. No genuine proof result yet."
+}
