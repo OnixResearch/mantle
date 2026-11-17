@@ -1,0 +1,47 @@
+{
+  "task": 1736,
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "acceptance_bytes_blake3": "59ac07605425ed3f3a31e716ca6e3d739425b8a973192e35d93ad9d97ae4a992",
+  "execution_host": {
+    "ssh_host": "leviathan.cymric-daggertooth.ts.net",
+    "hostname": "leviathan",
+    "system": "Linux",
+    "kernel": "6.18.63",
+    "architecture": "x86_64",
+    "boot_id": "3fcb079b-a910-47cf-8301-25c4e0eaa757",
+    "observed_at": "2026-11-17T16:22:26-05:00"
+  },
+  "resource_observations": {
+    "filesystem_available_bytes": 441874272256,
+    "memory_available_bytes": 216005808128,
+    "disk_bound_bytes": 200000000000,
+    "elapsed_bound_seconds": 86400,
+    "exec_event_bound": 524288,
+    "source_record_bound": 65536,
+    "jobs": 16
+  },
+  "raw_preflight_prefix": {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol/driver.log",
+    "retained_lines": "1-73",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cold-1736-preflight-prefix.log",
+    "bytes_blake3": "befdcc574f16386924bc170353aa9157c05794f87b6988d8040c41af46b1d02d",
+    "scope": "Captured prefix through the actual cold self-build invocation; not the final complete driver transcript."
+  },
+  "source_verification": {
+    "remote": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol/source-verification.json",
+    "local": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-leviathan-70db0868/cold-1736-source-verification.json",
+    "bytes_blake3": "40d4d9eb53a3adc1f35fef3beafc35e44a53d7f83c911d481b784f4de378d4eb",
+    "manifest_blake3": "28fa8ae91ce978216fba288452219bc0c5aa07a7b57fc6f92a7168863b1b1aab",
+    "ready_class": "ready"
+  },
+  "checks_observed": [
+    "current runner, normalized complete frozen source, full profile and preparation byte checks passed",
+    "GNU tar, bwrap and static busybox bytes matched their frozen pins",
+    "actual bwrap unshare-all/unshare-user smoke succeeded",
+    "all three success aliases absent before cold invocation",
+    "complete source-bundle verification reported ready",
+    "actual env -i CRUNCH_NO_FUSE=1 cold self-build invocation reached"
+  ],
+  "non_claim": "Required V2 host/preflight capture only; not provider/stage success, equality, reconciliation, verified receipt, native-row or release acceptance. Final task and complete driver result remain required."
+}
