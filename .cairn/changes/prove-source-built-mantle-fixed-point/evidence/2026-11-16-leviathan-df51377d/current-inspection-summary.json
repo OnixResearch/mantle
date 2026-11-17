@@ -81,7 +81,12 @@
       "total": 9176
     },
     "runtime_invocation_bytes_observed": 0,
-    "canonical_root_scenarios": 10
+    "canonical_root_scenarios": 10,
+    "helper_mutations": {
+      "task": 1691,
+      "cases": 6,
+      "all_assertions_passed": true
+    }
   },
   "physical": {
     "criterion7_combined": {
@@ -123,7 +128,6 @@
     }
   },
   "pending": [
-    "current complete helper mutation result1691",
     "two fresh authorized underclass/gpt-6-sol reviews",
     "parent acceptance and current prelaunch lifecycle gates",
     "genuine protected stages and verified v2 receipt",

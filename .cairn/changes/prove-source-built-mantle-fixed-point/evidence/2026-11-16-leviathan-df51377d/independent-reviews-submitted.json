@@ -1,0 +1,36 @@
+{
+  "source_code_revision": "df51377d592bf6a3412b436a10e8fc708e8dbe3d",
+  "prepared_manifest": "a43964e70b0d935cb6a2010c820bcc8d63996f95b54559fa748525e7725e8077",
+  "subject_blake3": "eeadb72741208dcc67fbfb3e3728afbb633575c858c7105f8277a77024a5adf2",
+  "authorized_model": "underclass/gpt-6-sol",
+  "authorization": "replacement-review-source-binding.json",
+  "agents": [
+    {
+      "id": "ReviewDfGraph",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "read_only": true
+    },
+    {
+      "id": "ReviewDfPhysical",
+      "criteria": [
+        7,
+        8
+      ],
+      "read_only": true
+    }
+  ],
+  "context": "local://df51377d-independent-review.md",
+  "current_evidence_ready": true,
+  "helper_mutation_task": 1691,
+  "all_current_helper_mutations_passed": true,
+  "independent_acceptance_observed": false,
+  "protected_launch_held": true,
+  "non_claim": "Two fresh exact-model independent review requests only; no review verdict or launch authority is inferred from dispatch."
+}
